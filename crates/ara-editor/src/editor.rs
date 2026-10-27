@@ -124,6 +124,8 @@ impl Editor {
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         host.register(Box::new(crate::authoring::AuthoringService))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        host.register(Box::new(crate::script_assets::ScriptService::default()))
+            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         *host.profiler() = ara_profile::Profiler::new(ara_profile::Config {
             budget_ns: 6_944_444,
             ..Default::default()
@@ -259,16 +261,19 @@ impl Editor {
         }
         Ok(result)
     }
-    /// Play in the Game view (setting `play.inGameView`, on by default): no player
-    /// window, an embedded surface at the Game view's size instead.
-    pub(crate) fn embed_play(&self, params: &mut Value) {
-        if self
-            .state
+    /// Play runs in the Game view (setting `play.inGameView`, on by default) rather
+    /// than in a separate player window.
+    pub(crate) fn plays_in_game_view(&self) -> bool {
+        self.state
             .settings
             .get("play.inGameView")
             .and_then(Value::as_bool)
             .unwrap_or(true)
-        {
+    }
+    /// Play in the Game view (`plays_in_game_view`): no player window, an embedded
+    /// surface at the Game view's size instead.
+    pub(crate) fn embed_play(&self, params: &mut Value) {
+        if self.plays_in_game_view() {
             let [w, h] = self.game_size;
             params["window"] = false.into();
             params["embed"] = json!({"width": w.clamp(64, 8192), "height": h.clamp(64, 8192)});
@@ -472,15 +477,21 @@ impl Editor {
     }
     /// Start a spatial gesture at the current revision.
     pub fn begin_gesture(&mut self) -> anyhow::Result<()> {
+        self.begin_gesture_tool(self.state.tool)
+    }
+    /// Begin the operation chosen by a transform handle, keeping the toolbar's
+    /// universal tool selected.
+    pub fn begin_gesture_tool(&mut self, tool: crate::state::Tool) -> anyhow::Result<()> {
         let resolved = crate::world::resolve(self.host.store(), &self.state.doc)
             .map_err(|d| anyhow::anyhow!(format!("{d:?}")))?;
-        self.gesture = Some(Gesture::begin(
+        self.gesture = Some(Gesture::begin_tool(
             &resolved,
             &self.state,
             self.host.store().revision(),
+            tool,
         )?);
-        let field = match self.state.tool {
-            crate::state::Tool::Translate => "Transform.position",
+        let field = match tool {
+            crate::state::Tool::Translate | crate::state::Tool::Universal => "Transform.position",
             crate::state::Tool::Rotate => "Transform.rotation",
             crate::state::Tool::Scale => "Transform.scale",
         };

@@ -25,6 +25,8 @@ The Roslyn incremental generator every gameplay module uses (netstandard2.0, Ros
 - Diagnostics ARA0701–0707 (`Descriptors.cs`): not partial, bad system parameter, missing
   doc, not blittable, bad command, bad behaviour, bad system method.
 - Registration order is deterministic (sorted by schema name; systems by `(Order, name)`).
+- `ColorPicker(Hdr = true, Temperature = true)` and `Header` combine into one schema
+  `editor` object, keeping colour hints available to the native inspector and docs.
 
 ## Testing
 

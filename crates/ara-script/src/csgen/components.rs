@@ -59,6 +59,20 @@ fn default_args(v: &Value) -> Option<String> {
 
 pub(super) fn field_attributes(db: &SchemaDb, f: &FieldDesc) -> Vec<String> {
     let mut attrs = Vec::new();
+    if f.editor.color || f.editor.hdr || f.editor.temperature {
+        let mut args = Vec::new();
+        if f.editor.hdr {
+            args.push("Hdr = true");
+        }
+        if f.editor.temperature {
+            args.push("Temperature = true");
+        }
+        attrs.push(if args.is_empty() {
+            "ColorPicker".into()
+        } else {
+            format!("ColorPicker({})", args.join(", "))
+        });
+    }
     if let Some(u) = f.unit {
         attrs.push(format!("Unit({})", literal(u.symbol())));
     }
@@ -115,6 +129,12 @@ pub(super) fn field_attributes(db: &SchemaDb, f: &FieldDesc) -> Vec<String> {
 /// The `<remarks>` line: what the attributes say, in words, for tooltips.
 pub(super) fn field_remarks(db: &SchemaDb, f: &FieldDesc) -> String {
     let mut parts = Vec::new();
+    if f.editor.hdr {
+        parts.push("HDR colour; values may exceed one.".into());
+    }
+    if f.editor.temperature {
+        parts.push("Colour picker supports temperature in Kelvin.".into());
+    }
     if let Some(u) = f.unit {
         parts.push(format!("Unit: {}.", u.symbol()));
     }

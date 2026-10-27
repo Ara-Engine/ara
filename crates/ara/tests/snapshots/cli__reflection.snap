@@ -2628,7 +2628,7 @@ expression: out
     },
     "ExposureMode": {
       "kind": "enum",
-      "doc": "How the camera exposes the scene.",
+      "doc": "How the camera exposes the scene (a post-process volume's exposure override).",
       "module": "render",
       "variants": {
         "auto": {
@@ -3895,7 +3895,10 @@ expression: out
         "color": {
           "type": "color",
           "doc": "Linear RGB tint (alpha is ignored).",
-          "default": [1, 1, 1, 1]
+          "default": [1, 1, 1, 1],
+          "editor": {
+            "temperature": true
+          }
         },
         "intensity": {
           "type": "f32",
@@ -4466,7 +4469,8 @@ expression: out
           "doc": "Default procedural radiance, or an RGB emission multiplier with a model/material asset. Models treat zero RGB as neutral; use `emissiveEnabled` to switch them off.",
           "default": [0, 0, 0],
           "editor": {
-            "color": true
+            "color": true,
+            "hdr": true
           }
         },
         "emissiveEnabled": {
@@ -4486,7 +4490,8 @@ expression: out
           "default": null,
           "range": [0, null],
           "editor": {
-            "color": true
+            "color": true,
+            "hdr": true
           }
         },
         "emissiveMaterials": {
@@ -5629,90 +5634,596 @@ expression: out
         }
       }
     },
-    "PostProcess": {
-      "kind": "component",
-      "doc": "Camera exposure, tone mapping, bloom and colour grading. The first entity in ID order wins; without one, renderers meter automatically with Filmic tone mapping.",
+    "PostModule": {
+      "kind": "enum",
+      "doc": "The group of settings one `PostOverride` entry changes.",
+      "module": "render",
+      "variants": {
+        "exposure": {
+          "doc": "Automatic metering or a fixed exposure, compensation and adaptation."
+        },
+        "toneMapping": {
+          "doc": "The display transform."
+        },
+        "bloom": {
+          "doc": "The glow around bright pixels."
+        },
+        "colorGrading": {
+          "doc": "White balance, saturation, contrast, lift/gamma/gain and a lookup table."
+        },
+        "vignette": {
+          "doc": "Darkening toward the frame corners."
+        },
+        "depthOfField": {
+          "doc": "Lens focus blur."
+        },
+        "motionBlur": {
+          "doc": "Blur along screen motion while the shutter is open."
+        },
+        "chromaticAberration": {
+          "doc": "Colour fringes toward the frame edges."
+        },
+        "ambientOcclusion": {
+          "doc": "Screen-space ambient occlusion strength and radius (presets that run it)."
+        },
+        "reflections": {
+          "doc": "Screen-space reflection strength and reach (presets that run them)."
+        }
+      }
+    },
+    "PostOverride": {
+      "kind": "struct",
+      "doc": "One group of settings a post-process volume overrides: pick the group in `module`, then tick the properties to change. Unticked properties are left to lower-priority volumes and the defaults.",
       "module": "render",
       "fields": {
+        "module": {
+          "type": "PostModule",
+          "doc": "The settings group this entry changes.",
+          "default": "exposure",
+          "options": [
+            "exposure",
+            "toneMapping",
+            "bloom",
+            "colorGrading",
+            "vignette",
+            "depthOfField",
+            "motionBlur",
+            "chromaticAberration",
+            "ambientOcclusion",
+            "reflections"
+          ]
+        },
         "exposure": {
-          "type": "ExposureMode",
+          "type": "option<ExposureMode>",
           "doc": "Automatic metering or a fixed exposure.",
-          "default": "auto",
+          "default": null,
           "options": [
             "auto",
             "manual"
-          ]
+          ],
+          "examples": [
+            "auto"
+          ],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "exposure"
+                ]
+              }
+            }
+          }
         },
         "ev100": {
-          "type": "f32",
-          "doc": "Manual exposure value at ISO 100. Sunny day ≈ 15, overcast ≈ 12, sunset ≈ 10, lit interior ≈ 7, night street ≈ 3.",
-          "default": 10,
-          "range": [-10, 24]
+          "type": "option<f32>",
+          "doc": "Manual exposure value at ISO 100 (manual mode). Sunny day ≈ 15, overcast ≈ 12, sunset ≈ 10, lit interior ≈ 7, night street ≈ 3.",
+          "default": null,
+          "range": [-10, 24],
+          "examples": [10],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "exposure"
+                ]
+              }
+            }
+          }
         },
         "compensation": {
-          "type": "f32",
+          "type": "option<f32>",
           "doc": "Exposure compensation in stops, applied in both modes; +1 doubles the brightness.",
-          "default": 0,
-          "range": [-8, 8]
+          "default": null,
+          "range": [-8, 8],
+          "examples": [0],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "exposure"
+                ]
+              }
+            }
+          }
         },
         "minEv100": {
-          "type": "f32",
+          "type": "option<f32>",
           "doc": "Darkest exposure automatic metering may pick (lower = brighter in dark scenes).",
-          "default": -2,
-          "range": [-10, 24]
+          "default": null,
+          "range": [-10, 24],
+          "examples": [-2],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "exposure"
+                ]
+              }
+            }
+          }
         },
         "maxEv100": {
-          "type": "f32",
+          "type": "option<f32>",
           "doc": "Brightest exposure automatic metering may pick.",
-          "default": 16,
-          "range": [-10, 24]
+          "default": null,
+          "range": [-10, 24],
+          "examples": [16],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "exposure"
+                ]
+              }
+            }
+          }
         },
         "adaptationSpeed": {
-          "type": "f32",
+          "type": "option<f32>",
           "doc": "How fast automatic exposure adapts, per second; higher reacts faster.",
-          "default": 2,
-          "range": [0.1, 20]
+          "default": null,
+          "range": [0.1, 20],
+          "examples": [2],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "exposure"
+                ]
+              }
+            }
+          }
         },
         "toneMapping": {
-          "type": "ToneMapping",
-          "doc": "Display transform.",
-          "default": "filmic",
+          "type": "option<ToneMapping>",
+          "doc": "Display transform that compresses scene radiance into the screen's range.",
+          "default": null,
           "options": [
             "filmic",
             "neutral",
             "acesFit"
-          ]
+          ],
+          "examples": [
+            "filmic"
+          ],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "toneMapping"
+                ]
+              }
+            }
+          }
         },
         "bloom": {
-          "type": "f32",
+          "type": "option<f32>",
           "doc": "Fraction of light spread into the bloom glow around bright pixels.",
-          "default": 0.04,
-          "range": [0, 0.25]
+          "default": null,
+          "range": [0, 0.25],
+          "examples": [0.04],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "bloom"
+                ]
+              }
+            }
+          }
         },
         "whiteBalance": {
-          "type": "f32",
+          "type": "option<f32>",
           "doc": "White balance: the colour temperature that renders as neutral white. Lower warms the image's whites to neutral (tungsten ≈ 3200), higher cools them.",
-          "default": 6500,
+          "default": null,
           "unit": "K",
-          "range": [1500, 15000]
+          "range": [1500, 15000],
+          "examples": [6500],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "colorGrading"
+                ]
+              }
+            }
+          }
         },
         "saturation": {
-          "type": "f32",
+          "type": "option<f32>",
           "doc": "Colour saturation; 0 is greyscale, 1 unchanged.",
-          "default": 1,
-          "range": [0, 2]
+          "default": null,
+          "range": [0, 2],
+          "examples": [1],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "colorGrading"
+                ]
+              }
+            }
+          }
         },
         "contrast": {
-          "type": "f32",
+          "type": "option<f32>",
           "doc": "Contrast around middle grey; 1 unchanged.",
-          "default": 1,
-          "range": [0.5, 2]
+          "default": null,
+          "range": [0.5, 2],
+          "examples": [1],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "colorGrading"
+                ]
+              }
+            }
+          }
+        },
+        "lift": {
+          "type": "option<color>",
+          "doc": "Lift: a colour added to the shadows after tone mapping, fading out toward white; black leaves them unchanged.",
+          "default": null,
+          "examples": [
+            [0, 0, 0, 1]
+          ],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "colorGrading"
+                ]
+              }
+            }
+          }
+        },
+        "gamma": {
+          "type": "option<color>",
+          "doc": "Gamma: a per-channel midtone power after tone mapping; white is neutral, a darker channel darkens that channel's midtones.",
+          "default": null,
+          "examples": [
+            [1, 1, 1, 1]
+          ],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "colorGrading"
+                ]
+              }
+            }
+          }
+        },
+        "gain": {
+          "type": "option<color>",
+          "doc": "Gain: a per-channel multiplier on the whole image after tone mapping; white is neutral.",
+          "default": null,
+          "examples": [
+            [1, 1, 1, 1]
+          ],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "colorGrading"
+                ]
+              }
+            }
+          }
+        },
+        "lut": {
+          "type": "option<asset<texture>>",
+          "doc": "Colour lookup table applied last, as in Unity and Unreal: a strip texture of 16 (256x16) or 32 (1024x32) sRGB slices along red and green, one slice per blue step, imported uncompressed.",
+          "default": null,
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "colorGrading"
+                ]
+              }
+            }
+          }
+        },
+        "lutContribution": {
+          "type": "option<f32>",
+          "doc": "How much of the lookup table applies, from 0 (none) to 1 (all).",
+          "default": null,
+          "range": [0, 1],
+          "examples": [1],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "colorGrading"
+                ]
+              }
+            }
+          }
         },
         "vignette": {
-          "type": "f32",
+          "type": "option<f32>",
           "doc": "Darkening toward the frame corners; 0 disables it.",
+          "default": null,
+          "range": [0, 1],
+          "examples": [0.3],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "vignette"
+                ]
+              }
+            }
+          }
+        },
+        "focusDistance": {
+          "type": "option<f32>",
+          "doc": "Distance from the camera that is in focus; 0 turns depth of field off.",
+          "default": null,
+          "unit": "m",
+          "range": [0, 10000],
+          "examples": [10],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "depthOfField"
+                ]
+              }
+            }
+          }
+        },
+        "aperture": {
+          "type": "option<f32>",
+          "doc": "Lens aperture as an f-number: smaller numbers blur more (f/1.4 is shallow, f/16 keeps nearly everything sharp). The focal length follows the camera's field of view on a full-frame sensor.",
+          "default": null,
+          "range": [0.7, 32],
+          "examples": [2.8],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "depthOfField"
+                ]
+              }
+            }
+          }
+        },
+        "nearBlur": {
+          "type": "option<f32>",
+          "doc": "Strength of the blur in front of the focus distance, from 0 (sharp) to 1 (physical).",
+          "default": null,
+          "range": [0, 1],
+          "examples": [1],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "depthOfField"
+                ]
+              }
+            }
+          }
+        },
+        "farBlur": {
+          "type": "option<f32>",
+          "doc": "Strength of the blur behind the focus distance, from 0 (sharp) to 1 (physical).",
+          "default": null,
+          "range": [0, 1],
+          "examples": [1],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "depthOfField"
+                ]
+              }
+            }
+          }
+        },
+        "shutterAngle": {
+          "type": "option<f32>",
+          "doc": "Shutter angle: 180° blurs motion over half a frame, 360° over a whole frame; 0 turns motion blur off. Samples per pixel follow the quality preset.",
+          "default": null,
+          "unit": "deg",
+          "range": [0, 360],
+          "examples": [180],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "motionBlur"
+                ]
+              }
+            }
+          }
+        },
+        "chromaticAberration": {
+          "type": "option<f32>",
+          "doc": "Strength of the red/blue fringes toward the frame edges; 0 turns it off.",
+          "default": null,
+          "range": [0, 1],
+          "examples": [0.5],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "chromaticAberration"
+                ]
+              }
+            }
+          }
+        },
+        "aoIntensity": {
+          "type": "option<f32>",
+          "doc": "Ambient occlusion strength: 0 none, 1 physical, above 1 exaggerated.",
+          "default": null,
+          "range": [0, 4],
+          "examples": [1],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "ambientOcclusion"
+                ]
+              }
+            }
+          }
+        },
+        "aoRadius": {
+          "type": "option<f32>",
+          "doc": "Ambient occlusion search radius.",
+          "default": null,
+          "unit": "m",
+          "range": [0.05, 10],
+          "examples": [1],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "ambientOcclusion"
+                ]
+              }
+            }
+          }
+        },
+        "reflectionIntensity": {
+          "type": "option<f32>",
+          "doc": "Screen-space reflection strength, from 0 (probe reflections only) to 1.",
+          "default": null,
+          "range": [0, 1],
+          "examples": [1],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "reflections"
+                ]
+              }
+            }
+          }
+        },
+        "reflectionDistance": {
+          "type": "option<f32>",
+          "doc": "Longest screen-space reflection ray.",
+          "default": null,
+          "unit": "m",
+          "range": [1, 500],
+          "examples": [30],
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "reflections"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "PostProcessVolume": {
+      "kind": "component",
+      "doc": "A region whose post-processing overrides blend in as the camera approaches and enters it. Volumes apply in ascending `priority` (ties in entity ID order); each property one overrides moves toward its value by the volume's weight at the camera. Properties no volume overrides keep the engine defaults. Scenes saved with the former `PostProcess` component load as one global volume that overrides everything.",
+      "module": "render",
+      "version": 2,
+      "aliases": [
+        "PostProcess"
+      ],
+      "fields": {
+        "shape": {
+          "type": "VolumeShape",
+          "doc": "Where the volume applies: everywhere, or inside a box or sphere placed and sized by the entity's transform.",
+          "default": "global",
+          "options": [
+            "global",
+            "box",
+            "sphere"
+          ]
+        },
+        "blendDistance": {
+          "type": "f32",
+          "doc": "Distance outside the box or sphere over which the volume fades out; 0 is a hard edge.",
           "default": 0,
+          "unit": "m",
+          "range": [0, 1000],
+          "editor": {
+            "showIf": {
+              "field": "shape",
+              "when": {
+                "oneOf": [
+                  "box",
+                  "sphere"
+                ]
+              }
+            }
+          }
+        },
+        "priority": {
+          "type": "f32",
+          "doc": "Order among overlapping volumes: higher priorities apply after, and over, lower ones.",
+          "default": 0,
+          "range": [-1000, 1000]
+        },
+        "weight": {
+          "type": "f32",
+          "doc": "Overall strength of the volume's overrides, from 0 (none) to 1 (full).",
+          "default": 1,
           "range": [0, 1]
+        },
+        "overrides": {
+          "type": "list<PostOverride>",
+          "doc": "The settings this volume changes, one entry per group. Anything not listed comes from lower-priority volumes or the defaults.",
+          "default": []
         }
       }
     },
@@ -6871,7 +7382,8 @@ expression: out
             "linear",
             "normal",
             "mask",
-            "hdr"
+            "hdr",
+            "lut"
           ]
         },
         "mipmaps": {
@@ -6917,6 +7429,9 @@ expression: out
         },
         "hdr": {
           "doc": "Nonnegative linear radiance, BC6H UFLOAT."
+        },
+        "lut": {
+          "doc": "A colour lookup table strip (post-process volumes' grading): values kept as authored, uncompressed RGBA half floats, without mips."
         }
       }
     },
@@ -7894,6 +8409,22 @@ expression: out
           "type": "AcousticPath",
           "doc": "Worker-computed occlusion, transmission and reflection send.",
           "default": {}
+        }
+      }
+    },
+    "VolumeShape": {
+      "kind": "enum",
+      "doc": "Where a post-process volume applies.",
+      "module": "render",
+      "variants": {
+        "global": {
+          "doc": "Everywhere, wherever the camera is."
+        },
+        "box": {
+          "doc": "Inside a 1 m cube centred on the entity, sized and turned by its transform."
+        },
+        "sphere": {
+          "doc": "Inside a 1 m diameter sphere centred on the entity, sized by its transform's scale."
         }
       }
     },

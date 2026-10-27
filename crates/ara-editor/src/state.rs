@@ -1,10 +1,12 @@
 //! Navigation state is an op document with a history independent of scene undo.
+mod layout_file;
 use ara_doc::{AssetId, Document, Edit, RecordId, Workspace};
 use ara_ops::{Author, Store, TxnMeta};
 use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
 use ara_schema::{FieldPath, Schema, SchemaDb};
 use ara_ui::docking::{Axis, DockDrop, DockLayout, DockNode, Floating};
 use glam::{Quat, Vec3};
+pub(crate) use layout_file::{MIGRATION_NOTICE, restore as restore_layout};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -23,6 +25,8 @@ pub enum Tool {
     Rotate,
     /// Scale along an axis or uniformly.
     Scale,
+    /// Move, rotate or scale with the handle grabbed in the combined gizmo.
+    Universal,
 }
 /// Perspective scene camera; this is editor state, never gameplay state.
 /// Fields missing from older saved state take their defaults.
@@ -145,7 +149,7 @@ pub struct EditorState {
     pub focus_field: Option<String>,
     /// Current dock tree, persisted per project.
     pub layout: DockNode,
-    /// Dock areas shown as just their tab strip (the default collapses `bottom`).
+    /// Dock areas shown as just their tab strip.
     pub collapsed_areas: BTreeSet<String>,
     /// Use Ara Light instead of the default Ara Dark.
     pub light: bool,
@@ -206,6 +210,10 @@ pub struct EditorState {
     pub asset_path: Option<String>,
     /// Folder shown by the asset browser, relative to the project root.
     pub asset_folder: String,
+    /// Folder sidebar width in logical pixels, saved per project.
+    pub asset_sidebar_width: f32,
+    /// Explicitly expanded asset folders; all other folders start closed.
+    pub asset_expanded_folders: BTreeSet<String>,
     /// Show thumbnail cards instead of compact asset rows.
     pub asset_grid: bool,
     /// Active material, effect or animation document identity.
@@ -291,6 +299,8 @@ impl Default for EditorState {
             recent_scenes: Vec::new(),
             asset_path: None,
             asset_folder: String::new(),
+            asset_sidebar_width: 168.,
+            asset_expanded_folders: BTreeSet::new(),
             asset_grid: true,
             resource: None,
             canvas: Default::default(),
@@ -335,6 +345,8 @@ impl EditorState {
         self.doc != other.doc
             || self.asset_path != other.asset_path
             || self.asset_folder != other.asset_folder
+            || self.asset_sidebar_width != other.asset_sidebar_width
+            || self.asset_expanded_folders != other.asset_expanded_folders
             || self.asset_grid != other.asset_grid
             || self.resource != other.resource
             || self.canvas_add != other.canvas_add
@@ -530,24 +542,6 @@ pub fn move_panel(dock: &mut DockLayout, panel: &str, slot: &str) -> ara_ui::Res
             DockNode::Split { first, .. } => first_area(first),
         }
     }
-    // The Hierarchy's area sits above the Inspector's: split that area again.
-    if slot == "outline" && !has_area(dock.root(), slot) {
-        if !has_area(dock.root(), "right") {
-            return move_panel(dock, panel, "right");
-        }
-        if !dock.contains(panel) {
-            add_tab(dock, "right", panel)?;
-        }
-        return dock.drop_tab(
-            panel,
-            DockDrop::Split {
-                area: "right".into(),
-                new_area: "outline".into(),
-                axis: Axis::Vertical,
-                before: true,
-            },
-        );
-    }
     let target = if has_area(dock.root(), slot) {
         slot.to_owned()
     } else if slot == "view" {
@@ -583,7 +577,7 @@ pub fn move_panel(dock: &mut DockLayout, panel: &str, slot: &str) -> ara_ui::Res
         active: 0,
     };
     let (axis, ratio, before) = match slot {
-        "left" => (Axis::Horizontal, 0.18, true),
+        "left" | "outline" => (Axis::Horizontal, 0.18, true),
         "right" => (Axis::Horizontal, 0.78, false),
         _ => (Axis::Vertical, 0.74, false),
     };
@@ -640,92 +634,34 @@ fn split(axis: Axis, ratio: f32, first: DockNode, second: DockNode) -> DockNode 
         second: Box::new(second),
     }
 }
-/// Areas the default layout shows collapsed (just their tab strip).
-pub const DEFAULT_COLLAPSED: &[&str] = &["bottom"];
+/// Areas the default layout shows collapsed (none; the centre bottom dock starts open).
+pub const DEFAULT_COLLAPSED: &[&str] = &[];
 /// The default layout with its collapsed areas (new projects, Reset Layout).
 pub fn default_dock() -> ara_ui::Result<DockLayout> {
     Ok(DockLayout::new(default_layout())?.collapsed_by_default(DEFAULT_COLLAPSED))
 }
-/// The default arrangement before the collapsed bottom bar (2026-10-25): a project
-/// still on it is moved to the new default when it opens.
-fn old_default_layout() -> DockNode {
-    use Axis::{Horizontal as H, Vertical as V};
-    split(
-        H,
-        0.17,
-        split(
-            V,
-            0.5,
-            area("left", &["hierarchy"]),
-            area("bottom", &["assets", "console", "problems", "agents"]),
-        ),
-        split(
-            H,
-            0.76,
-            area(
-                "view",
-                &["scene", "game", "material", "vfx", "animation", "profiler"],
-            ),
-            area("right", &["inspector"]),
-        ),
-    )
-}
-/// The same tree shape, axes, areas and tabs; split ratios and active tabs differ
-/// freely (resizing or switching tabs is not rearranging).
-fn same_arrangement(a: &DockNode, b: &DockNode) -> bool {
-    match (a, b) {
-        (
-            DockNode::Area { id, tabs, .. },
-            DockNode::Area {
-                id: other,
-                tabs: other_tabs,
-                ..
-            },
-        ) => id == other && tabs == other_tabs,
-        (
-            DockNode::Split {
-                axis,
-                first,
-                second,
-                ..
-            },
-            DockNode::Split {
-                axis: other_axis,
-                first: other_first,
-                second: other_second,
-                ..
-            },
-        ) => {
-            axis == other_axis
-                && same_arrangement(first, other_first)
-                && same_arrangement(second, other_second)
-        }
-        _ => false,
-    }
-}
-/// Built-in layouts (Window › Layouts). The default gives the Scene and Game the
-/// left and centre at full height, Hierarchy over Inspector on the right, and a
-/// collapsed bottom bar (Assets, Console, Problems, Agents); tool pages and the
-/// Profiler open as floating windows ([`float_size`]).
+/// Built-in layouts. The default places full-height Hierarchy and Inspector beside
+/// Scene/Game above a centre-only bottom dock. Tool pages and the Profiler open
+/// as floating windows ([`float_size`]).
 pub fn preset_layout(name: &str) -> Option<DockNode> {
     use Axis::{Horizontal as H, Vertical as V};
     const DOCUMENTS: &[&str] = &["scene", "game", "material", "vfx", "animation", "profiler"];
     Some(match name {
         "default" => split(
-            V,
-            0.7,
+            H,
+            0.18,
+            area("outline", &["hierarchy"]),
             split(
                 H,
-                0.78,
-                area("view", &["scene", "game"]),
+                0.73,
                 split(
                     V,
-                    0.42,
-                    area("outline", &["hierarchy"]),
-                    area("right", &["inspector"]),
+                    0.72,
+                    area("view", &["scene", "game"]),
+                    area("bottom", &["assets", "console", "problems", "agents"]),
                 ),
+                area("right", &["inspector"]),
             ),
-            area("bottom", &["assets", "console", "problems", "agents"]),
         ),
         "levelDesign" => split(
             H,
@@ -825,8 +761,14 @@ pub(crate) struct Navigation {
     /// Saves `.ara/editor-layout.json` off the UI thread (every tab switch, split drag
     /// or window move changes it; a synchronous write once took 203 ms of a click).
     layout: crate::persist::BackgroundWriter<String>,
+    /// The startup migration notice is emitted once, by a service call or tick.
+    layout_migrated: bool,
 }
 impl Navigation {
+    /// Consume the one-time saved-layout migration notice.
+    pub fn take_layout_notice(&mut self) -> bool {
+        std::mem::take(&mut self.layout_migrated)
+    }
     /// Layout writes that failed since the last call.
     pub fn take_failures(&self) -> Vec<String> {
         self.layout.take_failures()
@@ -836,20 +778,25 @@ impl Navigation {
     }
     pub fn new(root: &Path, mut state: EditorState) -> anyhow::Result<Self> {
         let path = root.join(".ara/editor-layout.json");
+        let mut layout_migrated = false;
         if path.exists() {
-            let fresh = || default_dock().map_err(|e| anyhow::anyhow!(e.to_string()));
-            let mut layout = fresh()?;
-            // A layout from an older editor that fails validation falls back to the default.
             let text = std::fs::read_to_string(&path)
                 .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
-            if layout.restore(&text).is_ok() {
-                // Still the old default (only resized or tab-switched): move it to the
-                // new one. Any other arrangement is the user's and stays.
-                if layout.floating().is_empty()
-                    && same_arrangement(layout.root(), &old_default_layout())
+            if let Ok(saved) = ara_json::parse(&text) {
+                if let Some(width) = saved["assets"]["sidebarWidth"]
+                    .as_f64()
+                    .filter(|w| w.is_finite())
                 {
-                    layout = fresh()?;
+                    state.asset_sidebar_width = (width as f32).clamp(96., 480.);
                 }
+                if let Ok(folders) =
+                    serde_json::from_value(saved["assets"]["expandedFolders"].clone())
+                {
+                    state.asset_expanded_folders = folders;
+                }
+            }
+            if let Ok((layout, migrated)) = restore_layout(&text) {
+                layout_migrated = migrated;
                 state.set_dock(&layout);
             }
         }
@@ -868,7 +815,7 @@ impl Navigation {
         );
         let mut ws = Workspace::default();
         ws.insert(".ara/editor-state.scene", document);
-        Ok(Self {
+        let navigation = Self {
             store: Store::new(db, ws),
             doc,
             record,
@@ -877,7 +824,12 @@ impl Navigation {
                 crate::persist::write_text(&path, &text)
                     .map_err(|e| format!("The window layout was not saved: {e}"))
             }),
-        })
+            layout_migrated,
+        };
+        if layout_migrated {
+            navigation.layout.save(layout_text(&navigation.state)?);
+        }
+        Ok(navigation)
     }
     pub fn commit(
         &mut self,
@@ -886,6 +838,8 @@ impl Navigation {
         why: &str,
     ) -> Result<Value, Vec<ara_diag::Diagnostic>> {
         let layout_changed = candidate.layout != self.state.layout
+            || candidate.asset_sidebar_width != self.state.asset_sidebar_width
+            || candidate.asset_expanded_folders != self.state.asset_expanded_folders
             || candidate.floating != self.state.floating
             || candidate.collapsed_areas != self.state.collapsed_areas;
         let value =
@@ -918,10 +872,7 @@ impl Navigation {
 
 /// The main dock tree and floating windows, as the canonical writer stores them.
 fn layout_text(state: &EditorState) -> anyhow::Result<String> {
-    state
-        .dock()
-        .and_then(|d| d.serialize())
-        .map_err(|e| anyhow::anyhow!(e.to_string()))
+    layout_file::serialize(state)
 }
 /// Save a named layout (Window › Layouts › Save Layout As…).
 pub(crate) fn write_layout(path: &Path, state: &EditorState) -> anyhow::Result<()> {

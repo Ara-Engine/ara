@@ -52,13 +52,16 @@ impl Controller {
         pointer: [f32; 2],
         rect: ara_ui::paint::Box2,
     ) -> ara_ui::Result<()> {
-        editor.begin_gesture()?;
+        let tool = handle.tool(editor.state.tool);
+        let operation = handles.for_tool(tool);
+        let handles = &operation;
+        editor.begin_gesture_tool(tool)?;
         let camera = editor.state.camera;
         let forward = (camera.target - camera.position()).normalize_or_zero();
-        let (vector, rotation, plane) = match handle {
+        let (vector, rotation, plane) = match handle.base() {
             overlay::Handle::Axis(axis) => (
                 Vec2::from(handles.ends[axis]) - Vec2::from(handles.origin),
-                (editor.state.tool == crate::state::Tool::Rotate)
+                (tool == crate::state::Tool::Rotate)
                     .then(|| {
                         overlay::plane_point(
                             &camera,
@@ -84,6 +87,9 @@ impl Controller {
                 overlay::plane_point(&camera, rect, pointer, handles.pivot, forward)
                     .map(|start| (forward, start)),
             ),
+            overlay::Handle::RotateAxis(_) | overlay::Handle::ScaleAxis(_) => {
+                unreachable!("base handle")
+            }
         };
         self.gizmo = Some(GizmoDrag {
             handle,
@@ -108,8 +114,10 @@ impl Controller {
         let drag = self.gizmo.as_ref()?;
         let camera = editor.state.camera;
         let snap = if editor.state.snapping {
-            match editor.state.tool {
-                crate::state::Tool::Translate => format!(" · snap {}", editor.state.move_snap),
+            match drag.handle.tool(editor.state.tool) {
+                crate::state::Tool::Translate | crate::state::Tool::Universal => {
+                    format!(" · snap {}", editor.state.move_snap)
+                }
                 crate::state::Tool::Rotate => format!(" · snap {}°", editor.state.rotate_snap),
                 crate::state::Tool::Scale => format!(" · snap {}", editor.state.scale_snap),
             }
@@ -119,12 +127,14 @@ impl Controller {
         let gesture = editor.gesture.as_mut()?;
         let typed = drag.typed.parse::<f32>().ok();
         let names = ["X", "Y", "Z"];
-        let (delta, text) = match drag.handle {
+        let (delta, text) = match drag.handle.base() {
             overlay::Handle::Axis(axis) => {
                 let movement = Vec2::from(position) - Vec2::from(drag.start);
                 let amount = movement.dot(drag.vector) / drag.vector.length_squared().max(0.01);
                 let amount = match gesture.tool {
-                    crate::state::Tool::Translate => typed.unwrap_or(amount * drag.length),
+                    crate::state::Tool::Translate | crate::state::Tool::Universal => {
+                        typed.unwrap_or(amount * drag.length)
+                    }
                     crate::state::Tool::Rotate => typed.unwrap_or_else(|| {
                         if let (Some((pivot, normal, start)), Some(rect)) = (drag.rotation, rect) {
                             overlay::plane_point(&camera, rect, position, pivot, normal)
@@ -143,7 +153,9 @@ impl Controller {
                 let mut delta = Vec3::ZERO;
                 delta[axis] = amount;
                 let value = match gesture.tool {
-                    crate::state::Tool::Translate => format!("{} {:+.3} m", names[axis], amount),
+                    crate::state::Tool::Translate | crate::state::Tool::Universal => {
+                        format!("{} {:+.3} m", names[axis], amount)
+                    }
                     crate::state::Tool::Rotate => format!("{} {:+.1}°", names[axis], amount),
                     crate::state::Tool::Scale => format!("{} ×{:.3}", names[axis], 1. + amount),
                 };
@@ -233,16 +245,25 @@ impl Controller {
                             }
                             27..=29 => {
                                 let axis = (scancode - 27) as usize;
-                                if let overlay::Handle::Axis(_) = drag.handle
+                                if let overlay::Handle::Axis(_) = drag.handle.base()
                                     && let Some(rect) = shell.viewport()
                                     && let Some(handles) =
                                         overlay::handles(view, &editor.state, rect)
                                 {
-                                    drag.handle = overlay::Handle::Axis(axis);
+                                    let tool = drag.handle.tool(editor.state.tool);
+                                    let handles = handles.for_tool(tool);
+                                    drag.handle = match drag.handle {
+                                        overlay::Handle::RotateAxis(_) => {
+                                            overlay::Handle::RotateAxis(axis)
+                                        }
+                                        overlay::Handle::ScaleAxis(_) => {
+                                            overlay::Handle::ScaleAxis(axis)
+                                        }
+                                        _ => overlay::Handle::Axis(axis),
+                                    };
                                     drag.vector =
                                         Vec2::from(handles.ends[axis]) - Vec2::from(handles.origin);
-                                    drag.rotation = (editor.state.tool
-                                        == crate::state::Tool::Rotate)
+                                    drag.rotation = (tool == crate::state::Tool::Rotate)
                                         .then(|| {
                                             overlay::plane_point(
                                                 &editor.state.camera,
@@ -290,7 +311,7 @@ impl Controller {
             Event::MouseMotion { position, delta } => {
                 shell.pointer = position;
                 editor.input_active();
-                if shell.move_scrub()? {
+                if shell.move_picker()? || shell.move_scrub()? {
                     return Ok((true, false, false));
                 }
                 let inside = shell
@@ -354,6 +375,23 @@ impl Controller {
                     self.buttons[button as usize] = pressed;
                 }
                 editor.input_active();
+                // The colour picker's eyedropper owns clicks while it picks: a left
+                // click (or releasing a drag from its button) picks, a right click cancels.
+                if shell.eyedropper_active() {
+                    match (button, pressed) {
+                        (1, true) if !shell.eyedropper_held() => shell.pick_eyedropper(editor)?,
+                        (1, false) => {
+                            shell.finish_picker(editor)?;
+                            shell.event(InputEvent::Cancel, clipboard)?;
+                        }
+                        (3, true) => {
+                            shell.cancel_eyedropper();
+                            shell.rebuild(editor)?;
+                        }
+                        _ => {}
+                    }
+                    return Ok((true, true, false));
+                }
                 if pressed
                     && shell
                         .viewport()
@@ -368,15 +406,10 @@ impl Controller {
                     shell.commit_fields(editor)?;
                     shell.input.blur(&mut shell.ui);
                 }
-                if pressed
-                    && shell.menu.is_some()
-                    && !shell.menu_contains(shell.pointer)
-                    && !shell.over_open_title()
-                {
-                    // A click outside an open menu closes it; another title opens its
-                    // own, and the open menu's title closes it when released.
-                    shell.menu = None;
-                    shell.rebuild(editor)?;
+                // A press outside the open popovers (menus, the palette, pickers) closes
+                // them; another menu title then opens its own, and the open menu's title
+                // closes it when released.
+                if pressed && shell.dismiss_popovers(editor, shell.pointer)? {
                     dirty = true;
                 }
                 if button == 3 && !pressed && !self.orbited {
@@ -443,7 +476,11 @@ impl Controller {
                         if !inside {
                             shell.commit_fields(editor)?;
                             shell.event(InputEvent::PointerDown(shell.pointer), clipboard)?;
-                            if !shell.begin_scrub(editor)? && !shell.begin_column_drag() {
+                            if !shell.input.scrolling()
+                                && !shell.begin_picker_drag(editor)?
+                                && !shell.begin_scrub(editor)?
+                                && !shell.begin_column_drag()
+                            {
                                 shell.begin_drag();
                             }
                         } else {
@@ -473,11 +510,11 @@ impl Controller {
                                     if let Some(path) = shell.pick_field.take() {
                                         if let Some(entity) = entity {
                                             editor.apply(
-                                                crate::inspector::edit_commands(
+                                                shell.field_commands(
                                                     &editor.state.selection,
                                                     &path,
-                                                    &json!(entity),
-                                                ),
+                                                    json!(entity),
+                                                )?,
                                                 "Pick entity reference",
                                                 None,
                                             )?;
@@ -489,7 +526,7 @@ impl Controller {
                             }
                         }
                     } else if !pressed {
-                        if shell.finish_scrub(editor, false)? {
+                        if shell.finish_picker(editor)? || shell.finish_scrub(editor, false)? {
                             shell.event(InputEvent::Cancel, clipboard)?;
                         } else if self.gizmo.take().is_some() {
                             editor.finish_gesture(false)?;
@@ -520,19 +557,40 @@ impl Controller {
                 if shell
                     .viewport()
                     .is_some_and(|r| r.contains(shell.pointer[0], shell.pointer[1]))
+                    && shell
+                        .ui
+                        .hit_test(shell.pointer[0], shell.pointer[1])
+                        .is_none()
+                    && shell.ui.scrollbar_at(shell.pointer).is_none()
+                    && shell.menu.is_none()
+                    && !editor.state.palette
                 {
                     let mut camera = editor.state.camera;
                     camera.zoom(delta[1]);
                     set_camera(editor, &camera)?;
                     scene_dirty = true;
-                } else if !shell.scroll_hierarchy(-delta[1] * 52.)? {
-                    shell.event(
-                        InputEvent::Wheel {
-                            position: shell.pointer,
-                            delta: [-delta[0] * 26., -delta[1] * 26.],
-                        },
-                        clipboard,
-                    )?;
+                } else {
+                    // Keep the old card pool scrollable until its owner adopts <scroll>.
+                    let legacy_grid = !editor.state.palette
+                        && shell.menu.is_none()
+                        && shell.ui.find("asset-grid").is_some_and(|i| {
+                            shell.ui.shown(i)
+                                && shell.ui.scroll_position(i).is_none()
+                                && shell.ui.nodes[i]
+                                    .rect
+                                    .contains(shell.pointer[0], shell.pointer[1])
+                        });
+                    if legacy_grid {
+                        shell.scroll_hierarchy(-delta[1] * 26.)?;
+                    } else {
+                        shell.event(
+                            InputEvent::Wheel {
+                                position: shell.pointer,
+                                delta: [-delta[0] * 26., -delta[1] * 26.],
+                            },
+                            clipboard,
+                        )?;
+                    }
                 }
                 dirty = true;
             }

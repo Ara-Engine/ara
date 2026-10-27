@@ -1,6 +1,6 @@
 //! Camera-local resources; pipeline handles and uploaded scene content are shared.
 use super::*;
-use crate::look::gpu::{LookGpu, Pipelines as LookPipelines, STATE_BYTES};
+use crate::look::gpu::{LookGpu, STATE_BYTES};
 
 pub(super) struct ViewState {
     size: [u32; 2],
@@ -225,38 +225,18 @@ fn fork_look(
     let frame_index = gpu.storage_buffer(frame)?.index;
     let state_index = gpu.storage_buffer(state)?.index;
     gpu.upload(state, &[0; STATE_BYTES])?;
-    let p = &source.pipelines;
     Ok(LookGpu {
         look: source.look,
         quality: crate::look::Quality::default(),
-        pipelines: LookPipelines {
-            transmittance: p.transmittance,
-            multiscatter: p.multiscatter,
-            sky_view: p.sky_view,
-            sky_irradiance: p.sky_irradiance,
-            sky_prefilter: p.sky_prefilter,
-            fog: p.fog,
-            exposure: p.exposure,
-            bloom: p.bloom,
-            post: p.post,
-            gi_relight: p.gi_relight,
-            gi_scatter: p.gi_scatter,
-            ao_trace: p.ao_trace,
-            ao_denoise: p.ao_denoise,
-            gi_gather: p.gi_gather,
-            ssr_pyramid: p.ssr_pyramid,
-            ssr_trace: p.ssr_trace,
-            horizon_sun: p.horizon_sun,
-            horizon_sky: p.horizon_sky,
-            vsm_mark: p.vsm_mark,
-            vsm_project: p.vsm_project,
-            gi_relight_vsm: p.gi_relight_vsm,
-        },
+        pipelines: source.pipelines,
         frame,
         frame_index,
         state,
         state_index,
         state_access: Access::HostWrite,
+        lut: source.lut,
+        lut_index: source.lut_index,
+        lut_size: source.lut_size,
         images: source.images.map(|_| None),
         sampled: source.sampled.map(|_| 0),
         storage: source.storage.map(|_| 0),
@@ -268,6 +248,10 @@ fn fork_look(
         display: size,
         sky: None,
         deferred: false,
+        frame_dof: false,
+        frame_motion: false,
+        frame_wire: false,
+        unseen: false,
         deferred_history: None,
         settle: 0,
         seeded: false,

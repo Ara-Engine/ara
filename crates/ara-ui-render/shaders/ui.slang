@@ -21,6 +21,32 @@ float roundedDistance(float2 p,float2 size,float radius) {
     radius=clamp(radius,0,min(size.x,size.y)*0.5); float2 q=abs(p-size*0.5)-size*0.5+radius;
     return length(max(q,0))+min(max(q.x,q.y),0)-radius;
 }
+// Mode 9 fills (ara_ui::paint::Fill): sRGB transfer, full-saturation hue.
+float3 srgbToLinear(float3 c){return select(c<=0.04045,c/12.92,pow((c+0.055)/1.055,2.4));}
+float3 linearToSrgb(float3 c){return select(c<=0.0031308,c*12.92,1.055*pow(max(c,0),1.0/2.4)-0.055);}
+float3 hueColor(float h){return saturate(abs(fmod(h*6+float3(0,4,2),6)-3)-1);}
+// Linear gradient (kind 0; flags 1 vertical, 2 linear light), hue strip (1), hue ring
+// (2: annulus of thickness z, 0 deg red at +x, counterclockwise) or checkerboard (3).
+float4 fillColor(Instance i,float2 p,inout float shape){
+    uint kind=uint(i.parameters.y+0.5);float2 size=i.rect.zw;
+    if(kind==0){
+        uint flags=uint(i.parameters.w+0.5);
+        float t=saturate((flags&1)!=0?p.y/max(size.y,0.0001):p.x/max(size.x,0.0001));
+        float4 c=lerp(i.color,i.uv,t);
+        if((flags&2)!=0)c.rgb=linearToSrgb(lerp(srgbToLinear(i.color.rgb),srgbToLinear(i.uv.rgb),t));
+        return c;
+    }
+    if(kind==1)return float4(hueColor(saturate(p.x/max(size.x,0.0001))),i.color.a);
+    if(kind==2){
+        float2 d=p-size*0.5;float r=length(d);float outer=min(size.x,size.y)*0.5;float inner=outer-i.parameters.z;
+        float aa=max(fwidth(r),0.0001);
+        shape=saturate((outer-r)/aa+0.5)*saturate((r-inner)/aa+0.5);
+        float h=frac(atan2(-d.y,d.x)/6.28318530718+1);
+        return float4(hueColor(h),i.color.a);
+    }
+    float cell=max(i.parameters.z,1);int2 q=int2(floor(p/cell));
+    return ((q.x+q.y)&1)==0?i.color:i.uv;
+}
 [shader("fragment")]
 float4 fragmentMain(Varying input) : SV_Target {
     Instance i=instances[input.instanceId]; float4 color=i.color;
@@ -34,6 +60,10 @@ float4 fragmentMain(Varying input) : SV_Target {
             coverage-=hole;
         }
         color.a*=coverage;
+    } else if(pc.mode==9) {
+        float d=roundedDistance(input.local,i.rect.zw,i.parameters.x);
+        float shape=saturate(0.5-d/max(fwidth(d),0.0001));
+        color=fillColor(i,input.local,shape); color.a*=shape;
     } else if(pc.mode==6) {
         float2 a=i.uv.xy,b=i.uv.zw,d=b-a;
         float t=saturate(dot(input.local-a,d)/max(dot(d,d),0.0001));

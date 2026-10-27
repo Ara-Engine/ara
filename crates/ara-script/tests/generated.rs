@@ -131,6 +131,10 @@ fn every_component_and_variable_field_has_a_generated_binding() {
         }
     }
     let mut variable = SchemaDb::new();
+    assert!(text.contains("ColorPicker(Hdr = true)"));
+    assert!(text.contains("ColorPicker(Temperature = true)"));
+    assert!(text.contains("struct PostProcessVolume : IComponent<PostProcessVolume>"));
+    assert!(text.contains("struct PostOverride"));
     assert!(variable.add_json_types(&json!({"$schema":"ara://schema/types/1","types":{"Label":{"kind":"component","doc":"Label.","fields":{"text":{"type":"string","doc":"Text."}}}}})).is_empty());
     assert!(
         csgen::csharp(&variable, &[])

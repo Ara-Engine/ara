@@ -3,13 +3,20 @@ use ara_ui::input::InputEvent;
 use ara_ui_text::Clipboard;
 impl Shell {
     pub(crate) fn hover_tooltip(&mut self) -> ara_ui::Result<()> {
-        let description = self.ui.paint_order.iter().rev().find_map(|i| {
-            let node = &self.ui.nodes[*i];
-            (node.rect.contains(self.pointer[0], self.pointer[1])
-                && node.clip.contains(self.pointer[0], self.pointer[1]))
-            .then(|| node.element.attrs.get("description").map(String::as_str))
-            .flatten()
-        });
+        let description = self
+            .ui
+            .scrollbar_at(self.pointer)
+            .is_none()
+            .then(|| {
+                self.ui.paint_order.iter().rev().find_map(|i| {
+                    let node = &self.ui.nodes[*i];
+                    (node.rect.contains(self.pointer[0], self.pointer[1])
+                        && node.clip.contains(self.pointer[0], self.pointer[1]))
+                    .then(|| node.element.attrs.get("description").map(String::as_str))
+                    .flatten()
+                })
+            })
+            .flatten();
         if description == self.tooltip_text.as_deref() {
             return Ok(());
         }
@@ -35,7 +42,8 @@ impl Shell {
         event: InputEvent,
         clipboard: &mut dyn Clipboard,
     ) -> ara_ui::Result<()> {
-        self.input.event(&mut self.ui, event, clipboard)
+        self.input.event(&mut self.ui, event, clipboard)?;
+        self.sync_scroll_views()
     }
     /// Dispatch queued widget actions through the typed engine endpoint.
     pub fn dispatch(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
@@ -44,6 +52,16 @@ impl Shell {
         let mut rebuild = false;
         let result = (|| -> ara_ui::Result<()> {
             for action in actions {
+                if action.name == "ResizeAssets" {
+                    if let Some(ratio) = action.value.as_f64()
+                        && let Some(i) = self.ui.find("assets-content")
+                    {
+                        let width = self.ui.nodes[i].rect.w * ratio as f32;
+                        editor.action("editor.workspace", json!({"sidebarWidth":width}))?;
+                        rebuild = true;
+                    }
+                    continue;
+                }
                 if action.name == "ResizeDock" {
                     if let Some(index) = self.ui.by_id(action.node) {
                         let id = &self.ui.nodes[index].element.id;
@@ -67,6 +85,15 @@ impl Shell {
                     continue;
                 };
                 match binding {
+                    Binding::AssetRenameValue => {
+                        if let Some(rename) = &mut self.asset_rename {
+                            rename.name = action.value.as_str().unwrap_or("").into();
+                        }
+                    }
+                    Binding::AssetFolder(path, arrow) => {
+                        self.asset_folder_action(editor, path, *arrow)?;
+                        rebuild = true;
+                    }
                     Binding::GraphLabel(doc, key) => {
                         self.drafts.insert(
                             format!("@graph-label|{doc}|{key}"),
@@ -126,10 +153,8 @@ impl Shell {
                         editor.action("editor.workspace", json!({"plane":plane}))?;
                         rebuild = true;
                     }
-                    Binding::ComponentCollapse(name) => {
-                        if !self.collapsed_components.remove(name) {
-                            self.collapsed_components.insert(name.clone());
-                        }
+                    Binding::ComponentCollapse(name) | Binding::NestedCollapse(name) => {
+                        self.inspector_sections.toggle(name);
                         rebuild = true;
                     }
                     Binding::Command(id, target) => {
@@ -137,6 +162,7 @@ impl Shell {
                         let close_palette = editor.state.palette;
                         self.remember(id);
                         self.menu = None;
+                        self.add_component = None;
                         self.mnemonics = false;
                         if close_palette {
                             editor.action("editor.palette", json!({"open":false}))?;
@@ -154,32 +180,16 @@ impl Shell {
                         rebuild = true;
                     }
                     Binding::AssetPicker(path, kind) => {
-                        let at = self
-                            .ui
-                            .by_id(action.node)
-                            .map(|i| {
-                                let r = self.ui.nodes[i].rect;
-                                [r.x, r.y + r.h + 2.]
-                            })
-                            .unwrap_or(self.pointer);
-                        self.open_menu_at(
+                        self.open_menu_from(
                             super::menu::Source::Assets(path.clone(), kind.clone()),
-                            at,
+                            action.node,
                         );
                         rebuild = true;
                     }
                     Binding::EnumMenu(path, options) => {
-                        let at = self
-                            .ui
-                            .by_id(action.node)
-                            .map(|i| {
-                                let r = self.ui.nodes[i].rect;
-                                [r.x, r.y + r.h + 2.]
-                            })
-                            .unwrap_or(self.pointer);
-                        self.open_menu_at(
+                        self.open_menu_from(
                             super::menu::Source::Enum(path.clone(), options.clone()),
-                            at,
+                            action.node,
                         );
                         rebuild = true;
                     }
@@ -188,6 +198,13 @@ impl Shell {
                             menu.open.truncate(*level);
                             menu.open.push(*row);
                             menu.active = None;
+                        }
+                        rebuild = true;
+                    }
+                    Binding::AddComponentFilter => {
+                        if let Some(add) = &mut self.add_component {
+                            add.query = action.value.as_str().unwrap_or("").into();
+                            add.active = 0;
                         }
                         rebuild = true;
                     }
@@ -200,15 +217,10 @@ impl Shell {
                         rebuild = true;
                     }
                     Binding::ContextMenu(kind, target) => {
-                        let at = self
-                            .ui
-                            .by_id(action.node)
-                            .map(|i| {
-                                let r = self.ui.nodes[i].rect;
-                                [r.x, r.y + r.h + 2.]
-                            })
-                            .unwrap_or(self.pointer);
-                        self.open_menu_at(super::menu::Source::Context(*kind, target.clone()), at);
+                        self.open_menu_from(
+                            super::menu::Source::Context(*kind, target.clone()),
+                            action.node,
+                        );
                         rebuild = true;
                     }
                     Binding::CameraFov => {
@@ -307,13 +319,13 @@ impl Shell {
                         }
                     }
                     Binding::Scrub(_, _) => {}
-                    Binding::ColorPicker(path) => {
-                        self.color_picker = if self.color_picker.as_ref() == Some(path) {
-                            None
-                        } else {
-                            Some(path.clone())
-                        };
+                    Binding::NestedScrub { .. } => {}
+                    Binding::ColorPicker(target, hints) => {
+                        self.toggle_color_picker(editor, target, *hints)?;
                         rebuild = true;
+                    }
+                    Binding::Picker(control) => {
+                        rebuild |= self.picker_control(editor, *control, &action.value)?;
                     }
                     Binding::Diagnostic(diagnostic) => {
                         if let Some(record) = &diagnostic.location.record {
@@ -343,6 +355,7 @@ impl Shell {
                     Binding::Content(commands, why) => {
                         editor.apply(commands.clone(), why, None)?;
                         self.menu = None;
+                        self.add_component = None;
                         if editor.state.palette {
                             editor.action("editor.palette", json!({"open":false}))?;
                         }
@@ -388,11 +401,7 @@ impl Shell {
 
                         if let Some(path) = self.pick_field.take() {
                             editor.apply(
-                                crate::inspector::edit_commands(
-                                    &editor.state.selection,
-                                    &path,
-                                    &json!(entity),
-                                ),
+                                self.field_commands(&editor.state.selection, &path, json!(entity))?,
                                 "Pick entity reference",
                                 None,
                             )?;
@@ -401,15 +410,28 @@ impl Shell {
                         }
                         rebuild = true;
                     }
-                    Binding::Nested(target, leaf, nullable) => {
+                    Binding::Nested(target, leaf, nullable, unit) => {
+                        let path = target
+                            .split_once('#')
+                            .map_or(target.as_str(), |(path, _)| path);
+                        if self.fields.get(path).is_some_and(|field| field.read_only) {
+                            continue;
+                        }
+                        for entity in &editor.state.selection.clone() {
+                            editor.field_gesture(entity, path, true)?;
+                        }
                         let text = action
                             .value
                             .as_str()
                             .map(str::to_owned)
                             .unwrap_or_else(|| action.value.to_string());
-                        self.drafts.insert(leaf.draft(target, *nullable), text);
+                        self.drafts
+                            .insert(leaf.draft(target, *nullable, unit.as_deref()), text);
                     }
                     Binding::Field(path, axis) => {
+                        if self.fields.get(path).is_some_and(|field| field.read_only) {
+                            continue;
+                        }
                         if !action.value.is_boolean() {
                             let gesture_path = axis.map_or_else(
                                 || path.clone(),
@@ -598,6 +620,15 @@ impl Shell {
     }
     /// Commit pending inspector text and slider values as one transaction.
     pub fn commit_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        if self.commit_picker_text(editor)? && self.drafts.keys().all(|k| k.starts_with("@picker|"))
+        {
+            self.rebuild(editor)?;
+            return Ok(true);
+        }
+        if self.commit_asset_rename(editor)? {
+            self.rebuild(editor)?;
+            return Ok(true);
+        }
         if self.commit_graph_labels(editor)? && self.drafts.is_empty() {
             self.rebuild(editor)?;
             return Ok(true);
@@ -718,6 +749,9 @@ impl Shell {
             return Ok(false);
         }
         for (key, text) in &self.drafts {
+            if key.starts_with("@scrub|") || key.starts_with("@picker|") {
+                continue;
+            }
             if key == "@name" {
                 commands.extend(crate::inspector::edit_commands(
                     &editor.state.selection,
@@ -727,16 +761,45 @@ impl Shell {
                 continue;
             }
             let edit = self.draft_edit(key, text)?;
+            if edit.axis.is_none()
+                && matches!(
+                    edit.field.widget,
+                    crate::inspector::Widget::Vector { color: true, .. }
+                )
+            {
+                let rgba = matches!(
+                    edit.field.widget,
+                    crate::inspector::Widget::Vector { rgba: true, .. }
+                );
+                for axis in 0..3 {
+                    let name = if rgba {
+                        ["r", "g", "b"][axis]
+                    } else {
+                        ["x", "y", "z"][axis]
+                    };
+                    commands.extend(crate::inspector::edit_commands(
+                        &editor.state.selection,
+                        &format!("{}.{}", edit.field.path, name),
+                        &edit.value[axis],
+                    ));
+                }
+                continue;
+            }
             commands.extend(crate::inspector::edit_commands(
                 &editor.state.selection,
                 &edit.path(),
                 &edit.value,
             ));
         }
-        let result = editor.apply(commands, "Edit inspector values", None);
+        let result = if commands.is_empty() {
+            Ok(Value::Null)
+        } else {
+            editor.apply(commands, "Edit inspector values", None)
+        };
         editor.end_field_gestures()?;
         result?;
-        self.drafts.clear();
+        // A picker gesture's preview marker outlives a commit around it.
+        self.drafts.retain(|key, _| key.starts_with("@picker|"));
         self.rename = false;
         self.rebuild(editor)?;
         Ok(true)
@@ -754,20 +817,16 @@ impl Shell {
                 field.widget,
                 crate::inspector::Widget::Vector { color: true, .. }
             ) {
-            // `#RRGGBB` sRGB hex becomes linear channels; alpha keeps its value.
-            let hex = text.trim().trim_start_matches('#');
-            if hex.len() != 6 {
-                return Err("Enter a colour as #RRGGBB".into());
+            // `#RRGGBB` sRGB hex becomes linear channels; alpha keeps its value, and an
+            // HDR colour its intensity (the hex is its base colour).
+            let mut linear = compound::hex_linear(text)?;
+            if let crate::inspector::Widget::Vector { hdr: true, .. } = field.widget {
+                let channel = |n: usize| field.value.get(n).and_then(Value::as_f64).unwrap_or(0.);
+                let (_, stops) =
+                    super::color::math::split_hdr([channel(0), channel(1), channel(2)]);
+                linear = linear.map(|c| super::color::math::stable(c * stops.exp2()));
             }
-            let channel = |n: usize| -> ara_ui::Result<f64> {
-                Ok((u8::from_str_radix(&hex[n * 2..n * 2 + 2], 16)? as f64 / 255.).powf(2.2))
-            };
-            let round = |v: f64| (v * 10000.).round() / 10000.;
-            let mut rgb = vec![
-                json!(round(channel(0)?)),
-                json!(round(channel(1)?)),
-                json!(round(channel(2)?)),
-            ];
+            let mut rgb: Vec<Value> = linear.into_iter().map(|v| json!(v)).collect();
             // A `color` keeps its alpha; a colour-hinted vec3 has none.
             if let crate::inspector::Widget::Vector { count: 4, .. } = field.widget {
                 rgb.push(field.value.get(3).cloned().unwrap_or(json!(1.)));
@@ -782,6 +841,9 @@ impl Shell {
                 .ok()
                 .filter(Value::is_number)
                 .unwrap_or_else(|| json!(number))
+        } else if matches!(field.widget, crate::inspector::Widget::Entity) && text.trim().is_empty()
+        {
+            Value::Null
         } else if matches!(field.widget, crate::inspector::Widget::Text) && !field.value.is_string()
         {
             serde_json::from_str(text)?
@@ -793,7 +855,12 @@ impl Shell {
         } else {
             Some(axis.parse()?)
         };
-        Ok(DraftEdit { field, axis, value })
+        Ok(DraftEdit {
+            field,
+            axis,
+            value,
+            keeps_alpha: true,
+        })
     }
 
     /// The selected entities' records with the typed Inspector drafts applied, for a
@@ -806,6 +873,51 @@ impl Shell {
     ) -> Option<BTreeMap<String, ara_doc::Record>> {
         use crate::world::EditWorldView;
         let mut records = BTreeMap::new();
+        if let Some(scrub) = &self.scrub
+            && let Some(field) = self.fields.get(&scrub.path)
+        {
+            for (entity, value) in scrub.values() {
+                let value = if let Some(pointer) = &scrub.pointer {
+                    let Some(whole) = compound::preview_value(&field.value, pointer, value) else {
+                        continue;
+                    };
+                    whole
+                } else {
+                    value
+                };
+                let edit = DraftEdit {
+                    field,
+                    axis: scrub.axis,
+                    value,
+                    keeps_alpha: true,
+                };
+                if let Some(base) = view.entities().get(entity)
+                    && let Some(record) = edit.applied(base.record.clone())
+                {
+                    records.insert(entity.to_owned(), record);
+                }
+            }
+        }
+        // The colour picker previews its whole value on the entities it edits.
+        if let Some((field, value, entities)) = self
+            .color_picker
+            .as_ref()
+            .and_then(|picker| picker.preview(&self.drafts))
+        {
+            let edit = DraftEdit {
+                field,
+                axis: None,
+                value,
+                keeps_alpha: false,
+            };
+            for entity in entities {
+                if let Some(base) = view.entities().get(entity)
+                    && let Some(record) = edit.applied(base.record.clone())
+                {
+                    records.insert(entity.clone(), record);
+                }
+            }
+        }
         for (key, text) in &self.drafts {
             if key.starts_with('@') {
                 continue;
@@ -832,6 +944,9 @@ struct DraftEdit<'a> {
     field: &'a crate::inspector::Field,
     axis: Option<usize>,
     value: Value,
+    /// A whole colour keeps the record's alpha (typed hex has none); the picker's
+    /// value carries its own.
+    keeps_alpha: bool,
 }
 impl DraftEdit<'_> {
     /// The `property.set` path: `Transform.position.x`, `MeshRenderer.color.r`.
@@ -866,13 +981,36 @@ impl DraftEdit<'_> {
         }
         let object = at.as_object_mut()?;
         match self.axis {
+            None if self.keeps_alpha
+                && matches!(
+                    self.field.widget,
+                    crate::inspector::Widget::Vector {
+                        color: true,
+                        count: 4,
+                        ..
+                    }
+                ) =>
+            {
+                let mut value = self.value.clone();
+                value[3] = object
+                    .get(&field)
+                    .and_then(|value| value.get(3))
+                    .cloned()
+                    .or_else(|| self.field.fallback.get(3).cloned())
+                    .unwrap_or(json!(1.));
+                object.insert(field, value);
+            }
             None => {
                 object.insert(field, self.value.clone());
             }
             Some(axis) => {
-                let vector = object
-                    .entry(field)
-                    .or_insert_with(|| self.field.value.clone());
+                let vector = object.entry(field).or_insert_with(|| {
+                    if self.field.value.is_array() {
+                        self.field.value.clone()
+                    } else {
+                        self.field.fallback.clone()
+                    }
+                });
                 *vector.as_array_mut()?.get_mut(axis)? = self.value.clone();
             }
         }

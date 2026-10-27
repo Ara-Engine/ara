@@ -186,6 +186,48 @@ fn initial_bounces_use_a_bounded_window_then_restore_the_preset_budget() -> Resu
 }
 
 #[test]
+fn unseen_frames_converge_whole_bounces_and_show_the_volume_without_a_fade() -> Result<()> {
+    let mut renderer = renderer("unseen")?;
+    let mut quality = *renderer.quality();
+    quality.gi_budget = 256;
+    renderer.set_quality(quality)?;
+    renderer.set_unseen(true);
+    let probes = 8192;
+    let mut statics = vec![[1., 1., 0., 0.]; probes * crate::look::gi::STATIC_VECTORS];
+    for p in 0..probes {
+        statics[p * crate::look::gi::STATIC_VECTORS + 64] = [0., 0., 0., 1.];
+    }
+    renderer.set_probe_surfaces(Some(&ProbeSurfaces {
+        layout: ProbeLayout::single(crate::look::gi::ProbeLattice {
+            origin: [-1.; 3],
+            spacing: [2.; 3],
+            counts: [32, 16, 16],
+        }),
+        texels: vec![[255 << 24, 0, 0, 0]; probes * SURFACE_TEXELS],
+        statics,
+    }))?;
+    // One whole bounce per frame (a seen volume takes two, then a 30-frame fade).
+    for frame in 1..=8 {
+        renderer.render_view(&camera(), 1., ViewMode::Lit)?;
+        assert_eq!(
+            renderer.look.gi.as_ref().context("GI volume")?.converge,
+            8 - frame
+        );
+    }
+    renderer.render_view(&camera(), 1., ViewMode::Lit)?;
+    assert!(renderer.probe_gi_ready(), "no fade while unseen");
+    renderer.set_unseen(false);
+    renderer.render_view(&camera(), 1., ViewMode::Lit)?;
+    assert_eq!(
+        renderer.look.gi.as_ref().context("GI volume")?.cursor,
+        512,
+        "shown frames relight at the preset budget"
+    );
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}
+
+#[test]
 fn explicit_capture_can_finish_a_partial_probe_clear_before_delivering_records() -> Result<()> {
     let mut renderer = renderer("capture")?;
     assert!(!renderer.preallocate_probe_volume(layout(), 4)?);

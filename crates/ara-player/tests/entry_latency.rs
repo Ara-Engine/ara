@@ -180,7 +180,7 @@ fn real_project_warm_play_entry() {
     }
     let report = json!({"format":"ara.play-entry/1","windowed":windowed,
         "cold":cold,"background":background,
-        "measurement":"start request to first completed shared frame notice; windowed status is an upper bound with a 250 ms heartbeat; excludes editor display",
+        "measurement":"start request to first completed shared frame notice (embedded players publish their first frame once its presentation is ready, at most 1.5 s after their first content frame); windowed status is an upper bound with a 250 ms heartbeat; excludes editor display",
         "source":source,"player":player,"assetWarmupMs":asset_warmup_ms,
         "publishedAssets":asset_count,"runs":runs});
     std::fs::write(

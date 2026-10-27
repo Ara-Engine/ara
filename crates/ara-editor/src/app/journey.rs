@@ -385,20 +385,25 @@ impl Journey {
                 if first {
                     shell.open_ide = false;
                     shell.run_command(editor, "assets.create.script", &Target::None)?;
-                    let module = crate::shell::scripts::modules(editor.host.root())
-                        .into_iter()
-                        .next()
-                        .ok_or("no C# module was created")?;
-                    let folder = module
-                        .strip_prefix(editor.host.root())
-                        .unwrap_or(&module)
-                        .to_string_lossy()
-                        .replace('\\', "/");
-                    self.script = Some(module.join("Spinner.cs"));
-                    editor.action("editor.workspace", json!({"folder": folder}))?;
-                    self.note = "Create > C# Behaviour (Spinner.cs; outside verification it opens in the IDE)".into();
+                    let mut clipboard = super::assets_verify::Clip::default();
+                    shell.event(
+                        ara_ui::input::InputEvent::Edit(ara_ui_text::EditEvent::Insert(
+                            "Spinner".into(),
+                        )),
+                        &mut clipboard,
+                    )?;
+                    shell.dispatch(editor)?;
+                    shell.key(editor, 40, true, &mut clipboard)?;
+                    self.script = editor
+                        .state
+                        .asset_path
+                        .as_deref()
+                        .map(|p| editor.host.root().join(p));
+                    self.note =
+                        "Create > C# Script, inline rename to Spinner.cs, background compile"
+                            .into();
                 }
-                Ok(settled)
+                Ok(settled && editor.host.store().schema().get("Spinner").is_some())
             }
             "stop-starting" => {
                 if first {
@@ -566,7 +571,10 @@ impl Journey {
                     self.log_cursor = logs["cursor"].as_u64().unwrap_or(0);
                     let path = self.script.clone().ok_or("no script")?;
                     let source = std::fs::read_to_string(&path)?;
-                    std::fs::write(&path, source.replace("90f", "240f"))?;
+                    std::fs::write(
+                        &path,
+                        source.replace("Speed * tick.Dt", "(Speed + 240f) * tick.Dt"),
+                    )?;
                     editor.action("editor.focus", json!({"panel": "console"}))?;
                     self.note = "edited Spinner.cs while playing and saved".into();
                     return Ok(false);

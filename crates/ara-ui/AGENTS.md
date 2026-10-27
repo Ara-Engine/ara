@@ -28,7 +28,18 @@ Public API:
 - `paint::DisplayList` owns renderer-neutral commands and a contiguous positioned-glyph arena.
 - `virtualize::{Rows,VirtualList,VirtualTree,VirtualTable,VirtualView}` retains only viewport rows.
 - `input::{InputState,InputEvent}` owns per-player screen/modal focus, capture and drag/drop.
+- `Ui::cursor` resolves widget defaults and `cursor`/`active-cursor` markup hints.
+- `<scroll>` clips overflowing content and paints draggable, pageable scrollbars.
+  `scroll_position`/`scroll_to` expose offsets; `set_virtual_extent` publishes the
+  full model extent without mounting rows. Virtual pools own vertical translation;
+  the widget applies horizontal translation. Hosts synchronize pools after input.
 - `layers::LayerStack` owns tooltip/popup/modal visibility and dismissal/focus restoration.
+- `popover`: a root-child `<popover anchor='id'|at='x,y' placement='bottom-start' offset='4'>`
+  is placed by `Ui::frame` against the anchor's painted rect (`popover::place`: flip to the
+  roomier side, shift inside the window, size to content, clamp and scroll when too tall; it is
+  a block container and a scroll view). `popover::Popovers` gives hosts click-outside
+  (`pointer_down` -> which to close, `on_anchor`), Escape (`top`), stacking (later is on top)
+  and focus return (`sync` after mounting: an opened popover focuses its first field).
 - `docking::{DockLayout,DockNode,DockDrop,Floating}` moves tabs, creates splits, tears panels
   off into floating windows (`float`, `close`, `set_rect`), persists and resets layouts.
   Panel/area IDs are unique across every window; emptied areas collapse and emptied
@@ -69,7 +80,7 @@ Widget rules:
   labels wrapping. `InputState::blur` hands text focus back to native viewport input.
 - General browser CSS, selector combinators and arbitrary transforms are diagnosed as unsupported.
 
-Tests: `CARGO_BUILD_JOBS=4 cargo test -p ara-ui`.
+Tests: `CARGO_BUILD_JOBS=2 cargo test -p ara-ui`.
 Also run `cargo clippy -p ara-ui --all-targets -- -D warnings` and package rustfmt check.
 Rendering goldens and release measurements live in ara-ui-render.
 

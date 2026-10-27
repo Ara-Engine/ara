@@ -75,6 +75,36 @@ public sealed class ComponentTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public unsafe void Post_volume_recipe_fades_with_trigger_occupancy_and_preserves_lens_and_lut_overrides()
+    {
+        Values.Clear(); Written.Clear();
+        var initial = JsonNode.Parse(EngineComponents.DefaultJson[PostProcessVolume.TypeIndex])!.AsObject();
+        initial["weight"] = 0f;
+        Values[PostProcessVolume.TypeIndex] = Encoding.UTF8.GetBytes(initial.ToJsonString());
+        using var binding = Host.Bind(new HostContext(new HostInit { Api = new HostApi { ComponentJson = &ComponentJson } }));
+        var previous = Host.EnterExclusive();
+        try
+        {
+            var entity = new Entity(~0u);
+            var tick = new Tick { Dt = 0.25f };
+            ComponentExamples.UsePostProcessVolume(entity, true, in tick);
+            Assert.Equal(0.5f, World.Read<PostProcessVolume>(entity).Weight);
+            ComponentExamples.UsePostProcessVolume(entity, true, in tick);
+            Assert.Equal(1f, World.Read<PostProcessVolume>(entity).Weight);
+            ComponentExamples.UsePostProcessVolume(entity, false, in tick);
+            Assert.Equal(0.5f, World.Read<PostProcessVolume>(entity).Weight);
+            EngineAccess.Flush();
+        }
+        finally { Host.ExitExclusive(previous); }
+        using var document = JsonDocument.Parse(Values[PostProcessVolume.TypeIndex]);
+        var volume = EngineValueCodecs.ReadPostProcessVolume(document.RootElement);
+        Assert.Equal(VolumeShape.Box, volume.Shape);
+        Assert.Equal("@textures/security_lut.png#as_alarm", volume.Overrides[0].Lut);
+        Assert.Equal(8f, volume.Overrides[1].FocusDistance);
+        Assert.Equal(180f, volume.Overrides[2].ShutterAngle);
+    }
+
+    [Fact]
     public unsafe void Stale_abi_and_layout_hash_refuse_to_start()
     {
         var loader = new StaticModuleLoader();

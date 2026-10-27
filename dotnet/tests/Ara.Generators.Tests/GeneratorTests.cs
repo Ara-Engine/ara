@@ -146,6 +146,23 @@ public class GeneratorTests
         Assert.Empty(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
     }
 
+    [Fact]
+    public void Color_picker_hints_share_one_editor_object_with_the_group()
+    {
+        const string source = """
+            namespace Game;
+            /// <summary>A lamp's authorable tint.</summary>
+            [Component] public partial struct Lamp {
+                /// <summary>Linear light colour.</summary>
+                [Header("Lighting"), ColorPicker(Hdr = true, Temperature = true)] public Color Tint;
+            }
+            """;
+        var (output, diags, sources) = Run(source);
+        Assert.Empty(diags.Where(d => d.Severity == DiagnosticSeverity.Error));
+        Assert.Empty(output.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error));
+        Assert.Contains("""\"editor\":{\"group\":\"Lighting\",\"color\":true,\"hdr\":true,\"temperature\":true}""", sources["AraModule.g.cs"]);
+    }
+
     [Theory]
     [InlineData("ARA0701", "/// <summary>X.</summary>\n[Component] public struct NotPartial { /// <summary>V.</summary>\n public int V; }")]
     [InlineData("ARA0703", "[Component] public partial struct Undocumented { public int V; }")]

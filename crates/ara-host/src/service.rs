@@ -158,6 +158,24 @@ pub struct Cx<'a> {
 }
 
 impl Cx<'_> {
+    /// Complete background work under its initiating live session, retaining author
+    /// attribution and permissions rather than borrowing the editor's human session.
+    pub fn resume_session<R>(
+        &mut self,
+        session: &str,
+        complete: impl FnOnce(&mut Self) -> R,
+    ) -> Result<R, Vec<Diagnostic>> {
+        self.st.sessions.live(session).ok_or_else(|| {
+            vec![Diagnostic::error(
+                codes::SESSION_NOT_FOUND,
+                "background command session expired",
+            )]
+        })?;
+        let previous = self.session.replace(session.to_owned());
+        let result = complete(self);
+        self.session = previous;
+        Ok(result)
+    }
     /// The calling session (`None` for sessionless methods and ticks).
     pub fn session(&self) -> Option<&Session> {
         self.session

@@ -143,6 +143,18 @@ pub enum Draw {
         /// Straight multiplier; white keeps the image, a text color tints a white icon.
         tint: Color,
     },
+    /// A per-pixel gradient or pattern in a rounded rectangle (colour pickers, gradient
+    /// slider tracks, alpha checkerboards), drawn analytically by the renderer.
+    Fill {
+        /// Stable source node identity.
+        node: u64,
+        /// Computed logical viewport rectangle.
+        rect: Box2,
+        /// Clamped corner radius in logical pixels (ignored by a ring).
+        radius: f32,
+        /// What fills it.
+        fill: Fill,
+    },
     /// Intersect a rectangular clip with the current clip stack.
     PushClip {
         /// Computed logical viewport rectangle.
@@ -164,6 +176,39 @@ pub enum Draw {
     },
     /// Restore the preceding paint translation.
     PopTransform,
+}
+/// What a [`Draw::Fill`] paints. Colors are in the UI's sRGB working space.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub enum Fill {
+    /// `from` to `to` along x (along y when `vertical`). `linear_light` blends in linear
+    /// light and encodes sRGB per pixel (linear-space slider tracks); otherwise it blends
+    /// the sRGB numbers (perceptual tracks, the saturation/value square).
+    Linear {
+        /// Colour at the left (top) edge.
+        from: Color,
+        /// Colour at the right (bottom) edge.
+        to: Color,
+        /// Along y instead of x.
+        vertical: bool,
+        /// Interpolate in linear light.
+        linear_light: bool,
+    },
+    /// Every hue at full saturation and value: along x (0° at the left, 360° at the
+    /// right), or with `ring: Some(thickness)` as an antialiased annulus inscribed in the
+    /// rect, 0° (red) at +x and hue increasing counterclockwise.
+    Hue {
+        /// Ring thickness in logical pixels; `None` is a horizontal strip.
+        ring: Option<f32>,
+    },
+    /// A checkerboard of `cell`-pixel squares (behind translucent colours).
+    Checker {
+        /// Square size in logical pixels.
+        cell: f32,
+        /// The top-left square's colour.
+        light: Color,
+        /// The other squares' colour.
+        dark: Color,
+    },
 }
 /// Painter-ordered commands with one contiguous glyph arena.
 #[derive(Default, Serialize)]
@@ -192,6 +237,7 @@ impl DisplayList {
                 Draw::ScalableGlyphRun { font, .. } => (1, *font),
                 Draw::Image { image, .. } => (2, *image),
                 Draw::Line { .. } => (3, 0),
+                Draw::Fill { .. } => (4, 0),
                 Draw::Rect { .. } | Draw::RoundedRect { .. } | Draw::Border { .. } => (0, 0),
                 _ => {
                     breaks.push(BatchBreak {

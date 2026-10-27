@@ -349,12 +349,25 @@ public static class ComponentExamples
     }
     #endregion
 
-    #region types/PostProcess
-    /// <summary>Add restrained bloom around emissive lamps.</summary>
-    public static void UsePostProcess(Entity entity, in Tick tick)
+    #region types/PostProcessVolume
+    /// <summary>Call each fixed tick with a room trigger's occupancy to fade its camera treatment in and out.</summary>
+    public static void UsePostProcessVolume(Entity entity, bool playerInside, in Tick tick)
     {
-        ref var component = ref World.Get<PostProcess>(entity);
-        component.Bloom = 0.2f;
+        ref var volume = ref World.Get<PostProcessVolume>(entity);
+        volume.Shape = VolumeShape.Box;
+        volume.BlendDistance = 2f;
+        volume.Weight = Math.Clamp(volume.Weight + (playerInside ? 2f : -2f) * tick.Dt, 0f, 1f);
+        volume.Overrides = [
+            new PostOverride {
+                Module = PostModule.ColorGrading, WhiteBalance = 4500f, Saturation = 0.8f,
+                Lut = "@textures/security_lut.png#as_alarm", LutContribution = 0.6f
+            },
+            new PostOverride {
+                Module = PostModule.DepthOfField, FocusDistance = 8f, Aperture = 2.8f,
+                NearBlur = 0.5f, FarBlur = 1f
+            },
+            new PostOverride { Module = PostModule.MotionBlur, ShutterAngle = 180f }
+        ];
     }
     #endregion
 
@@ -570,7 +583,7 @@ public static class ComponentExamples
         UsePhysicsPose(entity, in tick);
         UsePhysicsPose2d(entity, in tick);
         UsePlayerControl(entity, in tick);
-        UsePostProcess(entity, in tick);
+        UsePostProcessVolume(entity, playerInside: true, in tick);
         UseReverbZone(entity, in tick);
         UseRigidBody(entity, in tick);
         UseRigidBody2d(entity, in tick);

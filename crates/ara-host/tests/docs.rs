@@ -17,10 +17,30 @@ fn structured_reference_round_trips_and_covers_every_catalog_and_example() {
         ara_json::to_canonical_string(&ara_json::sort_keys(&value))
     );
     assert_eq!(value["format"], docs::FORMAT);
+    assert_eq!(
+        value["types"]["Light"]["fields"]["color"]["editor"]["temperature"],
+        true
+    );
+    assert_eq!(
+        value["types"]["MeshRenderer"]["fields"]["emissiveFactor"]["editor"]["hdr"],
+        true
+    );
+    assert!(value["types"]["PostOverride"]["fields"]["lut"].is_object());
+    assert!(value["types"].get("PostProcessVolume").is_some());
+    assert!(value["types"].get("PostProcess").is_none());
     for t in db.types() {
         assert!(value["types"].get(&t.name).is_some(), "missing {}", t.name);
         for f in t.fields() {
             let field = &value["types"][&t.name]["fields"][&f.name];
+            if f.editor != ara_schema::EditorHints::default() {
+                assert_eq!(
+                    field["editor"],
+                    serde_json::to_value(&f.editor).expect("editor hints"),
+                    "{}.{}",
+                    t.name,
+                    f.name
+                );
+            }
             for key in [
                 "type",
                 "unit",

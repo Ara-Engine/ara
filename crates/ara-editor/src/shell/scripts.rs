@@ -1,93 +1,25 @@
-//! C# from the editor: Create > C# Behaviour scaffolds a hot-reloading module (the
-//! project's first one, or the existing one) with a template behaviour and an IDE
-//! project, then opens it in the IDE. Ara compiles modules itself; Play publishes
-//! their types and saving a script while playing hot-reloads it (see Console).
+//! Script creation uses the same typed source commands as MCP. Inline rename
+//! chooses the final declaration before the background compile and attachment.
 use std::path::{Path, PathBuf};
 
 use super::*;
 
+struct NoClipboard;
+impl ara_ui_text::Clipboard for NoClipboard {
+    fn read(&mut self) -> ara_ui_text::Result<String> {
+        Ok(String::new())
+    }
+    fn write(&mut self, _: &str) -> ara_ui_text::Result<()> {
+        Ok(())
+    }
+}
+
 /// The project's C# modules (folders with `ara.module.toml`), sorted.
 pub(crate) fn modules(root: &Path) -> Vec<PathBuf> {
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if !path.is_dir() || name.starts_with('.') || matches!(name.as_str(), "bin" | "obj") {
-                continue;
-            }
-            if path.join("ara.module.toml").is_file() {
-                out.push(path);
-            } else {
-                walk(&path, out);
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(root, &mut out);
-    out.sort();
-    out
+    ara_play_host::script_modules(root)
 }
 
-/// "outpost sample" → "OutpostSample".
-fn pascal(text: &str) -> String {
-    let name: String = text
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .filter(|w| !w.is_empty())
-        .map(|w| {
-            let mut c = w.chars();
-            c.next()
-                .map(|f| f.to_ascii_uppercase().to_string() + c.as_str())
-                .unwrap_or_default()
-        })
-        .collect();
-    match name.chars().next() {
-        Some(c) if c.is_ascii_alphabetic() => name,
-        _ => format!("Game{name}"),
-    }
-}
-
-/// A template behaviour: every reflected member has a summary (ARA0703).
-fn behaviour(module: &str, name: &str) -> String {
-    format!(
-        r#"namespace {module};
-
-/// <summary>Spins its entity around the Y axis. Edit while playing: saving hot-reloads it.</summary>
-public sealed partial class {name} : Behaviour
-{{
-    /// <summary>Turn speed.</summary>
-    [Property, Unit(Units.Degrees)] public partial float Speed {{ get; set; }}
-
-    /// <inheritdoc/>
-    protected override void OnTick(in Tick t)
-    {{
-        ref var transform = ref Get<Transform>();
-        transform.Rotation.Y += (Speed == 0 ? 90f : Speed) * t.Dt;
-    }}
-}}
-"#
-    )
-}
-
-/// An SDK project for IDEs only (completion, navigation); Ara builds the module.
-fn ide_project(module: &str, runtime: Option<&Path>) -> String {
-    let reference = runtime
-        .map(|dir| {
-            format!(
-                "\n  <ItemGroup>\n    <Reference Include=\"Ara.Runtime\"><HintPath>{}</HintPath></Reference>\n  </ItemGroup>",
-                dir.join("Ara.Runtime.dll").display()
-            )
-        })
-        .unwrap_or_default();
-    format!(
-        "<!-- For IDEs only: Ara compiles and hot-reloads the {module} module itself. -->\n<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <Nullable>enable</Nullable>\n    <AssemblyName>{module}</AssemblyName>\n  </PropertyGroup>\n  <ItemGroup>\n    <Using Include=\"System\" />\n    <Using Include=\"System.Collections.Generic\" />\n    <Using Include=\"System.Linq\" />\n    <Using Include=\"System.Numerics\" />\n    <Using Include=\"Ara\" />\n  </ItemGroup>{reference}\n</Project>\n"
-    )
-}
-
-/// Opens a folder and file in VS Code when it is installed, else the file in the OS
-/// default editor.
+/// Open in VS Code when available, otherwise use the system's file association.
 pub(crate) fn open_in_ide(folder: &Path, file: &Path) -> ara_ui::Result<()> {
     let code = if cfg!(windows) { "code.cmd" } else { "code" };
     if std::process::Command::new(code)
@@ -101,82 +33,193 @@ pub(crate) fn open_in_ide(folder: &Path, file: &Path) -> ara_ui::Result<()> {
     ops::open_external(file)
 }
 
-impl Shell {
-    /// Create > C# Behaviour: scaffold (or reuse) the module, add a template behaviour
-    /// and open it in the IDE.
-    pub(crate) fn create_behaviour(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
-        let root = editor.host.root().to_owned();
-        let module_dir = match modules(&root).into_iter().next() {
-            Some(dir) => dir,
-            None => {
-                let project = std::fs::read_to_string(root.join("ara.project.json"))
-                    .ok()
-                    .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-                    .and_then(|v| v["name"].as_str().map(str::to_owned))
-                    .unwrap_or_else(|| "Game".into());
-                let name = pascal(&project);
-                let dir = root.join("scripts").join(&name);
-                std::fs::create_dir_all(&dir)?;
-                std::fs::write(
-                    dir.join("ara.module.toml"),
-                    format!(
-                        "# Gameplay scripts, compiled and hot-reloaded by Ara while playing.\n[module]\nname = \"{name}\"\nhot = true\n"
-                    ),
-                )?;
-                dir
-            }
-        };
-        let manifest = std::fs::read_to_string(module_dir.join("ara.module.toml"))?;
-        let module = manifest
-            .lines()
-            .find_map(|l| l.trim().strip_prefix("name"))
-            .and_then(|l| l.split('"').nth(1))
-            .map(str::to_owned)
-            .ok_or("ara.module.toml has no module name")?;
-        let name = (1..)
-            .map(|n| {
-                if n == 1 {
-                    "Spinner".to_owned()
-                } else {
-                    format!("Spinner{n}")
-                }
-            })
-            .find(|n| !module_dir.join(format!("{n}.cs")).exists())
-            .unwrap_or_else(|| "Spinner".into());
-        let file = module_dir.join(format!("{name}.cs"));
-        std::fs::write(&file, behaviour(&module, &name))?;
-        let project = module_dir.join(format!("{module}.csproj"));
-        if !project.exists() {
-            let runtime = ara_play_host::ScriptPaths::locate(&root)
-                .or_else(|| {
-                    std::env::current_exe()
-                        .ok()
-                        .and_then(|e| e.parent().map(Path::to_path_buf))
-                        .and_then(|dir| ara_play_host::ScriptPaths::locate(&dir))
-                })
-                .map(|p| p.host_dir);
-            std::fs::write(&project, ide_project(&module, runtime.as_deref()))?;
-        }
-        if self.open_ide {
-            open_in_ide(&module_dir, &file)?;
-        }
-        self.status_note = Some(format!(
-            "Created {name}.cs: press Play to compile it, then add the {name} component"
-        ));
-        Ok(())
-    }
+#[derive(Clone)]
+pub(super) struct Rename {
+    pub path: String,
+    pub name: String,
+    pub attach_to: Vec<String>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl Shell {
+    /// Create a script in the targeted folder, then focus its inline name before compiling.
+    pub(crate) fn create_script(
+        &mut self,
+        editor: &mut Editor,
+        target: &commands::Target,
+        template: &str,
+        attach_to: Vec<String>,
+    ) -> ara_ui::Result<()> {
+        let folder = match target {
+            commands::Target::Folder(p) => p.clone(),
+            commands::Target::Asset(p) => p.rsplit_once('/').map_or("", |(p, _)| p).to_owned(),
+            _ => editor.state.asset_folder.clone(),
+        };
+        let stem = if template == "system" {
+            "NewSystem"
+        } else {
+            "NewBehaviour"
+        };
+        let path =
+            (1..)
+                .map(|n| {
+                    let name = if n == 1 {
+                        stem.to_owned()
+                    } else {
+                        format!("{stem}{n}")
+                    };
+                    if folder.is_empty() {
+                        format!("{name}.cs")
+                    } else {
+                        format!("{folder}/{name}.cs")
+                    }
+                })
+                .find(|p| {
+                    !editor.host.root().join(p).exists()
+                        && !self.browser.items.iter().any(|a| {
+                            a.kind == "cs" && names::file_name(&a.path) == names::file_name(p)
+                        })
+                })
+                .ok_or("No unused script name")?;
+        editor.action(
+            "script.create",
+            json!({"path":path,"template":template,"compile":false}),
+        )?;
+        self.browser.insert_path(&path, "cs");
+        self.asset_offset = 0.;
+        editor.action("editor.search", json!({"panel":"assets","query":""}))?;
+        editor.action("editor.layout.show", json!({"panel":"assets"}))?;
+        editor.action("editor.workspace", json!({"folder":folder,"asset":path}))?;
+        self.asset_rename = Some(Rename {
+            name: names::stem(names::file_name(&path)).into(),
+            path,
+            attach_to,
+        });
+        self.status_note = Some("Name your script, then press Enter to compile".into());
+        Ok(())
+    }
 
-    #[test]
-    fn module_and_behaviour_names_are_csharp_identifiers() {
-        assert_eq!(pascal("outpost sample"), "OutpostSample");
-        assert_eq!(pascal("3d-demo"), "Game3dDemo");
-        let source = behaviour("Outpost", "Spinner");
-        assert!(source.contains("public sealed partial class Spinner : Behaviour"));
-        assert!(source.contains("/// <summary>Turn speed.</summary>"));
+    pub(super) fn asset_rename_markup(&mut self, out: &mut String) {
+        if let Some(rename) = &self.asset_rename {
+            self.bindings.insert(
+                ara_ui::source::stable_id("asset-rename-value"),
+                Binding::AssetRenameValue,
+            );
+            out.push_str(&format!("<field id='asset-rename-value' style='position:absolute;left:0px;top:0px;width:160px;height:24px' text='{}' label='Script class name' description='Enter to create and compile; Escape keeps the default name' action='Dispatch' />",escape(&rename.name)));
+        }
+    }
+
+    pub(super) fn position_asset_rename(&mut self) -> ara_ui::Result<()> {
+        if let Some(rename) = &self.asset_rename
+            && let Some(field) = self.ui.find("asset-rename-value")
+        {
+            let visible = self.shown_node("assets-content").is_some();
+            self.ui.set_visible(field, visible)?;
+            if !visible {
+                return Ok(());
+            }
+            let card = self.ui.nodes.iter().find(|n|matches!(self.bindings.get(&ara_ui::source::stable_id(&n.element.id)),Some(Binding::Asset(a)) if a.path==rename.path));
+            let rect = card
+                .and_then(|node| {
+                    self.ui
+                        .find(&format!("{}-label", node.element.id))
+                        .map(|i| self.ui.nodes[i].rect)
+                })
+                .or_else(|| card.map(|node| node.rect))
+                .or_else(|| {
+                    self.ui
+                        .find("assets-content")
+                        .map(|i| self.ui.nodes[i].rect)
+                });
+            if let Some(rect) = rect {
+                self.ui.nodes[field].paint_offset = [
+                    (rect.x + (rect.w - 160.) * 0.5).max(0.),
+                    (rect.y - 3.).max(0.),
+                ];
+                self.ui.nodes[field].dirty.paint = true;
+            }
+            let id = ara_ui::source::stable_id("asset-rename-value");
+            if self.input.focused() != Some(id) {
+                self.input.focus(&mut self.ui, id)?;
+                self.ui
+                    .edit(field, ara_ui_text::EditEvent::SelectAll, &mut NoClipboard)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub(super) fn commit_asset_rename(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        let Some(rename) = self.asset_rename.clone() else {
+            return Ok(false);
+        };
+        let folder = rename.path.rsplit_once('/').map_or("", |(p, _)| p);
+        let name = rename.name.trim().trim_end_matches(".cs");
+        let path = if folder.is_empty() {
+            format!("{name}.cs")
+        } else {
+            format!("{folder}/{name}.cs")
+        };
+        let result=editor.action("script.rename",json!({"path":rename.path,"to":path,"attachTo":rename.attach_to,"doc":editor.state.doc}))?;
+        self.browser.remove_path(&rename.path);
+        self.browser.insert_path(&path, "cs");
+        editor.action("editor.workspace", json!({"asset":path}))?;
+        self.asset_rename = None;
+        self.script_job = result["job"]
+            .as_str()
+            .map(|job| (job.to_owned(), std::time::Instant::now()));
+        self.status_note = Some(format!("Compiling {name}.cs"));
+        Ok(true)
+    }
+
+    pub(crate) fn open_script_ide(&self, editor: &Editor, path: &str) -> ara_ui::Result<()> {
+        if !self.open_ide {
+            return Ok(());
+        }
+        let file = editor.host.root().join(path);
+        let configured = editor
+            .state
+            .settings
+            .get("scripts.ide")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        if !configured.is_empty() && configured != "system" {
+            std::process::Command::new(configured)
+                .arg(editor.host.root())
+                .arg(&file)
+                .spawn()?;
+            return Ok(());
+        }
+        if configured == "system" {
+            ops::open_external(&file)
+        } else {
+            open_in_ide(editor.host.root(), &file)
+        }
+    }
+
+    pub(super) fn poll_script_job(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        let Some((job, last)) = &mut self.script_job else {
+            return Ok(false);
+        };
+        if last.elapsed() < std::time::Duration::from_millis(200) {
+            return Ok(false);
+        }
+        *last = std::time::Instant::now();
+        let result = editor.action("jobs.status", json!({"job":job}))?;
+        let status = result["status"].as_str().unwrap_or("running");
+        if status == "running" {
+            return Ok(false);
+        }
+        self.status_note = Some(if status == "done" {
+            format!(
+                "{}.cs compiled",
+                result["result"]["component"].as_str().unwrap_or("Script")
+            )
+        } else {
+            result["diagnostics"][0]["message"]
+                .as_str()
+                .unwrap_or("Script compilation failed; see Problems")
+                .to_owned()
+        });
+        self.script_job = None;
+        Ok(true)
     }
 }

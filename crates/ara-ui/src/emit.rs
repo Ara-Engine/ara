@@ -187,7 +187,14 @@ impl Ui {
             );
         }
         let scroll = match self.widgets.get(&id) {
-            Some(crate::widgets::Widget::Scroll(p)) => [-p[0], -p[1]],
+            Some(crate::widgets::Widget::Scroll(p)) => [
+                -p[0],
+                if node.virtual_extent.is_some() {
+                    0.
+                } else {
+                    -p[1]
+                },
+            ],
             _ => [0.0, 0.0],
         };
         let scrolled = scroll != [0.0, 0.0];
@@ -214,6 +221,9 @@ impl Ui {
         }
         if scrolled {
             self.display.commands.push(Draw::PopTransform);
+        }
+        if self.scroll_position(index).is_some() {
+            self.paint_scrollbars(index, total)?;
         }
         if clipped {
             self.display.commands.push(Draw::PopClip);

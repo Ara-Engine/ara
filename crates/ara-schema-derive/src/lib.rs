@@ -298,6 +298,8 @@ struct FieldAttrs {
     hidden: bool,
     read_only: bool,
     color: bool,
+    hdr: bool,
+    temperature: bool,
     /// `show_if`: the sibling field and the condition's tokens.
     show_if: Option<(String, Ts)>,
     keyed: bool,
@@ -375,10 +377,14 @@ impl FieldAttrs {
                     self.read_only = true;
                 } else if m.path.is_ident("color") {
                     self.color = true;
+                } else if m.path.is_ident("hdr") {
+                    self.hdr = true;
+                } else if m.path.is_ident("temperature") {
+                    self.temperature = true;
                 } else if m.path.is_ident("show_if") {
                     self.show_if = Some(show_if(&m)?);
                 } else {
-                    return Err(m.error("ara: expected `group`, `slider`, `step`, `multiline`, `hidden`, `read_only`, `color` or `show_if`"));
+                    return Err(m.error("ara: expected `group`, `slider`, `step`, `multiline`, `hidden`, `read_only`, `color`, `hdr`, `temperature` or `show_if`"));
                 }
                 Ok(())
             })?;
@@ -445,8 +451,15 @@ fn field_tokens(f: &syn::Field, a: &FieldAttrs, params: bool) -> syn::Result<Ts>
     let rollback = a.rollback;
     let group = opt_string(&a.group);
     let step = as_f64(&a.step);
-    let (slider, multiline, hidden, read_only, color) =
-        (a.slider, a.multiline, a.hidden, a.read_only, a.color);
+    let (slider, multiline, hidden, read_only, color, hdr, temperature) = (
+        a.slider,
+        a.multiline,
+        a.hidden,
+        a.read_only,
+        a.color,
+        a.hdr,
+        a.temperature,
+    );
     let show_if = a.show_if.as_ref().map_or(none.clone(), |(field, when)| {
         some(quote!(::ara_schema::ShowIf {
             field: ::std::string::String::from(#field),
@@ -479,6 +492,8 @@ fn field_tokens(f: &syn::Field, a: &FieldAttrs, params: bool) -> syn::Result<Ts>
             hidden: #hidden,
             read_only: #read_only,
             color: #color,
+            hdr: #hdr,
+            temperature: #temperature,
             show_if: #show_if,
         },
     }))

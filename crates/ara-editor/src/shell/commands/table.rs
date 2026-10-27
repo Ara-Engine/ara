@@ -237,6 +237,13 @@ fn with_components(c: &Ctx, names: &[&str]) -> Avail {
         None => scene_doc(c),
     }
 }
+fn component_target(c: &Ctx) -> Avail {
+    if matches!(c.target, Target::Component(_)) && !c.state.selection.is_empty() {
+        Avail::Ready
+    } else {
+        Avail::Blocked("Choose a component in the Inspector".into())
+    }
+}
 
 fn act(e: &mut Editor, method: &str, params: Value) -> R {
     e.action(method, params)?;
@@ -457,9 +464,34 @@ fn transform_reset(e: &mut Editor, t: &Target, field: &str) -> R {
 
 fn build() -> Vec<Spec> {
     let mut c = Vec::with_capacity(240);
+    // Native window actions share the command registry with menus, shortcuts and MCP.
+    c.extend([
+        cmd(
+            "window.minimize",
+            "Minimize Window",
+            "minus",
+            "",
+            "Minimize the editor window.",
+            |s, _, _| {
+                s.window_request = Some(super::super::WindowRequest::Minimize);
+                Ok(())
+            },
+        ),
+        cmd(
+            "window.maximize_window",
+            "Maximize or Restore Window",
+            "maximize",
+            "",
+            "Toggle the editor window's native maximize state.",
+            |s, _, _| {
+                s.window_request = Some(super::super::WindowRequest::Maximize);
+                Ok(())
+            },
+        ),
+    ]);
     // File
     c.extend([
-        cmd("file.new_scene", "New Scene…", "file", "Ctrl+N", "Create an empty scene under levels/ and open it.", |s, e, _| s.new_scene(e)),
+        cmd("file.new_scene", "New Scene…", "file", "Ctrl+N", "Create an empty scene under levels/ and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_scene(e)}),
         later("file.new_project", "New Project…", "folder", "", "Create projects with `ara init <dir>`; the in-editor project wizard comes with the launcher."),
         cmd("file.open", "Open Scene…", "clapperboard", "Ctrl+O", "Pick a scene to open (recent first), or type to find any scene or asset.", |s, e, _| s.open_palette(e, "#")),
         later("file.open_project", "Open Project…", "folder", "", "One editor process owns one project; start `ara-editor <project>` for another."),
@@ -468,13 +500,13 @@ fn build() -> Vec<Spec> {
             act(e, "editor.scene.open", json!({"scene": doc}))?;
             focus(e, "scene")
         }),
-        cmd("file.save", "Save", "check", "Ctrl+S", "Write every changed document to disk now.", |s, e, _| {
+        cmd("file.save", "Save", "save", "Ctrl+S", "Write every changed document to disk now.", |s, e, _| {
             e.host.flush();
             s.status_note = Some("All changes saved".into());
             Ok(())
         }),
         later("file.save_as", "Save As…", "file", "Ctrl+Shift+S", "Documents save in place through the host journal; Save As needs a typed document-copy command."),
-        cmd("file.save_all", "Save All", "check", "Ctrl+Alt+S", "Write every changed document to disk now.", |s, e, _| {
+        cmd("file.save_all", "Save All", "save", "Ctrl+Alt+S", "Write every changed document to disk now.", |s, e, _| {
             e.host.flush();
             s.status_note = Some("All changes saved".into());
             Ok(())
@@ -722,6 +754,9 @@ fn build() -> Vec<Spec> {
             let v = e.state.settings.get("viewport.cameraSpeed").and_then(Value::as_f64).unwrap_or(4.);
             set(e, "viewport.cameraSpeed", json!((v * 0.5).max(0.5)))
         }),
+        cmd("view.camera.speed.slow", "Slow · 1 m/s", "", "", "Precise close-up camera movement.", |_, e, _| set(e,"viewport.cameraSpeed",json!(1.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 1.)),
+        cmd("view.camera.speed.normal", "Normal · 4 m/s", "", "", "Default camera movement speed.", |_, e, _| set(e,"viewport.cameraSpeed",json!(4.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 4.)),
+        cmd("view.camera.speed.fast", "Fast · 16 m/s", "", "", "Navigate large scenes quickly.", |_, e, _| set(e,"viewport.cameraSpeed",json!(16.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 16.)),
         later("view.camera.bookmarks", "Bookmarks", "", "", "Camera bookmarks need a per-scene editor sidecar; they are not built yet."),
         later("view.camera.pilot", "Pilot Selected Camera", "camera", "", "Piloting (moving the scene camera with the view) is not built yet; Align View to Selected Camera copies its pose and field of view."),
     ]);
@@ -735,6 +770,15 @@ fn build() -> Vec<Spec> {
             |_, e, _| view(e, json!({"viewMode": "lit"})),
         )
         .when(|c| mode(c, "lit")),
+        cmd(
+            "view.mode.unlit",
+            "Unlit",
+            "sun",
+            "",
+            "Show material base color without lighting.",
+            |_, e, _| view(e, json!({"viewMode":"baseColor"})),
+        )
+        .when(|c| mode(c, "baseColor")),
         cmd(
             "view.mode.base_color",
             "Base Color",
@@ -789,9 +833,26 @@ fn build() -> Vec<Spec> {
             |_, e, _| view(e, json!({"viewMode": "shadowCascades"})),
         )
         .when(|c| mode(c, "shadowCascades")),
+        cmd(
+            "view.mode.wireframe",
+            "Wireframe",
+            "",
+            "",
+            "Triangle edges over a dark background, coloured per entity.",
+            |_, e, _| view(e, json!({"viewMode": "wireframe"})),
+        )
+        .when(|c| mode(c, "wireframe")),
+        cmd(
+            "view.mode.lit_wireframe",
+            "Lit Wireframe",
+            "",
+            "",
+            "The lit image with its triangle edges drawn over it.",
+            |_, e, _| view(e, json!({"viewMode": "litWireframe"})),
+        )
+        .when(|c| mode(c, "litWireframe")),
     ]);
     c.extend([
-        later("view.mode.wireframe", "Wireframe", "", "", "ara-render has no wireframe pass yet."),
         later("view.mode.overdraw", "Overdraw", "", "", "ara-render has no overdraw visualisation yet."),
         later("view.mode.gi_debug", "GI Debug", "", "", "GI debug views live in ara-render-fidelity captures; live viewport output is not wired yet."),
         cmd("view.show.grid", "Grid", "grid-2x2", "", "Show the ground grid.", |_, e, _| toggle(e, "viewport.grid")).when(|c| flag(c, "viewport.grid")),
@@ -857,6 +918,10 @@ fn build() -> Vec<Spec> {
             view(e, json!({"gizmos": true}))?;
             act(e, "editor.tool", json!({"tool": "scale"}))
         }).when(|c| Avail::Checked(!c.state.hide_gizmos && c.state.tool == crate::state::Tool::Scale)),
+        cmd("view.tool.universal", "Universal Tool", "transform", "T", "Move, rotate or scale using the combined handles.", |_, e, _| {
+            view(e, json!({"gizmos": true}))?;
+            act(e, "editor.tool", json!({"tool": "universal"}))
+        }).when(|c| Avail::Checked(!c.state.hide_gizmos && c.state.tool == crate::state::Tool::Universal)),
         cmd("view.space", "World / Local Space", "globe", "", "Toggle world or local handle axes.", |_, e, _| {
             act(e, "editor.tool", json!({"tool": e.state.tool, "local": !e.state.local}))
         }).when(|c| Avail::Checked(c.state.local)),
@@ -905,12 +970,14 @@ fn build() -> Vec<Spec> {
     ]);
     // Assets
     c.extend([
-        cmd("assets.create.folder", "Folder", "folder", "", "Create a folder in the current asset folder.", |s, e, _| s.new_folder(e)),
-        cmd("assets.create.scene", "Scene", "box", "", "Create an empty scene.", |s, e, _| s.new_scene(e)),
-        cmd("assets.create.material", "Material", "circle", "", "Create a material graph and open it.", |s, e, _| s.create_resource(e, "material")),
-        cmd("assets.create.vfx", "VFX System", "sparkles", "", "Create a VFX graph and open it.", |s, e, _| s.create_resource(e, "vfx")),
-        cmd("assets.create.animation", "Animation Controller", "activity", "", "Create an animation controller and open it.", |s, e, _| s.create_resource(e, "animation")),
-        cmd("assets.create.script", "C# Behaviour", "file-code", "", "Create a behaviour script in the project's C# module and open it in your IDE; Play compiles it and saving hot-reloads it.", |s, e, _| s.create_behaviour(e)),
+        cmd("assets.create.folder", "Folder", "folder", "", "Create a folder in the current asset folder.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_folder(e)}),
+        cmd("assets.create.scene", "Scene", "box", "", "Create an empty scene.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_scene(e)}),
+        cmd("assets.create.material", "Material", "circle", "", "Create a material graph and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.create_resource(e, "material")}),
+        cmd("assets.create.vfx", "VFX System", "sparkles", "", "Create a VFX graph and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.create_resource(e, "vfx")}),
+        cmd("assets.create.animation", "Animation Controller", "activity", "", "Create an animation controller and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.create_resource(e, "animation")}),
+        cmd("assets.create.script", "C# Script", "file-code", "", "Create a Behaviour script in this folder; name it, compile it, then attach it.", |s, e, t| s.create_script(e,t,"behaviour",Vec::new())),
+        cmd("assets.create.system", "C# System", "file-code", "", "Create a batched ECS query system from Ara's System template.", |s,e,t|s.create_script(e,t,"system",Vec::new())),
+        cmd("assets.open_ide", "Open in IDE", "file-code", "", "Open the selected C# source in the configured IDE.", |s,e,t|{let path=s.asset_target(e,t).ok_or("Select a C# script")?;s.open_script_ide(e,&path)}).when(|c|match c.target {Target::Asset(p) if p.ends_with(".cs")=>Avail::Ready,_=>Avail::Blocked("Select a C# script".into())}),
         cmd("assets.create.prefab", "Prefab from Selection", "package", "", "Turn the selected entity and its children into a prefab under prefabs/.", |s, e, t| s.prefab_from_selection(e, t)).when(prefab_source),
         cmd("assets.reimport", "Reimport", "refresh-cw", "", "Run the importer again for the selected asset.", |s, e, t| {
             let path = s.asset_target(e, t).ok_or("select an asset")?;
@@ -1172,9 +1239,10 @@ fn build() -> Vec<Spec> {
         later("tools.physics_debugger", "Physics Debugger", "", "", "Needs an ara-physics debug-draw feed into the editor."),
         later("tools.terrain", "Terrain Tools", "", "", "Terrain sculpting and painting tools are not built yet."),
         later("tools.ui_designer", "UI Designer", "", "", "The UI designer over ara-ui-document ops is not built yet."),
-        cmd("tools.cs.solution", "Open Scripts in IDE", "file-code", "", "Open the project's C# module in VS Code (or the OS default editor).", |_, e, _| {
-            let dir = crate::shell::scripts::modules(e.host.root()).into_iter().next().ok_or("This project has no C# module yet; use Assets > Create > C# Behaviour")?;
-            crate::shell::scripts::open_in_ide(&dir, &dir)
+        cmd("tools.cs.solution", "Open Scripts in IDE", "file-code", "", "Open the project's C# module in VS Code (or the OS default editor).", |s, e, _| {
+            let dir = crate::shell::scripts::modules(e.host.root()).into_iter().next().ok_or("This project has no C# module yet; use Assets > Create > C# Script")?;
+            let path=dir.strip_prefix(e.host.root()).unwrap_or(&dir).to_string_lossy().replace('\\',"/");
+            s.open_script_ide(e,&path)
         }).when(|_| Avail::Ready),
         later("tools.cs.reload", "Reload Scripts", "refresh-cw", "Ctrl+R", "C# reloads automatically when sources change; a manual trigger is not exposed yet."),
         cmd("window.agents", "Agents Panel", "bot", "Alt+6", "Agent activity and undo per turn.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "agents"}))).when(|c| panel_open(c, "agents")),
@@ -1958,25 +2026,27 @@ fn build() -> Vec<Spec> {
             s.dialog = Some(super::super::Dialog::provenance(s.fields.get(path).ok_or("field not visible")?));
             Ok(())
         }),
-        cmd("component.reset", "Reset Component", "undo-2", "", "Restore every field of the component to its default.", |_, e, t| {
-            let Target::Component(name) = t else { return Err("choose a component".into()) };
-            let mut commands = Vec::new();
-            for entity in &e.state.selection {
-                commands.push(json!({"cmd": "component.remove", "args": {"entity": entity, "component": name}}));
-                commands.push(json!({"cmd": "component.add", "args": {"entity": entity, "component": name}}));
-            }
-            apply(e, commands, &format!("Reset {name}"))
-        }).when(|c| if matches!(c.target, Target::Component(n) if n == "Transform") { Avail::Blocked("Use Transform › Reset Position, Rotation and Scale".into()) } else { Avail::Ready }),
+        cmd("component.reset", "Reset Component", "undo-2", "", "Restore component fields to schema or prefab defaults in one transaction.", |s, e, t| s.component_values(e, t, true)).when(component_target),
         cmd("component.remove", "Remove Component", "trash", "", "Remove the component from the selection.", |_, e, t| {
             let Target::Component(name) = t else { return Err("choose a component".into()) };
             let commands = e.state.selection.iter().map(|entity| json!({"cmd": "component.remove", "args": {"entity": entity, "component": name}})).collect();
             apply(e, commands, &format!("Remove {name}"))
+        }).when(component_target),
+        cmd("component.copy", "Copy Values", "copy", "", "Copy the primary selection's component values.", |s, e, t| s.copy_component(e, t)).when(component_target),
+        cmd("component.paste", "Paste Values", "clipboard", "", "Paste values into this component on every selected entity.", |s, e, t| s.component_values(e, t, false)).when(|c| {
+            if c.clipboard_component { Avail::Ready } else { Avail::Blocked("Copy values from this component type first".into()) }
         }),
-        later("component.copy", "Copy Component", "copy", "", "Component clipboard arrives with Inspector v2."),
-        cmd("component.add", "Add Component…", "plus", "", "Search components to add.", |s, e, _| {
-            s.palette_command = Some("@components".into());
-            act(e, "editor.palette", json!({"open": true}))
+        cmd("component.move_up", "Move Up", "chevron-up", "", "Move this section up in the Inspector.", |s, e, t| s.move_component(e, t, false)).when(|c| {
+            if c.component_position.is_some_and(|(index, _)| index > 0) { Avail::Ready } else { Avail::Blocked("This is the first component".into()) }
+        }),
+        cmd("component.move_down", "Move Down", "chevron-down", "", "Move this section down in the Inspector.", |s, e, t| s.move_component(e, t, true)).when(|c| {
+            if c.component_position.is_some_and(|(index, count)| index + 1 < count) { Avail::Ready } else { Avail::Blocked("This is the last component".into()) }
+        }),
+        cmd("component.new_script", "New Script…", "file-code", "", "Create a Behaviour, choose its name, then compile and attach it to the selected entities.", |s, e, t| {
+            let entities = t.entities(&e.state);
+            s.create_script(e,t,"behaviour",entities)
         }).when(has_entity),
+        cmd("component.add", "Add Component…", "plus", "", "Search components to add, or create a script.", |s, e, _| s.toggle_add_component(e)).when(has_entity),
         cmd("graph.delete", "Delete Nodes", "trash", "Del", "Delete the selected graph nodes.", |s, e, t| s.delete_graph_nodes(e, t)).when(graph_open),
         cmd("graph.frame", "Frame Graph", "focus", "", "Fit the graph in the canvas.", |s, e, _| s.frame_graph(e)).when(graph_open),
         cmd("graph.add", "Add Node…", "plus", "Space", "Search nodes to add at the pointer.", |_, e, _| act(e, "editor.canvas", json!({"add": true}))).when(graph_open),

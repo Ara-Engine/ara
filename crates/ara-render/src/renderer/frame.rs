@@ -50,7 +50,8 @@ impl Renderer {
         let mut projection = camera.projection;
         let [render, display] = [self.render, self.size].map(|s| s.map(|v| v as f32));
         let mut offset = glam::Vec2::ZERO;
-        if !deterministic {
+        // Wireframe modes hold their edges still: no temporal jitter.
+        if !deterministic && !mode.wire() {
             // Halton(2,3) phases grow with the upscale (eight times the display
             // pixels per render pixel), so samples land near every display pixel.
             let phases = temporal_phases(self.render, self.size);
@@ -127,7 +128,7 @@ impl Renderer {
             temporal: [
                 u32::from(self.targets.history.is_some()),
                 u32::from(deterministic),
-                mode as u32,
+                mode.shader_mode(),
                 self.content.material_index,
             ],
             // w: sampled native motion (RG16F, unjittered UV delta); u32::MAX without.

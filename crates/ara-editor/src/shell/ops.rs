@@ -6,6 +6,10 @@ use super::*;
 /// Work only the window owner can do; the app loop drains it each frame.
 #[derive(Clone, Debug, PartialEq)]
 pub enum WindowRequest {
+    /// Minimize the main window.
+    Minimize,
+    /// Maximize or restore the main window.
+    Maximize,
     /// Toggle full screen for the main window.
     Fullscreen,
     /// Raise a floating window by id.
@@ -18,6 +22,22 @@ pub enum WindowRequest {
     Quit,
 }
 impl Shell {
+    /// Context creation uses the right-clicked folder, or the clicked file's parent.
+    pub(super) fn select_asset_folder(
+        &mut self,
+        editor: &mut Editor,
+        target: &Target,
+    ) -> ara_ui::Result<()> {
+        let folder = match target {
+            Target::Folder(p) => Some(p.as_str()),
+            Target::Asset(p) => Some(p.rsplit_once('/').map_or("", |(p, _)| p)),
+            _ => None,
+        };
+        if let Some(folder) = folder {
+            editor.action("editor.workspace", json!({"folder":folder}))?;
+        }
+        Ok(())
+    }
     /// Put text on the OS clipboard at the next frame boundary.
     pub(crate) fn copy_text(&mut self, text: String) {
         self.pending_clipboard = Some(text);
@@ -74,7 +94,13 @@ impl Shell {
     pub(crate) fn new_scene(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
         let root = editor.host.root().to_owned();
         let path = (1..)
-            .map(|n| format!("levels/untitled-{n}.scene"))
+            .map(|n| {
+                if editor.state.asset_folder.is_empty() {
+                    format!("untitled-{n}.scene")
+                } else {
+                    format!("{}/untitled-{n}.scene", editor.state.asset_folder)
+                }
+            })
             .find(|p| !root.join(p).exists() && editor.host.store().workspace().find(p).is_none())
             .unwrap_or_else(|| "levels/untitled.scene".into());
         let result = editor.action(
@@ -102,8 +128,9 @@ impl Shell {
             })
             .find(|p| !root.join(p).exists())
             .unwrap_or_default();
-        std::fs::create_dir_all(root.join(&path))?;
-        editor.action("editor.workspace", json!({"folder": path}))?;
+        editor.action("asset.folder.create", json!({"path":path}))?;
+        self.browser.insert_path(&path, "folder");
+        editor.action("editor.workspace", json!({"asset": path}))?;
         Ok(())
     }
     /// Entities' resolved records, ready to paste as new entities.
@@ -203,6 +230,9 @@ impl Shell {
             return Ok(());
         }
         let path = self.asset_target(editor, target).ok_or("select an asset")?;
+        if path.ends_with(".cs") {
+            return self.open_script_ide(editor, &path);
+        }
         let workspace = editor.host.store().workspace();
         if let Some(id) = workspace.find(&path).map(ToString::to_string)
             && let Some(doc) = workspace.doc(&id)

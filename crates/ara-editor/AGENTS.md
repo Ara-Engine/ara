@@ -22,7 +22,7 @@ Escape drops the preview; release commits one transform.set batch with its base.
 structure and mesh geometry changes, and new model publications, upload the whole scene.
 View commands produce ara-ops transactions in a separate navigation document; the layout
 persists canonically to `.ara/editor-layout.json`. `state::default_dock` is the default
-(bottom bar collapsed); `float_size` pages open floating (`show_panel`).
+(full-height sidebars; centre-only bottom dock); `float_size` pages open floating (`show_panel`).
 
 Toolbar: idle Play + start-paused toggle; live Stop/Pause|Resume/Step, all `play.*`
 (`PlayService`, registered in `Editor::open`); Stop also cancels a starting Play. Multi-player
@@ -70,8 +70,8 @@ captures exclude open frames and write asynchronously to `.ara/cache/profiles`.
 drag and graph create/connect/undo, then captures every panel in both themes and
 measures 1,000 warm input-to-present samples with 500 nodes open.
 
-UX v2 (D23). `shell/commands` is the one command registry: `table.rs` specs (id,
-title, icon, keys, availability, label, run), `menus.rs` the nine menus and every
+UX v2 (D28). `shell/commands` is the one command registry: `table.rs` specs (id,
+title, icon, keys, availability, label, run), `menus.rs` the six menus and every
 context menu, `keys.rs` chords and the Ara/Unreal/Unity/Blender presets. Menus,
 palette, context menus, shortcuts, toolbar buttons and `editor.commands` (MCP) all
 read it; a disabled command returns `Avail::Blocked(reason)` and a deferred one is
@@ -97,9 +97,9 @@ Floating windows: `DockLayout` floating roots map to owned OS windows
 `enter/leave`, and renders through `NativeUi::select_target`. Rects persist in
 the layout and off-screen windows are recovered at startup. Tab drags cross
 windows through the global mouse; Esc cancels.
-Paint-time decorations (swatches, row icons, graph, drop preview) go through
-`Shell::paint_decorations`, which splices them under the popup layer; never append
-draws after it. Icon tint classes must stay after `.icon` in editor.css.
+Paint-time decorations (swatches, row icons, graph, drop preview) go through `Shell::paint_decorations`, which splices them under the popup layer;
+the colour picker (`shell/color`) splices each painted part right after its own box, and only the eyedropper loupe appends last.
+Icon tint classes must stay after `.icon` in editor.css.
 Density: compact by default (`editor-comfortable.css` adds the other density),
 22 px tree rows, 24 px property rows. CSS colors come from theme tokens; labels use
 `color:inherit` and icons `tint` so state colors reach them.
@@ -126,7 +126,7 @@ Game view (D19): `app/game.rs` imports the play host's shared surfaces
 `game_input` forwards keys/mouse to the selected client while captured (Esc releases).
 Play starts in the background; `Shell::read_play_status` shows its phase, a failed start
 or a fault. Embeds unless `play.inGameView` is off. Outside Play `app/game_preview.rs`
-renders `Shell::gameplay_camera` (`SceneView::preview_game`) as `game-preview`.
+renders `Shell::gameplay_camera` (`SceneView::preview_game`) as `game-preview`; it stays, under the start's progress, until Play's first frame.
 Build (`shell/build.rs`): `build.current` exports the main scene with the first
 `presets/*.export.json` (else `build.profile.create` writes the portable, unpinned
 Windows runtime profile) into `builds/<profile>-<time>/build` on a thread, pinning

@@ -139,8 +139,8 @@ pub struct RenderFrame {
     pub camera: Option<CameraView>,
     /// Sky and exposure.
     pub environment: Environment,
-    /// Authored physical sky, height fog and post processing (first entity in ID
-    /// order per component); renderers fall back to `environment` without them.
+    /// Authored physical sky and height fog (first entity in ID order per component)
+    /// and every post-process volume; renderers fall back to `environment` without them.
     pub look: ara_components::render::SceneLook,
     /// Directional light: direction toward the light and linear RGB lux.
     pub sun: Option<([f32; 3], [f32; 3])>,
@@ -165,7 +165,10 @@ impl RenderFrame {
         self.alpha = alpha;
         self.camera = None;
         self.environment = Environment::default();
-        self.look = Default::default();
+        self.look.sky = None;
+        self.look.fog = None;
+        self.look.volumes.clear();
+        self.look.luts.clear();
         self.sun = None;
         self.lights.clear();
         self.draws.clear();
@@ -205,8 +208,24 @@ impl RenderFrame {
             if self.look.fog.is_none() {
                 self.look.fog = entity.get::<ara_components::render::HeightFog>().copied();
             }
-            if self.look.post.is_none() {
-                self.look.post = entity.get::<ara_components::render::PostProcess>().copied();
+            if let Some(volume) = entity.get::<ara_components::post::PostProcessVolume>() {
+                // The lookup tables it references, shared from the library.
+                for lut in volume.overrides.iter().filter_map(|o| o.lut.as_ref()) {
+                    if let (Some(library), Ok(id)) = (library, crate::assets::asset_id(lut))
+                        && let Some(table) = library.luts.get(id)
+                        && !self.look.luts.iter().any(|(known, _)| known == id)
+                    {
+                        self.look
+                            .luts
+                            .push((id.to_owned(), std::sync::Arc::clone(table)));
+                    }
+                }
+                self.look.volumes.push(ara_components::post::PostVolume {
+                    volume: volume.clone(),
+                    translation: pose.translation.to_array(),
+                    rotation: pose.rotation.to_array(),
+                    scale: pose.scale.to_array(),
+                });
             }
             if let Some(c) = entity.get::<Camera>()
                 && camera.is_none_or(|(p, _)| c.priority < p)

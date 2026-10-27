@@ -1,5 +1,24 @@
 use ara_ui_document::{Command, DocumentKind, SourceDocument, compile, stylesheet::Stylesheet};
 type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
+#[test]
+fn cursor_attributes_compile_and_round_trip_through_authored_markup() -> Result {
+    let source = "<panel id='tab' cursor='grab' active-cursor='grabbing' />";
+    let nodes = compile(source)?;
+    assert_eq!(nodes[0].attrs["cursor"], "grab");
+    assert_eq!(nodes[0].attrs["active-cursor"], "grabbing");
+    let edited = roundtrip(
+        source,
+        DocumentKind::Markup,
+        Command::SetAttribute {
+            id: "tab".into(),
+            name: "cursor".into(),
+            value: Some("move".into()),
+        },
+    )?;
+    assert_eq!(edited, source.replace("cursor='grab'", "cursor='move'"));
+    Ok(())
+}
+
 fn roundtrip(input: &str, kind: DocumentKind, command: Command) -> Result<String> {
     let mut doc = SourceDocument::parse(input, kind)?;
     assert_eq!(doc.serialize().as_bytes(), input.as_bytes());

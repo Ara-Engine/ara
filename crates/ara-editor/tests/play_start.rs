@@ -111,6 +111,29 @@ fn play_starts_in_the_background_and_shows_its_progress() {
         text(&shell, "status-play-text").as_deref(),
         Some("Starting Play…")
     );
+    // Over a camera preview the start is a hint on the view Play starts with, with
+    // the same progress updated in place; Play's first (lit) frame replaces it.
+    shell.show_game_preview_for_test(&mut editor, [640, 360]);
+    let image = shell.ui.find("game-image").unwrap();
+    assert_eq!(
+        shell.ui.nodes[image]
+            .element
+            .attrs
+            .get("src")
+            .map(String::as_str),
+        Some("game-preview")
+    );
+    assert_eq!(
+        text(&shell, "game-starting-phase").as_deref(),
+        Some("Preparing assets")
+    );
+    assert!(shell.move_play_row_for_test(
+        json!({"status":"starting","progress":{"phase":"assets","completed":5,"total":12,"elapsedMs":3150}})
+    ));
+    assert_eq!(
+        text(&shell, "game-starting-count").as_deref(),
+        Some("5 / 12")
+    );
     // Without a player the start fails, and says why.
     let start = Instant::now();
     loop {

@@ -171,6 +171,8 @@ public static class Schema
     {
         double? min = null, max = null;
         var aliases = new List<string>();
+        string? group = null;
+        bool color = false, hdr = false, temperature = false;
         foreach (var a in attrs)
         {
             var c = a.AttributeClass;
@@ -186,8 +188,23 @@ public static class Schema
             }
             else if (IsAra(c, "ReplicateAttribute")) j.Key("replicate").Raw(ReplicateJson(a));
             else if (IsAra(c, "FormerlySerializedAsAttribute") && StringArg(a) is { } old) aliases.Add(Camel(old));
-            else if (IsAra(c, "HeaderAttribute") && StringArg(a) is { } group) j.Key("editor").Open().Key("group").String(group).Close();
+            else if (IsAra(c, "HeaderAttribute")) group = StringArg(a);
+            else if (IsAra(c, "ColorPickerAttribute"))
+            {
+                color = true;
+                hdr = a.NamedArguments.Any(p => p.Key == "Hdr" && p.Value.Value is true);
+                temperature = a.NamedArguments.Any(p => p.Key == "Temperature" && p.Value.Value is true);
+            }
             else if (c?.ToDisplayString() == "System.ObsoleteAttribute") j.Key("deprecated").String(StringArg(a) ?? "deprecated");
+        }
+        if (group is not null || color)
+        {
+            j.Key("editor").Open();
+            if (group is not null) j.Key("group").String(group);
+            if (color) j.Key("color").Bool(true);
+            if (hdr) j.Key("hdr").Bool(true);
+            if (temperature) j.Key("temperature").Bool(true);
+            j.Close();
         }
         if (min is not null || max is not null)
         {

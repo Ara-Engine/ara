@@ -65,6 +65,10 @@ pub(crate) struct Ctx<'a> {
     pub clipboard_entities: bool,
     /// The shell holds a copied field value.
     pub clipboard_value: bool,
+    /// The clipboard holds values of the targeted component type.
+    pub clipboard_component: bool,
+    /// Targeted component's current presentation index and section count.
+    pub component_position: Option<(usize, usize)>,
     /// Console and Problems filters (for their toggle states).
     pub logs: crate::shell::LogView,
     /// Assets lists every file (Show All Files).
@@ -222,6 +226,11 @@ impl Shell {
             target,
             clipboard_entities: self.entity_clipboard.is_some(),
             clipboard_value: self.field_clipboard.is_some(),
+            clipboard_component: matches!((target, &self.component_clipboard), (Target::Component(target), Some((name, _))) if target == name),
+            component_position: match target {
+                Target::Component(name) => self.inspector_sections.position(name),
+                _ => None,
+            },
             logs: self.log_view,
             assets_show_all: self.assets_show_all,
             game: (self.game_stats, self.game_aspect, self.game_live),

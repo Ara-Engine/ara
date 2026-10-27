@@ -246,3 +246,13 @@ public sealed class HeaderAttribute(string text) : Attribute
     /// <summary>The heading.</summary>
     public string Text { get; } = text;
 }
+
+/// <summary>Edits a linear RGB(A) value with the engine's colour picker.</summary>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public sealed class ColorPickerAttribute : Attribute
+{
+    /// <summary>Allows emissive values above one using an intensity in stops.</summary>
+    public bool Hdr { get; init; }
+    /// <summary>Offers light-temperature presets and a Kelvin slider.</summary>
+    public bool Temperature { get; init; }
+}

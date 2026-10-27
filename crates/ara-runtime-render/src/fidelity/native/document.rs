@@ -1,6 +1,9 @@
 //! Editor presentation uses runtime extraction, without starting a playable world.
 use super::*;
-use ara_components::render::{HeightFog, PostProcess, SkyAtmosphere};
+use ara_components::{
+    post::PostProcessVolume,
+    render::{HeightFog, SkyAtmosphere},
+};
 use ara_doc::{Workspace, prefab::Resolved};
 use ara_runtime::{
     animation::Library,
@@ -86,7 +89,7 @@ pub fn document_frame_selected(
         insert::<Environment>(&mut entity, &row.record, "Environment")?;
         insert::<SkyAtmosphere>(&mut entity, &row.record, "SkyAtmosphere")?;
         insert::<HeightFog>(&mut entity, &row.record, "HeightFog")?;
-        insert::<PostProcess>(&mut entity, &row.record, "PostProcess")?;
+        insert::<PostProcessVolume>(&mut entity, &row.record, "PostProcessVolume")?;
         insert::<Light>(&mut entity, &row.record, "Light")?;
         insert::<VisualEffect>(&mut entity, &row.record, "VisualEffect")?;
         insert::<TerrainChunk>(&mut entity, &row.record, "TerrainChunk")?;

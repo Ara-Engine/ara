@@ -4,6 +4,7 @@ use ara_runtime::{
     extract::{Draw, Geometry},
 };
 mod preparation;
+mod scene_switch;
 
 #[test]
 fn disabled_probe_gi_does_not_report_a_queued_emitter_search() -> Result<()> {
@@ -127,7 +128,7 @@ fn unchanged_secondary_prepare_keeps_generation_and_starts_no_background_jobs() 
         .geometry
         .as_ptr();
     let key = raster.key;
-    let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+    let look = crate::environment(&frame);
     let camera = CameraSpec::LookAt {
         position: glam30::Vec3::new(0., 1., 4.),
         target: glam30::Vec3::ZERO,
@@ -208,7 +209,7 @@ fn first_capture_uploads_finished_emitter_search_without_another_prepare() -> Re
         &[],
         root.join("gpu"),
     )?;
-    let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+    let look = crate::environment(&frame);
     renderer.set_look(look.raster())?;
     let mut raster = RasterView::new(root.join("probes"));
     raster.set_probe_gi(false);

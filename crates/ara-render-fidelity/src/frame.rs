@@ -175,7 +175,16 @@ impl FidelityView {
             ],
             lens: [
                 p.focus_distance,
-                p.aperture,
+                p.f_number.map_or(p.aperture, |aperture| {
+                    let fov = 2. * (1. / camera.projection.y_axis.y).atan();
+                    ara_render::look::DepthOfField {
+                        focus_distance: p.focus_distance,
+                        aperture,
+                        near: 1.,
+                        far: 1.,
+                    }
+                    .circle_scale(fov, s.render_size[1] as f32)
+                }),
                 p.shutter,
                 if p.quality == Quality::Cinematic && s.tier != Tier::Mobile {
                     1.

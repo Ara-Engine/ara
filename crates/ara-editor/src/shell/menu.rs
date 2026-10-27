@@ -24,7 +24,11 @@ pub(crate) enum Source {
 #[derive(Clone, Debug)]
 pub(crate) struct MenuState {
     pub source: Source,
-    /// Root popup top-left, in the surface's logical pixels.
+    /// The control the menu opened from (a bar title, a dropdown button, a field); the
+    /// root popover is placed against it. Without one it opens at `at`.
+    pub anchor: Option<String>,
+    /// Root popover point when there is no anchor (a right-click), in the surface's
+    /// logical pixels.
     pub at: [f32; 2],
     /// Surface that shows the menu; `None` is the main window.
     pub surface: Option<String>,
@@ -62,22 +66,23 @@ impl Shell {
     fn row_height(editor: &Editor) -> f32 {
         if editor.state.comfortable() { 30. } else { 26. }
     }
-    /// Open a menu bar menu (or switch to it).
+    /// Open a menu bar menu (or switch to it), below its title.
     pub(crate) fn open_bar(&mut self, index: usize, keyboard: bool) {
-        let x = self.menu_anchors.get(index).copied().unwrap_or(40.);
         self.menu = Some(MenuState {
             source: Source::Bar(index),
-            at: [x, 32.],
+            anchor: Some(format!("menu-title-{index}")),
+            at: [0., 0.],
             surface: None,
             open: Vec::new(),
             active: keyboard.then_some(0),
             query: String::new(),
         });
     }
-    /// Open a context or value menu at the pointer of the current surface.
+    /// Open a context or value menu at a point of the current surface.
     pub(crate) fn open_menu_at(&mut self, source: Source, at: [f32; 2]) {
         self.menu = Some(MenuState {
             source,
+            anchor: None,
             at,
             surface: self.current.clone(),
             open: Vec::new(),
@@ -85,6 +90,28 @@ impl Shell {
             query: String::new(),
         });
         self.mnemonics = false;
+    }
+    /// Open a dropdown below the control that was clicked (`node`, a stable ID), or at
+    /// the pointer when it is gone. Clicking the control of the open dropdown closes it.
+    pub(crate) fn open_menu_from(&mut self, source: Source, node: u64) {
+        let anchor = self
+            .ui
+            .by_id(node)
+            .map(|i| self.ui.nodes[i].element.id.clone());
+        if anchor.is_some()
+            && self
+                .menu
+                .as_ref()
+                .is_some_and(|m| m.source == source && m.anchor == anchor)
+        {
+            self.menu = None;
+            return;
+        }
+        let at = [self.pointer[0] + 2., self.pointer[1] + 2.];
+        self.open_menu_at(source, at);
+        if let Some(menu) = &mut self.menu {
+            menu.anchor = anchor;
+        }
     }
     /// Open snap increment choices under the pointer.
     pub(crate) fn open_value_menu(&mut self, kind: &'static str) {
@@ -365,48 +392,6 @@ impl Shell {
         }
         levels
     }
-    /// Top-left of each open popup level, clamped to the surface.
-    fn popup_origins(&self, editor: &Editor, levels: &[Vec<Row>]) -> Vec<[f32; 2]> {
-        let Some(menu) = &self.menu else {
-            return Vec::new();
-        };
-        let item = Self::row_height(editor);
-        let filter = item + 4.;
-        let size = self.ui.size;
-        let height = |rows: &[Row], top: bool| {
-            8. + if top { filter } else { 0. }
-                + rows
-                    .iter()
-                    .map(|r| if matches!(r, Row::Sep) { 9. } else { item })
-                    .sum::<f32>()
-        };
-        let mut out: Vec<[f32; 2]> = Vec::new();
-        for (level, rows) in levels.iter().enumerate() {
-            let h = height(rows, level == 0);
-            let [mut x, mut y] = if level == 0 {
-                menu.at
-            } else {
-                let parent = out[level - 1];
-                let index = menu.open[level - 1];
-                let before: f32 = levels[level - 1][..index]
-                    .iter()
-                    .map(|r| if matches!(r, Row::Sep) { 9. } else { item })
-                    .sum();
-                let mut x = parent[0] + WIDTH - 4.;
-                if x + WIDTH > size[0] {
-                    x = parent[0] - WIDTH + 4.;
-                }
-                [
-                    x,
-                    parent[1] + 4. + if level == 1 { filter } else { 0. } + before - 4.,
-                ]
-            };
-            x = x.clamp(0., (size[0] - WIDTH).max(0.));
-            y = y.min((size[1] - h).max(0.)).max(0.);
-            out.push([x, y]);
-        }
-        out
-    }
     /// Popups for the current surface: menus and context menus.
     pub(super) fn overlays(&mut self, editor: &mut Editor, out: &mut String) -> ara_ui::Result<()> {
         let Some(menu) = self.menu.clone() else {
@@ -416,11 +401,28 @@ impl Shell {
             return Ok(());
         }
         let levels = self.menu_levels(editor);
-        let origins = self.popup_origins(editor, &levels);
         let keymap = self.keymap.clone();
         for (level, rows) in levels.iter().enumerate() {
-            let [x, y] = origins[level];
-            out.push_str(&format!("<panel id='menu-pop-{level}' class='menu' style='left:{x}px;top:{y}px;width:{WIDTH}px'>"));
+            // The root opens below its control (or at the click); each submenu beside
+            // the row that opened it. `Ui::frame` flips and shifts them into the window.
+            let place = match (level, &menu.anchor) {
+                (0, Some(anchor)) => format!(
+                    "anchor='{}' placement='bottom-start' offset='2'",
+                    escape(anchor)
+                ),
+                (0, None) => format!(
+                    "at='{},{}' placement='bottom-start' offset='0'",
+                    menu.at[0], menu.at[1]
+                ),
+                _ => format!(
+                    "anchor='m{}-{}' placement='right-start' offset='-2'",
+                    level - 1,
+                    menu.open[level - 1]
+                ),
+            };
+            out.push_str(&format!(
+                "<popover id='menu-pop-{level}' class='menu' {place} style='min-width:{WIDTH}px'>"
+            ));
             if level == 0 {
                 self.bindings.insert(
                     ara_ui::source::stable_id("menu-filter"),
@@ -476,25 +478,63 @@ impl Shell {
                     }
                 }
             }
-            out.push_str("</panel>");
+            out.push_str("</popover>");
         }
         Ok(())
     }
-    /// Whether a point is inside an open popup of the current surface.
-    /// The pointer is over the open bar menu's own title, whose click closes it.
-    pub(crate) fn over_open_title(&self) -> bool {
-        let Some(bar) = self.menu.as_ref().and_then(MenuState::bar) else {
-            return false;
-        };
-        self.ui
-            .hit_test(self.pointer[0], self.pointer[1])
-            .is_some_and(|i| self.ui.nodes[i].element.id == format!("menu-title-{bar}"))
+    /// A press at `point` outside the open popovers closes them (those above the one
+    /// it lands in); a press on the open menu's own control is left to toggle it.
+    /// Returns whether anything closed.
+    pub fn dismiss_popovers(
+        &mut self,
+        editor: &mut Editor,
+        point: [f32; 2],
+    ) -> ara_ui::Result<bool> {
+        let mut dismissal = self.popovers.pointer_down(&self.ui, point);
+        // A pinned colour picker stays open through clicks outside it.
+        if self.color_picker.as_ref().is_some_and(|p| p.pinned()) {
+            dismissal.close.retain(|id| id != "color-picker");
+        }
+        if dismissal.close.is_empty() || dismissal.on_anchor {
+            return Ok(false);
+        }
+        self.close_popovers(editor, &dismissal.close)?;
+        Ok(true)
     }
-    pub(crate) fn menu_contains(&self, point: [f32; 2]) -> bool {
-        self.ui
-            .nodes
-            .iter()
-            .any(|n| n.element.id.starts_with("menu-pop-") && n.rect.contains(point[0], point[1]))
+    /// Close popovers by ID: a menu level closes with the levels below it (its
+    /// submenus); the palette closes through its editor action.
+    pub(crate) fn close_popovers(
+        &mut self,
+        editor: &mut Editor,
+        ids: &[String],
+    ) -> ara_ui::Result<()> {
+        for id in ids {
+            if let Some(level) = id
+                .strip_prefix("menu-pop-")
+                .and_then(|l| l.parse::<usize>().ok())
+            {
+                match level {
+                    0 => {
+                        self.menu = None;
+                        self.mnemonics = false;
+                    }
+                    _ => {
+                        if let Some(menu) = &mut self.menu {
+                            menu.open.truncate(level - 1);
+                            menu.active = None;
+                        }
+                    }
+                }
+            } else if id == "palette" && editor.state.palette {
+                editor.action("editor.palette", json!({"open": false}))?;
+            } else if id == "add-component-pop" {
+                self.add_component = None;
+            } else if id == "color-picker" {
+                // A click outside keeps the colour, as Enter does.
+                self.close_color_picker(editor, false)?;
+            }
+        }
+        self.rebuild(editor)
     }
     /// Pointer hover: switch menu bar menus and open submenus without a click.
     pub(crate) fn menu_hover(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
@@ -661,6 +701,12 @@ impl Shell {
             let id = n.element.id.as_str();
             if let Some(binding) = self.bindings.get(&ara_ui::source::stable_id(id)) {
                 match binding {
+                    Binding::AssetFolder(path, _) => {
+                        return Some((Context::Folder, Target::Folder(path.clone())));
+                    }
+                    Binding::ContextMenu(context, target) => {
+                        return Some((*context, target.clone()));
+                    }
                     Binding::Select(entity) => {
                         return Some((Context::Entity, Target::Entity(entity.clone())));
                     }
@@ -669,7 +715,7 @@ impl Shell {
                     }
                     Binding::Field(path, _)
                     | Binding::Scrub(path, _)
-                    | Binding::ColorPicker(path)
+                    | Binding::ColorPicker(path, _)
                     | Binding::PickField(path) => {
                         return Some((Context::Field, Target::Field(path.clone())));
                     }

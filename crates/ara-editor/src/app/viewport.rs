@@ -11,6 +11,8 @@ mod content;
 mod convergence;
 mod preview;
 mod recovery;
+#[cfg(test)]
+mod scene_switch;
 mod startup;
 pub(super) use preview::{GamePreview, PreviewCamera};
 pub(super) use startup::prepare_renderer;
@@ -48,6 +50,8 @@ pub(super) struct SceneView {
     lit: bool,
     /// Transient typed drafts, projected through the same native extraction as commits.
     preview_view: Option<crate::world::DocumentView>,
+    /// Owner of the transient projection, independent of content still loading.
+    preview_scene: String,
     /// Pose already incorporated by the native patch path (no repeated extraction).
     patched_pose: Option<u64>,
     /// One CPU-only replacement at a time; newer imports coalesce until it finishes.
@@ -58,6 +62,10 @@ pub(super) struct SceneView {
     /// Input actually reflected by the retained native frame. SceneSync can
     /// invalidate after this view already adopted the same publication.
     raster_input: Option<content::Key>,
+    /// Document whose scene-specific render state was successfully published.
+    raster_scene: Option<String>,
+    /// Scene identity is independent of coincident geometry/material generations.
+    fidelity_scene: Option<String>,
     recovery: recovery::Recovery,
 }
 impl SceneView {
@@ -72,9 +80,17 @@ impl SceneView {
         self.patched_pose = None;
     }
     /// Project typed Inspector drafts without authoring documents or baking meshes.
-    pub(super) fn set_preview_view(&mut self, view: Option<crate::world::DocumentView>) {
+    pub(super) fn set_preview_view(
+        &mut self,
+        scene: &str,
+        view: Option<crate::world::DocumentView>,
+    ) {
         self.content_epoch = self.content_epoch.wrapping_add(1);
         self.preview_view = view;
+        self.preview_scene.clear();
+        if self.preview_view.is_some() {
+            self.preview_scene.push_str(scene);
+        }
         self.invalidate();
     }
     /// Update only `patch` on the retained native frame. A typed preview remains
@@ -88,7 +104,10 @@ impl SceneView {
         patch: &crate::world::Patch,
     ) -> ara_ui::Result<bool> {
         ara_gpu::cpu_scope!("SceneView.apply_patch");
-        if !renderer.is_native() || self.failed.is_some() {
+        if !renderer.is_native()
+            || self.failed.is_some()
+            || self.raster_scene.as_deref() != Some(editor.state.doc.as_str())
+        {
             return Ok(false);
         }
         let (Some(frame), Some(raster), Some(content)) =
@@ -146,6 +165,10 @@ impl SceneView {
             renderer.reset_temporal_history();
         }
         self.preview_view = preview;
+        self.preview_scene.clear();
+        if self.preview_view.is_some() {
+            self.preview_scene.push_str(&editor.state.doc);
+        }
         if !patch.is_empty() {
             self.content_epoch = self.content_epoch.wrapping_add(1);
             self.convergence.reset();
@@ -276,7 +299,7 @@ impl SceneView {
             candidate.scene.raster.destroy(renderer)?;
         }
         if self.preview_view.is_some() {
-            self.set_preview_view(None);
+            self.set_preview_view(&editor.state.doc, None);
         }
         if let Some(raster) = self.raster.take() {
             raster.destroy(renderer)?;
@@ -286,6 +309,7 @@ impl SceneView {
             self.convergence.failed();
             self.raster_frame = None;
             self.raster_input = None;
+            self.raster_scene = None;
             self.invalidate();
         }
         renderer.render_view(&editor.state.camera.spec(), 0.0015, mode)?;
@@ -323,6 +347,11 @@ impl SceneView {
         view: &crate::world::DocumentView,
         work: RasterWork,
     ) -> ara_ui::Result<()> {
+        if self.preview_view.is_some() && self.preview_scene != editor.state.doc {
+            // Drafts belong to the outgoing scene. Clear them before forming
+            // the recovery key, which must describe the same extraction input.
+            self.set_preview_view(&editor.state.doc, None);
+        }
         self.recovery
             .configure(renderer.size(), editor.state.render_quality);
         let key = content::Key {
@@ -442,6 +471,7 @@ impl SceneView {
         }
         if let Some(fidelity) = self.fidelity.take() {
             fidelity.destroy(renderer.gpu_mut())?;
+            self.fidelity_scene = None;
             self.prepared = None;
             self.plan = None;
             self.revision = None;
@@ -477,6 +507,7 @@ impl SceneView {
             self.patched_pose = key.pose;
         }
         let changed = self.revision != Some(revision)
+            || self.raster_input.is_none_or(|shown| !shown.same_input(key))
             || (editor.gesture.is_some() && self.patched_pose != pose_key(editor.gesture.as_ref()))
             || self.raster_frame.is_none()
             || self.raster_input.is_none()
@@ -503,7 +534,8 @@ impl SceneView {
             )?);
         }
         if matches!(work, RasterWork::Live(_)) {
-            let ready = self.raster_frame.is_some()
+            let ready = self.raster_scene.as_deref() == Some(editor.state.doc.as_str())
+                && self.raster_frame.is_some()
                 && self
                     .raster
                     .as_ref()
@@ -547,10 +579,16 @@ impl SceneView {
             let raster = self.raster.get_or_insert_with(|| {
                 ara_runtime_render::RasterView::new(editor.host.root().join(".ara/gpu"))
             });
-            let frame = raster.publish_content(renderer, prepared.raster, plan)?;
+            let scene_changed = self.raster_scene.as_deref() != Some(editor.state.doc.as_str());
+            let frame = if scene_changed {
+                raster.publish_scene(renderer, prepared.raster, plan)?
+            } else {
+                raster.publish_content(renderer, prepared.raster, plan)?
+            };
+            self.raster_scene = Some(editor.state.doc.clone());
             *content = prepared.content;
             let arrivals = content.take_arrivals();
-            if !arrivals.is_empty() {
+            if !scene_changed && !arrivals.is_empty() {
                 raster.fade_models(&arrivals)?;
             }
             self.raster_frame = Some(frame);
@@ -574,7 +612,11 @@ impl SceneView {
             std::thread::sleep(std::time::Duration::from_millis(1));
             return Ok(());
         }
-        if self.raster_frame.is_none() {
+        if self.raster_frame.is_none()
+            || self.raster_scene.as_deref() != Some(editor.state.doc.as_str())
+        {
+            // Keep the completed old image while another scene prepares. Drawing
+            // its geometry through the new scene's camera shows an unrelated world.
             return Ok(());
         }
         if self
@@ -596,7 +638,12 @@ impl SceneView {
                     .ok_or("raster view")?
                     .style_unpublished(renderer, |asset| content.model_is_pending(asset))?;
             }
-            let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+            // Volumes blend for the Scene view's camera.
+            let look = FrameEnvironment::resolve(
+                &frame.look,
+                editor.state.camera.position(),
+                frame.environment.exposure,
+            );
             let raster = self.raster.as_mut().ok_or("raster view")?;
             let resolve = || content.content(frame, store.workspace(), store.schema());
             if self.raster_snapshot_dirty {
@@ -694,7 +741,8 @@ impl SceneView {
             self.remaining = self.remaining.max(8);
             self.camera = Some(editor.state.camera);
         }
-        let reset = self.revision != Some(revision) || editor.gesture.is_some();
+        let scene_changed = self.fidelity_scene.as_deref() != Some(editor.state.doc.as_str());
+        let reset = self.revision != Some(revision) || editor.gesture.is_some() || scene_changed;
         let resized = self.plan != Some(settings);
         if reset || resized {
             self.remaining = 64;
@@ -714,13 +762,19 @@ impl SceneView {
                 editor.gesture.as_ref(),
                 &editor.state.hidden,
             )?;
-            let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
-            let rebuild = self
-                .prepared
-                .as_mut()
-                .map(|prepared| prepared.update_frame(&frame))
-                .transpose()?
-                .is_none_or(|change| change == FrameChange::Rebuild);
+            // Volumes blend for the Scene view's camera.
+            let look = FrameEnvironment::resolve(
+                &frame.look,
+                editor.state.camera.position(),
+                frame.environment.exposure,
+            );
+            let rebuild = scene_changed
+                || self
+                    .prepared
+                    .as_mut()
+                    .map(|prepared| prepared.update_frame(&frame))
+                    .transpose()?
+                    .is_none_or(|change| change == FrameChange::Rebuild);
             if rebuild {
                 let assets = content.content(&frame, store.workspace(), store.schema())?;
                 let mut prepared = native::prepare(&frame, assets, texture_config())?;
@@ -746,6 +800,16 @@ impl SceneView {
                 .as_mut()
                 .ok_or("fidelity allocation")?
                 .set_environment(&look)?;
+            if scene_changed {
+                self.fidelity
+                    .as_mut()
+                    .ok_or("fidelity allocation")?
+                    .reset_accumulation(renderer.gpu_mut())?;
+                if let Some(effects) = self.effects.take() {
+                    effects.destroy(renderer.gpu_mut())?;
+                }
+                self.tick = 0;
+            }
             let sun = frame.sun.map_or((Vec3::Y, Vec3::ZERO), |(direction, lux)| {
                 (Vec3::from_array(direction), Vec3::from_array(lux))
             });
@@ -763,6 +827,7 @@ impl SceneView {
                 &frame.effects,
                 sun,
             )?;
+            self.fidelity_scene = Some(editor.state.doc.clone());
             self.failed = None;
         }
         if self.fidelity.is_none() {
@@ -913,6 +978,8 @@ fn view_mode(name: &str) -> ViewMode {
         "roughnessMetal" => ViewMode::RoughnessMetal,
         "entityIds" => ViewMode::EntityIds,
         "shadowCascades" => ViewMode::ShadowCascades,
+        "wireframe" => ViewMode::Wireframe,
+        "litWireframe" => ViewMode::LitWireframe,
         _ => ViewMode::Lit,
     }
 }

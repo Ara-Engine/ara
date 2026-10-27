@@ -1,7 +1,11 @@
 //! SDL event loop and same-device native UI/scene composition.
+mod assets_verify;
 mod capture;
+mod chrome_verify;
 mod controller;
+mod cursors;
 mod drags;
+mod eyedropper;
 mod game;
 mod game_preview;
 mod journey;
@@ -14,6 +18,7 @@ mod setup;
 mod ux_verify;
 mod verify;
 mod viewport;
+mod window_chrome;
 mod windows;
 use crate::{
     Editor,
@@ -55,7 +60,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     if options.headless {
         return headless(options);
     }
-    if options.verify_panels || options.verify_ux {
+    if options.verify_panels || options.verify_ux || options.verify_docking {
         panels_verify::fixtures(&options.project)?;
     }
     // Bounded runs resolve an isolated ARA_CONFIG_DIR (`Options::isolate_profile`);
@@ -93,26 +98,46 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     // they render offscreen and read the UI target back.
     let offscreen = options.offscreen();
     // Behind a loading window, the main window appears with its first frame.
-    let window = if offscreen || splash.is_some() {
+    let mut window = if offscreen || splash.is_some() {
         Window::hidden(&title, options.size)?
     } else {
         Window::new(&title, options.size)?
     };
     let mut native = Native::attach(&title)?;
-    if options.verify || options.verify_panels || options.verify_ux || options.screenshot {
+    if options.verify
+        || options.verify_panels
+        || options.verify_ux
+        || options.verify_docking
+        || options.screenshot
+    {
         native.verification_extent(options.size)?;
     }
+    window.enable_custom_chrome()?;
+    let mut caption = window_chrome::SnapCaption::new(&window)?;
     let mut clipboard = OsClipboard;
     crate::native::frame::style(window.raw(), editor.state.light);
     let main_id = window.id();
     let dpi = options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
     let physical = window.size()?;
     let logical = physical.map(|v| v as f32 / dpi);
-    if options.verify || options.verify_panels || options.verify_ux {
+    if options.verify || options.verify_panels || options.verify_ux || options.verify_docking {
         eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
     }
     let mut shell = Shell::new(&mut editor, logical)?;
     shell.offscreen = offscreen;
+    if let Some(button) = shell.update_chrome(&mut window, dpi) {
+        caption.update(button);
+    }
+    if options.verify {
+        chrome_verify::verify(
+            &mut editor,
+            &mut shell,
+            &mut window,
+            &mut caption,
+            &options.output,
+            dpi,
+        )?;
+    }
     let mut view = editor.view()?;
     editor.report_missing_sources(&view);
     let viewport = shell.viewport().unwrap_or(ara_ui::paint::Box2 {
@@ -169,6 +194,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     floats.hidden = offscreen;
     let mut game = game::GameView::default();
     let mut game_preview = game_preview::Preview::default();
+    let mut eyedropper_buttons = eyedropper::Buttons::default();
     gpu.set_dpi(dpi)?;
     let mut ui_renderer = UiRenderer::default();
     crate::shell::icons::install(&mut ui_renderer, dpi)?;
@@ -207,7 +233,22 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         None
     };
     // The UX route's drags run after its captures and camera timings.
-    let mut drag_check: Option<drags::DragCheck> = None;
+    let mut drag_check = if options.verify_docking {
+        editor.action("editor.preferences", json!({"reduceMotion": true}))?;
+        editor.action("editor.layout.reset", json!({}))?;
+        shell.rebuild(&mut editor)?;
+        Some(drags::DragCheck::new(&options.output, &shell))
+    } else {
+        None
+    };
+    let mut assets_verification = if options.verify_assets {
+        Some(assets_verify::AssetsVerification::new(
+            &mut editor,
+            &options.output,
+        )?)
+    } else {
+        None
+    };
     let mut ux_verification = if options.verify_ux {
         Some(ux_verify::UxVerification::new(
             &mut editor,
@@ -440,6 +481,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             let input_ms = routed_at.elapsed().as_secs_f64() * 1000.;
             if let Some(request) = shell.window_request.take() {
                 match request {
+                    crate::shell::WindowRequest::Minimize => window.minimize()?,
+                    crate::shell::WindowRequest::Maximize => window.toggle_maximize()?,
                     crate::shell::WindowRequest::Fullscreen => window.toggle_fullscreen()?,
                     crate::shell::WindowRequest::Raise(id) => {
                         if let Some(f) = floats.windows.iter().find(|f| f.id == id) {
@@ -585,6 +628,17 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 dirty = true;
             }
             dirty |= shell.upload_thumbnails(&mut ui_renderer)?;
+            // The colour picker's eyedropper samples the last frame under the pointer,
+            // or the screen outside the window.
+            dirty |= eyedropper::sample(
+                &mut editor,
+                &mut shell,
+                &mut gpu,
+                &window,
+                last_dpi,
+                !options.offscreen(),
+                &mut eyedropper_buttons,
+            )?;
             let geometry_at = Instant::now();
             let mut view_ms = 0.;
             let mut stages = scene_sync::Stages::default();
@@ -637,6 +691,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 last_scene = editor.scene_revision;
                 scene_dirty = true;
             }
+            let (styles_changed, viewport_changed) = shell.reload_styles(&mut editor)?;
+            dirty |= styles_changed;
+            scene_dirty |= viewport_changed;
             if editor.panels_revision != last_panels {
                 last_panels = editor.panels_revision;
                 dirty |= shell.rebuild_if_stale(&mut editor)?;
@@ -717,6 +774,16 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     wall_samples.clear();
                 }
             }
+            if let Some(route) = &mut assets_verification {
+                dirty |= route.step(
+                    &mut editor,
+                    &mut shell,
+                    &mut gpu,
+                    &mut ui_renderer,
+                    &mut renderer,
+                    &mut scene_view,
+                )?;
+            }
             drop(authority_scope);
             let physical = window.size()?;
             if physical.contains(&0) {
@@ -763,7 +830,22 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
             shell.orient_axis(editor.state.camera);
             let ui_scope = profile_frame.map(|_| ara_profile::scope("editor.ui"));
             let ui_at = Instant::now();
+            if shell.native_maximized != window.maximized() {
+                shell.native_maximized = window.maximized();
+                shell.rebuild(&mut editor)?;
+            }
             let work = shell.frame()?;
+            if let Some(button) = shell.update_chrome(&mut window, dpi) {
+                caption.update(button);
+            }
+            if !offscreen {
+                cursors::update(
+                    &mut window,
+                    &mut floats,
+                    &mut shell,
+                    controller.gizmo_state(),
+                )?;
+            }
             let ui_ms = ui_at.elapsed().as_secs_f64() * 1000.;
             let (mut render_ms, mut present_ms, mut presented) = (0., 0., false);
             let (mut scene_ms, mut icons_ms) = (0., 0.);
@@ -837,6 +919,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                             controller.gizmo_state(),
                             &mut shell.outlines,
                             editor.host.store().revision(),
+                            &shell.ui.sheet,
                         )?;
                         shell.outlines.upload(&mut ui_renderer, &mut gpu)?;
                         if rect.contains(shell.pointer[0], shell.pointer[1])
@@ -1092,7 +1175,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 probe.end(&editor, &mut shell, sample);
             }
             if let Some(check) = &mut drag_check {
-                check.end(&editor, &mut shell)?;
+                check.end(&editor, &mut shell, &mut gpu, &floats)?;
             } else if ux_verification.as_ref().is_some_and(|v| v.finished())
                 && camera_samples.len() >= 240
             {
@@ -1131,6 +1214,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 break;
             }
             if options.frames.is_some_and(|limit| frames >= limit)
+                || assets_verification
+                    .as_ref()
+                    .is_some_and(assets_verify::AssetsVerification::finished)
                 || verification
                     .as_ref()
                     .is_some_and(|v| v.finished() && idle_samples.len() >= 5000)
@@ -1145,6 +1231,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                             || ux_idle_since.get_or_insert_with(Instant::now).elapsed()
                                 >= UX_IDLE_PATIENCE)
                 })
+                || (options.verify_docking
+                    && drag_check.as_ref().is_some_and(drags::DragCheck::finished))
                 || journey.as_ref().is_some_and(journey::Journey::finished)
                 || first_hour.as_ref().is_some_and(qa::FirstHour::finished)
             {
@@ -1166,6 +1254,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         }
         if let Some(check) = &drag_check {
             check.write()?;
+            if !check.finished() {
+                return Err("native docking verification did not finish".into());
+            }
             let failed = check.failures();
             if !failed.is_empty() {
                 return Err(format!("drags changed nothing: {}", failed.join(", ")).into());
@@ -1342,12 +1433,28 @@ fn route_event(
     view: &crate::world::DocumentView,
     clipboard: &mut OsClipboard,
 ) -> ara_ui::Result<(bool, bool, bool)> {
-    if let Some(handled) = game_input(&event, editor, shell, dpi) {
+    if !shell.tab_pending()
+        && let Some(handled) = game_input(&event, editor, shell, dpi)
+    {
         return Ok((handled, false, false));
     }
     // Tab drags follow the desktop pointer: preview in whichever window is under it.
     if shell.dragged_tab().is_some() {
         match &event {
+            Event::Key {
+                scancode: 41,
+                pressed: true,
+                ..
+            } => {
+                shell.drag = None;
+                shell.drop_preview = None;
+                shell.release_tab_capture(clipboard)?;
+                controller.release(1);
+                for float in &mut floats.windows {
+                    float.dirty = true;
+                }
+                return Ok((true, false, false));
+            }
             Event::MouseMotion { .. } => {
                 let global = desktop_pointer(shell);
                 let ui_scale = windows::ui_scale(editor);
@@ -1368,11 +1475,20 @@ fn route_event(
                 pressed: false,
             } => {
                 let global = desktop_pointer(shell);
+                // A release can follow a layout change without another motion event.
+                track_tab_drag(
+                    global,
+                    dpi,
+                    windows::ui_scale(editor),
+                    window,
+                    floats,
+                    shell,
+                )?;
                 let rect = [(global[0] - 60.) as i32, (global[1] - 14.) as i32, 420, 560];
                 shell.leave();
+                shell.release_tab_capture(clipboard)?;
                 let dropped = shell.finish_tab_drag(editor, Some(rect));
                 controller.release(1);
-                shell.event(InputEvent::Cancel, clipboard)?;
                 dropped?;
                 return Ok((true, false, false));
             }
@@ -1480,6 +1596,11 @@ fn track_tab_drag(
         ];
         shell.drag_over();
     } else {
+        let scale = crate::native::points_to_logical(window.raw(), dpi);
+        shell.pointer = [
+            (global[0] - m[0] as f32) * scale,
+            (global[1] - m[1] as f32) * scale,
+        ];
         shell.drag_outside();
     }
     Ok(())

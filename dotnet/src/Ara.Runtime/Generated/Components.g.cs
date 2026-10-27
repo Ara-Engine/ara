@@ -1322,7 +1322,7 @@ public partial struct Environment : IComponent<Environment>
 }
 
 /// <summary>
-/// How the camera exposes the scene.
+/// How the camera exposes the scene (a post-process volume's exposure override).
 /// </summary>
 public enum ExposureMode : uint
 {
@@ -1694,9 +1694,9 @@ public partial struct Light : IComponent<Light>
     /// Linear RGB tint (alpha is ignored).
     /// </summary>
     /// <remarks>
-    /// Default: [1,1,1,1].
+    /// Colour picker supports temperature in Kelvin. Default: [1,1,1,1].
     /// </remarks>
-    [FieldOffset(4), Default(1, 1, 1, 1)]
+    [FieldOffset(4), ColorPicker(Temperature = true), Default(1, 1, 1, 1)]
     public Color Color;
     /// <summary>
     /// Luminous flux in lumens (point/spot) or illuminance in lux (directional).
@@ -1995,9 +1995,9 @@ public partial struct MeshRenderer : IComponent<MeshRenderer>
     /// Default procedural radiance, or an RGB emission multiplier with a model/material asset. Models treat zero RGB as neutral; use <c>emissiveEnabled</c> to switch them off.
     /// </summary>
     /// <remarks>
-    /// Default: [0,0,0].
+    /// HDR colour; values may exceed one. Default: [0,0,0].
     /// </remarks>
-    [Default(0, 0, 0)]
+    [ColorPicker(Hdr = true), Default(0, 0, 0)]
     public Vector3 Emissive;
     /// <summary>
     /// Enables emission without modifying the source model or its materials.
@@ -2019,9 +2019,9 @@ public partial struct MeshRenderer : IComponent<MeshRenderer>
     /// Optional linear RGB replacement for the source emissive factor, useful for lamps.
     /// </summary>
     /// <remarks>
-    /// Range: [0, ∞]. Default: null.
+    /// HDR colour; values may exceed one. Range: [0, ∞]. Default: null.
     /// </remarks>
-    [Min(0), Default(Json = "null")]
+    [ColorPicker(Hdr = true), Min(0), Default(Json = "null")]
     public Vector3? EmissiveFactor;
     /// <summary>
     /// Source material names or numeric indices affected by <c>emissiveFactor</c>. Empty targets all; <c>name:3</c> disambiguates a numeric material name.
@@ -2809,114 +2809,335 @@ public partial struct PlayerControl : IComponent<PlayerControl>
 }
 
 /// <summary>
-/// Camera exposure, tone mapping, bloom and colour grading. The first entity in ID order wins; without one, renderers meter automatically with Filmic tone mapping.
+/// The group of settings one <c>PostOverride</c> entry changes.
 /// </summary>
-[StructLayout(LayoutKind.Explicit, Size = 48)]
-[EngineComponent("PostProcess", Module = "render")]
-public partial struct PostProcess : IComponent<PostProcess>
+public enum PostModule : uint
 {
+    /// <summary>
+    /// Automatic metering or a fixed exposure, compensation and adaptation.
+    /// </summary>
+    Exposure = 0,
+    /// <summary>
+    /// The display transform.
+    /// </summary>
+    ToneMapping = 1,
+    /// <summary>
+    /// The glow around bright pixels.
+    /// </summary>
+    Bloom = 2,
+    /// <summary>
+    /// White balance, saturation, contrast, lift/gamma/gain and a lookup table.
+    /// </summary>
+    ColorGrading = 3,
+    /// <summary>
+    /// Darkening toward the frame corners.
+    /// </summary>
+    Vignette = 4,
+    /// <summary>
+    /// Lens focus blur.
+    /// </summary>
+    DepthOfField = 5,
+    /// <summary>
+    /// Blur along screen motion while the shutter is open.
+    /// </summary>
+    MotionBlur = 6,
+    /// <summary>
+    /// Colour fringes toward the frame edges.
+    /// </summary>
+    ChromaticAberration = 7,
+    /// <summary>
+    /// Screen-space ambient occlusion strength and radius (presets that run it).
+    /// </summary>
+    AmbientOcclusion = 8,
+    /// <summary>
+    /// Screen-space reflection strength and reach (presets that run them).
+    /// </summary>
+    Reflections = 9,
+}
+
+/// <summary>
+/// One group of settings a post-process volume overrides: pick the group in <c>module</c>, then tick the properties to change. Unticked properties are left to lower-priority volumes and the defaults.
+/// </summary>
+public partial struct PostOverride
+{
+    /// <summary>
+    /// The settings group this entry changes.
+    /// </summary>
+    /// <remarks>
+    /// Default: "exposure".
+    /// </remarks>
+    [Default("exposure")]
+    public PostModule Module;
     /// <summary>
     /// Automatic metering or a fixed exposure.
     /// </summary>
     /// <remarks>
-    /// Default: "auto".
+    /// Default: null.
     /// </remarks>
-    [FieldOffset(0), Default("auto")]
-    public ExposureMode Exposure;
+    [Default(Json = "null")]
+    public ExposureMode? Exposure;
     /// <summary>
-    /// Manual exposure value at ISO 100. Sunny day ≈ 15, overcast ≈ 12, sunset ≈ 10, lit interior ≈ 7, night street ≈ 3.
+    /// Manual exposure value at ISO 100 (manual mode). Sunny day ≈ 15, overcast ≈ 12, sunset ≈ 10, lit interior ≈ 7, night street ≈ 3.
     /// </summary>
     /// <remarks>
-    /// Range: [-10, 24]. Default: 10.
+    /// Range: [-10, 24]. Default: null.
     /// </remarks>
-    [FieldOffset(4), Range(-10, 24), Default(10)]
-    public float Ev100;
+    [Range(-10, 24), Default(Json = "null")]
+    public float? Ev100;
     /// <summary>
     /// Exposure compensation in stops, applied in both modes; +1 doubles the brightness.
     /// </summary>
     /// <remarks>
-    /// Range: [-8, 8]. Default: 0.
+    /// Range: [-8, 8]. Default: null.
     /// </remarks>
-    [FieldOffset(8), Range(-8, 8), Default(0)]
-    public float Compensation;
+    [Range(-8, 8), Default(Json = "null")]
+    public float? Compensation;
     /// <summary>
     /// Darkest exposure automatic metering may pick (lower = brighter in dark scenes).
     /// </summary>
     /// <remarks>
-    /// Range: [-10, 24]. Default: -2.
+    /// Range: [-10, 24]. Default: null.
     /// </remarks>
-    [FieldOffset(12), Range(-10, 24), Default(-2)]
-    public float MinEv100;
+    [Range(-10, 24), Default(Json = "null")]
+    public float? MinEv100;
     /// <summary>
     /// Brightest exposure automatic metering may pick.
     /// </summary>
     /// <remarks>
-    /// Range: [-10, 24]. Default: 16.
+    /// Range: [-10, 24]. Default: null.
     /// </remarks>
-    [FieldOffset(16), Range(-10, 24), Default(16)]
-    public float MaxEv100;
+    [Range(-10, 24), Default(Json = "null")]
+    public float? MaxEv100;
     /// <summary>
     /// How fast automatic exposure adapts, per second; higher reacts faster.
     /// </summary>
     /// <remarks>
-    /// Range: [0.1, 20]. Default: 2.
+    /// Range: [0.1, 20]. Default: null.
     /// </remarks>
-    [FieldOffset(20), Range(0.1, 20), Default(2)]
-    public float AdaptationSpeed;
+    [Range(0.1, 20), Default(Json = "null")]
+    public float? AdaptationSpeed;
     /// <summary>
-    /// Display transform.
+    /// Display transform that compresses scene radiance into the screen's range.
     /// </summary>
     /// <remarks>
-    /// Default: "filmic".
+    /// Default: null.
     /// </remarks>
-    [FieldOffset(24), Default("filmic")]
-    public ToneMapping ToneMapping;
+    [Default(Json = "null")]
+    public ToneMapping? ToneMapping;
     /// <summary>
     /// Fraction of light spread into the bloom glow around bright pixels.
     /// </summary>
     /// <remarks>
-    /// Range: [0, 0.25]. Default: 0.04.
+    /// Range: [0, 0.25]. Default: null.
     /// </remarks>
-    [FieldOffset(28), Range(0, 0.25), Default(0.04)]
-    public float Bloom;
+    [Range(0, 0.25), Default(Json = "null")]
+    public float? Bloom;
     /// <summary>
     /// White balance: the colour temperature that renders as neutral white. Lower warms the image's whites to neutral (tungsten ≈ 3200), higher cools them.
     /// </summary>
     /// <remarks>
-    /// Unit: K. Range: [1500, 15000]. Default: 6500.
+    /// Unit: K. Range: [1500, 15000]. Default: null.
     /// </remarks>
-    [FieldOffset(32), Unit("K"), Range(1500, 15000), Default(6500)]
-    public float WhiteBalance;
+    [Unit("K"), Range(1500, 15000), Default(Json = "null")]
+    public float? WhiteBalance;
     /// <summary>
     /// Colour saturation; 0 is greyscale, 1 unchanged.
     /// </summary>
     /// <remarks>
-    /// Range: [0, 2]. Default: 1.
+    /// Range: [0, 2]. Default: null.
     /// </remarks>
-    [FieldOffset(36), Range(0, 2), Default(1)]
-    public float Saturation;
+    [Range(0, 2), Default(Json = "null")]
+    public float? Saturation;
     /// <summary>
     /// Contrast around middle grey; 1 unchanged.
     /// </summary>
     /// <remarks>
-    /// Range: [0.5, 2]. Default: 1.
+    /// Range: [0.5, 2]. Default: null.
     /// </remarks>
-    [FieldOffset(40), Range(0.5, 2), Default(1)]
-    public float Contrast;
+    [Range(0.5, 2), Default(Json = "null")]
+    public float? Contrast;
+    /// <summary>
+    /// Lift: a colour added to the shadows after tone mapping, fading out toward white; black leaves them unchanged.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public Color? Lift;
+    /// <summary>
+    /// Gamma: a per-channel midtone power after tone mapping; white is neutral, a darker channel darkens that channel's midtones.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public Color? Gamma;
+    /// <summary>
+    /// Gain: a per-channel multiplier on the whole image after tone mapping; white is neutral.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public Color? Gain;
+    /// <summary>
+    /// Colour lookup table applied last, as in Unity and Unreal: a strip texture of 16 (256x16) or 32 (1024x32) sRGB slices along red and green, one slice per blue step, imported uncompressed.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public string? Lut;
+    /// <summary>
+    /// How much of the lookup table applies, from 0 (none) to 1 (all).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: null.
+    /// </remarks>
+    [Range(0, 1), Default(Json = "null")]
+    public float? LutContribution;
     /// <summary>
     /// Darkening toward the frame corners; 0 disables it.
     /// </summary>
     /// <remarks>
-    /// Range: [0, 1]. Default: 0.
+    /// Range: [0, 1]. Default: null.
     /// </remarks>
-    [FieldOffset(44), Range(0, 1), Default(0)]
-    public float Vignette;
+    [Range(0, 1), Default(Json = "null")]
+    public float? Vignette;
+    /// <summary>
+    /// Distance from the camera that is in focus; 0 turns depth of field off.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, 10000]. Default: null.
+    /// </remarks>
+    [Unit("m"), Range(0, 10000), Default(Json = "null")]
+    public float? FocusDistance;
+    /// <summary>
+    /// Lens aperture as an f-number: smaller numbers blur more (f/1.4 is shallow, f/16 keeps nearly everything sharp). The focal length follows the camera's field of view on a full-frame sensor.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0.7, 32]. Default: null.
+    /// </remarks>
+    [Range(0.7, 32), Default(Json = "null")]
+    public float? Aperture;
+    /// <summary>
+    /// Strength of the blur in front of the focus distance, from 0 (sharp) to 1 (physical).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: null.
+    /// </remarks>
+    [Range(0, 1), Default(Json = "null")]
+    public float? NearBlur;
+    /// <summary>
+    /// Strength of the blur behind the focus distance, from 0 (sharp) to 1 (physical).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: null.
+    /// </remarks>
+    [Range(0, 1), Default(Json = "null")]
+    public float? FarBlur;
+    /// <summary>
+    /// Shutter angle: 180° blurs motion over half a frame, 360° over a whole frame; 0 turns motion blur off. Samples per pixel follow the quality preset.
+    /// </summary>
+    /// <remarks>
+    /// Unit: deg. Range: [0, 360]. Default: null.
+    /// </remarks>
+    [Unit("deg"), Range(0, 360), Default(Json = "null")]
+    public float? ShutterAngle;
+    /// <summary>
+    /// Strength of the red/blue fringes toward the frame edges; 0 turns it off.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: null.
+    /// </remarks>
+    [Range(0, 1), Default(Json = "null")]
+    public float? ChromaticAberration;
+    /// <summary>
+    /// Ambient occlusion strength: 0 none, 1 physical, above 1 exaggerated.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 4]. Default: null.
+    /// </remarks>
+    [Range(0, 4), Default(Json = "null")]
+    public float? AoIntensity;
+    /// <summary>
+    /// Ambient occlusion search radius.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.05, 10]. Default: null.
+    /// </remarks>
+    [Unit("m"), Range(0.05, 10), Default(Json = "null")]
+    public float? AoRadius;
+    /// <summary>
+    /// Screen-space reflection strength, from 0 (probe reflections only) to 1.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: null.
+    /// </remarks>
+    [Range(0, 1), Default(Json = "null")]
+    public float? ReflectionIntensity;
+    /// <summary>
+    /// Longest screen-space reflection ray.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [1, 500]. Default: null.
+    /// </remarks>
+    [Unit("m"), Range(1, 500), Default(Json = "null")]
+    public float? ReflectionDistance;
+}
+
+/// <summary>
+/// A region whose post-processing overrides blend in as the camera approaches and enters it. Volumes apply in ascending <c>priority</c> (ties in entity ID order); each property one overrides moves toward its value by the volume's weight at the camera. Properties no volume overrides keep the engine defaults. Scenes saved with the former <c>PostProcess</c> component load as one global volume that overrides everything.
+/// </summary>
+[EngineComponent("PostProcessVolume", Module = "render")]
+public partial struct PostProcessVolume : IComponent<PostProcessVolume>
+{
+    /// <summary>
+    /// Where the volume applies: everywhere, or inside a box or sphere placed and sized by the entity's transform.
+    /// </summary>
+    /// <remarks>
+    /// Default: "global".
+    /// </remarks>
+    [Default("global")]
+    public VolumeShape Shape;
+    /// <summary>
+    /// Distance outside the box or sphere over which the volume fades out; 0 is a hard edge.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, 1000]. Default: 0.
+    /// </remarks>
+    [Unit("m"), Range(0, 1000), Default(0)]
+    public float BlendDistance;
+    /// <summary>
+    /// Order among overlapping volumes: higher priorities apply after, and over, lower ones.
+    /// </summary>
+    /// <remarks>
+    /// Range: [-1000, 1000]. Default: 0.
+    /// </remarks>
+    [Range(-1000, 1000), Default(0)]
+    public float Priority;
+    /// <summary>
+    /// Overall strength of the volume's overrides, from 0 (none) to 1 (full).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 1]. Default: 1.
+    /// </remarks>
+    [Range(0, 1), Default(1)]
+    public float Weight;
+    /// <summary>
+    /// The settings this volume changes, one entry per group. Anything not listed comes from lower-priority volumes or the defaults.
+    /// </summary>
+    /// <remarks>
+    /// Default: [].
+    /// </remarks>
+    [Default(Json = "[]")]
+    public PostOverride[] Overrides;
     /// <summary>Stable engine component index.</summary>
     public static uint TypeIndex => 39;
     /// <inheritdoc/>
-    public static ref PostProcess Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPostProcess, EngineValueCodecs.WritePostProcess);
+    public static ref PostProcessVolume Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadPostProcessVolume, EngineValueCodecs.WritePostProcessVolume);
     /// <inheritdoc/>
-    public static void Insert(in Commands commands, Entity entity, in PostProcess value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WritePostProcess));
+    public static void Insert(in Commands commands, Entity entity, in PostProcessVolume value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WritePostProcessVolume));
     /// <inheritdoc/>
     public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
 }
@@ -4062,6 +4283,25 @@ public partial struct VisualEffect : IComponent<VisualEffect>
 }
 
 /// <summary>
+/// Where a post-process volume applies.
+/// </summary>
+public enum VolumeShape : uint
+{
+    /// <summary>
+    /// Everywhere, wherever the camera is.
+    /// </summary>
+    Global = 0,
+    /// <summary>
+    /// Inside a 1 m cube centred on the entity, sized and turned by its transform.
+    /// </summary>
+    Box = 1,
+    /// <summary>
+    /// Inside a 1 m diameter sphere centred on the entity, sized by its transform's scale.
+    /// </summary>
+    Sphere = 2,
+}
+
+/// <summary>
 /// Server-side AI: walks the navmesh to random points inside a box, pausing between.
 /// </summary>
 [StructLayout(LayoutKind.Explicit, Size = 48)]
@@ -4137,7 +4377,7 @@ public enum ZoneShape : uint
 public static class EngineComponents
 {
     /// <summary>Schema names by TypeIndex.</summary>
-    public static readonly string[] Names = ["Transform", "AcousticPortal", "AcousticSource", "AcousticSurface", "Animator", "AudioGraphSource", "AudioListener", "AudioSource", "Brain", "Camera", "Camera2d", "CharacterController", "CharacterController2d", "CharacterInput", "CharacterInput2d", "CharacterMotion", "CharacterMotion2d", "Collider", "Collider2d", "Environment", "Flipbook", "FollowCamera", "HeightFog", "Joint", "Light", "Light2d", "MeshRenderer", "MusicSource", "NavAgent", "NavAgentType", "NavArea", "NavLink", "NavMeshSurface", "NavObstacle", "Perceiver", "PhysicsId", "PhysicsPose", "PhysicsPose2d", "PlayerControl", "PostProcess", "ReverbZone", "RigidBody", "RigidBody2d", "SkyAtmosphere", "Sprite", "Stimulus", "StreamedWorld", "Terrain", "TerrainChunk", "TileColliderSource2d", "Tilemap", "Vehicle", "VehicleInput", "VehicleTelemetry", "Velocity", "Velocity2d", "VisualEffect", "Wanderer"];
+    public static readonly string[] Names = ["Transform", "AcousticPortal", "AcousticSource", "AcousticSurface", "Animator", "AudioGraphSource", "AudioListener", "AudioSource", "Brain", "Camera", "Camera2d", "CharacterController", "CharacterController2d", "CharacterInput", "CharacterInput2d", "CharacterMotion", "CharacterMotion2d", "Collider", "Collider2d", "Environment", "Flipbook", "FollowCamera", "HeightFog", "Joint", "Light", "Light2d", "MeshRenderer", "MusicSource", "NavAgent", "NavAgentType", "NavArea", "NavLink", "NavMeshSurface", "NavObstacle", "Perceiver", "PhysicsId", "PhysicsPose", "PhysicsPose2d", "PlayerControl", "PostProcessVolume", "ReverbZone", "RigidBody", "RigidBody2d", "SkyAtmosphere", "Sprite", "Stimulus", "StreamedWorld", "Terrain", "TerrainChunk", "TileColliderSource2d", "Tilemap", "Vehicle", "VehicleInput", "VehicleTelemetry", "Velocity", "Velocity2d", "VisualEffect", "Wanderer"];
     internal static readonly string[] DefaultJson = [
         "{\"position\":[0,0,0],\"rotation\":[0,0,0],\"scale\":[1,1,1]}",
         "{\"a\":\"\",\"b\":\"\",\"position\":[0,0,0],\"width\":1,\"height\":2,\"open\":1}",
@@ -4178,7 +4418,7 @@ public static class EngineComponents
         "{\"position\":[0,0,0],\"rotation\":[0,0,0,1]}",
         "{\"position\":[0,0],\"rotation\":0}",
         "{\"player\":1,\"walkSpeed\":1.6,\"runSpeed\":4.5,\"jumpSpeed\":4.5,\"turnRate\":540,\"yaw\":0,\"camera\":null}",
-        "{\"exposure\":\"auto\",\"ev100\":10,\"compensation\":0,\"minEv100\":-2,\"maxEv100\":16,\"adaptationSpeed\":2,\"toneMapping\":\"filmic\",\"bloom\":0.04,\"whiteBalance\":6500,\"saturation\":1,\"contrast\":1,\"vignette\":0}",
+        "{\"shape\":\"global\",\"blendDistance\":0,\"priority\":0,\"weight\":1,\"overrides\":[]}",
         "{\"name\":\"\",\"shape\":\"box\",\"position\":[0,0,0],\"rotation\":[0,0,0,1],\"halfExtents\":[5,3,5],\"radius\":5,\"fade\":1,\"priority\":0,\"material\":\"generic\",\"rt60\":null,\"wet\":1,\"earlyReflections\":true,\"useBaked\":true}",
         "{\"motion\":\"static\",\"mass\":0,\"allowSleep\":true,\"continuous\":false}",
         "{\"motion\":\"static\",\"mass\":0,\"allowSleep\":true,\"continuous\":false,\"lockRotation\":false}",
@@ -6255,72 +6495,316 @@ internal static class EngineValueCodecs
         }
         w.WriteEndObject();
     }
-    internal static PostProcess ReadPostProcess(JsonElement v)
+    internal static PostModule ReadPostModule(JsonElement v)
+        => v.GetString() switch
+        {
+            "exposure" => PostModule.Exposure,
+            "toneMapping" => PostModule.ToneMapping,
+            "bloom" => PostModule.Bloom,
+            "colorGrading" => PostModule.ColorGrading,
+            "vignette" => PostModule.Vignette,
+            "depthOfField" => PostModule.DepthOfField,
+            "motionBlur" => PostModule.MotionBlur,
+            "chromaticAberration" => PostModule.ChromaticAberration,
+            "ambientOcclusion" => PostModule.AmbientOcclusion,
+            "reflections" => PostModule.Reflections,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WritePostModule(Utf8JsonWriter w, PostModule v) => w.WriteStringValue(v switch
+    {
+        PostModule.Exposure => "exposure",
+        PostModule.ToneMapping => "toneMapping",
+        PostModule.Bloom => "bloom",
+        PostModule.ColorGrading => "colorGrading",
+        PostModule.Vignette => "vignette",
+        PostModule.DepthOfField => "depthOfField",
+        PostModule.MotionBlur => "motionBlur",
+        PostModule.ChromaticAberration => "chromaticAberration",
+        PostModule.AmbientOcclusion => "ambientOcclusion",
+        PostModule.Reflections => "reflections",
+        _ => throw new JsonException("unknown enum value")
+    });
+    internal static PostOverride ReadPostOverride(JsonElement v)
         => new()
         {
-            Exposure = ReadExposureMode(Field(v, "exposure", "\"auto\"")),
-            Ev100 = Field(v, "ev100", "10").GetSingle(),
-            Compensation = Field(v, "compensation", "0").GetSingle(),
-            MinEv100 = Field(v, "minEv100", "-2").GetSingle(),
-            MaxEv100 = Field(v, "maxEv100", "16").GetSingle(),
-            AdaptationSpeed = Field(v, "adaptationSpeed", "2").GetSingle(),
-            ToneMapping = ReadToneMapping(Field(v, "toneMapping", "\"filmic\"")),
-            Bloom = Field(v, "bloom", "0.04").GetSingle(),
-            WhiteBalance = Field(v, "whiteBalance", "6500").GetSingle(),
-            Saturation = Field(v, "saturation", "1").GetSingle(),
-            Contrast = Field(v, "contrast", "1").GetSingle(),
-            Vignette = Field(v, "vignette", "0").GetSingle(),
+            Module = ReadPostModule(Field(v, "module", "\"exposure\"")),
+            Exposure = Field(v, "exposure", "null").ValueKind == JsonValueKind.Null ? null : (ExposureMode?)(ReadExposureMode(Field(v, "exposure", "null"))),
+            Ev100 = Field(v, "ev100", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "ev100", "null").GetSingle()),
+            Compensation = Field(v, "compensation", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "compensation", "null").GetSingle()),
+            MinEv100 = Field(v, "minEv100", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "minEv100", "null").GetSingle()),
+            MaxEv100 = Field(v, "maxEv100", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "maxEv100", "null").GetSingle()),
+            AdaptationSpeed = Field(v, "adaptationSpeed", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "adaptationSpeed", "null").GetSingle()),
+            ToneMapping = Field(v, "toneMapping", "null").ValueKind == JsonValueKind.Null ? null : (ToneMapping?)(ReadToneMapping(Field(v, "toneMapping", "null"))),
+            Bloom = Field(v, "bloom", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "bloom", "null").GetSingle()),
+            WhiteBalance = Field(v, "whiteBalance", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "whiteBalance", "null").GetSingle()),
+            Saturation = Field(v, "saturation", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "saturation", "null").GetSingle()),
+            Contrast = Field(v, "contrast", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "contrast", "null").GetSingle()),
+            Lift = Field(v, "lift", "null").ValueKind == JsonValueKind.Null ? null : (Color?)(new Color(Field(v, "lift", "null")[0].GetSingle(), Field(v, "lift", "null")[1].GetSingle(), Field(v, "lift", "null")[2].GetSingle(), Field(v, "lift", "null")[3].GetSingle())),
+            Gamma = Field(v, "gamma", "null").ValueKind == JsonValueKind.Null ? null : (Color?)(new Color(Field(v, "gamma", "null")[0].GetSingle(), Field(v, "gamma", "null")[1].GetSingle(), Field(v, "gamma", "null")[2].GetSingle(), Field(v, "gamma", "null")[3].GetSingle())),
+            Gain = Field(v, "gain", "null").ValueKind == JsonValueKind.Null ? null : (Color?)(new Color(Field(v, "gain", "null")[0].GetSingle(), Field(v, "gain", "null")[1].GetSingle(), Field(v, "gain", "null")[2].GetSingle(), Field(v, "gain", "null")[3].GetSingle())),
+            Lut = Field(v, "lut", "null").ValueKind == JsonValueKind.Null ? null : (string?)(Field(v, "lut", "null").ValueKind == JsonValueKind.Null ? null : Field(v, "lut", "null").GetString()),
+            LutContribution = Field(v, "lutContribution", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "lutContribution", "null").GetSingle()),
+            Vignette = Field(v, "vignette", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "vignette", "null").GetSingle()),
+            FocusDistance = Field(v, "focusDistance", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "focusDistance", "null").GetSingle()),
+            Aperture = Field(v, "aperture", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "aperture", "null").GetSingle()),
+            NearBlur = Field(v, "nearBlur", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "nearBlur", "null").GetSingle()),
+            FarBlur = Field(v, "farBlur", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "farBlur", "null").GetSingle()),
+            ShutterAngle = Field(v, "shutterAngle", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "shutterAngle", "null").GetSingle()),
+            ChromaticAberration = Field(v, "chromaticAberration", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "chromaticAberration", "null").GetSingle()),
+            AoIntensity = Field(v, "aoIntensity", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "aoIntensity", "null").GetSingle()),
+            AoRadius = Field(v, "aoRadius", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "aoRadius", "null").GetSingle()),
+            ReflectionIntensity = Field(v, "reflectionIntensity", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "reflectionIntensity", "null").GetSingle()),
+            ReflectionDistance = Field(v, "reflectionDistance", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "reflectionDistance", "null").GetSingle()),
         };
-    internal static void WritePostProcess(Utf8JsonWriter w, PostProcess v)
+    internal static void WritePostOverride(Utf8JsonWriter w, PostOverride v)
     {
         w.WriteStartObject();
+        w.WritePropertyName("module");
+        {
+        WritePostModule(w, v.Module);
+        }
         w.WritePropertyName("exposure");
         {
-        WriteExposureMode(w, v.Exposure);
+        if (v.Exposure is { } option0)
+        {
+        WriteExposureMode(w, option0);
+        } else w.WriteNullValue();
         }
         w.WritePropertyName("ev100");
         {
-        WriteFloat(w, v.Ev100);
+        if (v.Ev100 is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
         }
         w.WritePropertyName("compensation");
         {
-        WriteFloat(w, v.Compensation);
+        if (v.Compensation is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
         }
         w.WritePropertyName("minEv100");
         {
-        WriteFloat(w, v.MinEv100);
+        if (v.MinEv100 is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
         }
         w.WritePropertyName("maxEv100");
         {
-        WriteFloat(w, v.MaxEv100);
+        if (v.MaxEv100 is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
         }
         w.WritePropertyName("adaptationSpeed");
         {
-        WriteFloat(w, v.AdaptationSpeed);
+        if (v.AdaptationSpeed is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
         }
         w.WritePropertyName("toneMapping");
         {
-        WriteToneMapping(w, v.ToneMapping);
+        if (v.ToneMapping is { } option0)
+        {
+        WriteToneMapping(w, option0);
+        } else w.WriteNullValue();
         }
         w.WritePropertyName("bloom");
         {
-        WriteFloat(w, v.Bloom);
+        if (v.Bloom is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
         }
         w.WritePropertyName("whiteBalance");
         {
-        WriteFloat(w, v.WhiteBalance);
+        if (v.WhiteBalance is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
         }
         w.WritePropertyName("saturation");
         {
-        WriteFloat(w, v.Saturation);
+        if (v.Saturation is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
         }
         w.WritePropertyName("contrast");
         {
-        WriteFloat(w, v.Contrast);
+        if (v.Contrast is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("lift");
+        {
+        if (v.Lift is { } option0)
+        {
+        w.WriteStartArray();
+        WriteFloat(w, option0.R);
+        WriteFloat(w, option0.G);
+        WriteFloat(w, option0.B);
+        WriteFloat(w, option0.A);
+        w.WriteEndArray();
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("gamma");
+        {
+        if (v.Gamma is { } option0)
+        {
+        w.WriteStartArray();
+        WriteFloat(w, option0.R);
+        WriteFloat(w, option0.G);
+        WriteFloat(w, option0.B);
+        WriteFloat(w, option0.A);
+        w.WriteEndArray();
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("gain");
+        {
+        if (v.Gain is { } option0)
+        {
+        w.WriteStartArray();
+        WriteFloat(w, option0.R);
+        WriteFloat(w, option0.G);
+        WriteFloat(w, option0.B);
+        WriteFloat(w, option0.A);
+        w.WriteEndArray();
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("lut");
+        {
+        if (v.Lut is { } option0)
+        {
+        w.WriteStringValue(option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("lutContribution");
+        {
+        if (v.LutContribution is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
         }
         w.WritePropertyName("vignette");
         {
-        WriteFloat(w, v.Vignette);
+        if (v.Vignette is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("focusDistance");
+        {
+        if (v.FocusDistance is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("aperture");
+        {
+        if (v.Aperture is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("nearBlur");
+        {
+        if (v.NearBlur is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("farBlur");
+        {
+        if (v.FarBlur is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("shutterAngle");
+        {
+        if (v.ShutterAngle is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("chromaticAberration");
+        {
+        if (v.ChromaticAberration is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("aoIntensity");
+        {
+        if (v.AoIntensity is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("aoRadius");
+        {
+        if (v.AoRadius is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("reflectionIntensity");
+        {
+        if (v.ReflectionIntensity is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("reflectionDistance");
+        {
+        if (v.ReflectionDistance is { } option0)
+        {
+        WriteFloat(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WriteEndObject();
+    }
+    internal static PostProcessVolume ReadPostProcessVolume(JsonElement v)
+        => new()
+        {
+            Shape = ReadVolumeShape(Field(v, "shape", "\"global\"")),
+            BlendDistance = Field(v, "blendDistance", "0").GetSingle(),
+            Priority = Field(v, "priority", "0").GetSingle(),
+            Weight = Field(v, "weight", "1").GetSingle(),
+            Overrides = Field(v, "overrides", "[]").EnumerateArray().Select(static item0 => ReadPostOverride(item0)).ToArray(),
+        };
+    internal static void WritePostProcessVolume(Utf8JsonWriter w, PostProcessVolume v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("shape");
+        {
+        WriteVolumeShape(w, v.Shape);
+        }
+        w.WritePropertyName("blendDistance");
+        {
+        WriteFloat(w, v.BlendDistance);
+        }
+        w.WritePropertyName("priority");
+        {
+        WriteFloat(w, v.Priority);
+        }
+        w.WritePropertyName("weight");
+        {
+        WriteFloat(w, v.Weight);
+        }
+        w.WritePropertyName("overrides");
+        {
+        w.WriteStartArray();
+        if (v.Overrides is not null) foreach (var item0 in v.Overrides)
+        {
+        WritePostOverride(w, item0);
+        }
+        w.WriteEndArray();
         }
         w.WriteEndObject();
     }
@@ -7152,6 +7636,21 @@ internal static class EngineValueCodecs
         }
         w.WriteEndObject();
     }
+    internal static VolumeShape ReadVolumeShape(JsonElement v)
+        => v.GetString() switch
+        {
+            "global" => VolumeShape.Global,
+            "box" => VolumeShape.Box,
+            "sphere" => VolumeShape.Sphere,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteVolumeShape(Utf8JsonWriter w, VolumeShape v) => w.WriteStringValue(v switch
+    {
+        VolumeShape.Global => "global",
+        VolumeShape.Box => "box",
+        VolumeShape.Sphere => "sphere",
+        _ => throw new JsonException("unknown enum value")
+    });
     internal static Wanderer ReadWanderer(JsonElement v)
         => new()
         {

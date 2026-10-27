@@ -14,6 +14,8 @@ pub(super) struct Settings<'a> {
     pub quality: QualityChoice,
     pub options: RenderOptions,
     pub hidden: bool,
+    pub window_mode: ara_platform::GameWindowMode,
+    pub no_present: bool,
 }
 
 pub(super) struct Loaded {
@@ -38,8 +40,15 @@ pub(super) fn load(
             .name("ara-player-startup".into())
             .spawn(move || content::prepare(&scene, source))?,
     );
-    let (mut window, extensions, size) =
-        device::Windowed::open_unprepared(settings.name, settings.size, settings.hidden)?;
+    let (mut window, extensions, size) = device::Windowed::open_unprepared_with_mode(
+        settings.name,
+        settings.size,
+        settings.hidden,
+        settings.window_mode,
+    )?;
+    if settings.no_present {
+        window.disable_presentation();
+    }
     let loading_started = Instant::now();
     let (mut loading, game_gpu, parallel) =
         device::Loading::for_game(&extensions, settings.cache, settings.options.ray_tracing)?;
@@ -135,16 +144,22 @@ pub(super) fn load(
             && window.present_loading(&mut loading, 0.1 + f32::from(completed) * 0.4)?;
         if shown {
             phases
-                .entry("loading_frame_ms")
+                .entry(if settings.no_present {
+                    "loading_rendered_ms"
+                } else {
+                    "loading_frame_ms"
+                })
                 .or_insert_with(|| began.elapsed().as_millis());
-            phases
-                .entry("first_frame_ms")
-                .or_insert_with(|| began.elapsed().as_millis());
+            if !settings.no_present {
+                phases
+                    .entry("first_frame_ms")
+                    .or_insert_with(|| began.elapsed().as_millis());
+            }
             if let Some(path) = capture.take() {
                 loading.capture(&path, size)?;
             }
-            // Start compilation only after a real frame has reached the window.
-            // The main-thread first presentation can never wait behind it.
+            // The diagnostic uses the same handoff after its loading draw. Normal
+            // games start compilation only after the first real presentation.
             if let Some(gpu) = graphics_inputs.take() {
                 graphics = Some(graphics::Graphics::start(
                     size,
