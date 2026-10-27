@@ -52,7 +52,9 @@ struct Material { float4 color; float4 emissiveRoughness; float4 surface; uint4 
 struct Light {float4 positionRange;float4 colorLumens;float4 directionOuter;float4 parameters;};
 // Tiled light lists (ara_render::scene::TILE_LIGHTS): a count, then the indices.
 static const uint TILE_LIGHTS=128,TILE_STRIDE=TILE_LIGHTS+1;
-Frame frame() {return buffers[NonUniformResourceIndex(root.frame)].Load<Frame>(0);}
+// The frame record (root word 0: uniform across the draw or dispatch, so no
+// NonUniformResourceIndex: the load can stay scalar).
+Frame frame() {return buffers[root.frame].Load<Frame>(0);}
 float4 tex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[0],uv,0);}
 float4 envTex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[1],uv,0);}
 float4 historyTex(uint index,float2 uv) {return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[2],uv,0);}
