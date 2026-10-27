@@ -103,8 +103,13 @@ impl Ui {
                 - layout.padding.left
                 - layout.padding.right
                 - layout.border.left
-                - layout.border.right)
-                .max(1.0),
+                - layout.border.right
+                - if crate::input::numeric::declared(&n.element) {
+                    crate::input::numeric::GRIP
+                } else {
+                    0.
+                })
+            .max(1.0),
         );
         let cursor = parley::Cursor::from_point(
             &text.layout,

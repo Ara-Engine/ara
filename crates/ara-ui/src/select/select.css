@@ -1,0 +1,8 @@
+.kit-select { min-width:48px; max-width:360px; min-height:24px; padding:6px; white-space:normal; background:var(--input); color:var(--foreground); border-width:1px; border-color:var(--border); border-radius:6px; overflow:hidden; }
+.kit-select-popover { display:flex; min-width:140px; max-width:360px; max-height:300px; padding:4px; gap:4px; background:var(--popover); border-width:1px; border-color:var(--border); border-radius:6px; }
+.kit-select-search { min-height:26px; padding:6px; white-space:nowrap; }
+.kit-select-options { min-height:0px; max-height:240px; flex-shrink:1; }
+.kit-select-option { min-width:0px; min-height:26px; padding:6px; white-space:normal; color:var(--foreground); background:transparent; }
+.kit-select-active { background:var(--hover-surface); }
+.kit-select-selected { color:var(--primary); }
+.kit-select-empty { padding:8px; color:var(--muted-foreground); white-space:normal; }

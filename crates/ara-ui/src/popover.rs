@@ -19,6 +19,37 @@ use crate::{Result, Ui, input::InputState, paint::Box2, source::stable_id};
 pub const MARGIN: f32 = 4.0;
 /// The default gap between a popover and its anchor, in logical pixels.
 pub const OFFSET: f32 = 4.0;
+/// Shared upper width for transient overlays, in logical pixels (scaled by the host DPI).
+pub const MAX_WIDTH: f32 = 360.0;
+/// Minimum useful width for an otherwise empty transient overlay.
+pub const MIN_WIDTH: f32 = 24.0;
+/// Hover hints appear after the same stable-target delay in every host.
+pub const SHOW_DELAY_MS: u64 = 500;
+
+/// Deterministic hover timing; hosts supply their monotonic UI clock in milliseconds.
+#[derive(Default, Debug)]
+pub struct HoverDelay {
+    target: Option<u64>,
+    since: u64,
+}
+
+impl HoverDelay {
+    /// Return whether the current target has remained under the pointer for the hint delay.
+    /// A changed/missing target or a clock reset restarts the delay.
+    pub fn update(&mut self, target: Option<u64>, now_ms: u64) -> bool {
+        if target != self.target || now_ms < self.since {
+            self.target = target;
+            self.since = now_ms;
+        }
+        target.is_some() && now_ms.saturating_sub(self.since) >= SHOW_DELAY_MS
+    }
+
+    /// Hide a hint and require a new delay, for example when a drag or modal starts.
+    pub fn reset(&mut self) {
+        self.target = None;
+        self.since = 0;
+    }
+}
 
 /// The side of its anchor a popover opens on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -97,6 +128,36 @@ pub fn place(
     placement: Placement,
     offset: f32,
 ) -> Placed {
+    // Public placement also accepts OS coordinates outside a surface (detached
+    // windows, monitor changes). Normalize them before calculating available room.
+    let window = window.map(|v| if v.is_finite() { v.max(0.0) } else { 0.0 });
+    let content = content.map(|v| if v.is_finite() { v.max(0.0) } else { 0.0 });
+    let offset = if offset.is_finite() {
+        offset.max(0.0)
+    } else {
+        OFFSET
+    };
+    let coordinate = |value: f32, extent: f32| {
+        if value.is_finite() {
+            value.clamp(0.0, extent)
+        } else {
+            0.0
+        }
+    };
+    let anchor = Box2 {
+        x: coordinate(anchor.x, window[0]),
+        y: coordinate(anchor.y, window[1]),
+        w: if anchor.w.is_finite() {
+            anchor.w.max(0.0)
+        } else {
+            0.0
+        },
+        h: if anchor.h.is_finite() {
+            anchor.h.max(0.0)
+        } else {
+            0.0
+        },
+    };
     let vertical = matches!(placement.side, Side::Bottom | Side::Top);
     // Main axis: the side's axis; cross axis: the alignment's.
     let (a_main, a_main_len, a_cross, a_cross_len) = if vertical {
@@ -129,14 +190,16 @@ pub fn place(
         a_main + a_main_len + offset
     } else {
         a_main - offset - main_len
-    };
+    }
+    .clamp(0.0, (w_main - main_len).max(0.0));
     let cross_len = cross_need.min((w_cross - 2.0 * MARGIN).max(0.0));
     let cross = match placement.align {
         Align::Start => a_cross,
         Align::Center => a_cross + (a_cross_len - cross_len) / 2.0,
         Align::End => a_cross + a_cross_len - cross_len,
     };
-    let cross = cross.clamp(MARGIN, (w_cross - MARGIN - cross_len).max(MARGIN));
+    let margin = MARGIN.min(w_cross * 0.5);
+    let cross = cross.clamp(margin, (w_cross - margin - cross_len).max(margin));
     let side = match (placement.side, flip) {
         (side, false) => side,
         (Side::Bottom, true) => Side::Top,
@@ -163,6 +226,8 @@ pub fn place(
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Applied {
     origin: [f32; 2],
+    window: [f32; 2],
+    anchor: Box2,
     /// Set when the content is larger than the room; it then scrolls.
     clamp: [Option<f32>; 2],
 }
@@ -185,20 +250,72 @@ impl Applied {
 }
 
 impl Ui {
+    /// Apply shared overlay width limits before text measurement, so wrapping feeds
+    /// placement instead of overflowing an already positioned box.
+    pub(crate) fn prepare_popovers(&mut self) -> Result<()> {
+        let available = (self.size[0] - 2.0 * MARGIN).max(0.0);
+        let relayout = self.nodes.iter().any(|node| node.dirty.layout);
+        for position in 0..self.nodes[0].element.children.len() {
+            let index = self.nodes[0].element.children[position];
+            let node = &mut self.nodes[index];
+            if !matches!(node.element.tag.as_str(), "popover" | "tooltip") {
+                continue;
+            }
+            let mut style = node.computed.layout.clone();
+            style.position = taffy::Position::Absolute;
+            if !node.visible {
+                style.display = taffy::Display::None;
+            }
+            let existing_max = style
+                .max_size
+                .width
+                .resolve_to_option(self.size[0], |_, _| 0.0)
+                .unwrap_or(MAX_WIDTH);
+            let max = existing_max.min(available).max(0.0);
+            style.max_size.width = taffy::LengthPercentageAuto::length(max);
+            style.min_size.width = taffy::LengthPercentageAuto::length(
+                style
+                    .min_size
+                    .width
+                    .resolve_to_option(self.size[0], |_, _| 0.0)
+                    .unwrap_or(MIN_WIDTH)
+                    .min(max),
+            );
+            let key = stable_id(&node.element.id);
+            if self
+                .placed
+                .get(&key)
+                .is_some_and(|p| p.window != self.size || relayout && p.clamp[0].is_some())
+            {
+                self.placed.remove(&key);
+            }
+            if let Some(applied) = self.placed.get(&key).filter(|p| p.window == self.size) {
+                applied.apply(&mut style);
+            }
+            if self.tree.style(node.layout_id)? != &style {
+                self.tree.set_style(node.layout_id, style)?;
+                node.dirty.layout = true;
+            }
+        }
+        Ok(())
+    }
+
     /// The popover nodes, root children in stacking order (last is on top).
     pub fn popover_nodes(&self) -> impl Iterator<Item = usize> + '_ {
-        self.nodes[0]
-            .element
-            .children
-            .iter()
-            .copied()
-            .filter(|i| self.nodes[*i].element.tag == "popover" && self.shown(*i))
+        self.transient_nodes()
+            .filter(|i| self.nodes[*i].element.tag == "popover")
+    }
+    /// Shown popovers and tooltips, including non-interactive hover hints, in paint order.
+    pub fn transient_nodes(&self) -> impl Iterator<Item = usize> + '_ {
+        self.nodes[0].element.children.iter().copied().filter(|i| {
+            matches!(self.nodes[*i].element.tag.as_str(), "popover" | "tooltip") && self.shown(*i)
+        })
     }
     /// Place every shown popover against its anchor's painted rect; true when one
     /// moved or resized, so the frame lays out and paints again. Popovers whose anchor
     /// is missing or hidden stay where they were.
     pub(crate) fn place_popovers(&mut self) -> Result<bool> {
-        let popovers: Vec<usize> = self.popover_nodes().collect();
+        let popovers: Vec<usize> = self.transient_nodes().collect();
         // Closed popovers forget their placement; a reopened one is placed afresh.
         let open: std::collections::BTreeSet<u64> = popovers
             .iter()
@@ -207,6 +324,7 @@ impl Ui {
         self.placed.retain(|id, _| open.contains(id));
         let mut moved = false;
         for i in popovers {
+            moved |= self.fit_overlay_text(i)?;
             let element = &self.nodes[i].element;
             let anchor = match (element.attrs.get("anchor"), element.attrs.get("at")) {
                 (Some(id), _) => match self.find(id).filter(|a| self.shown(*a)) {
@@ -241,20 +359,44 @@ impl Ui {
                 .map(|o| o.parse::<f32>())
                 .transpose()?
                 .unwrap_or(OFFSET);
+            if !offset.is_finite() || offset < 0.0 {
+                return Err("ARA4046: popover offset must be finite and non-negative".into());
+            }
+            let id = stable_id(&self.nodes[i].element.id);
+            // A horizontal clamp changed the text's measurement width. If its
+            // anchor moves (including scroll), remeasure without that old clamp
+            // before choosing the new side/size, so it can grow back into room.
+            if self
+                .placed
+                .get(&id)
+                .is_some_and(|p| p.anchor != anchor && p.clamp[0].is_some())
+            {
+                let node = &mut self.nodes[i];
+                let mut style = self.tree.style(node.layout_id)?.clone();
+                style.size = node.computed.layout.size;
+                self.tree.set_style(node.layout_id, style)?;
+                self.placed.remove(&id);
+                node.dirty.layout = true;
+                moved = true;
+                continue;
+            }
             let content = self.natural_size(i)?;
             let placed = place(anchor, content, self.size, placement, offset);
             let applied = Applied {
                 origin: placed.origin,
+                window: self.size,
+                anchor,
                 clamp: [
                     (placed.size[0] + 0.5 < content[0]).then_some(placed.size[0]),
                     (placed.size[1] + 0.5 < content[1]).then_some(placed.size[1]),
                 ],
             };
-            let id = stable_id(&self.nodes[i].element.id);
             let node = &mut self.nodes[i];
             let current = self.tree.style(node.layout_id)?;
             // From the CSS, so an earlier clamp does not stick once there is room.
-            let mut style = node.computed.layout.clone();
+            let mut style = self.tree.style(node.layout_id)?.clone();
+            // A fresh prepare pass restores CSS sizes when the viewport changes.
+            style.size = node.computed.layout.size;
             applied.apply(&mut style);
             // A rebuilt node starts from its CSS; compare the style, not just the cache.
             if self.placed.get(&id) == Some(&applied) && style == *current {
@@ -267,6 +409,57 @@ impl Ui {
         }
         Ok(moved)
     }
+    /// Final text breaking can discover an extra line after an intrinsic-width
+    /// overlay was sized. Feed that measured height back into its auto-height
+    /// leaves before choosing the popup's box, preserving padding and fixed rows.
+    fn fit_overlay_text(&mut self, root: usize) -> Result<bool> {
+        let mut stack = vec![root];
+        let mut changed = false;
+        while let Some(index) = stack.pop() {
+            let node = &self.nodes[index];
+            stack.extend(node.element.children.iter().copied());
+            if index == root
+                || !self.shown(index)
+                || !node.element.children.is_empty()
+                || matches!(node.element.tag.as_str(), "field" | "input")
+                || !node.computed.layout.size.height.is_auto()
+            {
+                continue;
+            }
+            let Some(text) = &node.text else {
+                continue;
+            };
+            let layout = self.tree.layout(node.layout_id)?;
+            let measured = text.layout.height()
+                + layout.padding.top
+                + layout.padding.bottom
+                + layout.border.top
+                + layout.border.bottom;
+            let current = self.tree.style(node.layout_id)?;
+            let minimum = current
+                .min_size
+                .height
+                .resolve_to_option(self.size[1], |_, _| 0.0)
+                .unwrap_or(0.0);
+            let maximum = current
+                .max_size
+                .height
+                .resolve_to_option(self.size[1], |_, _| 0.0)
+                .unwrap_or(f32::MAX)
+                .max(minimum);
+            let height = measured.clamp(minimum, maximum);
+            if (layout.size.height - height).abs() <= 0.5 {
+                continue;
+            }
+            let mut style = current.clone();
+            style.size.height = taffy::Dimension::length(height);
+            let id = node.layout_id;
+            self.tree.set_style(id, style)?;
+            self.nodes[index].dirty.layout = true;
+            changed = true;
+        }
+        Ok(changed)
+    }
     /// A popover's content size: its CSS width and height where it sets them (a fixed
     /// palette), otherwise its laid-out width (it sizes to content) and the bottom of its
     /// lowest child, which keeps its natural height in a block container even when the
@@ -276,7 +469,18 @@ impl Ui {
         let css = &node.computed.layout.size;
         let natural = self.content_size(index)?;
         Ok([
-            css.width.into_option().unwrap_or(natural[0]),
+            css.width
+                .into_option()
+                .unwrap_or(natural[0])
+                .min(
+                    node.computed
+                        .layout
+                        .max_size
+                        .width
+                        .resolve_to_option(self.size[0], |_, _| 0.0)
+                        .unwrap_or(MAX_WIDTH),
+                )
+                .min((self.size[0] - 2.0 * MARGIN).max(0.0)),
             css.height.into_option().unwrap_or(natural[1]),
         ])
     }
