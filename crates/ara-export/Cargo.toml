@@ -33,6 +33,7 @@ flate2 = "1.1"
 backhand = { version = "0.25.5", default-features = false, features = ["gzip", "error-strings"] }
 
 [dev-dependencies]
+ara-doc.workspace = true
 tempfile = { workspace = true }
 ara-runtime = { path = "../ara-runtime" }
 ara-runtime-script = { path = "../ara-runtime-script" }

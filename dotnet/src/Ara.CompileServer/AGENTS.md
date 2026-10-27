@@ -6,6 +6,14 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
 
 ## Pieces
 
+- `ProjectInventory`: the one D30 folder/source inventory, shared with warm sessions;
+  `--inventory` returns reference/storage paths and explicit derived schema results.
+- `ProjectCompiler`: `--compile-project` builds deterministically before scene validation,
+  returning generated schemas for Rust's canonical publication under `.ara/scripts`.
+  Publication markers verify input, schema and assembly hashes; editor code stays separate.
+- `CodeFixRunner`: `--fix` applies the shipped code-fix providers to immutable input texts,
+  returning replacements only. The host commits those through `source.replace` ops.
+
 - `Coordinator`: the scheduler. Modules and their reference graph (a module is watched
   after the modules it references), the work queues and the one worker thread.
   - Human work (watcher saves, heat, rebuilds) runs first, in order, at normal process

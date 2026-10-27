@@ -41,4 +41,7 @@ impl ConnId {
 pub trait Endpoint {
     /// Calls `method` with `params` (an object) and waits for the result.
     fn call(&mut self, method: &str, params: Value) -> Result<Value, RpcError>;
+    /// Advance local asynchronous work while a caller awaits a preparation job.
+    /// Remote endpoints are advanced by their server and keep the default no-op.
+    fn tick(&mut self) {}
 }

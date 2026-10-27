@@ -1,5 +1,5 @@
 //! C# gameplay modules in Play: locating the .NET host build, finding the project's
-//! modules (folders with `ara.module.toml`), agent source writes claimed in the
+//! modules from the shared D30 inventory, agent source writes claimed in the
 //! players' compile servers before they land (`script.write`: D20 agent edits),
 //! C# commands (`play.command`), reload events, and L4 restarts that keep the game
 //! state (resume from a portable snapshot of the current tick).
@@ -22,62 +22,24 @@ pub struct ScriptPaths {
 impl ScriptPaths {
     /// Installed .NET tools, then `ARA_DOTNET_ARTIFACTS`, then checkout artifacts.
     pub fn locate(start: &Path) -> Option<Self> {
-        let bin = std::env::current_exe()
-            .ok()
-            .and_then(|exe| exe.parent().map(|dir| dir.join("dotnet/artifacts/bin")))
-            .filter(|bin| bin.join("Ara.Host/release/Ara.Host.dll").is_file())
-            .or_else(|| std::env::var_os("ARA_DOTNET_ARTIFACTS").map(PathBuf::from))
-            .or_else(|| {
-                start
-                    .ancestors()
-                    .map(|dir| dir.join("dotnet/artifacts/bin"))
-                    .find(|bin| bin.join("Ara.Host/release/Ara.Host.dll").exists())
-            })?;
-        let host_dir = bin.join("Ara.Host/release");
-        let server = bin.join("Ara.CompileServer/release/Ara.CompileServer.dll");
-        host_dir.join("Ara.Host.dll").exists().then(|| Self {
-            host_dir,
-            compile_server: server.exists().then_some(server),
+        let tools = ara_script::project::ToolPaths::locate(start)?;
+        Some(Self {
+            host_dir: tools.host_dir,
+            compile_server: Some(tools.compile_server),
         })
     }
 }
 
-/// Module folders at or under `root`, sorted, including nested module boundaries.
-pub fn modules(root: &Path) -> Vec<PathBuf> {
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-        if dir.join("ara.module.toml").is_file() {
-            out.push(dir.to_owned());
-        }
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if !entry.file_type().is_ok_and(|t| t.is_dir())
-                || name.starts_with('.')
-                || [
-                    "target",
-                    "bin",
-                    "obj",
-                    "artifacts",
-                    "node_modules",
-                    "spikes",
-                ]
-                .contains(&name.as_str())
-            {
-                continue;
-            }
-            if path.join("ara.project.json").is_file() {
-                continue;
-            }
-            walk(&path, out);
-        }
-    }
-    let mut out = Vec::new();
-    walk(root, &mut out);
-    out.sort();
-    out
+/// Published gameplay input directories, including implicit and nested modules.
+/// Graph/compilation errors are returned rather than silently dropping modules.
+pub fn modules(root: &Path) -> Result<Vec<PathBuf>, Vec<Diagnostic>> {
+    let published = ara_script::project::publish(root, ara_script::ModuleProfile::Gameplay)
+        .map_err(|d| vec![d])?;
+    Ok(published
+        .gameplay_specs(root)?
+        .into_iter()
+        .map(|m| m.dir)
+        .collect())
 }
 
 /// Keeps a C# module's generated `*.types.json` current (canonical text, written only
@@ -108,7 +70,7 @@ pub(crate) fn script_scene(
     root: &Path,
     paths: Option<&ScriptPaths>,
 ) -> Result<Option<ScriptScene>, Vec<Diagnostic>> {
-    let modules = modules(root);
+    let modules = modules(root)?;
     if modules.is_empty() {
         return Ok(None);
     }
@@ -156,7 +118,12 @@ impl PlayService {
             ));
         }
         let path = self.root.join(relative);
-        if !modules(&self.root).iter().any(|m| path.starts_with(m)) {
+        let inventory = ara_script::project::inventory(&self.root).map_err(|d| vec![d])?;
+        if !inventory
+            .sources
+            .iter()
+            .any(|source| self.root.join(&source.storage_path) == path)
+        {
             return Err(fail(
                 codes::REQUEST,
                 format!("{} is not inside a C# module folder", p.path),
@@ -307,29 +274,31 @@ name=\"Root\"
     }
     #[test]
     fn root_and_nested_modules_keep_their_own_identity() {
-        let root =
-            std::env::temp_dir().join(format!("ara-script-discovery-{}", std::process::id()));
-        std::fs::create_dir_all(root.join("Gameplay/Nested")).unwrap();
-        std::fs::write(root.join("ara.module.toml"), "[module]\nname=\"Root\"\n").unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-play-host/module-inventory")
+            .join(std::process::id().to_string());
+        let authored = root.join(ara_doc::AUTHORING_ROOT);
+        std::fs::create_dir_all(authored.join("Gameplay/Nested")).unwrap();
+        std::fs::write(authored.join("root.module.json"), r#"{"name":"Root"}"#).unwrap();
         std::fs::write(
-            root.join("Gameplay/ara.module.toml"),
-            "[module]\nname=\"Gameplay\"\n",
+            authored.join("Gameplay/gameplay.module.json"),
+            r#"{"name":"Gameplay"}"#,
         )
         .unwrap();
         std::fs::write(
-            root.join("Gameplay/Nested/ara.module.toml"),
-            "[module]\nname=\"Nested\"\n",
+            authored.join("Gameplay/Nested/nested.module.json"),
+            r#"{"name":"Nested"}"#,
         )
         .unwrap();
+        let canonical = std::fs::canonicalize(&root).unwrap();
         assert_eq!(
-            modules(&root),
+            modules(&root).unwrap(),
             vec![
-                root.clone(),
-                root.join("Gameplay"),
-                root.join("Gameplay/Nested")
+                canonical.join(".ara/scripts/Gameplay"),
+                canonical.join(".ara/scripts/Nested"),
+                canonical.join(".ara/scripts/Root")
             ]
         );
-        assert!(root.starts_with(std::env::temp_dir()));
         std::fs::remove_dir_all(root).unwrap();
     }
 }

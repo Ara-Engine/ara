@@ -442,6 +442,52 @@ proptest! {
 }
 
 #[test]
+fn journal_replay_preserves_per_author_undo_redo_and_invalidation() {
+    fn restart(s: &Store) -> Store {
+        let mut restored = Store::new(s.schema().clone(), s.workspace().clone());
+        for txn in s.history() {
+            restored
+                .restore(txn.clone(), false)
+                .expect("restore history");
+        }
+        for author in [agent(), Author::Human] {
+            assert_eq!(restored.next_undo(&author), s.next_undo(&author));
+            assert_eq!(restored.next_redo(&author), s.next_redo(&author));
+        }
+        restored
+    }
+    let mut s = store();
+    s.transact(TxnMeta::by(agent()), [set("e_a", "name", json!("One"))])
+        .expect("first");
+    s.transact(TxnMeta::by(agent()), [set("e_a", "name", json!("Two"))])
+        .expect("second");
+    s.undo_last(&agent()).expect("undo second");
+    let mut s = restart(&s);
+    s.undo_last(&agent()).expect("undo first");
+    let mut s = restart(&s);
+    // Someone else's edit must not discard this agent's redo.
+    s.transact(
+        TxnMeta::by(Author::Human),
+        [set("e_b", "name", json!("Human"))],
+    )
+    .expect("human edit");
+    let mut s = restart(&s);
+    s.redo_last(&agent()).expect("redo first");
+    let mut s = restart(&s);
+    s.redo_last(&agent()).expect("redo second");
+    assert_eq!(get(&s, "e_a", "name"), json!("Two"));
+    let mut s = restart(&s);
+    s.undo_last(&agent()).expect("undo redo");
+    s.transact(TxnMeta::by(agent()), [set("e_a", "name", json!("New"))])
+        .expect("new edit");
+    let mut s = restart(&s);
+    assert_eq!(
+        s.redo_last(&agent()).expect_err("invalidated")[0].code,
+        codes::NOTHING_TO_UNDO
+    );
+}
+
+#[test]
 fn restore_rebuilds_history_with_ids_and_optionally_reapplies() {
     let mut s = store();
     s.transact(TxnMeta::by(agent()), [set("e_a", "name", json!("One"))])

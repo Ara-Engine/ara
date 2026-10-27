@@ -216,6 +216,10 @@ pub struct PlayControlParams {
 #[ara(params)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PlayCaptureParams {
+    /// Camera entity ID or exact name; absent uses the active scene camera.
+    pub camera: Option<String>,
+    /// Per-capture quality; absent uses the project setting.
+    pub preset: Option<ara_play::QualitySetting>,
     /// Session handle from `session.begin`.
     pub session: String,
     /// World ID from `play.start` (`play:1`); default: the most recent world.

@@ -36,6 +36,9 @@ const RENDERERS: &[&str] = &[
     "SkinnedMeshRenderer",
     "SpriteRenderer",
     "Sprite",
+    "Tilemap",
+    "Terrain",
+    "VisualEffect",
 ];
 /// Topic words (prefixes) of visibility questions.
 const WORDS: &[&str] = &[
@@ -476,7 +479,45 @@ fn mesh(cx: &Ctx<'_>, f: &mut Findings) -> Vec<Subject> {
         f.check("mesh", Status::Skip, "");
         return Vec::new();
     }
-    let Some((field, value)) = cx.renderer_field(&["mesh", "sprite"]) else {
+    let geometry = cx.renderer.as_ref().and_then(|(name, value)| {
+        let schema = cx.facts.component_schema(name)?;
+        if schema.fields().iter().all(|field| !matches!(field.ty,
+            ara_schema::ValueType::Asset(_) | ara_schema::ValueType::Option(_)))
+            && matches!(schema.module.as_str(), "render" | "vfx")
+        {
+            return Some(Ok(format!("{} generated geometry", schema.name)));
+        }
+        // The schema describes procedural selectors shown while their asset
+        // source is empty (MeshRenderer's shape/model contract, for example).
+        for field in schema.fields() {
+            if let Some(condition) = &field.editor.show_if
+                && condition.when == ara_schema::ShowWhen::Empty
+                && matches!(&field.ty, ara_schema::ValueType::Named(_))
+                && condition.when.matches(&value[&condition.field])
+            {
+                return Some(Ok(format!("{}: {}", field.name, value[&field.name])));
+            }
+        }
+        schema.fields().iter().find_map(|field| {
+            let ty = match &field.ty {
+                ara_schema::ValueType::Option(inner) => inner.as_ref(),
+                ty => ty,
+            };
+            if !matches!(ty, ara_schema::ValueType::Asset(kind) if kind.as_deref() != Some("material")) {
+                return None;
+            }
+            value.get(&field.name).filter(|v| !v.is_null())
+                .map(|v| Err((field.name.as_str(), v)))
+        })
+    });
+    if let Some(Ok(note)) = &geometry {
+        f.check("mesh", Status::Ok, format!("procedural {note}"));
+        return Vec::new();
+    }
+    let source = geometry
+        .and_then(Result::err)
+        .or_else(|| cx.renderer_field(&["mesh", "sprite"]));
+    let Some((field, value)) = source else {
         f.check("mesh", Status::Fail, "none");
         f.cause(
             Cause::new(
@@ -792,6 +833,15 @@ struct View<'a> {
 }
 
 fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
+    if cx.e.components.keys().any(|name| {
+        cx.facts
+            .component_schema(name)
+            .is_some_and(|s| s.module == "twoD")
+    }) && !cx.facts.with_component(&cx.e.doc, "Camera2d").is_empty()
+    {
+        f.check("camera", Status::Ok, "Camera2d renders this 2D scene");
+        return;
+    }
     if !cx.facts.has_component_type("Camera") {
         f.check("camera", Status::Skip, "no Camera type in this project");
         return;
@@ -803,6 +853,18 @@ fn cameras(cx: &Ctx<'_>, world: Affine, f: &mut Findings) {
         .filter(|c| !camera_off(c))
         .collect();
     if cams.is_empty() {
+        if cx
+            .facts
+            .component_schema("Camera")
+            .is_some_and(|s| s.module == "render")
+        {
+            f.check(
+                "camera",
+                Status::Ok,
+                "no authored camera; the native renderer uses its overview camera",
+            );
+            return;
+        }
         f.check("camera", Status::Fail, "none enabled");
         f.cause(
             Cause::new(

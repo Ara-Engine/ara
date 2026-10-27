@@ -48,6 +48,37 @@ fn json_of(text: &str) -> Value {
 }
 
 #[test]
+fn offline_file_preparation_finishes_before_the_cli_exits_including_undo_and_redo() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/authoring-tests")
+        .join(format!("cli-source-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).expect("scratch");
+    assert_eq!(ara_in(&root, &["init"]).0, 0);
+    fs::create_dir_all(root.join("scripts/Game")).expect("scripts");
+    fs::write(root.join("scripts/Game/Door.cs"), "before\n").expect("source");
+    let args = r#"{"path":"scripts/Game/Door.cs","baseHash":"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb","text":"after\n"}"#;
+    let (code, stdout, stderr) = ara_in(&root, &["do", "source.replace", "--args", args, "--json"]);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(
+        json_of(&stdout)["txn"].is_string(),
+        "CLI must return the final transaction: {stdout}"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("scripts/Game/Door.cs")).expect("replaced"),
+        "after\n"
+    );
+    for (command, text) in [("undo", "before\n"), ("redo", "after\n")] {
+        let (code, stdout, stderr) = ara_in(&root, &[command, "--json"]);
+        assert_eq!(code, 0, "{stdout}{stderr}");
+        assert_eq!(
+            fs::read_to_string(root.join("scripts/Game/Door.cs")).expect("file"),
+            text
+        );
+    }
+}
+
+#[test]
 fn authoring_creates_documents_sets_main_and_configures_sidecars_across_runs() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/authoring-tests")
@@ -154,7 +185,7 @@ fn commands_need_a_project_marker_and_skip_nested_projects() {
     let report = json_of(&out);
     assert_eq!(
         (code, report["files"].clone(), report["errors"].clone()),
-        (0, json!(2), json!(0)),
+        (0, json!(3), json!(0)),
         "{out}"
     );
 }
@@ -218,6 +249,51 @@ fn init_writes_the_project_template() {
         (code, json_of(&out)["diagnostics"][0]["code"].clone()),
         (1, json!("ARA1902"))
     );
+}
+
+#[test]
+fn offline_redo_survives_each_cli_process_and_clears_after_a_new_edit() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/preview4-tests")
+        .join(format!("offline-redo-{}", std::process::id()));
+    fs::create_dir_all(&root).expect("scratch directory");
+    assert_eq!(ara_in(&root, &["init"]).0, 0);
+    let args = ["--author", "agent:redo", "--json"];
+    let invoke = |tail: &[&str]| {
+        let mut all = args.to_vec();
+        all.extend(tail);
+        let (code, out, error) = ara_in(&root, &all);
+        assert_eq!(code, 0, "{all:?}: {out}{error}");
+        json_of(&out)
+    };
+    let created = invoke(&[
+        "do",
+        "entity.create",
+        "-p",
+        "name=RedoProbe",
+        "--why",
+        "test redo",
+    ]);
+    let txn = created["txn"].clone();
+    let undo = invoke(&["undo"]);
+    assert_eq!(undo["reverts"], txn);
+    let redo = invoke(&["redo"]);
+    assert_eq!(redo["reverts"], undo["txn"]);
+    let (code, out, error) = ara_in(&root, &["query", "name:RedoProbe", "--json"]);
+    assert_eq!(code, 0, "{out}{error}");
+    assert!(out.contains("RedoProbe"));
+    invoke(&["undo"]);
+    invoke(&[
+        "do",
+        "entity.create",
+        "-p",
+        "name=NewProbe",
+        "--why",
+        "clear redo",
+    ]);
+    let (code, out, _) = ara_in(&root, &["redo", "--author", "agent:redo", "--json"]);
+    assert_eq!(code, 1, "{out}");
+    assert_eq!(json_of(&out)["diagnostics"][0]["code"], "ARA1505");
 }
 
 #[test]

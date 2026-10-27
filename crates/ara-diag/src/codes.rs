@@ -182,6 +182,8 @@ codes! {
     /// The call names no document and none can be inferred from its entities or the
     /// project's main scene; pass `doc`.
     DOC_REQUIRED = 1814,
+    /// A CLI preparation job stopped reporting progress within its configured budget.
+    JOB_STALLED = 1815,
 
     /// No `ara.project.json` was found; the command needs a project.
     NO_PROJECT = 1901,

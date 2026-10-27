@@ -20,6 +20,7 @@ ara-play = { path = "../ara-play" }
 ara-proto.workspace = true
 ara-runtime = { path = "../ara-runtime" }
 ara-schema.workspace = true
+ara-script = { path = "../ara-script" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 

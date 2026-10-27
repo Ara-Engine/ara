@@ -45,10 +45,15 @@ $receipt | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $source 'install
 if (-not $NoSystemIntegration) {
     [IO.Directory]::CreateDirectory($shortcutDirectory) | Out-Null
     $shell = New-Object -ComObject WScript.Shell
+    # Shortcuts and the Apps entry use the icons embedded in each program's executable
+    # (Hub icon in ara-hub.exe, engine icon in ara-editor.exe), never the legacy ara.ico.
+    $nativeHub = Join-Path $source 'ara-hub.exe'
+    $engineIcon = (Join-Path $source 'ara-editor.exe') + ',0'
     foreach ($app in @('Hub','Editor')) {
         $link = $shell.CreateShortcut((Join-Path $shortcutDirectory ("Ara $app.lnk")))
-        $nativeHub = Join-Path $source 'ara-hub.exe'
+        $link.IconLocation = $engineIcon
         if ($app -eq 'Hub' -and (Test-Path -LiteralPath $nativeHub)) {
+            $link.IconLocation = $nativeHub + ',0'
             # The native Hub is a GUI app: start it directly, without a console window.
             $link.TargetPath = $nativeHub
         } else {
@@ -56,14 +61,13 @@ if (-not $NoSystemIntegration) {
             $link.Arguments = '-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $source ('launch-' + $app.ToLowerInvariant() + '.ps1')) + '"'
         }
         $link.WorkingDirectory = $source
-        $link.IconLocation = (Join-Path $source 'assets\brand\ara.ico') + ',0'
         $link.Save()
     }
     $entries = @(([Environment]::GetEnvironmentVariable('Path','User') -split ';') | Where-Object { $_ })
     if ($entries -notcontains $source) { [Environment]::SetEnvironmentVariable('Path', (($entries + $source) -join ';'), 'User') }
     $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Ara-' + $engine.version
     New-Item -Path $key -Force | Out-Null
-    $properties = @{ DisplayName=('Ara ' + $engine.version); DisplayVersion=$engine.version; Publisher='Ara'; InstallLocation=$source; DisplayIcon=(Join-Path $source 'assets\brand\ara.ico'); UninstallString=('"' + (Join-Path $source 'uninstall.cmd') + '"'); NoModify=1; NoRepair=1 }
+    $properties = @{ DisplayName=('Ara ' + $engine.version); DisplayVersion=$engine.version; Publisher='Ara'; InstallLocation=$source; DisplayIcon=$engineIcon; UninstallString=('"' + (Join-Path $source 'uninstall.cmd') + '"'); NoModify=1; NoRepair=1 }
     foreach ($entry in $properties.GetEnumerator()) { Set-ItemProperty -LiteralPath $key -Name $entry.Key -Value $entry.Value }
 }
 $uninstall = '@echo off' + "`r`n" + '(goto) 2>nul & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0uninstall.ps1" %*' + "`r`n"

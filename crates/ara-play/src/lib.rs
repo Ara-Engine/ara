@@ -545,6 +545,12 @@ pub struct Patched {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CaptureParams {
+    /// Camera entity ID, document address or exact scene name; absent uses the active camera.
+    #[serde(default)]
+    pub camera: Option<String>,
+    /// Per-capture rendering preset; absent uses the project's rendering policy.
+    #[serde(default)]
+    pub preset: Option<QualitySetting>,
     /// PNG path to write (plus `.marks.png`, `.legend.json`, `.json`); hash only when absent.
     pub path: Option<String>,
     /// Image width.

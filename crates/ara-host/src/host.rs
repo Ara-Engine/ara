@@ -109,6 +109,7 @@ pub(crate) struct State {
     /// Collaboration: participants, presence, claims, branch sessions (D21).
     pub(crate) collab: crate::collab::Collab,
     pub(crate) jobs: Jobs,
+    pub(crate) file_jobs: crate::source::FileJobs,
     pub(crate) gestures: crate::gesture::Gestures,
     pub(crate) subs: BTreeMap<ConnId, BTreeSet<Topic>>,
     pub(crate) outbox: Vec<(ConnId, Value)>,
@@ -125,7 +126,17 @@ pub(crate) struct State {
     pub(crate) stop: bool,
     killed: bool,
     ops: Receiver<Transaction>,
-    _lock: File,
+    _lock: ProjectLock,
+}
+
+/// Releases ownership after the file worker drains, even if an OS reference survives close.
+struct ProjectLock(File);
+
+impl Drop for ProjectLock {
+    fn drop(&mut self) {
+        // Closing remains the fallback if the OS reports an unlock error.
+        let _ = self.0.unlock();
+    }
 }
 
 /// One project's engine host.
@@ -143,11 +154,11 @@ fn io_error(what: &str, path: &Path, e: std::io::Error) -> Diagnostic {
 }
 
 /// Takes the project lock (`.ara/lock`). `ARA1903` if another process holds it.
-fn lock(state_dir: &Path) -> Result<File, Diagnostic> {
+fn lock(state_dir: &Path) -> Result<ProjectLock, Diagnostic> {
     let path = state_dir.join("lock");
     let file = File::create(&path).map_err(|e| io_error("create", &path, e))?;
     match file.try_lock() {
-        Ok(()) => Ok(file),
+        Ok(()) => Ok(ProjectLock(file)),
         Err(TryLockError::WouldBlock) => Err(Diagnostic::error(
             codes::DAEMON_RUNNING,
             "another `ara` process (a daemon or a running command) holds this project's lock",
@@ -169,14 +180,14 @@ impl Host {
         // identity stubs remain index entries until explicitly initialized.
         if project.db.kind("import").is_some() {
             for (id, path) in project.index.imports() {
-                let sidecar = format!("{path}.import.json");
+                let sidecar = project.storage_path(&format!("{path}.import.json"));
                 if let Ok(text) = fs::read_to_string(project.root.join(&sidecar)) {
                     let result = ara_doc::read(&text, &sidecar, &project.db, Some(&project.index));
                     if let Some(doc) = result
                         .doc
                         .filter(|d| d.kind == "import" && d.id.as_str() == id)
                     {
-                        ws.insert_with_asset_path(sidecar, doc, path);
+                        ws.insert_with_asset_path(sidecar, doc, project.storage_path(path));
                     }
                 }
             }
@@ -279,6 +290,7 @@ impl Host {
             diag_file,
             collab: crate::collab::Collab::new(state_dir.clone()),
             jobs: Jobs::default(),
+            file_jobs: crate::source::FileJobs::default(),
             gestures: crate::gesture::Gestures::default(),
             subs: BTreeMap::new(),
             outbox: Vec::new(),
@@ -459,6 +471,14 @@ impl Host {
             conn,
             session,
         };
+        if method == "cmd.apply" && !cx.st.file_jobs.applying {
+            let batch = crate::parse(params.clone())?;
+            for service in &mut self.services {
+                if let Some(result) = service.prepare_apply(&mut cx, &batch) {
+                    return result;
+                }
+            }
+        }
         self.services[index].call(&mut cx, method, params)
     }
 
@@ -488,6 +508,7 @@ impl Host {
             self.st.persist_diag(false);
             self.st.release_gestures();
             self.st.watch();
+            self.st.poll_file_jobs();
             self.st.drain();
             self.st.flush(false);
             for service in &mut self.services {
@@ -567,6 +588,9 @@ impl Drop for Host {
 }
 
 impl Endpoint for Host {
+    fn tick(&mut self) {
+        Host::tick(self);
+    }
     fn call(&mut self, method: &str, params: Value) -> Result<Value, RpcError> {
         Host::call(self, ConnId::LOCAL, method, params)
     }
@@ -730,6 +754,7 @@ impl State {
                 .map(|p| p.0.clone())
                 .or_else(|| self.calling.clone());
             self.journal(Entry::Txn {
+                untracked: self.untracked,
                 session: session.clone(),
                 txn: txn.clone(),
             });
@@ -760,6 +785,10 @@ impl State {
     }
 
     fn track_review(&mut self, txn: &Transaction) {
+        if self.untracked {
+            self.review.exclude(txn.id.clone());
+            return;
+        }
         match &txn.reverts {
             Some(target) if self.review.is_tracked(target) => {
                 self.review.set(target, None, ReviewStatus::Reverted);
@@ -806,6 +835,7 @@ impl State {
     /// Rebuilds history, sessions and review from the journal, re-applying
     /// transactions newer than each document's file.
     fn recover(&mut self, entries: &[Entry]) {
+        self.recover_file_states(entries);
         let mut base = 0;
         let mut flushes: BTreeMap<&str, Vec<(u64, &str)>> = BTreeMap::new();
         for e in entries {
@@ -850,7 +880,11 @@ impl State {
         }
         for e in entries {
             match e {
-                Entry::Txn { session, txn } => {
+                Entry::Txn {
+                    session,
+                    txn,
+                    untracked,
+                } => {
                     if stopped {
                         continue;
                     }
@@ -900,7 +934,11 @@ impl State {
                             if let Some(s) = session {
                                 self.txn_session.insert(txn.id.clone(), s.clone());
                             }
-                            self.track_review(txn);
+                            if !untracked {
+                                self.track_review(txn);
+                            } else {
+                                self.review.exclude(txn.id.clone());
+                            }
                         }
                         Err(diags) => {
                             stopped = true;
@@ -930,15 +968,23 @@ impl State {
                     txn,
                     entity,
                     status,
-                } => self.review.set(
-                    &TxnId(txn.clone()),
-                    entity.as_deref(),
-                    match status {
-                        ReviewStatus::Applied => ReviewStatus::Accepted,
-                        status => *status,
-                    },
-                ),
-                Entry::Base { .. } | Entry::Flush { .. } => {}
+                } => {
+                    let id = TxnId(txn.clone());
+                    if !self.review.is_tracked(&id)
+                        && let Some(target) = self.store.txn(&id)
+                    {
+                        self.review.track(target);
+                    }
+                    self.review.set(
+                        &id,
+                        entity.as_deref(),
+                        match status {
+                            ReviewStatus::Applied => ReviewStatus::Accepted,
+                            status => *status,
+                        },
+                    );
+                }
+                Entry::Base { .. } | Entry::Flush { .. } | Entry::FileFlush { .. } => {}
             }
         }
         if replayed > 0 {

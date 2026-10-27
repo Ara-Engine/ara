@@ -50,6 +50,9 @@ pub enum Entry {
     },
     /// A committed transaction and the session that made it.
     Txn {
+        /// A compensating transaction that must not become a new reviewable turn.
+        #[serde(default)]
+        untracked: bool,
         /// Session handle, if a session made it (external edits have none).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         session: Option<String>,
@@ -64,6 +67,15 @@ pub enum Entry {
         rev: u64,
         /// FNV-1a hash of the written text (see [`hash`]).
         hash: String,
+    },
+    /// A committed file-state transition finished materializing on disk.
+    FileFlush {
+        /// Project-relative storage path, preserving its authored casing.
+        path: String,
+        /// Revision whose final state was written.
+        rev: u64,
+        /// Written immutable state; absent means the entry was removed.
+        state: Option<ara_doc::file_state::FileState>,
     },
     /// A session began (with its approval decision).
     Session {
@@ -228,14 +240,19 @@ pub fn compact(entries: &[Entry], keep: usize) -> Vec<Entry> {
             Entry::Txn {
                 session: Some(s),
                 txn,
+                ..
             } if kept.contains(txn.id.0.as_str()) => Some(s.as_str()),
             _ => None,
         })
         .collect();
     let mut last_flush: BTreeMap<&str, &Entry> = BTreeMap::new();
+    let mut file_flushes: BTreeMap<String, &Entry> = BTreeMap::new();
     for e in entries {
         if let Entry::Flush { doc, .. } = e {
             last_flush.insert(doc, e);
+        }
+        if let Entry::FileFlush { path, .. } = e {
+            file_flushes.insert(ara_doc::file_state::path_key(path), e);
         }
     }
     let mut out = vec![Entry::Base {
@@ -243,6 +260,7 @@ pub fn compact(entries: &[Entry], keep: usize) -> Vec<Entry> {
         version: VERSION,
     }];
     out.extend(last_flush.into_values().cloned());
+    out.extend(file_flushes.into_values().cloned());
     for e in entries {
         let keep = match e {
             Entry::Txn { txn, .. } => kept.contains(txn.id.0.as_str()),
@@ -251,7 +269,7 @@ pub fn compact(entries: &[Entry], keep: usize) -> Vec<Entry> {
                 sessions.contains(session.as_str())
             }
             Entry::Review { txn, .. } => kept.contains(txn.as_str()),
-            Entry::Base { .. } | Entry::Flush { .. } => false,
+            Entry::Base { .. } | Entry::Flush { .. } | Entry::FileFlush { .. } => false,
         };
         if keep {
             out.push(e.clone());
@@ -267,7 +285,7 @@ fn last_revision(entries: &[Entry]) -> u64 {
         .map(|e| match e {
             Entry::Base { revision, .. } => *revision,
             Entry::Txn { txn, .. } => txn.result,
-            Entry::Flush { rev, .. } => *rev,
+            Entry::Flush { rev, .. } | Entry::FileFlush { rev, .. } => *rev,
             _ => 0,
         })
         .max()
@@ -278,10 +296,33 @@ fn last_revision(entries: &[Entry]) -> u64 {
 mod tests {
     use serde_json::json;
 
+    #[test]
+    fn compaction_retains_file_flush_identity_even_without_transactions() {
+        let entries = vec![
+            super::Entry::FileFlush {
+                path: "game/Old.cs".into(),
+                rev: 2,
+                state: Some(ara_doc::file_state::FileState::bytes(b"old")),
+            },
+            super::Entry::FileFlush {
+                path: "game/Old.cs".into(),
+                rev: 3,
+                state: None,
+            },
+        ];
+        let compacted = super::compact(&entries, 0);
+        assert!(matches!(
+            &compacted[0],
+            super::Entry::Base { revision: 3, .. }
+        ));
+        assert_eq!(compacted[1..], entries[1..]);
+    }
+
     use super::*;
 
     fn txn(n: u64) -> Entry {
         Entry::Txn {
+            untracked: false,
             session: Some(format!("ses_{n}")),
             txn: serde_json::from_value(json!({
                 "id": format!("tx_{n}"), "author": "agent:a", "base": n - 1, "result": n, "ops": []

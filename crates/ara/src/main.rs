@@ -23,6 +23,7 @@ mod project;
 #[global_allocator]
 static ALLOCATOR: ara_profile::CountingAllocator<std::alloc::System> =
     ara_profile::CountingAllocator(std::alloc::System);
+mod assets;
 mod relaxed;
 
 use std::path::PathBuf;
@@ -227,6 +228,10 @@ enum Command {
     },
     /// Redo `--author`'s most recently undone transaction.
     Redo,
+    /// Run the project or a scene headless, returning results, logs and diagnostics.
+    Run(commands::headless::RunArgs),
+    /// Render a scene or camera offscreen into a PNG; never opens a window.
+    Capture(commands::headless::CaptureArgs),
     /// List agent changes awaiting review.
     Review,
     /// Accept agent changes: a transaction, an entity's changes, or `--all`.
@@ -378,6 +383,8 @@ fn protocol_call(command: Command) -> Option<Result<Call, Vec<Diagnostic>>> {
         },
         Command::Logs(args) => args.call(),
         Command::Why(args) => args.call(),
+        Command::Run(args) => args.call(),
+        Command::Capture(args) => args.call(),
         _ => return None,
     }))
 }

@@ -363,6 +363,8 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     let result = if let Some(path) = capture {
         Some(world.capture(
             &ara_play::CaptureParams {
+                camera: None,
+                preset: None,
                 path: Some(path.to_string_lossy().into_owned()),
                 width: size[0],
                 height: size[1],

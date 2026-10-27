@@ -207,6 +207,22 @@ impl Command for PropertySet {
             .map_err(|msg| Diagnostic::error(codes::INVALID_PATH, msg).path("params.path"))?;
         let read = ctx.read();
         let target = read.target(&p.entity.0)?;
+        // Project metadata and policy use the same reflected record and op path.
+        if read.doc().kind == "project"
+            && target.address() == "p_settings"
+            && path.head() == "settings"
+        {
+            if path.segments().len() == 1 && !p.value.is_object() {
+                return Err(Diagnostic::error(
+                    codes::INVALID_PARAMS,
+                    "project settings must be a JSON object",
+                ));
+            }
+            ctx.set_entity(&target, &path, Some(p.value))?;
+            return Ok(Changed {
+                entity: target.address(),
+            });
+        }
         read.check_value(&path, &p.value)?;
         let comp = path.head();
         if is_component_key(comp) && !read.has_component(&target, comp) {

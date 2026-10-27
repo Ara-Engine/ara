@@ -27,6 +27,61 @@ fn ara(cwd: &Path, args: &[&str]) -> (i32, String) {
 }
 
 #[test]
+fn visibility_uses_the_registered_geometry_schema_for_shapes_and_models() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/preview4-tests")
+        .join(format!("geometry-{}", std::process::id()));
+    fs::create_dir_all(&dir).expect("scratch");
+    assert_eq!(ara(&dir, &["init"]).0, 0);
+    for shape in ["box", "sphere", "capsule", "plane"] {
+        let args = serde_json::json!({"name":shape,"components":{"MeshRenderer":{"shape":shape}}})
+            .to_string();
+        assert_eq!(
+            ara(
+                &dir,
+                &[
+                    "do",
+                    "entity.create",
+                    "--args",
+                    &args,
+                    "--why",
+                    "geometry fixture"
+                ]
+            )
+            .0,
+            0
+        );
+        let (code, text) = ara(
+            &dir,
+            &[
+                "why",
+                &format!("name:{shape} not visible"),
+                "--full",
+                "--json",
+            ],
+        );
+        assert_eq!(code, 0, "{text}");
+        let report: Value = serde_json::from_str(&text).expect("report");
+        assert!(
+            !report["causes"]
+                .as_array()
+                .expect("causes")
+                .iter()
+                .any(|c| c["code"] == "ARA3305"),
+            "{text}"
+        );
+        assert!(
+            report["checks"]
+                .as_array()
+                .expect("checks")
+                .iter()
+                .any(|c| c["name"] == "mesh" && c["status"] == "ok"),
+            "{text}"
+        );
+    }
+}
+
+#[test]
 fn why_explains_and_its_fix_runs_through_ara_do() {
     let dir = scratch("visible");
     assert_eq!(ara(&dir, &["init", "--name", "why"]).0, 0);

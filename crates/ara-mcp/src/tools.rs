@@ -46,8 +46,8 @@ pub const TOOLS: [ToolSpec; 13] = [
     },
     ToolSpec {
         name: "ara_run",
-        title: "Run code",
-        description: "Run C# against the typed engine SDK inside a transaction (code mode). Edits still become commands, so they stay reviewable and revertible.",
+        title: "Run a project",
+        description: "Run the project or a scene headless for fixed ticks or simulated seconds. Returns the deterministic state hash, results, logs and diagnostics.",
         reserved: "run",
     },
     ToolSpec {

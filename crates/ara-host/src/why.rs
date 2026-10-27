@@ -134,6 +134,9 @@ fn references(v: &Value, id: &str, path: &str, out: &mut Vec<String>) {
 }
 
 impl Facts for HostFacts<'_> {
+    fn component_schema(&self, name: &str) -> Option<&ara_schema::TypeDesc> {
+        self.st.store.schema().get(name)
+    }
     fn entity(&self, selector: &str, doc: Option<&str>) -> Result<Entity, Vec<Diagnostic>> {
         // `@levels/a.scene#e_8b21` names its document.
         let (doc, key) = match selector.strip_prefix('@').and_then(|r| r.split_once('#')) {

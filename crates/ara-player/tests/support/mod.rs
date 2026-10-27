@@ -161,7 +161,7 @@ impl Agent {
         }
         config.import_worker = worker;
         configure(&mut config);
-        let mut play = PlayService::new(dir, config);
+        let mut play = PlayService::new(dir, config).with_headless_automation();
         service(&mut play);
         host.register(Box::new(play)).unwrap();
         let mut agent = Agent {

@@ -8,11 +8,38 @@ using Ara.Hosting;
 // Started by the game or editor process (Ara.Host's CompileClient). Connects to its pipe and
 // exits with its parent. Idle and agent compiles run below normal priority; the human's run at
 // normal priority while the host raises its tick threads above normal (A13, D20).
-var pipeName = Arg("--pipe") ?? throw new ArgumentException("missing --pipe <name>");
-var parent = int.TryParse(Arg("--parent"), out var pid) ? pid : 0;
-
 try { Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal; }
 catch (Exception) { /* not allowed on this platform: compiles still run out of process */ }
+
+if (args.Contains("--inventory", StringComparer.Ordinal))
+{
+    var request = System.Text.Json.JsonSerializer.Deserialize<InventoryRequest>(await Console.In.ReadToEndAsync(), CodeFixRunner.Json)
+        ?? throw new ArgumentException("missing inventory request");
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(ProjectInventory.Scan(request), CodeFixRunner.Json));
+    return 0;
+}
+
+if (args.Contains("--compile-project", StringComparer.Ordinal))
+{
+    var request = System.Text.Json.JsonSerializer.Deserialize<ProjectBuildRequest>(await Console.In.ReadToEndAsync(), CodeFixRunner.Json)
+        ?? throw new ArgumentException("missing project compilation request");
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(ProjectCompiler.Compile(request), CodeFixRunner.Json));
+    return 0;
+}
+
+if (args.Contains("--fix", StringComparer.Ordinal))
+{
+    try
+    {
+        var request = System.Text.Json.JsonSerializer.Deserialize<FixRequest>(await Console.In.ReadToEndAsync(), CodeFixRunner.Json)
+            ?? throw new ArgumentException("missing code-fix request");
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(await CodeFixRunner.Run(request), CodeFixRunner.Json));
+        return 0;
+    }
+    catch (Exception error) { Console.Error.WriteLine(error.Message); return 1; }
+}
+var pipeName = Arg("--pipe") ?? throw new ArgumentException("missing --pipe <name>");
+var parent = int.TryParse(Arg("--parent"), out var pid) ? pid : 0;
 
 using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
 pipe.Connect(TimeSpan.FromSeconds(30));

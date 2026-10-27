@@ -397,6 +397,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-ai",
  "ara-asset",
+ "ara-asset-host",
  "ara-audio-why",
  "ara-crash",
  "ara-diag",
@@ -413,6 +414,7 @@ dependencies = [
  "ara-rpc",
  "ara-schema",
  "ara-shader-cook",
+ "ara-update",
  "ara-world",
  "clap",
  "insta",
@@ -550,6 +552,24 @@ version = "0.0.1-alpha"
 dependencies = [
  "bytemuck",
  "ktx2",
+]
+
+[[package]]
+name = "ara-asset-host"
+version = "0.0.1-alpha"
+dependencies = [
+ "ara-asset",
+ "ara-cmd",
+ "ara-diag",
+ "ara-doc",
+ "ara-host",
+ "ara-importers",
+ "ara-json",
+ "ara-proto",
+ "ara-schema",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -785,6 +805,9 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
+ "unicode-casefold",
+ "unicode-normalization",
 ]
 
 [[package]]
@@ -880,6 +903,7 @@ dependencies = [
  "ara-components",
  "ara-crash",
  "ara-diag",
+ "ara-doc",
  "ara-export-installer",
  "ara-json",
  "ara-pack",
@@ -1023,6 +1047,7 @@ dependencies = [
  "notify",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tracing",
 ]
 
@@ -1079,6 +1104,7 @@ dependencies = [
  "ara-acoustics",
  "ara-asset",
  "ara-asset-format",
+ "ara-asset-host",
  "ara-audio",
  "ara-doc",
  "ara-import2d",
@@ -1488,6 +1514,7 @@ dependencies = [
  "ara-proto",
  "ara-runtime",
  "ara-schema",
+ "ara-script",
  "serde",
  "serde_json",
  "tempfile",
@@ -1936,6 +1963,8 @@ dependencies = [
  "ara-cmd",
  "ara-components",
  "ara-diag",
+ "ara-doc",
+ "ara-json",
  "ara-profile",
  "ara-runtime",
  "ara-schema",
@@ -2149,6 +2178,7 @@ dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
  "hex",
+ "libc",
  "reqwest",
  "semver",
  "serde",
@@ -2214,6 +2244,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-diag",
  "ara-material",
+ "ara-schema",
  "serde",
  "serde_json",
 ]
@@ -12458,10 +12489,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94"
 
 [[package]]
+name = "unicode-casefold"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7f66b1c8f8caa2ab31dc6d3f35386f16efdab89668f93411e565ac368908e8f"
+
+[[package]]
 name = "unicode-ident"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
+
+[[package]]
+name = "unicode-normalization"
+version = "0.1.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75cd3fb03d5288b3ba9a1ee103ac7e9cbb59f0b03d64f8ddfcc04dd42758a85d"
+dependencies = [
+ "tinyvec",
+]
 
 [[package]]
 name = "unicode-segmentation"

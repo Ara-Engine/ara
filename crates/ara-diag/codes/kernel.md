@@ -544,6 +544,8 @@ owner: ara-ops
 
 The transaction cannot commit against its stated revision. A later transaction touched an overlapping path, or the supplied base revision is ahead of the store. Journal restoration also rejects a transaction whose result revision is not newer than the store. A rejected transaction leaves no committed changes.
 
+File transitions and `source.replace` also use this code when the current file snapshot differs from the expected base hash. Re-analyze the source or refresh the asset inventory before retrying; undo refuses to overwrite external bytes.
+
 Causes:
 - A client edited a field using a revision from before another edit to that field or record.
 - A revision from another store was reused, or journal transactions arrived out of order.
@@ -963,6 +965,22 @@ Causes:
 Fixes:
 - Choose one of the diagnostic's document suggestions and pass `--doc <path>` to `ara do` or `ara inspect`, or `doc` to `ara_apply` or `ara_inspect`.
 - Use the `documents` and `mainScene` returned by `session.begin` to select the intended document explicitly.
+
+## ARA1815 JOB_STALLED: Preparation job stopped reporting progress
+owner: ara
+
+The CLI received a preparation job but its progress fraction and phase message
+stopped changing for the configured stall budget. Total job duration is unlimited
+while meaningful progress continues; unrelated status heartbeats do not reset it.
+
+Causes:
+- An import, cook or other preparation worker stalled or stopped reporting progress.
+- A legitimate silent preparation phase exceeded the default 120-second stall budget.
+
+Fixes:
+- Check the job's diagnostics and last phase before repeating an edit.
+- Set `ARA_JOB_STALL_TIMEOUT_SECS` to a larger positive number of seconds for long silent phases.
+- Preparation services should report progress or a new phase while work advances.
 
 ## ARA1901 NO_PROJECT: Ara project not found
 owner: ara-host

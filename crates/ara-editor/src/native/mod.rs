@@ -60,10 +60,14 @@ impl Native {
                 SDL_SetWindowBordered(self.window, false),
                 "remove verification chrome"
             );
-            anyhow::ensure!(
-                SDL_SetWindowPosition(self.window, 0, 0),
-                "position verification window"
-            );
+            // Wayland controls placement; offscreen captures require only the client extent.
+            let driver = SDL_GetCurrentVideoDriver();
+            if driver.is_null() || CStr::from_ptr(driver) != c"wayland" {
+                anyhow::ensure!(
+                    SDL_SetWindowPosition(self.window, 0, 0),
+                    "position verification window"
+                );
+            }
             let density = SDL_GetWindowPixelDensity(self.window).max(0.25);
             anyhow::ensure!(
                 SDL_SetWindowSize(

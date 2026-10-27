@@ -108,7 +108,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             _modules.Add(m);
             _bySlot[slot] = m;
             _byName[name] = m;
-            if (watch) _watcher.Watch(slot, m.Dir);
+            if (watch) _watcher.Watch(slot, m.WatchDirectory);
             foreach (var a in assemblies) WatchReference(a);
             _human.AddLast(new Work(WorkKind.Initial, slot, AbiConst.OriginHuman, 0));
         }
@@ -322,6 +322,9 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 return;
             case OutcomeKind.Errors:
                 SendDiagnostics(m.Slot, m.Dir, o.Problems, o.Extra, o.Timing.ToTiming().ServerUs, origin);
+                return;
+            case OutcomeKind.Restart:
+                _out.Send(MessageKind.Restart, new Protocol.Writer().U32(m.Slot).Str("module/source domain boundary changed; restart Play from the current snapshot to load the new inventory (L4)").ToArray());
                 return;
             case OutcomeKind.Delta:
                 m.Commit(o);

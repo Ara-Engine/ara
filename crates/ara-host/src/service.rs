@@ -138,6 +138,17 @@ pub trait Service: 'static {
         method: &str,
         params: Value,
     ) -> Result<Value, Vec<Diagnostic>>;
+    /// Optionally prepares a typed batch on a subsystem worker before its commit.
+    /// The host has validated the envelope and calling session. Return `None` for
+    /// unrelated batches; prepared completions use [`Cx::apply_prepared`].
+    fn prepare_apply(
+        &mut self,
+        cx: &mut Cx<'_>,
+        params: &ApplyParams,
+    ) -> Option<Result<Value, Vec<Diagnostic>>> {
+        let _ = (cx, params);
+        None
+    }
     /// Background work, called on every host tick.
     fn tick(&mut self, cx: &mut Cx<'_>) {
         let _ = cx;
@@ -158,6 +169,105 @@ pub struct Cx<'a> {
 }
 
 impl Cx<'_> {
+    /// Resolve document inference and batch symbols through the host's normal pure path.
+    pub fn command_batch(
+        &self,
+        params: &ApplyParams,
+    ) -> Result<(ara_doc::AssetId, ara_cmd::Batch), Vec<Diagnostic>> {
+        self.st.batch(params)
+    }
+
+    /// Begin an uncancellable logical commit and queue its physical writes. The job
+    /// owner must poll the receipt before reporting success; this never waits for I/O.
+    pub fn apply_prepared_job(
+        &mut self,
+        job: &str,
+        params: ApplyParams,
+        inventory: ara_doc::file_state::PreparedInventory,
+        prepared_at: u64,
+    ) -> Result<(Value, crate::files::FileCommitReceipt), Vec<Diagnostic>> {
+        if self.st.jobs.get(job).is_none() {
+            return Err(vec![Diagnostic::error(
+                codes::JOB_NOT_FOUND,
+                format!("no job `{job}`"),
+            )]);
+        }
+        let receipt = self.st.begin_file_commit();
+        let Some(record) = self
+            .st
+            .jobs
+            .committing(job)
+            .map(|record| serde_json::json!(record))
+        else {
+            self.st.abort_file_commit(receipt);
+            return Err(vec![Diagnostic::error(
+                codes::INVALID_PARAMS,
+                "the job is no longer cancellable or is already committing",
+            )]);
+        };
+        self.st.notify(Topic::Jobs, record);
+        match self.apply_prepared(params, inventory, prepared_at) {
+            Ok(value) => {
+                self.st.seal_file_commit(receipt);
+                Ok((value, receipt))
+            }
+            Err(errors) => {
+                self.st.abort_file_commit(receipt);
+                Err(errors)
+            }
+        }
+    }
+
+    /// Drain available file-worker replies and consume a completed receipt. `None`
+    /// means writes or their journal acknowledgement are still pending.
+    pub fn poll_file_commit(
+        &mut self,
+        receipt: crate::files::FileCommitReceipt,
+    ) -> Option<Result<(), Vec<Diagnostic>>> {
+        self.st.poll_file_commit(receipt)
+    }
+
+    /// Commit a typed batch with a complete inventory revalidated by its owner on a
+    /// preparation worker. Metadata is visible only during this batch. This avoids
+    /// re-entering source preparation when a source/asset owner already prepared it.
+    pub fn apply_prepared(
+        &mut self,
+        params: ApplyParams,
+        inventory: ara_doc::file_state::PreparedInventory,
+        prepared_at: u64,
+    ) -> Result<Value, Vec<Diagnostic>> {
+        if self.st.store.revision() != prepared_at {
+            return Err(vec![Diagnostic::error(
+                codes::STALE_BASE,
+                "authority changed during file preparation; revalidate and retry",
+            )]);
+        }
+        self.st
+            .store
+            .prepare_files(inventory)
+            .map_err(|d| vec![d])?;
+        let previous_calling = std::mem::replace(&mut self.st.calling, self.session.clone());
+        let previous_origin = self.st.store.origin().map(str::to_owned);
+        self.st.store.set_origin(self.session.clone());
+        let previous = std::mem::replace(&mut self.st.file_jobs.applying, true);
+        let result = self.apply(params);
+        self.st.drain();
+        self.st.file_jobs.applying = previous;
+        self.st.store.clear_prepared_files();
+        self.st.calling = previous_calling;
+        self.st.store.set_origin(previous_origin);
+        result
+    }
+    /// Publish a worker's prepared file inventory before applying typed source/asset
+    /// commands. Tokens contain no mutable bytes and this never writes to disk.
+    pub fn observe_files(
+        &mut self,
+        entries: impl IntoIterator<Item = (String, Option<ara_doc::file_state::FileState>)>,
+    ) {
+        for (path, state) in entries {
+            self.st.store.observe_file(path, state);
+        }
+    }
     /// Complete background work under its initiating live session, retaining author
     /// attribution and permissions rather than borrowing the editor's human session.
     pub fn resume_session<R>(

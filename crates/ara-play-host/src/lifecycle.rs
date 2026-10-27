@@ -36,7 +36,7 @@ impl Retiring {
     }
 }
 
-fn shutdown(mut world: World) -> Value {
+pub(super) fn shutdown(mut world: World) -> Value {
     ara_gpu::cpu_scope!("Play.shutdown_worker");
     let mut tick = Value::Null;
     for (_, player) in &mut world.players {
