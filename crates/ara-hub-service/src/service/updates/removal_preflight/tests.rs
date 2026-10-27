@@ -219,6 +219,27 @@ fn confirmed_removal_accepts_the_registered_managed_path_alias() {
 }
 
 #[test]
+#[cfg(windows)]
+fn long_service_path_inside_the_installation_is_refused() {
+    let (root, mut hub) = fixture();
+    let install = root.join("engines/1.0.0");
+    let nested = install.join("x".repeat(200));
+    fs::create_dir_all(&nested).expect("long owned directory");
+    let executable = nested.join("ara.exe");
+    assert!(executable.as_os_str().len() > 260);
+    fs::write(&executable, b"service").expect("owned service");
+    hub.config.engine.executable = executable.clone();
+    for method in ["hub.engine.uninstall.preflight", "hub.engine.uninstall"] {
+        let error = hub
+            .call(method, json!({"version":"1.0.0"}))
+            .expect_err("the nested running service must stay installed");
+        assert!(error.message.contains("hosts the running Hub service"));
+    }
+    assert!(executable.is_file());
+    assert!(hub.updates.jobs.is_empty());
+}
+
+#[test]
 #[cfg(unix)]
 fn linked_inputs_and_linked_ownership_are_never_followed() {
     use std::os::unix::fs::symlink;
