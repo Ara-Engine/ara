@@ -138,7 +138,11 @@ impl ColorPicker {
     /// The channels the picker edits: RGB, plus alpha when the value has one that
     /// matters (a light ignores its colour's alpha).
     fn channels(&self) -> usize {
-        if self.hints.temperature { 3 } else { self.count }
+        if self.hints.temperature {
+            3
+        } else {
+            self.count
+        }
     }
     /// The linear base colour (at most 1), before the HDR intensity.
     fn base(&self) -> [f64; 3] {
@@ -479,7 +483,12 @@ impl Shell {
     }
     /// Verification routes: type `text` into the open picker's `hex` or `stops` field
     /// and apply it, as Enter does.
-    pub fn type_in_picker(&mut self, editor: &mut Editor, field: &str, text: &str) -> ara_ui::Result<()> {
+    pub fn type_in_picker(
+        &mut self,
+        editor: &mut Editor,
+        field: &str,
+        text: &str,
+    ) -> ara_ui::Result<()> {
         let input = match field {
             "stops" => Input::Stops,
             "kelvin" => Input::Kelvin,

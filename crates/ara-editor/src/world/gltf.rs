@@ -322,7 +322,7 @@ impl FidelityContent {
             self.materials = Some(materials);
         }
         // Post-process volumes' colour lookup tables (ara_runtime::lut), decoded once each.
-        for (_, row) in view.entities() {
+        for row in view.entities().values() {
             for id in ara_runtime::lut::record_references(&row.record) {
                 if self.library.luts.get(&id).is_none() {
                     // A missing or non-`lut` import grades without its table.

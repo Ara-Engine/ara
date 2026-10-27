@@ -2,8 +2,8 @@ use super::*;
 
 fn content(intensity: f32) -> Result<RasterContent> {
     let mut frame = RenderFrame::default();
+    // No post-process volumes: the look's defaults meter exposure automatically.
     frame.environment.intensity = intensity;
-    frame.look.post = Some(ara_components::render::PostProcess::default());
     frame.draws.push(box_draw(1, [2.; 3], [0.; 3], [0.; 3]));
     RasterContent::new(frame, Content::default())
 }

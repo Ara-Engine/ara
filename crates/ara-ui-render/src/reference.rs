@@ -222,17 +222,16 @@ pub(crate) fn fill_sample(i: &Instance, r: Box2, p: [f32; 2]) -> [f32; 4] {
                 local[0] / r.w.max(0.0001)
             }
             .clamp(0.0, 1.0);
-            let mut c = [0.0; 4];
-            for k in 0..4 {
-                c[k] = if k < 3 && flags & 2 != 0 {
+            let c: [f32; 4] = std::array::from_fn(|k| {
+                if k < 3 && flags & 2 != 0 {
                     linear_to_srgb(
                         srgb_to_linear(i.color[k])
                             + (srgb_to_linear(i.uv[k]) - srgb_to_linear(i.color[k])) * t,
                     )
                 } else {
                     i.color[k] + (i.uv[k] - i.color[k]) * t
-                };
-            }
+                }
+            });
             c
         }
         1 => {

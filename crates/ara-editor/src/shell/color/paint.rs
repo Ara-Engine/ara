@@ -390,7 +390,7 @@ impl Shell {
         }
         drop(part);
         // Later indices first, so earlier ones stay valid.
-        parts.sort_by(|a, b| b.0.cmp(&a.0));
+        parts.sort_by_key(|part| std::cmp::Reverse(part.0));
         let commands = &mut self.ui.display.commands;
         for (at, draws) in parts {
             let at = at.min(commands.len());
@@ -404,7 +404,7 @@ impl Shell {
         if self.current.is_some() {
             return;
         }
-        let Some((pixels, at)) = self
+        let Some(eyedropper::Loupe { pixels, at }) = self
             .color_picker
             .as_ref()
             .and_then(|p| p.eyedropper.as_ref())

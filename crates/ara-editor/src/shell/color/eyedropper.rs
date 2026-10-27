@@ -15,9 +15,16 @@ pub(super) struct Eyedropper {
     pub(super) before: [f64; 4],
     /// Held from its button: the release picks. Otherwise the next click picks.
     pub(super) held: bool,
-    /// The magnified pixels (display sRGB, row-major, `None` outside the frame) and
-    /// where they were sampled, while the pointer is over the editor window.
-    pub(super) loupe: Option<(Vec<Option<[u8; 4]>>, [f32; 2])>,
+    /// The magnified pixels, while the pointer is over the editor window.
+    pub(super) loupe: Option<Loupe>,
+}
+/// The pixels around the sample, magnified beside the pointer.
+#[derive(PartialEq)]
+pub(super) struct Loupe {
+    /// Display sRGB, row-major, [`LOUPE`]²; `None` outside the frame.
+    pub(super) pixels: Vec<Option<[u8; 4]>>,
+    /// Where they were sampled, in logical pixels.
+    pub(super) at: [f32; 2],
 }
 
 impl Shell {
@@ -85,12 +92,10 @@ impl Shell {
         let Some(eyedropper) = &mut picker.eyedropper else {
             return Ok(false);
         };
-        let changed = eyedropper
-            .loupe
-            .as_ref()
-            .is_none_or(|(old, old_at)| *old != pixels || *old_at != at);
         let sample = pixels[pixels.len() / 2];
-        eyedropper.loupe = Some((pixels, at));
+        let loupe = Loupe { pixels, at };
+        let changed = eyedropper.loupe.as_ref() != Some(&loupe);
+        eyedropper.loupe = Some(loupe);
         if let Some([r, g, b, _]) = sample {
             self.preview_sample([r, g, b])?;
         }

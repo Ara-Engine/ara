@@ -254,7 +254,7 @@ impl Shell {
                 out.push_str(&format!(
                     "<panel id='cp-{prefix}-row-{row}' class='cp-swatches'>"
                 ));
-                for n in 0..chunk.len() {
+                for (n, color) in chunk.iter().enumerate() {
                     let index = row * SWATCH_ROW + n;
                     let id = format!("cp-{prefix}-{index}");
                     bind(
@@ -266,8 +266,7 @@ impl Shell {
                         },
                     );
                     let hex = math::format_hex(
-                        [chunk[n][0], chunk[n][1], chunk[n][2]]
-                            .map(|c| math::linear_to_srgb(c.min(1.))),
+                        [color[0], color[1], color[2]].map(|c| math::linear_to_srgb(c.min(1.))),
                         None,
                     );
                     out.push_str(&format!(

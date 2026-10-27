@@ -500,13 +500,13 @@ fn build() -> Vec<Spec> {
             act(e, "editor.scene.open", json!({"scene": doc}))?;
             focus(e, "scene")
         }),
-        cmd("file.save", "Save", "check", "Ctrl+S", "Write every changed document to disk now.", |s, e, _| {
+        cmd("file.save", "Save", "save", "Ctrl+S", "Write every changed document to disk now.", |s, e, _| {
             e.host.flush();
             s.status_note = Some("All changes saved".into());
             Ok(())
         }),
         later("file.save_as", "Save As…", "file", "Ctrl+Shift+S", "Documents save in place through the host journal; Save As needs a typed document-copy command."),
-        cmd("file.save_all", "Save All", "check", "Ctrl+Alt+S", "Write every changed document to disk now.", |s, e, _| {
+        cmd("file.save_all", "Save All", "save", "Ctrl+Alt+S", "Write every changed document to disk now.", |s, e, _| {
             e.host.flush();
             s.status_note = Some("All changes saved".into());
             Ok(())

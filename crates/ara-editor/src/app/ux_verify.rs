@@ -396,7 +396,13 @@ impl UxVerification {
                 // Pinned over the Scene's upper left; the eyedropper over its centre.
                 let view = shell.viewport().ok_or("Scene view not visible")?;
                 let pin = picker.pinned.then_some([view.x + 24., view.y + 40.]);
-                shell.show_color_picker(editor, picker.path, picker.mode, pin, picker.eyedropper)?;
+                shell.show_color_picker(
+                    editor,
+                    picker.path,
+                    picker.mode,
+                    pin,
+                    picker.eyedropper,
+                )?;
                 for (field, text) in picker.typed {
                     shell.type_in_picker(editor, field, text)?;
                 }
