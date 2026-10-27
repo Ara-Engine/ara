@@ -287,6 +287,12 @@ impl MetalDevice {
     pub fn shares_graphics_queue(&self, other: &Self) -> bool {
         std::ptr::eq(&*self.queues[0], &*other.queues[0])
     }
+    /// The UI-attachment view of `image` ([`crate::NativeView`]): the handle itself,
+    /// checked live like the Vulkan view lookup.
+    pub fn image_view(&self, image: Image) -> Result<crate::NativeView> {
+        self.images.get(image)?;
+        Ok(image)
+    }
     /// Wait until both queues finished every submission.
     pub fn wait_idle(&self) -> Result<()> {
         for queue in [Queue::Graphics, Queue::Compute] {
