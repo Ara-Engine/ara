@@ -1,5 +1,6 @@
 //! SDL event loop and same-device native UI/scene composition.
 mod assets_verify;
+mod boundary_verify;
 mod capture;
 mod chrome_verify;
 mod content_drags;
@@ -347,6 +348,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     let mut selection_check = None;
     let mut snapping_check = None;
     let mut input_check = None;
+    let mut boundary_check = None;
     let mut prefab_check = None;
     let mut diagnostics_check = None;
     let mut play_check = None;
@@ -532,6 +534,20 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if input_check
                 .as_ref()
                 .is_some_and(input_verify::InputCheck::finished)
+                && boundary_check.is_none()
+            {
+                boundary_check = Some(boundary_verify::BoundaryCheck::new(
+                    &mut editor,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut boundary_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+            }
+            if boundary_check
+                .as_ref()
+                .is_some_and(boundary_verify::BoundaryCheck::finished)
                 && prefab_check.is_none()
             {
                 prefab_check = Some(prefab_verify::PrefabCheck::new(
@@ -1614,6 +1630,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if let Some(check) = &mut prefab_check {
                 check.end(&editor, &shell, &mut gpu)?;
             }
+            if let Some(check) = &mut boundary_check {
+                check.end(&editor, &mut shell, &mut gpu)?;
+            }
             if let Some(check) = &mut diagnostics_check {
                 check.end(
                     &editor,
@@ -1752,6 +1771,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if !check.finished() || !check.failures().is_empty() {
                 return Err(format!(
                     "Native prefab journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
+            let check = boundary_check
+                .as_ref()
+                .ok_or("The panel recovery journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native panel recovery journey failed: {}",
                     check.failures().join(", ")
                 )
                 .into());

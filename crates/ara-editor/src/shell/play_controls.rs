@@ -1,9 +1,11 @@
-//! Human Play adapters. RPC calls occur only for an explicit Inspect/Apply/Keep,
-//! never during panel painting or the display frame loop.
+//! Human Play adapters. Explicit Inspect/Apply/Keep starts player requests;
+//! frame polling reads Host job records without waiting for player IO. Painting
+//! reads cached snapshots only.
 use super::*;
 use ara_schema::ValueType;
 mod fields;
 mod jobs;
+mod keep;
 mod network;
 mod runtime;
 pub(crate) use network::conditions;
@@ -45,6 +47,8 @@ pub(crate) enum Action {
     Set(FieldTarget, Value),
     Expand(String),
     Page(String, i32),
+    KeepField { entity: String, path: String },
+    KeepDriven,
 }
 struct Draft {
     target: FieldTarget,
@@ -73,6 +77,8 @@ pub(crate) struct State {
     pending: Option<jobs::Pending>,
     pub simulate: Option<bool>,
     spectators: std::collections::BTreeSet<usize>,
+    keep: Option<keep::Choice>,
+    last_keep: Option<Value>,
 }
 impl Shell {
     pub(crate) fn toggle_play_options(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
@@ -128,6 +134,10 @@ impl Shell {
             return Err("Wait for the current runtime operation to complete".into());
         }
         match action {
+            Action::KeepField { entity, path } => {
+                return self.toggle_keep_field(editor, entity, path, value);
+            }
+            Action::KeepDriven => return self.toggle_keep_driven(editor, value),
             Action::Field(target) => {
                 let runtime = self
                     .play_controls
@@ -194,7 +204,7 @@ impl Shell {
     }
     /// The explicit inspection snapshot and live tile metadata, used by native acceptance evidence.
     pub(crate) fn play_runtime_report(&self) -> Value {
-        json!({"controlledPlayer":self.game_client,"spectator":self.play_controls.spectators.contains(&self.game_client),"captured":self.game_captured,"pending":self.play_controls.pending.is_some(),"players":self.play_controls.players.iter().map(|(player,info)|json!({"player":player,"live":info.live,"size":info.size,"fps":info.fps})).collect::<Vec<_>>(),"inspection":self.play_controls.runtime.as_ref().map(|runtime|json!({"world":runtime.world,"player":runtime.player,"entity":runtime.entity,"tick":runtime.tick,"components":runtime.components,"drafts":runtime.drafts.len(),"editable":runtime.editable})),"message":self.play_controls.message})
+        json!({"controlledPlayer":self.game_client,"spectator":self.play_controls.spectators.contains(&self.game_client),"captured":self.game_captured,"pending":self.play_controls.pending.is_some(),"players":self.play_controls.players.iter().map(|(player,info)|json!({"player":player,"live":info.live,"size":info.size,"fps":info.fps})).collect::<Vec<_>>(),"inspection":self.play_controls.runtime.as_ref().map(|runtime|json!({"world":runtime.world,"player":runtime.player,"entity":runtime.entity,"tick":runtime.tick,"components":runtime.components,"drafts":runtime.drafts.len(),"editable":runtime.editable})),"message":self.play_controls.message,"keep":self.keep_fields_report(),"lastKeep":self.play_controls.last_keep})
     }
     /// Each visible tile owns its own capture rectangle; changing focus never swaps images.
     pub(crate) fn game_input_rect(&self) -> Option<Box2> {
@@ -383,6 +393,7 @@ impl Shell {
             }
             out.push_str("</panel></panel>");
             self.play_runtime_markup(editor, out);
+            self.keep_fields_markup(editor, out);
         }
         if let Some(message) = &self.play_controls.message {
             out.push_str(&format!("<text id='play-runtime-message' class='caption' style='white-space:normal' text='{}' />",escape(message)));

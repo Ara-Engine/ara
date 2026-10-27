@@ -298,6 +298,31 @@ pub struct PlayFileParams {
     pub path: String,
 }
 
+/// Params of the read-only runtime diff and Keep eligibility preview.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayDiffParams {
+    /// Session handle from `session.begin`.
+    pub session: String,
+    /// World identity; omitted uses the latest world.
+    pub world: Option<String>,
+    /// Restrict the preview to these exact entity addresses.
+    pub entities: Option<Vec<String>>,
+    /// Read the runtime boundary through a nonblocking Host job.
+    pub background: Option<bool>,
+}
+
+/// One exact entity/field pair explicitly selected for Keep Changes.
+#[derive(Debug, Clone, PartialEq, Eq, Schema, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayKeepField {
+    /// Stable scene entity or prefab address.
+    pub entity: String,
+    /// Exact reflected field path; this selector never matches a prefix.
+    pub path: String,
+}
+
 /// Params of `play.keep`.
 #[derive(Debug, Schema, Deserialize)]
 #[ara(params)]
@@ -311,6 +336,9 @@ pub struct PlayKeepParams {
     pub entities: Option<Vec<String>>,
     /// Only paths starting with one of these (`Light.color`).
     pub paths: Option<Vec<String>>,
+    /// Exact selected entity/field pairs, intersected with any legacy filters.
+    /// An explicitly empty list keeps nothing.
+    pub fields: Option<Vec<PlayKeepField>>,
     /// Also keep values runtime systems write every tick (poses, velocities).
     pub include_driven: Option<bool>,
     /// Why, shown in review.

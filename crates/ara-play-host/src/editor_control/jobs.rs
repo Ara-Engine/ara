@@ -2,6 +2,7 @@ use super::*;
 enum Completion {
     Return,
     Keep(PlayKeepParams),
+    Diff(Option<Vec<String>>),
 }
 pub(crate) struct Pending {
     world: String,
@@ -46,6 +47,7 @@ impl PlayService {
                 Completion::Return
             }
             "play.keep" => Completion::Keep(parse::<PlayKeepParams>(params.clone())?),
+            "play.diff" => Completion::Diff(parse::<PlayDiffParams>(params.clone())?.entities),
             _ => {
                 return Err(fail(
                     codes::REQUEST,
@@ -71,7 +73,7 @@ impl PlayService {
             .session()
             .map(|session| session.id.clone())
             .ok_or_else(|| fail(codes::REQUEST, "Editor Play jobs require a live session"))?;
-        let mut forward = if method == "play.keep" {
+        let mut forward = if matches!(method, "play.keep" | "play.diff") {
             json!({})
         } else {
             params
@@ -203,6 +205,9 @@ impl PlayService {
                 )),
                 Ok(value) => match pending.completion {
                     Completion::Return => Ok(value),
+                    Completion::Diff(entities) => {
+                        self.diff_for_keep(cx, &pending.world, entities.as_deref(), value)
+                    }
                     Completion::Keep(params) => {
                         cx.job_progress(
                             &job,

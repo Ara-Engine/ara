@@ -29,7 +29,7 @@ impl Act {
         match self {
             Self::Multi | Self::MultiShared => 24,
             Self::Control => 36,
-            Self::Runtime => 28,
+            Self::Runtime => 34,
         }
     }
     fn multi(self) -> bool {
@@ -133,6 +133,21 @@ fn intensity(editor: &Editor) -> Option<f64> {
         .get("Light")?
         .get("intensity")?
         .as_f64()
+}
+fn light_range(editor: &Editor) -> Option<f64> {
+    let light = editor
+        .host
+        .store()
+        .workspace()
+        .doc(&editor.state.doc)?
+        .record(LIGHT)?
+        .get("Light")?;
+    Some(
+        light
+            .get("range")
+            .and_then(Value::as_f64)
+            .unwrap_or(f64::from(ara_runtime::components::Light::default().range)),
+    )
 }
 fn horizontal(value: &Value, entity: &str) -> Option<[f64; 2]> {
     let value = &value["values"][format!("{entity}.Transform.position")];
@@ -254,7 +269,7 @@ impl PlayCheck {
         ] {
             editor.action("editor.settings.set", json!({"key":setting,"value":value}))?;
         }
-        editor.apply(vec![json!({"cmd":"property.set","args":{"entity":LIGHT,"path":"Light.intensity","value":1000}})],"Reset Play proof light",None)?;
+        editor.apply(vec![json!({"cmd":"property.set","args":{"entity":LIGHT,"path":"Light.intensity","value":1000}}),json!({"cmd":"property.set","args":{"entity":LIGHT,"path":"Light.range","value":10}})],"Reset Play proof light",None)?;
         shell.rebuild(editor)?;
         shell.input.blur(&mut shell.ui);
         self.before = editor.host.store().revision();
@@ -680,8 +695,9 @@ impl PlayCheck {
         let target = match self.age {
             2 => Some("game-options"),
             4 => Some("play-start-paused"),
-            9 | 20 => Some("play-inspect"),
-            13 => Some("play-keep"),
+            9 | 26 => Some("play-inspect"),
+            15 => Some("play-keep"),
+            19 => Some("keep-fields-apply"),
             _ => None,
         };
         if let Some(target) = target
@@ -713,29 +729,79 @@ impl PlayCheck {
                 {
                     return self.wait();
                 }
+            }
+            12 => {
+                let id = format!("runtime-{}", ara_ui::source::stable_id("Light.range#"));
+                if !self.visible(shell, &id, scale, events)? {
+                    return Ok(());
+                }
+                replace(shell, &id, "25", scale, events)?;
+            }
+            13 => {
+                let report = shell.play_runtime_report();
+                if report["inspection"]["components"]["Light"]["range"].as_f64() != Some(25.) {
+                    return self.wait();
+                }
                 self.patch_tick = report["inspection"]["tick"].as_u64().unwrap_or(0);
             }
-            13 => click(shell, "play-keep", scale, events)?,
-            15 => {
+            15 => click(shell, "play-keep", scale, events)?,
+            16 => {
+                let report = shell.play_runtime_report();
+                if report["keep"]["fields"].as_array().is_none() {
+                    return self.wait();
+                }
+                if report["keep"]["selected"]
+                    .as_array()
+                    .is_none_or(|fields| !fields.is_empty())
+                {
+                    return Err(
+                        "Keep preview selected fields without an explicit checkbox action".into(),
+                    );
+                }
+                for path in ["Light.intensity", "Light.range"] {
+                    if !report["keep"]["fields"].as_array().is_some_and(|fields| {
+                        fields
+                            .iter()
+                            .any(|field| field["path"] == path && field["eligible"] == true)
+                    }) {
+                        return Err(format!(
+                            "Keep preview did not expose the independently changed field {path}"
+                        )
+                        .into());
+                    }
+                }
+            }
+            17 => {
+                let id = format!(
+                    "keep-field-{:016x}",
+                    ara_ui::source::stable_id(&format!("{LIGHT}#Light.intensity"))
+                );
+                if !self.visible(shell, &id, scale, events)? {
+                    return Ok(());
+                }
+                click(shell, &id, scale, events)?;
+            }
+            19 => click(shell, "keep-fields-apply", scale, events)?,
+            21 => {
                 key(events, 224, true);
                 tap(events, 29);
                 key(events, 224, false);
             }
-            17 => {
+            23 => {
                 key(events, 224, true);
                 tap(events, 28);
                 key(events, 224, false);
             }
-            19 => tap(events, 64),
-            20 => click(shell, "play-inspect", scale, events)?,
-            22 => tap(events, 62),
-            23 => tap(events, 63),
-            24 => {
+            25 => tap(events, 64),
+            26 => click(shell, "play-inspect", scale, events)?,
+            28 => tap(events, 62),
+            29 => tap(events, 63),
+            30 => {
                 key(events, 225, true);
                 tap(events, 62);
                 key(events, 225, false);
             }
-            25 if editor.play_world.is_some() || editor.state.playing.is_some() => {
+            31 if editor.play_world.is_some() || editor.state.playing.is_some() => {
                 return self.wait();
             }
             _ => {}
@@ -778,13 +844,15 @@ impl PlayCheck {
         } else {
             match (act, self.age) {
                 (_, 3) => Some("before"),
-                (Act::Runtime, 12) => Some("preview"),
-                (Act::Runtime, 14) => Some("kept"),
-                (Act::Runtime, 16) => Some("undo"),
-                (Act::Runtime, 18) => Some("redo"),
-                (Act::Runtime, 21) => Some("stepped"),
-                (Act::Runtime, 22) => Some("resumed"),
-                (Act::Runtime, 23) => Some("paused"),
+                (Act::Runtime, 14) => Some("preview"),
+                (Act::Runtime, 16) => Some("field-choices"),
+                (Act::Runtime, 18) => Some("selected-one-field"),
+                (Act::Runtime, 20) => Some("kept"),
+                (Act::Runtime, 22) => Some("undo"),
+                (Act::Runtime, 24) => Some("redo"),
+                (Act::Runtime, 27) => Some("stepped"),
+                (Act::Runtime, 28) => Some("resumed"),
+                (Act::Runtime, 29) => Some("paused"),
                 (_, age) if age == act.finish() => Some("after"),
                 _ => None,
             }
@@ -799,7 +867,7 @@ impl PlayCheck {
                 ara_json::to_canonical_string(&shell.layout_report()),
             )?;
             let frames:Vec<_>=shell.game_players.iter().filter_map(|player|{let node=shell.shown_node(&format!("game-frame-{player}"))?;let r=shell.ui.nodes[node].rect;Some(json!({"player":player,"rect":[r.x,r.y,r.w,r.h],"texture":game::player_texture(*player)}))}).collect();
-            self.trace.push(json!({"stage":stage,"revision":editor.host.store().revision(),"authoringIntensity":intensity(editor),"playing":editor.state.playing,"world":editor.play_world,"runtime":shell.play_runtime_report(),"frames":frames,"proofs":self.proofs,"settings":{"mode":editor.state.settings.get("play.mode"),"processMode":editor.state.settings.get("play.processMode"),"clients":editor.state.settings.get("play.clients"),"profiles":editor.state.settings.get("play.networkProfiles")}}));
+            self.trace.push(json!({"stage":stage,"revision":editor.host.store().revision(),"authoringIntensity":intensity(editor),"authoringRange":light_range(editor),"playing":editor.state.playing,"world":editor.play_world,"runtime":shell.play_runtime_report(),"frames":frames,"proofs":self.proofs,"settings":{"mode":editor.state.settings.get("play.mode"),"processMode":editor.state.settings.get("play.processMode"),"clients":editor.state.settings.get("play.clients"),"profiles":editor.state.settings.get("play.networkProfiles")}}));
         }
         if self.age == act.finish() {
             let trace = |stage: &str| self.trace.iter().find(|trace| trace["stage"] == stage);
@@ -878,20 +946,35 @@ impl PlayCheck {
             } else {
                 trace("preview").is_some_and(|row| {
                     row["authoringIntensity"].as_f64() == Some(1000.)
+                        && row["authoringRange"].as_f64() == Some(10.)
                         && row["runtime"]["inspection"]["components"]["Light"]["intensity"].as_f64()
                             == Some(2500.)
+                        && row["runtime"]["inspection"]["components"]["Light"]["range"].as_f64()
+                            == Some(25.)
                         && row["revision"] == self.before
+                }) && trace("field-choices").is_some_and(|row| {
+                    row["revision"] == self.before
+                        && row["runtime"]["keep"]["selected"]
+                            .as_array()
+                            .is_some_and(Vec::is_empty)
+                }) && trace("selected-one-field").is_some_and(|row| {
+                    row["runtime"]["keep"]["selected"]
+                        == json!([{"entity":LIGHT,"path":"Light.intensity"}])
                 }) && trace("kept").is_some_and(|row| {
                     row["authoringIntensity"].as_f64() == Some(2500.)
+                        && row["authoringRange"].as_f64() == Some(10.)
                         && row["revision"] == self.before + 1
-                }) && trace("undo")
-                    .is_some_and(|row| row["authoringIntensity"].as_f64() == Some(1000.))
-                    && trace("redo")
-                        .is_some_and(|row| row["authoringIntensity"].as_f64() == Some(2500.))
-                    && trace("stepped").is_some_and(|row| {
-                        row["runtime"]["inspection"]["tick"].as_u64() == Some(self.patch_tick + 1)
-                    })
-                    && trace("resumed").is_some_and(|row| row["playing"] == true)
+                }) && trace("undo").is_some_and(|row| {
+                    row["authoringIntensity"].as_f64() == Some(1000.)
+                        && row["authoringRange"].as_f64() == Some(10.)
+                        && row["revision"] == self.before + 2
+                }) && trace("redo").is_some_and(|row| {
+                    row["authoringIntensity"].as_f64() == Some(2500.)
+                        && row["authoringRange"].as_f64() == Some(10.)
+                        && row["revision"] == self.before + 3
+                }) && trace("stepped").is_some_and(|row| {
+                    row["runtime"]["inspection"]["tick"].as_u64() == Some(self.patch_tick + 1)
+                }) && trace("resumed").is_some_and(|row| row["playing"] == true)
                     && trace("paused").is_some_and(|row| row["playing"] == false)
                     && editor.play_world.is_none()
                     && editor.state.playing.is_none()

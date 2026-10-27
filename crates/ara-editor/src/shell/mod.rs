@@ -67,6 +67,7 @@ mod material_inspector;
 pub mod overlay;
 mod palette;
 mod panel_boundary;
+pub(crate) use panel_boundary::ProbeFailure;
 mod panels;
 pub(crate) mod play_controls;
 pub mod prefab_ops;
@@ -109,6 +110,7 @@ pub(crate) enum ViewportRequest {
 }
 /// Native shell and its retained widget state; no authoring document is mirrored here.
 pub struct Shell {
+    panel_probe: Option<panel_boundary::Probe>,
     pub(crate) viewport_request: Option<ViewportRequest>,
     pub(crate) play_controls: play_controls::State,
     pub(crate) toolkit_verify: Option<toolkit_verify::Host>,
@@ -475,6 +477,7 @@ impl Shell {
         let ui = Ui::editor("<ui id='editor' />", include_str!("editor.css"), size)?;
         let mut shell = Self {
             viewport_request: None,
+            panel_probe: None,
             play_controls: Default::default(),
             toolkit_verify: None,
             styles: live_styles::LiveStyles::new()?,

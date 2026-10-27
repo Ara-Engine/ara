@@ -1190,7 +1190,7 @@ impl Service for PlayService {
             play(Method::new::<WorldParams>(db, "play.record", "Start recording a replay (initial checkpoint + per-tick hashes)."), "record"),
             play(Method::new::<PlayFileParams>(db, "play.recording", "Finish the recording and write the replay file."), "saveReplay"),
             play(Method::new::<PlayFileParams>(db, "play.replay", "Verify a replay file tick by tick in this world."), "replay"),
-            play(Method::new::<WorldParams>(db, "play.diff", "Field-level differences between play and the start documents.").read_only(), "diff"),
+            play(Method::new::<PlayDiffParams>(db, "play.diff", "Read runtime differences and exact-field Keep eligibility against current authoring; background:true returns a nonblocking read-only job.").read_only(), "diff"),
             play(Method::new::<PlayKeepParams>(db, "play.keep", "Keep play changes: one typed-command transaction on the scene (driven values skipped unless asked)."), "keep"),
             play(Method::new::<PlayRestartParams>(db, "play.restart", "Restart a (faulted) world in fresh players from the same snapshot, or from the current tick with keepState."), "restart"),
             play(Method::new::<PlayCrashParams>(db, "play.debug.crash", "Test fault isolation: make the player panic, raise an access violation or hang.").destructive(), "crash"),
@@ -1219,7 +1219,7 @@ impl Service for PlayService {
         if (params["background"] == true
             && matches!(
                 method,
-                "play.inspect" | "play.read" | "play.patch" | "play.keep"
+                "play.inspect" | "play.read" | "play.patch" | "play.keep" | "play.diff"
             ))
             || matches!(method, "play.view" | "play.control")
         {
@@ -1277,6 +1277,15 @@ impl Service for PlayService {
             "play.keep" => {
                 let p: PlayKeepParams = parse(params)?;
                 self.keep(cx, p)
+            }
+            "play.diff" => {
+                let p: PlayDiffParams = parse(params)?;
+                let world = p
+                    .world
+                    .or_else(|| self.latest())
+                    .ok_or_else(|| fail(codes::UNKNOWN_WORLD, "No Play world is running"))?;
+                let diff = self.call(&world, method::DIFF, json!({}), false)?;
+                self.diff_for_keep(cx, &world, p.entities.as_deref(), diff)
             }
             "script.write" => {
                 let p: ScriptWriteParams = parse(params)?;

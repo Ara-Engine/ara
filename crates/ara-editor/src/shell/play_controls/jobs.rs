@@ -2,7 +2,7 @@
 use super::*;
 use std::time::{Duration, Instant};
 
-enum Phase {
+pub(super) enum Phase {
     Inspect {
         player: usize,
         entity: String,
@@ -11,6 +11,10 @@ enum Phase {
     Patched,
     Refreshed,
     Keep,
+    KeepPreview {
+        entities: Vec<String>,
+        include_driven: bool,
+    },
     Control {
         player: usize,
         spectator: bool,
@@ -30,13 +34,13 @@ pub(super) struct Pending {
 }
 
 impl Shell {
-    fn play_idle(&self) -> ara_ui::Result<()> {
+    pub(super) fn play_idle(&self) -> ara_ui::Result<()> {
         if self.play_controls.pending.is_some() {
             return Err("Wait for the current runtime operation to complete".into());
         }
         Ok(())
     }
-    fn play_job(
+    pub(super) fn play_job(
         &mut self,
         editor: &mut Editor,
         method: &str,
@@ -133,7 +137,17 @@ impl Shell {
         {
             return Err("Apply or discard runtime drafts first".into());
         }
-        self.play_job(editor,"play.keep",json!({"entities":editor.state.selection,"includeDriven":include_driven,"why":"Keep selected runtime changes"}),Phase::Keep)?;
+        let entities = editor.state.selection.clone();
+        self.play_job(
+            editor,
+            "play.diff",
+            json!({"entities":entities}),
+            Phase::KeepPreview {
+                entities,
+                include_driven,
+            },
+        )?;
+        self.play_controls.options = true;
         self.rebuild(editor)
     }
     /// Poll at a modest cadence; these Host job lookups never wait on player IO.
@@ -151,6 +165,7 @@ impl Shell {
         if editor.play_world.as_deref() != Some(pending.world.as_str()) {
             let _ = editor.action("jobs.cancel", json!({"job":pending.id}));
             self.play_controls.runtime = None;
+            self.play_controls.keep = None;
             self.play_controls.spectators.clear();
             self.play_controls.simulate = None;
             self.play_controls.message =
@@ -194,6 +209,18 @@ impl Shell {
         value: &Value,
     ) -> ara_ui::Result<()> {
         match pending.phase {
+            Phase::KeepPreview {
+                entities,
+                include_driven,
+            } => {
+                self.play_controls.keep = Some(keep::Choice::read(
+                    pending.world,
+                    entities,
+                    include_driven,
+                    value,
+                )?);
+                self.play_controls.message=Some("Choose the exact runtime fields to save. No scene values change until Apply selected.".into());
+            }
             Phase::Inspect { player, entity } => {
                 if self.game_client != player || editor.state.selection.first() != Some(&entity) {
                     return Err("The selection changed while inspecting; inspect again".into());
@@ -269,6 +296,8 @@ impl Shell {
                 ));
             }
             Phase::Keep => {
+                self.play_controls.last_keep = Some(value.clone());
+                self.play_controls.keep = None;
                 let count = |key: &str| value[key].as_array().map_or(0, Vec::len);
                 self.play_controls.message = Some(format!(
                     "Kept {} fields · {} conflicts preserved · {} unsupported changes skipped. One Undo restores the kept scene values.",

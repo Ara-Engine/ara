@@ -3,6 +3,31 @@ use super::{Editor, Shell, escape};
 use ara_ui::source::stable_id;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
+/// Controlled failure kind for the isolated, offscreen panel recovery journey.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum ProbeFailure {
+    /// Return an ordinary panel-render error after its real staged render.
+    Error,
+    /// Unwind inside the production panel boundary after its real staged render.
+    Panic,
+}
+
+/// An explicitly armed one-shot probe; ordinary shells and soak processes keep `None`.
+pub(super) struct Probe {
+    panel: String,
+    kind: ProbeFailure,
+    correlation: String,
+}
+impl Probe {
+    fn fail(self) -> ara_ui::Result<()> {
+        let message = format!("Panel recovery verification {}", self.correlation);
+        match self.kind {
+            ProbeFailure::Error => Err(message.into()),
+            ProbeFailure::Panic => panic!("{message}"),
+        }
+    }
+}
+
 /// The first failed render of a panel, retained until the user retries it.
 #[derive(Clone, Debug)]
 pub(super) struct Failure {
@@ -40,6 +65,54 @@ impl Failure {
 }
 
 impl Shell {
+    /// Arm a render failure only in the hidden native recovery fixture. This is an
+    /// internal journey seam, never an editor command, registry entry or global flag.
+    pub(crate) fn arm_panel_probe(
+        &mut self,
+        editor: &Editor,
+        panel: &str,
+        kind: ProbeFailure,
+        correlation: &str,
+    ) -> ara_ui::Result<()> {
+        if !self.offscreen || !editor.host.root().join(".ara-behaviour-fixture").is_file() {
+            return Err(
+                "Panel recovery probes require the isolated offscreen behaviour fixture".into(),
+            );
+        }
+        if self.panel_probe.is_some() || self.panel_failures.contains_key(panel) {
+            return Err(
+                "Retry the current failed panel before arming another recovery probe".into(),
+            );
+        }
+        if self.shown_node(&format!("body-{panel}")).is_none()
+            || correlation.is_empty()
+            || correlation.len() > 120
+        {
+            return Err(
+                "Recovery probe requires a mounted visible panel and a bounded correlation label"
+                    .into(),
+            );
+        }
+        // The journey exercises the real generator even for memoized Assets.
+        self.memos.remove(panel);
+        self.panel_probe = Some(Probe {
+            panel: panel.to_owned(),
+            kind,
+            correlation: correlation.to_owned(),
+        });
+        Ok(())
+    }
+
+    /// End the recovery story without retaining fault injection into another journey.
+    pub(crate) fn disarm_panel_probe(&mut self) {
+        self.panel_probe = None;
+    }
+
+    /// Whether the next matching real render still has an armed verification failure.
+    pub(crate) fn panel_probe_armed(&self) -> bool {
+        self.panel_probe.is_some()
+    }
+
     /// Number of quarantined panel renders for diagnostics and bounded journeys.
     pub(crate) fn panel_failure_count(&self) -> usize {
         self.panel_failures.len()
@@ -72,7 +145,15 @@ impl Shell {
         // outside the unwind so a half-built panel cannot retain clickable controls.
         let previous = std::mem::take(&mut self.bindings);
         let mut body = String::new();
-        let result = catch_unwind(AssertUnwindSafe(|| render(self, editor, &mut body)));
+        let result = catch_unwind(AssertUnwindSafe(|| -> ara_ui::Result<()> {
+            render(self, editor, &mut body)?;
+            if let Some(probe) = self.panel_probe.take_if(|probe| probe.panel == panel)
+                && self.offscreen
+            {
+                probe.fail()?;
+            }
+            Ok(())
+        }));
         let staged = std::mem::replace(&mut self.bindings, previous);
         let failure = match result {
             Ok(Ok(())) => {
@@ -106,6 +187,9 @@ impl Shell {
     }
 }
 
+#[cfg(test)]
+#[path = "panel_boundary/probe_tests.rs"]
+mod probe_tests;
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests;
