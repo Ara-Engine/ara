@@ -42,6 +42,7 @@ pub(super) struct FormatInfo {
 const FORMATS: &[(vk::Format, MTLPixelFormat, u32, u32, bool)] = {
     use MTLPixelFormat as P;
     &[
+        (vk::Format::R8_UNORM, P::R8Unorm, 1, 1, false),
         (vk::Format::R8G8B8A8_UNORM, P::RGBA8Unorm, 1, 4, false),
         (vk::Format::R8G8B8A8_SRGB, P::RGBA8Unorm_sRGB, 1, 4, false),
         (vk::Format::B8G8R8A8_UNORM, P::BGRA8Unorm, 1, 4, false),
