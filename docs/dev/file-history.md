@@ -85,3 +85,6 @@ hash matches analysis. It returns a standard preparation job, then an ordinary
 `cmd.apply` result with transaction and ops. External changes refuse apply/undo
 with ARA1501. CLI `Engine::call` advances local endpoints until preparation jobs
 finish, so offline commands cannot exit and discard their queued work.
+Their total duration is unlimited while the job's progress fraction or phase changes.
+`ARA_JOB_STALL_TIMEOUT_SECS` sets the positive stall budget (default 120 seconds);
+no progress within that budget returns ARA1815 with the job handle and last phase.
