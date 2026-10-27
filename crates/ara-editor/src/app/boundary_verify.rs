@@ -24,6 +24,16 @@ const CASES: &[Case] = &[
         kind: ProbeFailure::Panic,
         label: "assets-caught-panic",
     },
+    Case {
+        panel: "inspector",
+        kind: ProbeFailure::Style,
+        label: "inspector-invalid-style",
+    },
+    Case {
+        panel: "assets",
+        kind: ProbeFailure::Widget,
+        label: "assets-invalid-widget",
+    },
 ];
 
 pub(super) struct BoundaryCheck {

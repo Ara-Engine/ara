@@ -1751,7 +1751,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     )
                     .map_err(String::from)?;
             }
-            if let Some(probe) = &mut probe {
+            if probe.is_some() || monkey.is_some() {
                 let cpu_ms = frame_start.elapsed().as_secs_f64() * 1000.;
                 let ui_wait_ms = gpu.take_gpu_wait().as_secs_f64() * 1000.;
                 // Unavailable when the device was replaced this frame.
@@ -1760,6 +1760,11 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     .host_wait_stats()
                     .elapsed_since(Some(waits_before))
                     .map(|waited| waited.as_secs_f64() * 1000.);
+                let stats = if probe.is_none() {
+                    shell.take_stats()
+                } else {
+                    Default::default()
+                };
                 let sample = responsiveness::Sample {
                     cpu_ms,
                     host_wait_ms,
@@ -1781,10 +1786,22 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     present_ms,
                     presented,
                     game_frame,
+                    rebuilds: stats.rebuilds,
+                    rebuild_ms: stats.rebuild_ms,
+                    mount_ms: stats.mount_ms,
+                    reconcile_ms: stats.reconcile_ms,
+                    frame_ms: stats.frame_ms,
+                    rows_ms: stats.rows_ms,
+                    work: stats.work,
                     presentation_ready: renderer.presentation_ready(),
                     ..Default::default()
                 };
-                probe.end(&editor, &mut shell, sample);
+                if let Some(runner) = &mut monkey {
+                    runner.record_frame_with_stages(frame_start.elapsed(), &sample);
+                }
+                if let Some(probe) = &mut probe {
+                    probe.end(&editor, &mut shell, sample);
+                }
             }
             if let Some(check) = &mut drag_check {
                 check.end(&editor, &mut shell, &mut gpu, &floats)?;
@@ -1816,12 +1833,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     break;
                 }
             }
-            if let Some(runner) = &mut monkey {
-                runner.record_frame(frame_start.elapsed());
-                if runner.finished() {
-                    game.close(&mut editor, &mut gpu)?;
-                    break;
-                }
+            if monkey.as_ref().is_some_and(monkey::Monkey::finished) {
+                game.close(&mut editor, &mut gpu)?;
+                break;
             }
             if let Some(check) = &mut content_drags {
                 check.end(
