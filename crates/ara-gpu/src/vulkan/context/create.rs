@@ -3,7 +3,8 @@ use anyhow::{Context, ensure};
 use ash::vk::TaggedStructure;
 
 impl Gpu {
-    /// Enables synchronization validation explicitly; failure to find it is fatal.
+    /// Prefers a discrete GPU, falling back to integrated/virtual devices. Debug
+    /// builds require synchronization validation.
     pub fn new(window_extensions: &[std::ffi::CString]) -> Result<Self> {
         Self::with_ray_tracing(window_extensions, true)
     }
@@ -83,11 +84,16 @@ impl Gpu {
             let physical = instance
                 .enumerate_physical_devices()?
                 .into_iter()
-                .find(|p| {
-                    instance.get_physical_device_properties(*p).device_type
-                        == vk::PhysicalDeviceType::DISCRETE_GPU
-                })
-                .context("No discrete GPU")?;
+                .min_by_key(
+                    |p| match instance.get_physical_device_properties(*p).device_type {
+                        vk::PhysicalDeviceType::DISCRETE_GPU => 0,
+                        vk::PhysicalDeviceType::INTEGRATED_GPU => 1,
+                        vk::PhysicalDeviceType::VIRTUAL_GPU => 2,
+                        vk::PhysicalDeviceType::CPU => 3,
+                        _ => 4,
+                    },
+                )
+                .context("No Vulkan physical device")?;
             let properties = instance.get_physical_device_properties(physical);
             ensure!(
                 properties.api_version >= vk::API_VERSION_1_3,
