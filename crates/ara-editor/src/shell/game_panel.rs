@@ -116,10 +116,7 @@ impl Shell {
                 ],
             );
         } else if self.game_preview.is_some() {
-            self.preview_frame(
-                out,
-                "The scene through its gameplay camera, as Play starts",
-            );
+            self.preview_frame(out, "The scene through its gameplay camera, as Play starts");
             out.push_str("<panel id='game-capture' class='game-hint'><text id='game-capture-text' text='Gameplay camera · Play (F5) runs the scene here' /></panel>");
         } else {
             let in_view = editor.plays_in_game_view();

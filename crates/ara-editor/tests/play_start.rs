@@ -116,7 +116,11 @@ fn play_starts_in_the_background_and_shows_its_progress() {
     shell.show_game_preview_for_test(&mut editor, [640, 360]);
     let image = shell.ui.find("game-image").unwrap();
     assert_eq!(
-        shell.ui.nodes[image].element.attrs.get("src").map(String::as_str),
+        shell.ui.nodes[image]
+            .element
+            .attrs
+            .get("src")
+            .map(String::as_str),
         Some("game-preview")
     );
     assert_eq!(

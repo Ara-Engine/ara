@@ -202,6 +202,31 @@ fn failed_probe_and_content_allocations_preserve_heap_and_last_good_volume() -> 
 }
 
 #[test]
+fn a_scene_going_asynchronous_keeps_showing_its_last_synchronous_frame() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-render/async-handoff");
+    let scene = fixture::scene();
+    let mut renderer = Renderer::new_native(&scene, Box::new(Textures), [128, 80], &[], root)?;
+    let camera = CameraSpec::LookAt {
+        position: Vec3::new(0., 0., 3.),
+        target: Vec3::ZERO,
+        vertical_fov: 55f32.to_radians(),
+    };
+    // A synchronous frame (a capture) before any retained chain exists.
+    renderer.render_view(&camera, 1., ViewMode::Lit)?;
+    assert!(renderer.presentation_ready());
+    renderer.submit_scene_frame(|r| r.render_view(&camera, 1., ViewMode::Lit))?;
+    assert!(
+        renderer.presentation_ready(),
+        "no frame without an image while the chain's first frame is in flight"
+    );
+    renderer.wait_scene_frame()?;
+    assert!(renderer.presentation_ready());
+    assert_eq!(renderer.entity_at([64, 40])?, Some(7));
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}
+
+#[test]
 fn scene_submission_retains_completed_color_ids_and_pick_while_gpu_is_blocked() -> Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-render/async-scene");
     let mut scene = fixture::scene();

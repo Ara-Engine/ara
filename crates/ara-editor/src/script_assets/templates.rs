@@ -64,7 +64,7 @@ pub(super) fn module_name(root: &Path, folder: &Path) -> String {
 pub(super) fn source(namespace: &str, name: &str, template: Template) -> String {
     let body = match template {
         Template::Behaviour => format!(
-            "/// <summary>Gameplay behaviour for its entity. State lives in ECS properties.</summary>\npublic sealed partial class {name} : Behaviour\n{{\n    /// <summary>Turn speed in degrees per second.</summary>\n    [Property, Unit(Units.Degrees)] public partial float Speed {{ get; set; }}\n\n    /// <inheritdoc/>\n    protected override void OnTick(in Tick tick)\n    {{\n        ref var transform = ref Get<Transform>();\n        transform.Rotation.Y += Speed * tick.Dt;\n    }}\n}}\n"
+            "/// <summary>Gameplay behaviour for its entity. State lives in ECS properties.</summary>\npublic sealed partial class {name} : Behaviour\n{{\n    /// <summary>Turn speed in degrees per second.</summary>\n    [Property, Unit(Units.DegreesPerSecond)] public partial float Speed {{ get; set; }}\n\n    /// <inheritdoc/>\n    protected override void OnTick(in Tick tick)\n    {{\n        ref var transform = ref Get<Transform>();\n        transform.Rotation.Y += Speed * tick.Dt;\n    }}\n}}\n"
         ),
         Template::System => format!(
             "/// <summary>Batched gameplay logic over matching ECS components.</summary>\npublic static partial class {name}\n{{\n    /// <summary>Update each matching entity on the fixed simulation tick.</summary>\n    [Query]\n    static void Update(ref Transform transform)\n    {{\n        // Read and write component state here.\n    }}\n}}\n"

@@ -189,7 +189,10 @@ impl Renderer {
             return Ok(false);
         }
         let id_size = self.gpu.image_extent(self.targets.images[ID])?;
-        let mut live = self.live.take().unwrap_or_default();
+        let mut live = match self.live.take() {
+            Some(live) => live,
+            None => self.start_live()?,
+        };
         let mut output = match live.acquire(&mut self.gpu, self.size, id_size) {
             Ok(output) => output,
             Err(error) => {
@@ -233,6 +236,42 @@ impl Renderer {
         self.live = Some(live);
         result?;
         Ok(true)
+    }
+
+    /// A Scene going asynchronous starts its retained chain from the last completed
+    /// synchronous frame (a capture, or renders before the chain existed), so the UI
+    /// keeps showing that image until the chain's first frame completes instead of
+    /// going a frame without one. Waits for the one copy, once per chain.
+    fn start_live(&mut self) -> Result<Live> {
+        let mut live = Live::default();
+        let completed = [OUTPUT, ID].iter().all(|&slot| {
+            self.targets.states[slot].access == Access::CopySource
+                && self.targets.states[slot].queue == Queue::Graphics
+        });
+        if !completed || self.secondary_active || self.gpu.deferring_completion() {
+            return Ok(live);
+        }
+        let id_size = self.gpu.image_extent(self.targets.images[ID])?;
+        let mut output = live.acquire(&mut self.gpu, self.size, id_size)?;
+        output.labels.extend(
+            self.content
+                .entity_names
+                .iter()
+                .map(|(id, name)| (*id, name.to_owned())),
+        );
+        output.epoch = Some(self.entity_epoch);
+        self.gpu.begin_deferred_completion()?;
+        let copied = output.copy(self);
+        let mut completion = self.gpu.end_deferred_completion()?;
+        let waited = copied.and_then(|()| Ok(self.gpu.wait_completion(&mut completion)?));
+        if let Err(error) = waited {
+            if completion.is_resolved() {
+                output.retire(&mut self.gpu)?;
+            }
+            return Err(error);
+        }
+        live.shown = Some(output);
+        Ok(live)
     }
 
     /// Copy a synchronously completed capture frame into the retained UI pair.
