@@ -44,6 +44,7 @@ fn diff_edits_reproduce_the_target_through_a_transaction() {
             Edit::Move { id, .. } => format!("move {id}"),
             Edit::Set { id, path, .. } => format!("set {id} {path}"),
             Edit::Document { path, .. } => format!("document {path}"),
+            Edit::File { path, .. } => format!("file {path}"),
         })
         .collect();
     assert_eq!(
