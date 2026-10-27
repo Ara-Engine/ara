@@ -59,6 +59,90 @@ mod tests {
     use ara_ui_text::TextSystem;
 
     #[test]
+    fn fitted_auto_text_keeps_geometry_on_color_only_themes_and_idle() -> Result<()> {
+        let mut text = TextSystem::bundled()?;
+        let mut ui = Ui::editor(
+            "<ui id='root'><panel id='constrained' style='height:8px;flex-shrink:0;overflow:hidden'><text id='copy' text='Retained auto text' style='height:auto;min-height:0px;flex-shrink:1' /></panel></ui>",
+            crate::theme::EDITOR_CSS,
+            [240., 100.],
+        )?;
+        ui.frame(&mut text)?;
+        let copy = ui.find("copy").expect("auto text leaf");
+        let height = ui.tree.style(ui.nodes[copy].layout_id)?.size.height;
+        assert!(
+            !height.is_auto(),
+            "fixture must exercise an effective height fitted from authored auto"
+        );
+        assert!(ui.nodes[copy].computed.layout.size.height.is_auto());
+        let geometry = |ui: &Ui| {
+            ui.nodes
+                .iter()
+                .map(|node| {
+                    [
+                        node.rect.x,
+                        node.rect.y,
+                        node.rect.w,
+                        node.rect.h,
+                        node.clip.x,
+                        node.clip.y,
+                        node.clip.w,
+                        node.clip.h,
+                    ]
+                })
+                .collect::<Vec<_>>()
+        };
+        let before = geometry(&ui);
+        for theme in [
+            crate::theme::EditorTheme::Light,
+            crate::theme::EditorTheme::Dark,
+        ] {
+            ui.switch_theme(theme)?;
+            let work = ui.frame(&mut text)?;
+            assert_eq!(work.restyled, ui.nodes.len(), "{work:?}");
+            assert_eq!(
+                work.shaped, 0,
+                "color-only restyles retain shaping: {work:?}"
+            );
+            assert_eq!(
+                work.layout_passes, 0,
+                "color-only restyles retain fitted layout: {work:?}"
+            );
+            assert!(work.paint_nodes > 0);
+            assert_eq!(geometry(&ui), before);
+            assert_eq!(ui.tree.style(ui.nodes[copy].layout_id)?.size.height, height);
+            assert_eq!(ui.frame(&mut text)?, crate::Work::default());
+        }
+        let paragraph_height = ui.nodes[copy]
+            .text
+            .as_ref()
+            .expect("paragraph")
+            .layout
+            .height();
+        ui.set_style(
+            copy,
+            "height:auto;min-height:0px;flex-shrink:1;font-size:26px",
+        )?;
+        let metrics = ui.frame(&mut text)?;
+        assert_eq!(
+            metrics.shaped, 1,
+            "a genuine font change reshapes its paragraph"
+        );
+        assert!(metrics.layout_passes > 0);
+        assert!(
+            ui.nodes[copy]
+                .text
+                .as_ref()
+                .expect("paragraph")
+                .layout
+                .height()
+                > paragraph_height
+        );
+        assert_ne!(ui.tree.style(ui.nodes[copy].layout_id)?.size.height, height);
+        assert_eq!(ui.frame(&mut text)?, crate::Work::default());
+        Ok(())
+    }
+
+    #[test]
     fn final_wrapping_fits_auto_controls_preserves_fixed_height_and_settles_after_resize()
     -> Result<()> {
         let mut text = TextSystem::bundled()?;

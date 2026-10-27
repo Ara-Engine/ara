@@ -28,16 +28,23 @@ impl Ui {
                     computed.color = color;
                 }
                 let color_changed = computed.color != node.computed.color;
-                let mut layout = computed.layout.clone();
-                if !node.visible {
-                    layout.display = Display::None;
-                }
-                if let Some(placed) = self.placed.get(&crate::source::stable_id(&node.element.id)) {
-                    placed.apply(&mut layout);
-                }
-                if layout != *self.tree.style(node.layout_id)? {
-                    self.tree.set_style(node.layout_id, layout)?;
-                    node.dirty.layout = true;
+                // Taffy's effective style also contains runtime placement and
+                // fitted auto-text height. A paint-only restyle must retain
+                // those results instead of resetting them to authored `auto`.
+                if computed.layout != node.computed.layout {
+                    let mut layout = computed.layout.clone();
+                    if !node.visible {
+                        layout.display = Display::None;
+                    }
+                    if let Some(placed) =
+                        self.placed.get(&crate::source::stable_id(&node.element.id))
+                    {
+                        placed.apply(&mut layout);
+                    }
+                    if layout != *self.tree.style(node.layout_id)? {
+                        self.tree.set_style(node.layout_id, layout)?;
+                        node.dirty.layout = true;
+                    }
                 }
                 if computed.font_family != node.computed.font_family {
                     if let Some(text) = &mut node.text {
