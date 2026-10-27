@@ -187,7 +187,9 @@ fn create_surface(size: [u32; 2]) -> Result<IoSurface> {
     let values: [&CFType; 5] = [&width, &height, &bytes, &pixel, CFBoolean::new(true)];
     let properties = CFDictionary::<CFString, CFType>::from_slices(&keys, &values);
     // SAFETY: a dictionary of documented IOSurface properties with matching value types.
-    unsafe { IOSurfaceRef::new(properties.as_opaque()) }.ok_or_else(|| nil("IOSurfaceCreate"))
+    unsafe { IOSurfaceRef::new(properties.as_opaque()) }
+        .map(IoSurface::new)
+        .ok_or_else(|| nil("IOSurfaceCreate"))
 }
 
 /// The owner side: the producer's slots as sampled images on this device.

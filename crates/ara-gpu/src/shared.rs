@@ -247,7 +247,35 @@ pub struct SharedSurface {
 
 /// A retained IOSurface (macOS shared-surface slot).
 #[cfg(target_os = "macos")]
-pub(crate) type IoSurface = objc2_core_foundation::CFRetained<objc2_io_surface::IOSurfaceRef>;
+#[derive(Clone, Debug)]
+pub(crate) struct IoSurface(objc2_core_foundation::CFRetained<objc2_io_surface::IOSurfaceRef>);
+
+// SAFETY: IOSurfaces are reference-counted kernel objects that any thread may retain,
+// release and query; Ara only reads their properties and wraps them as textures, the
+// same cross-thread use as the Windows `OwnedHandle`s of other platforms.
+#[cfg(target_os = "macos")]
+unsafe impl Send for IoSurface {}
+// SAFETY: see `Send`; shared access only reads immutable surface properties.
+#[cfg(target_os = "macos")]
+unsafe impl Sync for IoSurface {}
+
+#[cfg(target_os = "macos")]
+impl IoSurface {
+    /// Take ownership of a retained surface.
+    pub(crate) fn new(
+        surface: objc2_core_foundation::CFRetained<objc2_io_surface::IOSurfaceRef>,
+    ) -> Self {
+        Self(surface)
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl std::ops::Deref for IoSurface {
+    type Target = objc2_io_surface::IOSurfaceRef;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl SharedSurface {
     /// The surface, with handle values valid in this process.
@@ -363,6 +391,7 @@ impl SharedSurface {
                 u32::try_from(slot.handle)
                     .ok()
                     .and_then(objc2_io_surface::IOSurfaceRef::lookup)
+                    .map(IoSurface::new)
                     .filter(|surface| surface.alloc_size() as u64 == slot.size)
                     .ok_or_else(|| {
                         Error::new(
