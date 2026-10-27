@@ -6,7 +6,6 @@ use sdl3_sys::{
     pixels::SDL_PIXELFORMAT_RGBA32,
     surface::{SDL_CreateSurfaceFrom, SDL_DestroySurface},
     video::*,
-    vulkan::*,
 };
 use std::{
     ffi::{CStr, CString},
@@ -51,7 +50,15 @@ pub enum Event {
 /// The Ara app icon (64 px PNG exported by `ara-brand` from `assets/brand/ara-icon.svg`).
 const ARA_ICON_PNG: &[u8] = include_bytes!("../../../assets/brand/png/ara-icon-64.png");
 
-/// Main-thread-owned resizable SDL3 Vulkan window and video subsystem reference.
+/// The window kind presentation needs: Metal views on macOS, Vulkan surfaces elsewhere.
+#[cfg(target_os = "macos")]
+const NATIVE_SURFACE: SDL_WindowFlags = SDL_WINDOW_METAL;
+/// The window kind presentation needs: Metal views on macOS, Vulkan surfaces elsewhere.
+#[cfg(not(target_os = "macos"))]
+const NATIVE_SURFACE: SDL_WindowFlags = SDL_WINDOW_VULKAN;
+
+/// Main-thread-owned resizable SDL3 window (Vulkan, or Metal on macOS) and video
+/// subsystem reference.
 pub struct Window {
     pub(crate) handle: *mut SDL_Window,
     pub(crate) chrome: Option<Box<crate::chrome::WindowChrome>>,
@@ -83,7 +90,7 @@ impl Window {
                 title.as_ptr(),
                 size[0] as i32,
                 size[1] as i32,
-                SDL_WINDOW_VULKAN
+                NATIVE_SURFACE
                     | SDL_WINDOW_RESIZABLE
                     | SDL_WINDOW_HIGH_PIXEL_DENSITY
                     | if hidden {
@@ -144,12 +151,19 @@ impl Window {
         }
         Ok(())
     }
+    /// Instance extensions required by the active SDL Vulkan driver; none on macOS,
+    /// where the Metal backend needs no instance.
+    #[cfg(target_os = "macos")]
+    pub fn extensions(&self) -> Result<Vec<CString>> {
+        Ok(Vec::new())
+    }
     /// Instance extensions required by the active SDL Vulkan driver.
+    #[cfg(not(target_os = "macos"))]
     pub fn extensions(&self) -> Result<Vec<CString>> {
         let mut count = 0;
         // SAFETY: SDL video is live; its static extension strings outlive Vulkan instance creation.
         unsafe {
-            let names = SDL_Vulkan_GetInstanceExtensions(&mut count);
+            let names = sdl3_sys::vulkan::SDL_Vulkan_GetInstanceExtensions(&mut count);
             ensure!(!names.is_null(), "SDL extensions: {}", error());
             Ok(std::slice::from_raw_parts(names, count as usize)
                 .iter()

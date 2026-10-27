@@ -17,7 +17,7 @@ fn main() -> Result<()> {
         ".sn/gpu",
     )?;
     // SAFETY: Main retains the window/device and tears down presentation before either drops.
-    let mut present = unsafe { Present::new(renderer.gpu().context(), &window)? };
+    let mut present = unsafe { Present::create(renderer.gpu(), &window)? };
     let result = (|| -> Result<()> {
         let mut frames = 0;
         let mut running = true;
@@ -52,10 +52,10 @@ fn main() -> Result<()> {
                 }
                 // SAFETY: Device idle was established immediately above; the creating device remains live.
                 unsafe {
-                    present.destroy(renderer.gpu().context());
+                    present.retire(renderer.gpu());
                 }
                 // SAFETY: Window/device are retained by main until explicit idle teardown.
-                present = unsafe { Present::new(renderer.gpu().context(), &window)? };
+                present = unsafe { Present::create(renderer.gpu(), &window)? };
                 renderer.resize(size)?;
             }
             let mut camera = common::camera();
@@ -65,9 +65,8 @@ fn main() -> Result<()> {
             renderer.render(&camera, 0.0015)?;
             // SAFETY: Renderer completed this CopySource image and both native owners remain live.
             if let Err(error) = unsafe {
-                present.display(
-                    renderer.gpu().context(),
-                    renderer.gpu().native_image(renderer.output())?,
+                present.present_image(renderer.gpu(),
+                    renderer.output(),
                     renderer.size(),
                 )
             } {
@@ -80,10 +79,10 @@ fn main() -> Result<()> {
                     }
                     // SAFETY: Device idle was established immediately above; the creating device remains live.
                     unsafe {
-                        present.destroy(renderer.gpu().context());
+                        present.retire(renderer.gpu());
                     }
                     // SAFETY: Window/device are retained by main until explicit idle teardown.
-                    present = unsafe { Present::new(renderer.gpu().context(), &window)? };
+                    present = unsafe { Present::create(renderer.gpu(), &window)? };
                 } else {
                     return Err(error);
                 }
@@ -110,7 +109,7 @@ fn main() -> Result<()> {
     }
     // SAFETY: Device idle was established immediately above; the creating device remains live.
     unsafe {
-        present.destroy(renderer.gpu().context());
+        present.retire(renderer.gpu());
     }
     result
 }

@@ -33,7 +33,7 @@ fn main() -> Result<()> {
     )?;
     let mut gpu = GpuDevice::new(&window.extensions()?, dir.join("cache"))?;
     // SAFETY: Window/device are retained until explicit idle swapchain teardown.
-    let mut present = match unsafe { Present::new_with_output(gpu.context(), &window, settings) } {
+    let mut present = match unsafe { Present::create_with_output(gpu, &window, settings) } {
         Ok(p) => p,
         Err(error) => {
             ara_gpu::cooked::write_json(
@@ -135,9 +135,8 @@ fn main() -> Result<()> {
             }
             // SAFETY: Output is completed CopySource and encoded for this swapchain.
             unsafe {
-                present.display_encoded(
-                    gpu.context(),
-                    gpu.native_image(output.output())?,
+                present.present_encoded(gpu,
+                    output.output(),
                     size,
                     settings.mode,
                 )?;
@@ -149,7 +148,7 @@ fn main() -> Result<()> {
     // SAFETY: All portable submissions completed; this wait also retires presentation.
     unsafe {
         gpu.wait_idle()?;
-        present.destroy(gpu.context());
+        present.retire(gpu);
     }
     output.retire(&mut gpu)?;
     gpu.retire(Resource::Image(input))?;

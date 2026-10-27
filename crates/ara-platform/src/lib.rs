@@ -1,7 +1,8 @@
 #![warn(missing_docs)]
-//! SDL3 native window/input and Vulkan presentation for Ara.
+//! SDL3 native window/input and native presentation (Vulkan, or Metal on macOS) for Ara.
 mod chrome;
 mod cursor;
+#[cfg(not(target_os = "macos"))]
 mod output;
 mod present;
 mod window;

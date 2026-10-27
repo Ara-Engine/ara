@@ -178,15 +178,13 @@ impl Windowed {
         if self.present_enabled && self.present.is_none() {
             // SAFETY: the window and device both outlive `present`, which is destroyed
             // after device idle in `recreate`/`Drop` ordering below.
-            self.present = Some(unsafe { Present::new(renderer.gpu().context(), &self.window)? });
+            self.present = Some(unsafe { Present::create(renderer.gpu(), &self.window)? });
         }
-        let image = renderer
-            .gpu()
-            .native_image(presenter.output().context("presented image missing")?)?;
+        let image = presenter.output().context("presented image missing")?;
         let result = match &mut self.present {
             // SAFETY: the renderer completed this CopySource image; both owners are live.
             Some(present) => unsafe {
-                present.display(renderer.gpu().context(), image, presenter.output_size())
+                present.present_image(renderer.gpu(), image, presenter.output_size())
             },
             None => Ok(()),
         };
@@ -233,13 +231,13 @@ impl Windowed {
         let renderer = presenter.renderer().context("2D renderer missing")?;
         if self.present_enabled && self.present2d.is_none() {
             // SAFETY: the window and 2D device outlive this native presentation object.
-            self.present2d = Some(unsafe { Present::new(renderer.gpu().context(), &self.window)? });
+            self.present2d = Some(unsafe { Present::create(renderer.gpu(), &self.window)? });
         }
-        let image = renderer.gpu().native_image(renderer.output())?;
+        let image = renderer.output();
         let result = match &mut self.present2d {
             // SAFETY: this completed image is CopySource and both owners are live.
             Some(present) => unsafe {
-                present.display(renderer.gpu().context(), image, renderer.size())
+                present.present_image(renderer.gpu(), image, renderer.size())
             },
             None => Ok(()),
         };
@@ -268,7 +266,7 @@ impl Windowed {
             // SAFETY: the native device is idle before its presentation objects retire.
             unsafe {
                 renderer.gpu().wait_idle()?;
-                present.destroy(renderer.gpu().context());
+                present.retire(renderer.gpu());
             }
         }
         Ok(())
@@ -284,7 +282,7 @@ impl Windowed {
             // SAFETY: waiting for device idle before destroying presentation objects.
             unsafe {
                 renderer.gpu().wait_idle()?;
-                present.destroy(renderer.gpu().context());
+                present.retire(renderer.gpu());
             }
         }
         Ok(())

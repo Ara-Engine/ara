@@ -246,9 +246,9 @@ impl Windowed {
         if loading.present.is_none() {
             // SAFETY: This window and shared device outlive the swapchain, which
             // is transferred to the game owner after completed worker preparation.
-            loading.present = Some(unsafe { Present::new(loading.gpu.context(), &self.window)? });
+            loading.present = Some(unsafe { Present::create(&loading.gpu, &self.window)? });
         }
-        let image = loading.gpu.native_image(loading.image)?;
+        let image = loading.image;
         // SAFETY: draw completed this CopySource image. The worker uses a distinct
         // queue, or the caller serializes both owners on single-queue adapters.
         let result = unsafe {
@@ -256,7 +256,7 @@ impl Windowed {
                 .present
                 .as_mut()
                 .context("loading swapchain")?
-                .display(loading.gpu.context(), image, SIZE)
+                .present_image(&loading.gpu, image, SIZE)
         };
         if result
             .as_ref()
@@ -279,7 +279,7 @@ impl Loading {
             // neither these semaphores nor this surface; no global queue wait
             // may block close/resize behind the game's uploads.
             unsafe {
-                present.destroy(self.gpu.context());
+                present.retire(&self.gpu);
             }
         }
     }
