@@ -43,8 +43,7 @@ impl View {
             self.shown = None;
             self.imported = None;
             // SAFETY: The device outlives the import; this thread owns its queue.
-            self.imported =
-                Some(unsafe { ImportedSurface::create(gpu, state.surface).unwrap() });
+            self.imported = Some(unsafe { ImportedSurface::create(gpu, state.surface).unwrap() });
         }
         let frame = surfaces.take(world, 0)?;
         let imported = self.imported.as_mut()?;

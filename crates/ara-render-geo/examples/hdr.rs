@@ -135,11 +135,7 @@ fn main() -> Result<()> {
             }
             // SAFETY: Output is completed CopySource and encoded for this swapchain.
             unsafe {
-                present.present_encoded(&gpu,
-                    output.output(),
-                    size,
-                    settings.mode,
-                )?;
+                present.present_encoded(&gpu, output.output(), size, settings.mode)?;
             }
         }
         gpu.assert_clean().context("native HDR ramp validation")?;

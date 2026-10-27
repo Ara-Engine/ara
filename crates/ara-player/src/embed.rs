@@ -260,12 +260,8 @@ impl Embedded {
         // SAFETY: The presenter completed this RGBA8 CopySource image at output_size
         // on the ring's device; this thread owns its queues.
         let Some(published) = (unsafe {
-            self.ring.publish_image(
-                renderer.gpu(),
-                source,
-                presenter.output_size(),
-                frame.tick,
-            )?
+            self.ring
+                .publish_image(renderer.gpu(), source, presenter.output_size(), frame.tick)?
         }) else {
             return Ok(None);
         };

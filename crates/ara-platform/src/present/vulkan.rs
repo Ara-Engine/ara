@@ -452,7 +452,12 @@ impl Present {
     /// Blit a completed engine image of `size` ([`Self::display`]).
     /// # Safety
     /// `image` is a completed CopySource image on `gpu`; both owners are live.
-    pub unsafe fn present_image(&mut self, gpu: &GpuDevice, image: Image, size: [u32; 2]) -> Result<()> {
+    pub unsafe fn present_image(
+        &mut self,
+        gpu: &GpuDevice,
+        image: Image,
+        size: [u32; 2],
+    ) -> Result<()> {
         let source = gpu.native_image(image)?;
         // SAFETY: forwarded caller contract for the native image of `image`.
         unsafe { self.display(gpu.context(), source, size) }

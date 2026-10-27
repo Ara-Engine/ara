@@ -9,7 +9,9 @@ use anyhow::{Context, Result, bail, ensure};
 use ara_color::{OutputMode, OutputSettings};
 use ara_gpu::metal::present::Presenter;
 use ara_gpu::{GpuDevice, Image, vk};
-use sdl3_sys::metal::{SDL_Metal_CreateView, SDL_Metal_DestroyView, SDL_Metal_GetLayer, SDL_MetalView};
+use sdl3_sys::metal::{
+    SDL_Metal_CreateView, SDL_Metal_DestroyView, SDL_Metal_GetLayer, SDL_MetalView,
+};
 use std::ptr::NonNull;
 
 /// An SDL Metal view and the presenter drawing into its layer.
@@ -68,7 +70,12 @@ impl Present {
     /// Present a completed engine image, scaled to the drawable.
     /// # Safety
     /// `image` is a completed transfer source on `gpu`; both owners are live.
-    pub unsafe fn present_image(&mut self, gpu: &GpuDevice, image: Image, _size: [u32; 2]) -> Result<()> {
+    pub unsafe fn present_image(
+        &mut self,
+        gpu: &GpuDevice,
+        image: Image,
+        _size: [u32; 2],
+    ) -> Result<()> {
         self.presenter
             .as_mut()
             .context("presentation was retired")?
