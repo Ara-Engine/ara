@@ -145,6 +145,6 @@ updates: `cargo run -p ara-gpu --example heap_probe_manifest`, then
 `tests/external.rs` (Windows) exports a ring on one device, imports it on a second,
 cycles every slot through a resize and checks pixels and validation on both.
 Metal 4 (macOS; `src/metal/mod.rs` holds the contract). Portable aliases: `GpuDevice`, `GpuCompletion`, `NativeImage`, `NativeView`, `external`.
-Converter ABI checked against MSC 4.0.3 (`abi.rs`: constants, four tables, then the static-sampler table); one MTL4Compiler + archive serializer per process (`cache.rs`, flushed once, never under shader validation); `native::pool` around Metal calls.
+Converter ABI checked against MSC 4.0.3 (`abi.rs`: constants, four tables, then the static-sampler table); one MTL4Compiler + archive serializer per process (`cache.rs`, flushed once, never under shader validation); one timestamp heap per device, shared as slot ranges (`timestamps.rs`; 32 heaps per process); `native::pool` around Metal calls.
 Presentation and shared-surface copies blit, or scale/convert with MPS, on a classic queue (`transfer.rs`); `adopt_texture` shares textures across devices of the GPU (UI adapter, loading split).
 Test: `MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1 cargo test -p ara-gpu --lib metal`, and once without shader validation; Vulkan GPU tests are ignored on macOS.
