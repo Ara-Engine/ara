@@ -50,6 +50,8 @@ pub struct ModelMaterial {
     /// KHR_materials_ior and KHR_materials_volume: how transmitted light refracts
     /// and is absorbed.
     pub volume: ModelVolume,
+    /// glTF `doubleSided`: back faces render, lit on their own side.
+    pub double_sided: bool,
     /// Alpha mode: 0 opaque, 1 mask, 2 blend.
     pub alpha_mode: u32,
     /// Mask cutoff.
@@ -130,6 +132,7 @@ pub(super) fn decode(
                 .as_f64()
                 .map_or(f32::INFINITY, |d| d as f32),
         },
+        double_sided: m["doubleSided"].as_bool().unwrap_or(false),
         alpha_mode: match m["alphaMode"].as_str() {
             Some("MASK") => 1,
             Some("BLEND") => 2,

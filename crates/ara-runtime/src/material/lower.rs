@@ -196,6 +196,7 @@ fn empty(name: &str) -> ModelMaterial {
         transmission_texture: None,
         transmission_uv: Default::default(),
         volume: Default::default(),
+        double_sided: false,
         alpha_mode: 0,
         alpha_cutoff: 0.5,
     }

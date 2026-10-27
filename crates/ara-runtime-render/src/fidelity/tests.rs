@@ -63,6 +63,7 @@ fn model_factors_alpha_emission_and_cooked_lod_reach_fidelity() {
             transmission_texture: None,
             transmission_uv: Default::default(),
             volume: Default::default(),
+            double_sided: false,
             alpha_mode: 1,
             alpha_cutoff: 0.4,
         }],
@@ -223,6 +224,7 @@ fn every_pbr_map_is_resolved_once_per_model_generation() {
         transmission_texture: None,
         transmission_uv: Default::default(),
         volume: Default::default(),
+        double_sided: false,
         alpha_mode: 2,
         alpha_cutoff: 0.5,
     };

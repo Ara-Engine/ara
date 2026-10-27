@@ -2,7 +2,7 @@ use super::*;
 use crate::material::Source;
 use ara_render::{
     instanced::NO_TEXTURE,
-    scene::{BASE_COLOR_DECODE_SRGB, EMISSIVE_DECODE_SRGB},
+    scene::{BASE_COLOR_DECODE_SRGB, DOUBLE_SIDED, EMISSIVE_DECODE_SRGB},
 };
 use ara_runtime::model::TextureTransform;
 use ara_texture_stream::{NativeSource, NativeView};
@@ -85,7 +85,8 @@ fn properties(out: &mut Material, source: Source<'_>) {
     out.pbr.surface = [m.metallic, m.normal_scale, 1.0, m.alpha_cutoff];
     out.pbr.flags[0] = m.alpha_mode;
     out.pbr.flags[1] = (u32::from(source.decode(0)) * BASE_COLOR_DECODE_SRGB)
-        | (u32::from(source.decode(3)) * EMISSIVE_DECODE_SRGB);
+        | (u32::from(source.decode(3)) * EMISSIVE_DECODE_SRGB)
+        | (u32::from(m.double_sided) * DOUBLE_SIDED);
     out.extras.uv = [
         m.base_color_uv,
         m.normal_uv,

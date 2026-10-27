@@ -236,12 +236,25 @@ Surface surface<let SIDES:int>(Varying v){
 }
 float2 motion(Varying v){float2 now=v.currentClip.xy/v.currentClip.w,previous=v.previousClip.xy/v.previousClip.w;return (now-previous)*float2(0.5,-0.5);}
 struct GBuffer {float4 albedo:SV_Target0;float4 normal:SV_Target1;float4 material:SV_Target2;float4 emissive:SV_Target3;float id:SV_Target4;float2 velocity:SV_Target5;};
-GBuffer geometry<let SIDES:int>(Varying v){Surface s=surface<SIDES>(v);GBuffer g;g.albedo=float4(s.albedo,s.ao);g.normal=gbufferEncodeNormal(s.normal,1);g.material=gbufferEncodeMaterial(s.roughness,s.metal,material(v.material).pbr.flags.x==1?0:1,1);g.emissive=gbufferEncodeEmissive(s.emissive,1);g.id=float(v.id);g.velocity=motion(v);return g;}
+// glTF doubleSided (ara_render::scene::DOUBLE_SIDED in material flags.y).
+static const uint DOUBLE_SIDED=1u<<28;
+// Whether a G-buffer fragment is a double-sided material's back face, lit on its own
+// side (glTF: back faces reverse their normals before lighting). The rasterizer's
+// winding decides (SV_IsFrontFace: counter-clockwise front, as -fvk-invert-y keeps
+// glTF's), corrected for mirrored instances whose transform reverses it (the instance
+// row's determinant sign, meta.w); the interpolated normal must agree it faces away,
+// so a front face is never flipped and a silhouette never misjudged.
+bool backFace(Varying v,bool front){
+    if((material(v.material).pbr.flags.y&DOUBLE_SIDED)==0)return false;
+    bool mirrored=asfloat(buffers[NonUniformResourceIndex(root.material)].Load(128+(v.id-1)*192+12))<0;
+    return front==mirrored && dot(v.normal,frame().camera.xyz-v.world)<0;
+}
+GBuffer geometry<let SIDES:int>(Varying v,bool front){Surface s=surface<SIDES>(v);if(backFace(v,front))s.normal=-s.normal;GBuffer g;g.albedo=float4(s.albedo,s.ao);g.normal=gbufferEncodeNormal(s.normal,1);g.material=gbufferEncodeMaterial(s.roughness,s.metal,material(v.material).pbr.flags.x==1?0:1,1);g.emissive=gbufferEncodeEmissive(s.emissive,1);g.id=float(v.id);g.velocity=motion(v);return g;}
 [shader("fragment")]
-GBuffer nativeGeometryFragment(Varying v){return geometry<1>(v);}
+GBuffer nativeGeometryFragment(Varying v,bool front:SV_IsFrontFace){return geometry<1>(v,front);}
 // The G-buffer for presets without terrain detail: terrain keeps its top projection.
 [shader("fragment")]
-GBuffer nativeGeometryTopFragment(Varying v){return geometry<0>(v);}
+GBuffer nativeGeometryTopFragment(Varying v,bool front:SV_IsFrontFace){return geometry<0>(v,front);}
 [shader("fragment")]
 void nativeShadowFragment(ShadowVarying shadow){Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);if(m.pbr.flags.x==1 && sampleMap(m,0,v).a*m.pbr.color.a<m.pbr.surface.w)discard;}
 // Translucent sun casters' film opacity (look-translucent.slangh): coverage times the
