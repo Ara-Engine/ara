@@ -2199,6 +2199,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "accesskit 0.25.1",
  "ara-doc",
+ "ara-editor-gpu",
  "ara-json",
  "ara-schema",
  "ara-ui",
