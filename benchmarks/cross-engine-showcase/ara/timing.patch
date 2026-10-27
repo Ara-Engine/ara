@@ -1,0 +1,471 @@
+diff --git a/crates/ara-editor/src/app/responsiveness.rs b/crates/ara-editor/src/app/responsiveness.rs
+index 29497e0..b857319 100644
+--- a/crates/ara-editor/src/app/responsiveness.rs
++++ b/crates/ara-editor/src/app/responsiveness.rs
+@@ -140,6 +140,8 @@ struct Pending {
+ /// One frame's measurements, filled in by the loop.
+ #[derive(Default, serde::Serialize)]
+ pub(super) struct Sample {
++    /// Wall interval between presented editor frames for the cross-engine probe.
++    pub frame_interval_ms: Option<f64>,
+     pub cpu_ms: f64,
+     /// Running the injected command (theme rows), before routing.
+     pub inject_ms: f64,
+@@ -222,6 +224,9 @@ pub(super) struct Probe {
+     startup: Startup,
+     /// When the current Settle act began.
+     settle_began: Option<Instant>,
++    benchmark_orbit_began: Option<Instant>,
++    benchmark_path: Option<Vec<BenchmarkCamera>>,
++    benchmark_last_present: Option<Instant>,
+     /// Whether a Settle act gave up at `SETTLE_TIMEOUT`.
+     settle_timed_out: bool,
+     /// The entity the edit, typing and drag acts work on, found once: resolving the
+@@ -267,6 +272,16 @@ impl Probe {
+         if settle == Some(Settle::After) {
+             acts.push(Act::Settle);
+         }
++        if std::env::var_os("ARA_BENCH_EDITOR_ONLY").is_some() {
++            acts.clear();
++            acts.push(Act::Settle);
++            acts.push(Act::Idle("idle", 120));
++            acts.push(Act::Orbit(ORBIT_FRAMES));
++            for _ in 0..3 {
++                acts.push(Act::Play);
++                acts.push(Act::Idle("after-play", 60));
++            }
++        }
+         Self {
+             output: output.into(),
+             acts,
+@@ -282,6 +297,9 @@ impl Probe {
+             plays: Vec::new(),
+             startup: Startup::default(),
+             settle_began: None,
++            benchmark_orbit_began: None,
++            benchmark_path: None,
++            benchmark_last_present: None,
+             settle_timed_out: false,
+             mesh: None,
+         }
+@@ -344,6 +362,16 @@ impl Probe {
+         scale: f32,
+         events: &mut Vec<(u32, Event)>,
+     ) -> ara_ui::Result<()> {
++        if self.benchmark_path.is_none()
++            && let Some(path) = std::env::var_os("ARA_BENCH_MANIFEST")
++        {
++            let manifest: BenchmarkManifest = serde_json::from_slice(&std::fs::read(path)?)?;
++            if manifest.path.is_empty() {
++                return Err("benchmark camera path is empty".into());
++            }
++            self.benchmark_path = Some(manifest.path);
++            editor.action("editor.preferences", json!({"renderQuality":"high"}))?;
++        }
+         let at = |point: [f32; 2]| [point[0] / scale, point[1] / scale];
+         let push = |events: &mut Vec<(u32, Event)>, event| events.push((0, event));
+         self.injected = None;
+@@ -510,7 +538,21 @@ impl Probe {
+             }
+             Some(Act::Orbit(_)) => {
+                 let mut camera = editor.state.camera;
+-                camera.yaw += ORBIT_STEP;
++                if let Some(path) = &self.benchmark_path {
++                    let elapsed = self
++                        .benchmark_orbit_began
++                        .get_or_insert_with(Instant::now)
++                        .elapsed()
++                        .as_secs_f64();
++                    let view = &path[((elapsed * 60.) as usize).min(path.len() - 1)];
++                    let position = glam::Vec3::from_array(view.position);
++                    let target = glam::Vec3::from_array(view.target);
++                    camera.distance = position.distance(target);
++                    camera.look_from(position, target - position);
++                    editor.action("editor.camera", json!({"fovYDegrees":view.fov}))?;
++                } else {
++                    camera.yaw += ORBIT_STEP;
++                }
+                 self.injected = Some(Instant::now());
+                 set_camera(editor, &camera)?;
+             }
+@@ -534,6 +576,11 @@ impl Probe {
+         sample.rows_ms = stats.rows_ms;
+         sample.work = stats.work;
+         if sample.presented {
++            let now = Instant::now();
++            sample.frame_interval_ms = self
++                .benchmark_last_present
++                .map(|previous| now.duration_since(previous).as_secs_f64() * 1000.);
++            self.benchmark_last_present = Some(now);
+             sample.input_to_present_ms = self.injected.map(|t| t.elapsed().as_secs_f64() * 1000.);
+         }
+         sample.importing = shell
+@@ -541,7 +588,17 @@ impl Probe {
+             .is_none_or(|(pending, _, _)| pending > 0);
+         self.startup_frame(&sample);
+         let game_frame = sample.game_frame;
+-        self.samples.push((self.label(), sample));
++        let label = if self.benchmark_path.is_some()
++            && self.label() == "scene-orbit"
++            && self
++                .benchmark_orbit_began
++                .is_some_and(|t| t.elapsed() < Duration::from_secs(2))
++        {
++            "scene-orbit-warmup".into()
++        } else {
++            self.label()
++        };
++        self.samples.push((label, sample));
+         if std::mem::take(&mut self.sleep_after) {
+             std::thread::sleep(SLOW);
+         }
+@@ -590,7 +647,16 @@ impl Probe {
+             Some(Act::Theme(_) | Act::Edit) => self.age >= 8,
+             Some(Act::Type(typed)) => self.age >= 12 + typed.text(self.index).len() as u32,
+             Some(Act::Drag) => self.age >= 10 + DRAG_FRAMES,
+-            Some(Act::Orbit(frames)) => self.age >= *frames,
++            Some(Act::Orbit(frames)) => {
++                if std::env::var_os("ARA_BENCH_EDITOR_ORBIT").is_some() {
++                    self.benchmark_orbit_began
++                        .get_or_insert_with(Instant::now)
++                        .elapsed()
++                        >= Duration::from_secs(12)
++                } else {
++                    self.age >= *frames
++                }
++            }
+             Some(Act::Settle) => {
+                 let began = *self.settle_began.get_or_insert_with(Instant::now);
+                 self.settle_timed_out = began.elapsed() > SETTLE_TIMEOUT;
+@@ -703,6 +769,19 @@ impl Probe {
+     }
+ }
+ 
++/// Blender-authored camera samples used by the isolated benchmark adapter.
++#[derive(serde::Deserialize)]
++struct BenchmarkCamera {
++    position: [f32; 3],
++    target: [f32; 3],
++    fov: f32,
++}
++
++#[derive(serde::Deserialize)]
++struct BenchmarkManifest {
++    path: Vec<BenchmarkCamera>,
++}
++
+ impl Probe {
+     /// `mesh_entity`, found on first use and kept (the probe's edits keep its ID).
+     fn mesh(&mut self, editor: &Editor) -> ara_ui::Result<String> {
+diff --git a/crates/ara-platform/src/present/vulkan.rs b/crates/ara-platform/src/present/vulkan.rs
+index f264ba3..a3c4d7e 100644
+--- a/crates/ara-platform/src/present/vulkan.rs
++++ b/crates/ara-platform/src/present/vulkan.rs
+@@ -129,7 +129,7 @@ impl Present {
+                     .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+                     .pre_transform(caps.current_transform)
+                     .composite_alpha(alpha)
+-                    .present_mode(vk::PresentModeKHR::FIFO)
++                    .present_mode(if std::env::var_os("ARA_BENCH_VISIBLE").is_some() { vk::PresentModeKHR::IMMEDIATE } else { vk::PresentModeKHR::FIFO })
+                     .clipped(true),
+                 None,
+             )?;
+diff --git a/crates/ara-platform/src/window/game.rs b/crates/ara-platform/src/window/game.rs
+index 307b430..0805e8a 100644
+--- a/crates/ara-platform/src/window/game.rs
++++ b/crates/ara-platform/src/window/game.rs
+@@ -24,11 +24,16 @@ impl Window {
+         if hidden {
+             return Ok(window);
+         }
+-        window.enter(mode, size)?;
++        let benchmark = std::env::var_os("ARA_BENCH_VISIBLE").is_some();
++        window.enter(if benchmark { GameWindowMode::Windowed } else { mode }, size)?;
+         // SAFETY: This main-thread owner retains its SDL window.
+         unsafe {
++            if benchmark {
++                ensure!(SDL_SetWindowBordered(window.handle, false), "SDL benchmark borderless: {}", error());
++            }
+             ensure!(SDL_ShowWindow(window.handle), "SDL show: {}", error());
+         }
++        if benchmark { window.set_size(size)?; }
+         // Resolve asynchronous fullscreen changes before sizing the loading swapchain,
+         // so its handoff never recreates it at the first game frame.
+         window.sync()?;
+diff --git a/crates/ara-player/src/standalone.rs b/crates/ara-player/src/standalone.rs
+index 221ceeb..a973965 100644
+--- a/crates/ara-player/src/standalone.rs
++++ b/crates/ara-player/src/standalone.rs
+@@ -8,6 +8,7 @@ use serde::Deserialize;
+ use serde_json::json;
+ use std::{path::PathBuf, sync::Arc, time::Instant};
+ mod perf;
++mod benchmark;
+ mod startup;
+ #[cfg(test)]
+ mod tests;
+@@ -196,6 +197,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
+     let started = world.start(args.standalone.headless, build_ms)?;
+     phases.insert("world_ready_ms", began.elapsed().as_millis());
+     let mut frame = RenderFrame::default();
++    let mut benchmark = benchmark::Benchmark::load(size)?;
+     presenter.set_quality(quality);
+     presenter.set_render_options(render_options);
+     phases
+@@ -254,7 +256,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
+             let now = Instant::now();
+             {
+                 ara_gpu::cpu_scope!("Player.advance");
+-                world.runtime.advance(now.duration_since(previous))?;
++                world.runtime.advance(if benchmark.fixed_step() { std::time::Duration::from_secs_f64(1. / 60.) } else { now.duration_since(previous) })?;
+             }
+             previous = now;
+             world.mark();
+@@ -262,6 +264,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
+             {
+                 ara_gpu::cpu_scope!("Player.extract");
+                 world.runtime.extract(&mut frame);
++                benchmark.camera(&mut frame, perf.has_samples());
+             }
+             let simulation_done = Instant::now();
+             if is_2d {
+@@ -321,6 +324,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
+                     .or_insert_with(|| began.elapsed().as_millis());
+             }
+             frames += 1;
++            if benchmark.capture(&mut *presenter, &frame)? { break; }
+             #[cfg(feature = "tracy")]
+             if let Some(client) = ara_gpu::__tracy::Client::running() {
+                 client.frame_mark();
+diff --git a/crates/ara-player/src/standalone/perf.rs b/crates/ara-player/src/standalone/perf.rs
+index 9a145df..058eba4 100644
+--- a/crates/ara-player/src/standalone/perf.rs
++++ b/crates/ara-player/src/standalone/perf.rs
+@@ -83,6 +83,7 @@ pub(super) struct Window {
+     ready_status: Option<ara_runtime_render::PresentationReadiness>,
+     seen: u32,
+     measured: u32,
++    benchmark_started: Option<Instant>,
+     collecting: bool,
+     next_control: Instant,
+     waiting_for_shader_epoch: Option<u64>,
+@@ -106,6 +107,7 @@ impl Window {
+     pub fn offscreen(&self) -> bool {
+         self.offscreen
+     }
++    pub fn has_samples(&self) -> bool { self.measured > 0 }
+     pub fn enabled(&self) -> bool {
+         self.options.perf_output.is_some()
+     }
+@@ -122,7 +124,7 @@ impl Window {
+             Duration::from_millis(options.perf_ready_timeout_ms),
+         );
+         Self {
+-            offscreen: offscreen || collecting,
++            offscreen: offscreen || (collecting && std::env::var_os("ARA_BENCH_VISIBLE").is_none()),
+             no_present: false,
+             windowed: false,
+             options,
+@@ -142,6 +144,7 @@ impl Window {
+             ready_status: None,
+             seen: 0,
+             measured: 0,
++            benchmark_started: None,
+             collecting,
+             next_control: Instant::now(),
+             waiting_for_shader_epoch: None,
+@@ -360,8 +363,10 @@ impl Window {
+                 .or_default()
+                 .push(milliseconds);
+         }
++        self.benchmark_started.get_or_insert_with(Instant::now);
+         self.measured += 1;
+-        if self.measured < self.options.perf_frames {
++        let duration_pending = std::env::var("ARA_BENCH_SECONDS").ok().and_then(|v| v.parse::<f64>().ok()).is_some_and(|seconds| self.benchmark_started.is_some_and(|start| start.elapsed().as_secs_f64() < seconds));
++        if duration_pending || (std::env::var_os("ARA_BENCH_SECONDS").is_none() && self.measured < self.options.perf_frames) {
+             return Ok(false);
+         }
+         self.publish(presenter, phases, camera, report::Outcome::Ready)?;
+diff --git a/crates/ara-player/src/standalone/perf/report.rs b/crates/ara-player/src/standalone/perf/report.rs
+index 15deb67..19f95e2 100644
+--- a/crates/ara-player/src/standalone/perf/report.rs
++++ b/crates/ara-player/src/standalone/perf/report.rs
+@@ -47,6 +47,8 @@ impl Window {
+             report["presentation"] = json!("noPresent");
+         }
+         report["presentation_settings"] = self.presentation_settings();
++        if std::env::var_os("ARA_BENCH_VISIBLE").is_some() { report["benchmark_adapter"] = json!("Blender camera path, visible perf, duration window, immediate presentation; rendering algorithms unchanged"); report["presentation_settings"]["present_mode"] = json!("immediate"); }
++        report["raw_wall_ms"] = json!(self.frames.get("frame_ms"));
+         report["gpu_submission_counters"] = presenter.renderer().map_or(Value::Null, |renderer| {
+             json!({"scope":"Cumulative renderer backend only; excludes native WSI and UI submissions",
+                 "backend":renderer.gpu().submission_stats()})
+diff --git a/crates/ara-player/src/standalone/benchmark.rs b/crates/ara-player/src/standalone/benchmark.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-player/src/standalone/benchmark.rs
+@@ -0,0 +1,165 @@
++//! Benchmark-only camera and capture adapter; no rendering algorithm changes.
++use anyhow::{Context, Result, ensure};
++use ara_runtime::extract::{CameraView, RenderFrame};
++use ara_runtime_render::Presenter;
++use serde::Deserialize;
++use std::{
++    io::Write,
++    path::PathBuf,
++    process::{Child, ChildStdin, Command, Stdio},
++    time::Instant,
++};
++
++#[derive(Deserialize)]
++struct View {
++    position: [f32; 3],
++    target: [f32; 3],
++    fov: f32,
++    #[serde(default)]
++    name: String,
++}
++#[derive(Deserialize)]
++struct Manifest {
++    shots: Vec<View>,
++    path: Vec<View>,
++}
++pub(super) struct Benchmark {
++    manifest: Option<Manifest>,
++    mode: String,
++    output: PathBuf,
++    size: [u32; 2],
++    started: Option<Instant>,
++    frame: usize,
++    shot: usize,
++    encoder: Option<(Child, ChildStdin)>,
++}
++impl Benchmark {
++    pub fn load(size: [u32; 2]) -> Result<Self> {
++        let manifest = std::env::var_os("ARA_BENCH_MANIFEST")
++            .map(|p| -> Result<Manifest> { Ok(serde_json::from_slice(&std::fs::read(p)?)?) })
++            .transpose()?;
++        Ok(Self {
++            manifest,
++            mode: std::env::var("ARA_BENCH_MODE").unwrap_or_else(|_| "timing".into()),
++            output: std::env::var_os("ARA_BENCH_OUTPUT")
++                .map(PathBuf::from)
++                .unwrap_or_else(|| PathBuf::from(".")),
++            size,
++            started: None,
++            frame: 0,
++            shot: 0,
++            encoder: None,
++        })
++    }
++    pub fn fixed_step(&self) -> bool {
++        self.manifest.is_some() && self.mode == "video"
++    }
++    pub fn camera(&mut self, frame: &mut RenderFrame, sampling: bool) {
++        let Some(manifest) = &self.manifest else {
++            return;
++        };
++        if sampling {
++            self.started.get_or_insert_with(Instant::now);
++        }
++        let cursor = if self.mode == "video" {
++            self.frame.saturating_sub(180) as f64
++        } else {
++            self.started.map_or(0., |s| s.elapsed().as_secs_f64() * 60.)
++        };
++        let index = (cursor as usize).min(manifest.path.len() - 1);
++        let view = if self.mode == "shots" {
++            &manifest.shots[self.shot.min(manifest.shots.len() - 1)]
++        } else {
++            &manifest.path[index]
++        };
++        let next = if self.mode == "timing" {
++            &manifest.path[(index + 1).min(manifest.path.len() - 1)]
++        } else {
++            view
++        };
++        let fraction = if self.mode == "timing" {
++            cursor.fract() as f32
++        } else {
++            0.
++        };
++        let p = glam::Vec3::from_array(view.position)
++            .lerp(glam::Vec3::from_array(next.position), fraction);
++        let target =
++            glam::Vec3::from_array(view.target).lerp(glam::Vec3::from_array(next.target), fraction);
++        let f = (target - p).normalize();
++        frame.camera = Some(CameraView {
++            position: p.to_array(),
++            forward: f.to_array(),
++            fov: view.fov + (next.fov - view.fov) * fraction,
++        });
++    }
++    pub fn capture(&mut self, presenter: &mut Presenter, frame: &RenderFrame) -> Result<bool> {
++        if self.manifest.is_none() || self.mode == "timing" {
++            return Ok(false);
++        }
++        self.frame += 1;
++        if self.mode == "shots" && self.frame % 120 == 0 {
++            std::fs::create_dir_all(&self.output)?;
++            let manifest = self.manifest.as_ref().context("benchmark manifest")?;
++            let capture = presenter.capture_presented(frame, self.size, None, 0)?;
++            capture.image.save(
++                self.output
++                    .join(format!("{}.png", manifest.shots[self.shot].name)),
++            )?;
++            self.shot += 1;
++            return Ok(self.shot == manifest.shots.len());
++        }
++        if self.mode == "video" && self.frame > 180 {
++            if self.encoder.is_none() {
++                let parent = self.output.parent().context("video parent")?;
++                std::fs::create_dir_all(parent)?;
++                let dimensions = format!("{}x{}", self.size[0], self.size[1]);
++                let mut process = Command::new("ffmpeg")
++                    .args([
++                        "-y",
++                        "-v",
++                        "warning",
++                        "-f",
++                        "rawvideo",
++                        "-pixel_format",
++                        "rgba",
++                        "-video_size",
++                        &dimensions,
++                        "-framerate",
++                        "60",
++                        "-i",
++                        "pipe:0",
++                        "-an",
++                        "-c:v",
++                        "hevc_nvenc",
++                        "-preset",
++                        "p6",
++                        "-cq",
++                        "18",
++                        "-pix_fmt",
++                        "yuv420p",
++                        "-tag:v",
++                        "hvc1",
++                    ])
++                    .arg(&self.output)
++                    .stdin(Stdio::piped())
++                    .spawn()?;
++                let stdin = process.stdin.take().context("ffmpeg stdin")?;
++                self.encoder = Some((process, stdin));
++            }
++            let capture = presenter.capture_presented(frame, self.size, None, 0)?;
++            self.encoder
++                .as_mut()
++                .context("video encoder")?
++                .1
++                .write_all(capture.image.as_raw())?;
++            if self.frame >= 1380 {
++                let (mut process, stdin) = self.encoder.take().context("video encoder")?;
++                drop(stdin);
++                ensure!(process.wait()?.success(), "ffmpeg failed");
++                return Ok(true);
++            }
++        }
++        Ok(false)
++    }
++}

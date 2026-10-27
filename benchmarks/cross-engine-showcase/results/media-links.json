@@ -1,0 +1,14 @@
+{
+  "showcase/ara": {
+    "4k60": "https://media.snist.dev/muRgW38_Zs398g--9hN5LQ/4k60-web.mp4",
+    "1080p60": "https://media.snist.dev/s7UU02YN5RJ95lrwjaP8KQ/1080p60.mp4"
+  },
+  "showcase/unity": {
+    "4k60": "https://media.snist.dev/QGkaGNkT3xzvufPpoJOxBQ/4k60-web.mp4",
+    "1080p60": "https://media.snist.dev/r7eqtGZp60Qu54RIx4v1pw/1080p60.mp4"
+  },
+  "showcase/unreal": {
+    "4k60": "https://media.snist.dev/VT5AnNnTUhpWJP4faTzGDQ/4k60-web.mp4",
+    "1080p60": "https://media.snist.dev/XWBLFyjPzh1tKfgQ1w6p9w/1080p60.mp4"
+  }
+}

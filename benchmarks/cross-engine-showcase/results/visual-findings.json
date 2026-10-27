@@ -1,0 +1,42 @@
+[
+  {
+    "shot": "materials",
+    "title": "Circular reflection failures",
+    "text": "Ara has a nearly black circular hole on the chrome sphere, a dark red/brown disk on the copper sphere, and a flat circular patch on the rough silver sphere. Unreal avoids these large circles, but its chrome center still falls back to a broad gray reflection. Cycles resolves the surrounding props and mannequins. Reflection fallback/compositing is a hypothesis, not a proven shader diagnosis."
+  },
+  {
+    "shot": "materials",
+    "title": "Glossy red reflection detail",
+    "text": "Ara\u2019s red sphere has a broad, unusually uniform red patch. Unreal shows more surrounding-object reflection structure; Cycles shows clearer silhouettes and a different highlight response. Roughness, screen-space coverage and tonemapping all contribute; the still alone does not isolate the cause."
+  },
+  {
+    "shot": "stage",
+    "title": "Lantern glass and metal",
+    "text": "Ara\u2019s lantern is pale and ghost-like, including much of its frame and base. Unreal and Cycles retain a dark metal frame with distinct glass regions. This looks like a material/transparency handling difference affecting more than glass tint; the exact import or shader fault is not established."
+  },
+  {
+    "shot": "materials",
+    "title": "Translucent sphere appearance",
+    "text": "The rear mint and clear spheres look fuller and milkier in Ara. Unreal and Cycles reveal more of the background through these spheres. Unreal also has visible faceting and does not reproduce the Cycles transmission exactly."
+  },
+  {
+    "shot": "stage",
+    "title": "Cast-shadow edges and grounding",
+    "text": "The main cast-shadow direction agrees across the views. Ara\u2019s long floor shadows have relatively hard, uniform edges; Cycles has more gradual penumbrae. Unreal has stronger darkening near some contacts. This is a visible shadow/filtering difference, not evidence of an incorrect sun angle."
+  },
+  {
+    "shot": "props",
+    "title": "Contact darkening and indirect-light gradients",
+    "text": "Ara has less darkening around several pedestal bases and prop contacts than Unreal, and its pedestal sides read more uniformly. Cycles shows more localized contact shading without Unreal\u2019s broad darkening. These images combine GI, AO and shadow terms, so they cannot attribute the difference to one subsystem or rank dynamic GI response."
+  },
+  {
+    "shot": "props",
+    "title": "Diagonal shading on flat pedestals",
+    "text": "Ara shows broad diagonal tonal patches across otherwise flat white pedestal faces, especially the tripod pedestal. They are much less apparent in Unreal and Cycles. Geometry, normals and lighting/compositing would need separate inspection to identify the cause."
+  },
+  {
+    "shot": "stage",
+    "title": "Overall tone and background",
+    "text": "Ara\u2019s background is lighter than Unreal and Cycles, with different floor and white-pedestal contrast despite the fixed common EV. Filmic/ACES/AgX and approximate sky/lighting responses differ. No exposure fitting was used to hide these differences."
+  }
+]

@@ -1,0 +1,440 @@
+[
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "condition": "active-discord-call",
+    "width": 2560,
+    "runs": 5,
+    "loading_ms": 600,
+    "scene_ms": 1572,
+    "spread": {
+      "loading_ms": {
+        "min": 556,
+        "max": 642
+      },
+      "scene_ms": {
+        "min": 1555,
+        "max": 1735
+      }
+    },
+    "per_run": [
+      {
+        "loading_ms": 642,
+        "scene_ms": 1555
+      },
+      {
+        "loading_ms": 602,
+        "scene_ms": 1566
+      },
+      {
+        "loading_ms": 600,
+        "scene_ms": 1735
+      },
+      {
+        "loading_ms": 556,
+        "scene_ms": 1577
+      },
+      {
+        "loading_ms": 567,
+        "scene_ms": 1572
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "condition": "active-discord-call",
+    "width": 3840,
+    "runs": 5,
+    "loading_ms": 569,
+    "scene_ms": 1549,
+    "spread": {
+      "loading_ms": {
+        "min": 540,
+        "max": 676
+      },
+      "scene_ms": {
+        "min": 1534,
+        "max": 1623
+      }
+    },
+    "per_run": [
+      {
+        "loading_ms": 569,
+        "scene_ms": 1549
+      },
+      {
+        "loading_ms": 597,
+        "scene_ms": 1563
+      },
+      {
+        "loading_ms": 540,
+        "scene_ms": 1539
+      },
+      {
+        "loading_ms": 676,
+        "scene_ms": 1623
+      },
+      {
+        "loading_ms": 556,
+        "scene_ms": 1534
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unity",
+    "condition": "active-discord-call",
+    "width": 2560,
+    "runs": 5,
+    "scene_callback_ms": 3593.5060000000003,
+    "spread": {
+      "scene_callback_ms": {
+        "min": 3567.356,
+        "max": 5083.99
+      }
+    },
+    "per_run": [
+      {
+        "scene_callback_ms": 5083.99
+      },
+      {
+        "scene_callback_ms": 3597.639
+      },
+      {
+        "scene_callback_ms": 3593.5060000000003
+      },
+      {
+        "scene_callback_ms": 3567.733
+      },
+      {
+        "scene_callback_ms": 3567.356
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unity",
+    "condition": "active-discord-call",
+    "width": 3840,
+    "runs": 5,
+    "scene_callback_ms": 3587.18,
+    "spread": {
+      "scene_callback_ms": {
+        "min": 3554.29,
+        "max": 3680.759
+      }
+    },
+    "per_run": [
+      {
+        "scene_callback_ms": 3587.18
+      },
+      {
+        "scene_callback_ms": 3595.345
+      },
+      {
+        "scene_callback_ms": 3554.29
+      },
+      {
+        "scene_callback_ms": 3680.759
+      },
+      {
+        "scene_callback_ms": 3578.941
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unreal",
+    "condition": "active-discord-call",
+    "width": 2560,
+    "runs": 5,
+    "engine_initialized_ms": 3749.1888999938965,
+    "spread": {
+      "engine_initialized_ms": {
+        "min": 3694.8604583740234,
+        "max": 6248.405933380127
+      }
+    },
+    "per_run": [
+      {
+        "engine_initialized_ms": 6248.405933380127
+      },
+      {
+        "engine_initialized_ms": 3934.691905975342
+      },
+      {
+        "engine_initialized_ms": 3694.8604583740234
+      },
+      {
+        "engine_initialized_ms": 3697.3328590393066
+      },
+      {
+        "engine_initialized_ms": 3749.1888999938965
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unreal",
+    "condition": "active-discord-call",
+    "width": 3840,
+    "runs": 5,
+    "engine_initialized_ms": 3682.5459003448486,
+    "spread": {
+      "engine_initialized_ms": {
+        "min": 3650.4859924316406,
+        "max": 3943.8741207122803
+      }
+    },
+    "per_run": [
+      {
+        "engine_initialized_ms": 3650.4859924316406
+      },
+      {
+        "engine_initialized_ms": 3943.8741207122803
+      },
+      {
+        "engine_initialized_ms": 3766.8254375457764
+      },
+      {
+        "engine_initialized_ms": 3656.7535400390625
+      },
+      {
+        "engine_initialized_ms": 3682.5459003448486
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "condition": "quiet-admission-continuous",
+    "width": 2560,
+    "runs": 3,
+    "loading_ms": 549,
+    "scene_ms": 1514,
+    "spread": {
+      "loading_ms": {
+        "min": 539,
+        "max": 635
+      },
+      "scene_ms": {
+        "min": 1480,
+        "max": 1546
+      }
+    },
+    "per_run": [
+      {
+        "loading_ms": 635,
+        "scene_ms": 1546
+      },
+      {
+        "loading_ms": 549,
+        "scene_ms": 1514
+      },
+      {
+        "loading_ms": 539,
+        "scene_ms": 1480
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "condition": "quiet-admission-continuous",
+    "width": 3840,
+    "runs": 3,
+    "loading_ms": 572,
+    "scene_ms": 1615,
+    "spread": {
+      "loading_ms": {
+        "min": 547,
+        "max": 586
+      },
+      "scene_ms": {
+        "min": 1503,
+        "max": 1771
+      }
+    },
+    "per_run": [
+      {
+        "loading_ms": 547,
+        "scene_ms": 1615
+      },
+      {
+        "loading_ms": 572,
+        "scene_ms": 1503
+      },
+      {
+        "loading_ms": 586,
+        "scene_ms": 1771
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "condition": "quiet-admission-original",
+    "width": 2560,
+    "runs": 3,
+    "loading_ms": 611,
+    "scene_ms": 1720,
+    "spread": {
+      "loading_ms": {
+        "min": 579,
+        "max": 655
+      },
+      "scene_ms": {
+        "min": 1666,
+        "max": 1872
+      }
+    },
+    "per_run": [
+      {
+        "loading_ms": 655,
+        "scene_ms": 1872
+      },
+      {
+        "loading_ms": 611,
+        "scene_ms": 1720
+      },
+      {
+        "loading_ms": 579,
+        "scene_ms": 1666
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "ara",
+    "condition": "quiet-admission-original",
+    "width": 3840,
+    "runs": 3,
+    "loading_ms": 570,
+    "scene_ms": 1559,
+    "spread": {
+      "loading_ms": {
+        "min": 541,
+        "max": 634
+      },
+      "scene_ms": {
+        "min": 1542,
+        "max": 1581
+      }
+    },
+    "per_run": [
+      {
+        "loading_ms": 570,
+        "scene_ms": 1542
+      },
+      {
+        "loading_ms": 541,
+        "scene_ms": 1559
+      },
+      {
+        "loading_ms": 634,
+        "scene_ms": 1581
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unity",
+    "condition": "quiet-admission-original",
+    "width": 2560,
+    "runs": 3,
+    "scene_callback_ms": 3531.9379999999996,
+    "spread": {
+      "scene_callback_ms": {
+        "min": 3512.168,
+        "max": 3545.422
+      }
+    },
+    "per_run": [
+      {
+        "scene_callback_ms": 3545.422
+      },
+      {
+        "scene_callback_ms": 3531.9379999999996
+      },
+      {
+        "scene_callback_ms": 3512.168
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unity",
+    "condition": "quiet-admission-original",
+    "width": 3840,
+    "runs": 3,
+    "scene_callback_ms": 3546.604,
+    "spread": {
+      "scene_callback_ms": {
+        "min": 3541.873,
+        "max": 3559.8920000000003
+      }
+    },
+    "per_run": [
+      {
+        "scene_callback_ms": 3559.8920000000003
+      },
+      {
+        "scene_callback_ms": 3541.873
+      },
+      {
+        "scene_callback_ms": 3546.604
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unreal",
+    "condition": "quiet-admission-original",
+    "width": 2560,
+    "runs": 3,
+    "engine_initialized_ms": 4091.804265975952,
+    "spread": {
+      "engine_initialized_ms": {
+        "min": 3539.860963821411,
+        "max": 4969.2840576171875
+      }
+    },
+    "per_run": [
+      {
+        "engine_initialized_ms": 4091.804265975952
+      },
+      {
+        "engine_initialized_ms": 4969.2840576171875
+      },
+      {
+        "engine_initialized_ms": 3539.860963821411
+      }
+    ]
+  },
+  {
+    "scene": "showcase",
+    "engine": "unreal",
+    "condition": "quiet-admission-original",
+    "width": 3840,
+    "runs": 3,
+    "engine_initialized_ms": 3595.875024795532,
+    "spread": {
+      "engine_initialized_ms": {
+        "min": 3572.148323059082,
+        "max": 3702.531576156616
+      }
+    },
+    "per_run": [
+      {
+        "engine_initialized_ms": 3572.148323059082
+      },
+      {
+        "engine_initialized_ms": 3702.531576156616
+      },
+      {
+        "engine_initialized_ms": 3595.875024795532
+      }
+    ]
+  }
+]

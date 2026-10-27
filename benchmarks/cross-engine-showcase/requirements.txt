@@ -1,0 +1,5 @@
+# Install in a benchmark-only Python environment; not an Ara build dependency.
+numpy==2.5.4
+Pillow==13.0.0
+scikit-image==0.26.0
+flip-evaluator==1.7

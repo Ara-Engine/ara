@@ -1,0 +1,29 @@
+{
+  "condition": "active-discord-call",
+  "policy_revision": "1.1-baseline-process-birth",
+  "baseline_start_unix_ms": 1793104445866,
+  "baseline_seconds": 30.255,
+  "dwm_percent": {
+    "mean": 16.389719916843234,
+    "p50": 16.301593805625096,
+    "p95": 17.631948396141524,
+    "min": 15.038013069494532,
+    "max": 18.37086278852222
+  },
+  "discord_percent": {
+    "mean": 2.676550597026674,
+    "p50": 2.625451418456393,
+    "p95": 3.230412854275364,
+    "min": 2.371635338286611,
+    "max": 3.259478713620468
+  },
+  "dwm_allowance_percent": 22.7,
+  "margin_percentage_points": 5,
+  "foreign_threshold_percent": 10,
+  "foreign_sustained_samples": 5,
+  "new_gpu_process_threshold_percent": 0.5,
+  "new_gpu_process_sustained_samples": 2,
+  "baseline_process_scan": "D:\\AraBench\\logs\\guard-active-call-baseline-20261027-153401.txt",
+  "baseline_reading": "D:\\Coding\\projects\\desktop\\snengine\\target\\ara-dev\\gpu-load\\16240-1793104442580.json",
+  "note": "Only DWM allowance is raised; Discord remains charged by the unchanged foreign-sum guard. Games still invalidate on presence. New GPU process identities are checked after each run. An existing process is not new merely because it had zero GPU activity during the idle sample."
+}
