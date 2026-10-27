@@ -496,3 +496,63 @@ fn a_loading_split_is_an_independent_device_on_the_same_gpu() {
     let refused = unsafe { game.split_loading(std::env::temp_dir()) };
     assert!(matches!(refused, Err(GpuError::Contract(_))));
 }
+
+#[test]
+fn another_device_adopts_and_reads_a_texture_of_the_same_gpu() {
+    let mut owner = device();
+    let mut borrower = device();
+    let image = owner
+        .create_image(
+            4,
+            2,
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+        )
+        .expect("image");
+    let mut rec = owner.begin(Queue::Graphics);
+    rec.push(Command::BeginRendering {
+        colors: vec![Attachment {
+            image,
+            clear: Some([1., 0., 0., 1.]),
+        }],
+        depth: None,
+        size: [4, 2],
+    });
+    rec.push(Command::EndRendering);
+    let point = owner.submit(rec.finish(), &[]).expect("clear");
+    owner.resolve(point).expect("resolve");
+    let texture = owner.native_image(image).expect("native texture");
+    let adopted = borrower
+        .adopt_texture(
+            texture.clone(),
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::SAMPLED,
+        )
+        .expect("adopt");
+    // The owner may retire its handle: the borrower retains the texture.
+    Device::retire(&mut owner, Resource::Image(image)).expect("retire");
+    let readback = borrower
+        .create_readback_buffer(4 * 2 * 4)
+        .expect("readback");
+    let mut rec = borrower.begin(Queue::Graphics);
+    rec.push(Command::ReadImage {
+        source: adopted,
+        destination: readback,
+    });
+    let point = borrower.submit(rec.finish(), &[]).expect("read");
+    borrower.resolve(point).expect("resolve");
+    let pixels = words(&borrower.read(readback).expect("pixels"));
+    assert!(
+        pixels.iter().all(|&p| p == 0xff00_00ff),
+        "{:08x}",
+        pixels[0]
+    );
+    assert!(matches!(
+        borrower.adopt_texture(
+            texture,
+            vk::Format::B8G8R8A8_UNORM,
+            vk::ImageUsageFlags::SAMPLED
+        ),
+        Err(GpuError::Contract(_))
+    ));
+}

@@ -28,6 +28,14 @@ pub type GpuCompletion = vulkan::Completion;
 /// Deferred frame completion returned by [`GpuDevice`].
 #[cfg(target_os = "macos")]
 pub type GpuCompletion = metal::Completion;
+/// The native image behind an engine handle (`GpuDevice::native_image`) for native
+/// integrations: the `VkImage` off Apple platforms.
+#[cfg(not(target_os = "macos"))]
+pub type NativeImage = vk::Image;
+/// On Metal the retained texture, which another device of the same GPU can adopt.
+#[cfg(target_os = "macos")]
+pub type NativeImage =
+    objc2::rc::Retained<objc2::runtime::ProtocolObject<dyn objc2_metal::MTLTexture>>;
 /// A same-device view of an engine image for native UI attachments
 /// (`GpuDevice::image_view`): the `VkImageView` off Apple platforms.
 #[cfg(not(target_os = "macos"))]
