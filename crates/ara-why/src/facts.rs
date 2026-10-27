@@ -91,6 +91,11 @@ impl Asset {
 
 /// Read access to the project for explainers.
 pub trait Facts {
+    /// Registered component descriptor, when available. Geometry checks use its
+    /// asset types and procedural-selection hints rather than guessing field names.
+    fn component_schema(&self, _name: &str) -> Option<&ara_schema::TypeDesc> {
+        None
+    }
     /// Resolves an entity selector (`name:Crate`, `e_8b21`, `e_4f9a/e_m4tz`,
     /// `@levels/a.scene#e_8b21`) in `doc`, else in the document holding it, else in
     /// the main scene. Absence and ambiguity are diagnostics with fixes.

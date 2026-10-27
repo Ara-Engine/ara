@@ -136,9 +136,10 @@ headless music playback deterministically. It also renders past the end and loop
 through bounded producers, checking aggregate queue accounting and late audibility.
 `tests/model_authoring.rs` selects source kit nodes through MCP and captures lamp
 factor edits, source-pivot changes and enable/disable transitions in headless Play.
-`tests/csharp.rs` covers published types, C# commands/hot reload and stateful restart;
+`tests/csharp.rs` covers fresh-schema first Play, C# commands/hot reload and stateful restart;
 `tests/valley.rs` covers networked C#, terrain/foliage, streamed cells and audio.
-Both build .NET. Valley fixtures come from `ara-runtime-world`'s `valley` test.
+Both stage Outpost under `AUTHORING_ROOT` with a JSON manifest and build .NET once.
+Valley fixtures come from `ara-runtime-world`'s `valley` test.
 `tests/pending_game.rs` captures pending, failed and published models in a real child.
 `tests/embed.rs` (`--ignored`) exercises `PlayService::surfaces`: 90 demo frames imported on another GPU device, comparisons against captures, raw W input, typed/JSON resize and stop.
 It prints frame latency and per-frame cost.

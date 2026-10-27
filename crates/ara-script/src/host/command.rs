@@ -86,6 +86,7 @@ struct Layouts {
 
 /// One validated undo step, with bytes already in the current layout.
 enum Step {
+    Parent(u64, Option<u64>),
     /// Undo a spawn.
     Despawn(u64),
     /// Undo a despawn: a new entity with these components; later steps naming the old
@@ -301,7 +302,7 @@ impl ScriptHost {
         writes.iter().for_each(|w| component(w.component));
         for a in structural {
             match a {
-                Applied::Spawn { .. } => {}
+                Applied::Spawn { .. } | Applied::Parent { .. } => {}
                 Applied::Despawn { components, .. } => {
                     components.iter().for_each(|(i, _)| component(*i));
                 }
@@ -362,6 +363,12 @@ impl ScriptHost {
         };
         for step in steps {
             match step {
+                Step::Parent(bits, parent) => {
+                    if let Some(child) = entity(bits, &remap) {
+                        cmdbuf::set_parent(world, child, parent.and_then(|p| entity(p, &remap)))
+                            .map_err(|why| Diagnostic::error(codes::UNDO_FAILED, why))?;
+                    }
+                }
                 Step::Despawn(bits) => {
                     if let Some(e) = entity(bits, &remap) {
                         world.despawn(e);
@@ -444,6 +451,9 @@ impl ScriptHost {
         };
         // Entities whose liveness an earlier step changed.
         let mut alive: BTreeMap<u64, bool> = BTreeMap::new();
+        // Simulate hierarchy changes as well as liveness: a later cycle must not
+        // fail after an earlier inverse has already changed the world.
+        let mut parents: BTreeMap<u64, Option<u64>> = BTreeMap::new();
         let live = |bits: u64, alive: &BTreeMap<u64, bool>| -> Result<(), String> {
             let ok = alive.get(&bits).copied().unwrap_or_else(|| {
                 Entity::try_from_bits(bits).is_some_and(|e| world.get_entity(e).is_ok())
@@ -454,9 +464,32 @@ impl ScriptHost {
         let mut steps = Vec::new();
         for a in record.structural.iter().rev() {
             match a {
+                Applied::Parent {
+                    entity, previous, ..
+                } => {
+                    live(*entity, &alive)?;
+                    if let Some(parent) = previous {
+                        live(*parent, &alive)?;
+                    }
+                    let mut ancestor = *previous;
+                    let mut seen = std::collections::BTreeSet::new();
+                    while let Some(node) = ancestor {
+                        if node == *entity || !seen.insert(node) {
+                            return Err("hierarchy cycle".into());
+                        }
+                        ancestor = parents.get(&node).copied().unwrap_or_else(|| {
+                            Entity::try_from_bits(node)
+                                .and_then(|e| world.get::<bevy_ecs::prelude::ChildOf>(e))
+                                .map(|parent| parent.parent().to_bits())
+                        });
+                    }
+                    parents.insert(*entity, *previous);
+                    steps.push(Step::Parent(*entity, *previous));
+                }
                 Applied::Spawn { entity } => {
                     live(*entity, &alive)?;
                     alive.insert(*entity, false);
+                    parents.insert(*entity, None);
                     steps.push(Step::Despawn(*entity));
                 }
                 Applied::Despawn { entity, components } => {
@@ -465,6 +498,7 @@ impl ScriptHost {
                         .map(|(i, b)| component(*i, b))
                         .collect::<Result<_, _>>()?;
                     alive.insert(*entity, true);
+                    parents.insert(*entity, None);
                     steps.push(Step::Respawn(*entity, components));
                 }
                 Applied::Insert {
@@ -537,6 +571,7 @@ impl ScriptHost {
                 "before": decode(&w.before), "after": decode(&w.after) })
         }));
         ops.extend(record.structural.iter().map(|a| match a {
+            Applied::Parent { entity, parent, .. } => json!({"op":"parent", "entity":value::entity_json(*entity), "parent":parent.map(value::entity_json)}),
             Applied::Spawn { entity } => json!({ "op": "spawn", "entity": value::entity_json(*entity) }),
             Applied::Despawn { entity, .. } => json!({ "op": "despawn", "entity": value::entity_json(*entity) }),
             Applied::Insert { entity, component, .. } => json!({ "op": "insert", "entity": value::entity_json(*entity), "component": name(*component) }),

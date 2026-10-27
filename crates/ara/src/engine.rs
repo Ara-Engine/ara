@@ -12,6 +12,8 @@ use ara_proto::{Endpoint, RpcError};
 use ara_rpc::Client;
 use serde_json::{Value, json};
 
+mod wait;
+
 /// How long an offline command waits for a busy project lock (another command, or
 /// a daemon that is still starting).
 const LOCK_WAIT: Duration = Duration::from_secs(10);
@@ -35,6 +37,14 @@ pub fn endpoint(root: &Path) -> Result<Box<dyn Endpoint>, Diagnostic> {
                 ara_audio_why::register(h.why());
                 h.why().register(Box::new(ara_ai::why::NpcExplainer));
                 ara_world::service::register(&mut h)?;
+                h.register(Box::new(ara_play_host::SourceFixService::new(root)))?;
+                h.register(Box::new(
+                    ara_play_host::PlayService::new(
+                        root,
+                        ara_play_host::PlayConfig::for_project(root),
+                    )
+                    .with_headless_automation(),
+                ))?;
                 return Ok(Box::new(h));
             }
             Err(d) if d.code == codes::DAEMON_RUNNING && start.elapsed() < LOCK_WAIT => {
@@ -64,7 +74,12 @@ impl Engine {
         if let Some(o) = params.as_object_mut() {
             o.insert("session".into(), self.session.clone().into());
         }
-        self.ep.call(method, params)
+        let timeout = wait::timeout()?;
+        let result = self.ep.call(method, params)?;
+        let start = Instant::now();
+        wait::finish(self.ep.as_mut(), &self.session, result, timeout, || {
+            start.elapsed()
+        })
     }
 }
 

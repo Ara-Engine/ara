@@ -54,6 +54,19 @@ fn results(method: &MethodInfo) -> Value {
         "history.undo" | "history.redo" => &[("txn", "string"), ("revision", "integer")],
         "review.accept" => &[("accepted", "array")],
         "review.revert" => &[("reverted", "array"), ("revision", "integer")],
+        "run" => &[
+            ("tick", "integer"),
+            ("hash", "string"),
+            ("logs", "array"),
+            ("diagnostics", "array"),
+        ],
+        "capture" => &[
+            ("path", "string"),
+            ("width", "integer"),
+            ("height", "integer"),
+            ("tick", "integer"),
+            ("hash", "string"),
+        ],
         "query" => &[("items", "array"), ("total", "integer"), ("text", "string")],
         "inspect" => &[
             ("doc", "string"),

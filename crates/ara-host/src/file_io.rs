@@ -99,6 +99,11 @@ enum Request {
 /// What the thread reports; the host applies it on its own thread.
 #[derive(Debug)]
 pub(crate) enum Reply {
+    /// Committed file transitions finished on the file worker.
+    Materialized {
+        revision: u64,
+        result: Result<(), Diagnostic>,
+    },
     /// A watched file's contents changed on disk (possibly back to what the host
     /// last wrote: compare before merging).
     Changed { path: String, text: String },
@@ -222,6 +227,10 @@ impl FileThread {
 
     /// Queue a journal entry; a failure comes back as `JournalFailed`.
     pub(crate) fn append(&mut self, entry: Entry) {
+        if matches!(&entry, Entry::Txn { txn, .. } if txn.ops.iter().any(|op| matches!(op, ara_doc::Op::File { .. })))
+        {
+            self.pending += 1;
+        }
         self.journal_len += 1;
         if let Some(since) = &mut self.compacting {
             *since += 1;
@@ -301,7 +310,7 @@ impl FileThread {
     }
     fn count(&mut self, reply: Reply) -> Reply {
         match &reply {
-            Reply::Saved { .. } | Reply::Removed { .. } => {
+            Reply::Saved { .. } | Reply::Removed { .. } | Reply::Materialized { .. } => {
                 self.pending = self.pending.saturating_sub(1);
             }
             Reply::Compacted { entries, .. } => {
@@ -380,11 +389,49 @@ impl Worker {
     fn handle(&mut self, request: Request) {
         match request {
             Request::Append(entry) => {
-                if let Err(e) = self.journal.append(&entry) {
-                    self.reply(Reply::JournalFailed(Diagnostic::error(
-                        codes::IO,
-                        format!("cannot append to `.ara/journal`: {e}"),
-                    )));
+                let result = self.journal.append(&entry).map_err(|e| {
+                    Diagnostic::error(codes::IO, format!("cannot append to `.ara/journal`: {e}"))
+                });
+                if let Entry::Txn { txn, .. } = &entry
+                    && txn
+                        .ops
+                        .iter()
+                        .any(|op| matches!(op, ara_doc::Op::File { .. }))
+                {
+                    let result = result.and_then(|()| {
+                        crate::file_state::FileHistory::new(&self.root).materialize(&txn.ops)?;
+                        // A completed flush is distinct from a journaled intent:
+                        // recovery must preserve later external edits, even when
+                        // they restore bytes seen in an older transaction.
+                        let mut final_states = std::collections::BTreeMap::new();
+                        for op in &txn.ops {
+                            if let ara_doc::Op::File { path, state, .. } = op {
+                                final_states
+                                    .insert(ara_doc::file_state::path_key(path), (path, state));
+                            }
+                        }
+                        for (path, state) in final_states.into_values() {
+                            self.journal
+                                .append(&Entry::FileFlush {
+                                    path: path.clone(),
+                                    rev: txn.result,
+                                    state: state.clone(),
+                                })
+                                .map_err(|e| {
+                                    Diagnostic::error(
+                                        codes::IO,
+                                        format!("cannot record file flush: {e}"),
+                                    )
+                                })?;
+                        }
+                        Ok(())
+                    });
+                    self.reply(Reply::Materialized {
+                        revision: txn.result,
+                        result,
+                    });
+                } else if let Err(d) = result {
+                    self.reply(Reply::JournalFailed(d));
                 }
             }
             Request::Compact => {
@@ -620,6 +667,7 @@ mod tests {
 
     fn txn(n: u64) -> Entry {
         Entry::Txn {
+            untracked: false,
             session: None,
             txn: serde_json::from_value(serde_json::json!({
                 "id": format!("tx_{n}"), "author": "agent:a", "base": n - 1, "result": n, "ops": []

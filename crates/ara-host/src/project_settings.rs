@@ -8,6 +8,16 @@ pub(crate) fn check_creations(
     root: &std::path::Path,
     ops: &[ara_doc::Op],
 ) -> Result<(), Vec<Diagnostic>> {
+    let planned: std::collections::BTreeMap<_, _> = ops
+        .iter()
+        .filter_map(|op| {
+            if let ara_doc::Op::File { path, state, .. } = op {
+                Some((path.as_str(), state.as_ref()))
+            } else {
+                None
+            }
+        })
+        .collect();
     for op in ops {
         if let ara_doc::Op::Document {
             path,
@@ -15,11 +25,24 @@ pub(crate) fn check_creations(
             ..
         } = op
         {
-            check_new_path(root, path).map_err(|d| vec![d])?;
+            if planned.contains_key(path.as_str()) {
+                check_parent(root, path).map_err(|d| vec![d])?;
+            } else {
+                check_new_path(root, path).map_err(|d| vec![d])?;
+            }
             if kind == "import" {
                 let source = path
                     .strip_suffix(".import.json")
                     .expect("import documents have a sidecar extension");
+                if let Some(state) = planned.get(source) {
+                    if state.is_some_and(|s| s.kind == ara_doc::file_state::FileKind::File) {
+                        continue;
+                    }
+                    return Err(vec![Diagnostic::error(
+                        codes::INVALID_PARAMS,
+                        "source media is removed by this batch",
+                    )]);
+                }
                 let source = root.join(source).canonicalize().map_err(|e| {
                     vec![Diagnostic::error(
                         codes::IO,

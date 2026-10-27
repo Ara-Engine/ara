@@ -103,11 +103,13 @@ fn run_daemon(
     host.why().register(Box::new(ara_ai::why::NpcExplainer));
     // World cells, spatial queries and attributed multi-document cell moves.
     ara_world::service::register(&mut host).map_err(|d| d.to_string())?;
+    host.register(Box::new(ara_play_host::SourceFixService::new(&root)))
+        .map_err(|d| d.to_string())?;
     // Play and test run in pooled ara-player processes owned by this daemon.
-    host.register(Box::new(ara_play_host::PlayService::new(
-        &root,
-        ara_play_host::PlayConfig::for_project(&root),
-    )))
+    host.register(Box::new(
+        ara_play_host::PlayService::new(&root, ara_play_host::PlayConfig::for_project(&root))
+            .with_headless_automation(),
+    ))
     .map_err(|d| d.to_string())?;
     let token = project_token(&root).map_err(|e| format!("cannot create `.ara/token`: {e}"))?;
     let listener = TcpListener::bind(("127.0.0.1", port))

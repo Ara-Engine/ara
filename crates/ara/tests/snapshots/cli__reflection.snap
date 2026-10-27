@@ -6844,6 +6844,32 @@ expression: out
         }
       }
     },
+    "SourceReplaceParams": {
+      "kind": "params",
+      "doc": "Parameters of source.replace.",
+      "fields": {
+        "path": {
+          "type": "string",
+          "doc": "Canonical project-relative C# source path.",
+          "required": true
+        },
+        "baseHash": {
+          "type": "option<string>",
+          "doc": "SHA-256 of the exact bytes that were analyzed; null creates an absent source.",
+          "default": null
+        },
+        "from": {
+          "type": "option<string>",
+          "doc": "Existing C# source to relocate while replacing it; destination must be absent or the same file under different filesystem casing.",
+          "default": null
+        },
+        "text": {
+          "type": "string",
+          "doc": "Complete replacement source; line endings are preserved exactly.",
+          "required": true
+        }
+      }
+    },
     "Sprite": {
       "kind": "component",
       "doc": "A batched sprite with optional normal-mapped 2D illumination.",
@@ -9846,6 +9872,23 @@ expression: out
           "entity": "e_8b21",
           "path": "name",
           "value": "Crate"
+        }
+      ]
+    },
+    "source.replace": {
+      "kind": "command",
+      "summary": "Create, replace or relocate C# source at its checked base hash, with offline undo and redo.",
+      "params": "SourceReplaceParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "path": "scripts/Game/Door.cs",
+          "baseHash": "9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb",
+          "text": "after\n"
         }
       ]
     },

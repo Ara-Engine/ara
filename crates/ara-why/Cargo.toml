@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 ara-diag.workspace = true
+ara-schema.workspace = true
 ara-material = { path = "../ara-material" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }

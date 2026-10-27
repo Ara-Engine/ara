@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Pipes;
+using System.Text.Json;
 using Ara.CompileServer;
 using Ara.Hosting;
 
@@ -8,11 +9,80 @@ using Ara.Hosting;
 // Started by the game or editor process (Ara.Host's CompileClient). Connects to its pipe and
 // exits with its parent. Idle and agent compiles run below normal priority; the human's run at
 // normal priority while the host raises its tick threads above normal (A13, D20).
-var pipeName = Arg("--pipe") ?? throw new ArgumentException("missing --pipe <name>");
-var parent = int.TryParse(Arg("--parent"), out var pid) ? pid : 0;
-
 try { Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal; }
 catch (Exception) { /* not allowed on this platform: compiles still run out of process */ }
+
+if (args.Contains("--inventory", StringComparer.Ordinal))
+{
+    var request = System.Text.Json.JsonSerializer.Deserialize<InventoryRequest>(await Console.In.ReadToEndAsync(), CodeFixRunner.Json)
+        ?? throw new ArgumentException("missing inventory request");
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(ProjectInventory.Scan(request), CodeFixRunner.Json));
+    return 0;
+}
+
+if (args.Contains("--project-session", StringComparer.Ordinal))
+{
+    if (int.TryParse(Arg("--parent"), out var projectParent) && projectParent != 0) _ = Task.Run(() => WatchParent(projectParent));
+    while (await Console.In.ReadLineAsync() is { } line)
+    {
+        using var input = System.Text.Json.JsonDocument.Parse(line);
+        var operation = input.RootElement.GetProperty("operation").GetString();
+        var result = operation switch {
+            "--inventory" => ProjectInventory.Scan(input.RootElement.Deserialize<InventoryRequest>(CodeFixRunner.Json) ?? throw new ArgumentException("missing inventory request")),
+            "--compile-project" => ProjectCompiler.Compile(input.RootElement.Deserialize<ProjectBuildRequest>(CodeFixRunner.Json) ?? throw new ArgumentException("missing compilation request")),
+            _ => throw new ArgumentException("unknown project operation"),
+        };
+        await Console.Out.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(result, CodeFixRunner.Json));
+        await Console.Out.FlushAsync();
+    }
+    return 0;
+}
+
+if (args.Contains("--editor-session", StringComparer.Ordinal))
+{
+    if (int.TryParse(Arg("--parent"), out var editorParent) && editorParent != 0) _ = Task.Run(() => WatchParent(editorParent));
+    var output = Console.Out;
+    Console.SetOut(Console.Error); // Extension console output cannot corrupt the protocol.
+    using var session = new EditorRunner.Session();
+    while (await Console.In.ReadLineAsync() is { } line)
+    {
+        var request = System.Text.Json.JsonSerializer.Deserialize<EditorRequest>(line, CodeFixRunner.Json)
+            ?? throw new ArgumentException("missing editor request");
+        await output.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(session.Run(request), CodeFixRunner.Json));
+        await output.FlushAsync();
+    }
+    return 0;
+}
+
+if (args.Contains("--editor", StringComparer.Ordinal))
+{
+    var request = System.Text.Json.JsonSerializer.Deserialize<EditorRequest>(await Console.In.ReadToEndAsync(), CodeFixRunner.Json)
+        ?? throw new ArgumentException("missing editor request");
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(EditorRunner.Run(request), CodeFixRunner.Json));
+    return 0;
+}
+
+if (args.Contains("--compile-project", StringComparer.Ordinal))
+{
+    var request = System.Text.Json.JsonSerializer.Deserialize<ProjectBuildRequest>(await Console.In.ReadToEndAsync(), CodeFixRunner.Json)
+        ?? throw new ArgumentException("missing project compilation request");
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(ProjectCompiler.Compile(request), CodeFixRunner.Json));
+    return 0;
+}
+
+if (args.Contains("--fix", StringComparer.Ordinal))
+{
+    try
+    {
+        var request = System.Text.Json.JsonSerializer.Deserialize<FixRequest>(await Console.In.ReadToEndAsync(), CodeFixRunner.Json)
+            ?? throw new ArgumentException("missing code-fix request");
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(await CodeFixRunner.Run(request), CodeFixRunner.Json));
+        return 0;
+    }
+    catch (Exception error) { Console.Error.WriteLine(error.Message); return 1; }
+}
+var pipeName = Arg("--pipe") ?? throw new ArgumentException("missing --pipe <name>");
+var parent = int.TryParse(Arg("--parent"), out var pid) ? pid : 0;
 
 using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
 pipe.Connect(TimeSpan.FromSeconds(30));

@@ -62,17 +62,8 @@ fn publish(
     cx.transact(Some("Publish compiled C# types".into()), |store, _| {
         *store.schema_mut() = schema;
     })?;
-    // Reflection is derived output, canonical and generated from the compiled image.
-    for module in crate::shell::scripts::modules(cx.root()) {
-        let spec = ara_script::ModuleSpec::from_dir(&module).map_err(|d| vec![d])?;
-        if let Some(types) = types.get(&spec.name) {
-            std::fs::write(
-                module.join(format!("{}.types.json", spec.name)),
-                ara_json::to_canonical_string(types),
-            )
-            .map_err(|e| vec![crate::invalid(e.to_string())])?;
-        }
-    }
+    // The compile worker published canonical schemas into the explicit derived
+    // inventory. The authority only adopts their types and applies attachment ops.
     let component = if path.is_empty() {
         ""
     } else {

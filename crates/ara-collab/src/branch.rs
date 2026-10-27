@@ -307,7 +307,7 @@ impl Branch {
                 for edit in edits {
                     match edit {
                         // `diff` compares records of two existing documents.
-                        Edit::Document { .. } => {}
+                        Edit::Document { .. } | Edit::File { .. } => {}
                         Edit::Create { id, .. } => c.created.push(id),
                         Edit::Delete { id, .. } => c.deleted.push(id),
                         Edit::Set { id, .. } | Edit::Move { id, .. } => {

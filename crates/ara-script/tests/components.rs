@@ -47,6 +47,7 @@ fn compiled_csharp_examples_write_every_engine_component_and_undo_them() {
     let _clr = support::clr_lock();
     support::build();
     let (db, bindings) = support::engine();
+    let names: Vec<_> = db.components().map(|t| t.name.clone()).collect();
     let mut world = World::new();
     let mut host = ScriptHost::start(
         ScriptConfig::jit(support::bin("Ara.Host")),
@@ -71,7 +72,6 @@ fn compiled_csharp_examples_write_every_engine_component_and_undo_them() {
         },
     );
     let entity = world.spawn_empty().id();
-    let names: Vec<_> = host.schema().components().map(|t| t.name.clone()).collect();
     let mut before = Vec::new();
     for name in &names {
         let mut initial = json!({});

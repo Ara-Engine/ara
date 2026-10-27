@@ -249,6 +249,7 @@ pub struct Shell {
     asset_folder_click: Option<(String, std::time::Instant)>,
     asset_rename: Option<scripts::Rename>,
     script_job: Option<(String, std::time::Instant)>,
+    script_modules: scripts::ModuleList,
     pub(crate) drag: Option<Drag>,
     scrub: Option<scrub::Scrub>,
     motion: motion::Motion,
@@ -318,7 +319,7 @@ pub struct Shell {
     pub(crate) entity_clipboard: Option<Vec<Value>>,
     pub(crate) field_clipboard: Option<Value>,
     pending_clipboard: Option<String>,
-    recent_commands: Vec<&'static str>,
+    recent_commands: Vec<String>,
     /// Command waiting for a new shortcut on the Keyboard Shortcuts page.
     pub(crate) recording: Option<&'static str>,
     key_search: bool,
@@ -359,6 +360,7 @@ pub struct UiStats {
 pub(crate) enum Binding {
     Protocol(&'static str, Value),
     Command(&'static str, commands::Target),
+    CommandOwned(String, commands::Target),
     Content(Vec<Value>, String),
     Field(String, Option<usize>),
     /// The Scene toolbar's field-of-view field (drafted, applied on commit).
@@ -534,6 +536,7 @@ impl Shell {
             asset_folder_click: None,
             asset_rename: None,
             script_job: None,
+            script_modules: Default::default(),
             drag: None,
             scrub: None,
             motion: Default::default(),
@@ -588,7 +591,7 @@ impl Shell {
             recording: None,
             key_search: false,
             label_width: 0.38,
-            keymap: commands::keymap(&editor.state),
+            keymap: commands::keymap(&editor.state, &editor.extensions),
             keymap_revision: 0,
             keymap_settings: keymap_settings(&editor.state),
             drop_preview: None,
@@ -729,7 +732,7 @@ impl Shell {
         // The keymap follows two settings; rebuilding it took ~0.1 ms per rebuild.
         let settings = keymap_settings(&editor.state);
         if settings != self.keymap_settings {
-            self.keymap = commands::keymap(&editor.state);
+            self.keymap = commands::keymap(&editor.state, &editor.extensions);
             self.keymap_settings = settings;
             self.keymap_revision += 1;
         }
@@ -1602,13 +1605,14 @@ impl Shell {
         );
     }
     /// Every chrome/toolbar/menu control's registry command, for UI tests.
-    pub fn command_bindings(&self) -> Vec<(String, &'static str)> {
+    pub fn command_bindings(&self) -> Vec<(String, String)> {
         self.ui
             .nodes
             .iter()
             .filter_map(
                 |n| match self.bindings.get(&ara_ui::source::stable_id(&n.element.id)) {
-                    Some(Binding::Command(c, _)) => Some((n.element.id.clone(), *c)),
+                    Some(Binding::Command(c, _)) => Some((n.element.id.clone(), (*c).to_owned())),
+                    Some(Binding::CommandOwned(c, _)) => Some((n.element.id.clone(), c.clone())),
                     _ => None,
                 },
             )
@@ -1627,6 +1631,7 @@ impl Shell {
                     self.bindings.get(&ara_ui::source::stable_id(&n.element.id)),
                     Some(
                         Binding::Command(..)
+                            | Binding::CommandOwned(..)
                             | Binding::MenuBar(_)
                             | Binding::MenuSub(..)
                             | Binding::ContextMenu(..)

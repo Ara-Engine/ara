@@ -12,6 +12,8 @@ use ara_diag::{Diagnostic, FixAction, codes};
 use ara_doc::{AssetIndex, Document, ReadResult, Workspace};
 use ara_schema::SchemaDb;
 use serde_json::Value;
+mod files;
+pub use files::{AuthoredFile, AuthoredRole, AuthoredScope, authored_files, authored_root};
 
 /// The file that marks a project root. Its contents are reserved for project settings.
 pub const MARKER: &str = "ara.project.json";

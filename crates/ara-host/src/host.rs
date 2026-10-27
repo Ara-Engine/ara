@@ -33,11 +33,12 @@ use crate::session::{Approval, DefaultPolicy, Sessions};
 
 /// Method families reserved for services that register later, with who provides
 /// them. Calls get `ARA1806` until then.
-pub const RESERVED: [(&str, &str); 4] = [
-    ("run", "the C# script worker (code mode)"),
+pub const RESERVED: [(&str, &str); 5] = [
+    ("run", "the headless project execution service"),
     ("capture", "the renderer's headless capture service"),
     ("play", "the simulation / play-mode service"),
     ("test", "the test runner"),
+    ("source", "the C# analyzer code-fix service"),
 ];
 
 /// Host settings.
@@ -109,6 +110,7 @@ pub(crate) struct State {
     /// Collaboration: participants, presence, claims, branch sessions (D21).
     pub(crate) collab: crate::collab::Collab,
     pub(crate) jobs: Jobs,
+    pub(crate) file_jobs: crate::source::FileJobs,
     pub(crate) gestures: crate::gesture::Gestures,
     pub(crate) subs: BTreeMap<ConnId, BTreeSet<Topic>>,
     pub(crate) outbox: Vec<(ConnId, Value)>,
@@ -289,6 +291,7 @@ impl Host {
             diag_file,
             collab: crate::collab::Collab::new(state_dir.clone()),
             jobs: Jobs::default(),
+            file_jobs: crate::source::FileJobs::default(),
             gestures: crate::gesture::Gestures::default(),
             subs: BTreeMap::new(),
             outbox: Vec::new(),
@@ -498,6 +501,7 @@ impl Host {
             self.st.persist_diag(false);
             self.st.release_gestures();
             self.st.watch();
+            self.st.poll_file_jobs();
             self.st.drain();
             self.st.flush(false);
             for service in &mut self.services {
@@ -567,6 +571,9 @@ impl Host {
 
 impl Drop for Host {
     fn drop(&mut self) {
+        // Join service preparation workers and stop owned children while the
+        // authority and project lock still exist, before draining durable writes.
+        self.services.clear();
         if self.st.profile_attached {
             ara_profile::ThreadRegistration::detach();
         }
@@ -577,6 +584,9 @@ impl Drop for Host {
 }
 
 impl Endpoint for Host {
+    fn tick(&mut self) {
+        Host::tick(self);
+    }
     fn call(&mut self, method: &str, params: Value) -> Result<Value, RpcError> {
         Host::call(self, ConnId::LOCAL, method, params)
     }
@@ -740,6 +750,7 @@ impl State {
                 .map(|p| p.0.clone())
                 .or_else(|| self.calling.clone());
             self.journal(Entry::Txn {
+                untracked: self.untracked,
                 session: session.clone(),
                 txn: txn.clone(),
             });
@@ -770,6 +781,10 @@ impl State {
     }
 
     fn track_review(&mut self, txn: &Transaction) {
+        if self.untracked {
+            self.review.exclude(txn.id.clone());
+            return;
+        }
         match &txn.reverts {
             Some(target) if self.review.is_tracked(target) => {
                 self.review.set(target, None, ReviewStatus::Reverted);
@@ -816,6 +831,7 @@ impl State {
     /// Rebuilds history, sessions and review from the journal, re-applying
     /// transactions newer than each document's file.
     fn recover(&mut self, entries: &[Entry]) {
+        self.recover_file_states(entries);
         let mut base = 0;
         let mut flushes: BTreeMap<&str, Vec<(u64, &str)>> = BTreeMap::new();
         for e in entries {
@@ -860,7 +876,11 @@ impl State {
         }
         for e in entries {
             match e {
-                Entry::Txn { session, txn } => {
+                Entry::Txn {
+                    session,
+                    txn,
+                    untracked,
+                } => {
                     if stopped {
                         continue;
                     }
@@ -910,7 +930,11 @@ impl State {
                             if let Some(s) = session {
                                 self.txn_session.insert(txn.id.clone(), s.clone());
                             }
-                            self.track_review(txn);
+                            if !untracked {
+                                self.track_review(txn);
+                            } else {
+                                self.review.exclude(txn.id.clone());
+                            }
                         }
                         Err(diags) => {
                             stopped = true;
@@ -940,15 +964,23 @@ impl State {
                     txn,
                     entity,
                     status,
-                } => self.review.set(
-                    &TxnId(txn.clone()),
-                    entity.as_deref(),
-                    match status {
-                        ReviewStatus::Applied => ReviewStatus::Accepted,
-                        status => *status,
-                    },
-                ),
-                Entry::Base { .. } | Entry::Flush { .. } => {}
+                } => {
+                    let id = TxnId(txn.clone());
+                    if !self.review.is_tracked(&id)
+                        && let Some(target) = self.store.txn(&id)
+                    {
+                        self.review.track(target);
+                    }
+                    self.review.set(
+                        &id,
+                        entity.as_deref(),
+                        match status {
+                            ReviewStatus::Applied => ReviewStatus::Accepted,
+                            status => *status,
+                        },
+                    );
+                }
+                Entry::Base { .. } | Entry::Flush { .. } | Entry::FileFlush { .. } => {}
             }
         }
         if replayed > 0 {

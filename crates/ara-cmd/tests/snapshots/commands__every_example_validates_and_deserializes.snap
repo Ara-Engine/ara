@@ -237,6 +237,23 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       }
     ]
   },
+  "source.replace": {
+    "kind": "command",
+    "summary": "Create, replace or relocate C# source at its checked base hash, with offline undo and redo.",
+    "params": "SourceReplaceParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit:scene",
+    "examples": [
+      {
+        "path": "scripts/Game/Door.cs",
+        "baseHash": "9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb",
+        "text": "after\n"
+      }
+    ]
+  },
   "test.spawnRow": {
     "kind": "job",
     "summary": "Create a row of entities.",

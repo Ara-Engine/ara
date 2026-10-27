@@ -202,6 +202,7 @@ pub(crate) fn overlap(a: &Op, b: &Op) -> bool {
 /// What an op wrote, for conflict reports.
 pub(crate) fn written(op: &Op) -> Option<Value> {
     match op {
+        Op::File { path, state, .. } => Some(json!({"path":path,"state":state})),
         Op::Document { kind, .. } => kind.as_ref().map(|kind| json!({"kind": kind})),
         Op::Set { value, .. } => value.clone(),
         Op::Create { record, .. } => Some(Value::Object(record.clone())),
@@ -215,7 +216,7 @@ pub(crate) fn path_of(op: &Op) -> Option<FieldPath> {
     match op {
         Op::Set { path, .. } => Some(path.clone()),
         Op::Move { .. } => Some(FieldPath::field(ara_doc::field::PARENT)),
-        Op::Create { .. } | Op::Delete { .. } | Op::Document { .. } => None,
+        Op::Create { .. } | Op::Delete { .. } | Op::Document { .. } | Op::File { .. } => None,
     }
 }
 

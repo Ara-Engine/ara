@@ -14,8 +14,9 @@ use bevy_ecs::prelude::Resource;
 use bevy_ecs::ptr::OwningPtr;
 use bevy_ecs::world::World;
 
-use crate::abi::{CMD_CUE, CMD_DESPAWN, CMD_INSERT, CMD_REMOVE, CMD_SPAWN};
+use crate::abi::{CMD_CUE, CMD_DESPAWN, CMD_INSERT, CMD_PARENT, CMD_REMOVE, CMD_SPAWN};
 use crate::codes;
+use bevy_ecs::prelude::ChildOf;
 
 /// One buffered op, as C# pushed it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,6 +128,15 @@ pub(crate) struct ScriptEvents {
 /// A structural change that was applied, with what undoing it needs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Applied {
+    /// A runtime ECS relationship changed (local transform remains unchanged).
+    Parent {
+        /// Child's entity bits.
+        entity: u64,
+        /// Previous parent, or a root.
+        previous: Option<u64>,
+        /// New parent, or a root.
+        parent: Option<u64>,
+    },
     /// An entity was spawned.
     Spawn {
         /// Entity bits.
@@ -243,6 +253,31 @@ pub(crate) fn apply(
         };
         let comp = catalog.components.get(op.type_index as usize).copied();
         match (op.op, comp) {
+            (CMD_PARENT, _) => {
+                let Some(bytes) = op.data.as_slice().try_into().ok() else {
+                    problems.push(bad("parent payload is not a handle".into()));
+                    continue;
+                };
+                let bits = u64::from_ne_bytes(bytes);
+                let parent = (bits != 0).then(|| Entity::try_from_bits(bits)).flatten();
+                if bits != 0 && parent.is_none() {
+                    problems.push(bad("invalid parent handle".into()));
+                    continue;
+                }
+                let previous = world.get::<ChildOf>(entity).map(|p| p.parent().to_bits());
+                match set_parent(world, entity, parent) {
+                    Ok(()) => {
+                        if let Some(a) = applied.as_deref_mut() {
+                            a.push(Applied::Parent {
+                                entity: op.entity,
+                                previous,
+                                parent: parent.map(Entity::to_bits),
+                            });
+                        }
+                    }
+                    Err(reason) => problems.push(bad(reason)),
+                }
+            }
             (CMD_SPAWN, _) => match world.spawn_empty_at(entity) {
                 Ok(_) => {
                     if let Some(a) = applied.as_deref_mut() {
@@ -305,6 +340,31 @@ pub(crate) fn apply(
             (other, _) => problems.push(bad(format!("unknown op {other}"))),
         }
     }
+}
+
+/// Change the actual ECS relationship, rejecting missing entities and cycles.
+pub(crate) fn set_parent(
+    world: &mut World,
+    entity: Entity,
+    parent: Option<Entity>,
+) -> Result<(), String> {
+    if world.get_entity(entity).is_err() || parent.is_some_and(|p| world.get_entity(p).is_err()) {
+        return Err("child or parent is missing".into());
+    }
+    let mut ancestor = parent;
+    while let Some(node) = ancestor {
+        if node == entity {
+            return Err("hierarchy cycle".into());
+        }
+        ancestor = world.get::<ChildOf>(node).map(ChildOf::parent);
+    }
+    let mut child = world.entity_mut(entity);
+    if let Some(parent) = parent {
+        child.insert(ChildOf(parent));
+    } else {
+        child.remove::<ChildOf>();
+    }
+    Ok(())
 }
 
 /// Spawns-then-despawns the entities a discarded buffer reserved, so their ids are reused.

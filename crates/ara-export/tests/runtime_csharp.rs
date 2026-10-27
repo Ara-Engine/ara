@@ -35,7 +35,9 @@ fn exported_game_ticks_csharp_after_relocation_without_author_files() {
         PathBuf::from(std::env::var_os("ARA_SHIPPING_E2E_PLAYER").expect("prebuilt ara-player"));
     let pdb = PathBuf::from(std::env::var_os("ARA_SHIPPING_E2E_PDB").expect("matching player PDB"));
     let author = scratch.join("author");
-    let module = author.join("scripts/Gameplay");
+    let module = author
+        .join(ara_doc::AUTHORING_ROOT)
+        .join("scripts/Gameplay");
     std::fs::create_dir_all(&module).unwrap();
     std::fs::create_dir_all(author.join("assets")).unwrap();
     std::fs::create_dir_all(author.join("ui")).unwrap();
@@ -56,8 +58,8 @@ fn exported_game_ticks_csharp_after_relocation_without_author_files() {
         json!({"name":"Native CSharp Export","main":"main.scene"}),
     );
     std::fs::write(
-        module.join("ara.module.toml"),
-        "[module]\nname = \"Gameplay\"\n",
+        module.join("gameplay.module.json"),
+        r#"{"name":"Gameplay"}"#,
     )
     .unwrap();
     std::fs::write(

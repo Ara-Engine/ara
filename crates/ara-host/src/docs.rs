@@ -283,10 +283,28 @@ pub fn generate(
         .iter()
         .filter(|e| e.page.starts_with("topics/"))
     {
+        let (title, summary) = match example.page.as_str() {
+            "topics/csharp-scene-queries" => (
+                "C# scene queries and hierarchy",
+                "Find entities by name, id or path; traverse and reparent through the ECS.",
+            ),
+            "topics/csharp-destroy" => (
+                "C# destroy callbacks",
+                "Deterministic, once-only behaviour cleanup at fixed-tick membership sweeps.",
+            ),
+            "topics/csharp-editor-api" => (
+                "C# editor API v1",
+                "Register commands and menus, query selection and scenes, and produce typed authoring ops.",
+            ),
+            _ => (
+                "C# structural commands",
+                "Spawn, add, remove and despawn through deterministic ECS commands.",
+            ),
+        };
         pages.push(DocPage {
             id: example.page.clone(),
-            title: "C# structural commands".into(),
-            summary: "Spawn, add, remove and despawn through deterministic ECS commands.".into(),
+            title: title.into(),
+            summary: summary.into(),
             body: format!("```csharp\n{}\n```\n", example.code),
         });
     }

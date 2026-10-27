@@ -40,6 +40,8 @@ Depends on ara-ops, ara-doc, ara-schema, ara-components, ara-diag.
 `component.remove`, `property.set`, `transform.set`, `prefab.instantiate`,
 `prefab.override.set`, `prefab.override.revert`; query `entity.inspect`.
 `doc.create`, `doc.delete`, `project.setMain` and `transform.lookAt` share this registry too.
+`source.replace {path, baseHash, text}` emits reversible file ops (worker snapshots in ara-host).
+`EditCtx::file_entries`, `file_state`, `set_file` expose prepared entries without kernel I/O.
 Document deletion records child-first deletes and a lifecycle op in one transaction;
 anchor it to another document (normally ara.project.json), which stays loaded.
 
