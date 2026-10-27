@@ -23,6 +23,8 @@ Only C# and explicitly declared native plugins compile during an export.
 Runtime pins use `scripts::prepare`: project `ara.module.toml` gameplay modules,
 dependency graph, SDK generators/analyzers, then one NativeAOT `ara_script_init`
 image. `game/scripts.json` carries ABI/layout identity and the linked inventory.
+`ara-export scripts --rid RID` (`scripts::build`) builds just that image and manifest,
+for hosts without an export lane yet (osx-arm64 players; docs/dev/macos.md).
 `ARA_DOTNET_SDK` selects SDK sources; `ARA_DOTNET_ARTIFACTS` selects prebuilt tools.
 `tests/shipping_scripts.rs` exports a behaviour, relocates the pack/image, deletes
 source, exercises all per-host callbacks in two worlds and restores ECS state; stale ABI/layout must fail `ARA0921`.
@@ -31,7 +33,8 @@ asserting C# ECS fields through `--read`, continuous native UI, and a stale-meta
 Run explicitly with prebuilt `ARA_SHIPPING_E2E_PLAYER` and its matching
 `ARA_SHIPPING_E2E_PDB` (README); it retains evidence under target/.
 No implicit emulator/WSL launches. Linux supports static ELF verification here.
-Apple uses the documented versioned SSH agent seam; no fake successful builds.
+A Mac exports macOS itself: an ad-hoc signed `.app` (`src/macos.rs`; README "macOS
+on a Mac"); iOS and other hosts use the documented SSH agent seam; no fake builds.
 See README.md for template bootstrapping, integration and Apple handoff.
 
 V2 outputs `build/`, `distribution.json`, packages and private `symbols/<build-id>`.

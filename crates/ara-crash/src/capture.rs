@@ -1,9 +1,9 @@
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 use anyhow::Context;
 use anyhow::{Result, bail};
 use std::path::Path;
 
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 mod native {
     use super::*;
     use std::{
@@ -18,6 +18,16 @@ mod native {
 
     static ATTACHED: AtomicBool = AtomicBool::new(false);
     type PanicHook = dyn Fn(&std::panic::PanicHookInfo<'_>) + Send + Sync + 'static;
+
+    /// The exception a macOS panic snapshot records: SIGABRT as a Mach software
+    /// exception (`EXC_SOFTWARE`, `EXC_SOFT_SIGNAL`), like Linux's simulated abort.
+    #[cfg(target_os = "macos")]
+    const ABORT: minidump_writer::crash_context::ExceptionInfo =
+        minidump_writer::crash_context::ExceptionInfo {
+            kind: crash_handler::ExceptionType::Software as u32,
+            code: 0x10003,
+            subcode: Some(libc::SIGABRT as u64),
+        };
 
     /// Owns the native crash handler and the monitor child. Drop detaches and reaps.
     pub struct Capture {
@@ -92,18 +102,31 @@ mod native {
             let panic_client = Arc::downgrade(&client);
             let snapshot = Arc::new(AtomicU32::new(0));
             let in_snapshot = snapshot.clone();
+            #[cfg(target_os = "macos")]
+            let (pending, in_pending, snapshot_socket) = {
+                let pending = Arc::new(crate::snapshot::Pending::default());
+                (pending.clone(), pending, socket_name.to_owned())
+            };
             // SAFETY: the callback owns the connected client for the handler's lifetime.
             // It performs only minidumper's signal-safe IPC; all allocation and I/O
             // for the dump happens in the monitor process.
             let event = unsafe {
                 crash_handler::make_crash_event(move |context: &crash_handler::CrashContext| {
-                    crash_handler::CrashEventResult::Handled(
-                        if in_snapshot.load(Ordering::Acquire) == crate::snapshot::thread(context) {
-                            crate::snapshot::request(&client, context)
-                        } else {
-                            client.request_dump(context).is_ok()
-                        },
-                    )
+                    let snapshot =
+                        in_snapshot.load(Ordering::Acquire) == crate::snapshot::thread(context);
+                    #[cfg(target_os = "macos")]
+                    let handled = if snapshot {
+                        in_pending.request(context)
+                    } else {
+                        client.request_dump(context).is_ok()
+                    };
+                    #[cfg(not(target_os = "macos"))]
+                    let handled = if snapshot {
+                        crate::snapshot::request(&client, context)
+                    } else {
+                        client.request_dump(context).is_ok()
+                    };
+                    crash_handler::CrashEventResult::Handled(handled)
                 })
             };
             let handler = match crash_handler::CrashHandler::attach(event) {
@@ -137,6 +160,31 @@ mod native {
                     std::backtrace::Backtrace::force_capture().to_string(),
                 );
                 let record = crate::write_report(&directory, &report);
+                // macOS: the snapshot's own client names its record first (the ping
+                // waits until the monitor has it), then dumps when the simulated
+                // exception reaches the callback; this hook waits for that.
+                #[cfg(target_os = "macos")]
+                if let Ok(_guard) = panic_lock.try_lock()
+                    && let Ok(record) = record
+                    && let Some(name) = record.file_name().and_then(|n| n.to_str())
+                    && let Ok(metadata) = crate::canonical(&serde_json::json!({"name":name}))
+                    && let Ok(snapshot_client) = minidumper::Client::with_name(
+                        minidumper::SocketName::path(&snapshot_socket),
+                    )
+                    && snapshot_client.send_message(1, metadata).is_ok()
+                    && snapshot_client.ping().is_ok()
+                {
+                    pending.arm(snapshot_client);
+                    snapshot.store(crate::snapshot::current_thread(), Ordering::Release);
+                    let taken = handler.simulate_exception(Some(ABORT))
+                        && pending.wait(Duration::from_secs(10));
+                    snapshot.store(0, Ordering::Release);
+                    if !taken && let Some(client) = panic_client.upgrade() {
+                        // Unpair the record so a later crash keeps its own name.
+                        let _ = client.send_message(3, []);
+                    }
+                }
+                #[cfg(not(target_os = "macos"))]
                 if let Ok(_guard) = panic_lock.try_lock()
                     && let Some(client) = panic_client.upgrade()
                     && let Ok(record) = record
@@ -181,16 +229,38 @@ mod native {
         directory: PathBuf,
         build_id: String,
         panic: std::sync::Mutex<Option<String>>,
+        /// The dump being written is a paired panic snapshot (macOS).
+        #[cfg(target_os = "macos")]
+        snapshot: AtomicBool,
     }
     impl minidumper::ServerHandler for Handler {
         fn create_minidump_file(&self) -> std::io::Result<(std::fs::File, PathBuf)> {
-            let stamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map_err(std::io::Error::other)?
-                .as_nanos();
-            let path = self
-                .directory
-                .join(format!("{}-{stamp}.dmp", std::process::id()));
+            // A macOS panic snapshot arrives as a dump request right after its record's
+            // name, and takes the paired name.
+            #[cfg(target_os = "macos")]
+            let paired = self
+                .panic
+                .lock()
+                .ok()
+                .and_then(|mut pending| pending.take())
+                .map(|name| crate::snapshot::path(&self.directory, &name))
+                .transpose()
+                .map_err(std::io::Error::other)?;
+            #[cfg(target_os = "macos")]
+            self.snapshot.store(paired.is_some(), Ordering::Release);
+            #[cfg(not(target_os = "macos"))]
+            let paired = None;
+            let path = match paired {
+                Some(path) => path,
+                None => {
+                    let stamp = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_err(std::io::Error::other)?
+                        .as_nanos();
+                    self.directory
+                        .join(format!("{}-{stamp}.dmp", std::process::id()))
+                }
+            };
             let file = std::fs::OpenOptions::new()
                 .create_new(true)
                 .write(true)
@@ -210,30 +280,56 @@ mod native {
                     "Native exception or fatal signal; symbolize the minidump for details".into(),
                     String::new(),
                 );
-                if let Ok(json) = crate::canonical(&report) {
-                    let _ = std::fs::write(dump.path.with_extension("crash.json"), json);
+                // A panic snapshot's dump sits beside the panic record it pairs with;
+                // that record stays the report.
+                let record = dump.path.with_extension("crash.json");
+                if !record.exists()
+                    && let Ok(json) = crate::canonical(&report)
+                {
+                    let _ = std::fs::write(record, json);
                 }
+            }
+            // macOS: minidumper ends a crashed client's connection without a
+            // disconnect callback, and each monitor serves one process, so it exits
+            // after that process's fatal dump; a panic snapshot keeps it serving.
+            #[cfg(target_os = "macos")]
+            if !self.snapshot.load(Ordering::Acquire) {
+                return minidumper::LoopAction::Exit;
             }
             // A caught Rust panic can continue running. The worker stays ready
             // until the owning process disconnects or drops its capture guard.
             minidumper::LoopAction::Continue
         }
+        /// 1: a panic record's name; 2: its snapshot context (Windows, Linux);
+        /// 3: the snapshot did not run (macOS), so a later dump keeps its own name.
         fn on_message(&self, kind: u32, buffer: Vec<u8>) {
-            if kind == 1
-                && buffer.len() <= 60 * 1024
-                && let Ok(report) = serde_json::from_slice::<serde_json::Value>(&buffer)
-                && let Some(name) = report.get("name").and_then(|v| v.as_str())
-                && let Ok(mut pending) = self.panic.lock()
-            {
-                *pending = Some(name.to_owned());
-            } else if kind == 2
-                && let Some(name) = self
-                    .panic
-                    .lock()
-                    .ok()
-                    .and_then(|mut pending| pending.take())
-            {
-                let _ = crate::snapshot::write(&self.directory, &name, &buffer);
+            match kind {
+                1 => {
+                    if buffer.len() <= 60 * 1024
+                        && let Ok(report) = serde_json::from_slice::<serde_json::Value>(&buffer)
+                        && let Some(name) = report.get("name").and_then(|v| v.as_str())
+                        && let Ok(mut pending) = self.panic.lock()
+                    {
+                        *pending = Some(name.to_owned());
+                    }
+                }
+                #[cfg(not(target_os = "macos"))]
+                2 => {
+                    if let Some(name) = self
+                        .panic
+                        .lock()
+                        .ok()
+                        .and_then(|mut pending| pending.take())
+                    {
+                        let _ = crate::snapshot::write(&self.directory, &name, &buffer);
+                    }
+                }
+                3 => {
+                    if let Ok(mut pending) = self.panic.lock() {
+                        pending.take();
+                    }
+                }
+                _ => {}
             }
         }
         fn on_client_disconnected(&self, num_clients: usize) -> minidumper::LoopAction {
@@ -265,6 +361,8 @@ mod native {
                 directory,
                 build_id,
                 panic: std::sync::Mutex::new(None),
+                #[cfg(target_os = "macos")]
+                snapshot: AtomicBool::new(false),
             }),
             &AtomicBool::new(false),
             None,
@@ -274,25 +372,25 @@ mod native {
     }
 }
 
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 pub use native::Capture;
 
 /// Runs the isolated dump worker when invoked with its private launch arguments.
 /// Return from main immediately when this returns true.
 pub fn monitor_from_args() -> Result<bool> {
-    #[cfg(any(windows, target_os = "linux"))]
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     return native::monitor_from_args();
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     Ok(false)
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
-/// Native capture is available on desktop Windows and Linux.
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+/// Native capture is available on desktop Windows, Linux and macOS.
 pub struct Capture;
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 impl Capture {
     /// Reports an unsupported platform without starting a worker.
     pub fn start(_directory: &Path, _build_id: &str) -> Result<Self> {
-        bail!("ARA-EXP-CRASH-004: native capture requires Windows or Linux")
+        bail!("ARA-EXP-CRASH-004: native capture requires Windows, Linux or macOS")
     }
 }

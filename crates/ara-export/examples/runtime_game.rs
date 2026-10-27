@@ -1,4 +1,6 @@
-//! Opt-in desktop integration probe using a real pinned player and authored project.
+//! Opt-in desktop integration probe using a real pinned player and authored project:
+//! a Windows export, or on a Mac a macOS `.app` (pass the player's dSYM DWARF file as
+//! `--symbols`).
 use anyhow::{Context, Result};
 use ara_export::{ExportPreset, ExportRequest};
 use clap::Parser;
@@ -28,13 +30,18 @@ fn pin(path: &Path) -> Result<serde_json::Value> {
 
 fn main() -> Result<()> {
     let args = Args::parse();
+    let (platform, arch) = if cfg!(target_os = "macos") {
+        ("macos", "arm64")
+    } else {
+        ("windows", "x64")
+    };
     let mut template = pin(&args.template)?;
-    template["platform"] = "windows".into();
-    template["arch"] = "x64".into();
+    template["platform"] = platform.into();
+    template["arch"] = arch.into();
     template["config"] = "dev".into();
     template["symbols"] = pin(&args.symbols)?;
     let preset: ExportPreset = serde_json::from_value(serde_json::json!({
-        "platform":"windows","config":"dev","lane":"nativeAot",
+        "platform":platform,"config":"dev","lane":"nativeAot",
         "playerTemplate":"runtime","scriptProject":"","assembly":"AraGame",
         "content":"assets","templates":[template]
     }))?;

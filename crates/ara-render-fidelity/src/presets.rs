@@ -142,8 +142,9 @@ impl From<ara_components::render::QualitySetting> for QualityChoice {
 pub struct Capabilities {
     /// Hardware ray queries (the RT tier).
     pub ray_tracing: bool,
-    /// Dedicated device-local memory in MiB; absent for shared-memory or unknown
-    /// adapters, which use the conservative raster tier.
+    /// Device-local memory in MiB (dedicated, or Apple unified memory); absent for
+    /// shared-memory integrated or unknown adapters, which use the conservative raster
+    /// tier.
     pub device_local_mib: Option<u64>,
 }
 
@@ -152,7 +153,7 @@ impl Capabilities {
     pub fn of(gpu: &GpuDevice) -> Self {
         Self {
             ray_tracing: gpu.info().ray_tracing,
-            device_local_mib: gpu.info().discrete.then_some(gpu.info().device_local_mib),
+            device_local_mib: gpu.info().quality_memory_mib(),
         }
     }
 }

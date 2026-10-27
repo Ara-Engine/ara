@@ -333,19 +333,13 @@ pub(crate) fn manifest(
     output: &Path,
     packages: &[String],
     signing: &str,
+    entry_point: &str,
 ) -> Result<()> {
     let manifest = DistributionManifest {
         format: "ara.distribution/1".into(),
         build_id: build_id.into(),
         platform: p.platform.name().into(),
-        entry_point: if p.platform == Platform::Windows {
-            "ara-player.exe"
-        } else if p.platform == Platform::Linux {
-            "ara-player"
-        } else {
-            "android.app.NativeActivity"
-        }
-        .into(),
+        entry_point: entry_point.into(),
         files: identities(&output.join("build"))?,
         packages: packages
             .iter()

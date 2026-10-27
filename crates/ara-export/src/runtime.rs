@@ -69,6 +69,7 @@ pub(crate) fn unpack_template(
             name == executable
                 || name == "engine.json"
                 || name == "SDL3.dll"
+                || name == crate::macos::ICON
                 || (entry.is_dir() && matches!(name.as_str(), "resources" | "dotnet"))
                 || name.starts_with("resources/")
                 || name.starts_with("dotnet/"),

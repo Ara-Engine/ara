@@ -1,13 +1,21 @@
 # ara-crash
 
 Local crash artifacts, isolated native dump monitor, and offline symbolization.
-`desktop::start` shares LOCALAPPDATA/Ara/crashes for editor/Hub and offers to open
+`desktop::start` shares LOCALAPPDATA/Ara/crashes (macOS: ~/Library/Application
+Support/Ara/crashes) for editor/Hub and offers to open
 new reports at the next interactive launch. Bounded/headless runs do not prompt.
 The per-app seen marker records report names, sizes and modification times, before
 the dialog is offered; its own LastWriteTime is irrelevant. Headless runs do not acknowledge.
 `ara-crash archive <pdb> <store>` converts matching private release symbols offline.
-Windows/Linux capture uses crash-handler + minidumper (MiniDumpWriteDump on
-Windows, ptrace/Breakpad minidumps on Linux). No SDK download or build tool.
+Capture uses crash-handler + minidumper on Windows (MiniDumpWriteDump), Linux
+(ptrace/Breakpad minidumps) and macOS (Mach exception ports and a SIGABRT handler; the
+task and thread go to the monitor over a Mach port). No SDK download or build tool.
+macOS panic snapshots dump through a second short-lived client named after the panic
+record (a dump request ends its client), and the hook waits for the callback.
+macOS symbols: build with line tables and `split-debuginfo = packed`; `archive_macho`
+checks the image and dSYM share an LC_UUID and merges the dSYM's functions and lines
+with the image's unwind tables. Symbolization falls back to the debug ID when names
+differ (minidump-writer may leave the main executable unnamed).
 
 `monitor_from_args` must run before any application initialization. `Capture`
 owns the child process and native handler; drop detaches and reaps it. The crash

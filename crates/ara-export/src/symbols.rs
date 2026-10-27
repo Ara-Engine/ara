@@ -73,6 +73,10 @@ pub(crate) fn archive(inputs: Inputs<'_>, build: &Path, output: &Path) -> Result
             let symbols = pin.symbols.as_ref().context("ARA-EXP-CRASH-005: Windows template requires a hash-pinned PDB in templates[].symbols")?;
             let pdb = crate::template::resolve_artifact(symbols, project, cache)?;
             ara_crash::symbols::archive_pe(&templates[&pin.arch], &pdb, &raw, &store)?;
+        } else if p.platform == Platform::Macos {
+            let symbols = pin.symbols.as_ref().context("ARA-EXP-CRASH-005: macOS template requires its player's hash-pinned dSYM DWARF file in templates[].symbols")?;
+            let dwarf = crate::template::resolve_artifact(symbols, project, cache)?;
+            ara_crash::symbols::archive_macho(&templates[&pin.arch], &dwarf, &store)?;
         } else {
             let name = if p.platform == Platform::Linux {
                 "ara-player"
@@ -97,16 +101,20 @@ pub(crate) fn archive(inputs: Inputs<'_>, build: &Path, output: &Path) -> Result
             let name = format!(
                 "{}.{}",
                 p.assembly,
-                if p.platform == Platform::Windows {
-                    "dll"
-                } else {
-                    "so"
+                match p.platform {
+                    Platform::Windows => "dll",
+                    Platform::Macos => "dylib",
+                    _ => "so",
                 }
             );
             let image = script.join(&name);
             if p.platform == Platform::Windows {
                 let pdb = script.join(format!("{}.pdb", p.assembly));
                 ara_crash::symbols::archive_pe(&image, &pdb, &raw, &store)?;
+            } else if p.platform == Platform::Macos {
+                // NativeAOT splits macOS symbols into a dSYM beside the image.
+                let dwarf = script.join(format!("{name}.dSYM/Contents/Resources/DWARF/{name}"));
+                ara_crash::symbols::archive_macho(&image, &dwarf, &store)?;
             } else {
                 let original = raw.join(&name);
                 tools::copy(&image, &original)?;

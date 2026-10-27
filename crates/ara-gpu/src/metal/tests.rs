@@ -127,6 +127,166 @@ fn compute_writes_through_the_converter_tables_and_top_level_buffer() {
 }
 
 #[test]
+fn a_pipeline_is_rebound_on_each_encoder_a_pass_timestamp_opens() {
+    let mut gpu = device();
+    let fill = gpu.msl_pipeline(
+        &[(Stage::Compute, "fill")],
+        &RenderState::default(),
+        Some([64, 1, 1]),
+    );
+    let buffers = [storage(&mut gpu, 64), storage(&mut gpu, 64)];
+    let slots = buffers.map(|b| gpu.storage_buffer(b).expect("slot"));
+    let mut rec = gpu.begin(Queue::Compute);
+    rec.push(Command::Pipeline(fill));
+    for (index, slot) in slots.iter().enumerate() {
+        // Pass timestamps close the compute encoder, so the second dispatch of the same
+        // pipeline runs on a new encoder that must have it set again.
+        rec.push(Command::BeginPass(format!("pass {index}")));
+        rec.push(Command::Constants(RootConstants {
+            words: [slot.index, 100 * index as u32, 64, 0, 0, 0, 0, 0],
+        }));
+        rec.push(Command::Dispatch([1, 1, 1]));
+        rec.push(Command::EndPass);
+    }
+    let point = gpu.submit(rec.finish(), &[]).expect("submit");
+    gpu.resolve(point).expect("resolve");
+    for (index, buffer) in buffers.iter().enumerate() {
+        let data = words(&gpu.read(*buffer).expect("read"));
+        let base = 100 * index as u32;
+        assert_eq!(data, (0..64).map(|i| base + i).collect::<Vec<_>>());
+    }
+}
+
+#[test]
+fn back_to_back_pass_timestamps_share_one_write_and_resolve_in_order() {
+    let mut gpu = device();
+    let fill = gpu.msl_pipeline(
+        &[(Stage::Compute, "fill")],
+        &RenderState::default(),
+        Some([64, 1, 1]),
+    );
+    let buffer = storage(&mut gpu, 64);
+    let slot = gpu.storage_buffer(buffer).expect("slot");
+    let mut rec = gpu.begin(Queue::Compute);
+    rec.push(Command::Pipeline(fill));
+    for index in 0..3 {
+        rec.push(Command::BeginPass(format!("pass {index}")));
+        rec.push(Command::Constants(RootConstants {
+            words: [slot.index, index, 64, 0, 0, 0, 0, 0],
+        }));
+        rec.push(Command::Dispatch([1, 1, 1]));
+        rec.push(Command::EndPass);
+    }
+    let point = gpu.submit(rec.finish(), &[]).expect("submit");
+    let timings = gpu.resolve(point).expect("resolve");
+    assert_eq!(timings.len(), 3);
+    for pass in &timings {
+        assert!(
+            pass.start_ms > 0. && pass.start_ms <= pass.end_ms,
+            "{pass:?}"
+        );
+    }
+    // A pass end and the next begin have no work between them: one timestamp.
+    for pair in timings.windows(2) {
+        assert_eq!(pair[0].end_ms, pair[1].start_ms);
+    }
+}
+
+#[test]
+fn submissions_share_one_timestamp_heap_as_ranges_and_reuse_freed_ones() {
+    let gpu = device();
+    let mut pool = timestamps::Pool::default();
+    // 511 passes take 1024 slots: four ranges fill the heap, a fifth runs untimed.
+    let labels = || vec![String::from("pass"); 511];
+    let taken: Vec<_> = std::iter::from_fn(|| pool.take(&gpu.device, labels())).collect();
+    let bases = taken.iter().map(|timing| timing.base).collect::<Vec<_>>();
+    assert_eq!(bases, [0, 1024, 2048, 3072]);
+    assert_eq!(timestamps::SLOTS, 4096);
+    pool.recycle(&taken[1]);
+    assert_eq!(pool.take(&gpu.device, labels()).map(|t| t.base), Some(1024));
+}
+
+#[test]
+fn apple_unified_memory_is_the_device_local_quality_budget() {
+    let gpu = device();
+    let budget = gpu.device.recommendedMaxWorkingSetSize() / (1024 * 1024);
+    assert!(gpu.info().unified_device_local);
+    assert_eq!(gpu.info().quality_memory_mib(), Some(budget));
+}
+
+#[test]
+fn a_resolve_inside_a_deferred_scope_leaves_its_timings_to_the_completion() {
+    let mut gpu = device();
+    let fill = gpu.msl_pipeline(
+        &[(Stage::Compute, "fill")],
+        &RenderState::default(),
+        Some([64, 1, 1]),
+    );
+    let buffer = storage(&mut gpu, 64);
+    let slot = gpu.storage_buffer(buffer).expect("slot");
+    gpu.begin_deferred_completion().expect("scope");
+    let mut rec = gpu.begin(Queue::Graphics);
+    rec.push(Command::BeginPass("fill".into()));
+    rec.push(Command::Pipeline(fill));
+    rec.push(Command::Constants(RootConstants {
+        words: [slot.index, 0, 64, 0, 0, 0, 0, 0],
+    }));
+    rec.push(Command::Dispatch([1, 1, 1]));
+    rec.push(Command::EndPass);
+    let point = gpu.submit(rec.finish(), &[]).expect("submit");
+    assert!(gpu.resolve(point).expect("scoped resolve").is_empty());
+    let mut completion = gpu.end_deferred_completion().expect("end");
+    let timings = gpu.wait_completion(&mut completion).expect("wait");
+    assert_eq!(
+        timings.iter().map(|t| t.pass.as_str()).collect::<Vec<_>>(),
+        ["fill"]
+    );
+}
+
+#[test]
+fn a_frame_scope_commits_its_lists_in_one_ordered_submission() {
+    let mut gpu = device();
+    let [fill, twice] = ["fill", "twice"].map(|entry| {
+        gpu.msl_pipeline(
+            &[(Stage::Compute, entry)],
+            &RenderState::default(),
+            Some([64, 1, 1]),
+        )
+    });
+    let data = storage(&mut gpu, 64);
+    let slot = gpu.storage_buffer(data).expect("slot");
+    let before = gpu.submission_stats();
+    gpu.begin_deferred_completion_on_current_queue()
+        .expect("scope");
+    let mut last = None;
+    // Each list depends on the previous one's writes: fill, then double twice.
+    for pipeline in [fill, twice, twice] {
+        let mut rec = gpu.begin(Queue::Graphics);
+        rec.push(Command::Pipeline(pipeline));
+        rec.push(Command::Constants(RootConstants {
+            words: [slot.index, 7, 64, 0, 0, 0, 0, 0],
+        }));
+        rec.push(Command::Dispatch([1, 1, 1]));
+        last = Some(gpu.submit(rec.finish(), &[]).expect("submit"));
+    }
+    let last = last.expect("recorded");
+    // Recorded work is committed at the scope's end, so it cannot be waited on yet.
+    assert!(Device::wait(&gpu, last).is_err());
+    let mut completion = gpu.end_deferred_completion().expect("end");
+    let after = gpu.submission_stats();
+    assert_eq!(
+        (
+            after.queue_submissions - before.queue_submissions,
+            after.command_lists - before.command_lists
+        ),
+        (1, 3)
+    );
+    gpu.wait_completion(&mut completion).expect("complete");
+    let values = words(&gpu.read(data).expect("read"));
+    assert_eq!(values, (0..64).map(|i| (7 + i) * 4).collect::<Vec<_>>());
+}
+
+#[test]
 fn graphics_waits_on_the_compute_timeline_and_encoder_barriers_order_dispatches() {
     let mut gpu = device();
     let fill = gpu.msl_pipeline(

@@ -1071,6 +1071,11 @@ mod tests {
             &[],
             root.join("gpu"),
         )?;
+        if ray_tracing && !renderer.gpu().info().ray_tracing {
+            // The opt-in RT Scene view needs an RT-tier device (not yet on Metal, D27).
+            eprintln!("skipped the ray-traced Scene view: the device has no ray tracing");
+            return Ok(());
+        }
         let mut scene = SceneView::default();
         let result = (|| -> anyhow::Result<()> {
             // SAFETY: The renderer outlives this adapter, which is dropped before

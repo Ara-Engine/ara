@@ -3,17 +3,20 @@
 //! Rendering scopes become render encoders; dispatches, copies and updates share one
 //! compute encoder between scopes. Metal 4 has no automatic hazard tracking, so graph
 //! barriers lower to stage barriers: an encoder barrier inside a compute encoder, and
-//! a queue barrier on the next encoder otherwise. The first encoder of every
-//! submission also waits on earlier queue work, which keeps Vulkan's cross-submission
-//! barrier semantics conservative. Each draw and dispatch binds a fresh top-level
-//! argument buffer (root constants plus table addresses) through the argument table.
+//! a queue barrier on the next encoder otherwise. Queue barriers carry the stages of
+//! the barriers' accesses, as Vulkan's do, so a render pass whose only dependencies
+//! are attachments waits in its fragment stage and its vertex (tiling) work overlaps
+//! the previous pass. The first render and compute encoders of every submission also
+//! wait on all earlier queue work, which keeps Vulkan's cross-submission barrier
+//! semantics conservative. Each draw and dispatch binds a fresh top-level argument
+//! buffer (root constants plus table addresses) through the argument table.
 use super::MetalDevice;
 use super::abi::{ARGUMENT_BUFFER_BIND_POINT, VERTEX_BUFFER_BIND_POINT};
 use super::native::{level_bytes, nil};
 use super::pipeline::NativePipeline;
 use super::scratch::{Chunk, Scratch};
 use crate::commands::{Attachment, Command, CommandList};
-use crate::{GpuError, Pipeline, Queue, Result};
+use crate::{Access, GpuError, Pipeline, Queue, Result};
 use ash::vk;
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
@@ -29,6 +32,24 @@ const RENDER_STAGES: MTLStages = MTLStages::Vertex
     .union(MTLStages::Fragment)
     .union(MTLStages::Object)
     .union(MTLStages::Mesh);
+/// Stages that run shaders, for accesses that do not name one (Vulkan's
+/// `ALL_GRAPHICS | COMPUTE_SHADER`).
+const SHADER_STAGES: MTLStages = RENDER_STAGES.union(MTLStages::Dispatch);
+
+/// Metal stages that perform `access`, mirroring `vulkan::recording::access`.
+/// Undefined contents and host accesses involve no GPU stage: host writes precede
+/// the commit, and host reads follow completion.
+fn stages(access: Access) -> MTLStages {
+    match access {
+        Access::Undefined | Access::HostRead | Access::HostWrite => MTLStages::empty(),
+        Access::Vertex | Access::Index => MTLStages::Vertex,
+        Access::Indirect | Access::ShaderRead | Access::Storage | Access::AsRead => SHADER_STAGES,
+        // Attachment loads, depth tests and stores all run in the fragment stage.
+        Access::Color | Access::Depth => MTLStages::Fragment,
+        Access::CopySource | Access::CopyDestination => MTLStages::Blit,
+        Access::AsBuild | Access::AsInput => MTLStages::AccelerationStructure,
+    }
+}
 
 /// Draw families with different vertex-input rules.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -53,15 +74,24 @@ struct Recording<'a> {
     scratch: &'a mut Scratch,
     created: &'a mut Vec<Chunk>,
     active: Active,
-    /// A graph barrier (or the submission start) awaits the next encoder.
-    barrier: bool,
+    /// Graph barriers (or the submission start) awaiting a queue barrier: the stages
+    /// of earlier queue work to wait for, and the stages that wait. Each encoder
+    /// applies and clears the waiting stages it runs.
+    wait: (MTLStages, MTLStages),
     pipeline: Option<Pipeline>,
+    /// The pipeline set on the open encoder; a new encoder starts with none.
     bound: Option<Pipeline>,
     root: [u32; 8],
     /// Color and depth formats of the open rendering scope.
     formats: (Vec<MTLPixelFormat>, Option<MTLPixelFormat>),
-    /// Timestamp heap laid out as in [`super::timestamps`].
-    heap: &'a ProtocolObject<dyn MTL4CounterHeap>,
+    /// Timestamp heap and the list's first slot, laid out as in [`super::timestamps`];
+    /// none for an untimed list.
+    heap: Option<(&'a ProtocolObject<dyn MTL4CounterHeap>, usize)>,
+    /// The last command-buffer timestamp's slot while no encoder has opened since:
+    /// a timestamp now would measure the same point, so it reuses that slot.
+    stamp: Option<usize>,
+    /// Slots that reuse an earlier one, as `(slot, written slot)`.
+    aliases: Vec<(usize, usize)>,
     /// Passes begun so far, and the indices of passes still open.
     passes: usize,
     open: Vec<usize>,
@@ -91,27 +121,32 @@ fn view(origin: [u32; 2], size: [u32; 2]) -> (MTLViewport, MTLScissorRect) {
 }
 
 impl MetalDevice {
-    /// Encode `list` into `cmd`, writing its timestamps into `heap`. Errors leave
-    /// `cmd` uncommitted; partially recorded commands are discarded with it.
+    /// Encode `list` into `cmd`, writing its timestamps into `heap` from the given
+    /// slot, if any. Returns the timestamp slots left unwritten because they would
+    /// repeat the previous one, as `(slot, written slot)` pairs relative to the first
+    /// slot ([`super::timestamps::Timing::aliases`]). Errors leave `cmd` uncommitted;
+    /// partially recorded commands are discarded with it.
     pub(super) fn encode(
         &mut self,
         cmd: &ProtocolObject<dyn MTL4CommandBuffer>,
         list: &CommandList,
         scratch: &mut Scratch,
         created: &mut Vec<Chunk>,
-        heap: &ProtocolObject<dyn MTL4CounterHeap>,
-    ) -> Result<()> {
+        heap: Option<(&ProtocolObject<dyn MTL4CounterHeap>, usize)>,
+    ) -> Result<Vec<(usize, usize)>> {
         let mut rec = Recording {
             cmd,
             scratch,
             created,
             active: Active::None,
-            barrier: true,
+            wait: (MTLStages::All, RENDER_STAGES.union(COMPUTE_STAGES)),
             pipeline: None,
             bound: None,
             root: [0; 8],
             formats: (Vec::new(), None),
             heap,
+            stamp: None,
+            aliases: Vec::new(),
             passes: 0,
             open: Vec::new(),
             scope: [0; 2],
@@ -127,12 +162,12 @@ impl MetalDevice {
         }
         rec.end();
         rec.timestamp(1 + 2 * rec.passes);
-        result
+        result.map(|()| rec.aliases)
     }
 
     fn encode_one(&mut self, rec: &mut Recording, queue: Queue, command: &Command) -> Result<()> {
         match command {
-            Command::Barrier(_) => {
+            Command::Barrier(barrier) => {
                 if matches!(rec.active, Active::Render(_)) {
                     return Err(GpuError::Contract(
                         "Barriers must be outside rendering scopes".into(),
@@ -146,7 +181,10 @@ impl MetalDevice {
                         MTL4VisibilityOptions::Device,
                     );
                 }
-                rec.barrier = true;
+                let (after, before) = (stages(barrier.before), stages(barrier.after));
+                if !after.is_empty() && !before.is_empty() {
+                    rec.wait = (rec.wait.0 | after, rec.wait.1 | before);
+                }
             }
             Command::Pipeline(pipeline) => {
                 self.pipelines.get(*pipeline)?;
@@ -189,6 +227,7 @@ impl MetalDevice {
                 let encoder = self.begin_rendering(rec, colors, depth.as_ref(), *size)?;
                 rec.active = Active::Render(encoder);
                 rec.bound = None;
+                rec.stamp = None;
                 rec.scope = *size;
                 rec.set_view(view([0, 0], *size))?;
             }
@@ -440,10 +479,10 @@ impl MetalDevice {
             colors.iter().map(pixel).collect::<Result<_>>()?,
             depth.map(pixel).transpose()?,
         );
-        if std::mem::take(&mut rec.barrier) {
+        if let Some((after, before)) = rec.take_wait(RENDER_STAGES) {
             encoder.barrierAfterQueueStages_beforeStages_visibilityOptions(
-                MTLStages::All,
-                RENDER_STAGES,
+                after,
+                before,
                 MTL4VisibilityOptions::Device,
             );
         }
@@ -685,24 +724,47 @@ impl Recording<'_> {
     /// encoder is closed and the timestamp goes between encoders on the command
     /// buffer, so begin and end use one ordered mechanism (mixing command-buffer and
     /// in-encoder timestamps gave end < begin under load). Splitting the encoder
-    /// orders nothing that the barrier lowering does not already order.
+    /// orders nothing that the barrier lowering does not already order. Metal runs
+    /// each command-buffer timestamp as a small driver dispatch, so consecutive ones
+    /// with no encoder between them (a pass end and the next begin) share one write.
     fn timestamp(&mut self, index: usize) {
+        let Some((heap, base)) = self.heap else {
+            return;
+        };
         if let Active::Render(encoder) = &self.active {
-            // SAFETY: the heap was sized by `submit` for this list's 2 * passes + 2
-            // slots, and `index` stays below that.
+            // SAFETY: the pool reserved this list's 2 * passes + 2 slots from `base`
+            // inside the heap, and `index` stays inside that range.
             unsafe {
                 encoder.writeTimestampWithGranularity_afterStage_intoHeap_atIndex(
                     MTL4TimestampGranularity::Precise,
                     MTLRenderStages::Fragment,
-                    self.heap,
-                    index,
+                    heap,
+                    base + index,
                 );
             }
             return;
         }
         self.end();
+        if let Some(written) = self.stamp {
+            self.aliases.push((index, written));
+            return;
+        }
         // SAFETY: as above; no encoder is open on the command buffer.
-        unsafe { self.cmd.writeTimestampIntoHeap_atIndex(self.heap, index) };
+        unsafe { self.cmd.writeTimestampIntoHeap_atIndex(heap, base + index) };
+        self.stamp = Some(index);
+    }
+    /// The queue barrier an encoder running `encoder` stages owes the pending graph
+    /// barriers, if any: wait for their earlier stages before its own waiting ones.
+    /// Waiting stages of other encoder kinds stay pending for the next such encoder.
+    fn take_wait(&mut self, encoder: MTLStages) -> Option<(MTLStages, MTLStages)> {
+        let (after, waiting) = self.wait;
+        let before = waiting & encoder;
+        if before.is_empty() {
+            return None;
+        }
+        let rest = waiting - before;
+        self.wait = (if rest.is_empty() { rest } else { after }, rest);
+        Some((after, before))
     }
     /// Apply and remember the viewport and scissor of the open rendering scope.
     fn set_view(&mut self, (viewport, scissor): (MTLViewport, MTLScissorRect)) -> Result<()> {
@@ -733,16 +795,17 @@ impl Recording<'_> {
                 .cmd
                 .computeCommandEncoder()
                 .ok_or_else(|| nil("compute encoder"))?;
-            if std::mem::take(&mut self.barrier) {
+            if let Some((after, before)) = self.take_wait(COMPUTE_STAGES) {
                 encoder.barrierAfterQueueStages_beforeStages_visibilityOptions(
-                    MTLStages::All,
-                    COMPUTE_STAGES,
+                    after,
+                    before,
                     MTL4VisibilityOptions::Device,
                 );
             }
             encoder.setArgumentTable(Some(&device.table));
             self.active = Active::Compute(encoder);
             self.bound = None;
+            self.stamp = None;
         }
         match &self.active {
             Active::Compute(encoder) => Ok(encoder),
@@ -750,6 +813,7 @@ impl Recording<'_> {
         }
     }
     fn end(&mut self) {
+        self.bound = None;
         match std::mem::replace(&mut self.active, Active::None) {
             Active::Compute(encoder) => encoder.endEncoding(),
             Active::Render(encoder) => encoder.endEncoding(),

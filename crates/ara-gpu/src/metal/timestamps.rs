@@ -1,7 +1,10 @@
 //! GPU timestamps per submission, in the Vulkan backend's layout: index 0 and the
 //! last index bracket the whole submission; pass `i` uses `1 + 2i` (begin, after its
-//! leading barriers) and `2 + 2i` (end). Both queues share one GPU clock, so mixed-queue
-//! timing windows are always available. Heaps are pooled and reused after completion.
+//! leading barriers) and `2 + 2i` (end), all relative to the submission's first slot.
+//! Both queues share one GPU clock, so mixed-queue timing windows are always available.
+//! Metal allows only 32 counter heaps per process, so each device owns one heap of the
+//! maximum size and in-flight submissions share it as slot ranges, freed on completion.
+//! A submission that finds no free range (or no heap) runs untimed.
 use super::native::nil;
 use crate::commands::{PassTiming, TimestampSpan};
 use crate::{GpuError, Queue, Result};
@@ -10,16 +13,19 @@ use objc2::runtime::ProtocolObject;
 use objc2_foundation::NSRange;
 use objc2_metal::*;
 
-/// A timestamp counter heap and its slot count.
-pub(super) struct Heap {
-    pub heap: Retained<ProtocolObject<dyn MTL4CounterHeap>>,
-    capacity: usize,
-}
+/// Slots of a device's timestamp heap: the largest Metal allows.
+pub(super) const SLOTS: usize = 4096;
 
-/// One submission's heap and pass labels, resolved after completion.
+/// One submission's slot range and pass labels, resolved after completion.
 pub(super) struct Timing {
-    pub heap: Heap,
+    /// The device's heap (a retain of the pool's), for encoding and resolving.
+    pub heap: Retained<ProtocolObject<dyn MTL4CounterHeap>>,
+    /// First slot of the submission's range.
+    pub base: usize,
     pub labels: Vec<String>,
+    /// Slots never written because they measure the same point as an earlier one,
+    /// as `(slot, written slot)` relative to `base`; resolved as copies.
+    pub aliases: Vec<(usize, usize)>,
 }
 
 impl Timing {
@@ -29,48 +35,59 @@ impl Timing {
     }
 }
 
-/// Free heaps; a submission takes the smallest one that fits.
+/// A device's one timestamp heap, created on first use, and its in-flight ranges.
 #[derive(Default)]
 pub(super) struct Pool {
-    free: Vec<Heap>,
+    heap: Option<Retained<ProtocolObject<dyn MTL4CounterHeap>>>,
+    /// `(first slot, slots)` of in-flight submissions, sorted by first slot.
+    used: Vec<(usize, usize)>,
 }
 
 impl Pool {
+    /// The first free range for a submission with these passes, or `None` (the
+    /// submission runs untimed) when none fits or the process is out of heaps.
     pub fn take(
         &mut self,
         device: &ProtocolObject<dyn MTLDevice>,
         labels: Vec<String>,
-    ) -> Result<Timing> {
+    ) -> Option<Timing> {
         let required = labels.len() * 2 + 2;
-        let fit = self
-            .free
-            .iter()
-            .enumerate()
-            .filter(|(_, heap)| heap.capacity >= required)
-            .min_by_key(|(_, heap)| heap.capacity)
-            .map(|(index, _)| index);
-        let heap = match fit {
-            Some(index) => self.free.swap_remove(index),
+        let heap = match &self.heap {
+            Some(heap) => heap.clone(),
             None => {
-                let capacity = required.next_power_of_two();
                 let descriptor = MTL4CounterHeapDescriptor::new();
                 descriptor.setType(MTL4CounterHeapType::Timestamp);
-                // SAFETY: a nonzero slot count for a timestamp heap.
-                unsafe { descriptor.setCount(capacity) };
+                // SAFETY: a nonzero slot count within Metal's timestamp heap maximum.
+                unsafe { descriptor.setCount(SLOTS) };
                 let heap = device
                     .newCounterHeapWithDescriptor_error(&descriptor)
-                    .map_err(|e| super::native::ns_error("timestamp heap", &e))?;
-                Heap { heap, capacity }
+                    .ok()?;
+                self.heap.insert(heap).clone()
             }
         };
-        Ok(Timing { heap, labels })
-    }
-    /// Return a completed submission's heap.
-    pub fn recycle(&mut self, heap: Heap) {
-        // At most 32 heaps are kept, like the Vulkan query-pool cache.
-        if self.free.len() < 32 {
-            self.free.push(heap);
+        let mut base = 0;
+        let mut at = self.used.len();
+        for (index, &(first, slots)) in self.used.iter().enumerate() {
+            if first - base >= required {
+                at = index;
+                break;
+            }
+            base = first + slots;
         }
+        if at == self.used.len() && SLOTS - base < required {
+            return None;
+        }
+        self.used.insert(at, (base, required));
+        Some(Timing {
+            heap,
+            base,
+            labels,
+            aliases: Vec::new(),
+        })
+    }
+    /// Free a completed (or never committed) submission's range.
+    pub fn recycle(&mut self, timing: &Timing) {
+        self.used.retain(|&(first, _)| first != timing.base);
     }
 }
 
@@ -81,10 +98,15 @@ pub(super) fn resolve(
     queue: Queue,
 ) -> Result<(Vec<PassTiming>, TimestampSpan)> {
     let slots = timing.slots();
-    // SAFETY: the range lies inside the heap and every slot in it was written by the
-    // completed submission (begin/end of the submission and of each pass).
-    let data = unsafe { timing.heap.heap.resolveCounterRange(NSRange::new(0, slots)) }
-        .ok_or_else(|| nil("timestamp resolve"))?;
+    // SAFETY: the range lies inside the heap. The completed submission wrote every
+    // slot in it (begin/end of the submission and of each pass) except aliases,
+    // whose values are replaced below.
+    let data = unsafe {
+        timing
+            .heap
+            .resolveCounterRange(NSRange::new(timing.base, slots))
+    }
+    .ok_or_else(|| nil("timestamp resolve"))?;
     let stride = device.sizeOfCounterHeapEntry(MTL4CounterHeapType::Timestamp);
     let bytes = data.to_vec();
     if stride < 8 || bytes.len() < slots * stride {
@@ -94,12 +116,18 @@ pub(super) fn resolve(
         )));
     }
     let scale = 1000.0 / device.queryTimestampFrequency() as f64;
-    let ms = |slot: usize| {
-        let at = slot * stride;
-        let mut tick = [0; 8];
-        tick.copy_from_slice(&bytes[at..at + 8]);
-        u64::from_le_bytes(tick) as f64 * scale
-    };
+    let mut ticks: Vec<u64> = (0..slots)
+        .map(|slot| {
+            let at = slot * stride;
+            let mut tick = [0; 8];
+            tick.copy_from_slice(&bytes[at..at + 8]);
+            u64::from_le_bytes(tick)
+        })
+        .collect();
+    for &(slot, written) in &timing.aliases {
+        ticks[slot] = ticks[written];
+    }
+    let ms = |slot: usize| ticks[slot] as f64 * scale;
     let passes = timing
         .labels
         .iter()

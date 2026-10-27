@@ -26,6 +26,21 @@ enum Cmd {
         #[arg(long)]
         output: PathBuf,
     },
+    /// Builds a project's shipping NativeAOT script image and scripts.json for a
+    /// runtime identifier (for example osx-arm64 on a Mac) into an export's game/.
+    Scripts {
+        #[arg(long)]
+        project: PathBuf,
+        #[arg(long)]
+        assembly: String,
+        #[arg(long)]
+        rid: String,
+        #[arg(long)]
+        output: PathBuf,
+        /// Generated projects and logs.
+        #[arg(long)]
+        job: PathBuf,
+    },
     /// Checks prerequisites without starting WSL or an emulator.
     Doctor {
         #[arg(long)]
@@ -128,6 +143,27 @@ fn run() -> Result<bool> {
             output,
         } => {
             ara_export::build_runtime_template(&player, &engine, &output)?;
+            Ok(true)
+        }
+        Cmd::Scripts {
+            project,
+            assembly,
+            rid,
+            output,
+            job,
+        } => {
+            let image = ara_export::scripts::build(
+                &project,
+                &assembly,
+                &rid,
+                &std::path::absolute(output)?,
+                &std::path::absolute(job)?,
+                &Toolchain::discover(),
+            )?;
+            match image {
+                Some(image) => println!("{}", image.display()),
+                None => println!("no gameplay modules"),
+            }
             Ok(true)
         }
         Cmd::Doctor {

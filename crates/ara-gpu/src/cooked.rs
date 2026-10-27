@@ -2,7 +2,23 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-/// Finds installed cooked resources beside the executable, falling back to a checkout.
+/// The folder a shipped player's data lives in: the executable's folder, or inside a
+/// macOS app bundle (`X.app/Contents/MacOS/<exe>`) its `Contents/Resources`, where the
+/// launch file, pack and cooked resources sit outside the signed code.
+pub fn install_root() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    if cfg!(target_os = "macos")
+        && dir.ends_with("Contents/MacOS")
+        && let Some(contents) = dir.parent()
+        && contents.join("Info.plist").is_file()
+    {
+        return Some(contents.join("Resources"));
+    }
+    Some(dir.to_path_buf())
+}
+
+/// Finds installed cooked resources in the [`install_root`], falling back to a checkout.
 /// Called during renderer setup, never during per-frame rendering.
 pub fn resource_dir(package: &str, checkout: impl AsRef<std::path::Path>) -> std::path::PathBuf {
     if let Some(root) = std::env::var_os("ARA_SHADER_DIR") {
@@ -12,9 +28,8 @@ pub fn resource_dir(package: &str, checkout: impl AsRef<std::path::Path>) -> std
             return path;
         }
     }
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| exe.parent().map(|dir| dir.join("resources").join(package)))
+    install_root()
+        .map(|root| root.join("resources").join(package))
         .filter(|dir| {
             dir.is_dir()
                 || dir

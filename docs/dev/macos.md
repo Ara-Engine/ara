@@ -78,10 +78,32 @@ in `caffeinate -dimsu <command>` (macOS sleeps after a minute on battery).
 |---|---|
 | Kernel and platform-independent crates | Green (`cargo test`); the whole workspace type-checks. |
 | SDL3 platform layer (`ara-platform`, `ara-audio`) | Green. |
-| `ara-gpu` Metal 4 core | Buffers, textures, converter tables, pipelines from metallibs with a persistent pipeline archive, both queues with shared-event timelines (async compute), deferred completion, preparation workers, GPU pass timings and the timing window, CAMetalLayer presenter (windowless and through an SDL3 Metal view) that scales and converts engine output like the Vulkan blit, through MetalPerformanceShaders on a classic queue; shared surfaces publish scaled frames the same way. Tested with runtime-compiled MSL laid out like converter output. |
-| Not yet on Metal | Acceleration structures/ray query, mesh stages, shader hot reload, HDR output, converter draw parameters. |
-| Renderer, player, editor, Hub | The whole workspace builds and passes `clippy -D warnings` on macOS against `MetalDevice` (renderer seam: `GpuDevice` consumers, backend-selected `ara-platform::Present`, the Metal editor UI adapter in `ara-editor-gpu`). Running them needs converter-cooked engine pipelines and the editor's `ui` pipeline (`crates/ara-editor-gpu/shaders/pipelines.json`), cooked on Windows with Metal Shader Converter. Tests that drive raw Vulkan objects are Vulkan-only. |
+| `ara-gpu` Metal 4 core | Buffers, textures, converter tables, pipelines from metallibs with a persistent pipeline archive, both queues with shared-event timelines (async compute), deferred completion, preparation workers, GPU pass timings and the timing window, CAMetalLayer presenter (windowless and through an SDL3 Metal view) that scales and converts engine output like the Vulkan blit, through MetalPerformanceShaders on a classic queue; shared surfaces publish scaled frames the same way. Tested with runtime-compiled MSL laid out like converter output and with the converter-cooked engine pipelines. Each device owns one 4096-slot timestamp heap (Metal allows 32 counter heaps per process); a submission without a free range runs untimed, and back-to-back pass boundaries share one timestamp. Queue barriers carry their accesses' stages, so a pass whose only dependencies are attachments runs its vertex (tiling) work under the previous pass's fragment work. |
+| Not yet on Metal | Acceleration structures/ray query, mesh stages, shader hot reload, HDR output, converter draw parameters (no cooked stage needs them yet). |
+| Renderer, player, editor, Hub | The whole workspace builds and passes `clippy -D warnings` on macOS against `MetalDevice` (renderer seam: `GpuDevice` consumers, backend-selected `ara-platform::Present`, the Metal editor UI adapter in `ara-editor-gpu`). Every engine pipeline and the editor's `ui` pipeline carry Metal Shader Converter 4.0.3 metallibs, cooked on Windows. Under API and GPU validation, the whole `ara-render` suite passes on Metal (its captures within SSIM 0.005 of the Vulkan goldens), and so does the editor UI adapter's windowless GPU/CPU pixel test (`ara-editor-gpu` `tests/ui_pixels.rs`). The player, editor and Hub apps have not been run on Metal yet. Tests that drive raw Vulkan objects are Vulkan-only. |
+| Player (`ara-player`) | Runs game packs exported on Windows on Metal, headless (`--headless`) and through the hidden continuous path (`--offscreen --frames N`), with C# gameplay as an osx-arm64 NativeAOT image and the native game UI. Showcase and Outpost captures are within SSIM 0.0011 and 0.0009 of the Windows captures at the same preset. On a Mac, `ara-export` exports `platform: macos` as an ad-hoc signed `.app` (crates/ara-export README, "macOS on a Mac"). |
+| Crash capture (`ara-crash`) | Native crashes and Rust panics write `ara.crash/1` reports and minidumps to `~/Library/Application Support/Ara/crashes` (or `ARA_CRASH_DIR`), captured out of process like Windows and Linux. To symbolize, build with `CARGO_PROFILE_<PROFILE>_DEBUG=line-tables-only` and `CARGO_PROFILE_<PROFILE>_SPLIT_DEBUGINFO=packed`, run `ara-crash archive <binary>.dSYM/Contents/Resources/DWARF/<file> <store>`, then `ara-crash symbolize <dump> <store>`. |
 | C# host (`ara-script`, osx-arm64) | Green: JIT hosting, NativeAOT sample, L1/L3 reload, the out-of-process compile server and module tests. Needs `dotnet` on `PATH`. |
+
+## Running a Windows-built game
+
+Until the macOS export lane exists, run an export or frozen pack made on Windows with
+the Mac's player. Copy `game.arapack` and `ara-launch.json` into a folder. For a
+game with C# gameplay, build its osx-arm64 image there (it writes `game/<Assembly>.dylib`
+and `game/scripts.json`; the layout hash must match the Windows export's):
+
+```sh
+cargo run -p ara-export --bin ara-export -- scripts --project samples/outpost \
+  --assembly Outpost --rid osx-arm64 --output PACK/game --job target/scripts-job
+cargo run -p ara-player -- --root PACK --headless --quality high   # writes PACK/verify.png
+```
+
+- Compare against the Windows `verify.png` at the same `--quality`. `Auto` plans with
+  Apple unified memory as device-local (Metal's recommended working set), so an
+  M5 Pro picks High, by the same thresholds as a discrete GPU.
+- Set `SDL_MAC_BACKGROUND_APP=1` for automated runs that open a hidden SDL window
+  (`--offscreen`, editor and Hub verification routes): without it SDL makes the
+  process a regular app, which shows a Dock icon and can take focus.
 
 ## Known issues
 

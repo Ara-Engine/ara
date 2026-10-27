@@ -195,6 +195,136 @@ pub fn prepare(
     }))
 }
 
+/// Writes the managed crash hook as MSBuild targets in `work`: attached only to the
+/// linked NativeAOT entry when `entry_only` (runtime players), else to every project.
+pub fn crash_targets(work: &Path, entry_only: bool) -> Result<PathBuf> {
+    let source = work.join("AraCrash.g.cs");
+    std::fs::write(&source, include_str!("managed-crash.cs"))?;
+    let targets = work.join("AraCrash.targets");
+    let condition = if entry_only {
+        " Condition=\"'$(AraNativeEntry)' == 'true'\""
+    } else {
+        ""
+    };
+    let source = source
+        .to_str()
+        .context("non-UTF8 managed crash source path")?;
+    std::fs::write(
+        &targets,
+        format!(
+            "<Project><ItemGroup{condition}><Compile Include=\"{}\" /></ItemGroup></Project>",
+            quick_xml::escape::escape(source)
+        ),
+    )?;
+    Ok(targets)
+}
+
+/// `dotnet publish` of a script project for `rid` into `output` with the shipping
+/// properties: a NativeAOT shared library, or a self-contained ReadyToRun build.
+/// Symbols stay in the image (ELF/PE builds archive and strip them), except on macOS,
+/// where they go to a `.dSYM` beside it. Callers add platform toolchain properties.
+pub fn publish_command(
+    project: &Path,
+    rid: &str,
+    output: &Path,
+    native_aot: bool,
+    crash_targets: &Path,
+    tools: &Toolchain,
+) -> Result<Command> {
+    let mut cmd = Command::new("dotnet");
+    cmd.arg("publish")
+        .arg(project)
+        .args([
+            "-c",
+            "Release",
+            "-r",
+            rid,
+            "--nologo",
+            "--disable-build-servers",
+            "-o",
+        ])
+        .arg(output)
+        .arg(format!(
+            "-p:AraLane={}",
+            if native_aot { "aot" } else { "r2r" }
+        ))
+        .arg("-p:Deterministic=true")
+        .arg("-p:InvariantGlobalization=true")
+        .arg("-p:UseSharedCompilation=false")
+        .arg("-p:DebugSymbols=true")
+        .arg(format!("-p:StripSymbols={}", rid.starts_with("osx")))
+        .arg(format!(
+            "-p:CustomBeforeMicrosoftCommonTargets={}",
+            crash_targets.display()
+        ))
+        .env("PATH", tools.path()?);
+    if native_aot {
+        cmd.args(["-p:PublishAot=true", "-p:NativeLib=Shared"]);
+    } else {
+        cmd.args([
+            "-p:PublishAot=false",
+            "-p:OutputType=Exe",
+            "-p:SelfContained=true",
+            "-p:PublishReadyToRun=true",
+            "-p:PublishTrimmed=false",
+        ]);
+    }
+    Ok(cmd)
+}
+
+/// The runtime identifier of a desktop platform's one architecture.
+pub(crate) fn desktop_rid(platform: crate::Platform) -> &'static str {
+    match platform {
+        crate::Platform::Windows => "win-x64",
+        crate::Platform::Macos => "osx-arm64",
+        _ => "linux-x64",
+    }
+}
+
+/// File name of `assembly`'s NativeAOT shared library on `rid`.
+pub fn library_name(assembly: &str, rid: &str) -> String {
+    let extension = if rid.starts_with("win") {
+        "dll"
+    } else if rid.starts_with("osx") || rid.starts_with("ios") {
+        "dylib"
+    } else {
+        "so"
+    };
+    format!("{assembly}.{extension}")
+}
+
+/// Builds a project's shipping NativeAOT image for `rid` and puts only the image and
+/// its `scripts.json` in `output`; the job directory keeps generated projects, the
+/// publish output (symbols included) and logs. Returns the
+/// image, or `None` for a project without gameplay modules. This is the host-native
+/// lane for platforms the export pipeline does not build yet (macOS players).
+pub fn build(
+    project: &Path,
+    assembly: &str,
+    rid: &str,
+    output: &Path,
+    job: &Path,
+    tools: &Toolchain,
+) -> Result<Option<PathBuf>> {
+    let Some(shipping) = prepare(project, assembly, job, tools)? else {
+        return Ok(None);
+    };
+    std::fs::create_dir_all(job.join("logs"))?;
+    let targets = crash_targets(job, true)?;
+    let published = job.join("publish").join(rid);
+    let mut cmd = publish_command(&shipping.project, rid, &published, true, &targets, tools)?;
+    tools::run(
+        &mut cmd,
+        &job.join(format!("logs/script-{rid}.log")),
+        Duration::from_secs(600),
+    )?;
+    let library = library_name(assembly, rid);
+    std::fs::create_dir_all(output)?;
+    tools::copy(&published.join(&library), &output.join(&library))?;
+    write_manifest(output, &library, &shipping.modules)?;
+    Ok(Some(output.join(library)))
+}
+
 /// Writes portable metadata next to a published image. The native initializer also
 /// checks the compiled binding identity, so stale SDK binaries cannot bypass it.
 pub fn write_manifest(output: &Path, library: &str, modules: &[String]) -> Result<()> {
@@ -254,5 +384,12 @@ mod source_tests {
         assert!(xml.contains("/game/**/obj/**"));
         assert!(xml.contains("/game/**/.*/**"));
         assert!(!xml.contains(";/game/**;"));
+    }
+    #[test]
+    fn script_images_take_each_platforms_shared_library_name() {
+        assert_eq!(library_name("Outpost", "win-x64"), "Outpost.dll");
+        assert_eq!(library_name("Outpost", "osx-arm64"), "Outpost.dylib");
+        assert_eq!(library_name("Outpost", "linux-x64"), "Outpost.so");
+        assert_eq!(library_name("Outpost", "android-arm64"), "Outpost.so");
     }
 }

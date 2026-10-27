@@ -32,7 +32,10 @@ fn upload_requires_configuration_and_explicit_consent() {
     assert_eq!(decoded.diagnostic().code, ara_crash::CRASH);
 }
 
-#[cfg(all(feature = "symbols", any(windows, target_os = "linux")))]
+#[cfg(all(
+    feature = "symbols",
+    any(windows, target_os = "linux", target_os = "macos")
+))]
 #[test]
 fn native_crash_and_panic_are_captured_in_separate_processes() {
     use std::{
@@ -59,6 +62,20 @@ fn native_crash_and_panic_are_captured_in_separate_processes() {
             std::thread::sleep(Duration::from_millis(20));
         };
         assert!(!status.success());
+        // The monitor ends with its process and removes its `ara-<pid>-*.sock`.
+        let socket = format!("ara-{}-", child.id());
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while std::fs::read_dir(std::env::temp_dir())
+            .unwrap()
+            .flatten()
+            .any(|e| e.file_name().to_string_lossy().starts_with(&socket))
+        {
+            assert!(
+                Instant::now() < deadline,
+                "the crash monitor outlived its {mode} probe"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
         let artifacts = std::fs::read_dir(dir.path())
             .unwrap()
             .map(|e| e.unwrap().path())

@@ -23,6 +23,8 @@ impl MetalDevice {
         encode: impl FnOnce(&Encoder),
         mut around: impl FnMut(&NativeQueue, bool),
     ) -> Result<TimelinePoint> {
+        // Its waits read committed values, so a scope's recorded batch goes first.
+        self.flush();
         let queue = Queue::Graphics;
         let point = TimelinePoint {
             queue,
@@ -81,6 +83,7 @@ impl MetalDevice {
             point.value,
         );
         self.submitted[queue.index()] = point.value;
+        self.flushed[queue.index()] = point.value;
         self.pending.push(super::Pending {
             point,
             allocator,

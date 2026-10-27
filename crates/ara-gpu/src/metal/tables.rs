@@ -16,6 +16,8 @@ use objc2_metal::{
 /// One table: a shared entry array plus monotonic slot allocation with reuse.
 pub(super) struct Table {
     pub buffer: Retained<ProtocolObject<dyn MTLBuffer>>,
+    /// The heap name in exhaustion errors, as the Vulkan backend reports it.
+    heap: &'static str,
     capacity: u32,
     next: u32,
     free: Vec<u32>,
@@ -23,7 +25,12 @@ pub(super) struct Table {
 }
 
 impl Table {
-    fn new(device: &ProtocolObject<dyn MTLDevice>, capacity: u32, label: &str) -> Result<Self> {
+    fn new(
+        device: &ProtocolObject<dyn MTLDevice>,
+        capacity: u32,
+        label: &str,
+        heap: &'static str,
+    ) -> Result<Self> {
         let buffer = device
             .newBufferWithLength_options(
                 (u64::from(capacity) * ENTRY_BYTES) as usize,
@@ -33,6 +40,7 @@ impl Table {
         buffer.setLabel(Some(&objc2_foundation::NSString::from_str(label)));
         Ok(Self {
             buffer,
+            heap,
             capacity,
             next: 0,
             free: Vec::new(),
@@ -49,8 +57,8 @@ impl Table {
             }
             None => {
                 return Err(crate::GpuError::Contract(format!(
-                    "Descriptor table capacity {} exhausted",
-                    self.capacity
+                    "{} heap exhausted ({} slots, including pending retirement)",
+                    self.heap, self.capacity
                 )));
             }
         };
@@ -119,15 +127,25 @@ pub(super) struct Tables {
 impl Tables {
     pub fn new(device: &ProtocolObject<dyn MTLDevice>) -> Result<Self> {
         let sampler_states = static_samplers(device)?;
-        let mut samplers = Table::new(device, abi::SAMPLERS, "ara.samplers")?;
+        let mut samplers = Table::new(device, abi::SAMPLERS, "ara.samplers", "Sampler")?;
         for state in &sampler_states {
             samplers.insert(TableEntry::sampler(state.gpuResourceID().to_raw()))?;
         }
         Ok(Self {
-            textures: Table::new(device, abi::TEXTURES, "ara.textures")?,
-            buffers: Table::new(device, abi::BUFFERS, "ara.buffers")?,
-            storage_images: Table::new(device, abi::STORAGE_IMAGES, "ara.storage_images")?,
-            accelerations: Table::new(device, abi::ACCELERATIONS, "ara.accelerations")?,
+            textures: Table::new(device, abi::TEXTURES, "ara.textures", "Sampled")?,
+            buffers: Table::new(device, abi::BUFFERS, "ara.buffers", "Buffer")?,
+            storage_images: Table::new(
+                device,
+                abi::STORAGE_IMAGES,
+                "ara.storage_images",
+                "Storage-image",
+            )?,
+            accelerations: Table::new(
+                device,
+                abi::ACCELERATIONS,
+                "ara.accelerations",
+                "Acceleration",
+            )?,
             samplers,
             _sampler_states: sampler_states,
         })

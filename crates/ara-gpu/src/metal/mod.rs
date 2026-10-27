@@ -116,6 +116,14 @@ struct Pending {
     timing: Option<timestamps::Timing>,
 }
 
+/// A recorded command buffer waiting for its batch's native commit.
+struct Batched {
+    cmd: Retained<ProtocolObject<dyn MTL4CommandBuffer>>,
+    point: TimelinePoint,
+    /// Timeline values this list waits for, per queue.
+    waits: [u64; 2],
+}
+
 /// Resolved pass timings kept for `resolve`/completion callers (bounded).
 const RESOLVED_TIMINGS: usize = 1024;
 
@@ -135,6 +143,11 @@ pub struct MetalDevice {
     images: Arena<ImageKind, Owned<NativeImage>>,
     pipelines: Arena<PipelineKind, NativePipeline>,
     submitted: [u64; 2],
+    /// Values committed to each queue; a deferred scope's batch is recorded
+    /// (`submitted`) before it is committed at the scope's end or a queue change.
+    flushed: [u64; 2],
+    /// Recorded command buffers of one queue, committed together by `flush`.
+    batch: Vec<Batched>,
     retired: Vec<Retired>,
     pending: Vec<Pending>,
     info: vulkan::DeviceInfo,
@@ -242,6 +255,8 @@ impl MetalDevice {
             images: Arena::default(),
             pipelines: Arena::default(),
             submitted: [0; 2],
+            flushed: [0; 2],
+            batch: Vec::new(),
             retired: Vec::new(),
             pending: Vec::new(),
             info,
@@ -297,7 +312,7 @@ impl MetalDevice {
     /// Wait until both queues finished every submission.
     pub fn wait_idle(&self) -> Result<()> {
         for queue in [Queue::Graphics, Queue::Compute] {
-            let value = self.submitted[queue.index()];
+            let value = self.flushed[queue.index()];
             Device::wait(self, TimelinePoint { queue, value })?;
         }
         Ok(())
@@ -524,6 +539,9 @@ impl MetalDevice {
         }
         self.reclaim()?;
         let queue = list.queue;
+        if self.batch.first().is_some_and(|b| b.point.queue != queue) {
+            self.flush();
+        }
         let point = TimelinePoint {
             queue,
             value: self.submitted[queue.index()]
@@ -552,43 +570,43 @@ impl MetalDevice {
                 _ => None,
             })
             .collect();
-        let timing = self.timestamp_pool.take(&self.device, labels)?;
-        let encoded = self.encode(&cmd, &list, &mut scratch, &mut created, &timing.heap.heap);
+        let mut timing = self.timestamp_pool.take(&self.device, labels);
+        let heap = timing.as_ref().map(|timing| (&*timing.heap, timing.base));
+        let encoded = self.encode(&cmd, &list, &mut scratch, &mut created, heap);
         cmd.endCommandBuffer();
         for chunk in &created {
             self.residency
                 .addAllocation(ProtocolObject::from_ref(&**chunk));
             self.residency_dirty = true;
         }
-        if let Err(error) = encoded {
-            // Nothing was committed: the allocator and scratch are immediately reusable.
-            allocator.reset();
-            self.allocators.push(allocator);
-            self.scratch.recycle(scratch.chunks);
-            self.timestamp_pool.recycle(timing.heap);
-            return Err(error);
+        let aliases = match encoded {
+            Ok(aliases) => aliases,
+            Err(error) => {
+                // Nothing was committed: the allocator and scratch are immediately
+                // reusable.
+                allocator.reset();
+                self.allocators.push(allocator);
+                self.scratch.recycle(scratch.chunks);
+                if let Some(timing) = &timing {
+                    self.timestamp_pool.recycle(timing);
+                }
+                return Err(error);
+            }
+        };
+        if let Some(timing) = &mut timing {
+            timing.aliases = aliases;
         }
-        if std::mem::take(&mut self.residency_dirty) {
-            self.residency.commit();
-        }
-        let native_queue = &self.queues[queue.index()];
+        let mut dependencies = [0; 2];
         for wait in waits {
-            native_queue.waitForEvent_value(
-                ProtocolObject::from_ref(&*self.events[wait.queue.index()]),
-                wait.value,
-            );
+            let value = &mut dependencies[wait.queue.index()];
+            *value = (*value).max(wait.value);
         }
-        let buffers = [NonNull::from(&*cmd)];
-        // SAFETY: one ended, never-committed command buffer; the pointer array lives
-        // across the call and the queue retains the buffer until it completes.
-        unsafe { native_queue.commit_count(NonNull::from(&buffers[0]), 1) };
-        native_queue.signalEvent_value(
-            ProtocolObject::from_ref(&*self.events[queue.index()]),
-            point.value,
-        );
+        self.batch.push(Batched {
+            cmd,
+            point,
+            waits: dependencies,
+        });
         self.submitted[queue.index()] = point.value;
-        self.submission_stats.queue_submissions += 1;
-        self.submission_stats.command_lists += 1;
         for value in self.buffers.values_mut() {
             value.last[queue.index()] = point.value;
         }
@@ -599,10 +617,11 @@ impl MetalDevice {
             point,
             allocator,
             chunks: scratch.chunks,
-            timing: Some(timing),
+            timing,
         });
-        if let Some(points) = &mut self.deferred {
-            points.push(point);
+        match &mut self.deferred {
+            Some(points) => points.push(point),
+            None => self.flush(),
         }
         for command in &list.commands {
             if let commands::Command::Barrier(Barrier {
@@ -616,9 +635,59 @@ impl MetalDevice {
         }
         Ok(point)
     }
+    /// Commit the batch (one queue's recorded command buffers) in one native call,
+    /// after the other queue's and earlier commits' points it waits for, and signal
+    /// its last point. Earlier buffers of the batch need no event: every recording's
+    /// first encoder orders itself after all prior work on its queue.
+    pub(super) fn flush(&mut self) {
+        let Some(first) = self.batch.first() else {
+            return;
+        };
+        let queue = first.point.queue;
+        let mut batch = std::mem::take(&mut self.batch);
+        let last = batch.last().map_or(0, |b| b.point.value);
+        let mut dependencies = [0; 2];
+        for batched in &batch {
+            for (value, wait) in dependencies.iter_mut().zip(batched.waits) {
+                *value = (*value).max(wait);
+            }
+        }
+        dependencies[queue.index()] = dependencies[queue.index()].min(self.flushed[queue.index()]);
+        if std::mem::take(&mut self.residency_dirty) {
+            self.residency.commit();
+        }
+        let native_queue = &self.queues[queue.index()];
+        for (index, value) in dependencies.into_iter().enumerate() {
+            if value > 0 {
+                native_queue
+                    .waitForEvent_value(ProtocolObject::from_ref(&*self.events[index]), value);
+            }
+        }
+        let buffers: Vec<_> = batch.iter().map(|b| NonNull::from(&*b.cmd)).collect();
+        // SAFETY: ended, never-committed command buffers in recording order; the pointer
+        // array lives across the call and the queue retains them until they complete.
+        unsafe { native_queue.commit_count(NonNull::from(&buffers[0]), buffers.len()) };
+        native_queue
+            .signalEvent_value(ProtocolObject::from_ref(&*self.events[queue.index()]), last);
+        self.flushed[queue.index()] = last;
+        self.submission_stats.queue_submissions += 1;
+        self.submission_stats.command_lists += batch.len() as u64;
+        batch.clear();
+        self.batch = batch;
+    }
     /// Wait for a submission, release its recording storage and return its pass
-    /// timings (GPU timestamps on the shared device clock).
+    /// timings (GPU timestamps on the shared device clock). Inside a deferred scope it
+    /// neither waits nor takes the timings, like Vulkan: later scoped submissions wait
+    /// for the point on the GPU, and the scope's completion delivers its timings.
     pub fn resolve(&mut self, point: TimelinePoint) -> Result<Vec<PassTiming>> {
+        if let Some(scope) = &self.deferred {
+            if !scope.contains(&point) && !self.pending.iter().any(|p| p.point == point) {
+                return Err(GpuError::Contract("Unknown deferred submission".into()));
+            }
+            let wait = &mut self.deferred_waits[point.queue.index()];
+            *wait = (*wait).max(point.value);
+            return Ok(Vec::new());
+        }
         Device::wait(self, point)?;
         self.reclaim()?;
         Ok(self.take_timings(point))
@@ -685,8 +754,9 @@ impl MetalDevice {
             self.allocators.push(pending.allocator);
             self.scratch.recycle(pending.chunks);
             if let Some(timing) = pending.timing {
-                let (passes, span) = timestamps::resolve(&self.device, &timing, point.queue)?;
-                self.timestamp_pool.recycle(timing.heap);
+                let resolved = timestamps::resolve(&self.device, &timing, point.queue);
+                self.timestamp_pool.recycle(&timing);
+                let (passes, span) = resolved?;
                 self.timing_window.observe(point, span);
                 if self.timings.len() == RESOLVED_TIMINGS {
                     self.timings.pop_front();
@@ -758,6 +828,11 @@ impl Device for MetalDevice {
         if point.value > self.submitted[point.queue.index()] {
             return Err(GpuError::Contract(
                 "Cannot wait on an unsubmitted timeline point".into(),
+            ));
+        }
+        if point.value > self.flushed[point.queue.index()] {
+            return Err(GpuError::Contract(
+                "End the frame scope before waiting on its recorded work".into(),
             ));
         }
         let event = &self.events[point.queue.index()];
@@ -855,7 +930,7 @@ impl Drop for MetalDevice {
         // own (tables, scratch, resources): wait for every submitted value first.
         native::pool(|| {
             for queue in [Queue::Graphics, Queue::Compute] {
-                let value = self.submitted[queue.index()];
+                let value = self.flushed[queue.index()];
                 if value > 0 {
                     let _ = self.events[queue.index()]
                         .waitUntilSignaledValue_timeoutMS(value, WAIT_TIMEOUT_MS);
