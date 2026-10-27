@@ -2,6 +2,75 @@
 mod support;
 
 #[test]
+fn source_presence_hint_never_traverses_directory_links() {
+    let target = std::env::var_os("ARA_TEST_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            support::dotnet()
+                .parent()
+                .expect("repo")
+                .join("target/script-project")
+        });
+    let scratch = target.join(format!("linked-sources-{}", std::process::id()));
+    let project = scratch.join("project");
+    let external = scratch.join("outside");
+    let authored = project.join(ara_doc::AUTHORING_ROOT);
+    std::fs::create_dir_all(&authored).expect("project");
+    std::fs::create_dir_all(&external).expect("external source directory");
+    std::fs::write(external.join("Outside.cs"), "class Outside { }").expect("outside source");
+    let link = authored.join("linked");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let result = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(&link)
+            .arg(&external)
+            .creation_flags(0x0800_0000)
+            .output()
+            .expect("create junction");
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&external, &link).expect("create directory symlink");
+    assert!(
+        !ara_script::project::has_sources(&project).expect("presence hint"),
+        "directory links must not contribute authored sources"
+    );
+}
+
+#[test]
+fn empty_project_publication_does_not_initialize_derived_state() {
+    let target = std::env::var_os("ARA_TEST_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            support::dotnet()
+                .parent()
+                .expect("repo")
+                .join("target/script-project")
+        });
+    let root = target.join(format!("empty-publication-{}", std::process::id()));
+    std::fs::create_dir_all(&root).expect("scratch");
+    for inventory in [
+        ara_script::project::inventory(&root),
+        ara_script::project::compile(&root, ara_script::ModuleProfile::Gameplay),
+        ara_script::project::publish(&root, ara_script::ModuleProfile::Gameplay),
+    ] {
+        let inventory = inventory.expect("empty project");
+        assert!(inventory.modules.is_empty());
+        assert!(inventory.diagnostics.is_empty());
+    }
+    assert!(
+        !root.join(".ara").exists(),
+        "a project without C# must not initialize compiler state"
+    );
+}
+
+#[test]
 fn migrated_outpost_sample_compiles_and_ticks_without_shipping_its_editor_extension() {
     let _clr = support::clr_lock();
     support::build();

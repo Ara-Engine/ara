@@ -42,3 +42,15 @@ assemblies, PDB and generator outputs all stay under `.ara/scripts/<module>/`.
 Source membership changes rebuild the owning module; changes to module/domain
 boundaries request an L4 Play restart from the current snapshot, which loads the
 new inventory. Editor code is never loaded into a player.
+
+Preparation requests reuse a hidden, parent-bound SDK process. Each request
+rescans the requested absolute root and rechecks compilation inputs; folder
+ownership and results are not cached by the host. SDK content changes replace
+the transport, and worker failures/timeouts dispose its exact owned process.
+Projects without source files or manifests return an empty inventory before
+initializing private compiler state, keeping read-only CLI fixtures clean.
+
+The Play integration fixtures stage legacy Outpost sources under `AUTHORING_ROOT`
+with a JSON manifest preserving its name/hot setting. Generated schemas come from
+`.ara/scripts/`, and the first-start regression places a C# component directly in
+the scene with no checked-in schema or warm Play to hide missing publication.

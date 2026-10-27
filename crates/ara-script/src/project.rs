@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 mod editor;
 mod fixes;
 mod lock;
+mod session;
 mod tool;
 pub use editor::EditorClient;
 pub use fixes::{AppliedFix, SourceChange, SourceText, code_fixes};
@@ -154,6 +155,9 @@ pub fn inventory(root: &Path) -> Result<Inventory, Diagnostic> {
 /// them while keeping the project open; check/export must reject error results.
 pub fn compile(root: &Path, domain: crate::ModuleProfile) -> Result<Inventory, Diagnostic> {
     let root = &std::fs::canonicalize(root).map_err(io)?;
+    if !source_hint(&root.join(ara_doc::AUTHORING_ROOT), true)? {
+        return Ok(Inventory::default());
+    }
     let _publication = lock::PublicationLock::acquire(root, || false)?;
     compile_canonical(root, domain)
 }
@@ -170,6 +174,9 @@ fn compile_canonical(root: &Path, domain: crate::ModuleProfile) -> Result<Invent
 /// when compilation has coded diagnostics; generated outputs never enter game/.
 pub fn publish(root: &Path, domain: crate::ModuleProfile) -> Result<Inventory, Diagnostic> {
     let root = &std::fs::canonicalize(root).map_err(io)?;
+    if !source_hint(&root.join(ara_doc::AUTHORING_ROOT), true)? {
+        return Ok(Inventory::default());
+    }
     let _publication = lock::PublicationLock::acquire(root, || false)?;
     let inventory = compile_canonical(root, domain)?;
     publish_outputs(root, inventory)
@@ -365,8 +372,8 @@ fn invoke(
     mode: &str,
     domain: Option<crate::ModuleProfile>,
 ) -> Result<Inventory, Diagnostic> {
-    let request = json!({"project":root, "authoringRoot":ara_doc::AUTHORING_ROOT, "domain":domain.map(crate::ModuleProfile::as_str)});
-    tool::run(root, mode, request)
+    let request = json!({"project":root, "authoringRoot":ara_doc::AUTHORING_ROOT, "domain":domain.map(crate::ModuleProfile::as_str), "operation":mode});
+    session::invoke(root, request)
 }
 
 /// Compile editor modules and discover or invoke their command registrations.

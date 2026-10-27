@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO.Pipes;
+using System.Text.Json;
 using Ara.CompileServer;
 using Ara.Hosting;
 
@@ -16,6 +17,24 @@ if (args.Contains("--inventory", StringComparer.Ordinal))
     var request = System.Text.Json.JsonSerializer.Deserialize<InventoryRequest>(await Console.In.ReadToEndAsync(), CodeFixRunner.Json)
         ?? throw new ArgumentException("missing inventory request");
     Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(ProjectInventory.Scan(request), CodeFixRunner.Json));
+    return 0;
+}
+
+if (args.Contains("--project-session", StringComparer.Ordinal))
+{
+    if (int.TryParse(Arg("--parent"), out var projectParent) && projectParent != 0) _ = Task.Run(() => WatchParent(projectParent));
+    while (await Console.In.ReadLineAsync() is { } line)
+    {
+        using var input = System.Text.Json.JsonDocument.Parse(line);
+        var operation = input.RootElement.GetProperty("operation").GetString();
+        var result = operation switch {
+            "--inventory" => ProjectInventory.Scan(input.RootElement.Deserialize<InventoryRequest>(CodeFixRunner.Json) ?? throw new ArgumentException("missing inventory request")),
+            "--compile-project" => ProjectCompiler.Compile(input.RootElement.Deserialize<ProjectBuildRequest>(CodeFixRunner.Json) ?? throw new ArgumentException("missing compilation request")),
+            _ => throw new ArgumentException("unknown project operation"),
+        };
+        await Console.Out.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(result, CodeFixRunner.Json));
+        await Console.Out.FlushAsync();
+    }
     return 0;
 }
 
