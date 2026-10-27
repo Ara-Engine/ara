@@ -3,9 +3,13 @@ use super::SceneView;
 use ara_render::instanced::Scene;
 use ara_ui::paint::Box2;
 use glam::Vec3;
+use std::collections::BTreeSet;
+mod snap;
 
 /// A native geometry hit and its source draw, borrowed from the presented scene snapshot.
 pub(in crate::app) struct SurfaceHit<'a> {
+    /// Presented instance identity, including primitives without an ordinary draw.
+    pub entity: u64,
     /// Position on the nearest triangle, in world metres.
     pub position: [f32; 3],
     /// World-space geometric triangle normal.
@@ -23,12 +27,38 @@ struct Pick {
 }
 
 impl SceneView {
+    /// The retained geometry belongs to this document. A previous scene's
+    /// last-good image may stay visible, but cannot accept authoring snap input.
+    pub(in crate::app) fn snap_ready(&self, doc: &str) -> bool {
+        if self
+            .raster
+            .as_ref()
+            .and_then(ara_runtime_render::RasterView::scene)
+            .is_some()
+        {
+            self.raster_scene.as_deref() == Some(doc)
+        } else {
+            self.prepared.is_some() && self.fidelity_scene.as_deref() == Some(doc)
+        }
+    }
+
     /// The precise native triangle, normal, vertex candidate and source primitive under a pointer.
     pub(in crate::app) fn surface_hit(
         &self,
         camera: &crate::state::Camera,
         rect: Box2,
         pointer: [f32; 2],
+    ) -> Option<SurfaceHit<'_>> {
+        self.surface_hit_excluding(camera, rect, pointer, &BTreeSet::new())
+    }
+
+    /// Pick through selected geometry while retaining the presented target mesh.
+    pub(in crate::app) fn surface_hit_excluding(
+        &self,
+        camera: &crate::state::Camera,
+        rect: Box2,
+        pointer: [f32; 2],
+        excluded: &BTreeSet<u64>,
     ) -> Option<SurfaceHit<'_>> {
         if ![rect.x, rect.y, rect.w, rect.h]
             .into_iter()
@@ -40,11 +70,6 @@ impl SceneView {
         {
             return None;
         }
-        let scene = self
-            .raster
-            .as_ref()
-            .and_then(ara_runtime_render::RasterView::scene)
-            .or_else(|| self.prepared.as_ref().map(|prepared| &prepared.scene))?;
         let (origin, direction) = camera.ray(
             [rect.w.max(1.) as u32, rect.h.max(1.) as u32],
             [
@@ -52,27 +77,60 @@ impl SceneView {
                 1. - (pointer[1] - rect.y) / rect.h * 2.,
             ],
         )?;
-        let hit = pick(scene, origin, direction)?;
+        self.ray_hit_excluding(origin, direction, excluded)
+    }
+
+    /// Native mesh query used by Drop to Surface; no invented ground-plane hit.
+    pub(in crate::app) fn ray_hit_excluding(
+        &self,
+        origin: Vec3,
+        direction: Vec3,
+        excluded: &BTreeSet<u64>,
+    ) -> Option<SurfaceHit<'_>> {
+        let hit = pick_where(self.presented_scene()?, origin, direction, |id| {
+            !excluded.contains(&id)
+        })?;
         let draw = self
             .raster_frame
             .as_ref()
             .and_then(|frame| frame.draws.iter().find(|draw| draw.entity == hit.entity));
         Some(SurfaceHit {
+            entity: hit.entity,
             position: hit.position.to_array(),
             normal: hit.normal.to_array(),
             vertex: hit.vertex.to_array(),
             draw,
         })
     }
+
+    fn presented_scene(&self) -> Option<&Scene> {
+        self.raster
+            .as_ref()
+            .and_then(ara_runtime_render::RasterView::scene)
+            .or_else(|| self.prepared.as_ref().map(|prepared| &prepared.scene))
+    }
 }
 
+#[cfg(test)]
 fn pick(scene: &Scene, origin: Vec3, direction: Vec3) -> Option<Pick> {
+    pick_where(scene, origin, direction, |_| true)
+}
+
+fn pick_where(
+    scene: &Scene,
+    origin: Vec3,
+    direction: Vec3,
+    accept: impl Fn(u64) -> bool,
+) -> Option<Pick> {
     if !origin.is_finite() || !direction.is_finite() || direction.length_squared() < f32::EPSILON {
         return None;
     }
     let mut nearest = f32::INFINITY;
     let mut hit = None;
     for instance in &scene.instances {
+        if !accept(instance.entity) {
+            continue;
+        }
         let Some(geometry) = scene.geometry.get(instance.geometry) else {
             continue;
         };
@@ -184,7 +242,7 @@ mod tests {
     use super::*;
     use ara_render::instanced::{Geometry, Instance, Lod, Vertex};
     use glam::Mat4;
-    fn scene(worlds: &[Mat4]) -> Scene {
+    pub(super) fn scene(worlds: &[Mat4]) -> Scene {
         Scene {
             geometry: vec![Geometry {
                 key: [1; 32],
@@ -243,6 +301,17 @@ mod tests {
         assert_eq!(hit.entity, 1);
         assert!(hit.normal.is_finite() && hit.vertex.is_finite());
         assert!(pick(&scene, Vec3::new(10., 0., 0.), -Vec3::Z).is_none());
+    }
+    #[test]
+    fn excluding_source_instances_picks_the_real_target_behind_them() {
+        let scene = scene(&[
+            Mat4::from_translation(-Vec3::Z * 5.),
+            Mat4::from_translation(-Vec3::Z * 2.),
+        ]);
+        let target = pick_where(&scene, Vec3::ZERO, -Vec3::Z, |id| id != 1).unwrap();
+        assert_eq!(target.entity, 0);
+        assert_eq!(target.position, Vec3::new(0., 0., -5.));
+        assert!(pick_where(&scene, Vec3::ZERO, -Vec3::Z, |_| false).is_none());
     }
     #[test]
     fn stale_indices_singular_transforms_parallel_and_nonfinite_rays_are_safe() {

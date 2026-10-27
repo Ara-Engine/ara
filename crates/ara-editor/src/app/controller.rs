@@ -7,6 +7,7 @@ mod navigation_tests;
 mod selection;
 #[cfg(test)]
 mod selection_gesture_tests;
+mod snap;
 struct GizmoDrag {
     handle: overlay::Handle,
     start: [f32; 2],
@@ -20,6 +21,8 @@ struct GizmoDrag {
     /// Digits typed during the drag; they set the value exactly.
     typed: String,
     duplicate: bool,
+    /// Captured source geometry and contact identity for exact placement modes.
+    snap: Option<snap::Drag>,
 }
 #[derive(Default)]
 pub(super) struct Controller {
@@ -113,6 +116,7 @@ impl Controller {
             pivot: handles.pivot,
             typed: String::new(),
             duplicate,
+            snap: None,
         });
         Ok(())
     }
@@ -262,6 +266,10 @@ impl Controller {
             _ => {}
         }
         if shell.modal_active() || shell.choice_open() {
+            if self.gizmo.take().is_some() {
+                editor.finish_gesture(true)?;
+                shell.show_readout(None);
+            }
             self.keys.clear();
             self.buttons = [false; 4];
             self.marquee = None;
@@ -390,10 +398,10 @@ impl Controller {
                         }
                     }
                     if commit {
-                        self.finish_gizmo(editor)?;
+                        self.finish_snap(editor, shell)?;
                         shell.show_readout(None);
                     } else {
-                        let text = self.drive_gizmo(editor, shell.pointer, shell.viewport());
+                        let text = self.drive_snap(editor, shell, view, scene_view);
                         shell.show_readout(text.map(|t| (t, shell.pointer)));
                     }
                     return Ok((true, true, false));
@@ -435,7 +443,7 @@ impl Controller {
                     && shell.menu.is_none();
                 if self.gizmo.is_some() {
                     if self.gizmo.as_ref().is_some_and(|g| g.typed.is_empty()) {
-                        let text = self.drive_gizmo(editor, position, shell.viewport());
+                        let text = self.drive_snap(editor, shell, view, scene_view);
                         shell.show_readout(text.map(|t| (t, position)));
                     }
                     scene_dirty = true;
@@ -620,7 +628,11 @@ impl Controller {
                             shell.commit_fields(editor)?;
                             shell.input.blur(&mut shell.ui);
                             let rect = shell.viewport().ok_or("viewport missing")?;
-                            if let Some(handles) = overlay::handles(view, &editor.state, rect)
+                            if self.begin_vertex(editor, shell, view, scene_view)? {
+                                dirty = true;
+                                scene_dirty = true;
+                            } else if let Some(handles) =
+                                overlay::handles(view, &editor.state, rect)
                                 && let Some(handle) = overlay::hit(&handles, shell.pointer)
                             {
                                 let pointer = shell.pointer;
@@ -632,6 +644,7 @@ impl Controller {
                                     rect,
                                     shell.modifiers[2],
                                 )?;
+                                self.capture_snap(editor, shell, view, scene_view);
                             } else if !shell.modifiers[2] {
                                 let x = ((shell.pointer[0] - rect.x) / rect.w
                                     * renderer.size()[0] as f32)
@@ -667,6 +680,7 @@ impl Controller {
                             }
                         }
                     } else if !pressed {
+                        shell.show_readout(None);
                         if self.finish_marquee(editor, shell, scene_view)? {
                             return Ok((true, false, false));
                         }
@@ -674,7 +688,7 @@ impl Controller {
                         if shell.finish_picker(editor)? || shell.finish_scrub(editor, false)? {
                             shell.event(InputEvent::Cancel, clipboard)?;
                         } else if self.gizmo.is_some() {
-                            self.finish_gizmo(editor)?;
+                            self.finish_snap(editor, shell)?;
                             shell.show_readout(None);
                             scene_dirty = true;
                         } else if !shell.drop_at(editor)? {

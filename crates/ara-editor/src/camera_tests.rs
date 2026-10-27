@@ -155,7 +155,7 @@ fn bookmarks_are_per_scene_typed_navigation_edits_and_recall_restores_the_full_l
     assert_eq!(listed["bookmarks"][0]["name"], "Detail");
     assert_eq!(history(&mut editor).as_array().unwrap().len(), before + 1);
     editor
-        .action("editor.scene.open", json!({"doc":"levels/other.scene"}))
+        .action("editor.scene.open", json!({"scene":"levels/other.scene"}))
         .unwrap();
     assert!(
         editor
@@ -225,7 +225,7 @@ fn agent_bookmark_recall_preserves_human_navigation_and_retains_attribution() {
         .unwrap();
     let bookmarked = editor.state.camera;
     editor
-        .action("editor.scene.open", json!({"doc":"levels/other.scene"}))
+        .action("editor.scene.open", json!({"scene":"levels/other.scene"}))
         .unwrap();
     editor
         .action("editor.camera", json!({"target":[9.,2.,1.]}))

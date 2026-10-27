@@ -218,6 +218,6 @@ fn scene_window_command_restores_saved_host_and_redocking_preserves_peer_panels(
     assert!(shell.enter(&id));
     assert!(shell.viewport().is_none());
     assert_eq!(shell.scene_host().unwrap().0, None);
-    assert!(shell.shown_node("console-scroll").is_some());
+    assert!(shell.shown_node("console-toolbar").is_some());
     assert!(editor.state.dock().unwrap().contains("console"));
 }

@@ -174,6 +174,35 @@ impl Gesture {
             }
         }
     }
+    /// Translate from the captured world poses, bypassing grid increments for an
+    /// exact surface/vertex contact. Invalid input leaves the whole preview intact.
+    pub fn translate_world(&mut self, delta: Vec3) -> bool {
+        if !matches!(self.tool, Tool::Translate | Tool::Universal)
+            || !delta.is_finite()
+            || self.current.len() != self.initial.len()
+            || self.initial.iter().any(|(id, matrix)| {
+                let Some(parent) = self.parents.get(id) else {
+                    return true;
+                };
+                !matrix.is_finite()
+                    || !self.current.contains_key(id)
+                    || !parent.is_finite()
+                    || parent.determinant().abs() < 1e-20
+                    || !(matrix.w_axis + parent.inverse().transform_vector3(delta).extend(0.))
+                        .is_finite()
+            })
+        {
+            return false;
+        }
+        for (id, start) in &self.initial {
+            if let (Some(current), Some(parent)) = (self.current.get_mut(id), self.parents.get(id))
+            {
+                *current = *start;
+                current.w_axis += parent.inverse().transform_vector3(delta).extend(0.);
+            }
+        }
+        true
+    }
     /// One transform.set per affected entity; the caller commits this list as one cmd.apply.
     pub fn commands(&self) -> Vec<Value> {
         self.current.iter().filter(|(id,m)|self.initial.get(*id)!=Some(*m)).map(|(id,matrix)|{

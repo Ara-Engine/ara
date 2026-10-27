@@ -688,8 +688,8 @@ fn build() -> Vec<Spec> {
             params[key] = json!(value);
             act(e, "editor.tool", params)
         }),
-        later("snap.surface", "Surface Snap", "magnet", "", "Surface snapping needs scene raycasts from ara-physics queries in the editor."),
-        later("snap.vertex", "Vertex Snap (hold V)", "magnet", "", "Vertex snapping needs mesh vertex queries from ara-asset in the editor."),
+        cmd("snap.surface", "Surface Snap", "magnet", "", "Snap translated geometry onto the actual surface under the pointer.",|_,e,_|toggle(e,"viewport.surfaceSnap")).when(|c|flag(c,"viewport.surfaceSnap")),
+        cmd("snap.vertex", "Vertex Snap (hold V)", "magnet", "", "Snap source and target mesh vertices; hold V temporarily in the Scene.",|_,e,_|toggle(e,"viewport.vertexSnap")).when(|c|flag(c,"viewport.vertexSnap")),
         cmd("snap.settings", "Snap Settings…", "settings-2", "", "Open snap and viewport preferences.", |s, e, _| s.open_settings(e, "user", "Viewport")),
         cmd("transform.reset_position", "Reset Position", "", "", "Reset position to the default or prefab value.", |_, e, t| transform_reset(e, t, "position")).when(has_entity),
         cmd("transform.reset_rotation", "Reset Rotation", "", "", "Reset rotation to the default or prefab value.", |_, e, t| transform_reset(e, t, "rotation")).when(has_entity),
@@ -700,7 +700,11 @@ fn build() -> Vec<Spec> {
             let commands = crate::inspector::edit_commands(&t.entities(&e.state), "Transform.position", &json!([p.x, p.y, p.z]));
             apply(e, commands, "Move to view")
         }).when(has_entity),
-        later("edit.transform.drop", "Drop to Floor", "", "End", "Dropping to the floor needs physics raycasts in the editor."),
+        cmd("edit.transform.drop", "Drop to Surface", "", "End", "Drop selected geometry onto real mesh support below it in one undoable action.",|s,e,_| {
+            if e.state.selection.is_empty() {return Err("Select geometry before dropping it to a surface".into());}
+            s.viewport_request=Some(super::super::ViewportRequest::DropToSurface {doc:e.state.doc.clone(),selection:e.state.selection.clone()});
+            Ok(())
+        }).when(has_entity),
         cmd("edit.preferences", "Preferences…", "settings-2", "Ctrl+,", "Open your editor preferences.", |s, e, _| s.open_settings(e, "user", "")),
         cmd("edit.project_settings", "Project Settings…", "settings-2", "Ctrl+Alt+,", "Open settings shared by the project.", |s, e, _| s.open_settings(e, "project", "")),
         cmd("edit.shortcuts", "Keyboard Shortcuts…", "command", "Ctrl+Alt+K", "Search, rebind and choose keymap presets.", |s, e, _| s.open_settings(e, "user", "Keyboard shortcuts")),

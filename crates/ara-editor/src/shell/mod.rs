@@ -102,8 +102,14 @@ pub struct Surface {
     /// The window's open popovers (menus, pickers, the palette): dismissal and focus return.
     pub popovers: ara_ui::popover::Popovers,
 }
+/// Geometry-dependent commands consumed by the native viewport owner.
+pub(crate) enum ViewportRequest {
+    /// Apply one surface placement to this still-current selection in its Scene host.
+    DropToSurface { doc: String, selection: Vec<String> },
+}
 /// Native shell and its retained widget state; no authoring document is mirrored here.
 pub struct Shell {
+    pub(crate) viewport_request: Option<ViewportRequest>,
     pub(crate) play_controls: play_controls::State,
     pub(crate) toolkit_verify: Option<toolkit_verify::Host>,
     styles: live_styles::LiveStyles,
@@ -468,6 +474,7 @@ impl Shell {
         let text = text_system()?;
         let ui = Ui::editor("<ui id='editor' />", include_str!("editor.css"), size)?;
         let mut shell = Self {
+            viewport_request: None,
             play_controls: Default::default(),
             toolkit_verify: None,
             styles: live_styles::LiveStyles::new()?,
@@ -1747,10 +1754,10 @@ impl Shell {
     /// Set a floating surface's logical size after its OS window opened or resized
     /// (`Ui::resize`: the next frame lays the surface out at that size).
     pub fn resize_surface(&mut self, id: &str, size: [f32; 2]) -> ara_ui::Result<()> {
-        if let Some(surface) = self.floats.iter_mut().find(|s| s.id == id) {
-            surface.ui.resize(size)?;
-        } else if self.current.as_deref() == Some(id) {
+        if self.current.as_deref() == Some(id) {
             self.ui.resize(size)?;
+        } else if let Some(surface) = self.floats.iter_mut().find(|s| s.id == id) {
+            surface.ui.resize(size)?;
         }
         Ok(())
     }

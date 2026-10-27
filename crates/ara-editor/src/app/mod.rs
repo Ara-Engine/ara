@@ -24,6 +24,7 @@ mod scene_quality;
 mod scene_sync;
 mod selection_verify;
 mod setup;
+mod snap_verify;
 mod ux_verify;
 mod verify;
 mod viewport;
@@ -344,6 +345,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     };
     let mut navigation_check = None;
     let mut selection_check = None;
+    let mut snapping_check = None;
     let mut input_check = None;
     let mut prefab_check = None;
     let mut diagnostics_check = None;
@@ -500,6 +502,25 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if selection_check
                 .as_ref()
                 .is_some_and(selection_verify::SelectionCheck::finished)
+                && snapping_check.is_none()
+            {
+                snapping_check = Some(snap_verify::SnapCheck::new(&mut editor, &options.output)?);
+            }
+            if let Some(check) = &mut snapping_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(
+                    &mut editor,
+                    &mut shell,
+                    &window,
+                    &floats,
+                    scale,
+                    &scene_view,
+                    &mut events,
+                )?;
+            }
+            if snapping_check
+                .as_ref()
+                .is_some_and(snap_verify::SnapCheck::finished)
                 && input_check.is_none()
             {
                 input_check = Some(input_verify::InputCheck::new(&options.output));
@@ -1139,6 +1160,44 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 )?;
             }
             let scene_host = windows::resolve_scene_host(&editor, &shell, &floats, dpi);
+            if let Some(crate::shell::ViewportRequest::DropToSurface { doc, selection }) =
+                shell.viewport_request.take()
+            {
+                let dropped = (|| -> ara_ui::Result<bool> {
+                    if editor.state.doc != doc || editor.state.selection != selection {
+                        return Err(
+                            "The Scene or selection changed before surface placement; try again"
+                                .into(),
+                        );
+                    }
+                    if editor.gesture.is_some() {
+                        return Err(
+                            "Finish the active transform gesture before dropping the selection"
+                                .into(),
+                        );
+                    }
+                    let host = scene_host
+                        .as_ref()
+                        .ok_or("Show the Scene view before dropping geometry to a surface")?;
+                    if let Some(surface) = host.surface
+                        && !shell.enter(surface)
+                    {
+                        return Err("The Scene window closed before surface placement".into());
+                    }
+                    controller.drop_to_surface(&mut editor, &mut shell, &scene_view)
+                })();
+                shell.leave();
+                match dropped {
+                    Ok(changed) => {
+                        dirty |= changed;
+                        scene_dirty |= changed;
+                    }
+                    Err(error) => {
+                        editor.report_failure(&*error);
+                        dirty = true;
+                    }
+                }
+            }
             let ui_ms = ui_at.elapsed().as_secs_f64() * 1000.;
             let (mut render_ms, mut present_ms, mut presented) = (0., 0., false);
             let (mut scene_ms, mut icons_ms) = (0., 0.);
@@ -1541,6 +1600,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if let Some(check) = &mut selection_check {
                 check.end(&editor, &mut shell, &mut gpu)?;
             }
+            if let Some(check) = &mut snapping_check {
+                check.end(&editor, &mut shell, &mut gpu, &floats)?;
+            }
             if let Some(check) = &mut input_check {
                 check.end(
                     &editor,
@@ -1639,6 +1701,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             }
         }
         if options.verify_behaviours {
+            let check = snapping_check
+                .as_ref()
+                .ok_or("The snapping journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native snapping journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
             let check = navigation_check
                 .as_ref()
                 .ok_or("The navigation journey did not start")?;
