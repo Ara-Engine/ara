@@ -3,7 +3,8 @@
 //! Click the view to give it the keyboard and mouse; Esc (or clicking outside)
 //! gives them back. Host + clients and Dedicated + clients show a client selector.
 //! Outside Play it previews the scene through its gameplay camera, the view Play
-//! starts with (`app/game_preview.rs`), or says the scene has none.
+//! starts with (`app/game_preview.rs`), or says the scene has none. While Play starts
+//! the preview stays, under the start's progress, until Play's first frame.
 use super::commands::{Target, menus::Context};
 use super::*;
 
@@ -97,6 +98,9 @@ impl Shell {
             } else {
                 out.push_str("<panel id='game-capture' class='game-hint'><text id='game-capture-text' text='Click the view to play' /></panel>");
             }
+        } else if playing && self.game_preview.is_some() {
+            self.preview_frame(out, "The view Play is starting with");
+            self.starting_hint(out);
         } else if playing {
             self.starting_markup(out);
         } else if self.gameplay_camera(editor).is_none() {
@@ -112,16 +116,13 @@ impl Shell {
                 ],
             );
         } else if self.game_preview.is_some() {
-            let [w, h] = self.game_frame().unwrap_or([640., 360.]);
-            out.push_str(&format!("<panel id='game-frame' class='game-frame' style='width:{w:.0}px;height:{h:.0}px' label='Gameplay camera' description='The scene through its gameplay camera, as Play starts'><image id='game-image' src='game-preview' style='width:100%;height:100%' /></panel>"));
+            self.preview_frame(
+                out,
+                "The scene through its gameplay camera, as Play starts",
+            );
             out.push_str("<panel id='game-capture' class='game-hint'><text id='game-capture-text' text='Gameplay camera · Play (F5) runs the scene here' /></panel>");
         } else {
-            let in_view = editor
-                .state
-                .settings
-                .get("play.inGameView")
-                .and_then(Value::as_bool)
-                .unwrap_or(true);
+            let in_view = editor.plays_in_game_view();
             self.empty(
                 out,
                 "game-empty",
@@ -270,6 +271,40 @@ impl Shell {
                     .to_owned()
             })
         });
+    }
+    /// The gameplay camera's preview image, letterboxed like Play's frames.
+    fn preview_frame(&self, out: &mut String, description: &str) {
+        let [w, h] = self.game_frame().unwrap_or([640., 360.]);
+        out.push_str(&format!("<panel id='game-frame' class='game-frame' style='width:{w:.0}px;height:{h:.0}px' label='Gameplay camera' description='{description}'><image id='game-image' src='game-preview' style='width:100%;height:100%' /></panel>"));
+    }
+    /// Play's start over the camera preview: title, phase, a bar and count when the
+    /// phase has a total, and the elapsed time, in one hint. Its ids are the starting
+    /// screen's, so `patch_start_progress` updates either in place; Stop is the
+    /// toolbar's.
+    fn starting_hint(&self, out: &mut String) {
+        let start = self.game_start.as_ref();
+        let stopping = start.is_some_and(|s| s.stopping);
+        let title = if stopping {
+            "Stopping Play…"
+        } else {
+            "Starting Play…"
+        };
+        let detail = start
+            .filter(|s| !s.stopping)
+            .map(StartProgress::label)
+            .unwrap_or_default();
+        out.push_str(&format!("<panel id='game-starting' class='game-hint' style='flex-direction:row;gap:8px'><text id='game-starting-title' text='{title}' /><text id='game-starting-phase' style='white-space:nowrap' text='{}' />",escape(&detail)));
+        if let Some(start) = start {
+            if start.total > 0 && !start.stopping {
+                let percent = start.completed as f64 * 100. / start.total as f64;
+                out.push_str(&format!("<panel id='game-starting-bar' class='progress' style='width:80px'><panel id='game-starting-fill' class='progress-fill' style='width:{percent:.0}%' /></panel><text id='game-starting-count' text='{} / {}' />",start.completed,start.total));
+            }
+            out.push_str(&format!(
+                "<text id='game-starting-time' text='{:.1} s' />",
+                start.tenths as f64 / 10.
+            ));
+        }
+        out.push_str("</panel>");
     }
     /// The Game view while Play starts: the phase, its progress (a bar when it has a
     /// total), the elapsed time and Stop; "Starting Play…" until the first status.

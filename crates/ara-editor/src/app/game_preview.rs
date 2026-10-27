@@ -12,8 +12,10 @@
 //! must show (`SceneView::preview_needs_frame`: publication, late GI, emitter fades).
 //! Until the scene's content is published it asks again every frame, keeping the
 //! empty state. Hiding renders nothing and keeps the last image attached, so showing
-//! the Game view again needs no second rebuild for it; Play takes the view and lets
-//! it go, and editor shutdown detaches and releases its targets.
+//! the Game view again needs no second rebuild for it. Play starting in the Game view
+//! keeps the last image under its progress until its first frame (a lit one: the
+//! player publishes once its lighting has settled) replaces it, then lets it go;
+//! editor shutdown detaches and releases its targets.
 use std::time::{Duration, Instant};
 
 use ara_editor_gpu::NativeUi;
@@ -68,9 +70,14 @@ impl Preview {
     }
 
     /// Whether a preview that is not wanted keeps its image: its Game view is only
-    /// hidden (another tab, or not laid out), and nothing else needs the view.
+    /// hidden (another tab, or not laid out) and nothing else needs the view, or Play
+    /// is starting in the Game view and has not shown a frame yet.
     fn keeps(editor: &Editor, shell: &Shell) -> bool {
-        editor.state.playing.is_none() && !shell.game_live && shell.game_host().is_none()
+        !shell.game_live
+            && match editor.state.playing {
+                None => shell.game_host().is_none(),
+                Some(_) => editor.plays_in_game_view(),
+            }
     }
 
     /// Whether this frame has preview work: a change to show, a burst still settling,

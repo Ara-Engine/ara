@@ -7,10 +7,12 @@
 //!
 //! Play entry: frames render from the first content frame, but none is published
 //! until the presentation is ready (textures resident, emitter lights adopted, probe
-//! GI converged and faded in) or [`ENTRY_CAP`] has passed. Local simulations hold
-//! meanwhile (`Embedded::entering`), so Play starts lit, at its first tick, when the
-//! owner first shows it. `ARA_PLAY_FIRST_FRAME=<dir>` saves each player's first
-//! published frame there for visual verification; leave it unset for timing runs.
+//! GI converged and shown) or [`ENTRY_CAP`] has passed. Those frames are unseen
+//! (`Renderer::set_unseen`): probe GI converges whole bounces and skips its fade.
+//! Local simulations hold meanwhile (`Embedded::entering`), so Play starts lit, at
+//! its first tick, when the owner first shows it. `ARA_PLAY_FIRST_FRAME=<dir>` saves
+//! each player's first published frame there for visual verification; leave it
+//! unset for timing runs.
 use crate::{device, input::DeviceEvent, input::Mapper};
 use anyhow::{Context, Result, ensure};
 use ara_gpu::{
@@ -240,6 +242,9 @@ impl Embedded {
         }
         if self.ring.free() == 0 {
             return Ok(None);
+        }
+        if let Some(renderer) = presenter.renderer_mut() {
+            renderer.set_unseen(self.entering());
         }
         presenter.present_with(frame, resolve)?;
         let entering = self.entering();

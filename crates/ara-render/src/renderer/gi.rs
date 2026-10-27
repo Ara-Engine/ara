@@ -123,6 +123,17 @@ impl Renderer {
         self.gpu.assert_clean()?;
         Ok(())
     }
+    /// Marks the coming frames as unseen: hosts that render frames nobody sees yet
+    /// (an embedded Play entry publishes nothing until it is lit) set `true`, and
+    /// probe GI then converges its whole volume per bounce and shows without its
+    /// fade, so readiness arrives in a few frames. `false` (shown frames) returns
+    /// to the budgeted relight and fades.
+    pub fn set_unseen(&mut self, unseen: bool) {
+        self.look.unseen = unseen;
+        if let Some(gi) = &mut self.look.gi {
+            gi.unseen = unseen;
+        }
+    }
     /// Replaces the probe volume used for global illumination; `None` returns to
     /// sky-only ambient light. The new volume relights out of sight for
     /// `CONVERGE_FRAMES`, then fades into shading.
@@ -347,6 +358,7 @@ impl Renderer {
             converge: 0,
             converge_progress: 0,
             capture_convergence: false,
+            unseen: self.look.unseen,
             relit_once: false,
             received: 0,
             weight: 0.,

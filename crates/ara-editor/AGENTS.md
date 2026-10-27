@@ -126,7 +126,7 @@ Game view (D19): `app/game.rs` imports the play host's shared surfaces
 `game_input` forwards keys/mouse to the selected client while captured (Esc releases).
 Play starts in the background; `Shell::read_play_status` shows its phase, a failed start
 or a fault. Embeds unless `play.inGameView` is off. Outside Play `app/game_preview.rs`
-renders `Shell::gameplay_camera` (`SceneView::preview_game`) as `game-preview`.
+renders `Shell::gameplay_camera` (`SceneView::preview_game`) as `game-preview`; it stays, under the start's progress, until Play's first frame.
 Build (`shell/build.rs`): `build.current` exports the main scene with the first
 `presets/*.export.json` (else `build.profile.create` writes the portable, unpinned
 Windows runtime profile) into `builds/<profile>-<time>/build` on a thread, pinning

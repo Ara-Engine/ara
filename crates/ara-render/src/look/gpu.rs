@@ -132,6 +132,8 @@ pub(crate) struct LookGpu {
     /// This frame draws triangle edges (`ViewMode::wire`): the renderer composites
     /// them after the post chain, here or in a deferred frame's `finish`.
     pub frame_wire: bool,
+    /// Frames are not shown (`Renderer::set_unseen`); probe volumes inherit it.
+    pub unseen: bool,
     /// The renderer history slot a deferred frame left for `finish` to resolve into.
     pub deferred_history: Option<usize>,
     /// Remaining frames whose exposure snaps to its meter (capture resets).
@@ -277,6 +279,7 @@ impl LookGpu {
             frame_dof: false,
             frame_motion: false,
             frame_wire: false,
+            unseen: false,
             deferred_history: None,
             settle: 0,
             seeded: false,

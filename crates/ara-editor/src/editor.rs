@@ -259,16 +259,19 @@ impl Editor {
         }
         Ok(result)
     }
-    /// Play in the Game view (setting `play.inGameView`, on by default): no player
-    /// window, an embedded surface at the Game view's size instead.
-    pub(crate) fn embed_play(&self, params: &mut Value) {
-        if self
-            .state
+    /// Play runs in the Game view (setting `play.inGameView`, on by default) rather
+    /// than in a separate player window.
+    pub(crate) fn plays_in_game_view(&self) -> bool {
+        self.state
             .settings
             .get("play.inGameView")
             .and_then(Value::as_bool)
             .unwrap_or(true)
-        {
+    }
+    /// Play in the Game view (`plays_in_game_view`): no player window, an embedded
+    /// surface at the Game view's size instead.
+    pub(crate) fn embed_play(&self, params: &mut Value) {
+        if self.plays_in_game_view() {
             let [w, h] = self.game_size;
             params["window"] = false.into();
             params["embed"] = json!({"width": w.clamp(64, 8192), "height": h.clamp(64, 8192)});

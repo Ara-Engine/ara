@@ -224,6 +224,10 @@ pub(crate) struct GiGpu {
     pub converge: u32,
     pub converge_progress: u32,
     pub capture_convergence: bool,
+    /// Frames are not shown (`Renderer::set_unseen`): each bounce relights its whole
+    /// range in one frame, as captures do, and a converged volume shows at once
+    /// instead of fading in.
+    pub unseen: bool,
     pub relit_once: bool,
     /// Records of probes `deferred..` (the coarsest lattice) written since the
     /// volume was created; it stays out of shading until they have all landed and
@@ -301,12 +305,16 @@ impl GiGpu {
     }
 
     /// This frame's relit window (first probe, count). Captures retain full-grid
-    /// bounces; live initialization uses a bounded window over the coarsest
-    /// lattice, and the finer lattices converge at the preset budget. A window
-    /// never runs past its range's end (the next one wraps).
+    /// bounces, and unseen frames relight each converging range whole; live
+    /// initialization uses a bounded window over the coarsest lattice, and the finer
+    /// lattices converge at the preset budget. A window never runs past its range's
+    /// end (the next one wraps).
     fn window(&self, budget: u32) -> (u32, u32) {
         let (start, end) = self.range();
-        let window = if self.converge > 0 && self.capture_convergence {
+        let converging = self.converge > 0 || self.deferred_converge > 0;
+        let window = if (self.converge > 0 && self.capture_convergence)
+            || (self.unseen && converging && budget > 0)
+        {
             self.probes
         } else if self.converge > 0 && budget > 0 {
             budget.max(INITIAL_PROBES)
@@ -389,8 +397,10 @@ impl GiGpu {
             }
             return;
         }
+        // Unseen frames show a converged volume at once: no fade to watch.
+        let fade = if self.unseen { 1. } else { 1. / FADE_FRAMES };
         if self.landed() {
-            self.weight = (self.weight + 1. / FADE_FRAMES).min(1.);
+            self.weight = (self.weight + fade).min(1.);
         }
         if self.deferred_converge > 0 {
             self.deferred_progress += window;
@@ -402,7 +412,7 @@ impl GiGpu {
                 }
             }
         } else if self.deferred_started {
-            self.deferred_weight = (self.deferred_weight + 1. / FADE_FRAMES).min(1.);
+            self.deferred_weight = (self.deferred_weight + fade).min(1.);
         } else if self.deferred > 0 && self.deferred_received >= self.deferred as usize {
             // The finer lattices landed after the coarsest converged: relight them
             // alone, at the preset budget, before they fade in.
