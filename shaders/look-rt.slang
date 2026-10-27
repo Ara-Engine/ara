@@ -76,7 +76,10 @@ void rtRoughMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);uint2 half=(f.extent.xy+1)/2;if(any(tid.xy>=half))return;
     int2 p=min(int2(tid.xy)*2,int2(f.extent.xy)-1);float4 result=0;
     bool covered;float3 world=gbufferWorld(f,p,covered);float roughness=gbufferMaterial(f,p).x;
-    [branch]if(covered && rtEnabled(l) && roughness>=0.8*l.rtParams[0].x && roughness<l.rtParams[1].w){
+    // Metals only: their specular lobe is all of their light, while a dielectric's is a
+    // few percent whose probe/sky fallback reads fine (Showcase: tracing rough floors
+    // cost 0.37 ms and made the shadow, bottle and pedestal regions worse).
+    [branch]if(covered && rtEnabled(l) && roughness>=0.8*l.rtParams[0].x && roughness<l.rtParams[1].w && gbufferMaterial(f,p).y>=0.5){
         float3 n=normalize(gbufferNormal(f,p)),v=normalize(f.camera.xyz-world);
         float distance=length(world-f.camera.xyz),alpha=roughness*roughness,spread=2*l.rtParams[0].z;
         float3 d=rtDominant(n,v,alpha),origin=world+n*(l.rtParams[1].x+l.rtParams[1].y*distance);
