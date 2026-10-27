@@ -326,4 +326,5 @@ impl Router {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests;

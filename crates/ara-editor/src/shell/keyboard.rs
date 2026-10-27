@@ -46,6 +46,16 @@ impl Shell {
                 clipboard,
             );
         }
+        if let Some(host) = &mut self.toolkit_verify {
+            return host.key(
+                &mut self.ui,
+                &mut self.input,
+                &mut self.native_input,
+                scancode,
+                pressed,
+                clipboard,
+            );
+        }
         if pressed && scancode == 41 && self.input.scrubbing() {
             self.event(InputEvent::Cancel, clipboard)?;
             editor.end_field_gestures()?;

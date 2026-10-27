@@ -2,6 +2,7 @@
 mod address;
 pub(crate) use address::hints;
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests;
 
 use ara_cmd::{Command, EditCtx, Registry};

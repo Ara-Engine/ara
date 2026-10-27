@@ -150,6 +150,24 @@ impl Shell {
     }
     fn dynamic(&self, editor: &Editor, kind: Dynamic, out: &mut Vec<Row>) {
         match kind {
+            Dynamic::PrefabSources => {
+                let target = self.menu_target();
+                let Some(entity) = target.entity(&editor.state) else {
+                    return;
+                };
+                let path = if let Target::Field(path) = &target {
+                    Some(path.as_str())
+                } else {
+                    None
+                };
+                for source in super::prefab_ops::source_choices(
+                    editor.host.store(),
+                    &editor.state.doc,
+                    entity,
+                ) {
+                    out.push(Row::Command {id:kind.command(),target:Target::Text(json!({"entity":entity,"path":path,"destination":format!("@{}#{}",source.path,source.entity)}).to_string()),label:Some(source.path),path:String::new(),checked:None});
+                }
+            }
             Dynamic::RecentScenes => {
                 let workspace = editor.host.store().workspace();
                 let mut scenes: Vec<_> = workspace

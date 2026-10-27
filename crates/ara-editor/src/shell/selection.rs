@@ -415,6 +415,7 @@ impl Shell {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests;
 
 impl Shell {

@@ -1,4 +1,5 @@
 //! Mounted-editor gates: shared control choices and every reachable transient surface.
+#![allow(clippy::unwrap_used)]
 mod captures;
 mod fixture;
 mod measure;

@@ -4,6 +4,7 @@
 //! `begin` without an `end` identifies the exact action, seed and sequence to replay.
 mod actions;
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests;
 mod watchdog;
 

@@ -242,7 +242,6 @@ impl Controller {
             shell.finish_scrub(editor, true)?;
             editor.finish_gesture(true)?;
             editor.end_field_gestures()?;
-            shell.release_tab_capture(clipboard)?;
             shell.show_readout(None);
             return Ok((true, true, false));
         }

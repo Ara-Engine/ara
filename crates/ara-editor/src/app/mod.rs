@@ -9,6 +9,7 @@ mod drags;
 mod eyedropper;
 mod game;
 mod game_preview;
+mod input_verify;
 mod journey;
 mod monkey;
 mod navigation_verify;
@@ -323,6 +324,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     };
     let mut navigation_check = None;
     let mut selection_check = None;
+    let mut input_check = None;
     if panel_verification.is_some()
         || ux_verification.is_some()
         || journey.is_some()
@@ -471,6 +473,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     &mut events,
                 )?;
             }
+            if selection_check
+                .as_ref()
+                .is_some_and(selection_verify::SelectionCheck::finished)
+                && input_check.is_none()
+            {
+                input_check = Some(input_verify::InputCheck::new(&options.output));
+            }
+            if let Some(check) = &mut input_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+            }
             let interaction_start = (!events.is_empty()).then(Instant::now);
             if events.iter().any(|(_, event)| {
                 matches!(
@@ -487,6 +500,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let routed_at = Instant::now();
             let mut quit = false;
             for (sdl, event) in events {
+                let event_clipboard: &mut dyn ara_ui_text::Clipboard =
+                    if let Some(check) = &mut input_check {
+                        check.clipboard()
+                    } else {
+                        &mut clipboard
+                    };
                 let routed = route_event(
                     sdl,
                     event,
@@ -501,7 +520,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     &gpu,
                     &view,
                     &scene_view,
-                    &mut clipboard,
+                    event_clipboard,
                 );
                 match routed {
                     Ok((ui, scene, close)) => {
@@ -1351,6 +1370,14 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             }
             if let Some(check) = &mut selection_check {
                 check.end(&editor, &mut shell, &mut gpu)?;
+            }
+            if let Some(check) = &mut input_check {
+                check.end(
+                    &editor,
+                    &shell,
+                    &mut gpu,
+                    frame_start.elapsed().as_secs_f64() * 1000.,
+                )?;
                 if check.finished() {
                     game.close(&mut editor, &mut gpu)?;
                     break;
@@ -1446,6 +1473,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if !check.finished() || !check.failures().is_empty() {
                 return Err(format!(
                     "Native selection journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
+            let check = input_check
+                .as_ref()
+                .ok_or("The native input journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native input journey failed: {}",
                     check.failures().join(", ")
                 )
                 .into());

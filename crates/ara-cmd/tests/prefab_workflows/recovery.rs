@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 
 /// Re-read canonical files and the real journal entry with either document flush
 /// interrupted. Recovery must converge to the complete action and retain one undo.
-fn assert_recovery(command: &str, records: serde_json::Value, params: serde_json::Value) {
+fn assert_recovery(command: &'static str, records: serde_json::Value, params: serde_json::Value) {
     let (mut store, registry) = setup(records);
     let before = snapshot(&store);
     let original_workspace = store.workspace().clone();

@@ -701,6 +701,7 @@ fn build() -> Vec<Spec> {
             let entity = t.entity(&e.state).ok_or("select a prefab instance")?.to_owned();
             s.apply_overrides(e, &entity, None)
         }).when(has_overrides),
+        cmd("prefab.apply_to","Apply Overrides to Source","save","","Apply overrides to a chosen nested prefab, variant or base in one transaction.",|s,e,t|s.apply_to_target(e,t)).when(has_entity),
         cmd("prefab.revert_all", "Revert All Overrides", "undo-2", "", "Drop this instance's overrides; it follows the prefab again.", |_, e, t| {
             let entity = t.entity(&e.state).ok_or("select a prefab instance")?.to_owned();
             apply(e, vec![json!({"cmd": "prefab.override.revert", "args": {"entity": entity}})], "Revert overrides")

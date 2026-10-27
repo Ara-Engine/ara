@@ -21,6 +21,8 @@ pub(crate) enum Dynamic {
     Windows,
     /// Layouts saved under `.ara/layouts`, run with `layout.load`.
     SavedLayouts,
+    /// Nearest prefab, variant and base destinations for a context's overrides.
+    PrefabSources,
 }
 impl Dynamic {
     /// The registry command dynamic entries run.
@@ -29,6 +31,7 @@ impl Dynamic {
             Self::RecentScenes => "file.open_scene",
             Self::Windows => "window.focus_window",
             Self::SavedLayouts => "layout.load",
+            Self::PrefabSources => "prefab.apply_to",
         }
     }
 }
@@ -526,6 +529,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
                 &[
                     C("prefab.open"),
                     C("prefab.apply_all"),
+                    Sub("Apply To", &[Item::Dynamic(Dynamic::PrefabSources)]),
                     C("prefab.revert_all"),
                     S,
                     C("prefab.unpack"),
@@ -609,6 +613,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("field.copy_path"),
             S,
             C("prefab.apply_override"),
+            Sub("Apply To", &[Item::Dynamic(Dynamic::PrefabSources)]),
             C("prefab.revert_override"),
             S,
             C("field.why"),

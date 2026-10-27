@@ -41,7 +41,13 @@ impl Shell {
     ) -> ara_ui::Result<()> {
         self.modifiers = [false; 3];
         self.native_input
-            .focus_lost(&mut self.ui, &mut self.input, clipboard)
+            .focus_lost(&mut self.ui, &mut self.input, clipboard)?;
+        for surface in &mut self.floats {
+            surface
+                .native_input
+                .focus_lost(&mut surface.ui, &mut surface.input, clipboard)?;
+        }
+        Ok(())
     }
 
     pub(crate) fn hover_tooltip(&mut self) -> ara_ui::Result<()> {
@@ -128,6 +134,12 @@ impl Shell {
         event: InputEvent,
         clipboard: &mut dyn Clipboard,
     ) -> ara_ui::Result<()> {
+        if let Some(host) = &mut self.toolkit_verify {
+            host.event(&mut self.ui, &mut self.input, event, clipboard)?;
+            self.native_input
+                .sync_focus(&mut self.ui, &self.input, clipboard)?;
+            return Ok(());
+        }
         if self.confirmations.is_open() {
             if self.current.is_none() {
                 self.confirmations
@@ -148,6 +160,13 @@ impl Shell {
     }
     /// Dispatch queued widget actions through the typed engine endpoint.
     pub fn dispatch(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        if let Some(host) = &mut self.toolkit_verify {
+            let changed = host.dispatch(&mut self.ui, &mut self.input)?;
+            if changed {
+                self.rebuild(editor)?;
+            }
+            return Ok(changed);
+        }
         if self.current.is_none() {
             self.confirmations.dispatch(&mut self.ui, &mut self.input)?;
         }

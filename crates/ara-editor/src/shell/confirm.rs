@@ -17,7 +17,7 @@ impl Shell {
     /// Whether native viewport, context-menu and drag handlers must yield input
     /// to a modal before interpreting it as an editor gesture.
     pub(crate) fn modal_active(&self) -> bool {
-        self.confirmations.is_open() || self.modal_root.is_some()
+        self.toolkit_verify.is_some() || self.confirmations.is_open() || self.modal_root.is_some()
     }
 
     pub(super) fn confirmation_key(

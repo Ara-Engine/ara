@@ -171,3 +171,26 @@ fn focus_loss_cancels_pointer_and_ime_preserves_modal_and_resets_shift_tab() -> 
     );
     Ok(())
 }
+
+#[test]
+fn altgr_commits_text_without_invoking_control_shortcuts() -> Result<()> {
+    let (mut ui, mut input, mut clip) = fixture()?;
+    let mut router = Router::new(PrimaryModifier::Control, TextSource::Sdl);
+    router.commit(&mut ui, &mut input, TextSource::Sdl, "Seed", &mut clip)?;
+    clip.0 = "isolated clipboard".into();
+    router.key(&mut ui, &mut input, 224, true, false, &mut clip)?;
+    router.key(&mut ui, &mut input, 230, true, false, &mut clip)?;
+    for scancode in [4, 6, 27, 25, 29] {
+        router.key(&mut ui, &mut input, scancode, true, false, &mut clip)?;
+        router.key(&mut ui, &mut input, scancode, false, false, &mut clip)?;
+    }
+    assert_eq!(
+        value(&ui),
+        "Seed",
+        "AltGr must not select, cut, paste or undo"
+    );
+    assert_eq!(clip.0, "isolated clipboard", "AltGr must not copy");
+    router.commit(&mut ui, &mut input, TextSource::Sdl, "ć€", &mut clip)?;
+    assert_eq!(value(&ui), "Seedć€");
+    Ok(())
+}

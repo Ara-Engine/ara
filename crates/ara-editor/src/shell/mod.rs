@@ -36,6 +36,7 @@ mod selection;
 mod settings_panel;
 mod testing;
 mod titlebar;
+pub(crate) mod toolkit_verify;
 pub(crate) use drag::Drag;
 pub use testing::MenuRow;
 mod add_component;
@@ -102,6 +103,7 @@ pub struct Surface {
 }
 /// Native shell and its retained widget state; no authoring document is mirrored here.
 pub struct Shell {
+    pub(crate) toolkit_verify: Option<toolkit_verify::Host>,
     styles: live_styles::LiveStyles,
     /// Native runtime tree and renderer-neutral display list of the current surface.
     pub ui: Ui,
@@ -463,6 +465,7 @@ impl Shell {
         let text = text_system()?;
         let ui = Ui::editor("<ui id='editor' />", include_str!("editor.css"), size)?;
         let mut shell = Self {
+            toolkit_verify: None,
             styles: live_styles::LiveStyles::new()?,
             ui,
             text,
@@ -837,6 +840,9 @@ impl Shell {
         );
         css.push_str(ara_ui::dialogs::CSS);
         css.push_str(ara_ui::select::CSS);
+        if self.toolkit_verify.is_some() {
+            css.push_str(toolkit_verify::CSS);
+        }
         css
     }
     /// Reconcile markup into the current surface (nodes whose ID survives keep their
@@ -1110,6 +1116,9 @@ impl Shell {
             self.dialog = Some(dialog);
         }
         markup.push_str(&self.confirmations.markup(self.ui.size));
+        if let Some(host) = &self.toolkit_verify {
+            markup.push_str(&host.markup(self.ui.size));
+        }
         if self.rename
             && let Some(id) = editor.state.selection.first()
         {
@@ -1181,6 +1190,9 @@ impl Shell {
             self.sync_choice_controls()?;
         }
         self.sync_modal_scopes(editor)?;
+        if let Some(host) = &mut self.toolkit_verify {
+            host.sync(&mut self.ui, &mut self.input)?;
+        }
         if self.modal_root.is_none()
             && !self.confirmations.is_open()
             && self.menu.is_some()
