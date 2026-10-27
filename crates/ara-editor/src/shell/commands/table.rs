@@ -540,18 +540,25 @@ fn build() -> Vec<Spec> {
             act(e, "editor.layout.close", json!({"panel": panel}))
         }),
         later("file.close_project", "Close Project", "x", "", "One editor process owns one project; close the window to close it."),
-        cmd("file.exit", "Exit", "x", "Alt+F4", "Close the editor; documents are saved first.", |s, e, _| {
-            e.host.flush();
+        cmd("file.exit", "Exit", "x", "Alt+F4", "Close the editor; documents are saved first.", |s, _, _| {
             s.window_request = Some(super::super::WindowRequest::Quit);
             Ok(())
         }),
     ]);
     // Edit
     c.extend([
-        cmd("edit.undo", "Undo", "undo-2", "Ctrl+Z", "Undo your last change in the focused context.", |_, e, _| {
+        cmd("edit.undo", "Undo", "undo-2", "Ctrl+Z", "Undo your last change in the focused context.", |s, e, _| {
+            s.drag = None;
+            s.drop_preview = None;
+            s.finish_scrub(e, true)?;
+            e.finish_gesture(true)?;
             if e.state.focus == "settings" { act(e, "editor.settings.undo", json!({})) } else { act(e, "history.undo", json!({})) }
         }).when(|c| can_undo(c, false)).labelled(|c| undo_label(c, false)),
-        cmd("edit.redo", "Redo", "redo-2", "Ctrl+Y / Ctrl+Shift+Z", "Redo your last undone change.", |_, e, _| {
+        cmd("edit.redo", "Redo", "redo-2", "Ctrl+Y / Ctrl+Shift+Z", "Redo your last undone change.", |s, e, _| {
+            s.drag = None;
+            s.drop_preview = None;
+            s.finish_scrub(e, true)?;
+            e.finish_gesture(true)?;
             if e.state.focus == "settings" { act(e, "editor.settings.undo", json!({"redo": true})) } else { act(e, "history.redo", json!({})) }
         }).when(|c| can_undo(c, true)).labelled(|c| undo_label(c, true)),
         later("edit.history", "History…", "clock", "Ctrl+H", "The History panel (typed command stack) arrives with the Phase 2 tool rebuilds; `ara history` lists it now."),
@@ -567,9 +574,10 @@ fn build() -> Vec<Spec> {
             let parent = t.entity(&e.state).map(str::to_owned);
             s.paste_entities(e, parent)
         }).when(|c| if !c.clipboard_entities { Avail::Blocked("Copy an entity first".into()) } else { has_entity(c) }),
-        cmd("edit.duplicate", "Duplicate", "copy", "Ctrl+D", "Duplicate the selected entity subtree.", |_, e, t| {
-            let commands = t.entities(&e.state).iter().map(|entity| json!({"cmd": "editor.entity.duplicate", "args": {"entity": entity}})).collect();
-            apply(e, commands, "Duplicate")
+        cmd("edit.duplicate", "Duplicate", "copy", "Ctrl+D", "Duplicate selected subtrees together and preserve references between their copies.", |_, e, t| {
+            let result=e.apply(vec![json!({"cmd":"editor.entities.duplicate","args":{"entities":t.entities(&e.state)}})],"Duplicate selection",None)?;
+            if let Some(roots)=result["outputs"][0]["roots"].as_array() {act(e,"editor.select",json!({"entities":roots}))?;}
+            Ok(())
         }).when(has_entity),
         cmd("edit.delete", "Delete", "trash", "Del", "Delete the selected entities.", |_, e, t| {
             let entities = t.entities(&e.state);
@@ -738,13 +746,10 @@ fn build() -> Vec<Spec> {
         cmd("view.camera.left", "Left", "", "Ctrl+Num3", "Look along +X.", |_, e, _| camera(e, -std::f32::consts::FRAC_PI_2, 0.)),
         cmd("view.camera.right", "Right", "", "Num3", "Look along −X.", |_, e, _| camera(e, std::f32::consts::FRAC_PI_2, 0.)),
         cmd("view.frame", "Frame Selected", "focus", "F", "Frame the selection, or the scene when nothing is selected.", |s, e, _| {
-            if s.graph_visible() { s.frame_graph(e) } else { act(e, "editor.frame", json!({})) }
+            if s.graph_visible() { s.frame_graph(e) } else { act(e, "editor.frame", json!({"aspect":s.viewport().map(|r|r.w/r.h)})) }
         }),
-        cmd("view.frame_all", "Frame All", "focus", "Home", "Frame every entity.", |_, e, _| {
-            let selection = e.state.selection.clone();
-            select(e, Vec::new())?;
-            act(e, "editor.frame", json!({}))?;
-            select(e, selection)
+        cmd("view.frame_all", "Frame All", "focus", "Home", "Frame every entity.", |s, e, _| {
+            act(e, "editor.frame", json!({"all":true,"aspect":s.viewport().map(|r|r.w/r.h)}))
         }),
         cmd("view.camera.speed_up", "Faster Camera", "gauge", "", "Double the fly speed.", |_, e, _| {
             let v = e.state.settings.get("viewport.cameraSpeed").and_then(Value::as_f64).unwrap_or(4.);
@@ -2006,7 +2011,7 @@ fn build() -> Vec<Spec> {
             let Target::Text(text) = t else { return Err("expected Path=value".into()) };
             let (path, value) = text.split_once('=').ok_or("expected Path=value")?;
             let value: Value = serde_json::from_str(value)?;
-            let commands = s.field_commands(&e.state.selection, path, value)?;
+            let commands = s.field_commands(e,&e.state.selection, path, value)?;
             let field = path.split('#').next().unwrap_or(path);
             apply(e, commands, &format!("Set {field}"))
         }).when(has_entity),

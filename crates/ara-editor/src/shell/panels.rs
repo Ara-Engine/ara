@@ -291,6 +291,17 @@ impl Shell {
         editor: &mut Editor,
         out: &mut String,
     ) -> ara_ui::Result<()> {
+        self.with_panel_boundary(panel, editor, out, |shell, editor, out| {
+            shell.panel_body_inner(panel, editor, out)
+        });
+        Ok(())
+    }
+    fn panel_body_inner(
+        &mut self,
+        panel: &str,
+        editor: &mut Editor,
+        out: &mut String,
+    ) -> ara_ui::Result<()> {
         match panel {
             "hierarchy" => self.hierarchy_panel(editor, out)?,
             "scene" => self.scene_panel(editor, out),

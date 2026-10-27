@@ -183,7 +183,8 @@ impl Shell {
         };
         if self.drop_preview.is_none()
             && *surface == self.current
-            && (self.pointer[0] - start[0]).hypot(self.pointer[1] - start[1]) < 6.
+            && (self.pointer[0] - start[0]).hypot(self.pointer[1] - start[1])
+                < ara_ui::drag_drop::DRAG_THRESHOLD
         {
             return false;
         }
@@ -331,6 +332,9 @@ impl Shell {
 
     /// Keep the dragged tab's label next to the pointer on the destination surface.
     pub(super) fn sync_tab_ghost(&mut self) -> ara_ui::Result<()> {
+        if self.content_pending() {
+            return self.sync_content_ghost();
+        }
         let Some(i) = self.ui.find("drop-label") else {
             return Ok(());
         };
@@ -386,6 +390,8 @@ impl Shell {
 
     /// Carets and split rectangles sit above panel contents and below popups.
     pub(super) fn paint_drop_preview(&mut self) {
+        self.paint_marquee();
+        self.paint_content_drag();
         let Some(preview) = self
             .drop_preview
             .as_ref()

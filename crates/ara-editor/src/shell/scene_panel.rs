@@ -147,7 +147,7 @@ impl Shell {
             );
             self.bindings
                 .insert(ara_ui::source::stable_id("view-fov"), Binding::CameraFov);
-            out.push_str(&format!("<field id='view-fov' class='number viewport-fov' text='{}' label='Field of view' description='Vertical field of view in degrees (10–120)' action='Dispatch' />",editor.state.camera.fov_label()));
+            out.push_str(&format!("<field id='view-fov' class='number viewport-fov' min='10' max='120' step='1' text='{}' label='Field of view' description='Vertical field of view in degrees (10–120)' action='Dispatch' />",editor.state.camera.fov_label()));
             self.viewport_menu(
                 out,
                 "view-speed",

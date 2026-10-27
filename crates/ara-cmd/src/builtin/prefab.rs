@@ -1,4 +1,16 @@
 //! `prefab.instantiate`, `prefab.override.set` and `prefab.override.revert`.
+mod apply;
+mod create;
+mod sources;
+pub use apply::{PrefabApply, PrefabApplyParams};
+pub use create::{PrefabCreate, PrefabCreateParams, PrefabVariant};
+pub use sources::{PrefabSource, prefab_sources};
+
+pub(super) fn register(reg: &mut crate::Registry, db: &mut ara_schema::SchemaDb) {
+    reg.command::<PrefabApply>(db)
+        .command::<PrefabCreate>(db)
+        .command::<PrefabVariant>(db);
+}
 
 use ara_diag::{Diagnostic, codes};
 use ara_doc::refs::resolve;

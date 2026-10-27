@@ -276,6 +276,9 @@ impl Shell {
         let Run::Do(run) = spec.run else {
             return Err(format!("{} is not available", spec.title).into());
         };
+        if self.confirm_command(editor, id, target)? {
+            return Ok(());
+        }
         self.menu = None;
         run(self, editor, target)
     }
@@ -283,11 +286,14 @@ impl Shell {
     pub fn run_queued(&mut self, editor: &mut Editor) -> bool {
         let queued = std::mem::take(&mut editor.queued_commands);
         let ran = !queued.is_empty();
+        let bypass = self.confirmation_bypass;
+        self.confirmation_bypass = true;
         for (id, target) in queued {
             if let Err(error) = self.run_command(editor, &id, &target) {
                 editor.report_failure(&*error);
             }
         }
+        self.confirmation_bypass = bypass;
         ran
     }
 }

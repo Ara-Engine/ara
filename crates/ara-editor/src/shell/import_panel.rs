@@ -137,24 +137,24 @@ impl Shell {
                     } else if let Some(crate::inspector::Widget::Enum { options }) =
                         desc.map(|d| crate::inspector::widget(db, d))
                     {
-                        out.push_str(&format!("<panel id='{id}-options' class='segment'>"));
-                        for (n, option) in options.iter().enumerate() {
-                            out.push_str(&self.bind_button(
-                                &format!("{id}-option-{n}"),
-                                option,
-                                Binding::ImportChoice(
-                                    doc.id.to_string(),
-                                    key.clone(),
-                                    json!(option),
-                                ),
-                                if value == option {
-                                    "segment-button selected"
-                                } else {
-                                    "segment-button"
+                        self.choice_button(
+                            &format!("{id}-options"),
+                            &name,
+                            choices::Select {
+                                destination: choices::Destination::Import {
+                                    doc: doc.id.to_string(),
+                                    key: key.clone(),
                                 },
-                            ));
-                        }
-                        out.push_str("</panel>");
+                                options: options
+                                    .iter()
+                                    .map(|option| {
+                                        (json!(option), super::inspector_panel::sentence(option))
+                                    })
+                                    .collect(),
+                                current: value.clone(),
+                            },
+                            out,
+                        );
                     } else {
                         let draft = self
                             .drafts

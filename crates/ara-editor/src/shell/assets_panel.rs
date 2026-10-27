@@ -29,6 +29,7 @@ impl Shell {
             editor.state.asset_grid,
             (
                 &editor.state.asset_path,
+                self.asset_selection.selected(),
                 self.asset_rename.as_ref().map(|r| &r.path),
             ),
             editor.state.comfortable(),
@@ -41,6 +42,7 @@ impl Shell {
         ))
     }
     pub(super) fn assets_panel(&mut self, editor: &Editor, out: &mut String) {
+        self.asset_selection_order(editor);
         // Folder column and breadcrumb hide in narrow docks (see `narrow`).
         out.push_str("<panel id='asset-toolbar' class='toolbar'>");
         self.bindings.insert(
@@ -328,7 +330,10 @@ impl Shell {
                     Binding::Asset(asset.clone())
                 },
             );
-            let selected = editor.state.asset_path.as_deref() == Some(&asset.path);
+            let selected = self
+                .asset_selection
+                .selected()
+                .contains(&ara_ui::source::stable_id(&asset.path));
             let file = names::file_name(&asset.path);
             // Importing or failed: the tooltip's note, the badge's icon, tint and reason.
             let import = self.imports.of(asset).map(|import| match import {

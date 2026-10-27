@@ -1,4 +1,5 @@
 //! Temporary document-to-render extraction, isolated for ara-sim's edit-world projection.
+pub(crate) mod bounds;
 pub(crate) mod channels;
 pub mod gesture;
 mod ghosts;

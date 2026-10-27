@@ -15,6 +15,38 @@ pub(crate) enum Dialog {
     SaveLayout { name: String },
 }
 impl Dialog {
+    /// Review an external tool fix without starting a process while a project is pinned.
+    pub fn cli_fix(title: &str, args: &[String]) -> Self {
+        fn quote(arg: &str) -> String {
+            if arg
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || "._-/".contains(c))
+                && !arg.is_empty()
+            {
+                arg.to_owned()
+            } else if cfg!(windows) {
+                format!("'{}'", arg.replace('\'', "''"))
+            } else {
+                format!("'{}'", arg.replace('\'', "'\\''"))
+            }
+        }
+        let repair = matches!(args, [hub, repair, _] if hub == "hub" && repair == "repair");
+        Self::Info {
+            title: title.to_owned(),
+            lines: if repair {
+                vec!["Save your work and close this pinned project before repairing its engine installation.".into(), "Copy this command, close the project, then run it in a terminal. Repair verifies the signed engine package and waits for the Hub service job.".into()]
+            } else {
+                vec!["Review and copy this command, then run it in a terminal.".into()]
+            },
+            code: Some(
+                std::iter::once("ara".to_owned())
+                    .chain(args.iter().map(|arg| quote(arg)))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            ),
+        }
+    }
+
     pub fn about() -> Self {
         Self::Info {
             title: "About Ara".into(),
@@ -90,10 +122,15 @@ impl Dialog {
 impl Shell {
     pub(super) fn dialog_markup(&mut self, dialog: &Dialog, out: &mut String) {
         let [w, h] = self.ui.size;
+        let width = ara_ui::popover::MAX_WIDTH.min((w - 16.).max(1.));
+        let height = (h - 16.).max(1.);
+        let action = if matches!(dialog, Dialog::SaveLayout { .. }) {
+            "dialog-save"
+        } else {
+            "dialog-close"
+        };
         out.push_str(&format!(
-            "<panel id='dialog' class='dialog' style='left:{}px;top:{}px'>",
-            ((w - 520.) * 0.5).max(8.),
-            (h * 0.22).max(8.)
+            "<modal id='dialog' class='kit-dialog-layer' default-action='{action}' style='position:absolute;left:0px;top:0px;width:{w}px;height:{h}px;align-items:center;justify-content:center'><panel id='dialog-backdrop' class='kit-dialog-backdrop' style='position:absolute;left:0px;top:0px;width:{w}px;height:{h}px;background:var(--overlay)' /><panel id='dialog-body' class='dialog' style='position:relative;width:{width}px;max-height:{height}px;overflow:hidden'>"
         ));
         match dialog {
             Dialog::Info { title, lines, code } => {
@@ -101,6 +138,7 @@ impl Shell {
                     "<text id='dialog-title' class='title' text='{}' />",
                     escape(title)
                 ));
+                out.push_str("<scroll id='dialog-content' style='min-height:0px;flex-shrink:1'>");
                 for (n, line) in lines.iter().enumerate() {
                     out.push_str(&format!(
                         "<text id='dialog-line-{n}' class='dialog-text' text='{}' />",
@@ -113,6 +151,7 @@ impl Shell {
                         escape(code)
                     ));
                 }
+                out.push_str("</scroll>");
                 out.push_str("<panel id='dialog-actions' class='row' style='justify-content:end'>");
                 if code.is_some() {
                     out.push_str(&self.bind_button(
@@ -152,7 +191,7 @@ impl Shell {
                 out.push_str("</panel>");
             }
         }
-        out.push_str("</panel>");
+        out.push_str("</panel></modal>");
     }
     /// Run a dialog button.
     pub(super) fn dialog_action(

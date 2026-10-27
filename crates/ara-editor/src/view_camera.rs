@@ -1,10 +1,10 @@
 //! The Scene view camera a scene opens with, and what framing looks at.
 //! - Opening: the last camera used in that scene ([`SavedCameras`], a user
 //!   preference), else the scene's gameplay camera ([`gameplay`]), else its content
-//!   from a three-quarter view ([`opening`]).
+//!   from a three-quarter view ([`opening_with_models`]).
 //! - Framing (F, Frame All, first opens) covers renderable content: terrain, ground
 //!   planes and unbounded entities (sky, lights, audio, colliders) count only when
-//!   selected ([`framing_bounds`]).
+//!   selected ([`framing_bounds_with_models`]). Imported geometry uses published bounds.
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -22,22 +22,6 @@ type Bounds = (Vec3, Vec3);
 
 /// Components that make an entity terrain (framed only when selected).
 const TERRAIN: &[&str] = &["Terrain", "TerrainChunk", "Landscape"];
-
-/// The camera scene content opens with when it has no saved camera: its gameplay
-/// camera, else its content from a three-quarter view.
-pub(crate) fn opening(resolved: &Resolved, transforms: &BTreeMap<String, Mat4>) -> Camera {
-    gameplay(resolved, transforms).unwrap_or_else(|| {
-        let mut camera = Camera {
-            yaw: 0.6,
-            pitch: 0.45,
-            ..Camera::default()
-        };
-        if let Some(bounds) = framing_bounds(resolved, transforms, &[]) {
-            fit(&mut camera, bounds);
-        }
-        camera
-    })
-}
 
 /// The view of the scene's gameplay camera (the lowest `Camera.priority`, first by
 /// address on ties) with its field of view. A follow rig looks from behind its target,
@@ -103,38 +87,130 @@ fn walls<'a>(
     })
 }
 
-/// World bounds framing shows: the `selection` when there is one (anything selected
-/// counts), else renderable content without terrain, ground planes and unbounded
-/// entities, else every entity. An entity is its transformed unit box (procedural
-/// shapes use their `size`); `None` for an empty scene.
-pub(crate) fn framing_bounds(
+/// Frame actual imported/procedural bounds. Selected parents include their renderable
+/// descendants; pending imports keep the camera's last view until metadata is available.
+pub(crate) fn framing_bounds_with_models(
     resolved: &Resolved,
     transforms: &BTreeMap<String, Mat4>,
     selection: &[String],
-) -> Option<(Vec3, Vec3)> {
-    let boxes = |keep: &dyn Fn(&str, &ResolvedEntity, Bounds) -> bool| {
+    models: &crate::world::bounds::ModelBounds,
+) -> Option<Bounds> {
+    use crate::world::bounds::{Aabb, selected};
+    let world = |entity: &ResolvedEntity, matrix: Mat4| {
+        if let Some(renderer) = entity.record.get("MeshRenderer") {
+            if renderer.get("model").and_then(Value::as_str).is_some() {
+                return models.local(renderer)?.transformed(matrix);
+            }
+            let size = renderer.get("size").and_then(Value::as_array);
+            let axis = |index| {
+                size.and_then(|size| size.get(index))
+                    .and_then(Value::as_f64)
+                    .unwrap_or(1.) as f32
+            };
+            let mut half = Vec3::new(axis(0), axis(1), axis(2)) * 0.5;
+            if renderer.get("shape").and_then(Value::as_str) == Some("plane") {
+                half.y = 0.;
+            }
+            return Aabb::new(-half, half)?.transformed(matrix);
+        }
+        Aabb::new(Vec3::splat(-0.5), Vec3::splat(0.5))?.transformed(matrix)
+    };
+    let boxes = |renderable: bool| {
         resolved
             .iter()
             .filter_map(|(id, entity)| {
-                let bounds = world_box(entity, transforms.get(id)?);
-                keep(id, entity, bounds).then_some(bounds)
+                if !selection.is_empty() && !selected(resolved, id, selection) {
+                    return None;
+                }
+                if renderable && !entity.record.contains_key("MeshRenderer") {
+                    return None;
+                }
+                let bounds = world(entity, *transforms.get(id)?)?;
+                if selection.is_empty() && renderable && !content(entity, (bounds.min, bounds.max))
+                {
+                    return None;
+                }
+                Some(bounds)
             })
-            .reduce(|a, b| (a.0.min(b.0), a.1.max(b.1)))
+            .reduce(Aabb::union)
     };
-    if !selection.is_empty() {
-        return boxes(&|id, _, _| selection.iter().any(|s| s == id));
-    }
-    boxes(&|_, entity, bounds| content(entity, bounds)).or_else(|| boxes(&|_, _, _| true))
+    let bounds = boxes(true).or_else(|| boxes(false))?;
+    Some((bounds.min, bounds.max))
 }
 
-/// Aim `camera` at the bounds' centre from its current direction, far enough that a
-/// sphere around them fills the view's height.
-pub(crate) fn fit(camera: &mut Camera, (min, max): (Vec3, Vec3)) {
-    let radius = ((max - min).length() * 0.5).max(0.5);
-    let half = (camera.fov_y_degrees.to_radians() * 0.5).sin();
-    camera.target = (min + max) * 0.5;
-    camera.distance = (radius / half * 1.1).clamp(0.05, 100_000.);
+/// Fit all eight bound corners against both field-of-view axes. Long, thin and
+/// portrait viewports therefore retain every selected corner without changing view direction.
+pub(crate) fn fit_aspect(camera: &mut Camera, (min, max): Bounds, aspect: f32) {
+    if !min.is_finite()
+        || !max.is_finite()
+        || !min.cmple(max).all()
+        || !aspect.is_finite()
+        || aspect <= 0.
+    {
+        return;
+    }
+    let centre = min * 0.5 + max * 0.5;
+    let back = Vec3::new(
+        camera.yaw.sin() * camera.pitch.cos(),
+        camera.pitch.sin(),
+        camera.yaw.cos() * camera.pitch.cos(),
+    );
+    let right = Vec3::new(camera.yaw.cos(), 0., -camera.yaw.sin());
+    let up = back.cross(right);
+    if !back.is_finite() || !right.is_finite() || !up.is_finite() || !centre.is_finite() {
+        return;
+    }
+    let tan_y = (f64::from(camera.fov_y_degrees) * std::f64::consts::PI / 360.).tan();
+    let tan_x = tan_y * f64::from(aspect);
+    if !tan_y.is_finite() || !tan_x.is_finite() || tan_y <= 0. || tan_x <= 0. {
+        return;
+    }
+    let mut distance = 0.5_f64;
+    for index in 0..8 {
+        let corner = Vec3::new(
+            if index & 1 == 0 { min.x } else { max.x },
+            if index & 2 == 0 { min.y } else { max.y },
+            if index & 4 == 0 { min.z } else { max.z },
+        );
+        let offset = corner.as_dvec3() - centre.as_dvec3();
+        let depth = offset.dot(back.as_dvec3());
+        distance = distance
+            .max(
+                depth
+                    + (offset.dot(right.as_dvec3()).abs() * 1.1 / tan_x)
+                        .max(offset.dot(up.as_dvec3()).abs() * 1.1 / tan_y),
+            )
+            .max(depth + 0.11);
+    }
+    if distance.is_finite() {
+        camera.target = centre;
+        camera.distance = distance.clamp(0.05, 100_000.) as f32;
+    }
 }
+
+/// The first view of a scene, using its gameplay camera or published content bounds.
+pub(crate) fn opening_with_models(
+    resolved: &Resolved,
+    transforms: &BTreeMap<String, Mat4>,
+    models: &crate::world::bounds::ModelBounds,
+    aspect: f32,
+) -> Camera {
+    gameplay(resolved, transforms).unwrap_or_else(|| {
+        let mut camera = Camera {
+            yaw: 0.6,
+            pitch: 0.45,
+            ..Camera::default()
+        };
+        if let Some(bounds) = framing_bounds_with_models(resolved, transforms, &[], models) {
+            fit_aspect(&mut camera, bounds, aspect);
+        }
+        camera
+    })
+}
+
+#[cfg(test)]
+#[path = "view_camera/framing_tests.rs"]
+mod framing_tests;
 
 /// Renderable, bounded and not ground: a `MeshRenderer` that is not terrain and not
 /// a wide flat slab (20 m or more across, under 5% as tall).
@@ -146,35 +222,6 @@ fn content(entity: &ResolvedEntity, (min, max): (Vec3, Vec3)) -> bool {
     let size = max - min;
     let across = size.x.max(size.z);
     !(across >= 20. && size.y < across * 0.05)
-}
-
-/// An entity's world box: its unit box, or its procedural shape's `size` (planes are
-/// flat), through `matrix`.
-fn world_box(entity: &ResolvedEntity, matrix: &Mat4) -> (Vec3, Vec3) {
-    let mut extent = Vec3::ONE;
-    if let Some(renderer) = entity.record.get("MeshRenderer")
-        && renderer.get("model").is_none()
-    {
-        if let Some(size) = renderer.get("size").and_then(Value::as_array) {
-            let axis = |i: usize| size.get(i).and_then(Value::as_f64).unwrap_or(1.) as f32;
-            extent = Vec3::new(axis(0), axis(1), axis(2));
-        }
-        if renderer.get("shape").and_then(Value::as_str) == Some("plane") {
-            extent.y = 0.;
-        }
-    }
-    let mut min = Vec3::splat(f32::INFINITY);
-    let mut max = Vec3::splat(f32::NEG_INFINITY);
-    for x in [-0.5, 0.5] {
-        for y in [-0.5, 0.5] {
-            for z in [-0.5, 0.5] {
-                let p = matrix.transform_point3(Vec3::new(x, y, z) * extent);
-                min = min.min(p);
-                max = max.max(p);
-            }
-        }
-    }
-    (min, max)
 }
 
 /// The Scene view's last camera per scene, kept per project in `scene-cameras.json`

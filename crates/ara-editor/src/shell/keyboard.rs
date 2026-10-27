@@ -16,11 +16,46 @@ impl Shell {
         pressed: bool,
         clipboard: &mut dyn Clipboard,
     ) -> ara_ui::Result<bool> {
-        match scancode {
-            225 | 229 => self.modifiers[0] = pressed,
-            224 | 228 => self.modifiers[1] = pressed,
-            226 | 230 => self.modifiers[2] = pressed,
-            _ => {}
+        if MODIFIERS.contains(&scancode) {
+            self.native_input.key(
+                &mut self.ui,
+                &mut self.input,
+                scancode,
+                pressed,
+                false,
+                clipboard,
+            )?;
+            let modifiers = self.native_input.modifiers();
+            self.modifiers = [
+                modifiers.shift,
+                if cfg!(target_os = "macos") {
+                    modifiers.command
+                } else {
+                    modifiers.control
+                },
+                modifiers.alt,
+            ];
+        }
+        if pressed && scancode == 41 && self.native_input.composing() {
+            return self.native_input.key(
+                &mut self.ui,
+                &mut self.input,
+                scancode,
+                pressed,
+                false,
+                clipboard,
+            );
+        }
+        if pressed && scancode == 41 && self.input.scrubbing() {
+            self.event(InputEvent::Cancel, clipboard)?;
+            editor.end_field_gestures()?;
+            return Ok(true);
+        }
+        if self.confirmations.is_open() {
+            return self.confirmation_key(editor, scancode, pressed, clipboard);
+        }
+        if self.choice_key(editor, scancode, pressed, clipboard)? {
+            return Ok(true);
         }
         if scancode == 226 || scancode == 230 {
             if pressed {
@@ -86,6 +121,50 @@ impl Shell {
             .focused()
             .and_then(|id| self.ui.by_id(id))
             .is_some_and(|i| matches!(self.ui.nodes[i].element.tag.as_str(), "field" | "input"));
+        // A dialog owns its keys before menus or global shortcuts. Enter activates
+        // the focused button; only an input uses the dialog's primary action.
+        if self.dialog.is_some() {
+            if scancode == 41 {
+                self.dialog_action(editor, "close")?;
+                self.rebuild(editor)?;
+                return Ok(true);
+            }
+            if scancode == 40 || scancode == 88 {
+                let action = self
+                    .input
+                    .focused()
+                    .and_then(|id| self.bindings.get(&id))
+                    .and_then(|binding| match binding {
+                        Binding::DialogAction(action) => Some(*action),
+                        _ => None,
+                    })
+                    .unwrap_or(if matches!(self.dialog, Some(Dialog::SaveLayout { .. })) {
+                        "save"
+                    } else {
+                        "close"
+                    });
+                self.dispatch(editor)?;
+                self.dialog_action(editor, action)?;
+                self.rebuild(editor)?;
+                return Ok(true);
+            }
+            if scancode == 43 {
+                self.event(InputEvent::Tab { reverse: shift }, clipboard)?;
+                return Ok(true);
+            }
+            if scancode == 44 && !field {
+                self.event(InputEvent::Activate, clipboard)?;
+                self.dispatch(editor)?;
+                self.rebuild(editor)?;
+                return Ok(true);
+            }
+            if alt || (58..=69).contains(&scancode) {
+                return Ok(true);
+            }
+            if !field {
+                return Ok(true);
+            }
+        }
         if self.menu.is_some() && self.menu_key(editor, scancode)? {
             return Ok(true);
         }
@@ -193,14 +272,10 @@ impl Shell {
             self.event(InputEvent::Cancel, clipboard)?;
             // Esc only reaches the keymap (e.g. Unreal's Stop) when nothing else consumed it.
             if !had_drag && !had_overlay && !had_modal && !field {
-                self.run_chord(editor, chord)?;
+                if !self.selection_escape(editor)? {
+                    self.run_chord(editor, chord)?;
+                }
             }
-            self.rebuild(editor)?;
-            return Ok(true);
-        }
-        if (scancode == 40 || scancode == 88) && self.dialog.is_some() {
-            self.dispatch(editor)?;
-            self.dialog_action(editor, "save")?;
             self.rebuild(editor)?;
             return Ok(true);
         }
@@ -236,31 +311,17 @@ impl Shell {
             return Ok(true);
         }
         if field {
-            let edit = match (scancode, ctrl) {
-                (4, true) => Some(EditEvent::SelectAll),
-                (6, true) => Some(EditEvent::Copy),
-                (27, true) => Some(EditEvent::Cut),
-                (25, true) => Some(EditEvent::Paste),
-                (29, true) => Some(if shift {
-                    EditEvent::Redo
-                } else {
-                    EditEvent::Undo
-                }),
-                (28, true) => Some(EditEvent::Redo),
-                (42, _) => Some(EditEvent::Backspace),
-                (76, _) => Some(EditEvent::Delete),
-                (79, _) => Some(EditEvent::Move {
-                    forward: true,
-                    select: shift,
-                }),
-                (80, _) => Some(EditEvent::Move {
-                    forward: false,
-                    select: shift,
-                }),
-                _ => None,
-            };
-            if let Some(edit) = edit {
-                self.event(InputEvent::Edit(edit), clipboard)?;
+            if matches!(
+                scancode,
+                4 | 6 | 27 | 25 | 29 | 28 | 42 | 76 | 79 | 80 | 74 | 77
+            ) && self.native_input.key(
+                &mut self.ui,
+                &mut self.input,
+                scancode,
+                true,
+                false,
+                clipboard,
+            )? {
                 return Ok(true);
             }
             // Plain typing belongs to the field; chords and function keys stay global.
@@ -268,6 +329,9 @@ impl Shell {
             if !ctrl && !alt && !function {
                 return Ok(false);
             }
+        }
+        if self.dialog.is_some() {
+            return Ok(true);
         }
         if self.asset_folder_key(editor, scancode)? {
             return Ok(true);
@@ -280,8 +344,12 @@ impl Shell {
             }
             return self.open_context(editor);
         }
-        if !ctrl && !alt && !field && self.hierarchy_key(scancode)? {
-            return Ok(true);
+        if !alt && !field {
+            if self.asset_selection_key(editor, scancode)?
+                || self.hierarchy_key(editor, scancode)?
+            {
+                return Ok(true);
+            }
         }
         self.run_chord(editor, chord)
     }
@@ -303,5 +371,131 @@ impl Shell {
         self.remember(id);
         self.run_command(editor, id, &target)?;
         Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod dialog_tests {
+    use super::*;
+    use std::{
+        path::PathBuf,
+        sync::atomic::{AtomicU64, Ordering},
+    };
+
+    struct Project(PathBuf);
+    impl Project {
+        fn new() -> ara_ui::Result<Self> {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let target = std::env::var_os("CARGO_TARGET_DIR")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"));
+            let root = target.join(format!(
+                "dialog-keys-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            std::fs::create_dir_all(root.join("levels"))?;
+            for (path, value) in [
+                (
+                    "ara.project.json",
+                    json!({"name":"Dialog keys","main":"levels/main.scene"}),
+                ),
+                (
+                    "levels/main.scene",
+                    json!({"$schema":"ara://schema/scene/1","id":"sc_dialog00","records":{}}),
+                ),
+            ] {
+                std::fs::write(root.join(path), ara_json::to_canonical_string(&value))?;
+            }
+            Ok(Self(root))
+        }
+    }
+    impl Drop for Project {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    struct Clip;
+    impl Clipboard for Clip {
+        fn read(&mut self) -> ara_ui_text::Result<String> {
+            Ok(String::new())
+        }
+        fn write(&mut self, _: &str) -> ara_ui_text::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn focused_cancel_enter_dismisses_without_saving_or_running_global_shortcuts()
+    -> ara_ui::Result<()> {
+        let project = Project::new()?;
+        let mut editor = Editor::open(&project.0)?;
+        let mut shell = Shell::new(&mut editor, [900., 600.])?;
+        shell.dialog = Some(Dialog::save_layout());
+        shell.rebuild(&mut editor)?;
+        shell
+            .input
+            .focus(&mut shell.ui, ara_ui::source::stable_id("dialog-cancel"))?;
+        shell.key(&mut editor, 40, true, &mut Clip)?;
+        assert!(shell.dialog.is_none());
+        assert!(!project.0.join(".ara/layouts").exists());
+        shell.open_bar(0, false);
+        shell.dialog = Some(Dialog::about());
+        shell.rebuild(&mut editor)?;
+        shell.key(&mut editor, 67, true, &mut Clip)?;
+        assert!(shell.dialog.is_some(), "F10 must not escape a modal");
+        shell.key(&mut editor, 41, true, &mut Clip)?;
+        assert!(shell.dialog.is_none());
+        assert!(shell.menu.is_some(), "Escape closes only the active dialog");
+        Ok(())
+    }
+
+    #[test]
+    fn modal_root_replacement_restores_the_actual_palette_scope() -> ara_ui::Result<()> {
+        let project = Project::new()?;
+        let mut editor = Editor::open(&project.0)?;
+        let mut shell = Shell::new(&mut editor, [900., 600.])?;
+        editor.action("editor.palette", json!({"open":true}))?;
+        shell.rebuild(&mut editor)?;
+        assert_eq!(shell.modal_root, Some("palette"));
+        shell.dialog = Some(Dialog::save_layout());
+        shell.rebuild(&mut editor)?;
+        assert_eq!(shell.modal_root, Some("dialog"));
+        shell
+            .input
+            .focus(&mut shell.ui, ara_ui::source::stable_id("dialog-cancel"))?;
+        shell.dialog = None;
+        shell.rebuild(&mut editor)?;
+        assert_eq!(shell.modal_root, Some("palette"));
+        shell
+            .input
+            .focus(&mut shell.ui, ara_ui::source::stable_id("palette-search"))?;
+        Ok(())
+    }
+
+    #[test]
+    fn unsaved_quit_cancel_preserves_drafts_and_accept_commits_before_close() -> ara_ui::Result<()>
+    {
+        let project = Project::new()?;
+        let mut editor = Editor::open(&project.0)?;
+        let mut shell = Shell::new(&mut editor, [900., 600.])?;
+        shell.drafts.insert("@camera|fov".into(), "65".into());
+        assert!(!shell.request_quit(&mut editor)?);
+        shell.key(&mut editor, 41, true, &mut Clip)?;
+        assert_eq!(
+            shell.drafts.get("@camera|fov").map(String::as_str),
+            Some("65")
+        );
+        assert!(shell.window_request.is_none());
+        assert!(!shell.request_quit(&mut editor)?);
+        shell.key(&mut editor, 40, true, &mut Clip)?;
+        assert!(shell.drafts.is_empty());
+        assert_eq!(editor.state.camera.fov_y_degrees, 65.);
+        // Host writes may still be pending; ordinary frames drive completion.
+        editor.host.flush();
+        shell.poll_dialogs(&mut editor)?;
+        assert_eq!(shell.window_request, Some(WindowRequest::Quit));
+        assert!(shell.request_quit(&mut editor)?);
+        Ok(())
     }
 }

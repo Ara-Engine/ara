@@ -336,6 +336,10 @@ impl Shell {
 }
 /// Open a path in the OS file manager.
 pub(crate) fn open_external(path: &std::path::Path) -> ara_ui::Result<()> {
+    std::fs::metadata(path)?;
+    if std::env::var_os("ARA_PLAY_OFFSCREEN").is_some_and(|value| value == "1") {
+        return Ok(());
+    }
     let program = if cfg!(windows) {
         "explorer"
     } else if cfg!(target_os = "macos") {
@@ -348,6 +352,12 @@ pub(crate) fn open_external(path: &std::path::Path) -> ara_ui::Result<()> {
 }
 /// Open a terminal at the project root.
 pub(crate) fn open_terminal(root: &std::path::Path) -> ara_ui::Result<()> {
+    if !root.is_dir() {
+        return Err("The terminal folder is no longer available".into());
+    }
+    if std::env::var_os("ARA_PLAY_OFFSCREEN").is_some_and(|value| value == "1") {
+        return Ok(());
+    }
     if cfg!(windows) {
         if std::process::Command::new("wt")
             .arg("-d")

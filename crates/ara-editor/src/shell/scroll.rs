@@ -70,54 +70,7 @@ impl Shell {
         Ok(())
     }
     /// Keyboard navigation over the full Hierarchy model, materializing only the target viewport.
-    pub(super) fn hierarchy_key(&mut self, key: i32) -> ara_ui::Result<bool> {
-        if !matches!(key, 81 | 82 | 74 | 77 | 75 | 78) {
-            return Ok(false);
-        }
-        let Some(view) = &self.hierarchy_view else {
-            return Ok(false);
-        };
-        let Some(focused) = self.input.focused() else {
-            return Ok(false);
-        };
-        let Some(current) = self
-            .ui
-            .by_id(focused)
-            .and_then(|node| view.visible_nodes().iter().position(|i| *i == node))
-        else {
-            return Ok(false);
-        };
-        let Some(i) = self.shown_node("hierarchy-rows") else {
-            return Ok(false);
-        };
-        let height = self.ui.nodes[i].rect.h;
-        let row = view.row_height();
-        let current = (self.hierarchy_offset / row).floor() as usize + current;
-        let page = (height / row).floor().max(1.) as usize;
-        let last = self.hierarchy.items.len().saturating_sub(1);
-        let next = match key {
-            81 => (current + 1).min(last),
-            82 => current.saturating_sub(1),
-            74 => 0,
-            77 => last,
-            75 => current.saturating_sub(page),
-            _ => (current + page).min(last),
-        };
-        let top = next as f32 * row;
-        let offset = if top < self.hierarchy_offset {
-            top
-        } else {
-            (top + row - height).max(self.hierarchy_offset)
-        };
-        self.ui.scroll_to(i, [0., offset])?;
-        self.sync_scroll_views()?;
-        self.ui.frame(&mut self.text)?;
-        let view = self
-            .hierarchy_view
-            .as_ref()
-            .expect("hierarchy pool survives scroll");
-        self.input
-            .focus(&mut self.ui, view.identity(self.hierarchy.items[next].0))?;
-        Ok(true)
+    pub(super) fn hierarchy_key(&mut self, editor: &mut Editor, key: i32) -> ara_ui::Result<bool> {
+        self.hierarchy_selection_key(editor, key)
     }
 }

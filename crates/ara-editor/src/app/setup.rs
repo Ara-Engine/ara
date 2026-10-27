@@ -30,6 +30,8 @@ pub struct Options {
     pub verify_ux: bool,
     /// Run only native dock drags, with before/preview/after captures at both UI scales.
     pub verify_docking: bool,
+    /// Run native content drag/drop, reference, component and OS-import behaviour journeys.
+    pub verify_behaviours: bool,
     /// Right-click Create → C# Script → rename → compile → attach, offscreen.
     pub verify_assets: bool,
     /// Scene to open instead of the project's main scene (`levels/hangar.scene`).
@@ -42,6 +44,16 @@ pub struct Options {
     /// Run the alpha journey route (open, import, place, prefab, C#, Play, failure,
     /// undo/save/reopen, export) and capture every step.
     pub verify_journey: bool,
+    /// Run seeded randomized interactions through the production editor loop, hidden.
+    pub verify_monkey: bool,
+    /// Seed of the replayable monkey action sequence.
+    pub monkey_seed: u64,
+    /// Wall-clock soak budget; action generation itself does not use time.
+    pub monkey_seconds: u64,
+    /// Optional action limit for short deterministic reproductions.
+    pub monkey_steps: Option<u64>,
+    /// Replay exact journal actions instead of generating new seeded choices.
+    pub monkey_replay: Option<PathBuf>,
     /// Measure UI cost and click reliability with input injected into the window
     /// loop (`app/responsiveness.rs`); writes `responsiveness.json`.
     pub verify_responsiveness: bool,
@@ -78,8 +90,10 @@ impl Options {
             || self.verify_panels
             || self.verify_ux
             || self.verify_docking
+            || self.verify_behaviours
             || self.verify_assets
             || self.verify_journey
+            || self.verify_monkey
             || self.verify_responsiveness
             || self.verify_first_hour
             || self.verify_scene_quality
@@ -126,11 +140,17 @@ impl Default for Options {
             verify_panels: false,
             verify_ux: false,
             verify_docking: false,
+            verify_behaviours: false,
             verify_assets: false,
             scene: None,
             select: None,
             play: false,
             verify_journey: false,
+            verify_monkey: false,
+            monkey_seed: 1,
+            monkey_seconds: 1800,
+            monkey_steps: None,
+            monkey_replay: None,
             verify_first_hour: false,
             verify_scene_quality: false,
             verify_loading: false,

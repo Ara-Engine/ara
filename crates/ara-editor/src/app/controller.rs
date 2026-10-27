@@ -2,6 +2,9 @@
 use super::*;
 use glam::Vec2;
 use std::collections::BTreeSet;
+#[cfg(test)]
+mod navigation_tests;
+mod selection;
 struct GizmoDrag {
     handle: overlay::Handle,
     start: [f32; 2],
@@ -14,16 +17,20 @@ struct GizmoDrag {
     pivot: Vec3,
     /// Digits typed during the drag; they set the value exactly.
     typed: String,
+    duplicate: bool,
 }
 #[derive(Default)]
 pub(super) struct Controller {
     buttons: [bool; 4],
     /// The right button moved the camera, so its release opens no context menu.
     orbited: bool,
+    /// Fly navigation starts only from an unobstructed Scene viewport press.
+    fly_capture: bool,
     keys: BTreeSet<i32>,
     gizmo: Option<GizmoDrag>,
     /// Gizmo handle under the pointer, highlighted yellow.
     hover: Option<overlay::Handle>,
+    marquee: Option<selection::Press>,
 }
 impl Controller {
     /// Whether any mouse button is held (window moves persist after release).
@@ -44,6 +51,7 @@ impl Controller {
         }
     }
     /// Start a handle drag at the pointer.
+    #[allow(clippy::too_many_arguments)]
     fn begin_gizmo(
         &mut self,
         editor: &mut Editor,
@@ -51,6 +59,7 @@ impl Controller {
         handle: overlay::Handle,
         pointer: [f32; 2],
         rect: ara_ui::paint::Box2,
+        duplicate: bool,
     ) -> ara_ui::Result<()> {
         let tool = handle.tool(editor.state.tool);
         let operation = handles.for_tool(tool);
@@ -101,6 +110,7 @@ impl Controller {
             axes: handles.axes,
             pivot: handles.pivot,
             typed: String::new(),
+            duplicate,
         });
         Ok(())
     }
@@ -125,7 +135,11 @@ impl Controller {
             String::new()
         };
         let gesture = editor.gesture.as_mut()?;
-        let typed = drag.typed.parse::<f32>().ok();
+        let typed = drag
+            .typed
+            .parse::<f32>()
+            .ok()
+            .filter(|value| value.is_finite());
         let names = ["X", "Y", "Z"];
         let (delta, text) = match drag.handle.base() {
             overlay::Handle::Axis(axis) => {
@@ -202,6 +216,7 @@ impl Controller {
         };
         Some(format!("{text}{typed}{snap}"))
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn event(
         &mut self,
         event: Event,
@@ -209,8 +224,82 @@ impl Controller {
         shell: &mut Shell,
         renderer: &mut Renderer,
         view: &crate::world::DocumentView,
+        scene_view: &viewport::SceneView,
         clipboard: &mut dyn ara_ui_text::Clipboard,
     ) -> ara_ui::Result<(bool, bool, bool)> {
+        if matches!(event, Event::FocusLost) {
+            shell.native_focus_lost(clipboard)?;
+            self.keys.clear();
+            self.buttons = [false; 4];
+            self.fly_capture = false;
+            self.gizmo = None;
+            self.marquee = None;
+            shell.set_marquee(None);
+            shell.drag = None;
+            shell.drop_preview = None;
+            shell.finish_scrub(editor, true)?;
+            editor.finish_gesture(true)?;
+            editor.end_field_gestures()?;
+            shell.release_tab_capture(clipboard)?;
+            shell.show_readout(None);
+            return Ok((true, true, false));
+        }
+        match &event {
+            Event::TextInput { text } => {
+                let changed = shell.native_text(text, clipboard)?;
+                shell.dispatch(editor)?;
+                return Ok((changed, false, false));
+            }
+            Event::TextEditing {
+                text,
+                start,
+                length,
+            } => {
+                let changed = shell.native_preedit(text, *start, *length, clipboard)?;
+                return Ok((changed, false, false));
+            }
+            _ => {}
+        }
+        if shell.modal_active() || shell.choice_open() {
+            self.keys.clear();
+            self.buttons = [false; 4];
+            self.marquee = None;
+            shell.set_marquee(None);
+            match event {
+                Event::MouseMotion { position, .. } => {
+                    shell.pointer = position;
+                    shell.event(InputEvent::PointerMove(position), clipboard)?;
+                }
+                Event::MouseButton { button: 1, pressed } => {
+                    shell.event(
+                        if pressed {
+                            InputEvent::PointerDown(shell.pointer)
+                        } else {
+                            InputEvent::PointerUp(shell.pointer)
+                        },
+                        clipboard,
+                    )?;
+                    shell.dispatch(editor)?;
+                }
+                Event::Wheel(delta) => {
+                    shell.event(
+                        InputEvent::Wheel {
+                            position: shell.pointer,
+                            delta: delta.map(|v| -v * 28.),
+                        },
+                        clipboard,
+                    )?;
+                }
+                Event::Key {
+                    scancode, pressed, ..
+                } => {
+                    shell.key(editor, scancode, pressed, clipboard)?;
+                }
+                Event::Quit => return Ok((true, false, shell.request_quit(editor)?)),
+                _ => {}
+            }
+            return Ok((true, false, false));
+        }
         if shell.graph_event(editor, &event)? {
             return Ok((true, false, false));
         }
@@ -220,6 +309,9 @@ impl Controller {
         match event {
             Event::Quit => quit = true,
             Event::Resize(_) => dirty = true,
+            Event::FocusLost => {} // Lifecycle cancellation is handled before modal/viewport routing.
+            Event::FileDrop { .. } => {} // The window owner dispatches the typed import.
+            Event::TextInput { .. } | Event::TextEditing { .. } => {}
             Event::Key {
                 scancode,
                 pressed,
@@ -229,6 +321,21 @@ impl Controller {
                     self.keys.insert(scancode);
                 } else {
                     self.keys.remove(&scancode);
+                }
+                if pressed && scancode == 41 && self.marquee.take().is_some() {
+                    shell.set_marquee(None);
+                    return Ok((true, false, false));
+                }
+                if pressed
+                    && self.gizmo.is_some()
+                    && shell.modifiers[1]
+                    && matches!(scancode, 28 | 29)
+                {
+                    self.gizmo = None;
+                    editor.finish_gesture(true)?;
+                    shell.show_readout(None);
+                    shell.key(editor, scancode, true, clipboard)?;
+                    return Ok((true, true, false));
                 }
                 if pressed && self.gizmo.is_some() && scancode != 41 {
                     // Typed entry during a drag: digits set the value, X/Y/Z switch axis, Enter commits.
@@ -282,8 +389,7 @@ impl Controller {
                         }
                     }
                     if commit {
-                        self.gizmo = None;
-                        editor.finish_gesture(false)?;
+                        self.finish_gizmo(editor)?;
                         shell.show_readout(None);
                     } else {
                         let text = self.drive_gizmo(editor, shell.pointer, shell.viewport());
@@ -291,7 +397,7 @@ impl Controller {
                     }
                     return Ok((true, true, false));
                 }
-                if !self.buttons[3] {
+                if !self.buttons[3] || !self.fly_capture {
                     shell.key(editor, scancode, pressed, clipboard)?;
                     if scancode == 41 && pressed {
                         self.gizmo = None;
@@ -311,6 +417,9 @@ impl Controller {
             Event::MouseMotion { position, delta } => {
                 shell.pointer = position;
                 editor.input_active();
+                if self.move_marquee(shell) {
+                    return Ok((true, false, false));
+                }
                 if shell.move_picker()? || shell.move_scrub()? {
                     return Ok((true, false, false));
                 }
@@ -331,15 +440,18 @@ impl Controller {
                     scene_dirty = true;
                 } else if inside
                     && (self.buttons[2]
-                        || self.buttons[3]
+                        || (self.buttons[3] && self.fly_capture)
                         || (self.buttons[1] && shell.modifiers[2]))
                 {
                     let mut camera = editor.state.camera;
-                    if self.buttons[3] && delta[0].abs() + delta[1].abs() > 0.5 {
+                    if self.buttons[3] && self.fly_capture && delta[0].abs() + delta[1].abs() > 0.5
+                    {
                         self.orbited = true;
                     }
                     if self.buttons[2] {
                         camera.pan(delta);
+                    } else if self.buttons[3] && self.fly_capture {
+                        camera.look(delta);
                     } else {
                         camera.orbit(delta);
                     }
@@ -371,6 +483,10 @@ impl Controller {
                 dirty = true;
             }
             Event::MouseButton { button, pressed } => {
+                if pressed && button != 1 {
+                    self.marquee = None;
+                    shell.set_marquee(None);
+                }
                 if button < 4 {
                     self.buttons[button as usize] = pressed;
                 }
@@ -461,6 +577,21 @@ impl Controller {
                 }
                 if button == 3 && pressed {
                     self.orbited = false;
+                    self.fly_capture = shell
+                        .viewport()
+                        .is_some_and(|rect| rect.contains(shell.pointer[0], shell.pointer[1]))
+                        && shell
+                            .ui
+                            .hit_test(shell.pointer[0], shell.pointer[1])
+                            .is_none()
+                        && shell.menu.is_none()
+                        && !shell.modal_active();
+                    if self.fly_capture {
+                        editor.action("editor.focus", json!({"panel":"scene"}))?;
+                    }
+                }
+                if button == 3 && !pressed {
+                    self.fly_capture = false;
                 }
                 if button == 1 {
                     let inside = shell
@@ -472,10 +603,11 @@ impl Controller {
                             .is_none()
                         && !editor.state.palette
                         && shell.menu.is_none();
-                    if pressed && !shell.modifiers[2] {
+                    if pressed {
                         if !inside {
                             shell.commit_fields(editor)?;
                             shell.event(InputEvent::PointerDown(shell.pointer), clipboard)?;
+                            shell.begin_native_scrub(editor)?;
                             if !shell.input.scrolling()
                                 && !shell.begin_picker_drag(editor)?
                                 && !shell.begin_scrub(editor)?
@@ -491,8 +623,15 @@ impl Controller {
                                 && let Some(handle) = overlay::hit(&handles, shell.pointer)
                             {
                                 let pointer = shell.pointer;
-                                self.begin_gizmo(editor, &handles, handle, pointer, rect)?;
-                            } else {
+                                self.begin_gizmo(
+                                    editor,
+                                    &handles,
+                                    handle,
+                                    pointer,
+                                    rect,
+                                    shell.modifiers[2],
+                                )?;
+                            } else if !shell.modifiers[2] {
                                 let x = ((shell.pointer[0] - rect.x) / rect.w
                                     * renderer.size()[0] as f32)
                                     .max(0.) as u32;
@@ -511,6 +650,7 @@ impl Controller {
                                         if let Some(entity) = entity {
                                             editor.apply(
                                                 shell.field_commands(
+                                                    editor,
                                                     &editor.state.selection,
                                                     &path,
                                                     json!(entity),
@@ -520,16 +660,20 @@ impl Controller {
                                             )?;
                                         }
                                     } else {
-                                        editor.action("editor.select",json!({"entities":entity.into_iter().collect::<Vec<_>>(),"toggle":shell.modifiers[1],"additive":shell.modifiers[0]}))?;
+                                        self.begin_marquee(editor, shell, entity);
                                     }
                                 }
                             }
                         }
                     } else if !pressed {
+                        if self.finish_marquee(editor, shell, scene_view)? {
+                            return Ok((true, false, false));
+                        }
+                        let native_scrub = shell.input.scrubbing();
                         if shell.finish_picker(editor)? || shell.finish_scrub(editor, false)? {
                             shell.event(InputEvent::Cancel, clipboard)?;
-                        } else if self.gizmo.take().is_some() {
-                            editor.finish_gesture(false)?;
+                        } else if self.gizmo.is_some() {
+                            self.finish_gizmo(editor)?;
                             shell.show_readout(None);
                             scene_dirty = true;
                         } else if !shell.drop_at(editor)? {
@@ -548,11 +692,16 @@ impl Controller {
                         } else {
                             shell.event(InputEvent::Cancel, clipboard)?;
                         }
+                        if native_scrub {
+                            editor.end_field_gestures()?;
+                        }
                     }
                     dirty = true;
                 }
             }
             Event::Wheel(delta) => {
+                self.marquee = None;
+                shell.set_marquee(None);
                 editor.input_active();
                 if shell
                     .viewport()
@@ -600,7 +749,13 @@ impl Controller {
     pub fn fly(&mut self, editor: &mut Editor, shell: &Shell, dt: f32) -> ara_ui::Result<bool> {
         let mut dirty = false;
         let mut scene_dirty = false;
-        if self.buttons[3] {
+        if self.buttons[3]
+            && self.fly_capture
+            && !shell.modal_active()
+            && editor.state.focus == "scene"
+            && dt.is_finite()
+            && dt > 0.
+        {
             let direction = Vec3::new(
                 (i32::from(self.keys.contains(&7)) - i32::from(self.keys.contains(&4))) as f32,
                 (i32::from(self.keys.contains(&8)) - i32::from(self.keys.contains(&20))) as f32,
@@ -608,9 +763,17 @@ impl Controller {
             );
             if direction.length_squared() > 0. {
                 let mut camera = editor.state.camera;
+                let speed = editor
+                    .state
+                    .settings
+                    .get("viewport.cameraSpeed")
+                    .and_then(Value::as_f64)
+                    .filter(|value| value.is_finite())
+                    .unwrap_or(4.)
+                    .clamp(0.5, 50.) as f32;
                 camera.fly(
                     direction.normalize(),
-                    dt * if shell.modifiers[0] { 12. } else { 4. },
+                    dt * speed * if shell.modifiers[0] { 3. } else { 1. },
                 );
                 set_camera(editor, &camera)?;
                 scene_dirty = true;

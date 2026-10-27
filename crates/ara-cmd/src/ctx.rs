@@ -173,15 +173,23 @@ impl<'a> ReadCtx<'a> {
             };
         }
         // `instance/<prefab root ID>` names the instance itself (it *is* the root).
+        let entities = inner.map(|_| self.record_entities(&id));
         let inner = match (inner, self.prefab_root(rec)) {
+            (Some(inner), _)
+                if entities
+                    .as_ref()
+                    .is_some_and(|entities| entities.contains_key(&format!("{head}/{inner}"))) =>
+            {
+                Some(inner)
+            }
             (Some(i), Some(root)) if i == root => None,
             (Some(i), Some(root)) => Some(i.strip_prefix(&format!("{root}/")).unwrap_or(i)),
             (i, _) => i,
         };
         if let Some(i) = inner
-            && !self
-                .record_entities(&id)
-                .contains_key(&format!("{head}/{i}"))
+            && entities
+                .as_ref()
+                .is_none_or(|entities| !entities.contains_key(&format!("{head}/{i}")))
         {
             return Err(Diagnostic::error(
                 codes::RECORD_NOT_FOUND,
@@ -339,6 +347,31 @@ pub struct EditCtx<'a, 's> {
 }
 
 impl EditCtx<'_, '_> {
+    /// Run typed commands against another loaded document inside this same transaction.
+    /// The scoped reader owns a distinct resolution cache, so reads never reuse the
+    /// anchor document's entities. Errors roll back both documents with the batch.
+    pub fn in_document<T>(
+        &mut self,
+        doc: &AssetId,
+        run: impl FnOnce(&mut EditCtx<'_, '_>) -> Result<T, Diagnostic>,
+    ) -> Result<T, Diagnostic> {
+        if self.staged.store().workspace().doc(doc.as_str()).is_none() {
+            return Err(Diagnostic::error(
+                codes::DOC_NOT_FOUND,
+                format!("Document `{doc}` is not loaded"),
+            ));
+        }
+        let resolutions = Resolutions::default();
+        let mut context = EditCtx {
+            staged: self.staged,
+            doc: doc.clone(),
+            symbols: self.symbols,
+            templates: self.templates,
+            resolutions: &resolutions,
+        };
+        run(&mut context)
+    }
+
     /// Creates a registered format's skeleton, falling back to an empty JSON document.
     pub fn create_from_template(
         &mut self,

@@ -1,18 +1,19 @@
 //! Typed editors for compound Inspector fields: lists, keyed lists, maps, optional and
 //! nested structs. Each element gets the widget its schema type asks for, and every
-//! edit replaces the whole field value with one `property.set` per selected entity
+//! edit patches each object's current value through a typed authoring command
 //! (`list<T>` is never addressed by index). An element is addressed `path#pointer`, a
 //! JSON pointer into the field's value: `field.set`, typed drafts (`@nested|…`), the
 //! asset picker and asset drops all take that target.
+mod collections;
 mod fields;
+use super::collection_adapter::{self, Action as CollectionAction, Intent};
 use super::inspector_panel::sentence;
 use super::panels::display;
 use super::*;
+use crate::commands::nested::Operation;
 use crate::inspector::Field;
 use ara_schema::{FieldDesc, SchemaDb, Shape, ValueType};
-
-/// Items listed per list or map; the rest are counted.
-const SHOWN: usize = 32;
+use ara_ui::collection::ItemKey;
 
 /// How a nested text box's draft parses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,6 +119,7 @@ pub(super) fn linear_hex(value: &Value) -> String {
     )
 }
 /// Applies one typed draft at `pointer` inside a field's whole value.
+#[cfg(test)]
 fn apply_draft(whole: &mut Value, pointer: &str, code: &str, text: &str) -> Result<(), String> {
     let (code, unit) = code
         .split_once('~')
@@ -177,13 +179,55 @@ fn apply_draft(whole: &mut Value, pointer: &str, code: &str, text: &str) -> Resu
     };
     set_at(whole, &at, value)
 }
-/// `property.set` commands putting `value` at `pointer` inside `field`.
-fn set_commands(selection: &[String], field: &Field, pointer: &str, value: Value) -> Vec<Value> {
-    let mut whole = field.value.clone();
-    match set_at(&mut whole, &tokens(pointer), value) {
-        Ok(()) => crate::inspector::edit_commands(selection, &field.path, &whole),
-        Err(_) => Vec::new(),
+
+fn draft_value(code: &str, text: &str) -> ara_ui::Result<(Operation, Value)> {
+    let (code, unit) = code
+        .split_once('~')
+        .map_or((code, None), |(code, unit)| (code, Some(unit)));
+    let mut chars = code.chars();
+    let leaf = chars
+        .next()
+        .and_then(Leaf::from_code)
+        .ok_or("Invalid nested edit")?;
+    if chars.next() == Some('?') && text.trim().is_empty() {
+        return Ok((Operation::Set, Value::Null));
     }
+    Ok(match leaf {
+        Leaf::Number => (
+            Operation::Set,
+            serde_json::from_str::<Value>(text.trim())
+                .ok()
+                .filter(Value::is_number)
+                .map_or_else(
+                    || crate::inspector::parse_number(text, unit).map(|value| json!(value)),
+                    Ok,
+                )?,
+        ),
+        Leaf::Text => (Operation::Set, json!(text)),
+        Leaf::Json => (Operation::Set, serde_json::from_str(text)?),
+        Leaf::Hex => (Operation::Hex, json!(hex_linear(text)?)),
+        Leaf::Key => (Operation::Rename, json!(text.trim())),
+    })
+}
+/// `property.set` commands putting `value` at `pointer` inside `field`.
+fn set_commands(
+    editor: &Editor,
+    selection: &[String],
+    field: &Field,
+    pointer: &str,
+    value: Value,
+) -> Vec<Value> {
+    collection_adapter::commands(
+        editor,
+        selection,
+        field,
+        &field.value,
+        pointer,
+        Operation::Set,
+        value,
+        None,
+    )
+    .unwrap_or_default()
 }
 /// Whole compound value with one numeric gesture sample applied locally.
 pub(super) fn preview_value(whole: &Value, pointer: &str, value: Value) -> Option<Value> {
@@ -288,9 +332,11 @@ impl Shell {
     /// The value at a field target: `path`, or `path#pointer` inside a compound field.
     pub(super) fn field_value(&self, target: &str) -> Value {
         let (path, pointer) = target.split_once('#').unwrap_or((target, ""));
-        self.fields
+        self.compound_values
             .get(path)
-            .and_then(|f| f.value.pointer(pointer).cloned())
+            .map(|values| &values.value)
+            .or_else(|| self.fields.get(path).map(|field| &field.value))
+            .and_then(|value| value.pointer(pointer).cloned())
             .unwrap_or(Value::Null)
     }
     /// Whether `target` is one past the end of a list: picking there adds an item.
@@ -315,6 +361,7 @@ impl Shell {
     /// replaces its field's whole value.
     pub(crate) fn field_commands(
         &self,
+        editor: &Editor,
         selection: &[String],
         target: &str,
         value: Value,
@@ -330,22 +377,37 @@ impl Shell {
             .fields
             .get(path)
             .ok_or("that field is no longer shown")?;
-        let mut whole = field.value.clone();
-        set_at(&mut whole, &tokens(pointer), value)?;
-        Ok(crate::inspector::edit_commands(selection, path, &whole))
+        let reference = self
+            .compound_values
+            .get(path)
+            .map_or(&field.value, |values| &values.value);
+        collection_adapter::commands(
+            editor,
+            selection,
+            field,
+            reference,
+            pointer,
+            Operation::Set,
+            value,
+            None,
+        )
     }
     /// The commands for the typed nested drafts, which it takes: each field's drafts
     /// apply to its value in turn, committed whole.
-    pub(super) fn nested_commands(&mut self, selection: &[String]) -> ara_ui::Result<Vec<Value>> {
+    pub(super) fn nested_commands(
+        &mut self,
+        editor: &Editor,
+        selection: &[String],
+    ) -> ara_ui::Result<Vec<Value>> {
         let keys: Vec<String> = self
             .drafts
             .keys()
             .filter(|k| k.starts_with("@nested|"))
             .cloned()
             .collect();
-        let mut wholes: BTreeMap<String, Value> = BTreeMap::new();
-        for key in keys {
-            let text = self.drafts.remove(&key).unwrap_or_default();
+        let mut commands = Vec::new();
+        for key in &keys {
+            let text = self.drafts.get(key).map(String::as_str).unwrap_or_default();
             let mut parts = key.splitn(3, '|').skip(1);
             let (Some(code), Some(target)) = (parts.next(), parts.next()) else {
                 continue;
@@ -355,15 +417,19 @@ impl Shell {
             let Some(field) = self.fields.get(path) else {
                 continue;
             };
-            let whole = wholes
-                .entry(path.to_owned())
-                .or_insert_with(|| field.value.clone());
-            apply_draft(whole, pointer, code, &text)?;
+            let reference = self
+                .compound_values
+                .get(path)
+                .map_or(&field.value, |values| &values.value);
+            let (operation, value) = draft_value(code, text)?;
+            commands.extend(collection_adapter::commands(
+                editor, selection, field, reference, pointer, operation, value, None,
+            )?);
         }
-        Ok(wholes
-            .iter()
-            .flat_map(|(path, whole)| crate::inspector::edit_commands(selection, path, whole))
-            .collect())
+        for key in keys {
+            self.drafts.remove(&key);
+        }
+        Ok(commands)
     }
 
     /// A compound field's row head: its count (or None) and Add, or Remove.
@@ -377,13 +443,20 @@ impl Shell {
         let crate::inspector::Widget::Compound { ty, .. } = &field.widget else {
             return;
         };
+        self.cache_compound(editor, field);
         if field.mixed {
             out.push_str(&format!(
-                "<text id='mixed-{id}' class='caption' text='Mixed: differs between the selection' />"
+                "<text id='mixed-{id}' class='caption' description='Edits preserve each object’s other values and skip missing items' text='Mixed values' />"
             ));
-            return;
         }
-        self.collection_head(editor, field, ty, &field.value, "", id, out);
+        let Some(mut values) = self.compound_values.remove(&field.path) else {
+            return;
+        };
+        let mut visible = field.clone();
+        visible.value = std::mem::take(&mut values.value);
+        self.collection_head(editor, &visible, ty, &visible.value, "", id, out);
+        values.value = visible.value;
+        self.compound_values.insert(field.path.clone(), values);
     }
     /// The rows under a compound field.
     pub(super) fn compound_rows(
@@ -396,9 +469,11 @@ impl Shell {
         let crate::inspector::Widget::Compound { ty, .. } = &field.widget else {
             return;
         };
-        if !field.mixed {
+        if let Some(mut values) = self.compound_values.remove(&field.path) {
+            let mut visible = field.clone();
+            visible.value = std::mem::take(&mut values.value);
             let start = out.len();
-            self.items(editor, field, ty, &field.value, "", 1, label, out);
+            self.items(editor, &visible, ty, &visible.value, "", 1, label, out);
             if field.read_only {
                 let disabled =
                     out[start..].replace("action='Dispatch'", "disabled='true' action='Dispatch'");
@@ -407,6 +482,8 @@ impl Shell {
                     &disabled.replace("disabled='true' disabled='true'", "disabled='true'"),
                 );
             }
+            values.value = visible.value;
+            self.compound_values.insert(field.path.clone(), values);
         }
     }
 
@@ -423,19 +500,25 @@ impl Shell {
         out: &mut String,
     ) {
         let db = editor.host.store().schema();
-        let selection = &editor.state.selection;
-        let action = |shell: &mut Self, out: &mut String, what: &str, icon: &str, to: Value| {
+        let action = |shell: &mut Self,
+                      out: &mut String,
+                      what: &str,
+                      icon: &str,
+                      operation: Operation,
+                      to: Value| {
             let button = format!("{what}-{rid}");
             shell.bindings.insert(
                 ara_ui::source::stable_id(&button),
-                Binding::Content(
-                    set_commands(selection, field, pointer, to),
-                    format!(
-                        "{} {}",
-                        sentence(what),
-                        sentence(&field.label).to_lowercase()
-                    ),
-                ),
+                Binding::Collection(CollectionAction {
+                    field: field.path.clone(),
+                    pointer: pointer.into(),
+                    intent: Intent::Edit {
+                        operation,
+                        value: to,
+                        index: None,
+                    },
+                    revision: editor.host.store().revision(),
+                }),
             );
             out.push_str(&format!("<button id='{button}' class='ghost icon-button' label='{}' description='{}' action='Dispatch'>{}</button>",sentence(what),sentence(what),icons::icon_in(&button,icon,"icon-sm")));
         };
@@ -444,14 +527,21 @@ impl Shell {
                 out.push_str(&format!(
                     "<text id='count-{rid}' class='caption fill' style='padding-left:6px' text='None' />"
                 ));
-                action(self, out, "add", "plus", element_default(db, inner));
+                action(
+                    self,
+                    out,
+                    "add",
+                    "plus",
+                    Operation::Set,
+                    element_default(db, inner),
+                );
             }
             ValueType::Option(inner) => {
                 self.collection_head(editor, field, inner, value, pointer, rid, out);
-                action(self, out, "remove", "x", Value::Null);
+                action(self, out, "remove", "x", Operation::Set, Value::Null);
             }
             ValueType::List(elem) | ValueType::Keyed(elem) => {
-                let items = value.as_array().cloned().unwrap_or_default();
+                let items = value.as_array().map(Vec::as_slice).unwrap_or_default();
                 let n = items.len();
                 out.push_str(&format!(
                     "<text id='count-{rid}' class='caption fill' style='padding-left:6px' text='{n} item{}' />",
@@ -461,14 +551,29 @@ impl Shell {
                 // material) is added by picking that asset.
                 if let Some((name, options)) = leading_enum(db, elem) {
                     let button = format!("add-{rid}");
-                    self.bindings.insert(
-                        ara_ui::source::stable_id(&button),
-                        Binding::EnumMenu(
-                            format!("{}#{pointer}/{n}/{}", field.path, token(name)),
+                    let options = options
+                        .into_iter()
+                        .map(|option| {
+                            let mut item = element_default(db, elem);
+                            if let Some(object) = item.as_object_mut() {
+                                object.insert(name.into(), json!(option));
+                            }
+                            (item, sentence(&option))
+                        })
+                        .collect();
+                    self.choice_button(
+                        &button,
+                        &format!("Add {}", sentence(&field.label)),
+                        choices::Select {
+                            destination: choices::Destination::Append {
+                                field: field.path.clone(),
+                                pointer: pointer.into(),
+                            },
                             options,
-                        ),
+                            current: Value::Null,
+                        },
+                        out,
                     );
-                    out.push_str(&format!("<button id='{button}' class='ghost' label='Add {}' description='Choose the kind of item to add' action='Dispatch'><text id='{button}-label' text='Add' />{}</button>", escape(&sentence(&field.label)), icons::icon_in(&button,"chevron-down","icon-sm")));
                     return;
                 }
                 if let Some((name, kind)) = required_asset(db, elem) {
@@ -491,17 +596,20 @@ impl Shell {
                         .rfind(|c: char| c.is_uppercase())
                         .map_or(name.as_str(), |i| &name[i..])
                         .to_lowercase();
-                    item["id"] = json!(unused(&base, |id| {
-                        items.iter().any(|i| i["id"].as_str() == Some(id))
-                    }));
+                    if let Some(object) = item.as_object_mut() {
+                        object.insert(
+                            "id".into(),
+                            json!(unused(&base, |id| items
+                                .iter()
+                                .any(|item| item["id"].as_str() == Some(id)))),
+                        );
+                    }
                 }
-                let mut grown = items;
-                grown.push(item);
-                action(self, out, "add", "plus", Value::Array(grown));
+                action(self, out, "add", "plus", Operation::Append, item);
             }
             ValueType::Map(elem) => {
-                let mut map = value.as_object().cloned().unwrap_or_default();
-                let n = map.len();
+                let map = value.as_object();
+                let n = map.map_or(0, |map| map.len());
                 out.push_str(&format!(
                     "<text id='count-{rid}' class='caption fill' style='padding-left:6px' text='{n} entr{}' />",
                     if n == 1 { "y" } else { "ies" }
@@ -511,9 +619,17 @@ impl Shell {
                 } else {
                     pointer
                 };
-                let key = unused(&singular(name), |k| map.contains_key(k));
-                map.insert(key, element_default(db, elem));
-                action(self, out, "add", "plus", Value::Object(map));
+                let key = unused(&singular(name), |key| {
+                    map.is_some_and(|map| map.contains_key(key))
+                });
+                action(
+                    self,
+                    out,
+                    "add",
+                    "plus",
+                    Operation::Append,
+                    json!({"key":key,"value":element_default(db,elem)}),
+                );
             }
             _ => {}
         }
@@ -533,8 +649,6 @@ impl Shell {
         out: &mut String,
     ) {
         let db = editor.host.store().schema();
-        let selection = &editor.state.selection;
-        let at = |pointer: &str, to: Value| set_commands(selection, field, pointer, to);
         match ty {
             ValueType::Option(inner) if !value.is_null() => {
                 self.items(editor, field, inner, value, pointer, depth, label, out);
@@ -558,79 +672,16 @@ impl Shell {
                         pointer: &pointer,
                         actions: Vec::new(),
                         item: false,
+                        details: true,
+                        select: None,
                     };
                     self.element(editor, field, row, depth, label, out);
                 }
             }
-            ValueType::List(elem) | ValueType::Keyed(elem) => {
-                let items = value.as_array().cloned().unwrap_or_default();
-                for (n, item) in items.iter().enumerate().take(SHOWN) {
-                    let mut actions = Vec::new();
-                    if n > 0 {
-                        let mut moved = items.clone();
-                        moved.swap(n - 1, n);
-                        actions.push((
-                            "up",
-                            "chevron-up",
-                            "Move up",
-                            at(pointer, Value::Array(moved)),
-                        ));
-                    }
-                    let mut removed = items.clone();
-                    removed.remove(n);
-                    actions.push(("remove", "x", "Remove", at(pointer, Value::Array(removed))));
-                    let item_pointer = format!("{pointer}/{n}");
-                    let row = Row {
-                        title: Title::Text(item_title(db, elem, item, n)),
-                        ty: elem,
-                        desc: None,
-                        value: item,
-                        pointer: &item_pointer,
-                        actions,
-                        item: true,
-                    };
-                    self.element(editor, field, row, depth, label, out);
-                }
-                self.more(items.len(), pointer, field, depth, label, out);
-            }
-            ValueType::Map(elem) => {
-                let map = value.as_object().cloned().unwrap_or_default();
-                for (key, item) in map.iter().take(SHOWN) {
-                    let mut removed = map.clone();
-                    removed.remove(key);
-                    let actions =
-                        vec![("remove", "x", "Remove", at(pointer, Value::Object(removed)))];
-                    let item_pointer = format!("{pointer}/{}", token(key));
-                    let row = Row {
-                        title: Title::Key(key.clone()),
-                        ty: elem,
-                        desc: None,
-                        value: item,
-                        pointer: &item_pointer,
-                        actions,
-                        item: true,
-                    };
-                    self.element(editor, field, row, depth, label, out);
-                }
-                self.more(map.len(), pointer, field, depth, label, out);
+            ValueType::List(_) | ValueType::Keyed(_) | ValueType::Map(_) => {
+                self.collection_items(editor, field, ty, value, pointer, depth, label, out)
             }
             _ => {}
-        }
-    }
-
-    /// "N more" under a list or map longer than [`SHOWN`].
-    fn more(
-        &mut self,
-        count: usize,
-        pointer: &str,
-        field: &Field,
-        depth: usize,
-        label: f32,
-        out: &mut String,
-    ) {
-        if count > SHOWN {
-            let rid = row_id(field, pointer);
-            out.push_str(&format!("<panel id='more-{rid}' class='row' style='padding-left:{}px;min-height:18px'><text id='more-{rid}-text' class='caption' text='{} more' /></panel>",label.min(12. * depth as f32 + 18.),count - SHOWN));
         }
     }
 
@@ -653,13 +704,34 @@ impl Shell {
             && !compound
             && *inner(row.ty) != ValueType::Entity;
         let inactive = optional && row.value.is_null();
-        let collapsed = compound && row.item && self.inspector_sections.collapsed(&target);
+        let collapsed = compound
+            && row.item
+            && row.select.as_ref().map_or_else(
+                || self.inspector_sections.collapsed(&target),
+                |action| !self.collection_selected(action),
+            );
         let numeric = inner(row.ty).is_number()
             && !inactive
             && !field.read_only
             && !row.desc.is_some_and(|desc| desc.editor.read_only);
         let indent = 6. + 12. * depth as f32;
+        if let Some(select) = &row.select {
+            self.bindings.insert(
+                ara_ui::source::stable_id(&format!("nest-{rid}")),
+                Binding::Collection(select.clone()),
+            );
+        }
         out.push_str(&format!("<panel id='nest-{rid}' class='prop-row'><panel id='nest-label-{rid}' class='prop-label' style='width:{label}px;padding-left:{indent}px'>"));
+        if row.item
+            && let Some(select) = &row.select
+        {
+            let grip = format!("collection-grip-{rid}");
+            self.bindings.insert(
+                ara_ui::source::stable_id(&grip),
+                Binding::Collection(select.clone()),
+            );
+            out.push_str(&format!("<button id='{grip}' class='ghost icon-button' cursor='grab' label='Move item' description='Drag to reorder, or use Move up and Move down' action='Dispatch'>{}</button>",icons::icon_in(&grip,"grip-vertical","icon-sm")));
+        }
         if optional {
             let id = format!("override-{rid}");
             let fallback = row
@@ -674,6 +746,7 @@ impl Shell {
             } else {
                 Binding::Content(
                     set_commands(
+                        editor,
                         &editor.state.selection,
                         field,
                         row.pointer,
@@ -690,7 +763,10 @@ impl Shell {
             let id = format!("collapse-nest-{rid}");
             self.bindings.insert(
                 ara_ui::source::stable_id(&id),
-                Binding::NestedCollapse(target.clone()),
+                row.select.clone().map_or_else(
+                    || Binding::NestedCollapse(target.clone()),
+                    Binding::Collection,
+                ),
             );
             out.push_str(&format!("<button id='{id}' class='ghost icon-button' label='{} item' action='Dispatch'>{}</button>",if collapsed {"Expand"} else {"Collapse"},icons::icon_in(&id,if collapsed {"chevron-right"} else {"chevron-down"},"icon-sm")));
         }
@@ -755,21 +831,18 @@ impl Shell {
         out.push_str("</panel>");
         // Items keep a fixed action column (Move up, Remove) so their values align;
         // struct fields keep the reset column's width.
-        let width = if row.item { 44. } else { 18. };
+        let width = if row.item { 64. } else { 18. };
         out.push_str(&format!("<panel id='nest-actions-{rid}' class='row' style='width:{width}px;flex-shrink:0;justify-content:end;gap:0px'>"));
-        for (what, icon, label_text, calls) in row.actions {
+        for (what, icon, label_text, action) in row.actions {
             let button = format!("{what}-{rid}");
             self.bindings.insert(
                 ara_ui::source::stable_id(&button),
-                Binding::Content(
-                    calls,
-                    format!("{label_text} {}", sentence(&field.label).to_lowercase()),
-                ),
+                Binding::Collection(action),
             );
             out.push_str(&format!("<button id='{button}' class='ghost icon-button' label='{label_text}' description='{label_text}' action='Dispatch'>{}</button>",icons::icon_in(&button,icon,"icon-sm")));
         }
         out.push_str("</panel></panel>");
-        if compound && !collapsed {
+        if compound && !collapsed && row.details {
             self.items(
                 editor,
                 field,
@@ -798,16 +871,49 @@ struct Row<'a> {
     value: &'a Value,
     pointer: &'a str,
     /// `(id prefix, icon, label, commands)` buttons at the row's end.
-    actions: Vec<(&'static str, &'static str, &'static str, Vec<Value>)>,
+    actions: Vec<(&'static str, &'static str, &'static str, CollectionAction)>,
     /// A list item or map entry (rather than a struct field).
     item: bool,
+    /// Rich children mount below the virtual scroll surface, never inside a row slot.
+    details: bool,
+    select: Option<CollectionAction>,
 }
 /// A stable control ID for the element at `pointer` in `field`.
 fn row_id(field: &Field, pointer: &str) -> String {
-    format!("{}{}", field.path, pointer)
+    let mut value = &field.value;
+    let null = Value::Null;
+    let mut identity = field.path.clone();
+    let mut escaped = false;
+    for key in tokens(pointer) {
+        let child = match value {
+            Value::Array(items) => key.parse::<usize>().ok().and_then(|index| items.get(index)),
+            Value::Object(map) => map.get(&key),
+            _ => None,
+        };
+        let stable = if value.is_array() {
+            child
+                .and_then(|item| item.get("id"))
+                .and_then(Value::as_str)
+                .unwrap_or(&key)
+        } else {
+            &key
+        };
+        escaped |= stable
+            .chars()
+            .any(|character| !character.is_ascii_alphanumeric());
+        identity.push('/');
+        identity.push_str(&token(stable));
+        value = child.unwrap_or(&null);
+    }
+    let readable: String = identity
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect()
+        .collect();
+    if escaped {
+        format!("{readable}-{:016x}", ara_ui::source::stable_id(&identity))
+    } else {
+        readable
+    }
 }
 
 #[cfg(test)]

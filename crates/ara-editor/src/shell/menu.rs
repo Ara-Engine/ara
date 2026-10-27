@@ -15,8 +15,6 @@ pub(crate) enum Source {
     Context(Context, Target),
     /// Snap increments (`move`, `rotate`, `scale`) or Scene view fields of view (`fov`).
     Values(&'static str),
-    /// An inspector enum field's options.
-    Enum(String, Vec<String>),
     /// An inspector asset field's picker: assets that fit it, and None.
     Assets(String, Option<String>),
 }
@@ -61,7 +59,7 @@ pub(crate) enum Row {
     Sub(&'static str, &'static [Item]),
     Sep,
 }
-const WIDTH: f32 = 272.;
+const WIDTH: f32 = 144.;
 impl Shell {
     fn row_height(editor: &Editor) -> f32 {
         if editor.state.comfortable() { 30. } else { 26. }
@@ -236,7 +234,7 @@ impl Shell {
         match &menu.source {
             Source::Bar(i) => self.expand(editor, MENUS[*i].items, &mut root),
             Source::Context(kind, _) => self.expand(editor, menus::context(*kind), &mut root),
-            Source::Enum(..) | Source::Assets(..) => {}
+            Source::Assets(..) => {}
             Source::Values("fov") => {
                 let current = editor.state.camera.fov_y_degrees;
                 for v in [30., 35., 40., 46., 50., 54., 60., 70., 90.] {
@@ -276,18 +274,6 @@ impl Shell {
                         checked: Some((current - v).abs() < 0.0001),
                     });
                 }
-            }
-        }
-        if let Source::Enum(path, options) = &menu.source {
-            let current = self.field_value(path);
-            for option in options {
-                root.push(Row::Command {
-                    id: "field.set",
-                    target: Target::Text(format!("{path}={}", json!(option))),
-                    label: Some(super::inspector_panel::sentence(option)),
-                    path: String::new(),
-                    checked: Some(current.as_str() == Some(option)),
-                });
             }
         }
         if let Source::Assets(path, kind) = &menu.source {

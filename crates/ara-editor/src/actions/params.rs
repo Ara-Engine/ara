@@ -95,10 +95,6 @@ pub(super) struct EditorReport {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct EditorSceneOpen {
     /// Live protocol session.
-    #[expect(
-        dead_code,
-        reason = "Host validates the session before service dispatch"
-    )]
     pub session: String,
     /// Project-relative scene path (`levels/hangar.scene`) or scene document ID.
     pub scene: String,
@@ -145,14 +141,14 @@ pub(super) struct EditorFocus {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct EditorFrame {
     /// Live protocol session.
-    #[expect(
-        dead_code,
-        reason = "Host validates the session before service dispatch"
-    )]
     pub session: String,
     /// Show the scene as it opens instead: its gameplay camera's view, else its
     /// content (terrain and ground excluded) from a three-quarter angle.
     pub opening: Option<bool>,
+    /// Width divided by height of the Scene viewport; omitted uses its last known aspect.
+    pub aspect: Option<f32>,
+    /// Frame every renderable object while preserving the current selection.
+    pub all: Option<bool>,
 }
 /// Parameters to read or change the Scene view camera. Omitted fields keep their
 /// values; with none given the call only reads the camera.

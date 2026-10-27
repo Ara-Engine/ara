@@ -2,8 +2,59 @@ use super::*;
 use ara_ui::input::InputEvent;
 use ara_ui_text::Clipboard;
 impl Shell {
+    /// SDL is the editor's sole committed-text ingress on every native surface.
+    pub(crate) fn native_text(
+        &mut self,
+        text: &str,
+        clipboard: &mut dyn Clipboard,
+    ) -> ara_ui::Result<bool> {
+        self.native_input.commit(
+            &mut self.ui,
+            &mut self.input,
+            ara_ui::native_input::TextSource::Sdl,
+            text,
+            clipboard,
+        )
+    }
+
+    pub(crate) fn native_preedit(
+        &mut self,
+        text: &str,
+        start: i32,
+        length: i32,
+        clipboard: &mut dyn Clipboard,
+    ) -> ara_ui::Result<bool> {
+        self.native_input.preedit(
+            &mut self.ui,
+            &mut self.input,
+            ara_ui::native_input::TextSource::Sdl,
+            text,
+            start,
+            length,
+            clipboard,
+        )
+    }
+
+    pub(crate) fn native_focus_lost(
+        &mut self,
+        clipboard: &mut dyn Clipboard,
+    ) -> ara_ui::Result<()> {
+        self.modifiers = [false; 3];
+        self.native_input
+            .focus_lost(&mut self.ui, &mut self.input, clipboard)
+    }
+
     pub(crate) fn hover_tooltip(&mut self) -> ara_ui::Result<()> {
-        let description = self
+        if self.modal_active() {
+            self.tooltip_target = None;
+            self.tooltip_text = None;
+            self.tooltip_delay.reset();
+            if let Some(i) = self.ui.find("tooltip") {
+                self.ui.set_visible(i, false)?;
+            }
+            return Ok(());
+        }
+        let target = self
             .ui
             .scrollbar_at(self.pointer)
             .is_none()
@@ -12,28 +63,63 @@ impl Shell {
                     let node = &self.ui.nodes[*i];
                     (node.rect.contains(self.pointer[0], self.pointer[1])
                         && node.clip.contains(self.pointer[0], self.pointer[1]))
-                    .then(|| node.element.attrs.get("description").map(String::as_str))
+                    .then(|| {
+                        node.element
+                            .attrs
+                            .get("description")
+                            .filter(|text| !text.is_empty())
+                            .map(|text| (ara_ui::source::stable_id(&node.element.id), text.clone()))
+                    })
                     .flatten()
                 })
             })
             .flatten();
-        if description == self.tooltip_text.as_deref() {
+        if target != self.tooltip_target {
+            self.tooltip_target = target;
+            self.tooltip_text = None;
+            self.tooltip_delay.reset();
+            if let Some(i) = self.ui.find("tooltip") {
+                self.ui.set_visible(i, false)?;
+            }
+        }
+        self.advance_tooltip()
+    }
+    /// Advance a pending hover on idle frames without rescanning the editor tree.
+    pub(super) fn advance_tooltip(&mut self) -> ara_ui::Result<()> {
+        let now = self
+            .tooltip_clock
+            .elapsed()
+            .as_millis()
+            .min(u128::from(u64::MAX)) as u64;
+        self.advance_tooltip_at(now)
+    }
+    /// Deterministic clock seam shared by idle advancement and offscreen journeys.
+    pub(super) fn advance_tooltip_at(&mut self, now: u64) -> ara_ui::Result<()> {
+        let target = self.tooltip_target.as_ref().map(|(id, _)| *id);
+        if !self.tooltip_delay.update(target, now) || self.tooltip_text.is_some() {
             return Ok(());
         }
-        let description = description.map(str::to_owned);
+        let Some((anchor, text)) = self.tooltip_target.as_ref() else {
+            return Ok(());
+        };
+        let Some(index) = self.ui.by_id(*anchor).filter(|i| self.ui.shown(*i)) else {
+            return Ok(());
+        };
+        let anchor = self.ui.nodes[index].element.id.clone();
+        let text = text.clone();
+        if let Some(i) = self.ui.find("tooltip-text") {
+            self.ui.set_text(i, &text)?;
+        }
         if let Some(i) = self.ui.find("tooltip") {
-            self.ui.set_visible(i, description.is_some())?;
-            self.ui.nodes[i].paint_offset = [
-                self.pointer[0].clamp(0., (self.ui.size[0] - 325.).max(0.)),
-                (self.pointer[1] + 18.).clamp(0., (self.ui.size[1] - 100.).max(0.)),
-            ];
+            let node = &mut self.ui.nodes[i];
+            node.element.attrs.insert("anchor".into(), anchor);
+            node.element
+                .attrs
+                .insert("placement".into(), "bottom-start".into());
+            node.paint_offset = [0.; 2];
+            self.ui.set_visible(i, true)?;
         }
-        if let Some(text) = &description
-            && let Some(i) = self.ui.find("tooltip-text")
-        {
-            self.ui.set_text(i, text)?;
-        }
-        self.tooltip_text = description;
+        self.tooltip_text = Some(text);
         Ok(())
     }
     /// Route input through retained hit testing, focus and native widgets.
@@ -42,16 +128,38 @@ impl Shell {
         event: InputEvent,
         clipboard: &mut dyn Clipboard,
     ) -> ara_ui::Result<()> {
-        self.input.event(&mut self.ui, event, clipboard)?;
+        if self.confirmations.is_open() {
+            if self.current.is_none() {
+                self.confirmations
+                    .event(&mut self.ui, &mut self.input, event, clipboard)?;
+            }
+            self.native_input
+                .sync_focus(&mut self.ui, &self.input, clipboard)?;
+            return Ok(());
+        }
+        if let Some(event) = self.choice_event(event, clipboard)? {
+            self.input.event(&mut self.ui, event, clipboard)?;
+        } else {
+            self.choice_input_dirty = true;
+        }
+        self.native_input
+            .sync_focus(&mut self.ui, &self.input, clipboard)?;
         self.sync_scroll_views()
     }
     /// Dispatch queued widget actions through the typed engine endpoint.
     pub fn dispatch(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        if self.current.is_none() {
+            self.confirmations.dispatch(&mut self.ui, &mut self.input)?;
+        }
+        let choices_changed = self.dispatch_choices(editor)?;
         let actions: Vec<_> = self.ui.drain_actions().collect();
         let bindings = std::mem::take(&mut self.bindings);
-        let mut rebuild = false;
+        let mut rebuild = choices_changed
+            || std::mem::take(&mut self.choice_input_dirty)
+            || self.sync_collections();
+        let mut committed_numeric = false;
         let result = (|| -> ara_ui::Result<()> {
-            for action in actions {
+            for mut action in actions {
                 if action.name == "ResizeAssets" {
                     if let Some(ratio) = action.value.as_f64()
                         && let Some(i) = self.ui.find("assets-content")
@@ -84,7 +192,21 @@ impl Shell {
                 let Some(binding) = bindings.get(&action.node) else {
                     continue;
                 };
+                // A native grip emits one numeric value on release; ordinary text
+                // edits keep their draft protocol until Enter or focus moves.
+                if action.value.is_number()
+                    && self.ui.by_id(action.node).is_some_and(|i| {
+                        matches!(self.ui.nodes[i].element.tag.as_str(), "field" | "input")
+                    })
+                {
+                    action.value = action.value.to_string().into();
+                    committed_numeric = true;
+                }
                 match binding {
+                    Binding::Collection(action) => {
+                        self.collection_action(editor, action)?;
+                        rebuild = true;
+                    }
                     Binding::AssetRenameValue => {
                         if let Some(rename) = &mut self.asset_rename {
                             rename.name = action.value.as_str().unwrap_or("").into();
@@ -186,13 +308,6 @@ impl Shell {
                         );
                         rebuild = true;
                     }
-                    Binding::EnumMenu(path, options) => {
-                        self.open_menu_from(
-                            super::menu::Source::Enum(path.clone(), options.clone()),
-                            action.node,
-                        );
-                        rebuild = true;
-                    }
                     Binding::MenuSub(level, row) => {
                         if let Some(menu) = &mut self.menu {
                             menu.open.truncate(*level);
@@ -241,6 +356,7 @@ impl Shell {
                         }
                     }
                     Binding::SettingChoice(key, value) => {
+                        self.menu = None;
                         if key == "@view" {
                             editor.action("editor.settings.view", value.clone())?;
                         } else if value.is_null() {
@@ -296,12 +412,6 @@ impl Shell {
                             editor.action("editor.canvas", json!({"add":false}))?;
                             self.resource_text = None;
                         }
-                        rebuild = true;
-                    }
-                    Binding::ImportChoice(doc, key, value) => {
-                        self.drafts
-                            .insert(format!("@import|{doc}|{key}"), value.to_string());
-                        self.commit_import_fields(editor)?;
                         rebuild = true;
                     }
                     Binding::ImportField(doc, key) => {
@@ -401,12 +511,17 @@ impl Shell {
 
                         if let Some(path) = self.pick_field.take() {
                             editor.apply(
-                                self.field_commands(&editor.state.selection, &path, json!(entity))?,
+                                self.field_commands(
+                                    editor,
+                                    &editor.state.selection,
+                                    &path,
+                                    json!(entity),
+                                )?,
                                 "Pick entity reference",
                                 None,
                             )?;
                         } else {
-                            editor.action("editor.select",json!({"entities":[entity],"toggle":self.modifiers[1],"additive":self.modifiers[0]}))?;
+                            self.select_hierarchy_item(editor, entity)?;
                         }
                         rebuild = true;
                     }
@@ -523,7 +638,7 @@ impl Shell {
                     Binding::Asset(asset) => {
                         rebuild = true;
                         let Some(path) = self.pick_field.clone() else {
-                            editor.action("editor.workspace", json!({"asset":asset.path}))?;
+                            self.select_asset_item(editor, asset)?;
                             continue;
                         };
                         // Picking: a file that does not fit, or has no asset ID yet, is
@@ -546,7 +661,16 @@ impl Shell {
                         }
                     }
                     Binding::Fix(diagnostic, index) => {
-                        apply_fix(editor, diagnostic, *index)?;
+                        let fix = diagnostic.fixes.get(*index).ok_or("fix disappeared")?;
+                        if let ara_diag::FixAction::Cli { args } = &fix.action {
+                            self.dialog = Some(Dialog::cli_fix(&fix.title, args));
+                        } else {
+                            apply_fix(editor, diagnostic, *index)?;
+                        }
+                        rebuild = true;
+                    }
+                    Binding::PanelRetry(panel) => {
+                        self.retry_panel(panel);
                         rebuild = true;
                     }
                     Binding::PickField(path) => {
@@ -572,6 +696,9 @@ impl Shell {
         })();
         self.bindings = bindings;
         result?;
+        if committed_numeric {
+            rebuild |= self.commit_fields(editor)?;
+        }
         if rebuild {
             self.rebuild(editor)?;
         }
@@ -744,7 +871,7 @@ impl Shell {
             self.rebuild(editor)?;
             return Ok(true);
         }
-        let mut commands = self.nested_commands(&editor.state.selection)?;
+        let mut commands = self.nested_commands(editor, &editor.state.selection)?;
         if self.drafts.is_empty() && commands.is_empty() {
             return Ok(false);
         }

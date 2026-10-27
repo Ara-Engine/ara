@@ -9,10 +9,12 @@ use ara_runtime_render::fidelity::native::{self, FrameChange, NativeConfig, Prep
 use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 mod content;
 mod convergence;
+mod picking;
 mod preview;
 mod recovery;
 #[cfg(test)]
 mod scene_switch;
+pub(super) mod selection;
 mod startup;
 pub(super) use preview::{GamePreview, PreviewCamera};
 pub(super) use startup::prepare_renderer;

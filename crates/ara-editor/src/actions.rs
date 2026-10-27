@@ -10,7 +10,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::mpsc::Sender;
 
+mod framing;
 mod params;
+pub(crate) use framing::PendingFrame;
 use params::*;
 
 pub(crate) struct EditorService {
@@ -20,6 +22,14 @@ pub(crate) struct EditorService {
     pub controls: Sender<Control>,
     /// The scenes' resolution kept current across edits, for selection and framing.
     pub resolver: crate::world::SceneResolver,
+    /// Worker-prepared local bounds; navigation never reads cooked payloads on the UI thread.
+    pub bounds: crate::world::bounds::ModelBounds,
+    /// Store/publication/document-set identity last tracked by the bounds worker.
+    pub bounds_key: Option<(u64, u64, u64)>,
+    /// One explicit pending Frame per caller, cancelled if that caller navigates meanwhile.
+    pub pending_frames: std::collections::BTreeMap<String, PendingFrame>,
+    /// Last human Scene viewport aspect ratio; protocol callers may override it per Frame.
+    pub frame_aspect: f32,
 }
 pub(crate) enum Control {
     ProfileFreeze {
@@ -261,6 +271,7 @@ impl Service for EditorService {
     }
     fn tick(&mut self, cx: &mut Cx<'_>) {
         self.report_layout_notice(cx);
+        self.poll_bounds(cx);
     }
 }
 impl EditorService {
@@ -396,6 +407,7 @@ impl EditorService {
             state.selection = presence.selection.clone();
             state.camera = presence.camera;
         }
+        let mut framing_pending = false;
         match method {
             "editor.canvas" => {
                 let p: EditorCanvas = parse(params)?;
@@ -790,12 +802,52 @@ impl EditorService {
             }
             "editor.frame" => {
                 let p: EditorFrame = parse(params)?;
-                if p.opening == Some(true) {
-                    let resolved = self.resolver.resolve(cx.store(), &state.doc)?;
-                    let transforms = crate::world::world_transforms(&resolved);
-                    state.camera = crate::view_camera::opening(&resolved, &transforms);
+                let aspect = p.aspect.unwrap_or(self.frame_aspect);
+                if !aspect.is_finite() || !(0.001..=1000.).contains(&aspect) {
+                    return Err(vec![crate::invalid(
+                        "Frame aspect ratio must be finite and positive",
+                    )]);
+                }
+                if agent.is_none() {
+                    self.frame_aspect = aspect;
+                }
+                let all = p.all.unwrap_or(false);
+                let opening = p.opening.unwrap_or(false);
+                let resolved = self.resolver.resolve(cx.store(), &state.doc)?;
+                self.bounds.track(&resolved, cx.store().workspace());
+                let selection = if all || opening {
+                    &[][..]
                 } else {
-                    frame(&mut state, cx, &mut self.resolver)?;
+                    &state.selection
+                };
+                let transforms = crate::world::world_transforms(&resolved);
+                let has_gameplay =
+                    opening && crate::view_camera::gameplay(&resolved, &transforms).is_some();
+                if !has_gameplay && !self.bounds.settled(&resolved, selection) {
+                    self.pending_frames.insert(
+                        p.session,
+                        PendingFrame::new(&state, opening, all, aspect, agent.is_some()),
+                    );
+                    framing_pending = true;
+                } else {
+                    self.pending_frames.remove(&p.session);
+                    if opening {
+                        state.camera = crate::view_camera::opening_with_models(
+                            &resolved,
+                            &transforms,
+                            &self.bounds,
+                            aspect,
+                        );
+                    } else {
+                        frame(
+                            &mut state,
+                            cx,
+                            &mut self.resolver,
+                            &self.bounds,
+                            aspect,
+                            all,
+                        )?;
+                    }
                 }
             }
             "editor.scene.open" => {
@@ -819,7 +871,28 @@ impl EditorService {
                         p.scene
                     ))]);
                 }
-                open_scene(&mut state, cx, &mut self.resolver, id, agent.is_none())?;
+                let first = state.doc != id && !state.scene_cameras.contains_key(&id);
+                let resolved = self.resolver.resolve(cx.store(), &id)?;
+                self.bounds.track(&resolved, cx.store().workspace());
+                open_scene(
+                    &mut state,
+                    cx,
+                    &mut self.resolver,
+                    &self.bounds,
+                    self.frame_aspect,
+                    id,
+                    agent.is_none(),
+                )?;
+                let transforms = crate::world::world_transforms(&resolved);
+                if first
+                    && crate::view_camera::gameplay(&resolved, &transforms).is_none()
+                    && !self.bounds.settled(&resolved, &[])
+                {
+                    self.pending_frames.insert(
+                        p.session,
+                        PendingFrame::new(&state, true, true, self.frame_aspect, agent.is_some()),
+                    );
+                }
             }
             "editor.theme" => {
                 let p: EditorTheme = parse(params)?;
@@ -960,6 +1033,9 @@ impl EditorService {
         if method == "editor.camera" {
             result["camera"] = json!(viewed);
         }
+        if method == "editor.frame" {
+            result["framingPending"] = json!(framing_pending);
+        }
         self.changes
             .send(self.navigation.state.clone())
             .map_err(|_| vec![crate::invalid("editor window has closed")])?;
@@ -1034,13 +1110,19 @@ fn frame(
     state: &mut EditorState,
     cx: &mut Cx,
     resolver: &mut crate::world::SceneResolver,
+    models: &crate::world::bounds::ModelBounds,
+    aspect: f32,
+    all: bool,
 ) -> Result<(), Vec<Diagnostic>> {
     let resolved = resolver.resolve(cx.store(), &state.doc)?;
     let transforms = crate::world::world_transforms(&resolved);
-    if let Some(bounds) =
-        crate::view_camera::framing_bounds(&resolved, &transforms, &state.selection)
-    {
-        crate::view_camera::fit(&mut state.camera, bounds);
+    if let Some(bounds) = crate::view_camera::framing_bounds_with_models(
+        &resolved,
+        &transforms,
+        if all { &[] } else { &state.selection },
+        models,
+    ) {
+        crate::view_camera::fit_aspect(&mut state.camera, bounds, aspect);
     }
     Ok(())
 }
@@ -1078,6 +1160,8 @@ fn open_scene(
     state: &mut EditorState,
     cx: &mut Cx,
     resolver: &mut crate::world::SceneResolver,
+    models: &crate::world::bounds::ModelBounds,
+    aspect: f32,
     doc: String,
     human: bool,
 ) -> Result<(), Vec<Diagnostic>> {
@@ -1090,7 +1174,8 @@ fn open_scene(
             None => {
                 let resolved = resolver.resolve(cx.store(), &doc)?;
                 let transforms = crate::world::world_transforms(&resolved);
-                state.camera = crate::view_camera::opening(&resolved, &transforms);
+                state.camera =
+                    crate::view_camera::opening_with_models(&resolved, &transforms, models, aspect);
             }
         }
     }

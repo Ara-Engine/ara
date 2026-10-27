@@ -143,23 +143,31 @@ impl Shell {
                 ));
             }
             Kind::Choice(options) => {
-                out.push_str(&format!("<panel id='set-{id}' class='segment'>"));
-                for (n, (option, label)) in options.iter().enumerate() {
-                    let button = format!("set-{id}-{n}");
-                    self.bindings.insert(
-                        ara_ui::source::stable_id(&button),
-                        Binding::SettingChoice(key.into(), json!(option)),
-                    );
-                    out.push_str(&format!("<button id='{button}' class='segment-button{}' label='{}' action='Dispatch'><text id='{button}-label' text='{}' /></button>",if value.as_str()==Some(option){" selected"}else{""},escape(label),escape(label)));
-                }
-                out.push_str("</panel>");
+                self.choice_button(
+                    &format!("set-{id}"),
+                    d.label,
+                    choices::Select {
+                        destination: choices::Destination::Setting(key.into()),
+                        options: options
+                            .iter()
+                            .map(|(value, label)| (json!(value), (*label).to_owned()))
+                            .collect(),
+                        current: value.clone(),
+                    },
+                    out,
+                );
             }
-            Kind::Number { unit, .. } => {
+            Kind::Number {
+                min,
+                max,
+                step,
+                unit,
+            } => {
                 self.bindings.insert(
                     ara_ui::source::stable_id(&format!("set-{id}")),
                     Binding::Setting(key.into()),
                 );
-                out.push_str(&format!("<field id='set-{id}' class='number' style='width:120px' text='{}' label='{}' description='Enter to apply' action='Dispatch' /><text id='set-{id}-unit' class='caption' text='{}' />",escape(&panels::display(&value)),escape(d.label),escape(unit)));
+                out.push_str(&format!("<field id='set-{id}' class='number' min='{min}' max='{max}' step='{step}' style='width:120px' text='{}' label='{}' description='Type and press Enter, or drag the grip to adjust' action='Dispatch' /><text id='set-{id}-unit' class='caption' text='{}' />",escape(&panels::display(&value)),escape(d.label),escape(unit)));
             }
             Kind::Colors { .. } => {
                 // Saved and edited from the colour picker; reset clears them.
@@ -200,17 +208,22 @@ impl Shell {
                 .and_then(Value::as_str)
                 .unwrap_or("ara"),
         );
-        out.push_str("<panel id='keymap-row' class='setting-head' style='padding:6px'><text id='keymap-label' class='setting-label' text='Keymap preset' /><panel id='keymap-presets' class='segment'>");
-        for p in Preset::ALL {
-            let id = format!("keymap-{}", p.name());
-            self.bindings.insert(
-                ara_ui::source::stable_id(&id),
-                Binding::SettingChoice("input.keymap".into(), json!(p.name())),
-            );
-            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{} keymap' action='Dispatch'><text id='{id}-label' text='{}' /></button>",if p==preset{" selected"}else{""},p.title(),p.title()));
-        }
+        out.push_str("<panel id='keymap-row' class='setting-head' style='padding:6px'><text id='keymap-label' class='setting-label' text='Keymap preset' />");
+        self.choice_button(
+            "keymap-presets",
+            "Keymap preset",
+            choices::Select {
+                destination: choices::Destination::Setting("input.keymap".into()),
+                options: Preset::ALL
+                    .iter()
+                    .map(|p| (json!(p.name()), p.title().to_owned()))
+                    .collect(),
+                current: json!(preset.name()),
+            },
+            out,
+        );
         out.push_str(
-            "</panel></panel><panel id='shortcut-tools' class='toolbar' style='padding-left:6px'>",
+            "</panel><panel id='shortcut-tools' class='toolbar' style='padding-left:6px'>",
         );
         self.search(out, "shortcuts", editor);
         self.bindings.insert(

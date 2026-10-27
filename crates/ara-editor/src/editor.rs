@@ -169,6 +169,10 @@ impl Editor {
             changes,
             controls: control_send,
             resolver: Default::default(),
+            bounds: crate::world::bounds::ModelBounds::new(root)?,
+            bounds_key: None,
+            pending_frames: Default::default(),
+            frame_aspect: 16. / 9.,
         }))
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         // Play runs in pooled ara-player processes; the toolbar binds play.* methods.
@@ -243,7 +247,17 @@ impl Editor {
     pub fn input_active(&mut self) {}
     /// A reflected editor action, using the same validation as an external client.
     pub fn action(&mut self, method: &str, mut params: Value) -> Result<Value, EditorError> {
-        params["session"] = self.session.clone().into();
+        // Native command adapters can outlive a field or receive invalid input.
+        // Reject scalars/arrays before object indexing, which would otherwise panic.
+        if params.is_null() {
+            params = json!({});
+        }
+        let object = params.as_object_mut().ok_or_else(|| {
+            EditorError(RpcError::from_diagnostics(vec![crate::invalid(
+                "Editor action parameters must be an object",
+            )]))
+        })?;
+        object.insert("session".into(), self.session.clone().into());
         let result = self.call_for(ConnId::LOCAL, method, params)?;
         if method == "editor.play" {
             // Multi-player Play (palette): the service resolved the `play.start` params.

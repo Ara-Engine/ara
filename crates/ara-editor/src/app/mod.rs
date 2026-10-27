@@ -2,6 +2,7 @@
 mod assets_verify;
 mod capture;
 mod chrome_verify;
+mod content_drags;
 mod controller;
 mod cursors;
 mod drags;
@@ -9,6 +10,8 @@ mod eyedropper;
 mod game;
 mod game_preview;
 mod journey;
+mod monkey;
+mod navigation_verify;
 mod panels_verify;
 mod qa;
 mod responsiveness;
@@ -56,7 +59,10 @@ const UX_IDLE_PATIENCE: Duration = Duration::from_secs(20);
 /// (`--verify-responsiveness`) count from it.
 pub static LAUNCHED: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 /// Open the SDL3 editor, host the project authority and serve authenticated EP/MCP.
-pub fn run(options: Options) -> ara_ui::Result<()> {
+pub fn run(mut options: Options) -> ara_ui::Result<()> {
+    if options.verify_behaviours {
+        content_drags::fixture(&mut options)?;
+    }
     if options.headless {
         return headless(options);
     }
@@ -290,6 +296,31 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
     } else {
         None
     };
+    let mut monkey = if let Some(journal) = &options.monkey_replay {
+        Some(monkey::Monkey::from_journal(
+            journal,
+            Duration::from_secs(options.monkey_seconds),
+            &options.output,
+        )?)
+    } else if options.verify_monkey {
+        Some(monkey::Monkey::new(
+            options.monkey_seed,
+            Duration::from_secs(options.monkey_seconds),
+            options.monkey_steps,
+            &options.output,
+        )?)
+    } else {
+        None
+    };
+    let mut content_drags = if options.verify_behaviours {
+        Some(content_drags::ContentDrags::new(
+            &mut editor,
+            &options.output,
+        )?)
+    } else {
+        None
+    };
+    let mut navigation_check = None;
     if panel_verification.is_some()
         || ux_verification.is_some()
         || journey.is_some()
@@ -387,6 +418,36 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut events,
                 )?;
             }
+            if let Some(check) = &mut content_drags {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(
+                    &mut editor,
+                    &mut shell,
+                    &window,
+                    &floats,
+                    scale,
+                    &scene_view,
+                    &mut events,
+                )?;
+            }
+            if content_drags
+                .as_ref()
+                .is_some_and(content_drags::ContentDrags::finished)
+                && navigation_check.is_none()
+            {
+                navigation_check = Some(navigation_verify::NavigationCheck::new(&options.output));
+            }
+            if let Some(check) = &mut navigation_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(
+                    &mut editor,
+                    &mut shell,
+                    &window,
+                    scale,
+                    &scene_view,
+                    &mut events,
+                )?;
+            }
             let interaction_start = (!events.is_empty()).then(Instant::now);
             if events.iter().any(|(_, event)| {
                 matches!(
@@ -416,6 +477,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     &mut renderer,
                     &gpu,
                     &view,
+                    &scene_view,
                     &mut clipboard,
                 );
                 match routed {
@@ -442,6 +504,27 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 }
                 game.close(&mut editor, &mut gpu)?;
                 break;
+            }
+            if shell.content_dragging() {
+                if offscreen && shell.desktop_pointer.is_none() {
+                    dirty |= shell.content_drag_over(&editor, dt)?;
+                } else {
+                    track_content_drag(
+                        desktop_pointer(&shell),
+                        main_dpi,
+                        &window,
+                        &floats,
+                        &mut shell,
+                        &editor,
+                        &scene_view,
+                        dt,
+                    )?;
+                    shell.leave();
+                    dirty = true;
+                    for float in &mut floats.windows {
+                        float.dirty = true;
+                    }
+                }
             }
             // IME text goes to the window with keyboard focus.
             let focus = crate::native::keyboard_focus();
@@ -495,8 +578,16 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                         }
                     }
                     crate::shell::WindowRequest::Gather => floats.gather(&window)?,
-                    crate::shell::WindowRequest::Import => import_dialog(&window, &editor),
-                    crate::shell::WindowRequest::Quit => exit_requested = true,
+                    crate::shell::WindowRequest::Import => {
+                        if !offscreen {
+                            import_dialog(&window, &editor);
+                        }
+                    }
+                    crate::shell::WindowRequest::Quit => {
+                        if monkey.is_none() {
+                            exit_requested = shell.request_quit(&mut editor)?;
+                        }
+                    }
                 }
                 dirty = true;
             }
@@ -506,12 +597,17 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 }
                 dirty = true;
             }
+            dirty |= shell.poll_dialogs(&mut editor)?;
             if let Some(text) = shell.take_clipboard() {
                 use ara_ui_text::Clipboard;
                 let _ = clipboard.write(&text);
             }
             shell.main_rect = window.rect()?;
-            match controller.fly(&mut editor, &shell, dt) {
+            let fly_dt = navigation_check
+                .as_ref()
+                .and_then(navigation_verify::NavigationCheck::fly_dt)
+                .unwrap_or(dt);
+            match controller.fly(&mut editor, &shell, fly_dt) {
                 Ok(changed) => {
                     dirty |= changed;
                     scene_dirty |= changed;
@@ -539,6 +635,9 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 scene_dirty = true;
             }
             let authority_scope = profile_frame.map(|_| ara_profile::scope("editor.authority"));
+            if let Some(runner) = &mut monkey {
+                dirty |= runner.step(&mut editor, &mut shell)?;
+            }
             let tick_at = Instant::now();
             server.pump(&mut editor);
             editor.tick();
@@ -1208,6 +1307,29 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                     break;
                 }
             }
+            if let Some(runner) = &mut monkey {
+                runner.record_frame(frame_start.elapsed());
+                if runner.finished() {
+                    game.close(&mut editor, &mut gpu)?;
+                    break;
+                }
+            }
+            if let Some(check) = &mut content_drags {
+                check.end(&editor, &mut shell, &mut gpu, &floats)?;
+            }
+            if let Some(check) = &mut navigation_check {
+                check.end(
+                    &editor,
+                    &shell,
+                    &mut gpu,
+                    &scene_view,
+                    frame_start.elapsed().as_secs_f64() * 1000.,
+                )?;
+                if check.finished() {
+                    game.close(&mut editor, &mut gpu)?;
+                    break;
+                }
+            }
             frames += 1;
             if probe.as_ref().is_some_and(responsiveness::Probe::finished) {
                 let device = serde_json::to_value(renderer.gpu().info())?;
@@ -1269,6 +1391,29 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         if journey.as_ref().is_some_and(|v| !v.finished()) {
             return Err("the journey route did not finish".into());
         }
+        if let Some(check) = &content_drags {
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native behaviour journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
+        }
+        if options.verify_behaviours {
+            let check = navigation_check
+                .as_ref()
+                .ok_or("The navigation journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native navigation journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
+        }
         editor.host.flush();
         if options.screenshot {
             std::fs::create_dir_all(&options.output)?;
@@ -1289,6 +1434,16 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         }
         Ok(())
     })();
+    let monkey_result = if let Some(runner) = &mut monkey {
+        runner.finish()?;
+        if runner.succeeded() {
+            Ok(())
+        } else {
+            Err("Editor monkey did not pass; see monkey.json and monkey-events.jsonl".into())
+        }
+    } else {
+        Ok(())
+    };
     game_preview.destroy(&mut renderer, &mut gpu)?;
     scene_view.destroy(&mut renderer)?;
     // SAFETY: Complete all presentation/UI submissions before native swapchain/surface destruction.
@@ -1297,7 +1452,7 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
         gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), &mut present);
     }
     floats.destroy(&renderer, &gpu);
-    result
+    result.and(monkey_result)
 }
 /// Exercise the editor's document extraction and production renderer without SDL.
 fn headless(options: Options) -> ara_ui::Result<()> {
@@ -1436,12 +1591,79 @@ fn route_event(
     renderer: &mut Renderer,
     gpu: &NativeUi,
     view: &crate::world::DocumentView,
+    scene_view: &viewport::SceneView,
     clipboard: &mut OsClipboard,
 ) -> ara_ui::Result<(bool, bool, bool)> {
+    if shell.game_captured && (shell.modal_active() || shell.choice_open()) {
+        game_input(&Event::FocusLost, editor, shell, dpi);
+    }
+    if let Event::FileDrop { path, .. } = &event {
+        import_file(editor, path)?;
+        return Ok((true, true, false));
+    }
     if !shell.tab_pending()
+        && !shell.content_pending()
+        && !shell.modal_active()
+        && !shell.choice_open()
         && let Some(handled) = game_input(&event, editor, shell, dpi)
     {
         return Ok((handled, false, false));
+    }
+    if shell.content_pending() {
+        match &event {
+            Event::Key {
+                scancode: 41,
+                pressed: true,
+                ..
+            } => {
+                shell.drag = None;
+                shell.release_tab_capture(clipboard)?;
+                controller.release(1);
+                return Ok((true, false, false));
+            }
+            Event::MouseMotion { .. } => {
+                track_content_drag(
+                    desktop_pointer(shell),
+                    dpi,
+                    window,
+                    floats,
+                    shell,
+                    editor,
+                    scene_view,
+                    0.,
+                )?;
+                shell.leave();
+                for float in &mut floats.windows {
+                    float.dirty = true;
+                }
+                return Ok((true, false, false));
+            }
+            Event::MouseButton {
+                button: 1,
+                pressed: false,
+            } if shell.content_dragging() => {
+                track_content_drag(
+                    desktop_pointer(shell),
+                    dpi,
+                    window,
+                    floats,
+                    shell,
+                    editor,
+                    scene_view,
+                    0.,
+                )?;
+                let dropped = shell.drop_at(editor);
+                shell.leave();
+                shell.release_tab_capture(clipboard)?;
+                controller.release(1);
+                dropped?;
+                for float in &mut floats.windows {
+                    float.dirty = true;
+                }
+                return Ok((true, true, false));
+            }
+            _ => {}
+        }
     }
     // Tab drags follow the desktop pointer: preview in whichever window is under it.
     if shell.dragged_tab().is_some() {
@@ -1501,14 +1723,31 @@ fn route_event(
         }
     }
     if sdl == 0 || sdl == main_id {
-        return controller.event(
+        shell.leave();
+        if matches!(event, Event::Quit) {
+            return Ok((true, false, shell.request_quit(editor)?));
+        }
+        let press = matches!(
+            event,
+            Event::MouseButton {
+                button: 1,
+                pressed: true
+            }
+        );
+        let result = controller.event(
             crate::native::logical_event_for(window.raw(), event, dpi),
             editor,
             shell,
             renderer,
             view,
+            scene_view,
             clipboard,
         );
+        if press && shell.content_pending() {
+            let scale = crate::native::points_to_logical(window.raw(), dpi);
+            shell.content_drag_pointer(desktop_pointer(shell).map(|v| v * scale));
+        }
+        return result;
     }
     let Some(float) = floats.by_sdl(sdl) else {
         return Ok((false, false, false));
@@ -1548,11 +1787,23 @@ fn route_event(
             Ok((true, false, false))
         }
         event => {
+            let press = matches!(
+                event,
+                Event::MouseButton {
+                    button: 1,
+                    pressed: true
+                }
+            );
             let event = crate::native::logical_event_for(float.window.raw(), event, float_dpi);
             if !shell.enter(&id) {
                 return Ok((false, false, false));
             }
-            let result = controller.event(event, editor, shell, renderer, view, clipboard);
+            let result =
+                controller.event(event, editor, shell, renderer, view, scene_view, clipboard);
+            if press && shell.content_pending() {
+                let scale = crate::native::points_to_logical(window.raw(), dpi);
+                shell.content_drag_pointer(desktop_pointer(shell).map(|v| v * scale));
+            }
             shell.leave();
             result
         }
@@ -1561,6 +1812,65 @@ fn route_event(
 /// The desktop pointer tab drags follow: the OS one, or a verification route's.
 fn desktop_pointer(shell: &Shell) -> [f32; 2] {
     shell.desktop_pointer.unwrap_or_else(Window::global_mouse)
+}
+/// Resolve one content drag in its destination surface; all desktop distances use
+/// the main window's logical scale while each surface keeps its own local scale.
+#[allow(clippy::too_many_arguments)]
+fn track_content_drag(
+    global: [f32; 2],
+    dpi: f32,
+    window: &Window,
+    floats: &windows::Floats,
+    shell: &mut Shell,
+    editor: &Editor,
+    scene_view: &viewport::SceneView,
+    seconds: f32,
+) -> ara_ui::Result<()> {
+    shell.leave();
+    let main_scale = crate::native::points_to_logical(window.raw(), dpi);
+    let desktop = global.map(|value| value * main_scale);
+    let on_surface = if let Some(float) = floats.at(global) {
+        let scale = crate::native::points_to_logical(
+            float.window.raw(),
+            float.window.display_scale() * windows::ui_scale(editor),
+        );
+        if shell.enter(&float.id) {
+            shell.pointer = [
+                (global[0] - float.rect[0] as f32) * scale,
+                (global[1] - float.rect[1] as f32) * scale,
+            ];
+            true
+        } else {
+            false
+        }
+    } else {
+        let rect = window.rect()?;
+        shell.pointer = [
+            (global[0] - rect[0] as f32) * main_scale,
+            (global[1] - rect[1] as f32) * main_scale,
+        ];
+        global[0] >= rect[0] as f32
+            && global[1] >= rect[1] as f32
+            && global[0] < (rect[0] + rect[2]) as f32
+            && global[1] < (rect[1] + rect[3]) as f32
+    };
+    shell.content_drag_pointer(desktop);
+    if on_surface {
+        shell.content_drag_over(editor, seconds)?;
+        if shell.content_asset_dragging()
+            && let Some(rect) = shell.viewport()
+            && let Some(hit) = scene_view.surface_hit(&editor.state.camera, rect, shell.pointer)
+        {
+            shell.content_surface_hit_details(hit.position, hit.normal, hit.vertex);
+            if let Some(draw) = hit.draw {
+                shell.content_material_hit(editor, draw)?;
+            }
+        }
+    } else {
+        shell.content_drag_outside();
+    }
+    // Keep the destination entered until release so drop_at resolves that surface.
+    Ok(())
 }
 /// Point the tab-drag preview at the window under a desktop point. A floating
 /// window maps it with the same DPI × UI scale its own input uses.
@@ -1704,6 +2014,10 @@ fn game_input(event: &Event, editor: &mut Editor, shell: &mut Shell, dpi: f32) -
         let _ = shell.rebuild(editor);
     };
     let events = match *event {
+        Event::FocusLost => {
+            release(editor, shell);
+            return None;
+        }
         Event::Key {
             scancode: 41,
             pressed: true,

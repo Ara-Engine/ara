@@ -112,6 +112,13 @@ impl Camera {
         self.yaw -= delta[0] * 0.005;
         self.pitch = (self.pitch + delta[1] * 0.005).clamp(-1.54, 1.54);
     }
+    /// Turn a fly camera around its own position, leaving orbit's pivot semantics intact.
+    pub fn look(&mut self, delta: [f32; 2]) {
+        let position = self.position();
+        self.orbit(delta);
+        let offset = self.position() - self.target;
+        self.target = position - offset;
+    }
     /// Exponential dolly, bounded to useful editor scales.
     pub fn zoom(&mut self, amount: f32) {
         self.distance = (self.distance * (-amount * 0.12).exp()).clamp(0.05, 100_000.);

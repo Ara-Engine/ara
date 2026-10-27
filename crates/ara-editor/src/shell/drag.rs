@@ -1,15 +1,11 @@
+//! Native drag sources. The shared kit owns gesture state; commands own every committed edit.
 use super::*;
 use ara_ui::source::stable_id;
-use glam::Vec3;
+#[path = "drag_drop.rs"]
+mod content;
+
 pub(crate) enum Drag {
-    Entity {
-        entity: String,
-        start: [f32; 2],
-    },
-    Asset {
-        asset: assets::Asset,
-        start: [f32; 2],
-    },
+    Content(content::ContentDrag),
     Tab {
         panel: String,
         start: [f32; 2],
@@ -22,12 +18,8 @@ pub(crate) enum Drag {
     },
 }
 impl Shell {
-    /// Capture an entity, asset or dock tab as a typed drag payload.
+    /// Capture an entity, asset, component section or dock tab as a typed drag payload.
     pub fn begin_drag(&mut self) {
-        // A single-panel area's header (`header-{panel}`) is a plain panel, which hit
-        // testing skips (it finds focusable nodes): find it under the pointer directly,
-        // so a lone panel drags by its header like a tab (a click without movement
-        // still reaches the header's buttons).
         let [x, y] = self.pointer;
         if let Some(panel) = self
             .ui
@@ -63,149 +55,39 @@ impl Shell {
             });
             return;
         }
-        self.drag = match self.bindings.get(&stable_id(id)) {
-            Some(Binding::Select(entity)) => Some(Drag::Entity {
-                entity: entity.clone(),
-                start: self.pointer,
-            }),
-            Some(Binding::Asset(asset)) => Some(Drag::Asset {
-                asset: asset.clone(),
-                start: self.pointer,
-            }),
+        let payload = match self.bindings.get(&stable_id(id)) {
+            Some(Binding::Select(entity)) => Some(content::Payload::Entity(entity.clone())),
+            Some(Binding::Asset(asset)) => Some(content::Payload::Asset(asset.clone())),
+            Some(Binding::ComponentCollapse(component)) => {
+                Some(content::Payload::Component(component.clone()))
+            }
+            Some(Binding::Collection(action))
+                if matches!(action.intent, collection_adapter::Intent::Select(_)) =>
+            {
+                Some(content::Payload::Collection(action.clone()))
+            }
             _ => None,
         };
+        self.drag = payload
+            .and_then(|payload| content::ContentDrag::begin(payload, self))
+            .map(Drag::Content);
     }
-    /// Resolve a drop into one reparent, instantiate or layout command.
+    /// Resolve a release against the current model, then commit one atomic authoring batch.
     pub fn drop_at(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
-        let Some(drag) = self.drag.take() else {
-            return Ok(false);
-        };
-        let start = match &drag {
-            Drag::Entity { start, .. }
-            | Drag::Asset { start, .. }
-            | Drag::Tab { start, .. }
-            | Drag::Column { start, .. } => start,
-        };
-        if matches!(drag, Drag::Column { .. }) {
-            return Ok(true);
+        if self.content_pending() {
+            return self.finish_content_drag(editor);
         }
-        if (self.pointer[0] - start[0]).hypot(self.pointer[1] - start[1]) < 6. {
-            return Ok(false);
-        }
-        let entity = self
-            .ui
-            .hit_test(self.pointer[0], self.pointer[1])
-            .and_then(|i| self.bindings.get(&stable_id(&self.ui.nodes[i].element.id)))
-            .and_then(|b| {
-                if let Binding::Select(id) = b {
-                    Some(id.clone())
-                } else {
-                    None
-                }
-            });
-        match drag {
-            Drag::Entity { entity: source, .. } => {
-                if let Some(target) = entity {
-                    let args = if self.modifiers[0] {
-                        let resolved =
-                            crate::world::resolve(editor.host.store(), &editor.state.doc)
-                                .map_err(|d| format!("{d:?}"))?;
-                        let parent = resolved.get(&target).and_then(|e| e.parent.as_ref());
-                        let index = resolved
-                            .iter()
-                            .filter(|(_, e)| e.parent.as_ref() == parent)
-                            .position(|(id, _)| id == &target)
-                            .unwrap_or(0);
-                        json!({"entity":source,"parent":parent,"index":index})
-                    } else {
-                        json!({"entity":source,"parent":target})
-                    };
-                    editor.apply(
-                        vec![json!({"cmd":"entity.reparent","args":args})],
-                        "Reparent hierarchy",
-                        None,
-                    )?;
-                }
-            }
-            Drag::Asset { asset, .. } => {
-                let reference = asset.current_reference(editor.host.store().workspace());
-                let Some(reference) = reference else {
-                    let why = format!(
-                        "{} has no asset ID yet: it is still importing. Drop it again when it is ready",
-                        asset.name()
-                    );
-                    self.status_note = Some(why.clone());
-                    return Err(why.into());
+        match self.drag.take() {
+            Some(Drag::Column { .. }) => Ok(true),
+            Some(Drag::Tab { panel, .. }) => {
+                let Some(preview) = self.drop_preview.take() else {
+                    return Ok(false);
                 };
-                if let Some(i) = self.shown_node("animation-clip-field")
-                    && self.ui.nodes[i]
-                        .rect
-                        .contains(self.pointer[0], self.pointer[1])
-                    && let Some(Binding::AnimationField(doc, item, key)) =
-                        self.bindings.get(&stable_id("animation-clip-field"))
-                {
-                    let (doc, item, key) = (doc.clone(), item.clone(), key.clone());
-                    self.set_animation_field(editor, &doc, &item, &key, json!(reference))?;
-                    self.rebuild(editor)?;
-                    return Ok(true);
-                }
-                // Any asset field under the pointer: a field, or an element of one.
-                let field = self.bindings.iter().find_map(|(node, binding)| {
-                    let Binding::AssetPicker(target, _) = binding else {
-                        return None;
-                    };
-                    let i = self.ui.by_id(*node)?;
-                    (self.ui.shown(i)
-                        && self.ui.nodes[i]
-                            .rect
-                            .contains(self.pointer[0], self.pointer[1]))
-                    .then(|| target.clone())
-                });
-                if let Some(field) = field {
-                    if let Err(why) = self.asset_for_field(editor, &asset, &field) {
-                        self.status_note = Some(why.clone());
-                        return Err(why.into());
-                    }
-                    editor.apply(
-                        self.field_commands(&editor.state.selection, &field, json!(reference))?,
-                        "Drop asset reference",
-                        None,
-                    )?;
-                    self.rebuild(editor)?;
-                    return Ok(true);
-                }
-                let over_scene = self
-                    .viewport()
-                    .is_some_and(|r| r.contains(self.pointer[0], self.pointer[1]));
-                if (entity.is_some() || over_scene)
-                    && matches!(asset.kind.as_str(), "prefab" | "glb" | "gltf" | "fbx")
-                {
-                    let position = if over_scene {
-                        overlay::ground_point(
-                            &editor.state.camera,
-                            self.viewport().ok_or("viewport missing")?,
-                            self.pointer,
-                        )
-                        .unwrap_or(Vec3::ZERO)
-                    } else {
-                        Vec3::ZERO
-                    };
-                    let command = if asset.kind == "prefab" {
-                        json!({"cmd":"prefab.instantiate","args":{"prefab":reference,"parent":entity,"position":position.to_array()}})
-                    } else {
-                        json!({"cmd":"editor.mesh.instantiate","args":{"mesh":reference,"parent":entity,"position":position.to_array()}})
-                    };
-                    editor.apply(vec![command], "Place asset", None)?;
-                }
+                self.drop_tab(editor, &panel, &preview.target, None)?;
+                self.rebuild(editor)?;
+                Ok(true)
             }
-            Drag::Tab { panel, .. } => {
-                if let Some(preview) = self.drop_preview.take() {
-                    self.drop_tab(editor, &panel, &preview.target, None)?;
-                }
-            }
-            Drag::Column { .. } => {}
+            _ => Ok(false),
         }
-        self.rebuild(editor)?;
-        Ok(true)
     }
 }

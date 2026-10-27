@@ -20,7 +20,7 @@ dropdown { height:26px; padding-top:3px; }
 .prop-row { height:28px; }
 .prop-label { height:28px; }
 .component-header { height:30px; }
-.menu-item { height:30px; }
+.menu-item { min-height:30px; }
 .module-row { height:28px; }
 .shortcut-row { height:30px; }
 .settings-cat { height:28px; }

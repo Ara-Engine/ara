@@ -34,8 +34,9 @@ pub use entity::{
 };
 pub use look_at::{TransformLookAt, TransformLookAtParams};
 pub use prefab::{
-    OverrideRevert, OverrideRevertParams, OverrideSet, OverrideSetParams, PrefabInstantiate,
-    PrefabInstantiateParams, Reverted,
+    OverrideRevert, OverrideRevertParams, OverrideSet, OverrideSetParams, PrefabApply,
+    PrefabApplyParams, PrefabCreate, PrefabCreateParams, PrefabInstantiate,
+    PrefabInstantiateParams, PrefabSource, PrefabVariant, Reverted, prefab_sources,
 };
 
 use crate::Registry;
@@ -56,4 +57,5 @@ pub fn register(reg: &mut Registry, db: &mut SchemaDb) {
         .command::<OverrideSet>(db)
         .command::<OverrideRevert>(db)
         .query::<EntityInspect>(db);
+    prefab::register(reg, db);
 }

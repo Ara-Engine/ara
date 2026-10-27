@@ -62,6 +62,11 @@ pub struct RasterView {
 }
 
 impl RasterView {
+    /// Borrow the currently prepared native scene for host picking and surface snapping.
+    /// Geometry remains owned by this view and must not be retained across publication.
+    pub fn scene(&self) -> Option<&ara_render::instanced::Scene> {
+        self.prepared.as_ref().map(|prepared| &prepared.scene)
+    }
     /// A rejected preparation discards its CPU snapshot. Interactive callers
     /// must reconstruct it on their content worker, keeping last-good GPU data.
     pub fn has_prepared_content(&self) -> bool {

@@ -171,7 +171,7 @@ impl Shell {
     }
 
     pub(crate) fn open_script_ide(&self, editor: &Editor, path: &str) -> ara_ui::Result<()> {
-        if !self.open_ide {
+        if !self.open_ide || self.offscreen {
             return Ok(());
         }
         let file = editor.host.root().join(path);
