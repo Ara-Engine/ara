@@ -97,9 +97,9 @@ struct TsrConstants {
     uint4 rcas;             // FsrRcasCon constants
     uint4 inputs;           // x colour, y depth, z motion (sampled; u32 max without), w the display frame record (buffer)
     uint4 resources;        // x exposure state (buffer), y scratch (buffer), z output (storage), w this frame's pair slot (0 or 1)
-    uint4 sampled0;         // intermediate, luma pair, pyramid atlas, shading change
+    uint4 sampled0;         // intermediate (luma instability), luma pair, pyramid atlas, prepared colour
     uint4 sampled1;         // accumulation pair, dilated reactive masks, new locks, luma history pair
-    uint4 sampled2;         // x upscaled colour pair
+    uint4 sampled2;         // x upscaled colour pair (FSR path)
     uint4 storage0;         // as sampled0
     uint4 storage1;         // as sampled1
     uint4 storage2;         // as sampled2

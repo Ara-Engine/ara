@@ -551,9 +551,10 @@ impl Renderer {
     pub fn upscaler(&self) -> crate::tsr::Upscaler {
         self.tsr.upscaler
     }
-    /// Ara TSR's RCAS sharpening from the next frame: FSR's `sharpness`, 0 (none)
-    /// to 1 (most); `ARA_TSR_SHARPNESS` sets it at creation (default 0.8). It
-    /// sharpens the displayed image only, never the accumulated history.
+    /// Ara TSR's RCAS sharpening from the next frame: FSR's `sharpness`, 0 (none,
+    /// the default: no RCAS pass) to 1 (most); `ARA_TSR_SHARPNESS` sets it at
+    /// creation. Above zero TSR resolves on FSR's path (RCAS needs FSR's own history;
+    /// the history restarts); it sharpens the displayed image only.
     pub fn set_tsr_sharpness(&mut self, sharpness: f32) {
         self.tsr.set_sharpness(sharpness);
     }

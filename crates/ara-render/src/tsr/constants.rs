@@ -59,29 +59,20 @@ pub(crate) struct TsrConstants {
     pub autogen: [f32; 4],
     /// x the host's reactive coverage (sampled; `u32::MAX` none).
     pub external: [u32; 4],
+    /// Ara path upsampling (`Tuning::kernel`): settled and moving Gaussian spreads,
+    /// weight gain, the current frame's weight on still transparency.
+    pub kernel: [f32; 4],
+    /// x `OPTION_*` flags, y last frame's display history (sampled; Ara path).
+    pub options: [u32; 4],
 }
 
-/// FSR 3.1.4 context defaults (`ffxFsr3UpscalerContextCreate`).
-pub(crate) const VELOCITY_FACTOR: f32 = 1.;
-pub(crate) const REACTIVENESS_SCALE: f32 = 1.;
-pub(crate) const SHADING_CHANGE_SCALE: f32 = 1.;
-pub(crate) const ACCUMULATION_ADDED_PER_FRAME: f32 = 1. / 3.;
-pub(crate) const MIN_DISOCCLUSION_ACCUMULATION: f32 = -1. / 3.;
-/// An entity absent from last frame's 3x3 at the reprojected pixel: a new surface,
-/// fully disoccluded.
-pub(crate) const NEW_SURFACE_DISOCCLUSION: f32 = 1.;
-/// The same entity within four times FSR's required depth separation is the same
-/// surface (FSR's own test flags 1×; real self-occlusion within one entity is larger).
-pub(crate) const SAME_SURFACE_TOLERANCE: f32 = 4.;
-/// Reactivity of confident screen-space reflections on a moving surface (light:
-/// reflections then accumulate a little less, never reset).
-pub(crate) const REFLECTION_REACTIVE: f32 = 0.25;
-/// Composition weight where transparency changed the pixel: tighter history
-/// clipping and fewer thin-feature locks, without discarding history.
-pub(crate) const COMPOSITION: f32 = 0.5;
-/// FSR's autogen reactive as AMD's sample dispatches it (scale, cutoff threshold,
-/// binary value), then the parallax (render pixels) at which it applies fully.
-pub(crate) const AUTOGEN: [f32; 4] = [1., 0.2, 0.9, 1.];
+/// `TsrConstants::options` flags (tsr.slangh TSR_OPTION_*): prepare inputs computes
+/// masks (a signal exists this frame), accumulate reads luma instability, prepare
+/// reactivity reads the shading change pyramid.
+pub(crate) const OPTION_MASKS: u32 = 1;
+pub(crate) const OPTION_LUMA_INSTABILITY: u32 = 2;
+pub(crate) const OPTION_SHADING_CHANGE: u32 = 4;
+
 /// Only FSR's own auto exposure reads the frame time; Ara never feeds it a wall
 /// clock (deterministic simulation), so it is a nominal 60 Hz.
 pub(crate) const FRAME_SECONDS: f32 = 1. / 60.;
@@ -125,8 +116,8 @@ mod tests {
     }
 
     #[test]
-    fn record_is_twenty_three_rows() {
-        assert_eq!(std::mem::size_of::<TsrConstants>(), 23 * 16);
+    fn record_is_twenty_five_rows() {
+        assert_eq!(std::mem::size_of::<TsrConstants>(), 25 * 16);
     }
 
     #[test]

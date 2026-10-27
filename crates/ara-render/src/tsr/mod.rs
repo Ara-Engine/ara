@@ -2,23 +2,52 @@
 //! v1.1.4, MIT; `shaders/tsr/`), selectable beside the TAAU resolve (`taaMain`).
 //!
 //! The renderer declares this pass chain in place of `TemporalResolve` when
-//! [`Upscaler::Tsr`] is selected: prepare inputs, luma pyramid, shading change
-//! pyramid, shading change, prepare reactivity, luma instability, accumulate and
-//! RCAS. RCAS writes the renderer's display history slot exactly as `taaMain` does
-//! (RGBA16F, pre-exposed by the applied exposure, w = depth), so exposure, bloom,
-//! grading, the reflection pyramid and captures read it unchanged. TSR's own
-//! histories (upscaled colour, luma, accumulation, luma history) live here.
+//! [`Upscaler::Tsr`] is selected: prepare inputs (with FSR's luma pyramid folded in),
+//! the shading change pyramid, prepare reactivity (with FSR's shading change pass
+//! evaluated inline), luma instability and accumulate, then RCAS on FSR's path. The
+//! result is the renderer's display history slot exactly as `taaMain` writes it
+//! (RGBA16F, pre-exposed by the applied exposure), so exposure, bloom, grading, the
+//! reflection pyramid and captures read it unchanged.
+//!
+//! Two accumulate paths (`tuning::Path`):
+//! - Ara (default): TSR's colour history is the renderer's own display history pair
+//!   (w holds FSR's lock), reprojected with a Catmull-Rom; this frame's samples are
+//!   weighted by a display-pixel Gaussian that matches area-sampled truth (FSR's
+//!   Lanczos over-sharpens it), and there is no RCAS;
+//! - FSR: FSR's own history pair, Lanczos reprojection and upsampling, RCAS.
 //!
 //! Beyond FSR, Ara feeds engine signals (`shaders/tsr/tsr-signals.slangh`): exact
-//! entity-ID history validity refines FSR's depth disocclusion, and reactive and
-//! composition masks come from the opaque-only copy forward transparency is drawn
-//! over (`look::refract`), SSR confidence and the host's composite coverage
-//! (`Renderer::finish_reactive`).
+//! entity-ID history validity refines FSR's depth disocclusion, and reactive,
+//! composition and still-transparency masks come from the opaque-only copy forward
+//! transparency is drawn over (`look::refract`), SSR confidence and the host's
+//! composite coverage (`Renderer::finish_reactive`).
+//!
+//! Development knobs (environment, read once when the renderer is created;
+//! `tuning.rs`), all record constants or pass selections, so sweeps need no recook:
+//! - `ARA_UPSCALER=tsr|taau`: the upscaler (default TAAU);
+//! - `ARA_TSR_PATH=ara|fsr` (ara); `ARA_TSR_SHARPNESS` 0..1 (0: no RCAS; above 0
+//!   selects the FSR path);
+//! - `ARA_TSR_KERNEL_STATIC` (5.56) / `ARA_TSR_KERNEL_MOVING` (2.78): Gaussian
+//!   spread (display px⁻²) for settled and for new or moving pixels;
+//!   `ARA_TSR_KERNEL_GAIN` (1): current-frame weight scale (accumulation rate);
+//! - `ARA_TSR_STILL_TRANSPARENCY` (0.5): current-frame weight on still transparency;
+//! - `ARA_TSR_NEW_SURFACE` (1), `ARA_TSR_SAME_SURFACE` (4), `ARA_TSR_REFLECTION`
+//!   (0.25), `ARA_TSR_COMPOSITION` (0.5): engine signal weights;
+//! - `ARA_TSR_AUTOGEN_SCALE` (1), `_THRESHOLD` (0.2), `_VALUE` (0.9),
+//!   `ARA_TSR_PARALLAX` (1 render px): reactive autogen;
+//! - `ARA_TSR_ACCUMULATION` (1/3), `ARA_TSR_MIN_DISOCCLUSION` (-1/3),
+//!   `ARA_TSR_VELOCITY` (1), `ARA_TSR_REACTIVENESS` (1): FSR's context values;
+//! - `ARA_TSR_SHADING_CHANGE` (1; 0 skips the shading change pyramid),
+//!   `ARA_TSR_LUMA_INSTABILITY` (1; 0 skips the luma instability pass);
+//! - `ARA_TSR_PREEXPOSED` (0): the HDR input already holds radiance × the applied
+//!   exposure (the pre-exposure contract); otherwise TSR applies it.
 //!
 //! Images are allocated on first use at the view's render and display sizes,
-//! reallocated (with a history reset) when either changes, and released when TAAU
-//! is selected again: they cost nine bindless storage-image slots.
+//! reallocated (with a history reset) when either size or the path changes, and
+//! released when TAAU is selected again: eight bindless storage-image slots on the
+//! Ara path, nine on FSR's.
 mod constants;
+mod tuning;
 
 use crate::graph::{Graph, PassId, ResourceId, State};
 use anyhow::{Result, ensure};
@@ -29,6 +58,7 @@ use ara_gpu::{
 use constants::TsrConstants;
 use glam::Mat4;
 use std::path::Path;
+use tuning::{Path as AccumulatePath, Tuning};
 
 /// The raster renderer's temporal upscaler (`Renderer::set_upscaler`). Both resolve
 /// into the same display history; switching keeps the post chain and captures
@@ -40,7 +70,7 @@ pub enum Upscaler {
     #[default]
     Taau,
     /// Ara TSR: FSR 3.1.4's temporal upscaler (reactivity, shading change, luma
-    /// instability and thin-feature locks, Lanczos upsampling, RCAS sharpening).
+    /// instability and thin-feature locks) with Ara's engine signals.
     Tsr,
 }
 
@@ -56,16 +86,15 @@ impl Upscaler {
 }
 
 // TSR images, in the record's index rows (`TsrConstants::sampled`/`storage`).
-/// R16F render size: farthest depth (prepare inputs to the luma pyramid), then luma
-/// instability (to accumulate); FSR's aliased INTERMEDIATE_FP16x1.
+/// R16F render size: luma instability (FSR's INTERMEDIATE_FP16x1).
 const INTERMEDIATE: usize = 0;
 /// R16F, two render widths: this frame's and last frame's luma.
 const LUMA: usize = 1;
 /// RG16F atlas: shading change mips 0 to 2 and the half-size farthest depth
 /// (`pyramid_extent`).
 const PYRAMID: usize = 2;
-/// R8 half render size.
-const SHADING_CHANGE: usize = 3;
+/// RGBA16F render size: FSR's prepared colour (YCoCg, pre-exposed) for accumulate.
+const PREPARED: usize = 3;
 /// R8, two render widths: the accumulation counter, this frame's and last frame's.
 const ACCUMULATION: usize = 4;
 /// RGBA8 render size: reactive, disocclusion, shading change and accumulation.
@@ -74,13 +103,13 @@ const MASKS: usize = 5;
 const LOCKS: usize = 6;
 /// RGBA16F, two render widths: the last four frames' luma.
 const LUMA_HISTORY: usize = 7;
-/// RGBA16F, two display widths: accumulated colour (pre-exposed) and lock.
+/// RGBA16F, two display widths: FSR's accumulated colour and lock (FSR path only).
 const UPSCALED: usize = 8;
 const IMAGES: usize = 9;
 /// Scratch words per render pixel (tsr.slangh `tsrScratch` regions): dilated depth
-/// (this and last frame), dilated motion (two), reconstructed previous depth, dilated
-/// entity ID (this and last frame), masks.
-const SCRATCH_WORDS: u64 = 8;
+/// (this and last frame), dilated motion (two halves), reconstructed previous depth,
+/// dilated entity ID (this and last frame), masks.
+const SCRATCH_WORDS: u64 = 7;
 
 /// Format and extent of each image for `render` and `display` sizes.
 fn image_desc(image: usize, render: [u32; 2], display: [u32; 2]) -> (vk::Format, [u32; 2]) {
@@ -89,7 +118,7 @@ fn image_desc(image: usize, render: [u32; 2], display: [u32; 2]) -> (vk::Format,
         INTERMEDIATE => (vk::Format::R16_SFLOAT, render),
         LUMA => (vk::Format::R16_SFLOAT, pair(render)),
         PYRAMID => (vk::Format::R16G16_SFLOAT, pyramid_extent(render)),
-        SHADING_CHANGE => (vk::Format::R8_UNORM, half(render)),
+        PREPARED => (vk::Format::R16G16B16A16_SFLOAT, render),
         ACCUMULATION => (vk::Format::R8_UNORM, pair(render)),
         MASKS => (vk::Format::R8G8B8A8_UNORM, render),
         LOCKS => (vk::Format::R8_UNORM, display),
@@ -120,12 +149,11 @@ pub(crate) enum TsrPass {
     /// images, on every reset the accumulation (`TsrFrame::clear`).
     Clear,
     PrepareInputs,
-    LumaPyramid,
     ShadingChangePyramid,
-    ShadingChange,
     PrepareReactivity,
     LumaInstability,
     Accumulate,
+    /// FSR path only.
     Rcas,
 }
 
@@ -134,12 +162,13 @@ struct Pipelines {
     /// Prepare inputs without a motion target: motion from depth and last frame's
     /// view-projection.
     prepare_inputs_reproject: Pipeline,
-    luma_pyramid: Pipeline,
     shading_change_pyramid: Pipeline,
-    shading_change: Pipeline,
     prepare_reactivity: Pipeline,
     luma_instability: Pipeline,
+    /// The Ara path's accumulate.
     accumulate: Pipeline,
+    /// FSR's accumulate (its own history pair, then RCAS).
+    accumulate_fsr: Pipeline,
     rcas: Pipeline,
     clear: Pipeline,
 }
@@ -148,7 +177,9 @@ struct Pipelines {
 struct Resources {
     render: [u32; 2],
     display: [u32; 2],
-    images: [Image; IMAGES],
+    /// Allocated for FSR's path (with `UPSCALED`).
+    fsr: bool,
+    images: [Option<Image>; IMAGES],
     sampled: [u32; IMAGES],
     storage: [u32; IMAGES],
     states: [State; IMAGES],
@@ -186,8 +217,12 @@ struct History {
 /// the history it leaves once recorded (`complete`).
 struct TsrFrame {
     constants: TsrConstants,
+    path: AccumulatePath,
     /// Prepare inputs reprojects from depth (no motion target).
     reproject: bool,
+    /// The shading change pyramid and luma instability passes run.
+    shading_change: bool,
+    luma_instability: bool,
     /// Images the clear pass zeroes this frame; empty without one.
     clear: Vec<usize>,
     /// The history after this frame.
@@ -232,8 +267,10 @@ pub(crate) struct Bindings {
     /// The composited HDR before depth of field (sampled), compared with the
     /// opaque copy.
     pub composited: u32,
-    /// The display history slot RCAS writes (storage).
+    /// The display history slot TSR writes (storage).
     pub output: u32,
+    /// Last frame's display history slot (sampled; the Ara path's colour history).
+    pub history: Option<u32>,
     /// The host's reactive coverage (sampled, render size).
     pub reactive: Option<u32>,
     /// The opaque copy may be read (declared in this graph).
@@ -248,8 +285,10 @@ pub(crate) struct Io {
     pub colour: ResourceId,
     pub depth: ResourceId,
     pub motion: Option<ResourceId>,
-    /// The display history slot RCAS writes.
+    /// The display history slot TSR writes.
     pub output: ResourceId,
+    /// Last frame's display history slot (read on the Ara path).
+    pub history: Option<ResourceId>,
     /// The look's exposure state.
     pub exposure: ResourceId,
     /// Entity IDs.
@@ -262,7 +301,7 @@ pub(crate) struct Io {
 
 /// Graph identities of TSR's resources in one frame.
 pub(crate) struct TsrIds {
-    images: [ResourceId; IMAGES],
+    images: [Option<ResourceId>; IMAGES],
     scratch: ResourceId,
 }
 
@@ -285,15 +324,12 @@ impl TsrView {
     }
 }
 
-/// The renderer's TSR: the selection, settings and pipelines shared by its views,
-/// and the active view's state.
+/// The renderer's TSR: the selection, tuning and pipelines shared by its views, and
+/// the active view's state.
 pub(crate) struct Tsr {
     /// The selected upscaler; TSR resources exist only while it is `Tsr`.
     pub upscaler: Upscaler,
-    /// FSR's RCAS sharpness (0 none to 1 most).
-    sharpness: f32,
-    /// Ara's signal weights (`TsrConstants::signals`).
-    signals: [f32; 4],
+    tuning: Tuning,
     pipelines: Option<Pipelines>,
     /// Counts upscaler switches: a view's history from an earlier selection (one
     /// that was not active when it changed) restarts.
@@ -303,34 +339,32 @@ pub(crate) struct Tsr {
 }
 
 impl Tsr {
-    /// The upscaler from `ARA_UPSCALER`, and the RCAS sharpness from
-    /// `ARA_TSR_SHARPNESS` (0 to 1; FSR's sample default 0.8 otherwise).
+    /// The upscaler from `ARA_UPSCALER` and the tuning from the `ARA_TSR_*` knobs.
     pub(crate) fn from_env() -> Self {
-        let sharpness = std::env::var("ARA_TSR_SHARPNESS")
-            .ok()
-            .and_then(|v| v.parse::<f32>().ok())
-            .filter(|v| v.is_finite())
-            .map_or(0.8, |v| v.clamp(0., 1.));
         Self {
             upscaler: Upscaler::from_env(),
-            sharpness,
-            signals: [
-                constants::NEW_SURFACE_DISOCCLUSION,
-                constants::SAME_SURFACE_TOLERANCE,
-                constants::REFLECTION_REACTIVE,
-                constants::COMPOSITION,
-            ],
+            tuning: Tuning::from_env(),
             pipelines: None,
             epoch: 0,
             view: TsrView::default(),
         }
     }
 
-    /// Sets FSR's RCAS sharpness (0 none to 1 most) from the next frame.
+    /// Sets FSR's RCAS sharpness (0 none to 1 most) from the next frame; above zero
+    /// selects FSR's path (RCAS needs FSR's own history).
     pub(crate) fn set_sharpness(&mut self, sharpness: f32) {
         if sharpness.is_finite() {
-            self.sharpness = sharpness.clamp(0., 1.);
+            self.tuning.sharpness = sharpness.clamp(0., 1.);
         }
+    }
+
+    /// Whether this frame's chain reads the renderer's previous display history
+    /// (the Ara path's colour history).
+    pub(crate) fn reads_history(&self) -> bool {
+        self.view
+            .frame
+            .as_ref()
+            .is_some_and(|f| f.path == AccumulatePath::Ara)
     }
 
     /// Selects the upscaler; TSR's accumulation restarts when it is next used.
@@ -357,8 +391,8 @@ impl Tsr {
     }
 
     /// Loads the cooked pipelines on first use (the renderer's cohort) and
-    /// allocates the images for `render` and `display`, replacing them when either
-    /// size changed.
+    /// allocates the images for `render` and `display` and the tuning's path,
+    /// replacing them when any of those changed.
     pub(crate) fn prepare(
         &mut self,
         gpu: &mut GpuDevice,
@@ -370,11 +404,12 @@ impl Tsr {
         if self.pipelines.is_none() {
             self.pipelines = Some(load_pipelines(gpu, artifacts, content_key)?);
         }
+        let fsr = self.tuning.path() == AccumulatePath::Fsr;
         if self
             .view
             .resources
             .as_ref()
-            .is_some_and(|r| r.render == render && r.display == display)
+            .is_some_and(|r| r.render == render && r.display == display && r.fsr == fsr)
         {
             return Ok(());
         }
@@ -382,7 +417,7 @@ impl Tsr {
             retire(gpu, old)?;
         }
         self.invalidate();
-        self.view.resources = Some(allocate(gpu, render, display)?);
+        self.view.resources = Some(allocate(gpu, render, display, fsr)?);
         Ok(())
     }
 
@@ -433,6 +468,15 @@ impl Tsr {
         let row = |values: &[u32; IMAGES], i: usize| -> [u32; 4] {
             std::array::from_fn(|k| values.get(i * 4 + k).copied().unwrap_or(0))
         };
+        let t = &self.tuning;
+        let shading_change = t.factors[2] > 0.;
+        let mut options = 0;
+        if t.luma_instability {
+            options |= constants::OPTION_LUMA_INSTABILITY;
+        }
+        if shading_change {
+            options |= constants::OPTION_SHADING_CHANGE;
+        }
         let constants = TsrConstants {
             render_size: [r[0], r[1], pr[0], pr[1]],
             upscale_size: [d[0], d[1], pd[0], pd[1]],
@@ -445,23 +489,19 @@ impl Tsr {
                 1. / inputs.projection.x_axis.x,
                 phases,
             ],
-            frame: [
-                frame_index,
-                constants::VELOCITY_FACTOR,
-                constants::REACTIVENESS_SCALE,
-                constants::SHADING_CHANGE_SCALE,
-            ],
+            frame: [frame_index, t.factors[0], t.factors[1], t.factors[2]],
             accumulation: [
-                constants::ACCUMULATION_ADDED_PER_FRAME,
-                constants::MIN_DISOCCLUSION_ACCUMULATION,
+                t.accumulation[0],
+                t.accumulation[1],
                 constants::FRAME_SECONDS,
                 1.,
             ],
-            // Input pre-exposure 0: the HDR input is linear and the shader applies
-            // the look's applied exposure. Once HDR arrives pre-exposed this one
-            // value becomes 1.
-            exposure: [0., inputs.exposure, 0., 0.],
-            rcas: constants::rcas(self.sharpness),
+            // The one pre-exposure switch: 0 multiplies the linear HDR input by the
+            // look's applied exposure; 1 reads it as already pre-exposed (VQ's
+            // contract). Output and history are pre-exposed by the applied exposure
+            // either way, history decoded with last frame's.
+            exposure: [f32::from(u8::from(t.pre_exposed)), inputs.exposure, 0., 0.],
+            rcas: constants::rcas(t.sharpness),
             inputs: [
                 0,
                 inputs.depth,
@@ -483,9 +523,11 @@ impl Tsr {
                 inputs.reflections.unwrap_or(u32::MAX),
             ],
             opaque_rect: inputs.opaque.map_or([0; 4], |(_, rect)| rect),
-            signals: self.signals,
-            autogen: constants::AUTOGEN,
+            signals: t.signals,
+            autogen: t.autogen,
             external: [u32::MAX; 4],
+            kernel: t.kernel,
+            options: [options, 0, 0, 0],
         };
         let clear = if resources.fresh {
             vec![LUMA, ACCUMULATION, LOCKS]
@@ -496,7 +538,14 @@ impl Tsr {
         };
         self.view.frame = Some(TsrFrame {
             constants,
+            path: if resources.fsr {
+                AccumulatePath::Fsr
+            } else {
+                AccumulatePath::Ara
+            },
             reproject: inputs.motion.is_none(),
+            shading_change,
+            luma_instability: t.luma_instability,
             clear,
             next: History {
                 valid: true,
@@ -534,6 +583,13 @@ impl Tsr {
             c.signal_inputs[3] = u32::MAX;
         }
         c.external[0] = bindings.reactive.unwrap_or(u32::MAX);
+        if c.signal_inputs[1] != u32::MAX
+            || c.signal_inputs[3] != u32::MAX
+            || c.external[0] != u32::MAX
+        {
+            c.options[0] |= constants::OPTION_MASKS;
+        }
+        c.options[1] = bindings.history.unwrap_or(0);
         gpu.upload_queued(resources.record, bytemuck::bytes_of(c))?;
         Ok(())
     }
@@ -549,9 +605,11 @@ impl Tsr {
         let (Some(frame), Some(resources)) = (&self.view.frame, &self.view.resources) else {
             anyhow::bail!("TSR declares a planned frame");
         };
-        let images: [ResourceId; IMAGES] = std::array::from_fn(|i| {
-            graph.import(Resource::Image(resources.images[i]), resources.states[i])
+        let ids: [Option<ResourceId>; IMAGES] = std::array::from_fn(|i| {
+            resources.images[i]
+                .map(|image| graph.import(Resource::Image(image), resources.states[i]))
         });
+        let image = |i: usize| ids[i].ok_or_else(|| anyhow::anyhow!("TSR image {i} is allocated"));
         let scratch = graph.import(Resource::Buffer(resources.scratch), resources.scratch_state);
         let constants = graph.import(
             Resource::Buffer(resources.record),
@@ -563,7 +621,11 @@ impl Tsr {
         let (read, write) = (Access::ShaderRead, Access::Storage);
         let mut stages: Vec<Stage> = Vec::new();
         if !frame.clear.is_empty() {
-            let mut uses: Vec<_> = frame.clear.iter().map(|&i| (images[i], write)).collect();
+            let mut uses = frame
+                .clear
+                .iter()
+                .map(|&i| Ok((image(i)?, write)))
+                .collect::<Result<Vec<_>>>()?;
             uses.push((scratch, write));
             stages.push(("TSR.Clear", TsrPass::Clear, uses));
         }
@@ -572,83 +634,81 @@ impl Tsr {
             (io.depth, read),
             (io.ids, read),
             (scratch, write),
-            (images[INTERMEDIATE], write),
-            (images[LUMA], write),
+            (image(LUMA)?, write),
+            (image(PYRAMID)?, write),
+            (image(PREPARED)?, write),
         ];
         prepare.extend(io.motion.map(|motion| (motion, read)));
         prepare.extend(io.signals.iter().map(|&signal| (signal, read)));
-        stages.extend([
-            ("TSR.PrepareInputs", TsrPass::PrepareInputs, prepare),
-            (
-                "TSR.LumaPyramid",
-                TsrPass::LumaPyramid,
-                vec![
-                    (images[LUMA], read),
-                    (images[INTERMEDIATE], read),
-                    (images[PYRAMID], write),
-                ],
-            ),
-            (
+        stages.push(("TSR.PrepareInputs", TsrPass::PrepareInputs, prepare));
+        if frame.shading_change {
+            stages.push((
                 "TSR.ShadingChangePyramid",
                 TsrPass::ShadingChangePyramid,
                 vec![
-                    (images[LUMA], read),
+                    (image(LUMA)?, read),
                     (scratch, read),
-                    (images[PYRAMID], write),
+                    (image(PYRAMID)?, write),
                 ],
-            ),
-            (
-                "TSR.ShadingChange",
-                TsrPass::ShadingChange,
-                vec![(images[PYRAMID], read), (images[SHADING_CHANGE], write)],
-            ),
-            (
-                "TSR.PrepareReactivity",
-                TsrPass::PrepareReactivity,
-                vec![
-                    (scratch, read),
-                    (images[SHADING_CHANGE], read),
-                    (images[LUMA], read),
-                    (images[ACCUMULATION], write),
-                    (images[MASKS], write),
-                    (images[LOCKS], write),
-                ],
-            ),
-            (
+            ));
+        }
+        stages.push((
+            "TSR.PrepareReactivity",
+            TsrPass::PrepareReactivity,
+            vec![
+                (scratch, read),
+                (image(PYRAMID)?, read),
+                (image(LUMA)?, read),
+                (image(ACCUMULATION)?, write),
+                (image(MASKS)?, write),
+                (image(LOCKS)?, write),
+            ],
+        ));
+        if frame.luma_instability {
+            stages.push((
                 "TSR.LumaInstability",
                 TsrPass::LumaInstability,
                 vec![
-                    (scratch, write),
-                    (images[MASKS], read),
-                    (images[LUMA], read),
-                    (images[PYRAMID], read),
-                    (images[LUMA_HISTORY], write),
-                    (images[INTERMEDIATE], write),
-                ],
-            ),
-            (
-                "TSR.Accumulate",
-                TsrPass::Accumulate,
-                vec![
                     (scratch, read),
-                    (images[INTERMEDIATE], read),
-                    (images[PYRAMID], read),
-                    (images[MASKS], read),
-                    (io.colour, read),
-                    (images[UPSCALED], write),
-                    (images[LOCKS], write),
+                    (image(MASKS)?, read),
+                    (image(LUMA)?, read),
+                    (image(PYRAMID)?, read),
+                    (image(LUMA_HISTORY)?, write),
+                    (image(INTERMEDIATE)?, write),
                 ],
-            ),
-            (
-                "TSR.Rcas",
-                TsrPass::Rcas,
-                vec![
-                    (images[UPSCALED], read),
-                    (io.depth, read),
-                    (io.output, write),
-                ],
-            ),
-        ]);
+            ));
+        }
+        // Accumulate also clears the reconstructed depth (scratch).
+        let mut accumulate = vec![
+            (scratch, write),
+            (image(PYRAMID)?, read),
+            (image(MASKS)?, read),
+            (image(PREPARED)?, read),
+            (image(LOCKS)?, write),
+        ];
+        if frame.luma_instability {
+            accumulate.push((image(INTERMEDIATE)?, read));
+        }
+        match frame.path {
+            AccumulatePath::Ara => {
+                accumulate.push((io.output, write));
+                accumulate.extend(io.history.map(|history| (history, read)));
+                stages.push(("TSR.Accumulate", TsrPass::Accumulate, accumulate));
+            }
+            AccumulatePath::Fsr => {
+                accumulate.push((image(UPSCALED)?, write));
+                stages.push(("TSR.Accumulate", TsrPass::Accumulate, accumulate));
+                stages.push((
+                    "TSR.Rcas",
+                    TsrPass::Rcas,
+                    vec![
+                        (image(UPSCALED)?, read),
+                        (io.depth, read),
+                        (io.output, write),
+                    ],
+                ));
+            }
+        }
         let passes = stages
             .into_iter()
             .map(|(name, pass, uses)| {
@@ -663,7 +723,13 @@ impl Tsr {
                 (id, pass)
             })
             .collect();
-        Ok((TsrIds { images, scratch }, passes))
+        Ok((
+            TsrIds {
+                images: ids,
+                scratch,
+            },
+            passes,
+        ))
     }
 
     /// Records one declared dispatch.
@@ -686,13 +752,13 @@ impl Tsr {
                     recorder.push(Command::Constants(RootConstants { words }));
                     recorder.push(Command::Dispatch(groups([width, height], 8)));
                 }
-                // The reconstructed previous depth (scratch region 4): 64 words a
+                // The reconstructed previous depth (scratch region 3): 64 words a
                 // group, rows of 1024 groups.
                 let pixels = render[0] * render[1];
                 let rows = pixels.div_ceil(64).div_ceil(1024);
                 let mut words = [0; 8];
                 (words[1], words[2], words[3], words[5], words[6]) =
-                    (resources.scratch_index, pixels, 1024, 1, pixels * 4);
+                    (resources.scratch_index, pixels, 1024, 1, pixels * 3);
                 recorder.push(Command::Constants(RootConstants { words }));
                 recorder.push(Command::Dispatch([1024, rows, 1]));
                 return;
@@ -701,11 +767,12 @@ impl Tsr {
                 (p.prepare_inputs_reproject, groups(render, 8))
             }
             TsrPass::PrepareInputs => (p.prepare_inputs, groups(render, 8)),
-            TsrPass::LumaPyramid => (p.luma_pyramid, groups(render, 64)),
             TsrPass::ShadingChangePyramid => (p.shading_change_pyramid, groups(render, 64)),
-            TsrPass::ShadingChange => (p.shading_change, groups(half(render), 8)),
             TsrPass::PrepareReactivity => (p.prepare_reactivity, groups(render, 8)),
             TsrPass::LumaInstability => (p.luma_instability, groups(render, 8)),
+            TsrPass::Accumulate if frame.path == AccumulatePath::Fsr => {
+                (p.accumulate_fsr, groups(display, 8))
+            }
             TsrPass::Accumulate => (p.accumulate, groups(display, 8)),
             TsrPass::Rcas => (p.rcas, groups(display, 16)),
         };
@@ -721,7 +788,9 @@ impl Tsr {
     pub(crate) fn complete(&mut self, ids: &TsrIds, final_states: &[State]) {
         if let Some(resources) = &mut self.view.resources {
             for (state, id) in resources.states.iter_mut().zip(&ids.images) {
-                *state = final_states[id.0];
+                if let Some(id) = id {
+                    *state = final_states[id.0];
+                }
             }
             resources.scratch_state = final_states[ids.scratch.0];
             resources.fresh = false;
@@ -735,7 +804,8 @@ impl Tsr {
 /// A declared pass: its name, dispatch and resource uses.
 type Stage = (&'static str, TsrPass, Vec<(ResourceId, Access)>);
 
-/// The cooked TSR pipelines, loaded with the renderer's content key (a mixed cohort is rejected, as for every renderer pipeline).
+/// The cooked TSR pipelines, loaded with the renderer's content key (a mixed cohort
+/// is rejected, as for every renderer pipeline).
 fn load_pipelines(gpu: &mut GpuDevice, artifacts: &Path, content_key: &str) -> Result<Pipelines> {
     let mut load = |name: &str| -> Result<Pipeline> {
         let cooked: ara_gpu::cooked::CookedPipeline =
@@ -746,61 +816,45 @@ fn load_pipelines(gpu: &mut GpuDevice, artifacts: &Path, content_key: &str) -> R
         );
         Ok(gpu.create_pipeline(&cooked, artifacts)?)
     };
-    let [
-        prepare_inputs,
-        prepare_inputs_reproject,
-        luma_pyramid,
-        shading_change_pyramid,
-        shading_change,
-        prepare_reactivity,
-        luma_instability,
-        accumulate,
-        rcas,
-        clear,
-    ] = [
-        load("tsr_prepare_inputs")?,
-        load("tsr_prepare_inputs_reproject")?,
-        load("tsr_luma_pyramid")?,
-        load("tsr_shading_change_pyramid")?,
-        load("tsr_shading_change")?,
-        load("tsr_prepare_reactivity")?,
-        load("tsr_luma_instability")?,
-        load("tsr_accumulate")?,
-        load("tsr_rcas")?,
-        load("tsr_clear")?,
-    ];
     Ok(Pipelines {
-        prepare_inputs,
-        prepare_inputs_reproject,
-        luma_pyramid,
-        shading_change_pyramid,
-        shading_change,
-        prepare_reactivity,
-        luma_instability,
-        accumulate,
-        rcas,
-        clear,
+        prepare_inputs: load("tsr_prepare_inputs")?,
+        prepare_inputs_reproject: load("tsr_prepare_inputs_reproject")?,
+        shading_change_pyramid: load("tsr_shading_change_pyramid")?,
+        prepare_reactivity: load("tsr_prepare_reactivity")?,
+        luma_instability: load("tsr_luma_instability")?,
+        accumulate: load("tsr_accumulate")?,
+        accumulate_fsr: load("tsr_accumulate_fsr")?,
+        rcas: load("tsr_rcas")?,
+        clear: load("tsr_clear")?,
     })
 }
 
-/// Allocates the images and scratch buffer for `render` and `display`.
-fn allocate(gpu: &mut GpuDevice, render: [u32; 2], display: [u32; 2]) -> Result<Resources> {
-    let created = (0..IMAGES)
-        .map(|i| -> Result<(Image, u32, u32)> {
-            let (format, [width, height]) = image_desc(i, render, display);
-            let image = gpu.create_image(
-                width,
-                height,
-                format,
-                vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::STORAGE,
-            )?;
-            let sampled = gpu.sampled_image(image, false)?.index;
-            Ok((image, sampled, gpu.storage_image(image)?.index))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    let images = std::array::from_fn(|i| created[i].0);
-    let sampled = std::array::from_fn(|i| created[i].1);
-    let storage = std::array::from_fn(|i| created[i].2);
+/// Allocates the images (the upscaled pair only for FSR's path), scratch buffer
+/// and record for `render` and `display`.
+fn allocate(
+    gpu: &mut GpuDevice,
+    render: [u32; 2],
+    display: [u32; 2],
+    fsr: bool,
+) -> Result<Resources> {
+    let mut images = [None; IMAGES];
+    let mut sampled = [0; IMAGES];
+    let mut storage = [0; IMAGES];
+    for (i, slot) in images.iter_mut().enumerate() {
+        if i == UPSCALED && !fsr {
+            continue;
+        }
+        let (format, [width, height]) = image_desc(i, render, display);
+        let image = gpu.create_image(
+            width,
+            height,
+            format,
+            vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::STORAGE,
+        )?;
+        *slot = Some(image);
+        sampled[i] = gpu.sampled_image(image, false)?.index;
+        storage[i] = gpu.storage_image(image)?.index;
+    }
     let pixels = u64::from(render[0]) * u64::from(render[1]);
     let scratch = gpu.create_buffer(
         pixels * SCRATCH_WORDS * 4,
@@ -821,6 +875,7 @@ fn allocate(gpu: &mut GpuDevice, render: [u32; 2], display: [u32; 2]) -> Result<
     Ok(Resources {
         render,
         display,
+        fsr,
         images,
         sampled,
         storage,
@@ -836,7 +891,7 @@ fn allocate(gpu: &mut GpuDevice, render: [u32; 2], display: [u32; 2]) -> Result<
 
 /// Retires replaced or released storage after its last use.
 fn retire(gpu: &mut GpuDevice, resources: Resources) -> Result<()> {
-    for image in resources.images {
+    for image in resources.images.into_iter().flatten() {
         gpu.retire(Resource::Image(image))?;
     }
     gpu.retire(Resource::Buffer(resources.scratch))?;

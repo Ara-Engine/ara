@@ -917,6 +917,20 @@
       "vertex_stride": 0
     }
   },
+  "tsr_accumulate_fsr": {
+    "entries": {
+      "tsrAccumulateFsrMain": "compute"
+    },
+    "source": "tsr/accumulate-fsr.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "tsr_clear": {
     "entries": {
       "tsrClearMain": "compute"
@@ -936,20 +950,6 @@
       "tsrLumaInstabilityMain": "compute"
     },
     "source": "tsr/luma-instability.slang",
-    "state": {
-      "blend": false,
-      "color_formats": [],
-      "depth_format": null,
-      "depth_test": false,
-      "depth_write": false,
-      "vertex_stride": 0
-    }
-  },
-  "tsr_luma_pyramid": {
-    "entries": {
-      "tsrLumaPyramidMain": "compute"
-    },
-    "source": "tsr/luma-pyramid.slang",
     "state": {
       "blend": false,
       "color_formats": [],
@@ -1006,20 +1006,6 @@
       "tsrRcasMain": "compute"
     },
     "source": "tsr/rcas.slang",
-    "state": {
-      "blend": false,
-      "color_formats": [],
-      "depth_format": null,
-      "depth_test": false,
-      "depth_write": false,
-      "vertex_stride": 0
-    }
-  },
-  "tsr_shading_change": {
-    "entries": {
-      "tsrShadingChangeMain": "compute"
-    },
-    "source": "tsr/shading-change.slang",
     "state": {
       "blend": false,
       "color_formats": [],

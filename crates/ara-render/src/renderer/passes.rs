@@ -1007,6 +1007,8 @@ impl Renderer {
             }
             if tsr {
                 let dof = self.look.frame_dof;
+                // TSR's Ara path accumulates into the renderer's history pair.
+                let history = self.targets.history.filter(|_| self.tsr.reads_history());
                 self.tsr.upload(
                     &mut self.gpu,
                     &crate::tsr::Bindings {
@@ -1017,6 +1019,7 @@ impl Renderer {
                         },
                         composited: self.targets.sampled[HDR],
                         output: self.targets.storage[output_history - HISTORY0],
+                        history: history.map(|h| self.targets.sampled[h]),
                         reactive: None,
                         opaque: true,
                         reflections: reflected,
@@ -1037,6 +1040,7 @@ impl Renderer {
                     depth: ids[DEPTH],
                     motion: self.native.as_ref().map(|_| ids[MOTION]),
                     output: ids[output_history],
+                    history: history.map(|h| ids[h]),
                     exposure: look.state,
                     ids: ids[ID],
                     signals,
@@ -1774,11 +1778,15 @@ impl Renderer {
                 (depth, Access::ShaderRead),
                 (import(&mut graph, slot), Access::Storage),
             ];
-            // TSR keeps its own histories.
-            if let Some(history) = self.targets.history.filter(|_| !tsr) {
-                uses.push((import(&mut graph, history), Access::ShaderRead));
-            }
-            (slot, uses)
+            // TAAU and TSR's Ara path read last frame's history; FSR's keeps its own.
+            let reads = !tsr || self.tsr.reads_history();
+            let history = self
+                .targets
+                .history
+                .filter(|_| reads)
+                .map(|history| (history, import(&mut graph, history)));
+            uses.extend(history.map(|(_, id)| (id, Access::ShaderRead)));
+            (slot, uses, history)
         });
         let look = self.look.import(&mut graph);
         let frame = graph.import(
@@ -1801,14 +1809,15 @@ impl Renderer {
         };
         let (mut tsr_chain, mut tsr_passes) = (None, Vec::new());
         let resolved = match resolve {
-            Some((slot, uses)) => {
+            Some((slot, uses, history)) => {
                 let slot_id = imported
                     .iter()
                     .find(|(target, _)| *target == slot)
                     .map(|(_, id)| *id)
                     .expect("the resolve imported its history slot");
-                // With Ara TSR the resolve is its chain; the last pass (RCAS) writes
-                // the slot. Its passes are recorded before the TemporalResolve arm.
+                // With Ara TSR the resolve is its chain; the last pass (accumulate,
+                // or RCAS on FSR's path) writes the slot. Its passes are recorded
+                // before the TemporalResolve arm.
                 let id = if tsr {
                     // As planned by render_frame; the opaque copy is that graph's.
                     let reflected =
@@ -1823,6 +1832,7 @@ impl Renderer {
                             },
                             composited: sampled,
                             output: self.targets.storage[slot - HISTORY0],
+                            history: history.map(|(h, _)| self.targets.sampled[h]),
                             reactive: reactive.map(|(_, index)| index),
                             opaque: false,
                             reflections: reflected,
@@ -1843,6 +1853,7 @@ impl Renderer {
                         depth,
                         motion: motion.filter(|_| self.native.is_some()),
                         output: slot_id,
+                        history: history.map(|(_, id)| id),
                         exposure: look.state,
                         ids: entity_ids.ok_or_else(|| anyhow::anyhow!("TSR imports entity IDs"))?,
                         signals,
