@@ -58,6 +58,26 @@ impl Options {
     }
 }
 
+/// UI/swapchain borrowers retire before either creating renderer, including errors.
+struct Presentation {
+    window: Option<crate::device::Windowed>,
+    presenter2d: Presenter2d,
+    presenter: Presenter,
+}
+
+impl Drop for Presentation {
+    fn drop(&mut self) {
+        if let Some(window) = &mut self.window {
+            if let Err(error) = window.shutdown(&self.presenter) {
+                eprintln!("ara-player: retire 3D presentation: {error}");
+            }
+            if let Err(error) = window.shutdown_2d(&self.presenter2d) {
+                eprintln!("ara-player: retire 2D presentation: {error}");
+            }
+        }
+    }
+}
+
 pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     let mut perf = perf::Window::new(args.standalone.perf, args.standalone.offscreen, began);
     perf.configure_presentation(args.standalone.no_present, args.standalone.windowed);
@@ -122,7 +142,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
         ray_tracing: args.ray_tracing.unwrap_or(scene.rendering.ray_tracing),
     };
     let scene = Arc::new(scene);
-    let (mut world, build_ms, mut window, mut presenter) = if args.standalone.headless {
+    let (mut world, build_ms, window, presenter) = if args.standalone.headless {
         let (world, build_ms) = World::build_packed(&scene, source, false)?;
         (
             world,
@@ -162,10 +182,20 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             loaded.presenter,
         )
     };
+    // Keep device borrowers inside the same owner on every return/unwind path.
+    let mut presentation = Presentation {
+        window,
+        presenter2d: Presenter2d::new(&args.gpu_cache),
+        presenter,
+    };
+    let (window, presenter, presenter2d) = (
+        &mut presentation.window,
+        &mut presentation.presenter,
+        &mut presentation.presenter2d,
+    );
     let started = world.start(args.standalone.headless, build_ms)?;
     phases.insert("world_ready_ms", began.elapsed().as_millis());
     let mut frame = RenderFrame::default();
-    let mut presenter2d = Presenter2d::new(&args.gpu_cache);
     presenter.set_quality(quality);
     presenter.set_render_options(render_options);
     phases
@@ -179,7 +209,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     if args.standalone.headless {
         world.runtime.step(args.standalone.ticks, &[])?;
         phases.insert("simulation_ready_ms", began.elapsed().as_millis());
-    } else if let Some(window) = &mut window {
+    } else if let Some(window) = window.as_mut() {
         let source = world.asset_source()?;
         let simulation = world.runtime.play_mut().session_mut().world_mut();
         let is_2d = ara_runtime_render::two_d::camera(simulation).is_some();
@@ -188,7 +218,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             "perf frame windows require the 3D presenter; a 2D pack cannot supply these GPU pass timings"
         );
         if is_2d {
-            window.shutdown(&presenter)?;
+            window.shutdown(&*presenter)?;
             presenter2d.set_atlases(ara_runtime_render::two_d::atlases(
                 simulation,
                 source.as_ref(),
@@ -205,7 +235,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
         let mut frames = 0;
         while args.standalone.frames.is_none_or(|limit| frames < limit) {
             ara_gpu::cpu_scope!("Player.standalone_frame");
-            if perf.control(&mut presenter)? {
+            if perf.control(&mut *presenter)? {
                 break;
             }
             let frame_start = Instant::now();
@@ -237,13 +267,13 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             if is_2d {
                 let tick = world.runtime.tick();
                 window.prepare_2d(
-                    &mut presenter2d,
+                    &mut *presenter2d,
                     world.runtime.play_mut().session_mut().world_mut(),
                     tick,
                 )?;
-                window.present_2d(&mut presenter2d)?;
+                window.present_2d(&mut *presenter2d)?;
             } else {
-                window.present(&mut presenter, &frame, || world.fidelity_content(&frame))?;
+                window.present(&mut *presenter, &frame, || world.fidelity_content(&frame))?;
             }
             let presentation_done = Instant::now();
             if let Some((audio, device)) = &mut audio {
@@ -297,8 +327,8 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             }
             if perf.enabled() {
                 let camera = frame.camera.map(|camera| json!({"position":camera.position,"forward":camera.forward,"fov":camera.fov}));
-                let measurement = perf.frame(
-                    &presenter,
+                let stop = perf.frame(
+                    &*presenter,
                     &phases,
                     json!(camera),
                     perf::CpuFrame {
@@ -322,22 +352,13 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
                         total_ms: frame_start.elapsed().as_secs_f64() * 1000.,
                         first_presented: frames == 1 && !args.standalone.no_present,
                     },
-                );
-                // A failed readiness window still owns a live swapchain. Retire
-                // it before the renderer/device leave scope on the error path.
-                let stop = match measurement {
-                    Ok(stop) => stop,
-                    Err(problem) => {
-                        window.shutdown(&presenter)?;
-                        return Err(problem);
-                    }
-                };
+                )?;
                 if stop {
                     break;
                 }
             }
         }
-        window.shutdown(&presenter)?;
+        window.shutdown(&*presenter)?;
         perf.finish()?;
     }
     let capture = args
@@ -353,8 +374,8 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
                 marks: 0,
                 presented: true,
             },
-            Some(&mut presenter),
-            Some(&mut presenter2d),
+            Some(&mut *presenter),
+            Some(&mut *presenter2d),
             &mut frame,
         )?)
     } else {

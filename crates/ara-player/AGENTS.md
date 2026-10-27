@@ -1,5 +1,4 @@
 # ara-player
-
 Standalone games and S5 Play. Owners authenticate single-use players with `ARA_PLAY_TOKEN`, assign a snapshot on `play.start`, and exit on `play.stop`.
 `--game --project samples/outpost` opens native menus; exported UI games do so on ordinary launches.
 `--dedicated --headless` hosts four clients; `--connect IP:PORT` joins. `--bot --evidence DIR` drives headless bots and writes scratch evidence.
@@ -38,6 +37,7 @@ presenter before hello and reuse its device at embed; surface-less services allo
 - `world/feedback.rs`: replicated event counters become audio, VFX and animation.
 - `packed.rs` and `standalone.rs`: the authored exported world and immutable pack source;
   ara-pack's bounded `native-decode` is linked into this player and its runtime templates.
+- `standalone.rs`: its presentation owner retires UI/swapchains before the devices on normal, error and unwind paths.
 - `standalone/startup.rs`: shaderless progress (`device/loading.rs`, 225 KiB image + staging) precedes runtime/presenter/content workers. Real content, PSOs, uploads, effects and the initial GI volume/staging clear finish behind it; the surface bake can arrive later without allocation.
   Startup JSON separates loading/runtime/presenter timings, `content_warmup_ms`/`content_ready_ms`, and `full_scene_frame_ms`; loading hands its existing device/swapchain to the game.
 - `main.rs`: pool lifecycle, the loop (link polling, host-time ticking with bounded
