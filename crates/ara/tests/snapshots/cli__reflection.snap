@@ -4554,6 +4554,23 @@ expression: out
         }
       }
     },
+    "MixerBusSetParams": {
+      "kind": "params",
+      "doc": "Creates or replaces a complete mixer category.",
+      "module": "audio",
+      "fields": {
+        "id": {
+          "type": "string",
+          "doc": "Stable bus record ID or a new batch symbol.",
+          "required": true
+        },
+        "bus": {
+          "type": "AudioBus",
+          "doc": "Typed bus data, with reflected defaults for omitted fields.",
+          "required": true
+        }
+      }
+    },
     "ModelColliderMode": {
       "kind": "enum",
       "doc": "Geometry used by a model-derived collider.",
@@ -4808,6 +4825,11 @@ expression: out
           "default": 0,
           "unit": "dB",
           "range": [-96, 24]
+        },
+        "looping": {
+          "type": "bool",
+          "doc": "Repeat a short ambience/tension loop until its segment ends.",
+          "default": false
         }
       }
     },
@@ -9591,6 +9613,25 @@ expression: out
       "examples": [
         {
           "text": "material Demo : unlit budget 1 { let color : ColorLinear = linear(1, 1, 1); output color = color; }"
+        }
+      ]
+    },
+    "mixer.bus.set": {
+      "kind": "command",
+      "summary": "Create or replace a typed mixer bus (master, music, sfx).",
+      "params": "MixerBusSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "id": "b_music",
+          "bus": {
+            "name": "music",
+            "output": "master"
+          }
         }
       ]
     },

@@ -21,6 +21,8 @@ Contains no native code or Jolt dependency. `ara-physics-jolt` implements its ba
 - `PhysicsCommands` queues typed runtime intents by stable identity. These are gameplay
   intents, not authoring edits. Authoring still goes through ara-ops transactions.
 - `snapshot_ecs::<B>` / `restore_ecs::<B>` are trusted checkpoint companions.
+  Exact optional ECS mirrors survive restore, including absent tick-zero support
+  and original pose bits; native extraction must not change the next gameplay input.
 - `body_for_id` / `id_for_body` resolve transient bodies and stable identities.
 - Contact effects retain stable application identities after bodies are removed.
 - `PhysicsStatus` holds a sticky schedule fault; the host pauses only that session.

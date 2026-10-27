@@ -104,6 +104,7 @@ fn check(size: [u32; 2]) -> Result<()> {
 
 /// An embedded player's shared ring, pacing, input and frame statistics.
 pub struct Embedded {
+    pub(crate) game_ui: Option<crate::game_ui::Surface>,
     ring: ExportRing,
     interval: Duration,
     last: Option<Instant>,
@@ -152,6 +153,7 @@ impl Embedded {
         let fps = params.max_fps.unwrap_or(60).clamp(1, 1000);
         Ok((
             Self {
+                game_ui: None,
                 ring,
                 interval: Duration::from_secs_f64(1.0 / f64::from(fps)),
                 last: None,
@@ -254,17 +256,19 @@ impl Embedded {
         let rendered_at_us = now_us();
         let copy = Instant::now();
         let renderer = presenter.renderer().context("renderer missing")?;
-        let source = renderer.gpu().native_image(
+        let mut size = presenter.output_size();
+        let mut source = renderer.gpu().native_image(
             presenter
                 .output()
                 .context("completed presentation missing")?,
         )?;
+        if let Some(ui) = &mut self.game_ui {
+            (source, size) = ui.render(presenter)?;
+        }
         // SAFETY: The presenter completed this RGBA8 CopySource image at output_size
         // on the ring's device; this thread owns its queues.
-        let Some(published) = (unsafe {
-            self.ring
-                .publish_scaled(source, presenter.output_size(), frame.tick)?
-        }) else {
+        let Some(published) = (unsafe { self.ring.publish_scaled(source, size, frame.tick)? })
+        else {
             return Ok(None);
         };
         let publish_us = copy.elapsed().as_micros() as u64;

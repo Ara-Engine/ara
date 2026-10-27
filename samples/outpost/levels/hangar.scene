@@ -1,6 +1,9 @@
 {
   "$schema": "ara://schema/scene/1",
   "id": "sc_hangar1",
+  "versions": {
+    "PostProcessVolume": 2
+  },
   "records": {
     "e_bench0": {
       "name": "Workbench",
@@ -301,11 +304,35 @@
         "albedo": [0.85, 0.82, 0.78, 1],
         "anisotropy": 0.6
       },
-      "PostProcess": {
-        "compensation": -0.5,
-        "minEv100": 2,
-        "maxEv100": 8,
-        "bloom": 0.06
+      "PostProcessVolume": {
+        "overrides": [
+          {
+            "exposure": "auto",
+            "ev100": 10,
+            "compensation": -0.5,
+            "minEv100": 2,
+            "maxEv100": 8,
+            "adaptationSpeed": 2
+          },
+          {
+            "module": "toneMapping",
+            "toneMapping": "filmic"
+          },
+          {
+            "module": "bloom",
+            "bloom": 0.06
+          },
+          {
+            "module": "colorGrading",
+            "whiteBalance": 6500,
+            "saturation": 1,
+            "contrast": 1
+          },
+          {
+            "module": "vignette",
+            "vignette": 0
+          }
+        ]
       }
     },
     "e_festoon": {

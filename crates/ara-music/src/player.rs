@@ -148,6 +148,7 @@ impl MusicPlayer {
                 at_frame: at,
                 spatial: false,
                 priority: 250,
+                looping: stem.looping,
                 parameters: Self::parameters(if fade_in > 0 { 0.0 } else { gain }),
                 ..Playback::default()
             };

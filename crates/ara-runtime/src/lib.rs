@@ -754,7 +754,7 @@ impl Runtime {
             adapter,
             plugins: &mut self.plugins,
         };
-        let record = self.play.session_mut().step_with_adapter(&mut adapter)?;
+        let record = self.play.step_with_adapter(&mut adapter)?;
         self.pending = None;
         if let Some(error) = self.fault() {
             return Err(RuntimeError(error));

@@ -370,6 +370,17 @@ fn apply_writes(scripts: &Scripts, world: &mut World) {
 /// and names the entities they spawned.
 fn run_scripts(world: &mut World) {
     let context = world.resource::<SimContext>();
+    let actions = context
+        .actions()
+        .map(|(player, name, value)| {
+            let axes = match value {
+                ara_input::ActionValue::Button(value) => [f32::from(u8::from(value)), 0.0],
+                ara_input::ActionValue::Axis(value) => [value, 0.0],
+                ara_input::ActionValue::Axis2(value) => value,
+            };
+            ((player.0, name.to_owned()), axes)
+        })
+        .collect();
     let tick = Tick {
         frame: context.tick(),
         seed: context.seed(),
@@ -377,11 +388,48 @@ fn run_scripts(world: &mut World) {
         dt: context.dt() as f32,
         reserved: 0,
     };
+    let players = world
+        .query::<(Entity, &ara_runtime::components::PlayerControl)>()
+        .iter(world)
+        .map(|(e, c)| (e.to_bits(), c.player))
+        .collect();
+    world.insert_resource(ara_script::ScriptInputs { actions, players });
+    world.init_resource::<ara_script::ScriptNavigation>();
+    world.init_resource::<ara_script::ScriptControls>();
     world.resource_scope::<Scripts, _>(|world, mut scripts| {
         apply_writes(&scripts, world);
         scripts.host.run_tick(world, tick);
         identify_spawns(&scripts, world, &format!("e_cs{}x", tick.frame));
     });
+    let requests = std::mem::take(&mut world.resource_mut::<ara_script::ScriptNavigation>().0);
+    for (entity, target) in requests {
+        if let Some(entity) = Entity::try_from_bits(entity)
+            && let Some(mut state) = world.get_mut::<ara_nav::NavAgentState>(entity)
+            && state.target != target
+        {
+            state.set_target(target);
+        }
+    }
+    let controls = std::mem::take(&mut *world.resource_mut::<ara_script::ScriptControls>());
+    for handle in controls.stopped {
+        if let Some(entity) = Entity::try_from_bits(handle)
+            && let Some(mut input) = world.get_mut::<ara_physics::CharacterInput>(entity)
+        {
+            input.desired_velocity = [0.; 3];
+            input.jump_speed = 0.;
+        }
+    }
+    for (handle, name, value) in controls.animation {
+        if let Some(entity) = Entity::try_from_bits(handle)
+            && let Some(mut slot) = world.get_mut::<ara_runtime::animation::AnimatorSlot>(entity)
+            && let Some(parameter) = slot.program.controller.parameter(&name)
+            && let Err(error) = slot
+                .animator
+                .set(parameter, ara_anim::graph::ParameterValue::Bool(value))
+        {
+            slot.fault = Some(error.0);
+        }
+    }
 }
 
 /// Gives every entity C# spawned (no `Identity` yet) a stable one, `<prefix><n>`,
@@ -478,7 +526,12 @@ impl StateProvider for ScriptProvider {
         "scripts"
     }
     fn owned_types(&self) -> Vec<TypeId> {
-        vec![TypeId::of::<Scripts>()]
+        vec![
+            TypeId::of::<Scripts>(),
+            TypeId::of::<ara_script::ScriptInputs>(),
+            TypeId::of::<ara_script::ScriptNavigation>(),
+            TypeId::of::<ara_script::ScriptControls>(),
+        ]
     }
     fn owned_components(&self, world: &World) -> Vec<ComponentId> {
         world

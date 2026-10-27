@@ -60,7 +60,7 @@ pub struct HostStats {
     pub tick: u64,
     /// Ready remote clients.
     pub connections: usize,
-    /// Host creation until the first networked boundary (every client joined), in ms.
+    /// Host creation until the first networked boundary, in ms.
     pub begin_ms: Option<f64>,
     /// Replication payload offered by the field codecs, in bytes.
     pub payload_bytes: u64,
@@ -89,7 +89,7 @@ pub struct NetHost {
 impl NetHost {
     /// Wraps a freshly built world (tick 0, after [`avatars`], with [`NetPlugin`]):
     /// attaches motors, registers every player avatar with its owner and binds one
-    /// proxy per client. Simulation starts once every client is ready.
+    /// proxy per reserved client. Listen starts immediately; dedicated waits for its first client.
     pub fn new(mut runtime: Runtime, config: HostConfig) -> Result<Self> {
         let players = attach_motors(&mut runtime);
         let hz = runtime.hz();
@@ -117,7 +117,7 @@ impl NetHost {
                 },
                 local_owner: PlayerId(HOST_PLAYER),
                 max_clients: config.clients.len().max(1),
-                start_clients: config.clients.len(),
+                start_clients: usize::from(config.dedicated && !config.clients.is_empty()),
                 hz,
                 snapshot_hz: hz.min(30),
                 expected_addresses: expected,

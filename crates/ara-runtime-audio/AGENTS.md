@@ -27,6 +27,8 @@ Depends on ara-audio, ara-acoustics (physics, ecs), ara-audio-mix, ara-runtime.
   entities play a procedural audio graph (compiled once per graph document, one
   instance per entity seeded by its identity, spatialized by its `AudioSource`,
   parameters and trigger counts forwarded at the next control frame).
+- `set_music_intensity(entity, Some(value))`: presentation-only override for a
+  replicated gameplay binding; `None` resumes the authored MusicSource value.
 - `stream_cells(resident, assets)`: baked `AcousticCell` probes follow the world's
   resident cells (`Cell.acoustics`): decoded on a thread, installed at a later
   `update`; `wait_cells` blocks for offline captures.

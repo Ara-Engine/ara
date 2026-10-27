@@ -12,7 +12,7 @@ voice scheduled at an exact output frame, so live play and offline captures agre
 - `commands::register`: segment/transition/stinger upserts and music-wide settings
   through the shared CLI/MCP/editor registry, with ordinary transaction undo.
 - `SegmentDesc { name, bars, tempo: [TempoChange {bar, bpm, beatsPerBar}], stems:
-  [StemDesc {name, clip, intensity: [lo, hi], gainDb}], next: [NextDesc {segment,
+  [StemDesc {name, clip, intensity: [lo, hi], gainDb, looping}], next: [NextDesc {segment,
   weight}], loudness }`; `TransitionDesc { from ("" any), to, sync, fade, bridge }`;
   `StingerDesc { name, clip, sync, gainDb }`; `MusicSettings { initial, intensity,
   layerFade, seed }`; `MusicSync::{Bar, Beat, End, Immediate}`.
@@ -23,6 +23,8 @@ voice scheduled at an exact output frame, so live play and offline captures agre
   → landing frame, `stinger(name)` → start frame, `set_intensity(x)`, `stop`,
   `position(frame)`, `history()` (scheduled segment starts).
 - `StemLoader`: prepares resident or streamed voices for clip references.
+- `StemDesc.looping` repeats a short ambience or tension layer until the segment boundary;
+  the default stays one-shot for authored musical phrases.
 - `measure_mix_loudness(&[(&Clip, gain)])`: cook-time loudness of a segment's full mix;
   store it in `SegmentDesc::loudness` so a -16 LUFS bus trims all stems equally.
 

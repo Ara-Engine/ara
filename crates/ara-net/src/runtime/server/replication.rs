@@ -17,11 +17,6 @@ fn refresh_inner<F: SimulationFeature>(
     policies: &PolicyRegistry,
 ) -> Result<()> {
     let feature = F::State::describe().name;
-    let components: Vec<_> = policies
-        .schema()
-        .components()
-        .map(|c| c.name.clone())
-        .collect();
     let live: BTreeMap<_, _> = state
         .session
         .session()
@@ -91,8 +86,8 @@ fn refresh_inner<F: SimulationFeature>(
             .expect("actor lifetime inserted");
         let mut public = Projection::default();
         let mut private = Projection::default();
-        for name in &components {
-            if name == &feature {
+        for name in policies.replicated_components() {
+            if name == feature {
                 continue;
             }
             if let Some(value) = state.session.component_at(source, name)? {

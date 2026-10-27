@@ -292,6 +292,20 @@ abi_table! {
         /// Read returns the UTF-8 byte count, negative required capacity, or zero if absent.
         /// Write returns 1 on success, 0 on failure. Spans are borrowed only for this call.
         fn component_json(ctx: *mut c_void, entity: u64, component: u32, op: u32, data: *const u8, len: u32, out: *mut u8, cap: u32) -> i32;
+        /// Copies entity handles carrying a component in ascending handle order. Returns
+        /// the required count; writes nothing when cap is too small. Exclusive phases only.
+        fn query_entities(ctx: *mut c_void, component: u32, out: *mut u64, cap: u32) -> u32;
+        /// Reads a fixed-tick action axis (button = axis 0). Missing actions are zero.
+        /// Exclusive phases only; the embedding runtime publishes the tick's input snapshot.
+        fn input_axis(ctx: *mut c_void, player: u64, name: *const u8, len: u32, axis: u32) -> f32;
+        /// Authored input owner for an entity, or zero. Exclusive gameplay phases only.
+        fn input_player(ctx: *mut c_void, entity: u64) -> u64;
+        /// Queues a navmesh destination after the exclusive gameplay phase; enabled=0 stops.
+        fn navigate(ctx: *mut c_void, entity: u64, x: f32, y: f32, z: f32, enabled: u32);
+        /// Suppresses locomotion during this fixed tick (downed actors or completed runs).
+        fn character_stop(ctx: *mut c_void, entity: u64);
+        /// Queues a named boolean animator parameter after exclusive gameplay callbacks.
+        fn animation_bool(ctx: *mut c_void, entity: u64, name: *const u8, len: u32, value: u32);
     }
 }
 

@@ -14,6 +14,11 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   `Frame`, `SystemCall`, `BehaviourCall`, `CommandCall`, `ReloadReport` (kind, escalation,
   origin, cascade size, per-phase µs), the `ABI_CONSTS` (`RELOAD_*`, `ESC_*`, `ORIGIN_*`) and
   `layout_hash(engine_layouts)`. Entry point: `ara_script_init(*const HostInit, *mut ScriptApi)`.
+- `ScriptInputs`, `ScriptNavigation`, `ScriptControls`: exclusive fixed-tick host
+  seams for sorted entity queries, replayable input, nav destinations, character
+  stops and boolean animator parameters, supplied/drained by the embedding runtime.
+  Every callback uses the active host context and its world resources.
+  HostApi: component_json precedes query/input/navigation/control callbacks; regenerate C# after edits.
 - `csgen`: Rust → C# (`csharp(db, engine)`, `write`, `stale`, `blittable_components`):
   `Abi.g.cs`, `Components.g.cs`, `Units.g.cs`, `Codes.g.cs`.
 - `ScriptHost` (per world; simultaneous hosts share one process-level CLR):
@@ -47,7 +52,6 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   types do not change the engine ABI. L3 column migration keeps engine storage intact.
 - `EngineBindings` + `bind_component!`, `run` (`RunPool`/`RunWorker`), `value`, `codes`
   (`ARA0900`–`ARA0999`), `register_tick_thread()`.
-
 ## Reload levels (A13, R10 D1)
 
 - **L1** body edits of a hot module → EnC delta (no closures, state machines, constructors).
@@ -61,7 +65,6 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
 - **L4** `RELOAD_L4` + `ARA0926`: engine bindings (`Ara.Runtime.dll`) changed on disk, or a
   retired generation stays alive (`ARA0927`). The last good code keeps running; restarting
   the play process from a snapshot is the play process owner's job.
-
 ## How it fits together
 
 - C# registers each atomic reload through `HostApi::register_modules` (a JSON array, deps
@@ -82,7 +85,6 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
 - Every `ScriptApi` call carries `HostInit.ctx` as a host handle. C# owns per-host
   loaders, slots, pending queues, faults and type indexes; scoped thread bindings route
   callbacks (including compiler-reader threads). Shutdown removes only that handle.
-
 ## Integration (ara-runtime-script)
 
 - The runtime plugin (`crates/ara-runtime-script`) starts the host on the ara-sim world,
@@ -103,7 +105,6 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   RPC boundary (a hold inside the C# pending queue is not built).
 - Not yet: interleaving individual `ScriptSet`s with Rust systems (parallelism across
   them), `ara_run` through `run::RunPool` from the daemon.
-
 ## Testing
 
 - `cargo test -p ara-script` builds `dotnet/Ara.slnx` (Release) per test binary;
@@ -118,7 +119,6 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   share it through `support::clr_lock()`. `support::Live` writes inline modules and ticks.
 - Latency: `cargo run -p ara-script --release --example reload_bench [-- --edits 60 --verbose]`
   prints a p50/p95 phase table per level and the system CPU load during the run.
-
 ## Gotchas
 - One .NET runtime per process. `DOTNET_MODIFIABLE_ASSEMBLIES=debug` (EnC) is set before
   it starts; on non-Windows, start the host before other threads read the environment.

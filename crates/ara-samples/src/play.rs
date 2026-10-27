@@ -14,7 +14,7 @@ use std::{
 };
 
 /// An MCP client over `ara mcp`'s stdio.
-struct Mcp {
+pub(crate) struct Mcp {
     child: Child,
     input: ChildStdin,
     output: BufReader<ChildStdout>,
@@ -22,7 +22,7 @@ struct Mcp {
 }
 
 impl Mcp {
-    fn start(root: &Path) -> Result<Self> {
+    pub(crate) fn start(root: &Path) -> Result<Self> {
         let ara = tool("ara", "ARA_BIN")?;
         let log = std::fs::File::create(root.join(".scratch/ara-mcp.log"))?;
         let mut child = Command::new(ara)
@@ -79,7 +79,7 @@ impl Mcp {
     }
 
     /// Calls `ara_play` with `action`, failing on a tool error.
-    fn play(&mut self, action: &str, mut args: Value) -> Result<Value> {
+    pub(crate) fn play(&mut self, action: &str, mut args: Value) -> Result<Value> {
         args["action"] = json!(action);
         let result = self.request("tools/call", json!({"name": "ara_play", "arguments": args}))?;
         if result["isError"] == json!(true) {

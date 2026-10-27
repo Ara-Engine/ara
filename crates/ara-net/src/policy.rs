@@ -1,3 +1,4 @@
+mod compat;
 mod value;
 use crate::{NetError, Result};
 use ara_schema::{Audience, Interpolate, Replication, SchemaDb, Unit, ValueType};
@@ -62,6 +63,7 @@ struct Field {
 pub struct PolicyRegistry {
     schema: SchemaDb,
     fields: BTreeMap<FieldId, Field>,
+    replicated: std::collections::BTreeSet<String>,
     hash: [u8; 32],
 }
 impl PolicyRegistry {
@@ -70,14 +72,11 @@ impl PolicyRegistry {
         if let Some(d) = schema.verify().into_iter().find(|d| d.is_error()) {
             return Err(NetError(d.message));
         }
-        let hash = ara_sim::StateHash::of_bytes(
-            ara_json::to_canonical_string(&ara_json::sort_keys(&schema.reflection())).as_bytes(),
-        )
-        .0;
         let mut this = Self {
             schema,
             fields: BTreeMap::new(),
-            hash,
+            replicated: Default::default(),
+            hash: [0; 32],
         };
         let components: Vec<_> = this.schema.components().cloned().collect();
         for component in components {
@@ -92,6 +91,13 @@ impl PolicyRegistry {
                 )?;
             }
         }
+        this.replicated = this
+            .fields
+            .values()
+            .filter(|field| field.policy.audience != Audience::None)
+            .map(|field| field.component.to_owned())
+            .collect();
+        this.hash = this.compatibility_hash()?;
         Ok(this)
     }
     fn compile(
@@ -207,6 +213,10 @@ impl PolicyRegistry {
     pub fn hash(&self) -> [u8; 32] {
         self.hash
     }
+    /// Only these component columns can contribute fields to a recipient.
+    pub(crate) fn replicated_components(&self) -> impl Iterator<Item = &str> {
+        self.replicated.iter().map(String::as_str)
+    }
     /// Reflected schema used by this protocol.
     pub fn schema(&self) -> &SchemaDb {
         &self.schema
@@ -314,7 +324,16 @@ impl PolicyRegistry {
         }
         Ok(Projection(result))
     }
-    /// Decodes a scoped component, preserving absence of fields the recipient cannot see.
+    /// Whether this recipient received any fields of the component.
+    pub(crate) fn contains_component(&self, projection: &Projection, component: &str) -> bool {
+        projection.0.keys().any(|id| {
+            self.fields
+                .get(id)
+                .is_some_and(|field| field.component == component)
+        })
+    }
+
+    /// Decodes the received fields of one component.
     pub fn component(&self, projection: &Projection, component: &str) -> Result<Value> {
         let mut result = serde_json::Map::new();
         for (&id, wire) in &projection.0 {

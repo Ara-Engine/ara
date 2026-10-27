@@ -117,7 +117,10 @@ public static class Extract
         if (ctx.SemanticModel.GetDeclaredSymbol(ctx.Node) is not INamedTypeSymbol t || t.IsAbstract) return null;
         if (!DerivesFromBehaviour(t)) return null;
         // One model per type: only the first partial declaration produces it.
-        if (t.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() != ctx.Node) return null;
+        // The syntax provider visits declarations with a base list. A helper
+        // partial in another file may precede the declaration spelling Behaviour.
+        if (t.DeclaringSyntaxReferences.Select(r => r.GetSyntax())
+            .OfType<ClassDeclarationSyntax>().FirstOrDefault(n => n.BaseList is not null) != ctx.Node) return null;
         var diags = new List<DiagInfo>();
         var defs = new List<TypeDef>();
         var shell = ShellOf(t, diags);
@@ -140,7 +143,7 @@ public static class Extract
             props.Add(new PropModel(modifiers, p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), p.Name, p.GetMethod is not null, set, doc));
             members.Add(new Member(p.Name, p.Type, doc, p.GetAttributes(), p));
         }
-        var summary = Docs.Summary(t);
+        var summary = Docs.Summary(ctx.Node);
         defs.Add(new TypeDef(t.Name, Schema.StructJson(t, "component", members, defs, diags,
             doc: summary.Length > 0 ? summary : null)));
         return new BehaviourModel(shell ?? new Shell(null, default, "", ""), t.Name, props.ToEquatable(), defs.ToEquatable(), diags.ToEquatable());

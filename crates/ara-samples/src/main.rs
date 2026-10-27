@@ -15,6 +15,7 @@ mod capture;
 mod credits;
 mod editor;
 mod fetch;
+mod game;
 mod kit;
 mod lock;
 mod play;
@@ -32,6 +33,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Author Outpost's C# co-op game layer over its existing real-art scene.
+    Game,
     /// Pin a Poly Haven model, texture set or HDRI.
     AddPolyhaven {
         /// Poly Haven ID (`Barrel_01`).
@@ -175,6 +178,12 @@ fn main() -> Result<()> {
         }
     };
     match cli.command {
+        Command::Game => game::author(&build::Ctx::open(
+            &samples,
+            "outpost",
+            "Outpost",
+            read_lock()?,
+        )?)?,
         Command::AddPolyhaven {
             polyhaven,
             id,
@@ -255,7 +264,9 @@ fn main() -> Result<()> {
             let lock = read_lock()?;
             match project.as_str() {
                 "outpost" => {
-                    build::outpost::build(&build::Ctx::open(&samples, "outpost", "Outpost", lock)?)?
+                    let ctx = build::Ctx::open(&samples, "outpost", "Outpost", lock)?;
+                    build::outpost::build(&ctx)?;
+                    game::author(&ctx)?;
                 }
                 "showcase" => build::showcase::build(&build::Ctx::open(
                     &samples,

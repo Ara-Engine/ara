@@ -17,22 +17,32 @@ embed-resource.workspace = true
 anyhow = { workspace = true }
 ara-asset = { path = "../ara-asset" }
 ara-audio = { path = "../ara-audio" }
+ara-components.workspace = true
 ara-crash = { path = "../ara-crash" }
 ara-gpu = { path = "../ara-gpu" }
 ara-input = { path = "../ara-input" }
 ara-platform = { path = "../ara-platform" }
+ara-physics = { path = "../ara-physics" }
 ara-play = { path = "../ara-play" }
+ara-play-host = { path = "../ara-play-host" }
+ara-json.workspace = true
 ara-pack = { path = "../ara-pack", default-features = false, features = ["native-decode"] }
 ara-render = { path = "../ara-render" }
 ara-runtime = { path = "../ara-runtime" }
 ara-runtime-audio = { path = "../ara-runtime-audio" }
 ara-runtime-net = { path = "../ara-runtime-net" }
+ara-nav = { path = "../ara-nav" }
+ara-anim = { path = "../ara-anim" }
 ara-runtime-world = { path = "../ara-runtime-world" }
 ara-schema.workspace = true
 ara-runtime-render = { path = "../ara-runtime-render" }
 ara-runtime-script = { path = "../ara-runtime-script" }
 ara-sim = { path = "../ara-sim" }
 ara-doc.workspace = true
+ara-editor-gpu = { path = "../ara-editor-gpu" }
+ara-ui = { path = "../ara-ui" }
+ara-ui-text = { path = "../ara-ui-text" }
+ara-ui-render = { path = "../ara-ui-render" }
 ara-diag = { path = "../ara-diag" }
 clap = { workspace = true, features = ["derive"] }
 ciborium.workspace = true
@@ -48,10 +58,8 @@ windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_
 ara-host.workspace = true
 ara-import2d = { path = "../ara-import2d" }
 ara-importers = { path = "../ara-importers" }
-ara-json.workspace = true
 ara-mcp.workspace = true
 ara-ops.workspace = true
-ara-play-host = { path = "../ara-play-host" }
 
 [lints]
 workspace = true

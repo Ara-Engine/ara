@@ -8,7 +8,7 @@ targets and named mix states (combat, explore) with transition times.
 
 - `register(db)`: records `AudioBus` (`b_`), `AudioMixState` (`s_`),
   `AudioMixerSettings` (`m_`) and the `mixer` document kind (`.mixer`, `mx_` IDs).
-  Edits go through the generic record/property commands; no side-channel writes.
+  `commands::register` adds `mixer.bus.set`: typed bus upserts with invertible ops.
 - `BusDesc { name, output, gainDb, mute, voiceLimit, loudness, reverb, duck }`;
   `DuckDesc { by, thresholdDb, amountDb, attack, release }`;
   `MixStateDesc { name, buses: {bus: dB offset}, fade }`; `MixerSettings { initialState }`.

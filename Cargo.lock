@@ -600,9 +600,11 @@ name = "ara-audio-mix"
 version = "0.0.1-alpha"
 dependencies = [
  "ara-audio",
+ "ara-cmd",
  "ara-diag",
  "ara-doc",
  "ara-json",
+ "ara-ops",
  "ara-schema",
  "serde",
  "serde_json",
@@ -1453,6 +1455,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-components",
  "ara-doc",
+ "ara-schema",
  "ciborium",
  "serde",
  "serde_json",
@@ -1486,11 +1489,14 @@ name = "ara-player"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-anim",
  "ara-asset",
  "ara-audio",
+ "ara-components",
  "ara-crash",
  "ara-diag",
  "ara-doc",
+ "ara-editor-gpu",
  "ara-gpu",
  "ara-host",
  "ara-import2d",
@@ -1498,8 +1504,10 @@ dependencies = [
  "ara-input",
  "ara-json",
  "ara-mcp",
+ "ara-nav",
  "ara-ops",
  "ara-pack",
+ "ara-physics",
  "ara-platform",
  "ara-play",
  "ara-play-host",
@@ -1512,6 +1520,9 @@ dependencies = [
  "ara-runtime-world",
  "ara-schema",
  "ara-sim",
+ "ara-ui",
+ "ara-ui-render",
+ "ara-ui-text",
  "ciborium",
  "clap",
  "embed-resource",
@@ -1791,9 +1802,12 @@ dependencies = [
 name = "ara-runtime-script"
 version = "0.0.1-alpha"
 dependencies = [
+ "ara-anim",
  "ara-components",
  "ara-diag",
  "ara-input",
+ "ara-nav",
+ "ara-physics",
  "ara-runtime",
  "ara-schema",
  "ara-script",
@@ -1863,6 +1877,7 @@ dependencies = [
  "image",
  "serde",
  "serde_json",
+ "zip 2.6.1",
 ]
 
 [[package]]

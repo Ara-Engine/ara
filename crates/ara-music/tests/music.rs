@@ -58,6 +58,7 @@ fn stem(clip: &str, intensity: [f32; 2]) -> StemDesc {
         clip: Some(AssetRef(clip.into())),
         intensity,
         gain_db: 0.0,
+        looping: false,
     }
 }
 
@@ -301,6 +302,41 @@ fn intensity_fades_layers_in_and_out() {
         "{} vs {}",
         rms(tail),
         rms(&calm)
+    );
+}
+
+#[test]
+fn a_short_looping_tension_stem_can_fade_in_after_its_first_clip_ended() {
+    let tail_energy = |looping| {
+        let mut e = engine();
+        let mut clips = Clips::new();
+        clips.0.insert(
+            "@short".into(),
+            Clip::new(RATE, vec![Frame::new(0.2, 0.2); 480], 1 << 20).unwrap(),
+        );
+        let mut tension = stem("@short", [0.5, 1.0]);
+        tension.looping = looping;
+        let mut desc = layered();
+        desc.segments[0].stems = vec![tension];
+        let mut player = MusicPlayer::new(desc, BusId::MASTER, RATE);
+        player.start(&mut e, &mut clips, None, 0).unwrap();
+        let samples = run(&mut e, &mut player, &mut clips, 24_000, |e, p, _, now| {
+            if (4800..4928).contains(&now) {
+                p.set_intensity(e, 1.0).unwrap();
+            }
+        });
+        samples[samples.len() / 2..]
+            .iter()
+            .map(|sample| sample.abs())
+            .sum::<f32>()
+    };
+    assert!(
+        tail_energy(false) < 0.01,
+        "one-shot clips finish before the chase"
+    );
+    assert!(
+        tail_energy(true) > 100.,
+        "looping clips remain available for a later tension fade"
     );
 }
 

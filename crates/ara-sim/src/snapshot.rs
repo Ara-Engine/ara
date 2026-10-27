@@ -133,8 +133,15 @@ pub struct Replay {
     pub schema_hash: StateHash,
     /// Complete initial simulation checkpoint, including RNG and input holds.
     pub initial: Snapshot,
-    /// Applied input/command/authoring log with hashes after every tick.
+    /// Live checkpoint cadence; older replays require a hash after every tick.
+    #[serde(default = "default_hash_interval")]
+    pub hash_interval: std::num::NonZeroU32,
+    /// Every applied boundary, with periodic hashes and a mandatory final hash.
     pub ticks: Vec<TickRecord>,
+}
+
+fn default_hash_interval() -> std::num::NonZeroU32 {
+    std::num::NonZeroU32::MIN
 }
 
 impl Replay {
@@ -142,7 +149,7 @@ impl Replay {
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
         encode(self)
     }
-    /// Decodes a replay; PlayControl::replay verifies compatibility and every tick.
+    /// Decodes a replay; PlayControl::replay verifies compatibility and checkpoints.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         decode(bytes)
     }

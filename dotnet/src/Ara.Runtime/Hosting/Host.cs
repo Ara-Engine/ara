@@ -9,6 +9,58 @@ namespace Ara.Hosting;
 public static unsafe class Host
 {
     [ThreadStatic] static HostContext? t_context;
+    /// <summary>Copies sorted handles without exposing engine storage to managed code.</summary>
+    public static int QueryEntities(uint component, Span<Entity> entities)
+    {
+        var context = RequireExclusive();
+        fixed (Entity* p = entities)
+        {
+            var count = context.Init.Api.QueryEntities(context.Init.Ctx, component, (ulong*)p, (uint)entities.Length);
+            if (count > entities.Length) throw new ArgumentException($"Query needs {count} entity slots", nameof(entities));
+            return (int)count;
+        }
+    }
+
+    /// <summary>Samples an action from the current fixed tick, in exclusive gameplay callbacks.</summary>
+    public static float InputAxis(ulong player, string name, uint axis)
+    {
+        var context = RequireExclusive();
+        var count = Encoding.UTF8.GetByteCount(name);
+        if (count > 128) throw new ArgumentException("Action names are limited to 128 UTF-8 bytes", nameof(name));
+        Span<byte> bytes = stackalloc byte[count];
+        Encoding.UTF8.GetBytes(name, bytes);
+        fixed (byte* p = bytes) return context.Init.Api.InputAxis(context.Init.Ctx, player, p, (uint)count, axis);
+    }
+
+    /// <summary>The authored input owner of this entity, or zero.</summary>
+    public static ulong InputPlayer(Entity entity)
+    {
+        var context = RequireExclusive();
+        return context.Init.Api.InputPlayer(context.Init.Ctx, entity.Bits);
+    }
+
+    /// <summary>Queues a destination for the engine navmesh agent, after the gameplay callback.</summary>
+    public static void Navigate(Entity entity, System.Numerics.Vector3 target, bool enabled)
+    {
+        var context = RequireExclusive();
+        context.Init.Api.Navigate(context.Init.Ctx, entity.Bits, target.X, target.Y, target.Z, enabled ? 1u : 0u);
+    }
+    /// <summary>Suppresses this actor's movement and jump for the current fixed tick.</summary>
+    public static void CharacterStop(Entity entity)
+    {
+        var context = RequireExclusive();
+        context.Init.Api.CharacterStop(context.Init.Ctx, entity.Bits);
+    }
+    /// <summary>Queues a named boolean animator input at the fixed-tick boundary.</summary>
+    public static void AnimationBool(Entity entity, string name, bool value)
+    {
+        var context = RequireExclusive();
+        var count = Encoding.UTF8.GetByteCount(name);
+        if (count > 128) throw new ArgumentException("Animation names are limited to 128 UTF-8 bytes", nameof(name));
+        Span<byte> bytes = stackalloc byte[count];
+        Encoding.UTF8.GetBytes(name, bytes);
+        fixed (byte* p = bytes) context.Init.Api.AnimationBool(context.Init.Ctx, entity.Bits, p, (uint)count, value ? 1u : 0u);
+    }
     [ThreadStatic] static bool t_exclusive;
 
     static HostContext Current => t_context ?? throw new InvalidOperationException("no script host is active on this thread");

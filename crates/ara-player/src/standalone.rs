@@ -18,16 +18,16 @@ pub(super) struct Options {
     perf: perf::PerfOptions,
     /// Export folder containing ara-launch.json (defaults to the executable folder).
     #[arg(long)]
-    root: Option<PathBuf>,
+    pub(crate) root: Option<PathBuf>,
     /// Run the authored world and capture it without opening a window.
     #[arg(long)]
-    headless: bool,
+    pub(crate) headless: bool,
     /// Run continuous presentation on a hidden Vulkan window; perf mode implies this.
     #[arg(long, conflicts_with = "headless")]
     pub(super) offscreen: bool,
     /// Use a resizable game window instead of borderless desktop fullscreen.
     #[arg(long, conflicts_with = "headless")]
-    windowed: bool,
+    pub(crate) windowed: bool,
     /// Diagnose rendering without swapchain acquisition or presentation; always hidden.
     #[arg(long, requires = "perf_output", conflicts_with = "headless")]
     no_present: bool,
@@ -42,7 +42,7 @@ pub(super) struct Options {
     reads: Vec<String>,
     /// Exit a standalone window after this many frames (unlimited by default).
     #[arg(long)]
-    frames: Option<u32>,
+    pub(crate) frames: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -50,6 +50,12 @@ struct Launch {
     contract: String,
     pack: String,
     encryption_key_env: Option<String>,
+}
+
+impl Options {
+    pub(crate) fn opens_menu(&self) -> bool {
+        !self.headless && !self.offscreen && !self.perf.requested() && self.frames.is_none()
+    }
 }
 
 pub(super) fn run(args: Args, began: Instant) -> Result<()> {
@@ -222,6 +228,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             }
             previous = now;
             world.mark();
+            window.update_game_ui(world.ui.as_ref(), &world.runtime, world.runtime.player().0)?;
             {
                 ara_gpu::cpu_scope!("Player.extract");
                 world.runtime.extract(&mut frame);

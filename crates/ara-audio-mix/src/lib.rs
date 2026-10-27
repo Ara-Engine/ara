@@ -1,9 +1,11 @@
 //! Mixer documents for `ara-audio`: the bus (category) tree with base gains and mutes,
 //! room-reverb sends, sidechain ducking, per-category voice limits, loudness targets
 //! (-16 LUFS for music and dialogue) and named mix states (combat, explore) with
-//! transition times. Authoring edits use the generic `property.set`/record commands on
-//! the `mixer` document; `Mixer::build` applies a validated `MixerDesc` to an engine.
+//! transition times. Authoring uses typed `mixer.bus.set` commands producing ops;
+//! `Mixer::build` applies a validated `MixerDesc` to an engine.
 
+/// Typed mixer authoring through the engine command registry.
+pub mod commands;
 mod desc;
 mod runtime;
 
