@@ -146,3 +146,4 @@ are preview-only; its timeline drives `vfx_stream`. In Play the Animation page p
 `play.read <entity>.AnimatorState` (`AnimationLive`). Imports use `import.initialize`/`configure`.
 
 The full --verify-behaviours route includes extended imports and asset lifecycle checks; --verify-behaviours-core runs the other native stories independently and writes verification-scope.json. A core result does not establish asset acceptance.
+The monkey deliberately invalidates the Scene after attempted actions, including rejected inputs. Its phase timings describe this stress workload; they are not ordinary user latency measurements.

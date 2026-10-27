@@ -711,6 +711,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
             }
             if let Some(runner) = &mut monkey {
+                let monkey_at = Instant::now();
                 let changed = monkey_route::step(
                     runner,
                     &mut monkey_input,
@@ -726,6 +727,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     &scene_view,
                     &mut import_drops,
                 )?;
+                inject_ms += monkey_at.elapsed().as_secs_f64() * 1000.0;
                 dirty |= changed;
                 scene_dirty |= changed;
                 if changed {
