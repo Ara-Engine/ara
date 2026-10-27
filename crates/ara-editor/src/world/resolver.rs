@@ -105,10 +105,9 @@ impl SceneResolver {
         store: &Store,
         doc: &str,
     ) -> Result<Arc<Resolved>, Vec<Diagnostic>> {
-        if super::document_available(store, doc) {
-            self.resolve(store, doc)
-        } else {
-            Ok(Arc::clone(&self.unavailable))
+        match self.resolve(store, doc) {
+            Err(_) if !super::document_available(store, doc) => Ok(Arc::clone(&self.unavailable)),
+            result => result,
         }
     }
     /// `world::resolve(store, doc)`, reusing earlier resolutions where it can.
@@ -289,6 +288,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unwrap_used)]
     fn presentation_recovers_unloaded_documents_without_relaxing_strict_resolution() {
         let mut store = store();
         let mut resolver = SceneResolver::default();
