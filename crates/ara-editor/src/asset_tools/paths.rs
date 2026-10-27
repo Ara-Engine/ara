@@ -102,4 +102,52 @@ mod tests {
         );
         assert!(source(&workspace, "../rock.glb").is_err());
     }
+
+    #[test]
+    fn source_media_bridge_matches_the_importers_authored_root() -> ara_ui::Result<()> {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let base = crate::test_target()
+            .join("editor-import-paths")
+            .join(format!(
+                "{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+        for (name, modern, media) in [
+            ("modern", true, "assets/rock.glb"),
+            ("modern-nested-game", true, "game/assets/rock.glb"),
+            ("legacy-game-folder", false, "game/assets/rock.glb"),
+        ] {
+            let root = base.join(name);
+            let mut workspace = Workspace::default();
+            if modern {
+                workspace.set_reference_root(ara_doc::AUTHORING_ROOT);
+            }
+            let storage = workspace.storage_path(media);
+            let physical = root.join(&storage);
+            std::fs::create_dir_all(
+                physical
+                    .parent()
+                    .ok_or("Source fixture parent is missing")?,
+            )?;
+            let marker = if modern {
+                serde_json::json!({"layoutVersion":3})
+            } else {
+                serde_json::json!({})
+            };
+            std::fs::write(
+                root.join("ara.project.json"),
+                ara_json::to_canonical_string(&marker),
+            )?;
+            std::fs::write(&physical, b"real source bytes at the storage path")?;
+            let logical = source(&workspace, &storage)?;
+            assert_eq!(logical, media);
+            // SourceAsset.path is relative to the root already selected by the
+            // import pipeline. Preserve a genuine nested/legacy `game` folder.
+            let input = ara_host::project::authored_root(&root).join(logical);
+            assert_eq!(dunce::canonicalize(input)?, dunce::canonicalize(&physical)?);
+        }
+        Ok(())
+    }
 }

@@ -168,7 +168,7 @@ impl Service for AssetService {
             .ok_or_else(|| vec![crate::invalid("missing import document")])?;
         let source = SourceAsset {
             id,
-            path: p.path.clone(),
+            path: logical.to_owned(),
             importer: settings.importer,
             version: settings.version,
             settings: settings.settings,
