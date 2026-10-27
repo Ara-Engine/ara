@@ -21,7 +21,9 @@ ara-dev preview --prepared "<printed preview.json path>" --publish
 The default prepares **signed local artifacts**, including an installed-package
 smoke test, without uploading. It creates an independent source clone under
 `target/ara-dev/previews/<version>/source`, bumps the workspace version and lockfile
-there, and commits those version files with preview notes. The caller's checkout
+there, and commits those version files with preview notes. Sample content is not tracked, so it
+seeds the clone's `samples/.cache/blobs` from the caller's checkout when present, then runs
+`ara-samples fetch` and `verify` before packaging the sample kits. The caller's checkout
 and refs remain unchanged. `0.0.1-alpha` starts `0.0.2-alpha.1`; subsequent local
 preparations reserve successive numbers. `--version` selects an explicit newer
 `alpha.N`. Third-party lockfile resolutions must remain unchanged.
