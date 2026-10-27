@@ -1819,10 +1819,10 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 )?;
             }
             if let Some(check) = &mut import_check {
-                check.end(&editor, &mut shell, &mut gpu)?;
+                check.end(&editor, &shell, &mut gpu)?;
             }
             if let Some(check) = &mut asset_ops_check {
-                check.end(&editor, &mut shell, &mut gpu)?;
+                check.end(&editor, &shell, &mut gpu)?;
             }
             if let Some(check) = &mut navigation_check {
                 let scene_ready =

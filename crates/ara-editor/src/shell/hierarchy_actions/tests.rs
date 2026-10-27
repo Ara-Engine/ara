@@ -136,7 +136,7 @@ fn group_preserves_top_level_root_order_exact_locals_and_one_undo_redo() {
         "identity grouping preserves absent components"
     );
     same_world(&before, &after);
-    assert_eq!(editor.state.selection, [id.clone()]);
+    assert_eq!(editor.state.selection.as_slice(), std::slice::from_ref(&id));
     assert!(editor.state.expanded.contains(&id));
     editor.action("history.undo", json!({})).unwrap();
     assert_eq!(resolved(&editor), before);

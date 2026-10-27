@@ -60,7 +60,7 @@ impl Shell {
                 "Saved filters".into()
             },
         )];
-        options.extend(saved.iter().map(|(name, _)| (json!(name), name.clone())));
+        options.extend(saved.keys().map(|name| (json!(name), name.clone())));
         out.push_str("<panel id='hierarchy-saved-filters' class='toolbar' style='min-height:28px;height:auto;gap:4px'><panel id='hierarchy-saved-choice' style='min-width:0px;flex-grow:1'>");
         self.choice_button(
             "hierarchy-saved-filter",

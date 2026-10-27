@@ -432,11 +432,7 @@ impl AssetOpsCheck {
                 self.click_point(window, point, scale, false, events);
             }
             7 => tap(window, 40, events),
-            8 => {
-                if editor.state.asset_folder != "settings/builds" {
-                    return self.wait();
-                }
-            }
+            8 if editor.state.asset_folder != "settings/builds" => return self.wait(),
             _ => {}
         }
         Ok(())

@@ -104,6 +104,95 @@ impl History {
         true
     }
 }
+impl Shell {
+    /// Observe before pruning keys: an undo may remove the currently selected paths
+    /// before the asynchronous semantic index publishes their restored names.
+    pub(in crate::shell) fn observe_asset_history(&mut self, editor: &Editor) -> bool {
+        let revision = editor.host.store().revision();
+        if revision == self.asset_ops.history.revision {
+            if self
+                .asset_ops
+                .history
+                .pending
+                .as_ref()
+                .is_some_and(|pending| !pending.expected.unchanged(self, editor))
+            {
+                self.asset_ops.history.pending = None;
+                self.asset_ops.revision += 1;
+                return true;
+            }
+            return false;
+        }
+        let mut history = std::mem::take(&mut self.asset_ops.history);
+        let mut changed = false;
+        for transaction in editor.host.store().since(history.revision) {
+            changed |= history.revert(transaction, || Selection::read(self, editor));
+        }
+        history.revision = revision;
+        self.asset_ops.history = history;
+        if changed {
+            self.browser.refresh();
+            self.asset_ops.revision += 1;
+        }
+        changed
+    }
+    pub(super) fn follow_asset_history(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        let Some(pending) = &self.asset_ops.history.pending else {
+            return Ok(false);
+        };
+        if !pending.expected.unchanged(self, editor) {
+            self.asset_ops.history.pending = None;
+            return Ok(true);
+        }
+        let desired = &pending.desired;
+        let folder_ready = desired.folder.is_empty()
+            || (!editor.host.store().workspace().reference_root().is_empty()
+                && desired.folder == editor.host.store().workspace().reference_root())
+            || self
+                .browser
+                .items
+                .iter()
+                .any(|asset| asset.kind == "folder" && asset.path == desired.folder);
+        if !folder_ready
+            || !desired
+                .paths
+                .iter()
+                .all(|path| self.browser.items.iter().any(|asset| &asset.path == path))
+        {
+            if pending.began.elapsed() > Duration::from_secs(30) {
+                self.asset_ops.history.pending = None;
+                self.status_note = Some(
+                    "Asset history changed; the browser is still refreshing its entries".into(),
+                );
+                return Ok(true);
+            }
+            return Ok(false);
+        }
+        editor.action(
+            "editor.workspace",
+            json!({"folder":desired.folder,"asset":desired.asset.as_deref().unwrap_or("")}),
+        )?;
+        let pending = self
+            .asset_ops
+            .history
+            .pending
+            .take()
+            .ok_or("Asset history navigation was removed")?;
+        let first = pending
+            .desired
+            .active
+            .filter(|key| pending.desired.keys.contains(key));
+        self.asset_selection
+            .set_selected(first.into_iter().chain(pending.desired.keys));
+        if let Some(active) = pending.desired.active {
+            self.asset_selection.focus(active);
+        }
+        self.asset_selection_path = pending.desired.primary;
+        self.asset_grid_dirty = true;
+        Ok(true)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -229,93 +318,5 @@ mod tests {
                 .as_ref()
                 .is_some_and(|pending| pending.desired == after)
         );
-    }
-}
-impl Shell {
-    /// Observe before pruning keys: an undo may remove the currently selected paths
-    /// before the asynchronous semantic index publishes their restored names.
-    pub(in crate::shell) fn observe_asset_history(&mut self, editor: &Editor) -> bool {
-        let revision = editor.host.store().revision();
-        if revision == self.asset_ops.history.revision {
-            if self
-                .asset_ops
-                .history
-                .pending
-                .as_ref()
-                .is_some_and(|pending| !pending.expected.unchanged(self, editor))
-            {
-                self.asset_ops.history.pending = None;
-                self.asset_ops.revision += 1;
-                return true;
-            }
-            return false;
-        }
-        let mut history = std::mem::take(&mut self.asset_ops.history);
-        let mut changed = false;
-        for transaction in editor.host.store().since(history.revision) {
-            changed |= history.revert(transaction, || Selection::read(self, editor));
-        }
-        history.revision = revision;
-        self.asset_ops.history = history;
-        if changed {
-            self.browser.refresh();
-            self.asset_ops.revision += 1;
-        }
-        changed
-    }
-    pub(super) fn follow_asset_history(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
-        let Some(pending) = &self.asset_ops.history.pending else {
-            return Ok(false);
-        };
-        if !pending.expected.unchanged(self, editor) {
-            self.asset_ops.history.pending = None;
-            return Ok(true);
-        }
-        let desired = &pending.desired;
-        let folder_ready = desired.folder.is_empty()
-            || (!editor.host.store().workspace().reference_root().is_empty()
-                && desired.folder == editor.host.store().workspace().reference_root())
-            || self
-                .browser
-                .items
-                .iter()
-                .any(|asset| asset.kind == "folder" && asset.path == desired.folder);
-        if !folder_ready
-            || !desired
-                .paths
-                .iter()
-                .all(|path| self.browser.items.iter().any(|asset| &asset.path == path))
-        {
-            if pending.began.elapsed() > Duration::from_secs(30) {
-                self.asset_ops.history.pending = None;
-                self.status_note = Some(
-                    "Asset history changed; the browser is still refreshing its entries".into(),
-                );
-                return Ok(true);
-            }
-            return Ok(false);
-        }
-        editor.action(
-            "editor.workspace",
-            json!({"folder":desired.folder,"asset":desired.asset.as_deref().unwrap_or("")}),
-        )?;
-        let pending = self
-            .asset_ops
-            .history
-            .pending
-            .take()
-            .ok_or("Asset history navigation was removed")?;
-        let first = pending
-            .desired
-            .active
-            .filter(|key| pending.desired.keys.contains(key));
-        self.asset_selection
-            .set_selected(first.into_iter().chain(pending.desired.keys));
-        if let Some(active) = pending.desired.active {
-            self.asset_selection.focus(active);
-        }
-        self.asset_selection_path = pending.desired.primary;
-        self.asset_grid_dirty = true;
-        Ok(true)
     }
 }
