@@ -389,10 +389,7 @@ impl QualityPreset {
                 lod_pixels: 1.,
                 min_pixels: 1.5,
                 high_tier: true,
-                reflection_captures: Some(ReflectionCaptures {
-                    resolution: 512,
-                    captures: 8,
-                }),
+                reflection_captures: reflection_captures(8),
                 terrain_detail: 150.,
                 local_shadows: Some(LocalShadows {
                     lights: 4,
@@ -420,10 +417,7 @@ impl QualityPreset {
                 lod_pixels: 1.,
                 min_pixels: 1.,
                 high_tier: true,
-                reflection_captures: Some(ReflectionCaptures {
-                    resolution: 512,
-                    captures: 16,
-                }),
+                reflection_captures: reflection_captures(16),
                 terrain_detail: 300.,
                 local_shadows: Some(LocalShadows {
                     lights: 8,
@@ -454,6 +448,18 @@ pub struct Plan {
     pub requested: QualityPreset,
     /// Renderer and budgets.
     pub path: RenderPath,
+}
+
+/// High/Epic local reflection captures (512-texel tiles, `captures` at most). They
+/// stay off by default until their bakes pass the Showcase region-FLIP gate;
+/// `ARA_REFLECTION_CAPTURES=1` opts in for look development and A/B captures.
+fn reflection_captures(captures: u32) -> Option<ReflectionCaptures> {
+    std::env::var_os("ARA_REFLECTION_CAPTURES")
+        .is_some_and(|v| v == "1")
+        .then_some(ReflectionCaptures {
+            resolution: 512,
+            captures,
+        })
 }
 
 impl Plan {
