@@ -18,6 +18,9 @@
 //! images rest in `TRANSFER_SRC_OPTIMAL`, owned by `VK_QUEUE_FAMILY_EXTERNAL`
 //! ([`crate::vulkan::external`]). Handles are unnamed NT handles the owner pulls
 //! out of the producer with `DuplicateHandle` ([`SharedSurface::duplicate_from`]).
+//! On macOS (`crate::metal::external`) slots are IOSurfaces: handles are global
+//! IOSurface IDs, `DeviceIdentity::device_uuid` starts with the Metal registry ID,
+//! and unified memory needs no ownership transfer.
 use serde::{Deserialize, Serialize};
 
 /// Images per ring: one shown, one pending and one being written.
@@ -237,6 +240,41 @@ pub struct SharedSurface {
     desc: SurfaceDesc,
     #[cfg(windows)]
     handles: Vec<std::os::windows::io::OwnedHandle>,
+    /// macOS: the slots' IOSurfaces, retained by this process.
+    #[cfg(target_os = "macos")]
+    surfaces: Vec<IoSurface>,
+}
+
+/// A retained IOSurface (macOS shared-surface slot).
+#[cfg(target_os = "macos")]
+#[derive(Clone, Debug)]
+pub(crate) struct IoSurface(objc2_core_foundation::CFRetained<objc2_io_surface::IOSurfaceRef>);
+
+// SAFETY: IOSurfaces are reference-counted kernel objects that any thread may retain,
+// release and query; Ara only reads their properties and wraps them as textures, the
+// same cross-thread use as the Windows `OwnedHandle`s of other platforms.
+#[cfg(target_os = "macos")]
+unsafe impl Send for IoSurface {}
+// SAFETY: see `Send`; shared access only reads immutable surface properties.
+#[cfg(target_os = "macos")]
+unsafe impl Sync for IoSurface {}
+
+#[cfg(target_os = "macos")]
+impl IoSurface {
+    /// Take ownership of a retained surface.
+    pub(crate) fn new(
+        surface: objc2_core_foundation::CFRetained<objc2_io_surface::IOSurfaceRef>,
+    ) -> Self {
+        Self(surface)
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl std::ops::Deref for IoSurface {
+    type Target = objc2_io_surface::IOSurfaceRef;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl SharedSurface {
@@ -251,7 +289,12 @@ impl SharedSurface {
     /// name; only a process holding `PROCESS_DUP_HANDLE` on the producer can copy
     /// them. The owner already holds its child's full-access process handle, so the
     /// child never needs a handle to the owner (it cannot push handles into or act on
-    /// the editor process). Unsupported (an error) outside Windows.
+    /// the editor process).
+    ///
+    /// macOS: slot handles are global IOSurface IDs, which any process of the same
+    /// user session can look up (the trust level of the Windows `Local\` sections in
+    /// `ara-play`); the owner checks the producer's process ID and every slot size.
+    /// Unsupported (an error) on other platforms.
     pub fn duplicate_from(
         child: &std::process::Child,
         desc: &SurfaceDesc,
@@ -261,7 +304,11 @@ impl SharedSurface {
             use std::os::windows::io::AsRawHandle;
             Self::duplicate(child.as_raw_handle(), desc)
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        {
+            Self::lookup(child.id(), desc)
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             let _ = (child, desc);
             Err(unsupported())
@@ -277,7 +324,11 @@ impl SharedSurface {
             let process = unsafe { windows_sys::Win32::System::Threading::GetCurrentProcess() };
             Self::duplicate(process, desc)
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        {
+            Self::lookup(std::process::id(), desc)
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             let _ = desc;
             Err(unsupported())
@@ -300,10 +351,60 @@ impl SharedSurface {
             }
             Ok(Self { desc, handles })
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        {
+            Ok(Self {
+                desc: self.desc.clone(),
+                surfaces: self.surfaces.clone(),
+            })
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             Err(unsupported())
         }
+    }
+
+    /// macOS: the retained slot surfaces, in slot order.
+    #[cfg(target_os = "macos")]
+    pub(crate) fn surfaces(&self) -> &[IoSurface] {
+        &self.surfaces
+    }
+
+    /// macOS: resolve global IOSurface IDs published by `process`.
+    #[cfg(target_os = "macos")]
+    fn lookup(process: u32, desc: &SurfaceDesc) -> std::io::Result<Self> {
+        use std::io::{Error, ErrorKind};
+        if desc.slots.len() != SLOTS || desc.process != process {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!(
+                    "expected {SLOTS} shared slots from process {process}, got {} from {}",
+                    desc.slots.len(),
+                    desc.process
+                ),
+            ));
+        }
+        let surfaces = desc
+            .slots
+            .iter()
+            .map(|slot| {
+                u32::try_from(slot.handle)
+                    .ok()
+                    .and_then(objc2_io_surface::IOSurfaceRef::lookup)
+                    .map(IoSurface::new)
+                    .filter(|surface| surface.alloc_size() as u64 == slot.size)
+                    .ok_or_else(|| {
+                        Error::new(
+                            ErrorKind::NotFound,
+                            format!("IOSurface {} not found", slot.handle),
+                        )
+                    })
+            })
+            .collect::<std::io::Result<Vec<_>>>()?;
+        Ok(Self {
+            desc: desc.clone(),
+            surfaces,
+        })
     }
 
     #[cfg(windows)]
@@ -357,11 +458,11 @@ impl SharedSurface {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 fn unsupported() -> std::io::Error {
     std::io::Error::new(
         std::io::ErrorKind::Unsupported,
-        "shared surfaces need Windows NT handles on this backend",
+        "shared surfaces need Windows NT handles or macOS IOSurfaces",
     )
 }
 

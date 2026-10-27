@@ -31,9 +31,9 @@ pub use reload::ShaderStatus;
 mod submission;
 mod surface;
 pub use submission::SubmissionStats;
-mod timestamps;
+pub(crate) mod timestamps;
 mod ui_readback;
-mod waits;
+pub(crate) mod waits;
 pub use waits::HostWaitStats;
 
 pub use crate::commands::TimestampSpan;
@@ -113,6 +113,22 @@ impl VulkanDevice {
     /// Read-only native integration access; ownership remains with this device.
     pub fn context(&self) -> &Context {
         &self.context
+    }
+    /// Cumulative host time in explicit driver waits; the backend-neutral form of
+    /// `context().host_wait_stats()` that `MetalDevice` also provides.
+    pub fn host_wait_stats(&self) -> HostWaitStats {
+        self.context.host_wait_stats()
+    }
+    /// Capabilities recorded at creation; the backend-neutral form of `context().info`.
+    pub fn info(&self) -> &DeviceInfo {
+        &self.context.info
+    }
+    /// Wait until every queue is idle, e.g. before presentation objects are destroyed.
+    pub fn wait_idle(&self) -> Result<()> {
+        // SAFETY: the device lives as long as `self`; an idle wait has no other
+        // precondition.
+        unsafe { self.context.device.device_wait_idle() }.map_err(anyhow::Error::from)?;
+        Ok(())
     }
     /// Create a debug/sync-validated device. Empty extensions create a headless device.
     pub fn new(window_extensions: &[CString], cache_dir: impl Into<PathBuf>) -> Result<Self> {

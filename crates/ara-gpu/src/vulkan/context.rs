@@ -175,6 +175,11 @@ pub struct DeviceInfo {
     pub packed_integer_dot_accelerated: bool,
     /// Maximum supported 2D extent.
     pub max_image_dimension: u32,
+    /// Largest storage-buffer binding range in bytes.
+    pub max_storage_buffer_range: u32,
+    /// Compute and fragment shaders support subgroup (wave) basic, vote, ballot and
+    /// arithmetic operations.
+    pub wave_ops: bool,
     /// Supported Vulkan version.
     pub api_version: String,
     /// Native driver version, included in cache invalidation.

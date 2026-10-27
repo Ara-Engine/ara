@@ -110,3 +110,19 @@ Fixes:
 - Update the GPU driver, then restart the editor so both processes use the same driver.
 - On machines with several GPUs, make the editor and players use the same adapter.
 - Play in a window (`play.start` with `window: true`) until shared surfaces are available on this platform.
+
+## ARA6007 GPU_METAL_COOK_SKIPPED: Metal shaders were not cooked
+owner: ara-shader-cook
+shown as: ARA_GPU_METAL_COOK_SKIPPED
+
+A warning from the shader cook: Apple's Metal Shader Converter was not found, so the cooked pipelines got SPIR-V and DXIL but no metallib artifacts. The cook still succeeds and Windows/Linux are unaffected. The macOS Metal backend refuses those pipelines with `ARA_GPU_CONTRACT` ("no Metal artifacts").
+
+Causes:
+- The converter is not installed on this cook host (it is a free, signed-in download from Apple and an optional setup step).
+- `ARA_METAL_SHADERCONVERTER` is set to `off` or to an empty value.
+- It is installed somewhere other than `PATH` or Apple's default location.
+
+Fixes:
+- On the canonical cook host (Windows), install Metal Shader Converter for Windows from https://developer.apple.com/download/all/?q=metal%20shader%20converter, then recook.
+- Point `ARA_METAL_SHADERCONVERTER` at `metal-shaderconverter` if it lives elsewhere.
+- Never commit cooked artifacts produced on a Mac; recook on the canonical host instead (docs/dev/macos.md).

@@ -10,6 +10,10 @@ fn timed(gpu: &mut VulkanDevice, queue: Queue, passes: usize) -> Result<Timeline
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn timestamp_pools_reuse_only_completed_submissions_and_keep_pass_results() -> Result<()> {
     let path =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-gpu/query-reuse");
@@ -57,6 +61,10 @@ fn timestamp_pools_reuse_only_completed_submissions_and_keep_pass_results() -> R
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn timestamp_cache_is_bounded_and_adopts_larger_pools_without_caching_huge_ones() -> Result<()> {
     let path =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-gpu/query-bounds");
@@ -86,6 +94,10 @@ fn timestamp_cache_is_bounded_and_adopts_larger_pools_without_caching_huge_ones(
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn pass_begins_exclude_previous_tail_and_frame_span_covers_both_queues() -> Result<()> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-gpu/exclusive-timestamps");

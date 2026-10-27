@@ -10,6 +10,7 @@ workspace = true
 
 [dependencies]
 ara-gpu = { path = "../ara-gpu" }
+ara-diag = { workspace = true }
 anyhow = { workspace = true }
 sha2 = { workspace = true }
 serde_json = { workspace = true }

@@ -330,6 +330,7 @@ impl Gpu {
             let mut v13_properties = vk::PhysicalDeviceVulkan13Properties::default();
             let mut indexing = vk::PhysicalDeviceDescriptorIndexingProperties::default();
             let mut id_properties = vk::PhysicalDeviceIDProperties::default();
+            let mut subgroup = vk::PhysicalDeviceSubgroupProperties::default();
             instance.get_physical_device_properties2(
                 physical,
                 &mut vk::PhysicalDeviceProperties2::default()
@@ -337,7 +338,8 @@ impl Gpu {
                     .push(&mut indexing)
                     .push(&mut mesh_properties)
                     .push(&mut v13_properties)
-                    .push(&mut id_properties),
+                    .push(&mut id_properties)
+                    .push(&mut subgroup),
             );
             let capacities = super::descriptors::select(&indexing, ray_tracing)?;
             let sampled_image_capacity = capacities.sampled_images;
@@ -386,6 +388,16 @@ impl Gpu {
                 packed_integer_dot_accelerated: shader_integer_dot_product
                     && v13_properties.integer_dot_product4x8_bit_packed_unsigned_accelerated != 0,
                 max_image_dimension: properties.limits.max_image_dimension2_d,
+                max_storage_buffer_range: properties.limits.max_storage_buffer_range,
+                wave_ops: subgroup
+                    .supported_stages
+                    .contains(vk::ShaderStageFlags::COMPUTE | vk::ShaderStageFlags::FRAGMENT)
+                    && subgroup.supported_operations.contains(
+                        vk::SubgroupFeatureFlags::BASIC
+                            | vk::SubgroupFeatureFlags::VOTE
+                            | vk::SubgroupFeatureFlags::BALLOT
+                            | vk::SubgroupFeatureFlags::ARITHMETIC,
+                    ),
                 driver_version: properties.driver_version,
                 graphics_family,
                 compute_family,

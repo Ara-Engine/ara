@@ -1,0 +1,134 @@
+{
+  "RootSignature": {
+    "Flags": "IRRootSignatureFlagAllowInputAssemblerInputLayout",
+    "NumParameters": 5,
+    "NumStaticSamplers": 3,
+    "Parameters": [
+      {
+        "Constants": {
+          "Num32BitValues": 8,
+          "RegisterSpace": 0,
+          "ShaderRegister": 0
+        },
+        "ParameterType": "IRRootParameterType32BitConstants",
+        "ShaderVisibility": "IRShaderVisibilityAll"
+      },
+      {
+        "DescriptorTable": {
+          "DescriptorRanges": [
+            {
+              "BaseShaderRegister": 0,
+              "Flags": "IRDescriptorRangeFlagDescriptorsVolatile",
+              "NumDescriptors": 4294967295,
+              "OffsetInDescriptorsFromTableStart": 0,
+              "RangeType": "IRDescriptorRangeTypeSRV",
+              "RegisterSpace": 1
+            }
+          ],
+          "NumDescriptorRanges": 1
+        },
+        "ParameterType": "IRRootParameterTypeDescriptorTable",
+        "ShaderVisibility": "IRShaderVisibilityAll"
+      },
+      {
+        "DescriptorTable": {
+          "DescriptorRanges": [
+            {
+              "BaseShaderRegister": 0,
+              "Flags": "IRDescriptorRangeFlagDescriptorsVolatile",
+              "NumDescriptors": 4294967295,
+              "OffsetInDescriptorsFromTableStart": 0,
+              "RangeType": "IRDescriptorRangeTypeUAV",
+              "RegisterSpace": 2
+            }
+          ],
+          "NumDescriptorRanges": 1
+        },
+        "ParameterType": "IRRootParameterTypeDescriptorTable",
+        "ShaderVisibility": "IRShaderVisibilityAll"
+      },
+      {
+        "DescriptorTable": {
+          "DescriptorRanges": [
+            {
+              "BaseShaderRegister": 0,
+              "Flags": "IRDescriptorRangeFlagDescriptorsVolatile",
+              "NumDescriptors": 64,
+              "OffsetInDescriptorsFromTableStart": 0,
+              "RangeType": "IRDescriptorRangeTypeUAV",
+              "RegisterSpace": 3
+            }
+          ],
+          "NumDescriptorRanges": 1
+        },
+        "ParameterType": "IRRootParameterTypeDescriptorTable",
+        "ShaderVisibility": "IRShaderVisibilityAll"
+      },
+      {
+        "DescriptorTable": {
+          "DescriptorRanges": [
+            {
+              "BaseShaderRegister": 0,
+              "Flags": "IRDescriptorRangeFlagDescriptorsVolatile",
+              "NumDescriptors": 16,
+              "OffsetInDescriptorsFromTableStart": 0,
+              "RangeType": "IRDescriptorRangeTypeSRV",
+              "RegisterSpace": 4
+            }
+          ],
+          "NumDescriptorRanges": 1
+        },
+        "ParameterType": "IRRootParameterTypeDescriptorTable",
+        "ShaderVisibility": "IRShaderVisibilityAll"
+      }
+    ],
+    "StaticSamplers": [
+      {
+        "AddressU": "IRTextureAddressModeWrap",
+        "AddressV": "IRTextureAddressModeWrap",
+        "AddressW": "IRTextureAddressModeClamp",
+        "BorderColor": "IRStaticBorderColorOpaqueBlack",
+        "ComparisonFunc": "IRComparisonFunctionNever",
+        "Filter": "IRFilterMinMagMipLinear",
+        "MaxAnisotropy": 0,
+        "MaxLOD": 3.4028234663852886e+38,
+        "MinLOD": 0,
+        "MipLODBias": 0,
+        "RegisterSpace": 0,
+        "ShaderRegister": 0,
+        "ShaderVisibility": "IRShaderVisibilityAll"
+      },
+      {
+        "AddressU": "IRTextureAddressModeWrap",
+        "AddressV": "IRTextureAddressModeClamp",
+        "AddressW": "IRTextureAddressModeClamp",
+        "BorderColor": "IRStaticBorderColorOpaqueBlack",
+        "ComparisonFunc": "IRComparisonFunctionNever",
+        "Filter": "IRFilterMinMagMipLinear",
+        "MaxAnisotropy": 0,
+        "MaxLOD": 3.4028234663852886e+38,
+        "MinLOD": 0,
+        "MipLODBias": 0,
+        "RegisterSpace": 0,
+        "ShaderRegister": 1,
+        "ShaderVisibility": "IRShaderVisibilityAll"
+      },
+      {
+        "AddressU": "IRTextureAddressModeClamp",
+        "AddressV": "IRTextureAddressModeClamp",
+        "AddressW": "IRTextureAddressModeClamp",
+        "BorderColor": "IRStaticBorderColorOpaqueBlack",
+        "ComparisonFunc": "IRComparisonFunctionNever",
+        "Filter": "IRFilterMinMagMipLinear",
+        "MaxAnisotropy": 0,
+        "MaxLOD": 3.4028234663852886e+38,
+        "MinLOD": 0,
+        "MipLODBias": 0,
+        "RegisterSpace": 0,
+        "ShaderRegister": 2,
+        "ShaderVisibility": "IRShaderVisibilityAll"
+      }
+    ]
+  },
+  "version": "IRRootSignatureVersion_1_1"
+}

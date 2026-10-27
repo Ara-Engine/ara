@@ -13,6 +13,11 @@
 //! telling the other, so a release happens-before the next acquire. Both sides
 //! create the images with identical parameters and dedicated allocations, as opaque
 //! handles require.
+//!
+//! `portable` adds the device-taking, handle-based forms shared with
+//! `metal::external` (`create`, `recreate`, `publish_image`, `read_pixels`).
+mod portable;
+
 use super::Context;
 use crate::{
     GpuError, Result,

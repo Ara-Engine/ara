@@ -13,6 +13,21 @@ pub mod shared;
 pub mod vulkan;
 
 pub use ash::vk;
+
+/// The platform's native backend (D12): Vulkan 1.3, except Metal 4 on macOS. A
+/// cfg-selected alias, so callers stay monomorphic: off Apple platforms this *is*
+/// [`vulkan::VulkanDevice`], with no dispatch cost.
+#[cfg(not(target_os = "macos"))]
+pub type GpuDevice = vulkan::VulkanDevice;
+/// The platform's native backend (D12): Metal 4 on macOS (D15). See the Vulkan alias.
+#[cfg(target_os = "macos")]
+pub type GpuDevice = metal::MetalDevice;
+/// Deferred frame completion returned by [`GpuDevice`].
+#[cfg(not(target_os = "macos"))]
+pub type GpuCompletion = vulkan::Completion;
+/// Deferred frame completion returned by [`GpuDevice`].
+#[cfg(target_os = "macos")]
+pub type GpuCompletion = metal::Completion;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "tracy")]
 #[doc(hidden)]
@@ -68,6 +83,10 @@ pub type Result<T> = std::result::Result<T, GpuError>;
 /// `ARA_GPU_EXTERNAL`: a shared surface cannot be exported or imported (named-code
 /// slot 6006, documented in `ara-diag/codes/gpu.md`).
 pub const GPU_EXTERNAL: ara_diag::Code = ara_diag::Code(6006);
+/// `ARA_GPU_METAL_COOK_SKIPPED`: the cook host has no Metal Shader Converter, so
+/// metallib artifacts were not cooked (a warning; named-code slot 6007,
+/// documented in `ara-diag/codes/gpu.md`).
+pub const GPU_METAL_COOK_SKIPPED: ara_diag::Code = ara_diag::Code(6007);
 
 impl From<&GpuError> for ara_diag::Diagnostic {
     /// The error as a bus diagnostic under its `ARA_GPU_*` named code.

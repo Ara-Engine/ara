@@ -9,11 +9,19 @@ use ara_gpu::{
 };
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn pooled_triangle_ranges_keep_local_indices_and_instance_transforms() -> Result<()> {
     transfer_uploaded_ranges(Queue::Graphics)
 }
 
 #[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
 fn pooled_triangle_ranges_build_on_compute_after_transfer() -> Result<()> {
     transfer_uploaded_ranges(Queue::Compute)
 }
