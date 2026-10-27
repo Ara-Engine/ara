@@ -76,15 +76,25 @@ in `caffeinate -dimsu <command>` (macOS sleeps after a minute on battery).
 |---|---|
 | Kernel and platform-independent crates | Green (`cargo test`); the whole workspace type-checks. |
 | SDL3 platform layer (`ara-platform`, `ara-audio`) | Green. |
-| `ara-gpu` Metal 4 core | Buffers, textures, converter tables, pipelines from metallibs, both queues with shared-event timelines, deferred completion, preparation workers, CAMetalLayer presenter. Tested with runtime-compiled MSL laid out like converter output. |
-| Not yet on Metal | Timestamps, acceleration structures/ray query, mesh stages, `ClearDepth`, shader hot reload, HDR output, shared surfaces (D19 embedded Play), converter draw parameters. |
+| `ara-gpu` Metal 4 core | Buffers, textures, converter tables, pipelines from metallibs, both queues with shared-event timelines (async compute), deferred completion, preparation workers, GPU pass timings and the timing window, CAMetalLayer presenter (windowless and through an SDL3 Metal view). Tested with runtime-compiled MSL laid out like converter output. |
+| Not yet on Metal | Persistent pipeline archives, acceleration structures/ray query, mesh stages, `ClearDepth`, shader hot reload, HDR output, shared surfaces (D19 embedded Play), converter draw parameters. |
 | Renderer, player, editor | Waiting on the renderer seam (`VulkanDevice` → `GpuDevice` across consumers) and on converter-cooked engine shaders. |
 | C# host (`ara-script`, osx-arm64) | Green: JIT hosting, NativeAOT sample, L1/L3 reload, the out-of-process compile server and module tests. Needs `dotnet` on `PATH`. |
 
 ## Known issues
 
 - Creating `MTL4Compiler`s while other compilers compile corrupted the heap inside
-  the macOS 27 driver; the backend therefore shares one compiler per process.
+  the macOS 27 driver; the backend therefore shares one compiler per process, never
+  destroyed.
+- Pipeline archives (MTL4 data-set serializers) are not wired yet. On macOS 27 a
+  serializer flush also cleared what other live devices had captured, and compilers
+  created or destroyed around other compiles crashed. The intended design is one
+  process-wide serializer flushed once, at shutdown, by single-device processes
+  (player, editor).
+- Metal tests must run with Metal 4 validation on and be stress-checked in parallel
+  (`cargo test` runs them concurrently); use the exact binary from
+  `cargo test --no-run --message-format=json` for Guard Malloc runs
+  (`DYLD_INSERT_LIBRARIES=/usr/lib/libgmalloc.dylib`).
 - Loopback UDP is delivered asynchronously on macOS: tests wait on delivery events,
   never on fixed sleeps.
 - Vulkan backend GPU tests are ignored on macOS (no Vulkan driver; D12).
