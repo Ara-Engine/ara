@@ -524,6 +524,11 @@ mod dialog_tests {
         assert_eq!(shell.input.focused(), Some(outside));
         editor.action("editor.palette", json!({"open":true}))?;
         shell.rebuild(&mut editor)?;
+        assert_eq!(
+            shell.modal_return_focus,
+            Some(outside),
+            "palette return focus"
+        );
         shell.open_build_options(&mut editor)?;
         assert!(
             !editor.state.palette,
