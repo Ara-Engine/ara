@@ -4,6 +4,8 @@
 //! they show the scene, drives the Fox with raw device input, resizes, and stops.
 //! Prints the frame latency and the player's per-frame cost.
 #![allow(clippy::unwrap_used)]
+#[path = "embed/outpost.rs"]
+mod outpost;
 mod support;
 
 use ara_gpu::{GpuDevice, external::ImportedSurface, shared::Frame};

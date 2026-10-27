@@ -5,6 +5,10 @@ No document mutation, widget logic, layout, ECS, SDL or ara-gpu dependency belon
 
 Public API:
 - `gpu::Renderer::{image,prepare,render,device_lost}` consumes retained display lists and font resources.
+- `external_image(id)` registers adapter-owned images without a CPU upload;
+  `forget_image(id)` detaches them. Re-register borrowed images after device loss.
+- Unavailable image draws are skipped and listed in `Renderer::missing_images`;
+  the host reports the corresponding authored paths instead of aborting the frame.
 - `gpu::UiGpu::{upload,begin,draw,end}` is the complete host adapter contract.
 - `gpu::{Instance,Batch,Clip,TextureUpload}` is the engine-neutral upload/draw ABI.
 - `atlas::{GlyphAtlas,TextMode}` caches hinted raster glyphs or 48px three-channel outline distance fields.

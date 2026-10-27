@@ -86,6 +86,7 @@ impl Surface {
         decoration::apply(&mut self.ui, self.screen);
         let size = self.ui.size.map(|v| v as u32);
         let mut cpu = ara_ui_render::CpuGpu::default();
+        self.renderer.device_lost();
         self.renderer
             .render(
                 &mut cpu,
@@ -95,6 +96,8 @@ impl Surface {
                 TextMode::Raster,
             )
             .map_err(ui_error)?;
+        self.report_missing_images();
+        self.renderer.device_lost();
         image::RgbaImage::from_raw(
             size[0],
             size[1],

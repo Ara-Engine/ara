@@ -1,6 +1,44 @@
 use super::*;
 
 #[test]
+fn missing_and_corrupt_images_preserve_the_hud_and_report_authored_paths() -> Result<()> {
+    let source: GameUi = serde_json::from_value(serde_json::json!({
+        "markup":"<ui id='r'><image id='broken' src='broken'/><image id='missing' src='missing'/><text id='health' text='100 HP'/></ui>",
+        "stylesheet":"ui {width:100%;height:100%;} image {width:20px;height:20px;} text {font-size:18px;}",
+        "bindings":[], "images":{"broken":[0,1,2]},
+        "resource_paths":{"image:broken":"assets/corrupt.png","image:missing":"assets/missing.png","font:0":"assets/corrupt.ttf"},
+        "fonts":[[0,1,2]]
+    }))?;
+    let mut surface = Surface::plain(&source, [320, 180])?;
+    let pixels = surface.image()?;
+    assert!(
+        pixels.pixels().any(|pixel| pixel[3] > 0),
+        "body text must still draw"
+    );
+    let messages: Vec<_> = surface
+        .diagnostics()
+        .map(|diagnostic| diagnostic.message)
+        .collect();
+    for path in [
+        "assets/corrupt.png",
+        "assets/missing.png",
+        "assets/corrupt.ttf",
+    ] {
+        assert!(
+            messages.iter().any(|message| message.contains(path)),
+            "{messages:?}"
+        );
+    }
+    surface.image()?;
+    assert_eq!(
+        surface.diagnostics().count(),
+        0,
+        "missing images report once per surface"
+    );
+    Ok(())
+}
+
+#[test]
 fn project_fonts_keep_bundled_body_fallbacks() -> Result<()> {
     let mut source: GameUi = serde_json::from_value(serde_json::json!({
         "markup":"<ui id=\"font-fallback\"><button id=\"host\" action=\"host\" text=\"Host a crew\"/></ui>",

@@ -312,9 +312,13 @@ A draw refers to an image or render target that was not created, or a glyph aren
 
 Causes:
 - An image was drawn before it was uploaded.
+- A game-UI image file is missing or cannot be decoded; its path is reported and its draw is skipped.
+- A borrowed scene image was not registered with the UI renderer or reattached after device loss.
 
 Fixes:
 - Upload images before drawing them; rebuild the display list after resizing.
+- Register adapter-owned images with `Renderer::external_image` without a CPU upload.
+- Restore missing files or replace corrupt images named by the warning.
 
 ## ARA4052 ui::REFERENCE: CPU reference renderer misuse
 owner: ara-ui-render

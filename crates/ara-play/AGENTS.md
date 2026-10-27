@@ -18,6 +18,8 @@ The play-mode wire contract between the edit-world owner (`ara` daemon, editor) 
   `documents(&Workspace)`, `workspace()`. `hex`/`unhex` for digests.
 - `PlayScene.ui` embeds native markup/styles, typed ECS bindings, fonts/images,
   feedback counters and music routes. It carries presentation data, never game state.
+  Defaulted resource-path and nonfatal-diagnostic metadata identifies broken files
+  in native/embedded players while retaining compatibility with older snapshots.
 - `shm::Section::{create, open, bytes}`: named pagefile-backed sections (Windows);
   other platforms return `Unsupported` and the owner sends `Inline` bytes.
 - `link::Link`: non-blocking JSON-RPC 2.0 over a localhost WebSocket (`connect` for

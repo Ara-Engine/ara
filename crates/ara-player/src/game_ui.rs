@@ -13,6 +13,7 @@ use ara_ui_text::TextSystem;
 use serde_json::Value;
 mod anchors;
 mod decoration;
+mod resources;
 mod screen;
 #[cfg(test)]
 mod tests;
@@ -31,6 +32,8 @@ pub(crate) struct Surface {
     renderer: Renderer,
     gpu: Option<ara_editor_gpu::NativeUi>,
     screen: Screen,
+    diagnostics: Vec<ara_diag::Diagnostic>,
+    reported_images: std::collections::BTreeSet<u32>,
 }
 
 impl Surface {
@@ -71,33 +74,7 @@ impl Surface {
                 binding.node
             );
         }
-        let mut text = TextSystem::bundled().map_err(ui_error)?;
-        // Renderer font assets appear lazily after shaping; keep the bundled
-        // collection itself and register project faces alongside its fallbacks.
-        for font in &source.fonts {
-            ensure!(
-                !text
-                    .fonts
-                    .collection
-                    .register_fonts(font.clone().into(), None)
-                    .is_empty(),
-                "project UI font contains no valid faces"
-            );
-        }
-        let mut renderer = Renderer::default();
-        for (name, bytes) in &source.images {
-            let image = image::load_from_memory(bytes)?.into_rgba8();
-            renderer
-                .image(
-                    stable_id(name) as u32 & 0x7fff_ffff,
-                    ara_ui_render::gpu::Image {
-                        width: image.width(),
-                        height: image.height(),
-                        rgba: image.into_raw(),
-                    },
-                )
-                .map_err(ui_error)?;
-        }
+        let (text, renderer, diagnostics) = resources::load(source)?;
         let mut surface = Self {
             ui,
             text,
@@ -106,9 +83,23 @@ impl Surface {
             renderer,
             gpu: None,
             screen: Screen::Game,
+            diagnostics,
+            reported_images: Default::default(),
         };
         surface.screen(Screen::Game)?;
         Ok(surface)
+    }
+
+    pub(crate) fn diagnostics(&mut self) -> std::vec::Drain<'_, ara_diag::Diagnostic> {
+        self.diagnostics.drain(..)
+    }
+
+    fn report_missing_images(&mut self) {
+        for &id in &self.renderer.missing_images {
+            if self.reported_images.insert(id) {
+                resources::warning(&mut self.diagnostics, resources::missing(&self.source, id));
+            }
+        }
     }
 
     pub(crate) fn update(&mut self, runtime: &Runtime, player: u64, size: [u32; 2]) -> Result<()> {
@@ -176,6 +167,7 @@ impl Surface {
             .output()
             .context("game UI needs a completed scene")?;
         if self.gpu.is_none() {
+            self.renderer.device_lost();
             // SAFETY: the window drops this surface before its presenter's device;
             // all UI and scene submissions occur sequentially on this thread.
             self.gpu = Some(unsafe {
@@ -193,6 +185,7 @@ impl Surface {
                 renderer.gpu().image_view(image)?,
             )?;
         }
+        self.renderer.external_image(id).map_err(ui_error)?;
         self.ui.display.commands.insert(
             0,
             Draw::Image {
@@ -220,6 +213,7 @@ impl Surface {
             .map_err(ui_error);
         self.ui.display.commands.remove(0);
         rendered?;
+        self.report_missing_images();
         Ok(())
     }
 
@@ -307,6 +301,7 @@ pub(crate) fn snapshot(
             TextMode::Raster,
         )
         .map_err(ui_error)?;
+    surface.report_missing_images();
     let pixmap = cpu.pixmap().map_err(ui_error)?;
     image::RgbaImage::from_raw(size[0], size[1], pixmap.data().to_vec())
         .context("native UI snapshot extent")
