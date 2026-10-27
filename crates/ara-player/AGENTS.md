@@ -40,8 +40,7 @@ presenter before hello and reuse its device at embed; surface-less services allo
 - `standalone/startup.rs`: shaderless progress (`device/loading.rs`, 225 KiB image + staging) precedes runtime/presenter/content workers. Real content, PSOs, uploads, effects and the initial GI volume/staging clear finish behind it; the surface bake can arrive later without allocation.
   Startup JSON separates loading/runtime/presenter timings, `content_warmup_ms`/`content_ready_ms`, and `full_scene_frame_ms`; loading hands its existing device/swapchain to the game.
 - `main.rs`: pool lifecycle, the loop (link polling, host-time ticking with bounded
-  catch-up, deferred patch acks, 250 ms `play.status` heartbeats, presentation),
-  method dispatch.
+  catch-up, deferred patch acks, 250 ms `play.status` heartbeats, presentation), method dispatch.
 - `net.rs`: `Play` (derefs to the runtime in every role): `Local`, `Host` (ara-net
   server owns the runtime and steps it; `play.join` issues client tokens) or `Mirror`
   (a client's never-stepped presentation world). Networked processes keep only their

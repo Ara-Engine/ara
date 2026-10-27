@@ -120,9 +120,7 @@ camera, else framed content; F/Frame All skip terrain and ground unless selected
 bus; editor failures use ARA4500-4504 (`codes.rs`, catalog `editor.md`) and
 `Editor::report_failure` re-logs an engine error's own diagnostics. Prefabs:
 `shell/prefab_ops.rs` (from selection, apply/revert overrides; root placement is
-never an override). C#: `shell/scripts.rs` queues reversible `source.replace` authoring
-jobs; the shared inventory compiles sources into `.ara/scripts/`. `extensions.rs`
-publishes C# commands/menus into the native registry; callbacks return typed commands.
+never an override). C#: `shell/scripts.rs` queues reversible `source.replace` authoring jobs; the shared inventory compiles sources into `.ara/scripts/`. `extensions.rs` publishes C# commands/menus into the native registry; callbacks return typed commands.
 Game view (D19): `app/game.rs` imports the play host's shared surfaces
 (`PlayService::surfaces`, taken in `Editor::open`) and shows texture `game-view`;
 `game_input` forwards keys/mouse to the selected client while captured (Esc releases).
