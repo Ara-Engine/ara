@@ -308,6 +308,7 @@ fn bundle_dotnet(root: &Path, stage: &Path, symbols: &Path, dist: &Path) -> Resu
         "Ara.Runtime",
         "Ara.CompileServer",
         "Ara.Analyzers",
+        "Ara.Analyzers.CodeFixes",
         "Ara.Generators",
         "Ara.RunWorker",
         "Ara.Agent",

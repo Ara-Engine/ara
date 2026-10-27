@@ -599,6 +599,14 @@ impl PlayService {
         let cache = self.assets()?.cache.to_string_lossy().into_owned();
         let mut types = Vec::new();
         types_files(&self.root, &self.root, &mut types);
+        let inventory = ara_script::project::inventory(&self.root).map_err(|d| vec![d])?;
+        types.extend(
+            inventory
+                .modules
+                .into_iter()
+                .filter(|m| m.profile == ara_script::ModuleProfile::Gameplay)
+                .filter_map(|m| m.schema),
+        );
         let scene = PlayScene {
             ui: game_ui::read(&self.root).map_err(|error| fail(codes::REQUEST, error))?,
             rendering: rendering::read(workspace).map_err(|error| fail(codes::REQUEST, error))?,
@@ -1486,12 +1494,32 @@ impl Service for PlayService {
 /// `.world`…) load, project types build on engine types, and the host (CLI, daemon,
 /// editor) validates documents exactly as its players do. Clashes become diagnostics.
 pub fn open_project(root: &Path) -> Result<ara_host::Project, Diagnostic> {
-    ara_host::Project::open_with(root, |db, registry| {
+    let published = ara_script::project::publish(root, ara_script::ModuleProfile::Gameplay);
+    let mut generated_paths = Vec::new();
+    let mut project = ara_host::Project::open_with(root, |db, registry| {
         let mut problems = ara_runtime::engine::register_schemas(db);
         ara_runtime::engine::register_commands(registry, db);
         if let Err(d) = ara_importers::commands::register(registry, db) {
             problems.push(d);
         }
+        match published {
+            Ok(inventory) => {
+                problems.extend(inventory.diagnostics);
+                for module in inventory
+                    .modules
+                    .iter()
+                    .filter(|m| m.profile == ara_script::ModuleProfile::Gameplay)
+                {
+                    if let Some(schema) = &module.schema {
+                        problems.extend(db.add_json_types(schema));
+                        generated_paths.push(root.join(&module.schema_path));
+                    }
+                }
+            }
+            Err(diagnostic) => problems.push(diagnostic),
+        }
         problems
-    })
+    })?;
+    project.type_files.extend(generated_paths);
+    Ok(project)
 }
