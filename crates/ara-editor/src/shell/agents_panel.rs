@@ -113,6 +113,9 @@ impl Shell {
                             .to_owned()
                     };
                     let (class, text) = match op {
+                        ara_doc::Op::File {
+                            path, prev, state, ..
+                        } => file_change(path, prev.as_ref(), state.as_ref()),
                         ara_doc::Op::Set {
                             id,
                             path,
@@ -216,5 +219,38 @@ fn ago(elapsed: std::time::Duration) -> String {
         5..=59 => format!("{s} s ago"),
         60..=3599 => format!("{} min ago", s / 60),
         _ => format!("{} h ago", s / 3600),
+    }
+}
+
+fn file_change(
+    path: &str,
+    previous: Option<&ara_doc::file_state::FileState>,
+    state: Option<&ara_doc::file_state::FileState>,
+) -> (&'static str, String) {
+    match (previous, state) {
+        (_, None) => ("destructive", format!("Delete {path}")),
+        (None, Some(_)) => ("success", format!("Create {path}")),
+        _ => ("warning", format!("Modify {path}")),
+    }
+}
+
+#[cfg(test)]
+mod file_tests {
+    use super::*;
+    #[test]
+    fn file_activity_names_the_path_and_the_operation() {
+        let file = ara_doc::file_state::FileState::bytes(b"source");
+        assert_eq!(
+            file_change("game/Σ.cs", None, Some(&file)),
+            ("success", "Create game/Σ.cs".into())
+        );
+        assert_eq!(
+            file_change("game/Σ.cs", Some(&file), Some(&file)),
+            ("warning", "Modify game/Σ.cs".into())
+        );
+        assert_eq!(
+            file_change("game/Σ.cs", Some(&file), None),
+            ("destructive", "Delete game/Σ.cs".into())
+        );
     }
 }
