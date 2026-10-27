@@ -4,7 +4,7 @@ use sdl3_sys::{events::*, scancode::SDL_Scancode, video::SDL_WindowID};
 use std::ffi::CString;
 
 /// Poll while the owned filename is alive; ara-platform must copy it into FileDrop.
-fn native(id: u32, event: Event, events: &mut Vec<(u32, Event)>) -> ara_ui::Result<()> {
+pub(super) fn native(id: u32, event: Event, events: &mut Vec<(u32, Event)>) -> ara_ui::Result<()> {
     let expected = format!("{event:?}");
     let filename = match &event {
         Event::FileDrop { path, .. } => Some(CString::new(path.to_string_lossy().as_bytes())?),

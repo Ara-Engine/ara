@@ -1,9 +1,11 @@
 //! Native OS-drop import proof on the verifier's scratch project and profile.
 //! Preparation and conflict planning stay in the backend; this probe observes their real jobs.
+use super::input_verify::native as native_input;
 use super::*;
 use ara_host::project::{AuthoredRole, AuthoredScope};
 use std::{collections::BTreeSet, path::Path};
 mod fixture;
+mod recovery;
 mod stream;
 
 const FOLDER: &str = "P4 Import Proof";
@@ -90,6 +92,8 @@ pub(super) struct ImportCheck {
     initialized: bool,
     stream_target: Option<(u32, [f32; 2])>,
     stream_frames: u32,
+    recovering: bool,
+    cleanup_events: u64,
 }
 impl ImportCheck {
     pub fn new(editor: &mut Editor, output: &Path) -> ara_ui::Result<Self> {
@@ -129,10 +133,12 @@ impl ImportCheck {
             initialized: false,
             stream_target: None,
             stream_frames: 0,
+            recovering: false,
+            cleanup_events: 0,
         })
     }
     pub fn finished(&self) -> bool {
-        self.index >= ACTS.len()
+        self.index >= ACTS.len() && !self.recovering
     }
     pub fn failures(&self) -> Vec<String> {
         self.results
@@ -150,6 +156,23 @@ impl ImportCheck {
         floats: &windows::Floats,
         events: &mut Vec<(u32, Event)>,
     ) -> ara_ui::Result<()> {
+        if self.recovering {
+            let before = events.len();
+            let cleaned = self.recover(shell, window, scale, events)?;
+            self.cleanup_events += events.len().saturating_sub(before) as u64;
+            if cleaned {
+                self.recovering = false;
+                // The next case has not taken its baseline or initialized its
+                // layout yet; do not let this cleanup frame capture age zero.
+                self.failed_frame = true;
+                self.started = Instant::now();
+                if let Some(result) = self.results.last_mut() {
+                    result["cleanup"] = json!({"jobsDrained":true,"ownedCardsDismissed":true,"conflictDialogClosed":true,"nativeEvents":self.cleanup_events});
+                }
+                self.write()?;
+            }
+            return Ok(());
+        }
         let Some(&act) = ACTS.get(self.index) else {
             return Ok(());
         };
@@ -163,7 +186,7 @@ impl ImportCheck {
                 events.push((sdl, Event::FocusLost));
                 events.push((sdl, Event::FileDropComplete));
             }
-            key(window, 41, events);
+            key(window, 41, events)?;
             self.advance();
             self.failed_frame = true;
             self.write()?;
@@ -287,13 +310,14 @@ impl ImportCheck {
                     _ => vec![&self.inputs.tone],
                 };
                 for source in sources {
-                    events.push((
+                    stream::native(
                         window.id(),
                         Event::FileDrop {
                             path: source.clone(),
                             position: point,
                         },
-                    ));
+                        events,
+                    )?;
                 }
             }
             2 => {
@@ -331,19 +355,12 @@ impl ImportCheck {
             }
             3 => {
                 if let Some(choice) = act.choice() {
-                    let suffix = format!("-choice-{choice}");
-                    let id = shell
-                        .ui
-                        .nodes
-                        .iter()
-                        .find(|node| {
-                            node.visible
-                                && node.element.id.starts_with("editor-confirm-")
-                                && node.element.id.ends_with(&suffix)
-                        })
-                        .map(|node| node.element.id.clone())
-                        .ok_or("Import conflict choice is not mounted")?;
-                    click(shell, &id, window, scale, events)?;
+                    let Some(id) = choice_control(shell, choice) else {
+                        return self.wait();
+                    };
+                    if !click(shell, &id, window, scale, events)? {
+                        return self.wait();
+                    }
                 } else if act == Act::Cancel {
                     let report = shell.asset_import_report();
                     let job = import_job(&report, &self.old_jobs)
@@ -352,13 +369,15 @@ impl ImportCheck {
                         return Err("Preparation committed before the native Cancel click; cancellation remains unverified".into());
                     }
                     let id = job["job"].as_str().ok_or("Import job identity missing")?;
-                    click(
+                    if !click(
                         shell,
                         &format!("asset-import-{:016x}-action", ara_ui::source::stable_id(id)),
                         window,
                         scale,
                         events,
-                    )?;
+                    )? {
+                        return self.wait();
+                    }
                 }
             }
             4 => {
@@ -412,13 +431,13 @@ impl ImportCheck {
                 self.terminal = Some(job.clone());
                 self.committed = Some(committed);
             }
-            5 if act == Act::UndoRedo => chord(window, false, events),
+            5 if act == Act::UndoRedo => chord(window, false, events)?,
             6 if act == Act::UndoRedo => {
                 if fixture::snapshot(editor, &target.storage)? != self.before {
                     return self.wait();
                 }
             }
-            7 if act == Act::UndoRedo => chord(window, true, events),
+            7 if act == Act::UndoRedo => chord(window, true, events)?,
             8 if act == Act::UndoRedo => {
                 if self.committed.as_ref() != Some(&fixture::snapshot(editor, &target.storage)?) {
                     return self.wait();
@@ -440,7 +459,11 @@ impl ImportCheck {
         shell: &Shell,
         gpu: &mut NativeUi,
     ) -> ara_ui::Result<()> {
-        if std::mem::take(&mut self.failed_frame) || self.finished() || self.waiting {
+        if std::mem::take(&mut self.failed_frame)
+            || self.finished()
+            || self.recovering
+            || self.waiting
+        {
             return Ok(());
         }
         let act = ACTS[self.index];
@@ -504,7 +527,11 @@ impl ImportCheck {
                         && self.stream_frames >= 3
                         && terminal["destination"] == FOLDER
                         && terminal["sources"] == 2
-                        && count(outcome, "created") == 2
+                        && paired_created(
+                            outcome,
+                            &after["identities"],
+                            &["native-other.wav", "native-tone.wav"],
+                        )
                         && after["identities"]
                             .as_object()
                             .is_some_and(|ids| ids.len() == 2)
@@ -541,7 +568,8 @@ impl ImportCheck {
             self.results.push(json!({"journey":act.label(),"ok":ok,"beforeRevision":self.before_revision,"afterRevision":editor.host.store().revision(),
                 "transactions":transactions,"unchanged":unchanged,"selectionBefore":self.selection,"selectionAfter":fixture::selection(editor,shell),
                 "cancelablePreparation":self.cancel_observed,"requiredResultInventoryPresent":outcome.get("created").is_some()||outcome.get("skipped").is_some(),
-                "outcome":terminal,"before":self.before,"after":after,"trace":self.trace,"injectedEvents":self.injected_events,"newImportJobs":new_jobs,"framesRetainedBeforeComplete":self.stream_frames}));
+                "outcome":terminal,"before":self.before,"after":after,"trace":self.trace,"injectedEvents":self.injected_events,"newImportJobs":new_jobs,"framesRetainedBeforeComplete":self.stream_frames,
+                "createdMediaAndPairedSidecars":if act==Act::Batch {Some(paired_created(outcome,&after["identities"],&["native-other.wav","native-tone.wav"]))}else{None}}));
             self.advance();
             self.write()?;
         } else {
@@ -562,6 +590,8 @@ impl ImportCheck {
         self.initialized = false;
         self.stream_target = None;
         self.stream_frames = 0;
+        self.recovering = true;
+        self.cleanup_events = 0;
     }
     fn capture(
         &mut self,
@@ -615,6 +645,31 @@ impl ImportCheck {
 fn count(result: &Value, key: &str) -> usize {
     result[key].as_array().map_or(0, Vec::len)
 }
+/// Import inventory lists media and its sidecar separately; require both paths
+/// exactly once, with the same freshly indexed identity for each pair.
+fn paired_created(result: &Value, identities: &Value, expected: &[&str]) -> bool {
+    let Some(created) = result["created"].as_array() else {
+        return false;
+    };
+    created.len() == expected.len() * 2
+        && expected.iter().all(|name| {
+            let Some(id) = identities[*name].as_str() else {
+                return false;
+            };
+            let media = format!("{FOLDER}/{name}");
+            let sidecar = format!("{media}.import.json");
+            [&media, &sidecar].into_iter().all(|path| {
+                created
+                    .iter()
+                    .filter(|entry| {
+                        entry["path"].as_str() == Some(path.as_str())
+                            && entry["asset"].as_str() == Some(id)
+                    })
+                    .count()
+                    == 1
+            })
+        })
+}
 fn job_ids(report: &Value) -> BTreeSet<String> {
     report["jobs"]
         .as_array()
@@ -646,74 +701,70 @@ fn click(
     window: &Window,
     scale: f32,
     events: &mut Vec<(u32, Event)>,
-) -> ara_ui::Result<()> {
-    let node = shell
-        .shown_node(id)
-        .map(|index| &shell.ui.nodes[index])
-        .ok_or_else(|| format!("Import control {id} is not reachable"))?;
-    events.push((
-        window.id(),
-        Event::MouseMotion {
-            position: [
-                (node.rect.x + node.rect.w * 0.5) / scale,
-                (node.rect.y + node.rect.h * 0.5) / scale,
-            ],
-            delta: [0.; 2],
-        },
-    ));
-    for pressed in [true, false] {
-        events.push((window.id(), Event::MouseButton { button: 1, pressed }));
+) -> ara_ui::Result<bool> {
+    let Some(node) = shell.shown_node(id).map(|index| &shell.ui.nodes[index]) else {
+        return Ok(false);
+    };
+    if node.state.disabled {
+        return Ok(false);
     }
-    Ok(())
+    let rect = node.rect.intersection(node.clip);
+    if rect.w <= 2. || rect.h < node.rect.h * 0.8 {
+        // Finished cards remain reviewable in a real scrolling surface. Use its
+        // normal wheel path to reach an owned job instead of clicking through a clip.
+        if id.starts_with("asset-import-")
+            && let Some(index) = shell.shown_node("asset-import-scroll")
+        {
+            let scroll = &shell.ui.nodes[index];
+            let rect = scroll.rect.intersection(scroll.clip);
+            if rect.w > 2. && rect.h > 2. {
+                native_input::motion(
+                    window,
+                    [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5],
+                    scale,
+                    events,
+                )?;
+                native_input::wheel(window, if node.rect.y < rect.y { 4. } else { -4. }, events)?;
+            }
+        }
+        return Ok(false);
+    }
+    native_input::motion(
+        window,
+        [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5],
+        scale,
+        events,
+    )?;
+    native_input::button(window, true, events)?;
+    native_input::button(window, false, events)?;
+    Ok(true)
 }
-fn key(window: &Window, scan: i32, events: &mut Vec<(u32, Event)>) {
-    for pressed in [true, false] {
-        events.push((
-            window.id(),
-            Event::Key {
-                scancode: scan,
-                pressed,
-                repeat: false,
-            },
-        ));
-    }
+fn key(window: &Window, scan: i32, events: &mut Vec<(u32, Event)>) -> ara_ui::Result<()> {
+    native_input::tap(window, scan, events)
 }
-fn chord(window: &Window, redo: bool, events: &mut Vec<(u32, Event)>) {
-    events.push((
-        window.id(),
-        Event::Key {
-            scancode: 224,
-            pressed: true,
-            repeat: false,
-        },
-    ));
+fn chord(window: &Window, redo: bool, events: &mut Vec<(u32, Event)>) -> ara_ui::Result<()> {
+    let primary = if cfg!(target_os = "macos") { 227 } else { 224 };
+    native_input::key(window, primary, true, events)?;
     if redo {
-        events.push((
-            window.id(),
-            Event::Key {
-                scancode: 225,
-                pressed: true,
-                repeat: false,
-            },
-        ));
+        native_input::key(window, 225, true, events)?;
     }
-    key(window, 29, events);
+    key(window, 29, events)?;
     if redo {
-        events.push((
-            window.id(),
-            Event::Key {
-                scancode: 225,
-                pressed: false,
-                repeat: false,
-            },
-        ));
+        native_input::key(window, 225, false, events)?;
     }
-    events.push((
-        window.id(),
-        Event::Key {
-            scancode: 224,
-            pressed: false,
-            repeat: false,
-        },
-    ));
+    native_input::key(window, primary, false, events)
+}
+
+fn choice_control(shell: &Shell, choice: usize) -> Option<String> {
+    let modal = shell.ui.nodes.iter().find(|node| {
+        node.element.tag == "modal"
+            && node
+                .element
+                .attrs
+                .get("label")
+                .is_some_and(|title| title == "Files already exist")
+            && shell.shown_node(&node.element.id).is_some()
+    })?;
+    let id = format!("{}-choice-{choice}", modal.element.id);
+    shell.shown_node(&id).map(|_| id)
 }

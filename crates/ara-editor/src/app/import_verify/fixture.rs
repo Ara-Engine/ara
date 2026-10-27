@@ -11,8 +11,8 @@ pub(super) struct Inputs {
 }
 impl Inputs {
     pub fn new(output: &Path, project: &Path) -> ara_ui::Result<Self> {
-        let output = std::path::absolute(output)?;
-        let project = std::path::absolute(project)?;
+        let output = dunce::canonicalize(output)?;
+        let project = dunce::canonicalize(project)?;
         if output.starts_with(&project) {
             return Err("Native import inputs must be outside the scratch project".into());
         }
