@@ -16,7 +16,12 @@ use image::RgbaImage;
 use std::{
     collections::BTreeSet,
     path::Path,
-    sync::mpsc::{self, Receiver, SyncSender},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc::{self, Receiver, SyncSender},
+    },
+    thread::JoinHandle,
 };
 
 /// Pixel size of Assets grid tiles: 2× their 64 px logical thumbnail.
@@ -49,10 +54,12 @@ enum Source {
     Material(Box<ara_material::Material>),
 }
 pub(crate) struct Thumbnails {
-    send: SyncSender<Request>,
+    send: Option<SyncSender<Request>>,
     /// Live and in-node previews queue on their own worker: behind nothing, blocking nothing.
-    previews: SyncSender<Request>,
-    receive: Receiver<Done>,
+    previews: Option<SyncSender<Request>>,
+    receive: Option<Receiver<Done>>,
+    stopping: Arc<AtomicBool>,
+    workers: [Option<JoinHandle<()>>; 2],
     requested: BTreeSet<String>,
     /// Keys whose source had not published, asked again by `retry_pending`.
     pending: BTreeSet<String>,
@@ -64,12 +71,25 @@ impl Thumbnails {
         let (send, requests) = mpsc::sync_channel::<Request>(48);
         let (previews, preview_requests) = mpsc::sync_channel::<Request>(32);
         let (results, receive) = mpsc::sync_channel(8);
-        worker(root.to_owned(), requests, results.clone());
-        worker(root.to_owned(), preview_requests, results);
+        let stopping = Arc::new(AtomicBool::new(false));
+        let sources = worker(
+            root.to_owned(),
+            requests,
+            results.clone(),
+            Arc::clone(&stopping),
+        );
+        let materials = worker(
+            root.to_owned(),
+            preview_requests,
+            results,
+            Arc::clone(&stopping),
+        );
         Self {
-            send,
-            previews,
-            receive,
+            send: Some(send),
+            previews: Some(previews),
+            receive: Some(receive),
+            stopping,
+            workers: [Some(sources), Some(materials)],
             requested: BTreeSet::new(),
             pending: BTreeSet::new(),
         }
@@ -151,17 +171,23 @@ impl Thumbnails {
             pixels: pixels.clamp(16, MASTER),
         };
         let queue = if matches!(request.source, Source::Material(_) | Source::Bytes(_)) {
-            &self.previews
+            self.previews.as_ref()
         } else {
-            &self.send
+            self.send.as_ref()
         };
-        if queue.try_send(request).is_ok() {
+        if queue.is_some_and(|queue| queue.try_send(request).is_ok()) {
             self.requested.insert(key);
         }
     }
     /// Finished requests (up to 8 a frame).
     pub fn poll(&mut self) -> Vec<Done> {
-        let done: Vec<Done> = self.receive.try_iter().take(8).collect();
+        let done: Vec<Done> = self
+            .receive
+            .as_ref()
+            .into_iter()
+            .flat_map(|receive| receive.try_iter())
+            .take(8)
+            .collect();
         for result in &done {
             if let Done::Pending(key) = result {
                 self.pending.insert(key.clone());
@@ -188,23 +214,50 @@ impl Thumbnails {
     }
 }
 
+impl Drop for Thumbnails {
+    fn drop(&mut self) {
+        self.stopping.store(true, Ordering::Release);
+        drop(self.send.take());
+        drop(self.previews.take());
+        // A producer may be blocked in the bounded results send. Disconnect that
+        // receiver before joining, including when the UI never polled its images.
+        drop(self.receive.take());
+        for worker in &mut self.workers {
+            if let Some(worker) = worker.take() {
+                let _ = worker.join();
+            }
+        }
+    }
+}
+
 /// One thumbnail worker thread; each result is sent the moment it lands. Sources and
 /// the page's live preview always go next, even ahead of in-node previews queued
 /// before them (they matter most). Derived materials (in-node previews) go three at a
 /// time: their preview shaders cook side by side (each cook is compiler processes),
 /// then they render one by one, letting any newly queued page preview in between.
-fn worker(root: std::path::PathBuf, requests: Receiver<Request>, results: SyncSender<Done>) {
+fn worker(
+    root: std::path::PathBuf,
+    requests: Receiver<Request>,
+    results: SyncSender<Done>,
+    stopping: Arc<AtomicBool>,
+) -> JoinHandle<()> {
     std::thread::spawn(move || {
         let mut renderer = None;
         // Queued requests in arrival order, and derived ones already cooked.
         let mut queue: Vec<Request> = Vec::new();
         let mut cooked: std::collections::VecDeque<Request> = Default::default();
         loop {
+            if stopping.load(Ordering::Acquire) {
+                return;
+            }
             if queue.is_empty() && cooked.is_empty() {
                 match requests.recv() {
                     Ok(request) => queue.push(request),
                     Err(_) => return,
                 }
+            }
+            if stopping.load(Ordering::Acquire) {
+                return;
             }
             queue.extend(requests.try_iter());
             let first = queue
@@ -227,11 +280,14 @@ fn worker(root: std::path::PathBuf, requests: Receiver<Request>, results: SyncSe
                     request
                 }
             };
+            if stopping.load(Ordering::Acquire) {
+                return;
+            }
             if results.send(finish(&root, &next, &mut renderer)).is_err() {
                 return;
             }
         }
-    });
+    })
 }
 
 /// Cooks the preview shaders of derived materials side by side. Errors surface again
@@ -507,6 +563,10 @@ pub(crate) fn image_name(slot: usize) -> String {
 pub(crate) fn image_id(slot: usize) -> u32 {
     ara_ui::source::stable_id(&image_name(slot)) as u32 & 0x7fff_ffff
 }
+
+#[cfg(test)]
+#[path = "thumbnails/shutdown_tests.rs"]
+mod shutdown_tests;
 
 #[cfg(test)]
 mod tests {
