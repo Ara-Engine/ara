@@ -104,6 +104,7 @@ fn check(size: [u32; 2]) -> Result<()> {
 
 /// An embedded player's shared ring, pacing, input and frame statistics.
 pub struct Embedded {
+    pub(crate) game_ui: Option<crate::game_ui::Surface>,
     ring: ExportRing,
     interval: Duration,
     last: Option<Instant>,
@@ -152,6 +153,7 @@ impl Embedded {
         let fps = params.max_fps.unwrap_or(60).clamp(1, 1000);
         Ok((
             Self {
+                game_ui: None,
                 ring,
                 interval: Duration::from_secs_f64(1.0 / f64::from(fps)),
                 last: None,
@@ -254,15 +256,30 @@ impl Embedded {
         let rendered_at_us = now_us();
         let copy = Instant::now();
         let renderer = presenter.renderer().context("renderer missing")?;
-        let source = presenter
-            .output()
-            .context("completed presentation missing")?;
-        // SAFETY: The presenter completed this RGBA8 CopySource image at output_size
-        // on the ring's device; this thread owns its queues.
-        let Some(published) = (unsafe {
-            self.ring
-                .publish_image(renderer.gpu(), source, presenter.output_size(), frame.tick)?
-        }) else {
+        let published = match &mut self.game_ui {
+            Some(ui) => {
+                ui.render(presenter)?;
+                // SAFETY: the game UI completed its composite of this presenter's scene on
+                // the ring's GPU; this thread owns its queues.
+                unsafe { ui.publish(renderer.gpu(), &mut self.ring, frame.tick)? }
+            }
+            None => {
+                let source = presenter
+                    .output()
+                    .context("completed presentation missing")?;
+                // SAFETY: the presenter completed this RGBA8 CopySource image at output_size
+                // on the ring's device; this thread owns its queues.
+                unsafe {
+                    self.ring.publish_image(
+                        renderer.gpu(),
+                        source,
+                        presenter.output_size(),
+                        frame.tick,
+                    )?
+                }
+            }
+        };
+        let Some(published) = published else {
             return Ok(None);
         };
         let publish_us = copy.elapsed().as_micros() as u64;

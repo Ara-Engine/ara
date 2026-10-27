@@ -90,3 +90,21 @@ AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
 ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 For more information, please refer to <http://unlicense.org/>.
+
+## Outpost v0 game assets
+
+The sample's redistributable art and audio are pinned by URL, BLAKE3 and size in
+`samples/assets.lock.json`; `ara-samples fetch` restores the original files and
+licence notices. The generated inventory is `samples/THIRD_PARTY_ASSETS.md`.
+
+- **Robot Expressive**, by Tomás Laulhé / Quaternius, CC0-1.0:
+  <https://quaternius.com/packs/animatedrobot.html>. The pinned glTF conversion
+  includes Don McCurdy's modifications and its original README from three.js
+  revision `e06d724a29df5b44c6ad878207974eb09ed7e0d9`.
+- **Space Kit**, **Sci-Fi Sounds**, **Interface Sounds**, **Impact Sounds**, and
+  **UI Pack Space Expansion**, by Kenney, CC0-1.0: <https://kenney.nl/assets>.
+  This includes the drone model, input/reticle icons, Kenney Future fonts and game
+  sound effects. Each downloaded archive retains its original `License.txt`.
+- Existing Poly Haven compound props, materials and industrial doors, and the
+  OpenGameArt ambience/music remain attributed individually in the asset lock and
+  `samples/THIRD_PARTY_ASSETS.md` under their recorded permissive licences.

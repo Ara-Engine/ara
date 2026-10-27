@@ -56,6 +56,12 @@ struct Control {
     stop: bool,
 }
 
+impl PerfOptions {
+    pub(super) fn requested(&self) -> bool {
+        self.perf_output.is_some()
+    }
+}
+
 pub(super) struct Window {
     options: PerfOptions,
     offscreen: bool,

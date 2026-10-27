@@ -22,6 +22,7 @@ const ESCAPE: i32 = 41;
 
 /// The player's window and device-input state.
 pub struct Windowed {
+    pub(crate) game_ui: Option<crate::game_ui::Surface>,
     window: Window,
     present: Option<Present>,
     present2d: Option<Present>,
@@ -57,6 +58,19 @@ pub fn warm_frame() -> RenderFrame {
 }
 
 impl Windowed {
+    pub(crate) fn raw_events(&mut self) -> Result<Vec<Event>> {
+        self.window.poll()
+    }
+    pub(crate) fn window_size(&self) -> Result<[u32; 2]> {
+        self.window.size()
+    }
+    pub(crate) fn set_window_mode(
+        &self,
+        mode: ara_platform::GameWindowMode,
+        size: [u32; 2],
+    ) -> Result<()> {
+        self.window.set_game_mode(mode, size)
+    }
     /// Startup-only diagnostic: render normally without creating a swapchain.
     pub(crate) fn disable_presentation(&mut self) {
         debug_assert!(self.present.is_none() && self.present2d.is_none());
@@ -180,11 +194,22 @@ impl Windowed {
             // after device idle in `recreate`/`Drop` ordering below.
             self.present = Some(unsafe { Present::create(renderer.gpu(), &self.window)? });
         }
-        let image = presenter.output().context("presented image missing")?;
+        // The game UI (if any) composites the scene into its own target and presents it.
+        if let Some(surface) = &mut self.game_ui {
+            surface.render(presenter)?;
+        }
         let result = match &mut self.present {
-            // SAFETY: the renderer completed this CopySource image; both owners are live.
+            // SAFETY: the renderer, or the game UI over it, completed its CopySource image;
+            // both owners are live.
             Some(present) => unsafe {
-                present.present_image(renderer.gpu(), image, presenter.output_size())
+                match &self.game_ui {
+                    Some(surface) => surface.present(renderer.gpu(), present),
+                    None => present.present_image(
+                        renderer.gpu(),
+                        presenter.output().context("presented image missing")?,
+                        presenter.output_size(),
+                    ),
+                }
             },
             None => Ok(()),
         };
@@ -274,6 +299,7 @@ impl Windowed {
 
     /// Destroys presentation objects after the device is idle (before exit).
     pub fn shutdown(&mut self, presenter: &Presenter) -> Result<()> {
+        self.game_ui = None;
         self.recreate(presenter)
     }
 

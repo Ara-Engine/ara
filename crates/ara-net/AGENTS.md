@@ -15,6 +15,10 @@ link Lightyear, Replicon, App, sockets, histories or network services.
   source. Sources run only when sampling new inputs, never during native replay.
   Rollback history covers the configured prediction horizon; keep those budgets
   aligned so delayed authoritative samples remain reconcilable.
+  Status and injection bounds use the corrected input clock after PostUpdate shifts,
+  rather than the tick sampled before synchronization adjusted the timeline.
+  `inject_next` queues immediate actions until native sampling stamps their tick;
+  use `inject(tick, ..)` for explicit future schedules, never stale device timestamps.
 - `Server::advance` / `Client::advance` use caller-supplied elapsed time instead of
   wall-clock polling. Advance all peers and `Link::pump` from the same clock;
   do not mix these calls with `poll`. The first advance consumes its full duration.
@@ -29,6 +33,10 @@ link Lightyear, Replicon, App, sockets, histories or network services.
   Replicon. Quantization/interpolation are independent of rollback metadata.
   Plain nested values inherit their container's policy. If a nested type declares
   child policies, unannotated children stay private. Scoped collections are rejected.
+  Compatibility hashes cover visible wire fields, policies and reachable value
+  versions/shapes; docs, private state and unrelated editor modules are excluded.
+  Client component reads use the received field index and return None for absent
+  components; mirrors must never instantiate default components from empty projections.
 - Native predicted movement requires complete relevant rollback fields in its state
   unit. Other components may mix private/public fields. Unsupported recursive or
   scoped collection layouts fail at registration rather than leaking private data.

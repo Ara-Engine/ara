@@ -54,7 +54,7 @@ pub struct TickRecord {
     /// Host streaming arrivals actually applied before this tick's systems.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub streaming: Vec<crate::StreamChange>,
-    /// Hash after this tick; absent when history/hash sampling is disabled.
+    /// Hash after a sampled tick; absent when hashing is disabled or between samples.
     pub hash: Option<StateHash>,
 }
 
@@ -115,6 +115,7 @@ pub struct Session {
     pub(crate) sequences: BTreeMap<PlayerId, u64>,
     pub(crate) mode: SessionMode,
     pub(crate) record_hashes: bool,
+    pub(crate) hash_interval: std::num::NonZeroU32,
     pub(crate) fault: Option<SimError>,
     pub(crate) providers: Vec<Box<dyn crate::StateProvider>>,
     slots: usize,
@@ -153,6 +154,7 @@ impl Session {
             sequences: BTreeMap::new(),
             mode: SessionMode::Local,
             record_hashes: false,
+            hash_interval: std::num::NonZeroU32::MIN,
             fault: None,
             providers: Vec::new(),
             slots: 0,
@@ -325,6 +327,15 @@ impl Session {
     /// Enables optional per-tick state hashing for recording/tests/desync checks.
     pub fn set_hash_sampling(&mut self, enabled: bool) {
         self.record_hashes = enabled;
+    }
+    /// Selects hash checkpoints by absolute tick number; set before recording.
+    /// Inputs, commands and streaming arrivals are still recorded at every boundary.
+    pub fn set_hash_interval(&mut self, every: std::num::NonZeroU32) -> Result<()> {
+        if self.record_hashes {
+            return Err(SimError("set hash interval before recording".into()));
+        }
+        self.hash_interval = every;
+        Ok(())
     }
     /// Adjusts host-time speed; explicit step calls always execute exact fixed ticks.
     pub fn set_timescale(&mut self, value: f64) -> Result<()> {
@@ -527,7 +538,9 @@ impl Session {
             }
         }
         self.schedule.run(&mut self.edit.world);
-        let hash = self.record_hashes.then(|| self.state_hash()).transpose()?;
+        let hash = (self.record_hashes && tick.is_multiple_of(u64::from(self.hash_interval.get())))
+            .then(|| self.state_hash())
+            .transpose()?;
         Ok(TickRecord {
             tick,
             inputs,

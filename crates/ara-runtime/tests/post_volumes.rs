@@ -10,11 +10,24 @@ fn the_outpost_scene_post_process_loads_as_a_global_volume() {
     let schema = ara_runtime::schema(&[]).unwrap();
     let path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/outpost/levels/outpost.scene");
-    let text = std::fs::read_to_string(&path).unwrap();
-    assert!(
-        text.contains("\"PostProcess\""),
-        "the sample predates volumes"
+    let mut legacy: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    // Canonical saves migrate the sample. Recreate its former component in memory
+    // so this regression keeps exercising the legacy reader after any save.
+    legacy["versions"]
+        .as_object_mut()
+        .unwrap()
+        .remove("PostProcessVolume");
+    legacy["versions"]["PostProcess"] = serde_json::json!(1);
+    let environment = legacy["records"]["e_env"].as_object_mut().unwrap();
+    environment.remove("PostProcessVolume");
+    environment.insert(
+        "PostProcess".into(),
+        serde_json::json!({
+            "compensation": -0.5, "bloom": 0.05
+        }),
     );
+    let text = serde_json::to_string(&legacy).unwrap();
     let doc = ara_doc::read(&text, "levels/outpost.scene", &schema, None)
         .doc
         .unwrap();

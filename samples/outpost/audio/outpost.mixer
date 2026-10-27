@@ -1,0 +1,17 @@
+{
+  "$schema": "ara://schema/mixer/1",
+  "id": "mx_outpost",
+  "records": {
+    "b_master": {
+      "name": "master"
+    },
+    "b_music": {
+      "name": "music",
+      "output": "master"
+    },
+    "b_sfx": {
+      "name": "sfx",
+      "output": "master"
+    }
+  }
+}

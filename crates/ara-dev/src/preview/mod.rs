@@ -204,15 +204,23 @@ fn prepare<R: Runner>(
     let lock =
         version::external_resolutions(&fs::read_to_string(context.source.join("Cargo.lock"))?)?;
     version::bump(&context.source, &version, &head)?;
+    // `cargo metadata --no-deps` never resolves, so it left Cargo.lock at the old
+    // version and the release build rewrote it after the version commit.
     context.command(
         "lockfile",
-        Command::new("cargo").args(["metadata", "--no-deps", "--format-version=1"]),
+        Command::new("cargo").args(["update", "--workspace", "--offline"]),
         false,
     )?;
+    let bumped_lock = fs::read_to_string(context.source.join("Cargo.lock"))?;
     ensure!(
-        version::external_resolutions(&fs::read_to_string(context.source.join("Cargo.lock"))?)?
-            == lock,
+        version::external_resolutions(&bumped_lock)? == lock,
         "preview bump changed a third-party dependency resolution"
+    );
+    let stale = version::stale_local_entries(&bumped_lock, &current)?;
+    ensure!(
+        stale.is_empty(),
+        "Cargo.lock still lists workspace packages at {current}: {}",
+        stale.join(", ")
     );
     let changes = crate::git::text(&context.source, ["diff", "--name-only"])?;
     ensure!(
@@ -246,6 +254,20 @@ fn prepare<R: Runner>(
             .join(tool.file_name().context("tool filename")?),
         &tool,
     )?;
+    // Sample content is fetched, not tracked (samples/.gitignore), and packaging
+    // builds the sample kits from it. Seed the clone from the caller's blob cache so
+    // fetch stays offline when it can, then fetch and verify against assets.lock.json.
+    let blobs = root.join("samples/.cache/blobs");
+    if blobs.is_dir() {
+        crate::d26::copy_tree(&blobs, &context.source.join("samples/.cache/blobs"))?;
+    }
+    for step in ["fetch", "verify"] {
+        context.command(
+            &format!("samples-{step}"),
+            Command::new("cargo").args(["run", "--release", "-p", "ara-samples", "--", step]),
+            false,
+        )?;
+    }
     let artifacts = context.source.join("target/release-dist");
     let mut prepared = Prepared {
         format: "ara.preview/1".into(),

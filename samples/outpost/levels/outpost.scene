@@ -1,6 +1,9 @@
 {
   "$schema": "ara://schema/scene/1",
   "id": "sc_outpost1",
+  "versions": {
+    "PostProcessVolume": 2
+  },
   "records": {
     "e_aircon": {
       "name": "Air conditioner",
@@ -282,10 +285,9 @@
       "Camera": {},
       "FollowCamera": {
         "target": "e_player",
-        "distance": 4.2,
-        "height": 1.55,
-        "yaw": 140,
-        "pitch": 12
+        "distance": 4.8,
+        "height": 1.6,
+        "pitch": 15
       },
       "Transform": {
         "position": [84, 2.2, 86]
@@ -2134,9 +2136,35 @@
         "albedo": [0.92, 0.86, 0.78, 1],
         "anisotropy": 0.5
       },
-      "PostProcess": {
-        "compensation": -0.5,
-        "bloom": 0.05
+      "PostProcessVolume": {
+        "overrides": [
+          {
+            "exposure": "auto",
+            "ev100": 10,
+            "compensation": -0.5,
+            "minEv100": -2,
+            "maxEv100": 16,
+            "adaptationSpeed": 2
+          },
+          {
+            "module": "toneMapping",
+            "toneMapping": "filmic"
+          },
+          {
+            "module": "bloom",
+            "bloom": 0.05
+          },
+          {
+            "module": "colorGrading",
+            "whiteBalance": 6500,
+            "saturation": 1,
+            "contrast": 1
+          },
+          {
+            "module": "vignette",
+            "vignette": 0
+          }
+        ]
       },
       "SkyAtmosphere": {
         "aerosols": 1.5,
@@ -3659,6 +3687,377 @@
         "rotation": [-22.619854, -67.02727, -20.98786]
       }
     },
+    "e_gamecache00": {
+      "name": "Signal cache 1",
+      "order": "b2o",
+      "Light": {
+        "color": [0.6, 1, 0.4, 1],
+        "intensity": 65,
+        "range": 3
+      },
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_toolbox/metal_toolbox_1k.gltf#as_metaltoolbox",
+        "emissive": [0.12, 0.24, 0.06]
+      },
+      "SalvageCache": {},
+      "Transform": {
+        "position": [94, 0.6, 91],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_gamecache01": {
+      "name": "Signal cache 2",
+      "order": "b2p",
+      "Light": {
+        "color": [0.6, 1, 0.4, 1],
+        "intensity": 65,
+        "range": 3
+      },
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_toolbox/metal_toolbox_1k.gltf#as_metaltoolbox",
+        "emissive": [0.12, 0.24, 0.06]
+      },
+      "SalvageCache": {
+        "kind": 1
+      },
+      "Transform": {
+        "position": [99, 0.6, 94],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_gamecache02": {
+      "name": "Signal cache 3",
+      "order": "b2q",
+      "Light": {
+        "color": [0.6, 1, 0.4, 1],
+        "intensity": 65,
+        "range": 3
+      },
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_toolbox/metal_toolbox_1k.gltf#as_metaltoolbox",
+        "emissive": [0.12, 0.24, 0.06]
+      },
+      "SalvageCache": {
+        "kind": 2
+      },
+      "Transform": {
+        "position": [102, 0.6, 99],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_gamecache03": {
+      "name": "Signal cache 4",
+      "order": "b2r",
+      "Light": {
+        "color": [0.6, 1, 0.4, 1],
+        "intensity": 65,
+        "range": 3
+      },
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_toolbox/metal_toolbox_1k.gltf#as_metaltoolbox",
+        "emissive": [0.12, 0.24, 0.06]
+      },
+      "SalvageCache": {},
+      "Transform": {
+        "position": [98, 0.6, 106],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_gamecache04": {
+      "name": "Signal cache 5",
+      "order": "b2s",
+      "Light": {
+        "color": [0.6, 1, 0.4, 1],
+        "intensity": 65,
+        "range": 3
+      },
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_toolbox/metal_toolbox_1k.gltf#as_metaltoolbox",
+        "emissive": [0.12, 0.24, 0.06]
+      },
+      "SalvageCache": {
+        "kind": 1
+      },
+      "Transform": {
+        "position": [92, 0.6, 108],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_gamecache05": {
+      "name": "Signal cache 6",
+      "order": "b2t",
+      "Light": {
+        "color": [0.6, 1, 0.4, 1],
+        "intensity": 65,
+        "range": 3
+      },
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_toolbox/metal_toolbox_1k.gltf#as_metaltoolbox",
+        "emissive": [0.12, 0.24, 0.06]
+      },
+      "SalvageCache": {
+        "kind": 2
+      },
+      "Transform": {
+        "position": [101, 0.6, 113],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_gamecache06": {
+      "name": "Signal cache 7",
+      "order": "b2u",
+      "Light": {
+        "color": [0.6, 1, 0.4, 1],
+        "intensity": 65,
+        "range": 3
+      },
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_toolbox/metal_toolbox_1k.gltf#as_metaltoolbox",
+        "emissive": [0.12, 0.24, 0.06]
+      },
+      "SalvageCache": {},
+      "Transform": {
+        "position": [90, 0.6, 119],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_gamecache07": {
+      "name": "Signal cache 8",
+      "order": "b2v",
+      "Light": {
+        "color": [0.6, 1, 0.4, 1],
+        "intensity": 65,
+        "range": 3
+      },
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_toolbox/metal_toolbox_1k.gltf#as_metaltoolbox",
+        "emissive": [0.12, 0.24, 0.06]
+      },
+      "SalvageCache": {
+        "kind": 1
+      },
+      "Transform": {
+        "position": [100, 0.6, 124],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_gamecache08": {
+      "name": "Signal cache 9",
+      "order": "b2w",
+      "Light": {
+        "color": [0.6, 1, 0.4, 1],
+        "intensity": 65,
+        "range": 3
+      },
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_toolbox/metal_toolbox_1k.gltf#as_metaltoolbox",
+        "emissive": [0.12, 0.24, 0.06]
+      },
+      "SalvageCache": {
+        "kind": 2
+      },
+      "Transform": {
+        "position": [81, 0.6, 94],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_gamecache09": {
+      "name": "Signal cache 10",
+      "order": "b2x",
+      "Light": {
+        "color": [0.6, 1, 0.4, 1],
+        "intensity": 65,
+        "range": 3
+      },
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_toolbox/metal_toolbox_1k.gltf#as_metaltoolbox",
+        "emissive": [0.12, 0.24, 0.06]
+      },
+      "SalvageCache": {},
+      "Transform": {
+        "position": [111, 0.6, 92],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_gamecache10": {
+      "name": "Signal cache 11",
+      "order": "b2y",
+      "Light": {
+        "color": [0.6, 1, 0.4, 1],
+        "intensity": 65,
+        "range": 3
+      },
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_toolbox/metal_toolbox_1k.gltf#as_metaltoolbox",
+        "emissive": [0.12, 0.24, 0.06]
+      },
+      "SalvageCache": {
+        "kind": 1
+      },
+      "Transform": {
+        "position": [110, 0.6, 111],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_gamecache11": {
+      "name": "Signal cache 12",
+      "order": "b2z",
+      "Light": {
+        "color": [0.6, 1, 0.4, 1],
+        "intensity": 65,
+        "range": 3
+      },
+      "MeshRenderer": {
+        "model": "@assets/third_party/metal_toolbox/metal_toolbox_1k.gltf#as_metaltoolbox",
+        "emissive": [0.12, 0.24, 0.06]
+      },
+      "SalvageCache": {
+        "kind": 2
+      },
+      "Transform": {
+        "position": [80, 0.6, 119],
+        "scale": [1.2, 1.2, 1.2]
+      }
+    },
+    "e_gamedoor0": {
+      "name": "Shared salvage hatch",
+      "order": "b30",
+      "Collider": {
+        "center": [1, 1.3, 0],
+        "halfExtents": [1, 1.3, 0.12]
+      },
+      "RigidBody": {
+        "motion": "kinematic"
+      },
+      "SharedDoor": {},
+      "Transform": {
+        "position": [98, 0, 103.8]
+      }
+    },
+    "e_gamedoor0visual": {
+      "name": "Graffiti shutter leaf",
+      "parent": "e_gamedoor0",
+      "order": "a0",
+      "MeshRenderer": {
+        "model": "@assets/third_party/rollershutter_door/rollershutter_door_1k.gltf#as_rollershutterdoor",
+        "node": "rollershutter_door_graffiti"
+      },
+      "Transform": {
+        "position": [1, 0, 0.12],
+        "rotation": [0, 180, 0],
+        "scale": [1.85, 1.08, 0.8]
+      }
+    },
+    "e_gamedoor1": {
+      "name": "Shared salvage hatch",
+      "order": "b31",
+      "Collider": {
+        "center": [1, 1.3, 0],
+        "halfExtents": [1, 1.3, 0.12]
+      },
+      "RigidBody": {
+        "motion": "kinematic"
+      },
+      "SharedDoor": {},
+      "Transform": {
+        "position": [104, 0, 93]
+      }
+    },
+    "e_gamedoor1visual": {
+      "name": "Graffiti shutter leaf",
+      "parent": "e_gamedoor1",
+      "order": "a0",
+      "MeshRenderer": {
+        "model": "@assets/third_party/rollershutter_door/rollershutter_door_1k.gltf#as_rollershutterdoor",
+        "node": "rollershutter_door_graffiti"
+      },
+      "Transform": {
+        "position": [1, 0, 0.12],
+        "rotation": [0, 180, 0],
+        "scale": [1.85, 1.08, 0.8]
+      }
+    },
+    "e_gamedrone0": {
+      "name": "Security drone",
+      "order": "b32",
+      "AudioSource": {
+        "clip": "@assets/third_party/outpost_scifi/Audio/computerNoise_000.ogg#as_robotnoise",
+        "bus": "sfx",
+        "gain": 0.12,
+        "looping": true
+      },
+      "MeshRenderer": {
+        "model": "@assets/third_party/outpost_space/Models/GLTF format/craft_speederA.glb#as_outpostdrone"
+      },
+      "NavAgent": {
+        "height": 1,
+        "maxSpeed": 2
+      },
+      "SecurityDrone": {
+        "home": [104, 0.1, 116]
+      },
+      "Transform": {
+        "position": [104, 0.1, 116],
+        "scale": [0.6, 0.6, 0.6]
+      }
+    },
+    "e_gamedrone1": {
+      "name": "Security drone",
+      "order": "b33",
+      "AudioSource": {
+        "clip": "@assets/third_party/outpost_scifi/Audio/computerNoise_000.ogg#as_robotnoise",
+        "bus": "sfx",
+        "gain": 0.12,
+        "looping": true
+      },
+      "MeshRenderer": {
+        "model": "@assets/third_party/outpost_space/Models/GLTF format/craft_speederA.glb#as_outpostdrone"
+      },
+      "NavAgent": {
+        "height": 1,
+        "maxSpeed": 2
+      },
+      "SecurityDrone": {
+        "home": [82, 0.1, 111]
+      },
+      "Transform": {
+        "position": [82, 0.1, 111],
+        "scale": [0.6, 0.6, 0.6]
+      }
+    },
+    "e_gameextract": {
+      "name": "Blue extraction beacon",
+      "order": "b2n",
+      "ExtractionBeacon": {},
+      "Light": {
+        "color": [0.15, 0.7, 1, 1],
+        "intensity": 400,
+        "range": 8
+      },
+      "MeshRenderer": {
+        "shape": "plane",
+        "size": [6, 0.08, 6],
+        "color": [0.1, 0.6, 0.8, 1],
+        "emissive": [0.05, 0.4, 0.7]
+      },
+      "Transform": {
+        "position": [96, 0.1, 85]
+      }
+    },
+    "e_gamemenueye": {
+      "name": "Menu vista camera",
+      "order": "b2l",
+      "Transform": {
+        "position": [104, 3.2, 76.5]
+      }
+    },
+    "e_gamemenutarget": {
+      "name": "Menu vista focus",
+      "order": "b2m",
+      "Transform": {
+        "position": [108, 4.2, 101]
+      }
+    },
     "e_gasmask": {
       "name": "Gas mask",
       "order": "b1v",
@@ -3927,6 +4326,7 @@
       "name": "Compound navigation",
       "order": "a6",
       "NavMeshSurface": {
+        "profiles": [0],
         "min": [61, -5, 61],
         "max": [131, 8, 131]
       },
@@ -3959,27 +4359,22 @@
       "name": "Salvager",
       "order": "a4",
       "Animator": {
-        "controller": "@anim/human.animation#an_locomotion"
+        "controller": "@anim/scavenger.animation#an_scavenger"
       },
       "AudioListener": {},
       "CharacterController": {},
       "MeshRenderer": {
-        "model": "@assets/third_party/m2m_human/human-base-animations.glb#as_m2mhuman",
-        "materialOverrides": [
-          {
-            "material": "@materials/humanpalette0.graph#gr_humanpalette0"
-          }
-        ]
+        "model": "@assets/third_party/outpost_robot/RobotExpressive.glb#as_outpostrobot"
       },
       "PlayerControl": {
-        "walkSpeed": 1.5,
+        "walkSpeed": 2.4,
         "runSpeed": 5,
-        "yaw": 140,
         "camera": "e_camera"
       },
+      "Survivor": {},
       "Transform": {
-        "position": [86.5, 0.05, 89],
-        "rotation": [0, 140, 0]
+        "position": [96, 0.05, 85],
+        "scale": [0.45, 0.45, 0.45]
       }
     },
     "e_pole0": {
@@ -4111,6 +4506,11 @@
         "model": "@assets/kit/road.gltf#as_kitroad"
       },
       "Transform": {}
+    },
+    "e_run": {
+      "name": "Outpost salvage run",
+      "order": "b2k",
+      "SalvageRun": {}
     },
     "e_seat0": {
       "name": "Seat",

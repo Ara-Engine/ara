@@ -1,0 +1,4 @@
+# Keep engine dependencies compact; the exporter needs a real PDB for its player pin.
+[profile.dev.package.ara-player]
+debug = "line-tables-only"
+strip = "none"

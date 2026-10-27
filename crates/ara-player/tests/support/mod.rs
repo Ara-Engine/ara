@@ -27,7 +27,9 @@ pub fn copy(from: &Path, to: &Path) {
 
 /// Reuse the gate's current Cargo artifact; standalone tests build the worker.
 pub fn import_worker() -> PathBuf {
-    if let Some(path) = std::env::var_os("CARGO_BIN_EXE_ara-import-worker") {
+    if let Some(path) = std::env::var_os("CARGO_BIN_EXE_ara-import-worker")
+        .or_else(|| std::env::var_os("ARA_IMPORT_WORKER"))
+    {
         let worker = PathBuf::from(path);
         assert!(
             worker.is_file(),
@@ -193,7 +195,11 @@ pub fn repo() -> PathBuf {
 }
 
 /// Builds `dotnet/Ara.slnx` (Release): the JIT host, compile server and analyzers.
+/// Builds the .NET solution unless the gate already did (`ARA_DOTNET_PREBUILT`).
 pub fn build_dotnet() {
+    if std::env::var_os("ARA_DOTNET_PREBUILT").is_some() {
+        return;
+    }
     let out = std::process::Command::new("dotnet")
         .args(["build", "Ara.slnx", "-c", "Release", "--nologo", "-v", "q"])
         .current_dir(repo().join("dotnet"))

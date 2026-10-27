@@ -298,7 +298,7 @@ impl PlayControl {
         self.session.restore(snapshot, self.build)
     }
 
-    /// Begins optional history with an initial snapshot and per-tick state hashes.
+    /// Begins history at the session's hash cadence, retaining every boundary.
     pub fn record(&mut self) -> Result<()> {
         if self.recording.is_some() {
             return Err(SimError("already recording".into()));
@@ -311,24 +311,44 @@ impl PlayControl {
             build_hash: self.build,
             schema_hash: initial.schema_hash,
             initial,
+            hash_interval: self.session.hash_interval,
             ticks: Vec::new(),
         });
         self.session.record_hashes = true;
         Ok(())
     }
 
+    /// An adapter-driven boundary participates in the same optional recording as
+    /// Local steps. Runtime embeddings must use this rather than bypass PlayControl.
+    pub fn step_with_adapter(
+        &mut self,
+        adapter: &mut impl crate::SessionAdapter,
+    ) -> Result<TickRecord> {
+        self.active()?;
+        let record = self.session.step_with_adapter(adapter)?;
+        if let Some(replay) = &mut self.recording {
+            replay.ticks.push(record.clone());
+        }
+        Ok(record)
+    }
+
     /// Finishes a record/replay artifact, leaving hashing disabled for normal Local play.
     pub fn finish_recording(&mut self) -> Result<Replay> {
-        let replay = self
+        let mut replay = self
             .recording
             .take()
             .ok_or_else(|| SimError("not recording".into()))?;
+        if let Some(last) = replay.ticks.last_mut()
+            && last.hash.is_none()
+        {
+            last.hash = Some(self.session.state_hash()?);
+        }
         self.session.record_hashes = false;
         Ok(replay)
     }
 
-    /// Restores a replay's initial state and verifies every tick, failing at the first
-    /// divergence. Exogenous future queues are rebuilt from the applied log once.
+    /// Recomputes every tick and checks each recorded checkpoint and the final state.
+    /// Exogenous future queues are rebuilt from the applied log once.
     pub fn replay(&mut self, replay: &Replay) -> Result<StateHash> {
         if self.recording.is_some() {
             return Err(SimError("finish recording before replay".into()));
@@ -350,10 +370,20 @@ impl PlayControl {
         self.session.pending_ops.clear();
         self.session.applied.clear();
         let was_hashing = self.session.record_hashes;
+        let was_interval = self.session.hash_interval;
         self.session.record_hashes = true;
+        self.session.hash_interval = std::num::NonZeroU32::MIN;
         let result = (|| {
             for expected in &replay.ticks {
-                if expected.tick != self.session.tick() + 1 || expected.hash.is_none() {
+                let checkpoint = expected
+                    .tick
+                    .is_multiple_of(u64::from(replay.hash_interval.get()))
+                    || replay
+                        .ticks
+                        .last()
+                        .is_some_and(|last| last.tick == expected.tick);
+                if expected.tick != self.session.tick() + 1 || checkpoint && expected.hash.is_none()
+                {
                     return Err(SimError("replay has a gap or missing tick hash".into()));
                 }
                 self.session
@@ -370,7 +400,7 @@ impl PlayControl {
                     }
                     Ok(())
                 })?;
-                if actual.hash != expected.hash {
+                if expected.hash.is_some() && actual.hash != expected.hash {
                     return Err(SimError(format!(
                         "replay state mismatch at tick {}: expected {:?}, got {:?}",
                         expected.tick, expected.hash, actual.hash
@@ -380,6 +410,7 @@ impl PlayControl {
             self.session.state_hash()
         })();
         self.session.record_hashes = was_hashing;
+        self.session.hash_interval = was_interval;
         result
     }
 

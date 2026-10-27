@@ -22,6 +22,10 @@ pub const LOOK: &str = "Look";
 pub const JUMP: &str = "Jump";
 /// Sprint hold.
 pub const SPRINT: &str = "Sprint";
+/// Use the closest reachable interaction (door, salvage, revive or extraction).
+pub const INTERACT: &str = "Interact";
+/// Toggle the owning player's private inventory display.
+pub const INVENTORY: &str = "Inventory";
 
 /// The runtime's action declarations with keyboard/mouse bindings
 /// (WASD/arrows, Space, Left Shift; `mouse:motion` is aggregated by the device adapter).
@@ -32,6 +36,8 @@ pub fn default_actions() -> ActionMap {
         (LOOK, ActionKind::Axis2),
         (JUMP, ActionKind::Button),
         (SPRINT, ActionKind::Button),
+        (INTERACT, ActionKind::Button),
+        (INVENTORY, ActionKind::Button),
     ] {
         // Names are unique constants; declaration cannot fail.
         let _ = map.declare(Action {
@@ -50,6 +56,8 @@ pub fn default_actions() -> ActionMap {
         ("right", MOVE, ActionValue::Axis2([1.0, 0.0])),
         ("space", JUMP, ActionValue::Button(true)),
         ("leftShift", SPRINT, ActionValue::Button(true)),
+        ("e", INTERACT, ActionValue::Button(true)),
+        ("tab", INVENTORY, ActionValue::Button(true)),
     ];
     for (control, action, value) in keys {
         let _ = map.bind(Binding {

@@ -7,9 +7,11 @@
 
 pub mod assets;
 pub mod embed;
+mod game_ui;
 mod keep;
 mod lifecycle;
 mod package;
+pub use game_ui::read as read_game_ui;
 pub use package::{package_scene, package_scene_for_export, package_scene_with_progress};
 pub mod params;
 pub mod pool;
@@ -587,6 +589,7 @@ impl PlayService {
         let mut types = Vec::new();
         types_files(&self.root, &self.root, &mut types);
         let scene = PlayScene {
+            ui: game_ui::read(&self.root).map_err(|error| fail(codes::REQUEST, error))?,
             rendering: rendering::read(workspace).map_err(|error| fail(codes::REQUEST, error))?,
             format: 1,
             scene: scene_id.clone(),

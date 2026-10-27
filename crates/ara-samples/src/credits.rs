@@ -36,6 +36,8 @@ pub fn markdown(lock: &Lock) -> String {
                 Kind::Hdri => "HDRI",
                 Kind::Character => "character",
                 Kind::Audio => "audio",
+                Kind::Archive => "asset pack",
+                Kind::Font => "font",
             };
             let _ = writeln!(
                 out,

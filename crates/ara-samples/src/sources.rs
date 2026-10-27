@@ -158,6 +158,7 @@ fn polyhaven_files(files: &Value, kind: Kind, resolution: &str) -> Result<Vec<(S
             out
         }
         Kind::Audio => bail!("Poly Haven has no audio"),
+        Kind::Archive | Kind::Font => bail!("Use add-urls for archive and font packs"),
         Kind::Hdri => {
             let file = &files["hdri"][resolution]["hdr"];
             ensure!(file.is_object(), "no HDR at this resolution");

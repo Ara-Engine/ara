@@ -456,6 +456,20 @@ impl NativeUi {
         // SAFETY: forwarded caller contract.
         unsafe { present.retire(&self.device) }
     }
+    /// Publish the last completed UI target into a shared-surface ring of the same GPU
+    /// (an embedded game's UI composite); the copy follows the adapter's own work.
+    /// # Safety
+    /// `ring` belongs to a device of this GPU; this thread owns its copy queue.
+    pub unsafe fn publish(
+        &self,
+        _gpu: &UiDevice,
+        ring: &mut ara_gpu::external::ExportRing,
+        tick: u64,
+    ) -> Result<Option<ara_gpu::shared::Frame>> {
+        let (image, size) = self.output()?;
+        // SAFETY: the UI submission completed; the target is a colour image here.
+        Ok(unsafe { ring.publish_image(&self.device, image, size, tick)? })
+    }
     /// Wait until the adapter's device is idle.
     pub fn wait_idle(&self, _gpu: &UiDevice) -> Result<()> {
         Ok(self.device.wait_idle()?)

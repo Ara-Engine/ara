@@ -1,0 +1,14 @@
+{
+  "$schema": "ara://schema/import/1",
+  "id": "as_dooropen",
+  "records": {
+    "i_settings": {
+      "importer": "ara.audio",
+      "version": "4",
+      "settings": {
+        "codec": "pcm",
+        "usage": "shortEffect"
+      }
+    }
+  }
+}

@@ -92,6 +92,12 @@ lighting and the generated kit geometry are original Ara work.
 | Old Military Compressor (`old_military_compressor`) | model | Brian Speight | outpost | <https://polyhaven.com/a/old_military_compressor> |
 | Old Military Crate (`old_military_crate`) | model | Jack Mava | outpost | <https://polyhaven.com/a/old_military_crate> |
 | Old Tyre (`old_tyre`) | model | MP | outpost | <https://polyhaven.com/a/old_tyre> |
+| Impact Sounds (`outpost_impact`) | asset pack | Kenney | outpost | <https://kenney.nl/assets/impact-sounds> |
+| Interface Sounds (`outpost_interface`) | asset pack | Kenney | outpost | <https://kenney.nl/assets/interface-sounds> |
+| Robot Expressive (`outpost_robot`) | character | Quaternius, Tomás Laulhé, Don McCurdy | outpost | <https://quaternius.com/packs/animatedrobot.html> |
+| Sci-Fi Sounds (`outpost_scifi`) | asset pack | Kenney | outpost | <https://kenney.nl/assets/sci-fi-sounds> |
+| Space Kit (`outpost_space`) | asset pack | Kenney | outpost | <https://kenney.nl/assets/space-kit> |
+| UI Pack Space Expansion (icons and Kenney Future fonts) (`outpost_ui`) | asset pack | Kenney | outpost | <https://kenney.nl/assets/ui-pack-sci-fi> |
 | Overhead Crane (`overhead_crane`) | model | Timothy3D | outpost | <https://polyhaven.com/a/overhead_crane> |
 | Painted Metal Shutter (`painted_metal_shutter`) | texture | Dario Barresi, Rico Cilliers, Charlotte Baglioni | outpost | <https://polyhaven.com/a/painted_metal_shutter> |
 | Pipe Wrench (`pipe_wrench`) | model | Will Evarts | outpost | <https://polyhaven.com/a/pipe_wrench> |
