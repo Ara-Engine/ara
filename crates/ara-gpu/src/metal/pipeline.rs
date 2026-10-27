@@ -4,6 +4,7 @@
 //! no culling, counter-clockwise front faces, reversed-Z `>=` depth, premultiplied
 //! alpha on attachment zero.
 use super::abi::{STAGE_IN_ATTRIBUTE_START, VERTEX_BUFFER_BIND_POINT};
+use super::cache::Compiler;
 use super::native::{nil, ns_error, raw_format};
 use crate::cooked::{CookedPipeline, CookedStage, RenderState, Stage, binding_layout_hash};
 use crate::{GpuError, Result};
@@ -44,7 +45,7 @@ pub(super) struct Reflection {
 /// Create a pipeline from cooked Metal artifacts; DXIL/SPIR-V are never loaded here.
 pub(super) fn create(
     device: &ProtocolObject<dyn MTLDevice>,
-    compiler: &ProtocolObject<dyn MTL4Compiler>,
+    compiler: &Compiler,
     cooked: &CookedPipeline,
     dir: &Path,
 ) -> Result<NativePipeline> {
@@ -111,7 +112,7 @@ pub(super) fn load(
 /// A vertex-only render pipeline that writes depth and no color: `ClearDepth`.
 /// Color attachments match the rendering scope with writes masked off.
 pub(super) fn depth_only(
-    compiler: &ProtocolObject<dyn MTL4Compiler>,
+    compiler: &Compiler,
     library: &ProtocolObject<dyn MTLLibrary>,
     entry: &str,
     colors: &[MTLPixelFormat],
@@ -130,14 +131,14 @@ pub(super) fn depth_only(
         attachment.setWriteMask(MTLColorWriteMask::None);
     }
     compiler
-        .newRenderPipelineStateWithDescriptor_compilerTaskOptions_error(&descriptor, None)
+        .render(&descriptor)
         .map_err(|e| ns_error("depth-only pipeline", &e))
 }
 
 /// Build a pipeline from loaded libraries; shared by cooked artifacts and tests.
 pub(super) fn build(
     device: &ProtocolObject<dyn MTLDevice>,
-    compiler: &ProtocolObject<dyn MTL4Compiler>,
+    compiler: &Compiler,
     functions: &[(Stage, &ProtocolObject<dyn MTLLibrary>, &str)],
     state: &RenderState,
     threads: Option<[u32; 3]>,
@@ -156,7 +157,7 @@ pub(super) fn build(
             let descriptor = MTL4ComputePipelineDescriptor::new();
             descriptor.setComputeFunctionDescriptor(Some(&function(library, name)));
             let state = compiler
-                .newComputePipelineStateWithDescriptor_compilerTaskOptions_error(&descriptor, None)
+                .compute(&descriptor)
                 .map_err(|e| ns_error("compute pipeline", &e))?;
             Ok(NativePipeline::Compute {
                 state,
@@ -191,7 +192,7 @@ pub(super) fn build(
 
 fn render(
     device: &ProtocolObject<dyn MTLDevice>,
-    compiler: &ProtocolObject<dyn MTL4Compiler>,
+    compiler: &Compiler,
     vertex: &MTL4LibraryFunctionDescriptor,
     fragment: &MTL4LibraryFunctionDescriptor,
     state: &RenderState,
@@ -256,7 +257,7 @@ fn render(
         descriptor.setVertexDescriptor(Some(&layout));
     }
     let pipeline = compiler
-        .newRenderPipelineStateWithDescriptor_compilerTaskOptions_error(&descriptor, None)
+        .render(&descriptor)
         .map_err(|e| ns_error("render pipeline", &e))?;
     let depth_format = state.depth_format.map(raw_format).transpose()?;
     let depth = match depth_format {

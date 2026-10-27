@@ -3,6 +3,7 @@
 //! triangle at the clear depth; the encoder clips it to the tile with viewport and
 //! scissor, tests Always and writes depth. Render pipelines must match the scope's
 //! color formats, so variants are built per format set (color writes masked off).
+use super::cache::Compiler;
 use super::native::nil;
 use super::pipeline;
 use crate::cooked::{self, CookedPipeline};
@@ -58,7 +59,7 @@ impl Clear {
     /// The variant for a scope with these color formats, built on first use.
     pub fn pipeline(
         &mut self,
-        compiler: &ProtocolObject<dyn MTL4Compiler>,
+        compiler: &Compiler,
         colors: &[MTLPixelFormat],
     ) -> Result<RenderState> {
         if let Some((_, state)) = self.variants.iter().find(|(formats, _)| formats == colors) {

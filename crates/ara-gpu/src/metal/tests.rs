@@ -7,7 +7,7 @@ use crate::commands::{Attachment, Command, Draw};
 use crate::cooked::{RenderState, Stage};
 use objc2_foundation::NSString;
 
-const ABI: &str = r#"
+pub(super) const ABI: &str = r#"
 #include <metal_stdlib>
 using namespace metal;
 struct BufferEntry { device uint* data; ulong resource_id; ulong metadata; };
@@ -21,7 +21,7 @@ struct TopLevel {
 };
 "#;
 
-const SHADERS: &str = r#"
+pub(super) const SHADERS: &str = r#"
 kernel void fill(constant TopLevel& top [[buffer(2)]], uint id [[thread_position_in_grid]]) {
     if (id < top.root[2]) {
         top.buffers[top.root[0]].data[id] = top.root[1] + id;
@@ -61,7 +61,7 @@ fn device() -> MetalDevice {
 
 impl MetalDevice {
     /// Test-only: a pipeline from runtime-compiled MSL using the converter layout.
-    fn msl_pipeline(
+    pub(super) fn msl_pipeline(
         &mut self,
         entries: &[(Stage, &str)],
         state: &RenderState,

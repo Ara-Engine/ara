@@ -76,8 +76,8 @@ in `caffeinate -dimsu <command>` (macOS sleeps after a minute on battery).
 |---|---|
 | Kernel and platform-independent crates | Green (`cargo test`); the whole workspace type-checks. |
 | SDL3 platform layer (`ara-platform`, `ara-audio`) | Green. |
-| `ara-gpu` Metal 4 core | Buffers, textures, converter tables, pipelines from metallibs, both queues with shared-event timelines (async compute), deferred completion, preparation workers, GPU pass timings and the timing window, CAMetalLayer presenter (windowless and through an SDL3 Metal view). Tested with runtime-compiled MSL laid out like converter output. |
-| Not yet on Metal | Persistent pipeline archives, acceleration structures/ray query, mesh stages, shader hot reload, HDR output, converter draw parameters. `ClearDepth` and shared surfaces exist but need converter-cooked shaders (ClearDepth) or the editor wiring (D19, seam step 3). |
+| `ara-gpu` Metal 4 core | Buffers, textures, converter tables, pipelines from metallibs with a persistent pipeline archive, both queues with shared-event timelines (async compute), deferred completion, preparation workers, GPU pass timings and the timing window, CAMetalLayer presenter (windowless and through an SDL3 Metal view). Tested with runtime-compiled MSL laid out like converter output. |
+| Not yet on Metal | Acceleration structures/ray query, mesh stages, shader hot reload, HDR output, converter draw parameters. `ClearDepth` and shared surfaces exist but need converter-cooked shaders (ClearDepth) or the editor wiring (D19, seam step 3). |
 | Renderer, player, editor | Waiting on the renderer seam (`VulkanDevice` → `GpuDevice` across consumers) and on converter-cooked engine shaders. |
 | C# host (`ara-script`, osx-arm64) | Green: JIT hosting, NativeAOT sample, L1/L3 reload, the out-of-process compile server and module tests. Needs `dotnet` on `PATH`. |
 
@@ -86,13 +86,15 @@ in `caffeinate -dimsu <command>` (macOS sleeps after a minute on battery).
 - Creating `MTL4Compiler`s while other compilers compile corrupted the heap inside
   the macOS 27 driver; the backend therefore shares one compiler per process, never
   destroyed.
-- Pipeline archives (MTL4 data-set serializers) are not wired yet. On macOS 27 a
-  serializer flush also cleared what other live devices had captured, and compilers
-  created or destroyed around other compiles crashed. The intended design is one
-  process-wide serializer flushed once, at shutdown, by single-device processes
-  (player, editor).
+- Pipeline archives: on macOS 27 a data-set serializer flush cleared what other live
+  devices had captured, and compilers created or destroyed around other compiles
+  crashed. So one compiler and serializer serve the process, and the archive is saved
+  once, when the last device drops (shutdown for the player and editor). Archives
+  captured under `MTL_SHADER_VALIDATION` fail to reload ("deployment target ... not
+  compatible with current OS"), so validated processes neither load nor save them.
 - Metal tests must run with Metal 4 validation on and be stress-checked in parallel
-  (`cargo test` runs them concurrently); use the exact binary from
+  (`cargo test` runs them concurrently), once more without `MTL_SHADER_VALIDATION`
+  (only then do archives capture); use the exact binary from
   `cargo test --no-run --message-format=json` for Guard Malloc runs
   (`DYLD_INSERT_LIBRARIES=/usr/lib/libgmalloc.dylib`).
 - Loopback UDP is delivered asynchronously on macOS: tests wait on delivery events,

@@ -17,6 +17,9 @@
 //!
 //! Pass timings come from MTL4 timestamp heaps ([`timestamps`]) on one GPU clock.
 //!
+//! Pipeline binaries persist in one process-wide MTL4 archive ([`cache`]), saved when
+//! the last device drops (never under shader validation).
+//!
 //! `ClearDepth` draws the cooked vertex-only `clear_depth` pipeline ([`clear`]).
 //!
 //! Shared surfaces (D19) use global IOSurfaces ([`external`]).
@@ -24,6 +27,9 @@
 //! Not yet available: acceleration structures, mesh/task stages,
 //! shader hot reload and HDR output.
 mod abi;
+mod cache;
+#[cfg(test)]
+mod cache_tests;
 mod clear;
 mod completion;
 mod encode;
@@ -62,23 +68,6 @@ use std::ptr::NonNull;
 // (command-line tools, test binaries).
 #[link(name = "CoreGraphics", kind = "framework")]
 unsafe extern "C" {}
-
-/// One `MTL4Compiler` per process. Every `MetalDevice` wraps the same system device,
-/// and creating compilers while another compiles raced inside the driver on macOS 27
-/// (heap corruption in parallel tests).
-fn shared_compiler(
-    device: &ProtocolObject<dyn MTLDevice>,
-) -> Result<Retained<ProtocolObject<dyn MTL4Compiler>>> {
-    static COMPILER: std::sync::OnceLock<Retained<ProtocolObject<dyn MTL4Compiler>>> =
-        std::sync::OnceLock::new();
-    if let Some(compiler) = COMPILER.get() {
-        return Ok(compiler.clone());
-    }
-    let created = device
-        .newCompilerWithDescriptor_error(&MTL4CompilerDescriptor::new())
-        .map_err(|e| ns_error("MTL4 compiler", &e))?;
-    Ok(COMPILER.get_or_init(|| created).clone())
-}
 
 /// Timeline waits give up after this long: a faulted command buffer never signals.
 const WAIT_TIMEOUT_MS: u64 = 20_000;
@@ -153,7 +142,7 @@ pub struct MetalDevice {
     events: [Retained<ProtocolObject<dyn MTLSharedEvent>>; 2],
     residency: Retained<ProtocolObject<dyn MTLResidencySet>>,
     residency_dirty: bool,
-    compiler: Retained<ProtocolObject<dyn MTL4Compiler>>,
+    compiler: cache::Compiler,
     table: Retained<ProtocolObject<dyn MTL4ArgumentTable>>,
     tables: tables::Tables,
     scratch: scratch::Pool,
@@ -182,19 +171,23 @@ pub struct MetalDevice {
     waits: crate::vulkan::waits::Counter,
     /// The cooked `ClearDepth` pipeline, loaded on first use.
     clear: Option<clear::Clear>,
+    /// Last: released after the workers joined, so the archive flush races no compile.
+    _cache: cache::Lease,
 }
 
 impl MetalDevice {
     /// Create the system default Metal 4 device. `_window_extensions` keeps the Vulkan
     /// constructor's signature for backend-neutral callers; Metal needs none.
-    /// Raster-only like [`crate::vulkan::VulkanDevice::new_raster`].
+    /// Raster-only like [`crate::vulkan::VulkanDevice::new_raster`]. `cache_dir` holds
+    /// the persistent pipeline archive; the process's first device picks it ([`cache`]).
     pub fn new_raster(
         _window_extensions: &[std::ffi::CString],
-        _cache_dir: impl Into<std::path::PathBuf>,
+        cache_dir: impl Into<std::path::PathBuf>,
     ) -> Result<Self> {
-        native::pool(Self::create)
+        let cache_dir = cache_dir.into();
+        native::pool(|| Self::create(&cache_dir))
     }
-    fn create() -> Result<Self> {
+    fn create(cache_dir: &std::path::Path) -> Result<Self> {
         let device = MTLCreateSystemDefaultDevice().ok_or_else(|| nil("Metal device"))?;
         if !device.supportsFamily(MTLGPUFamily::Metal4) {
             return Err(GpuError::Contract(format!(
@@ -216,7 +209,6 @@ impl MetalDevice {
         for queue in &queues {
             queue.addResidencySet(&residency);
         }
-        let compiler = shared_compiler(&device)?;
         let table_desc = MTL4ArgumentTableDescriptor::new();
         table_desc.setMaxBufferBindCount(abi::ARGUMENT_TABLE_BUFFERS);
         let table = device
@@ -236,6 +228,8 @@ impl MetalDevice {
             storage_buffer_capacity: abi::BUFFERS,
             working_set_mib: device.recommendedMaxWorkingSetSize() / (1024 * 1024),
         };
+        // Joined last: a failed creation above never counts as a live device.
+        let (compiler, cache) = cache::acquire(&device, cache_dir)?;
         Ok(Self {
             device,
             queues,
@@ -268,6 +262,7 @@ impl MetalDevice {
             timing_window: Default::default(),
             waits: Default::default(),
             clear: None,
+            _cache: cache,
         })
     }
 
