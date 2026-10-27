@@ -1,24 +1,52 @@
-//! UI policy can relocate authored bootstrap sources without changing portable bytes.
+//! Export reads existing authored roots and policy without activating a new layout.
 use ara_play_host::{package_scene_for_export, read_game_ui};
-use std::{fs, path::Path};
+use serde_json::json;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
-#[test]
-fn configured_feature_paths_package_ui_and_exclude_project_policy()
--> Result<(), Box<dyn std::error::Error>> {
-    let root = tempfile::tempdir()?;
+fn scratch() -> Result<tempfile::TempDir, std::io::Error> {
+    let root = std::env::var_os("ARA_TEST_ROOT")
+        .or_else(|| std::env::var_os("CARGO_TARGET_DIR"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            if cfg!(windows) {
+                PathBuf::from("D:/AraBuild/ux-hub-evidence")
+            } else {
+                std::env::temp_dir()
+            }
+        })
+        .join("export-ui-read-tests");
+    fs::create_dir_all(&root)?;
+    tempfile::Builder::new()
+        .prefix("ui-paths-")
+        .tempdir_in(root)
+}
+
+fn modern_project(root: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
     fs::write(
-        root.path().join("ara.project.json"),
+        root.join("ara.project.json"),
         r#"{"layoutVersion":3,"main":"scenes/main.scene"}"#,
     )?;
-    ara_host::project_layout::write_support_files(root.path(), "UI paths")?;
-    let authored = root.path().join(ara_doc::AUTHORING_ROOT);
-    fs::create_dir_all(authored.join("feature/hud"))?;
-    fs::create_dir_all(authored.join("feature/media"))?;
-    fs::create_dir_all(authored.join("settings"))?;
+    let authored = ara_host::project::authored_root(root);
+    fs::create_dir_all(authored.join("scenes"))?;
+    fs::create_dir_all(root.join("settings"))?;
     fs::write(
         authored.join("scenes/main.scene"),
         r#"{"$schema":"ara://schema/scene/1","id":"sc_main","records":{}}"#,
     )?;
+    Ok(authored)
+}
+
+#[test]
+fn configured_feature_paths_package_ui_short_references_and_exclude_project_policy()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = scratch()?;
+    let authored = modern_project(root.path())?;
+    for folder in ["feature/hud", "feature/media", "settings", "props"] {
+        fs::create_dir_all(authored.join(folder))?;
+    }
     fs::write(
         authored.join("feature/hud/panel.ui"),
         "<!-- ara:asset ui_feature -->\n<ui id='root'/>",
@@ -37,12 +65,38 @@ fn configured_feature_paths_package_ui_and_exclude_project_policy()
     )?;
     let policy = ara_asset::ProjectImportSettings::default().canonical_text()?;
     fs::write(
-        root.path().join(ara_asset::PROJECT_IMPORT_SETTINGS_FILE),
+        root.path().join(ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE),
         &policy,
+    )?;
+    fs::write(
+        root.path().join(ara_asset::PROJECT_IMPORT_SETTINGS_FILE),
+        policy.replace("ip_project", "ip_scoped"),
     )?;
     fs::write(
         authored.join("settings/ara.imports"),
         policy.replace("ip_project", "ip_feature"),
+    )?;
+    fs::write(
+        authored.join("props/box.prefab"),
+        r#"{"$schema":"ara://schema/prefab/1","id":"pf_box","records":{"e_box":{"name":"Box"}}}"#,
+    )?;
+    fs::write(
+        authored.join("scenes/main.scene"),
+        r#"{"$schema":"ara://schema/scene/1","id":"sc_main","records":{"e_use":{"prefab":"@props/box.prefab#pf_box"}}}"#,
+    )?;
+    // Project settings and packages must never contribute schemas to the player.
+    fs::create_dir_all(root.path().join("packages/fake"))?;
+    fs::write(
+        root.path().join("packages/fake/ignored.types.json"),
+        "not a type document",
+    )?;
+    fs::write(
+        root.path().join("settings/ignored.types.json"),
+        "not a type document",
+    )?;
+    fs::write(
+        authored.join("feature/authored.types.json"),
+        r#"{"$schema":"ara://schema/types/1","types":{},"sentinel":"authored"}"#,
     )?;
     let ui = read_game_ui(root.path())?.ok_or("UI")?;
     assert_eq!(ui.fonts, [b"font".to_vec()]);
@@ -56,7 +110,8 @@ fn configured_feature_paths_package_ui_and_exclude_project_policy()
         !scene
             .documents
             .iter()
-            .any(|doc| doc.id == "ip_project" || doc.kind == "project")
+            .any(|doc| matches!(doc.id.as_str(), "ip_project" | "ip_scoped")
+                || doc.kind == "project")
     );
     assert!(
         scene
@@ -64,25 +119,43 @@ fn configured_feature_paths_package_ui_and_exclude_project_policy()
             .iter()
             .any(|doc| doc.id == "ip_feature" && doc.path == "settings/ara.imports")
     );
+    assert!(
+        scene
+            .types
+            .iter()
+            .any(|schema| schema["sentinel"] == "authored")
+    );
+    let (workspace, main) = scene.workspace()?;
+    assert_eq!(main.as_str(), "sc_main");
+    assert_eq!(workspace.path_of("sc_main"), Some("scenes/main.scene"));
+    assert_eq!(
+        workspace
+            .find("@props/box.prefab#pf_box")
+            .map(|id| id.as_str()),
+        Some("pf_box")
+    );
+    assert_eq!(
+        workspace
+            .doc("sc_main")
+            .ok_or("main scene")?
+            .record("e_use")
+            .ok_or("prefab instance")?["prefab"],
+        "@props/box.prefab#pf_box"
+    );
     Ok(())
 }
 
 #[test]
 fn configured_missing_ui_and_escaping_resource_paths_fail_before_packaging()
 -> Result<(), Box<dyn std::error::Error>> {
-    let root = tempfile::tempdir()?;
-    fs::write(
-        root.path().join("ara.project.json"),
-        r#"{"layoutVersion":3}"#,
-    )?;
-    ara_host::project_layout::write_support_files(root.path(), "UI paths")?;
+    let root = scratch()?;
+    let authored = modern_project(root.path())?;
     assert!(read_game_ui(root.path())?.is_none());
     fs::write(
         root.path().join("settings/project.json"),
         r#"{"ui":{"main":"missing.ui"}}"#,
     )?;
     assert!(read_game_ui(root.path()).is_err());
-    let authored = root.path().join(ara_doc::AUTHORING_ROOT);
     fs::create_dir_all(authored.join("ui"))?;
     fs::write(authored.join("ui/game.ui"), "<ui id='root'/>")?;
     fs::write(authored.join("ui/game.css"), "")?;
@@ -116,8 +189,32 @@ fn configured_missing_ui_and_escaping_resource_paths_fail_before_packaging()
 }
 
 #[test]
+fn legacy_ui_sources_remain_byte_exact_without_policy_or_scaffold_creation()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = scratch()?;
+    fs::write(root.path().join("ara.project.json"), "{}")?;
+    fs::create_dir_all(root.path().join("ui"))?;
+    let markup = "<ui id='hud'><text id='title' text='Legacy'/></ui>\n";
+    for (name, text) in [
+        ("game.ui", markup),
+        ("game.css", ".title {}\n"),
+        ("bindings.json", "[]"),
+    ] {
+        fs::write(root.path().join("ui").join(name), text)?;
+    }
+    let ui = read_game_ui(root.path())?.ok_or("legacy UI")?;
+    assert_eq!(ui.markup, markup);
+    assert_eq!(ui.stylesheet, ".title {}\n");
+    assert_eq!(serde_json::to_value(&ui.bindings)?, json!([]));
+    assert!(!root.path().join("settings").exists());
+    assert!(!root.path().join(".ara").exists());
+    assert!(!root.path().join(ara_doc::AUTHORING_ROOT).exists());
+    Ok(())
+}
+
+#[test]
 fn migration_materializes_movable_legacy_ui_paths() -> Result<(), Box<dyn std::error::Error>> {
-    let root = tempfile::tempdir()?;
+    let root = scratch()?;
     fs::write(root.path().join("ara.project.json"), "{}")?;
     fs::create_dir_all(root.path().join("ui"))?;
     for (file, text) in [

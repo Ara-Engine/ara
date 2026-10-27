@@ -101,6 +101,22 @@ fn authored_icon_paths_and_project_artifact_pins_keep_separate_roots() {
     );
     assert!(tools::authored_path(root, "../templates/player.zip").is_err());
 }
+
+#[test]
+fn an_explicit_project_root_content_directory_keeps_file_paths_strict() {
+    let root = tempfile::tempdir().unwrap();
+    assert_eq!(
+        tools::content_path(root.path(), ".").unwrap(),
+        dunce::canonicalize(root.path()).unwrap()
+    );
+    assert!(tools::project_path(root.path(), ".").is_err());
+    assert!(tools::content_path(root.path(), "..").is_err());
+    let mut profile = preset("windows");
+    profile.content = ".".into();
+    profile.validate().unwrap();
+    let text = profile.to_text().unwrap();
+    assert_eq!(ExportPreset::from_text(&text).unwrap().content, ".");
+}
 /// A runtime profile may leave its templates for the builder to pin (the editor's
 /// Build Current Profile): it round-trips unpinned, other invariants still hold, and
 /// strict reading (the CLI, the export itself) still demands the pins.

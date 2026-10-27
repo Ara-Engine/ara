@@ -552,6 +552,23 @@ impl Host {
         self.st.settle_files();
     }
 
+    /// Queue authored saves and their journal boundary without waiting for disk.
+    /// A build owner polls the receipt before reading its on-disk snapshot.
+    pub fn queue_flush(&mut self) -> crate::FileCommitReceipt {
+        self.st.drain();
+        let receipt = self.st.begin_file_commit();
+        self.st.seal_file_commit(receipt);
+        receipt
+    }
+
+    /// Consume a queued save's physical result; `None` keeps the caller responsive.
+    pub fn poll_flush(
+        &mut self,
+        receipt: crate::FileCommitReceipt,
+    ) -> Option<Result<(), Vec<Diagnostic>>> {
+        self.st.poll_file_commit(receipt)
+    }
+
     /// Forgets a closed connection's subscriptions.
     pub fn closed(&mut self, conn: ConnId) {
         self.st.subs.remove(&conn);

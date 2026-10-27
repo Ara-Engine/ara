@@ -55,7 +55,7 @@ starting a Hub service; smoke also isolates LOCALAPPDATA so its
 managed Hub never touches an existing user installation. Smoke
 captures every Hub page from the installed binary. Packaged samples get their
 `thumbnail.png` from repository `evidence/samples/<sample>/<main-scene>-player.png`.
-Sample kits (`content/assets/kit/*`, git-ignored) are generated into the staged copy by
+Sample kits (`<authored-root>/assets/kit/*`, git-ignored) are generated into the staged copy by
 `ara-samples --samples <stage>/templates kits <name>`, so the checkout never drifts.
 Then `references::check` gates every template: each `@path#id`, glTF URI, sidecar
 source, look `scene` and project `main` must resolve inside it, or packaging fails
@@ -63,8 +63,8 @@ naming `document -> missing path` (`ara-release references <dir>` runs it alone)
 Smoke opens every installed template in the installed editor (`--frames 20`).
 It also creates Starter, queues `build.current` in an offscreen installed editor,
 checks the resolved PDB hash, and requires verified `ARA_RESULT` after 8 game ticks.
-The game's launcher comes from `distribution.json` `entryPoint`. Smoke rejects
-unbranded launchers and private artifacts in `build/`; captures stay in `report/`.
+The game launcher comes from `distribution.json` `entryPoint`. Smoke rejects
+unbranded launchers and private artifacts inside the upload folder; captures stay in `report/`.
 That flow uses a human session to gracefully stop its owned editor authority.
 Smoke invokes uninstall.cmd (the Apps entry point), requires exit 0, and checks
 projects, settings, crash reports and user-added install files survive. The script

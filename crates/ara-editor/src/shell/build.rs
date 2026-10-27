@@ -2,13 +2,13 @@
 //! runtime player) through `ara-export` on a worker thread.
 //! - The profile is `settings/builds/<name>.export.json` (legacy `presets/` works).
 //!   Without one, Build creates the
-//!   portable default (`build.profile.create`: Windows, real runtime, plain folder).
+//!   portable default (`build_profile.create`: Windows, real runtime, plain folder).
 //!   Profiles hold no machine paths: the runtime template (this engine's
 //!   ara-player.exe, its PDB and the current shader cohorts) is zipped and pinned at
 //!   build time under `.ara/export/`.
 //! - The status bar shows the stage and cooking progress; export diagnostics go to
 //!   the bus with their `ARA-EXP-*` codes, so Problems explains them.
-//! - The result lands in `builds/<profile>-<time>/`; Run Build launches it (one
+//! - The result lands in `builds/<profile>/<build-id>/`; Run Build launches it (one
 //!   headless frame with a capture in offscreen runs, never a window).
 //! - C# modules anywhere beneath the shared authored root ship with the game: the export finds
 //!   them and publishes them NativeAOT (needs the .NET SDK on the building machine).
@@ -46,6 +46,8 @@ pub(crate) struct Built {
 pub(crate) struct BuildJob {
     events: Receiver<BuildEvent>,
     profile_creation: Option<ProfileCreation>,
+    /// The export worker waits until canonical files and their journal are saved.
+    saving: Option<(ara_host::FileCommitReceipt, Sender<()>)>,
     /// Profile name, for the status bar.
     pub preset: String,
     /// Current stage.
@@ -203,7 +205,13 @@ fn log(editor: &mut Editor, diagnostic: ara_diag::Diagnostic) {
 /// The portable default profile: Windows, the real game runtime, a plain folder; C#
 /// modules are found by the export. Its runtime template is pinned at build time
 /// (`runtime_template`), so the file is unpinned (`ExportPreset::to_unpinned_text`).
-fn default_profile() -> anyhow::Result<ara_export::ExportPreset> {
+fn default_profile(root: &Path) -> anyhow::Result<ara_export::ExportPreset> {
+    let authored = ara_host::project::authored_root(root);
+    let relative = authored
+        .strip_prefix(root)?
+        .to_string_lossy()
+        .replace('\\', "/");
+    let content = if relative.is_empty() { "." } else { &relative };
     let preset: ara_export::ExportPreset = serde_json::from_value(json!({
         "platform": "windows",
         "config": "dev",
@@ -211,7 +219,7 @@ fn default_profile() -> anyhow::Result<ara_export::ExportPreset> {
         "playerTemplate": "runtime",
         "scriptProject": "",
         "assembly": "AraGame",
-        "content": ara_host::project_layout::AUTHORING_ROOT,
+        "content": content,
         "templates": [],
     }))?;
     Ok(preset)
@@ -351,7 +359,7 @@ impl Shell {
         if self.build.is_some() {
             return Err("a build or profile creation is already running".into());
         }
-        let text = default_profile()
+        let text = default_profile(editor.host.root())
             .and_then(|p| p.to_unpinned_text())
             .map_err(|e| format!("{e:#}"))?;
         let preset: Value = ara_json::parse(&text).map_err(|error| error.to_string())?;
@@ -368,6 +376,7 @@ impl Shell {
             let (_, events) = channel();
             self.build = Some(BuildJob {
                 events,
+                saving: None,
                 profile_creation: Some(ProfileCreation {
                     job,
                     build_after: false,
@@ -406,8 +415,10 @@ impl Shell {
     }
 
     /// Build a selected profile into a new chosen export folder, or by content ID
-    /// under builds/<profile> when no destination is supplied. Existing outputs stay.
-    pub(crate) fn build_profile(
+    /// under `builds/<profile>/<build-id>` when no destination is supplied.
+    /// Relative destinations resolve from the project root; existing outputs are refused.
+    /// The build dialog calls this after its profile/destination selection is confirmed.
+    pub fn build_profile(
         &mut self,
         editor: &mut Editor,
         profile: &str,
@@ -433,7 +444,6 @@ impl Shell {
             .into());
         }
         let preset = profile.to_owned();
-        editor.host.flush();
         let text = std::fs::read_to_string(profile_path(&root, &preset))?;
         let parsed =
             ara_export::ExportPreset::from_unpinned_text(&text).map_err(|e| format!("{e:#}"))?;
@@ -461,16 +471,23 @@ impl Shell {
             return Err("the build destination already exists; choose a new folder".into());
         }
         let (send, events) = channel();
+        let receipt = editor.host.queue_flush();
+        let (saved, ready) = channel();
         std::thread::spawn(move || {
-            let result =
-                export(root, parsed, output, stable_parent, &send).map_err(|e| format!("{e:#}"));
+            let result = ready
+                .recv()
+                .map_err(|_| "The build stopped before project files were saved".to_owned())
+                .and_then(|()| {
+                    export(root, parsed, output, stable_parent, &send).map_err(|e| format!("{e:#}"))
+                });
             let _ = send.send(BuildEvent::Finished(result));
         });
         self.build = Some(BuildJob {
             events,
             profile_creation: None,
+            saving: Some((receipt, saved)),
             preset: preset.clone(),
-            stage: "starting".into(),
+            stage: "saving project".into(),
             cooking: None,
         });
         self.status_note = Some(format!("Building {preset}…"));
@@ -542,6 +559,32 @@ impl Shell {
     /// Drain export and run events at a frame boundary; true when the UI should rebuild.
     pub(crate) fn poll_build(&mut self, editor: &mut Editor) -> bool {
         let mut changed = false;
+        let save_result = self
+            .build
+            .as_ref()
+            .and_then(|job| job.saving.as_ref())
+            .and_then(|(receipt, _)| editor.host.poll_flush(*receipt));
+        if let Some(result) = save_result {
+            let job = self
+                .build
+                .as_mut()
+                .expect("save receipt belongs to a build");
+            let (_, saved) = job.saving.take().expect("pending save receipt");
+            match result {
+                Ok(()) => {
+                    let _ = saved.send(());
+                    job.stage = "starting".into();
+                }
+                Err(errors) => {
+                    drop(saved);
+                    job.stage = "could not save project".into();
+                    for error in errors {
+                        log(editor, error);
+                    }
+                }
+            }
+            changed = true;
+        }
         if let Some(results) = &self.run
             && let Ok(result) = results.try_recv()
         {
@@ -715,8 +758,17 @@ mod tests {
     impl Scratch {
         fn new() -> anyhow::Result<Self> {
             static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-            let root =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/editor-build-layout");
+            let root = std::env::var_os("ARA_TEST_ROOT")
+                .or_else(|| std::env::var_os("CARGO_TARGET_DIR"))
+                .map(PathBuf::from)
+                .unwrap_or_else(|| {
+                    if cfg!(windows) {
+                        PathBuf::from("D:/AraBuild/ux-hub-evidence")
+                    } else {
+                        std::env::temp_dir()
+                    }
+                })
+                .join("editor-build-layout");
             std::fs::create_dir_all(&root)?;
             let directory = root.join(format!(
                 "{}-{}",
@@ -763,13 +815,26 @@ mod tests {
             profile_path(root, "windows"),
             root.join("settings/builds/windows.export.json")
         );
-        let default = default_profile()?;
+        let default = default_profile(root)?;
         assert!(default.templates.is_empty());
-        assert_eq!(default.content, ara_host::project_layout::AUTHORING_ROOT);
+        assert_eq!(
+            default.content, ".",
+            "legacy projects keep root-relative authored content"
+        );
         assert!(
             ara_export::ExportPreset::from_unpinned_text(&default.to_unpinned_text()?)?
                 .templates
                 .is_empty()
+        );
+        std::fs::write(root.join("ara.project.json"), r#"{"layoutVersion":3}"#)?;
+        let chosen = ara_host::project::authored_root(root);
+        assert_eq!(
+            default_profile(root)?.content,
+            chosen.strip_prefix(root)?.to_string_lossy()
+        );
+        assert!(
+            !chosen.exists(),
+            "reading the chosen root never creates or migrates it"
         );
         Ok(())
     }

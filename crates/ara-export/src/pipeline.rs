@@ -382,7 +382,7 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
             )?
         } else {
             ara_pack::build_directory(
-                &tools::project_path(&project, &p.content)?,
+                &tools::content_path(&project, &p.content)?,
                 cook,
                 p.chunk_size as usize,
                 encryption.as_ref(),

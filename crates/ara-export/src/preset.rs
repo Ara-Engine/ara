@@ -458,7 +458,9 @@ impl ExportPreset {
         );
         let script_free =
             self.player_template == PlayerTemplate::Runtime && self.script_project.is_empty();
-        ara_pack::validate_path(&self.content)?;
+        if self.content != "." {
+            ara_pack::validate_path(&self.content)?;
+        }
         if !script_free {
             ara_pack::validate_path(&self.script_project)?;
         }

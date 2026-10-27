@@ -3,8 +3,8 @@ mod mapping;
 mod migrate;
 mod references;
 
-pub use ara_doc::AUTHORING_ROOT;
 pub use crate::project_policy::{PREFERENCES, PREFERENCES_ID, policy};
+pub use ara_doc::AUTHORING_ROOT;
 pub use migrate::{Migration, MigrationOp};
 
 use std::{fs, io, path::Path};

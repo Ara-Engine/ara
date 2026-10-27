@@ -39,6 +39,8 @@ See README.md for template bootstrapping, integration and Apple handoff.
 
 Exports output `build/<Game>.exe` (Linux: `<Game>`), one `build/data/` and notices;
 macOS uses `<Game>.app` with `Contents/Resources` as its data root.
+This full branch holds provisional authored `game/` naming pending D30 approval;
+export reads the selected root through `project::authored_root`.
 `distribution.json`, packages, `report/`, logs and `symbols/<build-id>` sit outside `build/`.
 Never package symbols, verification logs or crash artifacts with the player.
 Windows pins require a matching PDB pin; ELF pins must retain DWARF until export.
@@ -52,7 +54,8 @@ macOS bundle metadata. `icon` is an authored-root-relative ICO/ICNS/SVG on Windo
 Without it players retain the engine's game icon. Branding precedes code signing.
 Named presets resolve from `settings/builds/`; derived export data uses `.ara/export-cache`.
 `preflight::runtime` checks installed companions, player/PDB GUID+age and complete
-cooked manifests/binaries/reflections before packaging; existing shader hashes are checked.
+cooked manifests/runtime binaries and required Metal reflection before packaging;
+offline Slang caches are excluded and existing shader hashes are checked.
 `ARA-EXP-PREFLIGHT-001` offers `ara hub repair <version>` for an installed cohort;
 projects using that version must close first. Pinned ZIPs get the same resource preflight.
 Delivery formats are generic. No store SDKs, service settings or upload layouts.

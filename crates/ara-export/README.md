@@ -31,11 +31,16 @@ ReadyToRun is diagnosed for runtime gameplay exports until its host is integrate
 
 ## Project presets and distribution layout
 
+This full branch holds the proposed authored `game/` root pending D30 approval.
+Export resolves the project's selected authored root through its read-only adapter.
+
 Project-owned presets live in `settings/builds/<name>.export.json`. For example,
 `ara-export export --project PROJECT --preset windows --output PROJECT/builds/windows`
 uses `settings/builds/windows.export.json`. Explicit project-relative and absolute
 preset paths work; the old `presets/` lookup remains available for existing projects.
 Derived template/cache/job data lives in `.ara/export-cache/`.
+Preset `content: "."` explicitly selects a legacy project's root directory;
+other content directories stay project-relative, and file/artifact paths remain strict.
 
 Windows and Linux ship one game executable, one `data/` directory and notices:
 
@@ -68,7 +73,8 @@ working directory nor any author source/cache path is needed to locate its data.
 Headless gameplay writes a capture only when `--capture PATH` is supplied.
 
 Before compiling scripts, the editor checks its installed companion player, matching
-PDB GUID/age and every shader manifest, binary and reflection file. Shader checksums
+PDB GUID/age and every shader manifest, runtime binary and required Metal reflection. Offline
+Slang reflection and compiler caches stay outside the runtime payload. Shader checksums
 are checked when recorded by the cook. Pinned runtime ZIPs receive the same resource
 check before gameplay compilation. A missing or mixed cohort is
 `ARA-EXP-PREFLIGHT-001`, with an exact-version repair action for installed engines:

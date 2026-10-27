@@ -60,6 +60,26 @@ pub fn import_docs(workspace: &ara_doc::Workspace) -> Result<Vec<ImportDoc>, Str
         .collect()
 }
 
+fn project_preset(imports: &[ImportDoc]) -> Result<ara_asset::CookPreset, String> {
+    imports
+        .iter()
+        .find(|(path, _, _)| path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE)
+        .or_else(|| {
+            imports
+                .iter()
+                .find(|(path, _, _)| path == ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE)
+        })
+        .map(|(_, _, record)| {
+            serde_json::from_value::<ara_asset::ProjectImportSettings>(serde_json::Value::Object(
+                record.clone(),
+            ))
+            .map(|settings| settings.preset)
+        })
+        .transpose()
+        .map_err(|error| error.to_string())
+        .map(Option::unwrap_or_default)
+}
+
 /// The owner's import pipeline and the latest published generation per asset.
 pub struct Assets {
     pipeline: AssetPipeline,
@@ -165,7 +185,7 @@ impl Assets {
         // they are persisted (an in-process speedup), and pinning one would also make
         // Play depend on import timing; play cooks the requested preset directly.
         pipeline.reload.progressive = false;
-        let authored_root = ara_host::project_layout::authored_root(root);
+        let authored_root = ara_host::project::authored_root(root);
         let files = ara_host::project::authored_files(root, &schema)
             .map_err(|e| e.to_string())?
             .into_iter()
@@ -280,21 +300,7 @@ impl Assets {
         imports: Vec<ImportDoc>,
         revision: u64,
     ) -> Result<(), String> {
-        let project_preset = imports
-            .iter()
-            .find(|(path, _, _)| {
-                path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE
-                    || path == ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE
-            })
-            .map(|(_, _, record)| {
-                serde_json::from_value::<ara_asset::ProjectImportSettings>(
-                    serde_json::Value::Object(record.clone()),
-                )
-                .map(|settings| settings.preset)
-            })
-            .transpose()
-            .map_err(|error| error.to_string())?
-            .unwrap_or_default();
+        let project_preset = project_preset(&imports)?;
         let project_changed = self
             .pipeline
             .configure_project(project_preset)
@@ -546,6 +552,68 @@ fn upgrade(file: &Path, sidecar: Sidecar, version: &str, schema: &SchemaDb) -> R
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn scoped_import_policy_takes_precedence_without_changing_the_legacy_default() {
+        let record = |preset| {
+            serde_json::json!({"preset":preset})
+                .as_object()
+                .expect("record")
+                .clone()
+        };
+        let imports = vec![
+            (
+                ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE.into(),
+                "ip_legacy".into(),
+                record("highQuality"),
+            ),
+            (
+                ara_asset::PROJECT_IMPORT_SETTINGS_FILE.into(),
+                "ip_scoped".into(),
+                record("balanced"),
+            ),
+        ];
+        assert_eq!(
+            super::project_preset(&imports).expect("scoped policy"),
+            ara_asset::CookPreset::Balanced
+        );
+        assert_eq!(
+            super::project_preset(&imports[..1]).expect("legacy policy"),
+            ara_asset::CookPreset::HighQuality
+        );
+    }
+
+    #[test]
+    fn authored_imports_documents_do_not_become_global_project_policy() {
+        let mut workspace = ara_doc::Workspace::default();
+        workspace.set_reference_root(ara_doc::AUTHORING_ROOT);
+        for (id, path, project) in [
+            ("ip_project", "ara.imports".to_owned(), true),
+            (
+                "ip_feature",
+                format!("{}/settings/ara.imports", ara_doc::AUTHORING_ROOT),
+                false,
+            ),
+        ] {
+            let mut document =
+                ara_doc::Document::new("imports", ara_doc::AssetId::parse(id).expect("policy ID"));
+            document.insert_unchecked(
+                ara_doc::RecordId::parse("pi_settings").expect("record ID"),
+                serde_json::json!({"preset":"balanced"})
+                    .as_object()
+                    .expect("record")
+                    .clone(),
+            );
+            if project {
+                workspace.insert_project_document(path, document);
+            } else {
+                workspace.insert(path, document);
+            }
+        }
+        let imports = super::import_docs(&workspace).expect("project imports");
+        assert_eq!(imports.len(), 1);
+        assert_eq!(imports[0].0, "ara.imports");
+    }
+
     #[test]
     fn project_quality_is_loaded_as_a_host_document_before_import_synchronization() {
         let root = tempfile::tempdir().expect("project");

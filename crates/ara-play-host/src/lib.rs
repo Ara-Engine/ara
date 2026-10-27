@@ -1126,7 +1126,9 @@ fn types_files(root: &Path, _dir: &Path, out: &mut Vec<Value>) {
     let modules: std::collections::BTreeSet<_> = files
         .iter()
         .filter(|file| {
-            file.role == AuthoredRole::ScriptModule || file.path.ends_with("ara.module.toml")
+            file.scope == AuthoredScope::Authored
+                && (file.role == AuthoredRole::ScriptModule
+                    || file.path.ends_with("ara.module.toml"))
         })
         .filter_map(|file| Path::new(&file.storage_path).parent().map(Path::to_owned))
         .collect();

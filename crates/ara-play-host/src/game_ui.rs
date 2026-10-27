@@ -5,13 +5,11 @@ mod paths;
 
 /// Reads portable game UI sources and explicit resources inside the project.
 pub fn read(root: &Path) -> Result<Option<GameUi>, String> {
-    let authored = ara_host::project_layout::authored_root(root);
+    let authored = ara_host::project::authored_root(root);
     let preferences =
-        ara_host::project_layout::preferences(root).map_err(|error| error.to_string())?;
-    let configured = preferences.get("ui").is_some();
+        ara_host::project_policy::read(root, "ui").map_err(|error| error.to_string())?;
+    let configured = preferences.is_some();
     let policy: paths::Policy = preferences
-        .get("ui")
-        .cloned()
         .map(serde_json::from_value)
         .transpose()
         .map_err(|error| format!("project UI settings: {error}"))?

@@ -40,10 +40,16 @@ fn main() -> Result<()> {
     template["arch"] = arch.into();
     template["config"] = "dev".into();
     template["symbols"] = pin(&args.symbols)?;
+    let authored = ara_host::project::authored_root(&args.project);
+    let content = authored
+        .strip_prefix(&args.project)?
+        .to_string_lossy()
+        .replace('\\', "/");
+    let content = if content.is_empty() { "." } else { &content };
     let preset: ExportPreset = serde_json::from_value(serde_json::json!({
         "platform":platform,"config":"dev","lane":"nativeAot",
         "playerTemplate":"runtime","scriptProject":"","assembly":"AraGame",
-        "content":ara_host::project_layout::AUTHORING_ROOT,"templates":[template]
+        "content":content,"templates":[template]
     }))?;
     preset.validate()?;
     let mut events = ara_export::event::Ndjson(std::io::stdout().lock());
