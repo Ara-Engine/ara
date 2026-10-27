@@ -12,6 +12,7 @@ use ara_gpu::{
     vulkan::{Context as Gpu, image_barrier},
 };
 use sdl3_sys::vulkan::SDL_Vulkan_CreateSurface;
+use std::time::{Duration, Instant};
 /// Presentations that may be in flight at once (`Present::set_frames_in_flight`).
 const SLOTS: usize = 2;
 /// Longest a presentation waits to acquire an image or reuse a slot before it skips
@@ -254,6 +255,23 @@ impl Present {
         self.frames_in_flight = enabled;
         Ok(())
     }
+    /// Waits, at most `timeout` in all, for every presentation still reading its source:
+    /// false while one is pending (a stalled presentation engine left a synchronous
+    /// `display` unfinished). The caller must not rewrite or free that source until true.
+    /// # Safety
+    /// `gpu` created this presentation and is live.
+    pub unsafe fn settled(&mut self, gpu: &GpuDevice, timeout: Duration) -> Result<bool> {
+        let deadline = Instant::now() + timeout;
+        for slot in 0..SLOTS {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let nanos = u64::try_from(left.as_nanos()).unwrap_or(u64::MAX);
+            // SAFETY: forwarded caller contract.
+            if !unsafe { self.retire_slot(gpu.context(), slot, nanos)? } {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
     /// Waits (at most `timeout_ns`) for the blit that last used `slot` and frees its
     /// command buffer; false while it is still pending (the slot stays busy).
     /// # Safety
@@ -418,7 +436,9 @@ impl Present {
     }
 }
 impl Present {
-    /// Blit one completed Ara frame to the acquired image and wait for presentation work.
+    /// Blit one completed Ara frame to the acquired image and wait for the blit, at most
+    /// `PRESENT_WAIT_NS`: a stalled presentation engine leaves it pending, later displays
+    /// skip until it completes, and [`Self::settled`] gates the caller's next write.
     /// The serialized v0 path keeps native command and semaphore ownership inspectable.
     /// # Safety
     /// Source must be a completed CopySource image owned by the creating device.
@@ -491,26 +511,20 @@ impl Present {
                     .command_buffer_infos(&commands)
                     .wait_semaphore_infos(&waits)
                     .signal_semaphore_infos(&signals)],
-                if self.frames_in_flight {
-                    self.slots[slot].fence
-                } else {
-                    vk::Fence::null()
-                },
+                self.slots[slot].fence,
             )?;
         }
         let result = self.present(gpu, index);
+        // The slot's next use waits its fence (`retire_slot`).
+        self.slots[slot].command = Some(cmd);
         if self.frames_in_flight {
-            // The slot's next presentation waits its fence (`retire_slot`).
-            self.slots[slot].command = Some(cmd);
             self.next = (slot + 1) % SLOTS;
             return result;
         }
-        // SAFETY: Waiting includes the blit/present queue operations before command reuse/free.
-        unsafe {
-            ara_gpu::cpu_scope!("Platform.present_queue_idle");
-            gpu.measure_host_wait(|| gpu.device.queue_wait_idle(gpu.graphics))?;
-            gpu.device.free_command_buffers(gpu.graphics_pool, &[cmd]);
-        }
+        // Synchronous: the blit completes before returning, unless the presentation
+        // engine stalls; then the slot stays busy rather than blocking the caller.
+        // SAFETY: this presentation was created on `gpu`.
+        unsafe { self.retire_slot(gpu, slot, PRESENT_WAIT_NS)? };
         result
     }
 }

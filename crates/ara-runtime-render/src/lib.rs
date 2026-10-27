@@ -82,10 +82,11 @@ pub struct PresentStats {
     pub render: Duration,
     /// Time this present waited for the previous frame in flight to complete.
     pub in_flight_wait: Duration,
-    /// With frames in flight: this present submitted nothing because the frame in
-    /// flight did not complete within `Presenter::STALL_WAIT` (a stalled present
-    /// path: minimized, occluded or undisplayed window). Hosts skip the UI and the
-    /// window blit for it and keep pumping events.
+    /// This present has no new completed image: an earlier frame (with frames in
+    /// flight) or, synchronously, its own did not complete within
+    /// `Presenter::STALL_WAIT` (a stalled present path: minimized, occluded or
+    /// undisplayed window). Hosts skip the UI, the blit or the publish for it and
+    /// keep pumping events.
     pub skipped: bool,
 }
 

@@ -35,17 +35,24 @@ Metal view presented through `ara_gpu::metal::present` (`src/present/metal.rs`).
   `assets/brand/icons/`. Regenerate with `cargo run -p ara-brand -- icons`.
 - `Present`: backend-selected (`src/present/{vulkan,metal}.rs`). Portable surface:
   `create`, `create_with_output`, `present_image`, `present_encoded`, `retire` (no
-  wait; callers wait for idle where they need it), `output_settings`, `surface_format`.
-  Metal accepts SDR only and scales/converts like the Vulkan blit.
+  wait; callers wait for idle where they need it), `output_settings`, `surface_format`,
+  `settled` (bounded wait for presentations still reading their source; always true on
+  Metal). Metal accepts SDR only and scales/converts like the Vulkan blit; a nil
+  `nextDrawable` (hidden window) skips the frame.
+- Never block the event pump on presentation: skip rendering and presenting while
+  `Window::presentable()` is false (minimized, occluded). Vulkan acquire and slot
+  waits are bounded (`PRESENT_WAIT_NS`, 100 ms); a stalled presentation engine skips
+  frames, and a synchronous display leaves its blit pending, so hosts gate the next
+  write to the source on `settled`.
 - Vulkan `Present`: unsafe native integration over an existing GPU context. Retain both
   native owners, present only completed CopySource images, and destroy after idle.
-  Leaf acquire/present/queue-idle waits contribute to `Context::host_wait_stats`.
+  Leaf acquire/present/slot waits contribute to `Context::host_wait_stats`.
   Loading/game may transfer the same Present between owners of one native device;
   all uses must be complete first. `native_swapchain()` exposes its stable identity.
 
 Per-image render semaphores are reused after reacquisition. Construction cleans
 partially created surface/swapchain/semaphores; destruction is idempotent.
-The v0 display path serializes presentation before releasing its command buffer.
+The synchronous display path waits its blit's slot fence (bounded) before returning.
 The windowed example recreates on resize and OUT_OF_DATE; minimized windows wait.
 
 ## Setup and test

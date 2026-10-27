@@ -13,6 +13,7 @@ use sdl3_sys::metal::{
     SDL_Metal_CreateView, SDL_Metal_DestroyView, SDL_Metal_GetLayer, SDL_MetalView,
 };
 use std::ptr::NonNull;
+use std::time::Duration;
 
 /// An SDL Metal view and the presenter drawing into its layer.
 pub struct Present {
@@ -35,6 +36,14 @@ impl Present {
             .context("presentation retired")?
             .set_frames_in_flight(enabled)?;
         Ok(())
+    }
+    /// As on Vulkan, but always true: Metal's copies never wait on the display
+    /// (`nextDrawable` is where a hidden window blocks, and a nil drawable skips the
+    /// frame), and with frames in flight `order_before` orders the next writes.
+    /// # Safety
+    /// `gpu` created this presentation and is live.
+    pub unsafe fn settled(&mut self, _gpu: &GpuDevice, _timeout: Duration) -> Result<bool> {
+        Ok(true)
     }
     /// Order `gpu`'s next work after this presentation's copies, which run on a
     /// queue of their own and may still read the image a frame in flight rewrites.

@@ -30,7 +30,8 @@ impl Drop for Scratch {
     }
 }
 
-fn run_verification() -> (Scratch, PathBuf) {
+/// A fresh one-scene project under `target/`, removed on drop.
+fn fixture() -> Scratch {
     let project = Scratch(target_root().join(format!(
         "ara-editor-golden-{}-{}",
         std::process::id(),
@@ -55,6 +56,11 @@ fn run_verification() -> (Scratch, PathBuf) {
         "# Outpost\nNative editor verification fixture.\n",
     )
     .unwrap();
+    project
+}
+
+fn run_verification() -> (Scratch, PathBuf) {
+    let project = fixture();
     let output = project.0.join(".ara/verification");
     let status = Command::new(env!("CARGO_BIN_EXE_ara-editor"))
         .arg(&project.0)
@@ -146,4 +152,28 @@ fn native_docking_drags_match_drop_previews() {
         assert_eq!(drag["ok"], true, "{drag}");
     }
     assert!(output.join("dock-04-preview.png").exists());
+}
+
+/// A window that cannot show (the probe holds it minimized or occluded) renders and
+/// presents nothing, keeps every loop frame short (a stalled present path never
+/// blocks the event pump) and presents again once it can show.
+#[test]
+#[ignore = "requires Vulkan validation and a compatible GPU; every window stays hidden"]
+fn an_unpresentable_window_never_blocks_the_editor_pump() {
+    let project = fixture();
+    let output = project.0.join(".ara/verification");
+    let status = Command::new(env!("CARGO_BIN_EXE_ara-editor"))
+        .arg(&project.0)
+        .args(["--verify-unpresentable", "--output"])
+        .arg(&output)
+        .status()
+        .unwrap();
+    assert!(status.success(), "unpresentable route failed: {status}");
+    let report: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(output.join("responsiveness.json")).unwrap())
+            .unwrap();
+    let hidden = &report["unpresentable"];
+    assert_eq!(hidden["presented"], 0, "{hidden}");
+    assert_eq!(hidden["resumed"], true, "{hidden}");
+    assert_eq!(hidden["ok"], true, "{hidden}");
 }

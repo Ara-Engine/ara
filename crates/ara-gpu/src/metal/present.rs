@@ -144,10 +144,14 @@ impl Presenter {
         let readback = readback
             .map(|b| gpu.buffers.get(b).map(|b| b.raw.buffer.clone()))
             .transpose()?;
-        let drawable = self
-            .layer
-            .nextDrawable()
-            .ok_or_else(|| nil("CAMetalLayer nextDrawable"))?;
+        // Nil after Core Animation's drawable timeout (a hidden or occluded window):
+        // skip the frame rather than fail the host. Readbacks (tests) need the drawable.
+        let Some(drawable) = self.layer.nextDrawable() else {
+            return match readback {
+                Some(_) => Err(nil("CAMetalLayer nextDrawable")),
+                None => Ok(()),
+            };
+        };
         let target = drawable.texture();
         let [width, height] = self.size.map(|v| v as usize);
         let frames_in_flight = self.frames_in_flight && readback.is_none();

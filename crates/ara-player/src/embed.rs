@@ -249,6 +249,10 @@ impl Embedded {
             renderer.set_unseen(self.entering());
         }
         presenter.present_with(frame, resolve)?;
+        // A stalled frame (Presenter::STALL_WAIT): nothing new to publish yet.
+        if presenter.stats().skipped {
+            return Ok(None);
+        }
         let entering = self.entering();
         if !self.admit(presenter) {
             return Ok(None);
@@ -258,7 +262,9 @@ impl Embedded {
         let renderer = presenter.renderer().context("renderer missing")?;
         let published = match &mut self.game_ui {
             Some(ui) => {
-                ui.render(presenter)?;
+                if !ui.render(presenter)? {
+                    return Ok(None);
+                }
                 // SAFETY: the game UI completed its composite of this presenter's scene on
                 // the ring's GPU; this thread owns its queues.
                 unsafe { ui.publish(renderer.gpu(), &mut self.ring, frame.tick)? }

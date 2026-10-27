@@ -31,6 +31,7 @@ fn main() -> ara_ui::Result<()> {
             "--verify-scene-quality" => options.verify_scene_quality = true,
             "--verify-loading" => options.verify_loading = true,
             "--verify-responsiveness" => options.verify_responsiveness = true,
+            "--verify-unpresentable" => options.verify_unpresentable = true,
             "--settle-imports" => {
                 options.settle = Some(match args.next().as_deref() {
                     Some("before") => ara_editor::Settle::Before,
@@ -75,7 +76,8 @@ fn main() -> ara_ui::Result<()> {
 --verify-assets proves right-click Create, C# inline rename, real compilation and entity attachment, with offscreen captures.
 --verify-loading runs the loading window offscreen on the project and captures its milestones and every state.
 --verify-docking runs native tab insertion, reorder, split, detach, reattach and Escape routes at UI scales 1 and 1.25, capturing every gesture.
---verify-responsiveness measures clicks, typing, drags, a Scene orbit, Play and startup through the window loop; --settle-imports before|after waits for imports before or after the interactions."
+--verify-responsiveness measures clicks, typing, drags, a Scene orbit, Play and startup through the window loop; --settle-imports before|after waits for imports before or after the interactions.
+--verify-unpresentable holds the window unable to show (minimized or occluded) and checks the loop presents nothing, stays responsive and resumes presenting."
                 );
                 return Ok(());
             }
