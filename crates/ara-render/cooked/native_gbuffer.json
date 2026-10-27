@@ -1,36 +1,36 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1",
+  "key": "69a06be2248eb5e8db4cb82ceb2306a191da9cbdaa927cb16e3c069b957d8878",
   "stages": [
     {
-      "dxil": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/nativeGeometryFragment.dxil",
-      "dxil_hash": "0bc7f81a9c9b16a4fdf405deb19af60080aaed7618f9a5c98fd8fc63520d8486",
+      "dxil": "69a06be2248eb5e8db4cb82ceb2306a191da9cbdaa927cb16e3c069b957d8878/nativeGeometryFragment.dxil",
+      "dxil_hash": "d2a0c8c747e7ed63bdf2b3c489e86ba6eebbe7a15c3692ce83af58bf212190a9",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/nativeGeometryFragment.metallib",
-        "metallib_hash": "4d745519763677f581e67819ded4349079e90c19a3df80463bbb22fc0de143bb",
-        "reflection": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/nativeGeometryFragment.metal.json",
+        "metallib": "69a06be2248eb5e8db4cb82ceb2306a191da9cbdaa927cb16e3c069b957d8878/nativeGeometryFragment.metallib",
+        "metallib_hash": "6571bf74cdfca4738ee80c86e11ad678d2c47818dfd947854197f82e75d9f24e",
+        "reflection": "69a06be2248eb5e8db4cb82ceb2306a191da9cbdaa927cb16e3c069b957d8878/nativeGeometryFragment.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "nativeGeometryFragment",
-      "spirv": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/nativeGeometryFragment.spv",
+      "spirv": "69a06be2248eb5e8db4cb82ceb2306a191da9cbdaa927cb16e3c069b957d8878/nativeGeometryFragment.spv",
       "spirv_entry": "main",
-      "spirv_hash": "09b21a0c9b04300b752d638aa90391ad8bfacaec7ea91bfe905c725f24b03d52",
+      "spirv_hash": "f7a711e03631e197fd3eda943c190e1e8a349cbe4215f6e4fdc2c43d3aa39b41",
       "stage": "fragment"
     },
     {
-      "dxil": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/nativeGeometryVertex.dxil",
+      "dxil": "69a06be2248eb5e8db4cb82ceb2306a191da9cbdaa927cb16e3c069b957d8878/nativeGeometryVertex.dxil",
       "dxil_hash": "f4115d11f3cca66a0d4f5d01674b887e04c1a0c7cff81a8a6746267ca38d006d",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/nativeGeometryVertex.metallib",
+        "metallib": "69a06be2248eb5e8db4cb82ceb2306a191da9cbdaa927cb16e3c069b957d8878/nativeGeometryVertex.metallib",
         "metallib_hash": "ac34cc1d561e2dc84d2816741ebcd067be5a3d530d326d248dbcee539f92ad4b",
-        "reflection": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/nativeGeometryVertex.metal.json",
+        "reflection": "69a06be2248eb5e8db4cb82ceb2306a191da9cbdaa927cb16e3c069b957d8878/nativeGeometryVertex.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "nativeGeometryVertex",
-      "spirv": "aa8e4382c60a59dc7dc9089578a113283887ee1228039341f9dec9f66d635ad1/nativeGeometryVertex.spv",
+      "spirv": "69a06be2248eb5e8db4cb82ceb2306a191da9cbdaa927cb16e3c069b957d8878/nativeGeometryVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "bf7f1e9697019ae319b693192acc4bdea86f7b9800e1fcc9ec685a55eb6adf3a",
       "stage": "vertex"
