@@ -46,10 +46,7 @@ fn main() -> Result<()> {
                 continue;
             }
             if size != renderer.size() {
-                // SAFETY: Resize destroys the old presentation objects only after every queue is idle.
-                unsafe {
-                    renderer.gpu().wait_idle()?;
-                }
+                renderer.gpu().wait_idle()?;
                 // SAFETY: Device idle was established immediately above; the creating device remains live.
                 unsafe {
                     present.retire(renderer.gpu());
@@ -73,10 +70,7 @@ fn main() -> Result<()> {
                 if error.downcast_ref::<ara_gpu::vk::Result>()
                     == Some(&ara_gpu::vk::Result::ERROR_OUT_OF_DATE_KHR)
                 {
-                    // SAFETY: No pending work may refer to the replaced swapchain.
-                    unsafe {
-                        renderer.gpu().wait_idle()?;
-                    }
+                    renderer.gpu().wait_idle()?;
                     // SAFETY: Device idle was established immediately above; the creating device remains live.
                     unsafe {
                         present.retire(renderer.gpu());
@@ -103,10 +97,7 @@ fn main() -> Result<()> {
         renderer.gpu().assert_clean()?;
         Ok(())
     })();
-    // SAFETY: Device idle includes all native presentation work before swapchain/surface teardown.
-    unsafe {
-        renderer.gpu().wait_idle()?;
-    }
+    renderer.gpu().wait_idle()?;
     // SAFETY: Device idle was established immediately above; the creating device remains live.
     unsafe {
         present.retire(renderer.gpu());
