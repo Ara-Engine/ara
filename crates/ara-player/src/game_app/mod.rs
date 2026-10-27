@@ -134,11 +134,15 @@ pub(crate) fn run(args: Args) -> Result<()> {
             )?
         };
         window.set_window_mode(settings.window_mode(), settings.size())?;
-        window.game_ui = Some(Surface::plain(&ui, window.window_size()?)?);
+        window.game_ui = Some(Surface::plain(
+            &ui,
+            window.window_size()?,
+            window.pixel_density(),
+        )?);
         (Some(window), presenter)
     };
     let headless_ui = if window.is_none() {
-        Some(Surface::plain(&ui, settings.size())?)
+        Some(Surface::plain(&ui, settings.size(), 1.)?)
     } else {
         None
     };
@@ -337,9 +341,9 @@ impl App {
                 world.extract_frame(&mut self.frame);
             }
             if let Some(window) = &mut self.window {
-                let size = window.window_size()?;
+                let (size, scale) = (window.window_size()?, window.pixel_density());
                 if let Some(surface) = &mut window.game_ui {
-                    surface.update(&world.runtime, world.runtime.player().0, size)?;
+                    surface.update(&world.runtime, world.runtime.player().0, size, scale)?;
                     if let Some(crew) = &crew {
                         surface.label("lobby-players", crew)?;
                     }
@@ -347,7 +351,7 @@ impl App {
                 }
             }
             if let Some(surface) = &mut self.headless_ui {
-                surface.update(&world.runtime, world.runtime.player().0, [1280, 720])?;
+                surface.update(&world.runtime, world.runtime.player().0, [1280, 720], 1.)?;
                 if let Some(crew) = &crew {
                     surface.label("lobby-players", crew)?;
                 }

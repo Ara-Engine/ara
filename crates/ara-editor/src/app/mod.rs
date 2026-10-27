@@ -560,6 +560,8 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 if size[0] >= 64 && size[1] >= 64 {
                     shell.game_target = size;
                     editor.game_size = size;
+                    shell.game_scale = scale;
+                    editor.game_scale = scale;
                 }
             }
             let was_live = shell.game_live;

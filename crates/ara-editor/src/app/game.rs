@@ -26,6 +26,8 @@ pub struct GameView {
     shown: Option<PlaySurface>,
     pending: Option<PlaySurface>,
     resized: Option<Instant>,
+    /// The UI scale the shown player last received (at start, then with resizes).
+    scale: Option<f32>,
     frames: Vec<Instant>,
     checked: Option<Instant>,
     /// The world `checked` refers to: a new Play is read at once.
@@ -66,6 +68,8 @@ impl GameView {
             self.close(editor, ui)?;
             self.world = world.clone();
             self.player = player.unwrap_or(0);
+            // Play started at the Game view's scale (`Editor::embed_play`).
+            self.scale = Some(shell.game_scale);
             shell.game_live = false;
         }
         let (Some(world), Some(player)) = (world, player) else {
@@ -141,16 +145,18 @@ impl GameView {
             }
         }
         shell.game_size = size;
-        // Follow the panel's size (physical pixels), at most a few times a second.
+        // Follow the panel's size (physical pixels) and UI scale, at most a few times
+        // a second.
         let wanted = shell.game_target;
         if wanted[0] >= 16
             && wanted[1] >= 16
-            && wanted != size
+            && (wanted != size || self.scale != Some(shell.game_scale))
             && self
                 .resized
                 .is_none_or(|t| t.elapsed() > Duration::from_millis(150))
         {
-            surfaces.resize(&world, player, wanted[0], wanted[1]);
+            surfaces.resize(&world, player, wanted, shell.game_scale);
+            self.scale = Some(shell.game_scale);
             self.resized = Some(Instant::now());
         }
         Ok(showed)
