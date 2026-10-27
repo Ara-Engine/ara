@@ -204,15 +204,23 @@ fn prepare<R: Runner>(
     let lock =
         version::external_resolutions(&fs::read_to_string(context.source.join("Cargo.lock"))?)?;
     version::bump(&context.source, &version, &head)?;
+    // `cargo metadata --no-deps` never resolves, so it left Cargo.lock at the old
+    // version and the release build rewrote it after the version commit.
     context.command(
         "lockfile",
-        Command::new("cargo").args(["metadata", "--no-deps", "--format-version=1"]),
+        Command::new("cargo").args(["update", "--workspace", "--offline"]),
         false,
     )?;
+    let bumped_lock = fs::read_to_string(context.source.join("Cargo.lock"))?;
     ensure!(
-        version::external_resolutions(&fs::read_to_string(context.source.join("Cargo.lock"))?)?
-            == lock,
+        version::external_resolutions(&bumped_lock)? == lock,
         "preview bump changed a third-party dependency resolution"
+    );
+    let stale = version::stale_local_entries(&bumped_lock, &current)?;
+    ensure!(
+        stale.is_empty(),
+        "Cargo.lock still lists workspace packages at {current}: {}",
+        stale.join(", ")
     );
     let changes = crate::git::text(&context.source, ["diff", "--name-only"])?;
     ensure!(
