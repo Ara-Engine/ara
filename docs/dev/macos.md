@@ -97,8 +97,9 @@ cargo run -p ara-export --bin ara-export -- scripts --project samples/outpost \
 cargo run -p ara-player -- --root PACK --headless --quality high   # writes PACK/verify.png
 ```
 
-- Compare against the Windows `verify.png` at the same `--quality`: `Auto` picks Low
-  on Apple silicon, because shared memory reports no device-local memory.
+- Compare against the Windows `verify.png` at the same `--quality`. `Auto` plans with
+  Apple unified memory as device-local (Metal's recommended working set), so an
+  M5 Pro picks High, by the same thresholds as a discrete GPU.
 - Set `SDL_MAC_BACKGROUND_APP=1` for automated runs that open a hidden SDL window
   (`--offscreen`, editor and Hub verification routes): without it SDL makes the
   process a regular app, which shows a Dock icon and can take focus.
@@ -122,3 +123,7 @@ cargo run -p ara-player -- --root PACK --headless --quality high   # writes PACK
 - Loopback UDP is delivered asynchronously on macOS: tests wait on delivery events,
   never on fixed sleeps.
 - Vulkan backend GPU tests are ignored on macOS (no Vulkan driver; D12).
+- Metal commits each command list. Vulkan batches a synchronous presenter's lists into
+  one queue submission, which `ara-runtime-render`'s
+  `live_tick_advances_and_draws_in_one_particle_graph` asserts, so that test fails on
+  macOS until Metal batches its command buffers per presenter scope.
