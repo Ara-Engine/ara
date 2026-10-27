@@ -253,7 +253,9 @@ impl Monkey {
     }
 
     fn write_event(&mut self, event: Value) -> ara_ui::Result<()> {
-        let line = ara_json::to_canonical_string(&event);
+        // JSONL frames use the same compact serializer as the host journal;
+        // standalone report documents use Ara's canonical document writer.
+        let line = serde_json::to_string(&event)?;
         self.journal.write_all(line.as_bytes())?;
         if !line.ends_with('\n') {
             self.journal.write_all(b"\n")?;

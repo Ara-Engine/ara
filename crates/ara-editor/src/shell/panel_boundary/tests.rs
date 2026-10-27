@@ -61,7 +61,7 @@ fn panic_quarantines_only_its_panel_and_discards_partial_bindings() {
     assert!(!shell.bindings.contains_key(&123));
     assert!(!markup.contains("unfinished"));
     assert!(markup.contains("panel-error-inspector"));
-    assert!(markup.contains("&lt;&amp;&gt;"));
+    assert!(markup.contains("&lt;&amp;>"));
 
     // A quarantined panel must not panic or report again on every frame.
     shell.with_panel_boundary("inspector", &mut editor, &mut markup, |_, _, _| {

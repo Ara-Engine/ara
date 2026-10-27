@@ -123,10 +123,35 @@ fn alt_gizmo_preview_keeps_sources_and_commits_creation_and_pose_as_one_undo() {
     assert_eq!(records(&editor), committed);
 }
 #[test]
-fn conflicting_content_revision_refuses_alt_duplicate_without_partial_copies() {
+fn unrelated_source_rename_survives_alt_duplicate_without_interrupting_the_gesture() {
     let (mut editor, mut shell) = open();
     let mut controller = preview(&mut editor, &mut shell);
     editor.apply(vec![json!({"cmd":"property.set","args":{"entity":"e_gesturea1","path":"name","value":"Renamed during gesture"}})],"Concurrent source rename",None).unwrap();
+    let current = records(&editor);
+    let revision = editor.host.store().revision();
+    controller.finish_gizmo(&mut editor).unwrap();
+    let after = records(&editor);
+    assert_eq!(after["e_gesturea1"], current["e_gesturea1"]);
+    assert!(
+        after
+            .values()
+            .any(|record| record["name"] == "Renamed during gesture copy")
+    );
+    assert_eq!(editor.host.store().revision(), revision + 1);
+    assert!(editor.gesture.is_none());
+}
+
+#[test]
+fn deleted_source_refuses_alt_duplicate_without_partial_copies() {
+    let (mut editor, mut shell) = open();
+    let mut controller = preview(&mut editor, &mut shell);
+    editor
+        .apply(
+            vec![json!({"cmd":"entity.delete","args":{"entities":["e_gesturea1"]}})],
+            "Delete a source during preview",
+            None,
+        )
+        .unwrap();
     let current = records(&editor);
     let revision = editor.host.store().revision();
     assert!(controller.finish_gizmo(&mut editor).is_err());

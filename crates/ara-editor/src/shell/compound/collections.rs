@@ -191,7 +191,7 @@ impl Shell {
         if let Some((element, item, item_pointer)) = detail
             && crate::inspector::compound(editor.host.store().schema(), inner(element))
         {
-            out.push_str(&format!("<panel id='{scroll}-detail' style='flex-shrink:0;gap:0px;border-width:1px;border-color:var(--separator)'>"));
+            out.push_str(&format!("<panel id='{scroll}-detail' style='flex-shrink:0;gap:0px;border-width:1px;border-color:var(--border)'>"));
             self.items(
                 editor,
                 field,

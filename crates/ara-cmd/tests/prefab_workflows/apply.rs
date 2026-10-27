@@ -42,6 +42,14 @@ fn nested_source_choice_preserves_outer_boundary_or_explicitly_edits_base() {
             "e_nested/e_child/Probe.value":9
         }}}),
     );
+    let before_nearest = snapshot(&store);
+    let original_outer = store
+        .workspace()
+        .doc("pf_outer")
+        .unwrap()
+        .record("e_nested")
+        .unwrap()
+        .clone();
     let sources =
         prefab_sources(store.workspace(), "sc_level", "e_first/e_nested/e_child").unwrap();
     assert_eq!(
@@ -84,6 +92,17 @@ fn nested_source_choice_preserves_outer_boundary_or_explicitly_edits_base() {
         9
     );
     store.undo_last(&Author::Human).unwrap();
+    assert_eq!(snapshot(&store), before_nearest);
+    assert_eq!(
+        store
+            .workspace()
+            .doc("pf_outer")
+            .unwrap()
+            .record("e_nested")
+            .unwrap(),
+        &original_outer,
+        "Undo must restore an absent override container, not leave an empty map"
+    );
     run(
         &mut store,
         &registry,

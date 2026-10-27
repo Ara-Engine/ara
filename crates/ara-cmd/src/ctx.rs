@@ -550,7 +550,27 @@ impl EditCtx<'_, '_> {
             Target::Plain(id) => self.set(id, path.clone(), value),
             Target::Prefab { instance, .. } => {
                 let key = target.override_key(&path.to_string());
-                self.set(instance, FieldPath::field(field::OVERRIDES).key(key), value)
+                let overrides = FieldPath::field(field::OVERRIDES);
+                let present = self
+                    .read()
+                    .doc()
+                    .record(instance.as_str())
+                    .is_some_and(|record| record.contains_key(field::OVERRIDES));
+                if !present {
+                    // Creating a nested map implicitly only records the leaf's old
+                    // value. Record the container creation so one undo removes it.
+                    return match value {
+                        Some(value) => self.set(
+                            instance,
+                            overrides,
+                            Some(Value::Object(serde_json::Map::from_iter([(key, value)]))),
+                        ),
+                        None => Ok(()),
+                    };
+                }
+                // Once the container exists, keep unrelated participants' keys
+                // independent for conflict checks and per-participant undo.
+                self.set(instance, overrides.key(key), value)
             }
         }
     }

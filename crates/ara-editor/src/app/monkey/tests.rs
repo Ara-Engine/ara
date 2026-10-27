@@ -114,3 +114,42 @@ fn bounded_options_force_hidden_windows_and_default_to_a_long_soak() {
     assert_eq!(options.monkey_seconds, 1800);
     assert_eq!(options.monkey_steps, None);
 }
+
+#[test]
+fn exact_replay_preserves_recorded_actions_and_multilingual_text() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    let source = project.0.join("recorded.jsonl");
+    let actions = [
+        json!({"kind":"protocol","method":"editor.focus","params":{"panel":"hierarchy"},"raw":false}),
+        json!({"kind":"text","id":null,"value":"مرحبا\n🙂"}),
+        json!({"kind":"protocol","method":"editor.camera","params":["NaN"],"raw":false}),
+    ];
+    let lines = actions
+        .iter()
+        .enumerate()
+        .map(|(step, action)| {
+            serde_json::to_string(&json!({"phase":"begin","seed":77,"step":step,"action":action}))
+                .unwrap()
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(&source, lines).unwrap();
+    let output = project.0.join("replayed");
+    let mut runner = Monkey::from_journal(&source, Duration::from_secs(30), &output).unwrap();
+    while !runner.finished() {
+        runner.step(&mut editor, &mut shell).unwrap();
+        shell.frame().unwrap();
+    }
+    runner.finish().unwrap();
+    assert!(runner.succeeded());
+    let actual: Vec<Value> = std::fs::read_to_string(output.join("monkey-events.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .filter(|record| record["phase"] == "begin")
+        .map(|record| record["action"].clone())
+        .collect();
+    assert_eq!(actual, actions);
+    assert!(source.is_file());
+}

@@ -5,6 +5,7 @@ mod chrome_verify;
 mod content_drags;
 mod controller;
 mod cursors;
+mod diagnostics_verify;
 mod drags;
 mod eyedropper;
 mod game;
@@ -327,6 +328,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     let mut selection_check = None;
     let mut input_check = None;
     let mut prefab_check = None;
+    let mut diagnostics_check = None;
     if panel_verification.is_some()
         || ux_verification.is_some()
         || journey.is_some()
@@ -500,6 +502,18 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 let scale = crate::native::points_to_logical(window.raw(), main_dpi);
                 check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
             }
+            if prefab_check
+                .as_ref()
+                .is_some_and(prefab_verify::PrefabCheck::finished)
+                && diagnostics_check.is_none()
+            {
+                diagnostics_check =
+                    Some(diagnostics_verify::DiagnosticsCheck::new(&options.output));
+            }
+            if let Some(check) = &mut diagnostics_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+            }
             let interaction_start = (!events.is_empty()).then(Instant::now);
             if events.iter().any(|(_, event)| {
                 matches!(
@@ -516,12 +530,15 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let routed_at = Instant::now();
             let mut quit = false;
             for (sdl, event) in events {
-                let event_clipboard: &mut dyn ara_ui_text::Clipboard =
-                    if let Some(check) = &mut input_check {
-                        check.clipboard()
-                    } else {
-                        &mut clipboard
-                    };
+                let event_clipboard: &mut dyn ara_ui_text::Clipboard = if let Some(check) =
+                    diagnostics_check.as_mut().filter(|check| !check.finished())
+                {
+                    check.clipboard()
+                } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
+                    check.clipboard()
+                } else {
+                    &mut clipboard
+                };
                 let routed = route_event(
                     sdl,
                     event,
@@ -658,7 +675,16 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             dirty |= shell.poll_dialogs(&mut editor)?;
             if let Some(text) = shell.take_clipboard() {
                 use ara_ui_text::Clipboard;
-                let _ = clipboard.write(&text);
+                let destination: &mut dyn Clipboard = if let Some(check) =
+                    diagnostics_check.as_mut().filter(|check| !check.finished())
+                {
+                    check.clipboard()
+                } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
+                    check.clipboard()
+                } else {
+                    &mut clipboard
+                };
+                destination.write(&text)?;
             }
             shell.main_rect = window.rect()?;
             let fly_dt = navigation_check
@@ -1397,6 +1423,14 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             }
             if let Some(check) = &mut prefab_check {
                 check.end(&editor, &shell, &mut gpu)?;
+            }
+            if let Some(check) = &mut diagnostics_check {
+                check.end(
+                    &editor,
+                    &shell,
+                    &mut gpu,
+                    frame_start.elapsed().as_secs_f64() * 1000.,
+                )?;
                 if check.finished() {
                     game.close(&mut editor, &mut gpu)?;
                     break;
@@ -1514,6 +1548,19 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if !check.finished() || !check.failures().is_empty() {
                 return Err(format!(
                     "Native prefab journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
+        }
+        if options.verify_behaviours {
+            let check = diagnostics_check
+                .as_ref()
+                .ok_or("The diagnostics journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native diagnostics journey failed: {}",
                     check.failures().join(", ")
                 )
                 .into());
