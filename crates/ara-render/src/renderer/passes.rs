@@ -4,6 +4,7 @@ use crate::{
     graph::{Graph, PassId},
     look::{
         frame::{FrameInputs, LookFrame},
+        gpu::DOF_COMPOSITE,
         passes::{Frames, LookPass},
     },
 };
@@ -33,6 +34,11 @@ enum Recipe {
     Forward,
     Taa,
     Tonemap,
+    /// The camera's native draws again into the wire mask (`ViewMode::wire`).
+    Wire,
+    /// The wire mask over the display output; `true` over the lit image (one
+    /// colour), `false` over the wireframe view's background (per-entity colours).
+    WireComposite(bool),
     Look(LookPass),
     /// Ownership/synchronization only.
     Empty,
@@ -270,6 +276,13 @@ impl Renderer {
             result?;
         }
         self.look.ensure(&mut self.gpu)?;
+        let (dof, motion) = self.look.blurs(self.native.is_some());
+        let lit = mode.lit();
+        // Focus blur needs a perspective lens (an orthographic projection has no w).
+        self.look.frame_dof = dof && lit && camera.projection.z_axis.w != 0.;
+        self.look.frame_motion = motion && lit;
+        // Edges come from the native draws (legacy content has none).
+        self.look.frame_wire = mode.wire() && self.native.is_some();
         let (sampled, storage) = self.look.indices();
         // Exposure snaps to its meter on a reset unless a host seeded it, and
         // while new probe GI converges or fades in (no adaptation swing as the
@@ -367,13 +380,61 @@ impl Renderer {
             && self.targets.history.is_some()
         {
             look_frame.flags[1] |= crate::look::frame::REFLECTIONS;
-            look_frame.ssr = [r.max_roughness, r.distance, r.steps as f32, 0.];
+            let ssr = self.look.look.ssr;
+            look_frame.ssr = [
+                r.max_roughness,
+                ssr.distance.over(r.distance).max(1.),
+                r.steps as f32,
+                ssr.intensity,
+            ];
             look_frame.ssr_images = self.look.ssr_indices();
         }
         if let Some(ao) = self.look.quality.ambient_occlusion {
             look_frame.flags[1] |= crate::look::frame::AMBIENT_OCCLUSION;
-            look_frame.ao = [ao.radius, ao.slices as f32, ao.steps as f32, 0.];
+            let tuning = self.look.look.ao;
+            look_frame.ao = [
+                tuning.radius.over(ao.radius).max(0.05),
+                ao.slices as f32,
+                ao.steps as f32,
+                tuning.intensity,
+            ];
             look_frame.ao_images = self.look.ao_indices();
+        }
+        let contribution = self.look.look.grading.lut_contribution;
+        if self.look.lut_size > 0 && contribution > 0. {
+            look_frame.lut = [
+                self.look.lut_index,
+                self.look.lut_size,
+                contribution.to_bits(),
+                0,
+            ];
+        }
+        let lens = self.look.look.lens;
+        if self.look.frame_dof
+            && let (Some(quality), Some(focus)) =
+                (self.look.quality.depth_of_field, lens.depth_of_field)
+        {
+            let fov = 2. * (1. / camera.projection.y_axis.y).atan();
+            look_frame.dof = focus.constants(fov, self.render[1] as f32, quality);
+            look_frame.dof_blur = [focus.far, quality.samples as f32, 0., 0.];
+            look_frame.dof_images = self.look.dof_indices();
+            look_frame.dof_output = [
+                self.look.storage[DOF_COMPOSITE],
+                self.look.sampled[DOF_COMPOSITE],
+                0,
+                0,
+            ];
+        }
+        if self.look.frame_motion
+            && let Some(quality) = self.look.quality.motion_blur
+        {
+            look_frame.motion = [
+                lens.motion_blur,
+                quality.samples as f32,
+                quality.max_length,
+                0.,
+            ];
+            look_frame.motion_images = self.look.motion_indices();
         }
         self.gpu
             .upload_queued(self.look.frame, bytemuck::bytes_of(&look_frame))?;
@@ -696,9 +757,19 @@ impl Renderer {
         declare(forward, Recipe::Forward);
         let mut shaded = shadow_passes;
         shaded.extend([gbuffer, lighting, forward]);
+        if self.look.frame_wire {
+            // Depth-tested against the frame's own depth, without writing it.
+            let wire = graph.pass(
+                "Wire.Draw",
+                Queue::Graphics,
+                [(ids[WIRE], Access::Color), (ids[DEPTH], Access::Depth)],
+            );
+            declare(wire, Recipe::Wire);
+            shaded.push(wire);
+        }
         // Deferred post leaves the lit scene in HDR for external composites (`finish`).
         // Captures always produce their own output, never a deferred frame.
-        let deferred = self.look.deferred && matches!(mode, ViewMode::Lit) && !capture;
+        let deferred = self.look.deferred && mode.lit() && !capture;
         if !deferred {
             let mut taa = vec![
                 (ids[HDR], Access::ShaderRead),
@@ -713,21 +784,32 @@ impl Renderer {
             if self.native.is_some() {
                 taa.push((ids[MOTION], Access::ShaderRead));
             }
+            // Depth of field composites into the image the resolve reads instead of HDR.
+            if self.look.frame_dof {
+                for (id, pass) in self
+                    .look
+                    .dof_passes(&mut graph, &look, ids[HDR], ids[DEPTH], &graphics)
+                {
+                    declare(id, Recipe::Look(pass));
+                }
+                taa.push((look.image(DOF_COMPOSITE), Access::ShaderRead));
+            }
             let temporal = graph.pass("TemporalResolve", Queue::Graphics, taa);
             declare(temporal, Recipe::Taa);
             shaded.push(temporal);
         }
-        if matches!(mode, ViewMode::Lit) && !deferred {
+        if mode.lit() && !deferred {
             for (id, pass) in self.look.post_passes(
                 &mut graph,
                 &look,
                 ids[output_history],
                 ids[OUTPUT],
+                self.look.frame_motion.then(|| [ids[MOTION], ids[DEPTH]]),
                 &graphics,
             ) {
                 declare(id, Recipe::Look(pass));
             }
-        } else if !matches!(mode, ViewMode::Lit) {
+        } else if !mode.lit() {
             let tonemap = graph.pass(
                 "DebugView.SDR",
                 Queue::Graphics,
@@ -748,6 +830,19 @@ impl Renderer {
             );
             declare(tonemap, Recipe::Tonemap);
             shaded.push(tonemap);
+        }
+        if self.look.frame_wire && !deferred {
+            let composite = graph.pass(
+                "Wire.Composite",
+                Queue::Graphics,
+                [
+                    (ids[WIRE], Access::ShaderRead),
+                    (ids[ID], Access::ShaderRead),
+                    (ids[OUTPUT], Access::Storage),
+                ],
+            );
+            declare(composite, Recipe::WireComposite(mode.lit()));
+            shaded.push(composite);
         }
         // A deferred frame has no output yet; `finish` produces it.
         if !deferred {
@@ -1155,6 +1250,24 @@ impl Renderer {
                         }
                         recorder.push(Command::EndRendering);
                     }
+                    Recipe::Wire => {
+                        recorder.push(Command::BeginRendering {
+                            colors: vec![Attachment {
+                                image: self.targets.images[WIRE],
+                                clear: Some([0.; 4]),
+                            }],
+                            depth: Some(Attachment {
+                                image: self.targets.images[DEPTH],
+                                clear: None,
+                            }),
+                            size: self.render,
+                        });
+                        if let Some(native) = &self.native {
+                            native.record_wire(&mut recorder, footprint);
+                        }
+                        recorder.push(Command::EndRendering);
+                    }
+                    Recipe::WireComposite(lit) => self.record_wire_composite(&mut recorder, lit),
                     Recipe::Taa | Recipe::Tonemap => {
                         let taa = matches!(recipes[pass.id.0], Recipe::Taa);
                         recorder.push(Command::Pipeline(if taa {
@@ -1164,7 +1277,9 @@ impl Renderer {
                         }));
                         let mut constants = root;
                         constants.words[0] = self.display_frame_index;
-                        constants.words[1] = if taa {
+                        constants.words[1] = if taa && self.look.frame_dof {
+                            self.look.sampled[DOF_COMPOSITE]
+                        } else if taa {
                             self.targets.sampled[HDR]
                         } else {
                             self.targets.sampled[output_history]
@@ -1186,6 +1301,7 @@ impl Renderer {
                             LookPass::SsrPyramid(_) => {
                                 self.targets.history.map_or(0, |h| self.targets.sampled[h])
                             }
+                            LookPass::Dof(_) => self.targets.sampled[HDR],
                             _ => self.targets.sampled[output_history],
                         },
                         true,
@@ -1302,10 +1418,18 @@ impl Renderer {
             imported.push((target, id));
             id
         };
+        let depth = import(&mut graph, DEPTH);
+        let vectors = self.look.frame_motion.then(|| import(&mut graph, MOTION));
+        let wire_inputs = self
+            .look
+            .frame_wire
+            .then(|| (import(&mut graph, WIRE), import(&mut graph, ID)));
+        // Focus blur runs before a resolve; a frame graded directly keeps it sharp.
+        let dof = self.look.frame_dof && slot.is_some();
         let resolve = slot.map(|slot| {
             let mut uses = vec![
                 (input, Access::ShaderRead),
-                (import(&mut graph, DEPTH), Access::ShaderRead),
+                (depth, Access::ShaderRead),
                 (import(&mut graph, slot), Access::Storage),
             ];
             if let Some(history) = self.targets.history {
@@ -1321,14 +1445,27 @@ impl Renderer {
                 queue: Queue::Graphics,
             },
         );
+        let dof_passes = if dof {
+            self.look.dof_passes(
+                &mut graph,
+                &look,
+                input,
+                depth,
+                &[(frame, Access::ShaderRead)],
+            )
+        } else {
+            Vec::new()
+        };
         let resolved = resolve.map(|(slot, uses)| {
             let id = graph.pass(
                 "TemporalResolve",
                 Queue::Graphics,
-                uses.into_iter().chain([
-                    (frame, Access::ShaderRead),
-                    (look.state, Access::ShaderRead),
-                ]),
+                uses.into_iter()
+                    .chain([
+                        (frame, Access::ShaderRead),
+                        (look.state, Access::ShaderRead),
+                    ])
+                    .chain(dof.then(|| (look.image(DOF_COMPOSITE), Access::ShaderRead))),
             );
             let slot_id = imported
                 .iter()
@@ -1341,13 +1478,28 @@ impl Renderer {
             Some((_, slot, slot_id)) => (slot_id, self.targets.sampled[slot]),
             None => (input, sampled),
         };
-        let passes = self.look.post_passes(
+        let mut passes = self.look.post_passes(
             &mut graph,
             &look,
             post_input,
             output,
+            vectors.map(|vectors| [vectors, depth]),
             &[(frame, Access::ShaderRead)],
         );
+        passes.extend(dof_passes);
+        // Deferred frames are lit: their edges go over the lit image.
+        let wire = wire_inputs.map(|(mask, id)| {
+            graph.pass(
+                "Wire.Composite",
+                Queue::Graphics,
+                [
+                    (mask, Access::ShaderRead),
+                    (id, Access::ShaderRead),
+                    (output, Access::Storage),
+                    (frame, Access::ShaderRead),
+                ],
+            )
+        });
         graph.pass(
             "Output.Ready",
             Queue::Graphics,
@@ -1361,17 +1513,29 @@ impl Renderer {
                 recorder.push(Command::BeginPass(pass.name.clone()));
                 recorder.barriers(pass.before.iter().copied());
                 if let Some((_, look_pass)) = passes.iter().find(|(id, _)| *id == pass.id) {
+                    // Depth of field reads the composited scene; the post chain its resolve.
+                    let input = match look_pass {
+                        LookPass::Dof(_) => sampled,
+                        _ => post_sampled,
+                    };
                     self.look.record(
                         &mut recorder,
                         *look_pass,
                         self.frames(),
-                        post_sampled,
+                        input,
                         resolved.is_some(),
                     );
+                } else if wire == Some(pass.id) {
+                    self.record_wire_composite(&mut recorder, true);
                 } else if resolved.is_some_and(|(id, _, _)| id == pass.id) {
+                    let taa_input = if dof {
+                        self.look.sampled[DOF_COMPOSITE]
+                    } else {
+                        sampled
+                    };
                     recorder.push(Command::Pipeline(self.pipelines.taa));
                     recorder.push(Command::Constants(RootConstants {
-                        words: [self.display_frame_index, sampled, 0, 0, 0, 0, 0, 0],
+                        words: [self.display_frame_index, taa_input, 0, 0, 0, 0, 0, 0],
                     }));
                     recorder.push(Command::Dispatch([
                         self.size[0].div_ceil(8),
@@ -1405,6 +1569,23 @@ impl Renderer {
 }
 
 impl Renderer {
+    /// Records the wire mask's composite over the display output (`lit`: over the lit
+    /// image in one colour; otherwise per-entity colours over the wireframe view).
+    fn record_wire_composite(&self, recorder: &mut ara_gpu::vulkan::Recorder, lit: bool) {
+        recorder.push(Command::Pipeline(self.pipelines.wire_composite));
+        let mut words = [0; 8];
+        words[0] = self.display_frame_index;
+        words[1] = self.targets.sampled[WIRE];
+        words[2] = self.targets.sampled[ID];
+        words[5] = u32::from(lit);
+        recorder.push(Command::Constants(RootConstants { words }));
+        recorder.push(Command::Dispatch([
+            self.size[0].div_ceil(8),
+            self.size[1].div_ceil(8),
+            1,
+        ]));
+    }
+
     /// The frame records look passes record with (`look::passes::Frames`).
     fn frames(&self) -> Frames {
         Frames {

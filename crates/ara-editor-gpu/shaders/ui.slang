@@ -21,6 +21,32 @@ uint outlineKey(uint table,uint id,bool hover){
     uint4 g=uint4(round(textures[NonUniformResourceIndex(table-1)].Load(int3(id%4096,id/4096,0))*255));
     return (hover?g.r|(g.g<<8):g.b&127)|((g.b&128)<<9);
 }
+// Mode 9 fills (ara_ui::paint::Fill): sRGB transfer, full-saturation hue.
+float3 srgbToLinear(float3 c){return select(c<=0.04045,c/12.92,pow((c+0.055)/1.055,2.4));}
+float3 linearToSrgb(float3 c){return select(c<=0.0031308,c*12.92,1.055*pow(max(c,0),1.0/2.4)-0.055);}
+float3 hueColor(float h){return saturate(abs(fmod(h*6+float3(0,4,2),6)-3)-1);}
+// Linear gradient (kind 0; flags 1 vertical, 2 linear light), hue strip (1), hue ring
+// (2: annulus of thickness z, 0 deg red at +x, counterclockwise) or checkerboard (3).
+float4 fillColor(Instance i,float2 p,inout float shape){
+    uint kind=uint(i.parameters.y+0.5);float2 size=i.rect.zw;
+    if(kind==0){
+        uint flags=uint(i.parameters.w+0.5);
+        float t=saturate((flags&1)!=0?p.y/max(size.y,0.0001):p.x/max(size.x,0.0001));
+        float4 c=lerp(i.color,i.uv,t);
+        if((flags&2)!=0)c.rgb=linearToSrgb(lerp(srgbToLinear(i.color.rgb),srgbToLinear(i.uv.rgb),t));
+        return c;
+    }
+    if(kind==1)return float4(hueColor(saturate(p.x/max(size.x,0.0001))),i.color.a);
+    if(kind==2){
+        float2 d=p-size*0.5;float r=length(d);float outer=min(size.x,size.y)*0.5;float inner=outer-i.parameters.z;
+        float aa=max(fwidth(r),0.0001);
+        shape=saturate((outer-r)/aa+0.5)*saturate((r-inner)/aa+0.5);
+        float h=frac(atan2(-d.y,d.x)/6.28318530718+1);
+        return float4(hueColor(h),i.color.a);
+    }
+    float cell=max(i.parameters.z,1);int2 q=int2(floor(p/cell));
+    return ((q.x+q.y)&1)==0?i.color:i.uv;
+}
 [shader("vertex")]
 Varying vertexMain(uint vertex:SV_VertexID,uint instance:SV_InstanceID) {
     static const float2 corners[6]={float2(0,0),float2(1,0),float2(0,1),float2(0,1),float2(1,0),float2(1,1)};
@@ -65,6 +91,10 @@ float4 fragmentMain(Varying input):SV_Target {
         int2 pixel=clamp(int2(screen*float2(width,height)),int2(0,0),int2(width-1,height-1));
         bool covered=textures[NonUniformResourceIndex(pc.textureIndex)].Load(int3(pixel,0)).r>0;
         color.a*=distance>0&&!covered?exp(-distance/max(i.parameters.w,0.01))*smoothstep(0.01,0.1,abs(ray.y)):0;
+    }else if(pc.mode==9){
+        float d=roundedDistance(input.local,i.rect.zw,i.parameters.x);
+        float shape=saturate(0.5-d/max(fwidth(d),0.0001));
+        color=fillColor(i,input.local,shape);color.a*=shape;
     }else if(pc.mode==5){
         // Outline (z: the channel or colour group) or hover (bit 0 of w: the group under
         // xy). w's other bits: the outline group table's slot + 1 (NativeUi::outline_groups).

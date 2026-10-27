@@ -2,7 +2,10 @@ mod support;
 use ara_ui::{Result, theme::EditorTheme};
 use ara_ui_render::atlas::TextMode;
 fn main() -> Result<()> {
-    let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("evidence");
+    let out = std::env::args_os()
+        .nth(1)
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("evidence"));
     std::fs::create_dir_all(&out)?;
     let mut text = support::text()?;
     for (name, mut ui) in [

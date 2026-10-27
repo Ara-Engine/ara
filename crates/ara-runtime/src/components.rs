@@ -73,7 +73,7 @@ pub struct MeshRenderer {
     pub metallic: f32,
     /// Default procedural radiance, or an RGB emission multiplier with a model/material asset.
     /// Models treat zero RGB as neutral; use `emissiveEnabled` to switch them off.
-    #[ara(editor(color))]
+    #[ara(editor(color, hdr))]
     pub emissive: [f32; 3],
     /// Enables emission without modifying the source model or its materials.
     #[ara(default = true)]
@@ -82,7 +82,7 @@ pub struct MeshRenderer {
     #[ara(default = 1, range(min = 0))]
     pub emissive_strength: f32,
     /// Optional linear RGB replacement for the source emissive factor, useful for lamps.
-    #[ara(range(min = 0), editor(color))]
+    #[ara(range(min = 0), editor(color, hdr))]
     pub emissive_factor: Option<[f32; 3]>,
     /// Source material names or numeric indices affected by `emissiveFactor`.
     /// Empty targets all; `name:3` disambiguates a numeric material name.
@@ -152,6 +152,7 @@ pub struct Light {
     /// Point, spot or directional.
     pub kind: LightKind,
     /// Linear RGB tint (alpha is ignored).
+    #[ara(editor(temperature))]
     pub color: Color,
     /// Luminous flux in lumens (point/spot) or illuminance in lux (directional).
     #[ara(default = 800, range(min = 0))]

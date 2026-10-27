@@ -301,14 +301,16 @@ fn shots<'a>(look: &'a Look, options: &Options<'_>) -> Vec<&'a Shot> {
     }
 }
 
-/// The raster capture's view: `ARA_CAPTURE_VIEW` = albedo, normals, cascades or
-/// material (roughness/metal) for diagnosis; lit otherwise.
+/// The raster capture's view: `ARA_CAPTURE_VIEW` = albedo, normals, cascades,
+/// material (roughness/metal), wireframe or lit_wireframe for diagnosis; lit otherwise.
 fn view_mode() -> ViewMode {
     match std::env::var("ARA_CAPTURE_VIEW").as_deref() {
         Ok("albedo") => ViewMode::Albedo,
         Ok("normals") => ViewMode::Normals,
         Ok("cascades") => ViewMode::ShadowCascades,
         Ok("material") => ViewMode::RoughnessMetal,
+        Ok("wireframe") => ViewMode::Wireframe,
+        Ok("lit_wireframe") => ViewMode::LitWireframe,
         _ => ViewMode::Lit,
     }
 }
@@ -548,7 +550,12 @@ fn baseline(
     presenter.set_look_override(Some(*options.environment));
     presenter.set_probe_gi(true);
     presenter.prepare_with(frame, || (options.content)(frame))?;
-    presenter.wait_probe_gi()?;
+    // `ARA_CAPTURE_COLD=1` starts the first shot as Play does, without the probe GI
+    // wait, settle or timing, so `ARA_CAPTURE_LIVE` shows a fresh player's frames.
+    let cold = std::env::var_os("ARA_CAPTURE_COLD").is_some();
+    if !cold {
+        presenter.wait_probe_gi()?;
+    }
     let create_ms = created.elapsed().as_secs_f64() * 1000.;
     let mut timing = Value::Null;
     let mut scores = Vec::new();
@@ -560,10 +567,11 @@ fn baseline(
                 .to_array(),
             fov: shot.fov,
         });
-        for _ in 0..options.settle {
+        let first_cold = cold && i == 0;
+        for _ in 0..if first_cold { 0 } else { options.settle } {
             presenter.present(frame)?;
         }
-        if i == 0 {
+        if i == 0 && !cold {
             let before = gpu_load();
             let mut window = Window::default();
             // `ARA_CAPTURE_MOTION=1` walks the camera forward (1.5 m/s) while it
@@ -622,10 +630,13 @@ fn baseline(
                         seed: 0,
                         marks: None,
                     };
-                    let live = presenter
-                        .renderer_mut()
-                        .context("live raster renderer")?
-                        .capture_completed(&request)?;
+                    let renderer = presenter.renderer_mut().context("live raster renderer")?;
+                    let live = renderer.capture_completed(&request)?;
+                    println!(
+                        "live {k:03}: exposure {:?}, readiness {}",
+                        renderer.exposure()?,
+                        serde_json::to_string(&presenter.readiness())?
+                    );
                     live.image.save(options.scratch.join(format!(
                         "{}-{name}-{}-live{k:03}.png",
                         options.name, shot.name

@@ -1,0 +1,50 @@
+/* Schema-generated inspector controls; Ara Dark and Ara Light share tokens. */
+.inspector-components { flex-shrink:0; gap:0px; padding-bottom:8px; }
+.component-section { flex-shrink:0; gap:2px; padding-bottom:8px; }
+.component-header { height:30px; padding-left:4px; padding-right:6px; gap:4px; }
+.component-heading { height:28px; flex-grow:1; flex-basis:0px; min-width:0px; justify-content:start; gap:6px; padding:0px; border-width:0px; background:transparent; }
+.component-heading:hover { background:var(--hover-surface); }
+.component-title { font-size:12px; color:var(--foreground); white-space:nowrap; overflow:hidden; min-width:0px; flex-shrink:1; }
+.component-count { font-size:10px; color:var(--muted-foreground); padding-top:5px; flex-shrink:0; }
+.component-enabled { width:18px; height:18px; }
+.component-browser { flex-shrink:0; flex-direction:row; align-items:start; height:34px; gap:6px; }
+.component-jumps { height:34px; min-width:0px; min-height:0px; flex-grow:1; flex-basis:0px; flex-direction:row; align-items:start; gap:3px; }
+.component-chip { height:21px; flex-shrink:0; padding-left:6px; padding-right:6px; border-width:0px; background:var(--raised); font-size:11px; }
+.component-chip-active { background:var(--accent-surface); color:var(--accent); }
+.component-browser-title { font-size:11px; color:var(--muted-foreground); padding-top:4px; white-space:nowrap; flex-shrink:0; }
+.scrubbable { justify-content:start; border-width:0px; border-radius:0px; background:transparent; }
+.scrubbable:hover { color:var(--foreground); }
+.inspector-unit { min-width:0px; flex-shrink:0; font-size:10px; color:var(--muted-foreground); }
+.vector-cell { height:22px; }
+.asset-reference { height:24px; flex-grow:1; flex-basis:0px; min-width:0px; overflow:hidden; justify-content:start; padding:2px; gap:6px; background:var(--background); border-color:var(--input); }
+.reference-name { white-space:nowrap; overflow:hidden; min-width:0px; flex-shrink:1; font-size:11px; }
+.inspector-swatch { width:34px; height:20px; }
+.inspector-no-results { padding:12px; gap:6px; flex-shrink:0; }
+.override-gutter { width:22px; height:24px; flex-shrink:0; align-items:center; justify-content:center; }
+.override-toggle { width:16px; height:16px; }
+.nested-scrub-label { height:22px; flex-grow:1; flex-basis:0px; min-width:0px; justify-content:start; padding:0px; border-width:0px; background:transparent; color:var(--muted-foreground); }
+.nested-scrub-label:hover { color:var(--foreground); }
+.color-picker { width:288px; padding:10px; padding-top:6px; gap:6px; background:var(--menu-surface); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-md); }
+.color-picker-pinned { border-color:var(--ring); }
+.cp-paint { padding:0px; border-width:0px; border-radius:0px; background:transparent; }
+.cp-paint:hover { background:transparent; }
+.cp-paint:active { background:transparent; color:var(--foreground); }
+.cp-title { flex-direction:row; align-items:center; justify-content:start; height:26px; gap:2px; flex-shrink:0; }
+.cp-top { flex-direction:row; gap:12px; flex-shrink:0; }
+.cp-wheel { width:196px; height:196px; flex-shrink:0; }
+.cp-side { flex-grow:1; flex-basis:0px; gap:3px; }
+.cp-preview { height:30px; flex-shrink:0; padding:0px; border-width:0px; background:transparent; }
+.cp-tool { height:28px; flex-shrink:0; justify-content:center; align-items:center; }
+.cp-row { flex-direction:row; align-items:center; gap:8px; height:24px; flex-shrink:0; }
+.cp-label { width:12px; flex-shrink:0; font-size:var(--font-size-small); color:var(--muted-foreground); }
+.cp-label-wide { width:74px; flex-shrink:0; font-size:var(--font-size-small); color:var(--muted-foreground); }
+.cp-track { flex-grow:1; flex-basis:0px; height:12px; }
+.cp-number { width:58px; flex-shrink:0; }
+.cp-hex { flex-grow:1; flex-basis:0px; min-width:0px; }
+.cp-mode { flex-grow:1; flex-basis:0px; justify-content:center; }
+.cp-exposure { flex-grow:1; flex-basis:0px; height:24px; padding:0px; border-width:0px; background:transparent; justify-content:center; align-items:center; }
+.cp-exposure-label { font-size:var(--font-size-small); color:var(--swatch-ink); }
+.cp-preset { flex-grow:1; flex-basis:0px; height:22px; padding:0px; border-width:0px; background:transparent; justify-content:center; align-items:center; }
+.cp-preset-label { font-size:10px; color:var(--swatch-ink); }
+.cp-swatches { flex-direction:row; gap:5px; height:20px; flex-shrink:0; }
+.cp-swatch { width:20px; height:20px; flex-shrink:0; padding:0px; border-width:0px; background:transparent; }

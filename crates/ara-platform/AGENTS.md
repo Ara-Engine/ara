@@ -8,14 +8,25 @@ Minimal SDL3 native window/input and Vulkan presentation. Uses `sdl3-sys` 0.7.2
 - `Window`: main-thread-only resizable/high-DPI Vulkan window; owns an SDL video
   subsystem reference. `extensions()` returns owned strings, and `size()` returns
   physical pixels. It is intentionally neither Send nor Sync.
+- `Window::game`: borderless desktop fullscreen by default, explicit Windowed, or
+  exclusive Fullscreen (closest display mode, desktop refresh). `set_game_mode`
+  switches at runtime (game Settings menus) and `game_mode` reads it back; presenters
+  follow the new drawable size. Hidden game windows never enter fullscreen. SDL
+  fullscreen synchronization finishes before loading/swapchain sizing; direct scanout
+  remains an OS/overlay decision.
 - `Event`: close, drawable resize, key/repeat, mouse motion/button and wheel input.
   Hosts translate these events into deterministic simulation actions.
+- `Window::set_cursor(SystemCursor)` lazily owns native cursor shapes until video
+  shutdown. Resolve UI hover/capture every frame; offscreen hosts skip selection.
 - Multi-window: `Window::floating(title, rect, parent)` opens an owned tool window
   (above its parent, minimizes with it). `poll_tagged()` drains every window's
   events tagged with `id()` (0 = application; a close request is `Quit` for its
   window); `poll()` keeps the single-window shape. `rect`/`set_position`/`raise`/
   `toggle_fullscreen`/`display_scale`, `displays()` (usable bounds, for off-screen
   recovery) and `global_mouse()` (cross-window drags). `raw()` is for host adapters.
+- Custom captions: `Window::enable_custom_chrome` installs native caption/resize hit
+  testing. Update `chrome_mut()` after layout in SDL window points. `minimize` and
+  `toggle_maximize` retain native actions; other windows keep their existing frames.
 - Icon: `Window::new` applies the Ara app icon (`assets/brand/png/ara-icon-64.png`,
   embedded; failures are ignored because Wayland has no window icons). Games call
   `set_icon(rgba, [w, h])`. Regenerate the PNG with `cargo run -p ara-brand -- export`.
@@ -45,6 +56,8 @@ Set `CARGO_BUILD_JOBS=2`. Run `cargo check -p ara-platform`,
 `cargo test -p ara-platform`,
 `cargo clippy -p ara-platform --all-targets -- -D warnings`, and
 `cargo fmt -p ara-platform -- --check`.
+The ignored `hidden_window_loads` lib test verifies all cursor resources without
+showing a window or selecting a desktop cursor.
 
 `cargo test -p ara-platform --test native -- --ignored` opens a short-lived native
 window/audio stream and checks injected key/mouse events, virtual gamepad

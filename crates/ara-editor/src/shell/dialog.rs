@@ -19,7 +19,7 @@ impl Dialog {
         Self::Info {
             title: "About Ara".into(),
             lines: vec![
-                format!("Ara editor {}", env!("CARGO_PKG_VERSION")),
+                format!("Ara {}", env!("CARGO_PKG_VERSION")),
                 "A Rust game engine built by agents, for agents and humans.".into(),
                 "Inter and JetBrains Mono (OFL), Lucide icons (ISC). See THIRD_PARTY_NOTICES.md."
                     .into(),

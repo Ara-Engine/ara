@@ -1,7 +1,5 @@
-//! Native window frame styled to the editor theme (D23). On Windows the DWM
-//! draws the caption in immersive dark mode with caption, border and title colors
-//! from the theme tokens, switched live with the theme. Other platforms keep
-//! their native frame untouched.
+//! DWM colors for floating native captions and the custom main window's border.
+//! The main title bar is client-drawn (D28); both window types share theme tokens.
 use sdl3_sys::video::SDL_Window;
 
 /// Apply the theme's frame colors to a native window.

@@ -20,6 +20,7 @@ fn current_queue_scope_preserves_phase_timings_and_waits_only_at_its_tail() -> a
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-gpu/deferred-frame");
     let mut gpu = VulkanDevice::new_raster(&[], root)?;
+    let submits = gpu.submission_stats();
     gpu.begin_deferred_completion_on_current_queue()?;
     let mut points = Vec::new();
     for phase in ["view", "feature", "post"] {
@@ -31,7 +32,19 @@ fn current_queue_scope_preserves_phase_timings_and_waits_only_at_its_tail() -> a
         points.push(point);
         assert_eq!(gpu.deferred_submission_count(), points.len());
     }
+    assert_eq!(
+        gpu.submission_stats(),
+        submits,
+        "recording has not submitted a partial frame"
+    );
+    assert!(
+        gpu.wait(points[0]).is_err(),
+        "a staged point cannot block the host"
+    );
     let mut completion = gpu.end_deferred_completion()?;
+    let submitted = gpu.submission_stats();
+    assert_eq!(submitted.queue_submissions - submits.queue_submissions, 1);
+    assert_eq!(submitted.command_lists - submits.command_lists, 3);
     let before = gpu.context().host_wait_stats();
     let mut phases = Vec::new();
     gpu.wait_completion_with(&mut completion, |point, passes| {

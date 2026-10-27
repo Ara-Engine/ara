@@ -89,6 +89,9 @@ impl Shell {
         if self.menu.is_some() && self.menu_key(editor, scancode)? {
             return Ok(true);
         }
+        if self.add_component.is_some() && self.add_component_key(editor, scancode)? {
+            return Ok(true);
+        }
         if self.mnemonics && self.menu.is_none() {
             if let Some(index) = MENUS.iter().position(|m| {
                 Chord::parse(&m.mnemonic.to_string()).is_some_and(|c| c.key == scancode)
@@ -152,7 +155,20 @@ impl Shell {
             self.rebuild(editor)?;
             return Ok(true);
         }
+        if scancode == 41
+            && !editor.state.palette
+            && self.dialog.is_none()
+            && self.picker_escape(editor)?
+        {
+            // Escape cancels the eyedropper or a drag, else restores the old colour.
+            self.rebuild(editor)?;
+            return Ok(true);
+        }
         if scancode == 41 {
+            if let Some(rename) = &mut self.asset_rename {
+                rename.name = names::stem(names::file_name(&rename.path)).into();
+                self.commit_asset_rename(editor)?;
+            }
             self.finish_scrub(editor, true)?;
             editor.finish_gesture(true)?;
             let had_drag = self.drag.take().is_some();
@@ -201,6 +217,9 @@ impl Shell {
             return Ok(true);
         }
         if scancode == 40 {
+            if self.asset_folder_key(editor, scancode)? {
+                return Ok(true);
+            }
             // The field's pending action and its commit rebuild once, not twice.
             let committed = self.coalesce_rebuilds(editor, |shell, editor| {
                 shell.dispatch(editor)?;
@@ -250,6 +269,9 @@ impl Shell {
                 return Ok(false);
             }
         }
+        if self.asset_folder_key(editor, scancode)? {
+            return Ok(true);
+        }
         if (scancode == 67 && shift) || scancode == 101 {
             // Shift+F10 or the Menu key: context menu for the focused control.
             if let Some(i) = self.input.focused().and_then(|id| self.ui.by_id(id)) {
@@ -257,6 +279,9 @@ impl Shell {
                 self.pointer = [r.x + 8., r.y + r.h * 0.5];
             }
             return self.open_context(editor);
+        }
+        if !ctrl && !alt && !field && self.hierarchy_key(scancode)? {
+            return Ok(true);
         }
         self.run_chord(editor, chord)
     }

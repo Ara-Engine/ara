@@ -367,6 +367,75 @@ fn every_gizmo_handle_is_grabbable_where_it_is_drawn() {
 }
 
 #[test]
+fn universal_handles_pick_the_operation_and_keep_transform_commands_typed() {
+    use ara_editor::{
+        shell::overlay::{self, Handle},
+        state::Tool,
+        world::gesture::Gesture,
+    };
+    let project = Project::new();
+    let mut editor = project.open();
+    editor
+        .action("editor.select", json!({"entities":["e_crate001"]}))
+        .unwrap();
+    editor
+        .action("editor.tool", json!({"tool":"universal"}))
+        .unwrap();
+    let view = editor.view().unwrap();
+    let rect = ara_ui::paint::Box2 {
+        x: 0.,
+        y: 0.,
+        w: 800.,
+        h: 600.,
+    };
+    let handles = overlay::handles(&view, &editor.state, rect).unwrap();
+    assert_eq!(overlay::hit(&handles, handles.origin), Some(Handle::Centre));
+    let scale = handles.for_tool(Tool::Scale);
+    for axis in 0..3 {
+        assert_eq!(
+            overlay::hit(&handles, scale.ends[axis]),
+            Some(Handle::ScaleAxis(axis))
+        );
+        let rotate = handles.for_tool(Tool::Rotate);
+        assert!(
+            (0..48).any(|n| {
+                rotate.ring_segment(axis, n).is_some_and(|[a, b]| {
+                    let p = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+                    overlay::hit(&handles, p) == Some(Handle::RotateAxis(axis))
+                })
+            }),
+            "rotation ring {axis} has a reachable target"
+        );
+        assert_eq!(Handle::RotateAxis(axis).tool(Tool::Universal), Tool::Rotate);
+        assert_eq!(Handle::ScaleAxis(axis).tool(Tool::Universal), Tool::Scale);
+    }
+    for (tool, delta, property) in [
+        (Tool::Translate, Vec3::X, "position"),
+        (Tool::Rotate, Vec3::Y * 15., "rotation"),
+        (Tool::Scale, Vec3::splat(0.25), "scale"),
+    ] {
+        let mut gesture = Gesture::begin_tool(
+            view.entities(),
+            &editor.state,
+            editor.host.store().revision(),
+            tool,
+        )
+        .unwrap();
+        gesture.update(delta);
+        let commands = gesture.commands();
+        assert_eq!(commands.len(), 1);
+        assert_eq!(commands[0]["cmd"], "transform.set");
+        assert!(commands[0]["args"][property].is_array());
+        gesture.update(Vec3::ZERO);
+        assert!(
+            gesture.commands().is_empty(),
+            "cancel returns to the initial pose"
+        );
+        assert_eq!(editor.state.tool, Tool::Universal);
+    }
+}
+
+#[test]
 fn layout_persistence_units_and_multi_edit_are_validated() {
     let project = Project::new();
     let mut editor = project.open();

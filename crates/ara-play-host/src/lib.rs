@@ -20,7 +20,7 @@ mod scripts;
 mod spec;
 mod starting;
 
-pub use scripts::ScriptPaths;
+pub use scripts::{ScriptPaths, modules as script_modules};
 
 use ara_diag::{Code, Diagnostic, FixAction};
 use ara_host::{Cx, Method, Service, parse};

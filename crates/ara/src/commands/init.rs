@@ -4,7 +4,8 @@
 //! (`ara merge` as the merge driver for documents), `.gitignore` (`.ara/` local
 //! state), `.mcp.json` (the MCP server for Claude Code / Codex) and a starter scene.
 //! Existing files are kept; `.gitignore`/`.gitattributes` get missing lines
-//! appended. Inside a git work tree the `merge.ara` driver is configured too.
+//! appended. The `merge.ara` driver is configured at the git work-tree root, or
+//! with an explicit `--configure-git` opt-in for a nested project.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -137,28 +138,29 @@ impl Report {
     }
 }
 
-/// Configures the `merge.ara` driver if `root` is inside a git work tree.
-fn configure_git(root: &Path) -> String {
+/// Configures the repository driver only at its root or with explicit opt-in.
+fn configure_git(root: &Path, requested: bool) -> String {
+    const HINT: &str = "run `git config merge.ara.driver \"ara merge %O %A %B\"`";
     let git = |args: &[&str]| Command::new("git").arg("-C").arg(root).args(args).output();
     let top = match git(&["rev-parse", "--show-toplevel"]) {
         Ok(o) if o.status.success() => PathBuf::from(String::from_utf8_lossy(&o.stdout).trim()),
         _ => {
-            return "not a git work tree; in one, run `git config merge.ara.driver \"ara merge %O %A %B\"`".into();
+            return format!("not a git work tree; in one, {HINT}");
         }
     };
-    // Git runs merge drivers from the top of the work tree.
-    let rel = match (fs::canonicalize(&top), fs::canonicalize(root)) {
-        (Ok(t), Ok(r)) => r
-            .strip_prefix(&t)
-            .map(|p| p.to_string_lossy().replace('\\', "/"))
-            .unwrap_or_default(),
-        _ => String::new(),
-    };
-    let rel = if rel.is_empty() { ".".to_owned() } else { rel };
-    let driver = format!("ara --root \"{rel}\" merge %O %A %B");
-    let ok = git(&["config", "merge.ara.name", "Ara semantic merge"])
+    let at_top = matches!(
+        (fs::canonicalize(&top), fs::canonicalize(root)),
+        (Ok(top), Ok(root)) if top == root
+    );
+    if !at_top && !requested {
+        return format!("project is not the git work-tree root; {HINT}");
+    }
+    // Git runs drivers at the work-tree root; merge discovers the project at runtime.
+    let driver = "ara merge %O %A %B";
+    let ok = git(&["config", "--local", "merge.ara.name", "Ara semantic merge"])
         .is_ok_and(|o| o.status.success())
-        && git(&["config", "merge.ara.driver", &driver]).is_ok_and(|o| o.status.success());
+        && git(&["config", "--local", "merge.ara.driver", driver])
+            .is_ok_and(|o| o.status.success());
     if ok {
         format!("configured git merge driver `{driver}`")
     } else {
@@ -167,7 +169,12 @@ fn configure_git(root: &Path) -> String {
 }
 
 /// Creates a project in `dir` (default: the current directory).
-pub fn init(dir: Option<&Path>, name: Option<&str>, json_out: bool) -> Result<bool, String> {
+pub fn init(
+    dir: Option<&Path>,
+    name: Option<&str>,
+    configure_git_requested: bool,
+    json_out: bool,
+) -> Result<bool, String> {
     let root = dir.map_or_else(|| PathBuf::from("."), Path::to_path_buf);
     fs::create_dir_all(&root).map_err(|e| format!("cannot create `{}`: {e}", root.display()))?;
     let root =
@@ -214,7 +221,7 @@ pub fn init(dir: Option<&Path>, name: Option<&str>, json_out: bool) -> Result<bo
         "levels/main.scene",
         &ara_json::to_canonical_string(&scene),
     )?;
-    let git = configure_git(&root);
+    let git = configure_git(&root, configure_git_requested);
     if json_out {
         print!(
             "{}",

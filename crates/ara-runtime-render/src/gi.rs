@@ -18,10 +18,7 @@ use ara_render::instanced::Scene;
 use ara_render::look::gi::{
     ProbeLattice, ProbeLayout, ProbeSurfaces, ProbeUpdate, STATIC_VECTORS, SURFACE_TEXELS,
 };
-use ara_render_fidelity::{
-    FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler,
-    environment::FrameEnvironment,
-};
+use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use ara_runtime::extract::RenderFrame;
 use glam30::Mat4;
 use std::{
@@ -159,6 +156,8 @@ enum Message {
 }
 
 struct Active {
+    /// A scene boundary invalidated this job; drain it without publishing.
+    discarded: bool,
     /// The first records arrived: readiness no longer waits on this job.
     delivered: bool,
     /// The last records arrived: captures stop waiting.
@@ -190,6 +189,19 @@ pub(crate) struct Acquisition {
 }
 
 impl Acquisition {
+    /// Forget another scene without waiting for its worker. The next request
+    /// queues behind it, preserving the single-worker budget; late deliveries and
+    /// the old incremental tracer are discarded rather than lighting the new scene.
+    pub(crate) fn reset_scene(&mut self) {
+        self.layout = None;
+        self.key = None;
+        self.source = None;
+        self.queued = None;
+        self.worker = None;
+        if let Some(active) = &mut self.active {
+            active.discarded = true;
+        }
+    }
     #[cfg(test)]
     pub(crate) fn request_serial(&self) -> u64 {
         self.newest
@@ -288,6 +300,7 @@ impl Acquisition {
             .spawn(move || run(&cache, cpu, job, worker, &send))
             .context("starting the probe GI worker")?;
         self.active = Some(Active {
+            discarded: false,
             delivered: false,
             complete: false,
             receive,
@@ -312,10 +325,17 @@ impl Acquisition {
                 }
             };
             match message {
-                Some(Message::Layout(layout)) => self.layout = Some(layout),
+                Some(Message::Layout(layout)) => {
+                    if !active.discarded {
+                        self.layout = Some(layout);
+                    }
+                }
                 Some(Message::Surfaces { update, last }) => {
                     active.delivered = true;
                     active.complete |= last;
+                    if active.discarded {
+                        continue;
+                    }
                     match update {
                         Ok(update) => return Some(update),
                         Err(error) => {
@@ -325,7 +345,8 @@ impl Acquisition {
                 }
                 done => {
                     match done {
-                        Some(Message::Done(worker)) => self.worker = worker,
+                        Some(Message::Done(worker)) if !active.discarded => self.worker = worker,
+                        Some(Message::Done(_)) => {}
                         _ => eprintln!("ara-runtime-render: probe GI worker stopped"),
                     }
                     self.active = None;
@@ -346,7 +367,7 @@ fn snapshot(frame: &RenderFrame) -> RenderFrame {
     copy.tick = frame.tick;
     copy.camera = frame.camera;
     copy.environment = frame.environment;
-    copy.look = frame.look;
+    copy.look = frame.look.clone();
     copy.sun = frame.sun;
     copy.lights = frame.lights.clone();
     copy.draws = frame.draws.clone();
@@ -839,7 +860,7 @@ fn bake(
     publish: impl FnOnce(ProbeLayout),
 ) -> Result<ProbeSurfaces> {
     let started = std::time::Instant::now();
-    let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+    let look = crate::environment(frame);
     let mut view = FidelityView::new_native(
         gpu,
         &prepared.scene,
@@ -930,6 +951,42 @@ mod tests {
             texels: vec![[0; 4]; 8 * SURFACE_TEXELS],
             statics: vec![[1., 1., 0., 1.]; 8 * STATIC_VECTORS],
         }
+    }
+
+    #[test]
+    fn scene_reset_discards_in_flight_surfaces_and_retraces_reused_content_keys() -> Result<()> {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/runtime-render/probe-scene-reset")
+            .join(std::process::id().to_string());
+        let cache = root.join("probe-gi");
+        std::fs::create_dir_all(&cache)?;
+        let key = 7u64 ^ u64::from(VERSION);
+        std::fs::write(
+            cache.join(format!("{key:016x}-cpu-{}.gi", gi_cpu::lattice_rule())),
+            encode(&lattice(7.)),
+        )?;
+        let mut acquisition = Acquisition::new(root);
+        let frame = RenderFrame::default();
+        let dynamic = BTreeSet::new();
+        acquisition.request(7, &frame, || Ok(Content::default()), &dynamic)?;
+        // Even an already-finished worker has not been adopted until poll. A
+        // scene boundary must drop its layout, surfaces and incremental tracer.
+        acquisition.reset_scene();
+        assert!(acquisition.layout().is_none());
+        // An identical content key in another scene still starts an acquisition.
+        acquisition.request(7, &frame, || Ok(Content::default()), &dynamic)?;
+        assert_eq!(acquisition.request_serial(), 2);
+        assert!(
+            acquisition.queued.is_some(),
+            "one worker across scene boundaries"
+        );
+        let mut origins = Vec::new();
+        while let Some(update) = acquisition.poll(true) {
+            origins.push(update.layout.lattices()[0].origin[0]);
+        }
+        assert_eq!(origins, [7.], "only the replacement scene may publish");
+        assert!(!acquisition.is_pending());
+        Ok(())
     }
 
     #[test]

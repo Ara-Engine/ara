@@ -1,10 +1,12 @@
 //! Grid/handle projection and picking use the actual renderer camera and ID channel.
+mod gizmo;
 use crate::{
     gpu::Overlay,
     state::{Camera, EditorState, Tool},
     world::{DocumentView, EditWorldView},
 };
-use ara_ui::{paint::Box2, theme::EditorTheme};
+use ara_ui::paint::Box2;
+use gizmo::draw_handles;
 use glam::{Vec2, Vec3};
 /// Resource handle of the viewport image in the native UI display list.
 pub fn viewport_image() -> u32 {
@@ -169,12 +171,35 @@ pub enum Handle {
     Plane(usize),
     /// The centre: free move in the view plane, or uniform scale.
     Centre,
+    /// A rotation ring in the universal tool.
+    RotateAxis(usize),
+    /// A scale cube in the universal tool.
+    ScaleAxis(usize),
+}
+impl Handle {
+    /// Operation selected by this handle; ordinary handles use the active tool.
+    pub fn tool(self, active: Tool) -> Tool {
+        match self {
+            Self::RotateAxis(_) => Tool::Rotate,
+            Self::ScaleAxis(_) => Tool::Scale,
+            _ if active == Tool::Universal => Tool::Translate,
+            _ => active,
+        }
+    }
+    /// Shape used by the single-operation drag and drawing code.
+    pub fn base(self) -> Self {
+        match self {
+            Self::RotateAxis(a) | Self::ScaleAxis(a) => Self::Axis(a),
+            _ => self,
+        }
+    }
 }
 /// Half the minimum hit target: every handle is grabbable within 16 px or more.
 pub const HIT: f32 = 9.;
 /// Gizmo arm length on screen at 100% gizmo size (Appendix C).
 pub const ARM: f32 = 88.;
 /// Projected axis handles and pivot, shared by drawing and pointer hit testing.
+#[derive(Clone, Copy)]
 pub struct Handles {
     /// World pivot.
     pub pivot: Vec3,
@@ -193,6 +218,28 @@ pub struct Handles {
     rect: Box2,
 }
 impl Handles {
+    /// Geometry of one operation in the universal tool. Scale cubes sit inside
+    /// the move arrows; rotation rings surround them without sharing hit targets.
+    pub fn for_tool(&self, tool: Tool) -> Self {
+        if self.tool != Tool::Universal {
+            return *self;
+        }
+        let factor = match tool {
+            Tool::Rotate => 0.85,
+            Tool::Scale => 0.62,
+            _ => 1.,
+        };
+        let length = self.length * factor;
+        let ends = self.axes.map(|axis| {
+            project(&self.camera, self.rect, self.pivot + axis * length).unwrap_or(self.origin)
+        });
+        Self {
+            tool,
+            length,
+            ends,
+            ..*self
+        }
+    }
     /// One projected rotation-ring segment, shared by drawing and pointer hit testing.
     pub fn ring_segment(&self, axis: usize, n: usize) -> Option<[[f32; 2]; 2]> {
         let u = self.axes[(axis + 1) % 3];
@@ -308,6 +355,28 @@ pub fn handles(view: &DocumentView, state: &EditorState, rect: Box2) -> Option<H
 }
 /// The handle under the pointer within the hit target, nearest first.
 pub fn hit(handles: &Handles, pointer: [f32; 2]) -> Option<Handle> {
+    if handles.tool == Tool::Universal {
+        let scale = handles.for_tool(Tool::Scale);
+        let p = Vec2::from(pointer);
+        for axis in 0..3 {
+            let end = Vec2::from(scale.ends[axis]);
+            if end.distance(Vec2::from(scale.origin)) >= 8. && p.distance(end) < HIT {
+                return Some(Handle::ScaleAxis(axis));
+            }
+        }
+        let move_handles = handles.for_tool(Tool::Translate);
+        let movement = hit(&move_handles, pointer);
+        if matches!(movement, Some(Handle::Centre | Handle::Plane(_))) {
+            return movement;
+        }
+        let rotation = hit(&handles.for_tool(Tool::Rotate), pointer);
+        return rotation
+            .map(|h| match h {
+                Handle::Axis(a) => Handle::RotateAxis(a),
+                _ => h,
+            })
+            .or(movement);
+    }
     let p = Vec2::from(pointer);
     let o = Vec2::from(handles.origin);
     if handles.tool == Tool::Rotate {
@@ -398,23 +467,16 @@ pub fn build(
     gizmo: GizmoState,
     outlines: &mut Outlines,
     revision: u64,
+    theme: &ara_ui::style::Sheet,
 ) -> ara_ui::Result<Vec<Overlay>> {
-    let tokens = if state.light {
-        EditorTheme::Light
-    } else {
-        EditorTheme::Dark
-    }
-    .tokens()?;
     let color = |token: &str, alpha: f32| -> ara_ui::Result<[f32; 4]> {
-        let hex = tokens
-            .get(&format!("--{token}"))
-            .ok_or("theme token missing")?
-            .trim_start_matches('#');
-        let number = u32::from_str_radix(hex, 16)?;
+        let color = theme
+            .color_token(&format!("--{token}"))
+            .ok_or("theme token missing")?;
         Ok([
-            ((number >> 16) & 255) as f32 / 255.,
-            ((number >> 8) & 255) as f32 / 255.,
-            (number & 255) as f32 / 255.,
+            color.0 as f32 / 255.,
+            color.1 as f32 / 255.,
+            color.2 as f32 / 255.,
             alpha,
         ])
     };
@@ -468,154 +530,27 @@ pub fn build(
     let Some(handles) = handles(view, state, rect) else {
         return Ok(overlays);
     };
-    let halo = [0., 0., 0., 0.6];
-    let hover = color("warning-foreground", 1.)?;
-    let tints = [
-        color("destructive-foreground", 1.)?,
-        color("success-foreground", 1.)?,
-        color("info-foreground", 1.)?,
-    ];
-    let faded = |c: [f32; 4], handle: Handle| -> [f32; 4] {
-        match gizmo.active {
-            Some(active) if active != handle => [c[0], c[1], c[2], c[3] * 0.15],
-            _ if gizmo.hover == Some(handle) || gizmo.active == Some(handle) => hover,
-            _ => c,
-        }
-    };
-    let stroke =
-        |overlays: &mut Vec<Overlay>, from: [f32; 2], to: [f32; 2], width: f32, c: [f32; 4]| {
-            overlays.push(Overlay::Line {
-                from,
-                to,
-                width: width + 1.,
-                color: [halo[0], halo[1], halo[2], halo[3] * c[3]],
-            });
-            overlays.push(Overlay::Line {
-                from,
-                to,
-                width,
-                color: c,
-            });
-        };
-    // Opaque fills (cones, cubes) sit on a 1 px dark halo, like the strokes.
-    let solid = |overlays: &mut Vec<Overlay>, corners: [[f32; 2]; 4], c: [f32; 4]| {
-        overlays.push(Overlay::Quad {
-            corners: grow(corners, 1.),
-            color: [halo[0], halo[1], halo[2], halo[3] * c[3]],
-        });
-        overlays.push(Overlay::Quad { corners, color: c });
-    };
-    let lit = |handle: Handle| gizmo.hover == Some(handle) || gizmo.active == Some(handle);
-    let o = Vec2::from(handles.origin);
-    // While dragging, a thin constraint line through the pivot along each moving axis.
-    let constrained = match gizmo.active {
-        Some(Handle::Axis(axis)) if state.tool != Tool::Rotate => [Some(axis), None],
-        Some(Handle::Plane(axis)) => [Some((axis + 1) % 3), Some((axis + 2) % 3)],
-        _ => [None, None],
-    };
-    for axis in constrained.into_iter().flatten() {
-        let d = handles.screen_dir(axis) * 2000.;
-        let mut line = tints[axis];
-        line[3] = 0.5;
-        overlays.push(Overlay::Line {
-            from: (o - d).into(),
-            to: (o + d).into(),
-            width: 0.5,
-            color: line,
-        });
-    }
-    if state.tool == Tool::Rotate {
-        // The half of each ring facing away from the camera draws at 25 %, so the three
-        // rings read as a sphere rather than a tangle.
-        let toward = (handles.pivot - handles.camera.position()).normalize_or_zero();
-        for (axis, tint) in tints.iter().enumerate() {
-            let c = faded(*tint, Handle::Axis(axis));
-            let width = if lit(Handle::Axis(axis)) { 1.25 } else { 0.75 };
-            for n in 0..48 {
-                let Some([from, to]) = handles.ring_segment(axis, n) else {
-                    continue;
-                };
-                let middle = (n as f32 + 0.5) / 48. * std::f32::consts::TAU;
-                let behind = (handles.ring_point(axis, middle) - handles.pivot).dot(toward) > 0.;
-                let mut c = c;
-                if behind && !lit(Handle::Axis(axis)) {
-                    c[3] *= 0.25;
-                }
-                stroke(&mut overlays, from, to, width, c);
-            }
-        }
-        return Ok(overlays);
-    }
-    if state.tool == Tool::Translate {
-        // Plane squares first, under the arms: 20 % fill (45 % lit), a 1 px edge.
-        for (axis, tint) in tints.iter().enumerate() {
-            let handle = Handle::Plane(axis);
-            let Some(quad) = handles.plane_quad(axis) else {
-                continue;
+    if state.tool == Tool::Universal {
+        for tool in [Tool::Rotate, Tool::Translate, Tool::Scale] {
+            let belongs = |handle: &Handle| handle.tool(Tool::Universal) == tool;
+            let other_active = gizmo.active.is_some_and(|h| !belongs(&h));
+            let operation_gizmo = GizmoState {
+                hover: gizmo.hover.filter(belongs).map(Handle::base),
+                active: gizmo.active.filter(belongs).map(Handle::base),
             };
-            let c = faded(*tint, handle);
-            let mut fill = c;
-            fill[3] *= if lit(handle) { 0.45 } else { 0.2 };
-            overlays.push(Overlay::Quad {
-                corners: quad,
-                color: fill,
-            });
-            for n in 0..4 {
-                stroke(&mut overlays, quad[n], quad[(n + 1) % 4], 0.5, c);
-            }
-        }
-    }
-    for (axis, tint) in tints.iter().enumerate() {
-        let handle = Handle::Axis(axis);
-        let c = faded(*tint, handle);
-        let width = if lit(handle) { 1.5 } else { 1. };
-        let end = Vec2::from(handles.ends[axis]);
-        let dir = handles.screen_dir(axis);
-        if dir == Vec2::ZERO || o.distance(end) < 8. {
-            continue; // Axes nearly parallel to the view fade out entirely.
-        }
-        if state.tool == Tool::Scale {
-            // An 8 px cube (10 px lit) at the arm's end.
-            stroke(
+            let tint = |name: &str, alpha: f32| {
+                color(name, if other_active { alpha * 0.15 } else { alpha })
+            };
+            draw_handles(
                 &mut overlays,
-                handles.origin,
-                (end - dir * 4.).into(),
-                width,
-                c,
-            );
-            solid(
-                &mut overlays,
-                square(end, if lit(handle) { 5. } else { 4. }),
-                c,
-            );
-        } else {
-            // A 12 px solid cone.
-            let base = end - dir * 12.;
-            let side = Vec2::new(-dir.y, dir.x) * if lit(handle) { 5.5 } else { 4.5 };
-            stroke(&mut overlays, handles.origin, base.into(), width, c);
-            solid(
-                &mut overlays,
-                [
-                    end.into(),
-                    (base + side).into(),
-                    (base - side).into(),
-                    end.into(),
-                ],
-                c,
-            );
+                &handles.for_tool(tool),
+                operation_gizmo,
+                &tint,
+                tool != Tool::Scale,
+            )?;
         }
-    }
-    let centre = if lit(Handle::Centre) {
-        hover
     } else {
-        color("foreground", 0.75)?
-    };
-    if state.tool == Tool::Scale {
-        // A 10 px square for uniform scale.
-        solid(&mut overlays, square(o, 5.), centre);
-    } else {
-        // A 10 px screen-space disc for free movement in the view plane.
-        stroke(&mut overlays, handles.origin, handles.origin, 5., centre);
+        draw_handles(&mut overlays, &handles, gizmo, &color, true)?;
     }
     Ok(overlays)
 }

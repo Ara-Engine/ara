@@ -411,7 +411,7 @@ impl SceneSync {
         };
         self.shown = Patch::default();
         self.projected = projected;
-        scene_view.set_preview_view(target);
+        scene_view.set_preview_view(&editor.state.doc, target);
         true
     }
 

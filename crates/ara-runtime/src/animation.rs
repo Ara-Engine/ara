@@ -60,6 +60,8 @@ pub struct Library {
     pub models: Models,
     /// Native graph/instance overrides resolved outside frame extraction.
     pub materials: crate::material::Materials,
+    /// Post-process volumes' colour lookup tables, decoded outside frame extraction.
+    pub luts: crate::lut::Luts,
     /// The project's `.animation` records (controllers, clips, motion databases).
     pub documents: Documents,
     programs: BTreeMap<String, Arc<Program>>,

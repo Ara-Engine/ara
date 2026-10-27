@@ -56,6 +56,9 @@ pub(super) fn device_info(device: &ProtocolObject<dyn MTLDevice>) -> DeviceInfo 
         // Shared surfaces are IOSurfaces ([`super::external`]).
         external_memory: true,
         identity: identity(device),
+        // Metal queues expose no priority control; the OS default matches Vulkan medium.
+        graphics_global_priority: "medium",
+        global_priority_extension: None,
     }
 }
 

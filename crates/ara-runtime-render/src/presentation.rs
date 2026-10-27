@@ -226,7 +226,7 @@ impl Presenter {
                     let mut prepared = native::prepare(frame, resolve()?, texture_config())?;
                     prepared.enable_motion();
                     let bank = prepared.textures.fork_sources(texture_config())?;
-                    let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+                    let look = crate::environment(frame);
                     match &mut self.live {
                         Some(live) => {
                             live.view.replace_native_scene(
@@ -295,7 +295,7 @@ impl Presenter {
                     )?;
                     live.plan = settings;
                 }
-                let look = FrameEnvironment::resolve(&frame.look, frame.environment.exposure);
+                let look = crate::environment(frame);
                 if live.look != look || live.tick.is_none() {
                     live.view.set_environment(&look)?;
                     live.look = look;

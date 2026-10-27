@@ -66,6 +66,10 @@ pub struct PostSettings {
     pub focus_distance: f32,
     /// Blur diameter at one metre defocus, in render pixels.
     pub aperture: f32,
+    /// A physical lens f-number (post-process volumes): when set, the blur follows
+    /// the thin lens for the camera's field of view on a full-frame sensor instead
+    /// of `aperture`.
+    pub f_number: Option<f32>,
     /// Fraction of the frame interval exposed by motion blur.
     pub shutter: f32,
     /// Quality gate for DOF and motion blur.
@@ -84,6 +88,7 @@ impl Default for PostSettings {
             fog_density: 0.002,
             focus_distance: 5.,
             aperture: 2.,
+            f_number: None,
             shutter: 0.5,
             quality: Quality::Gameplay,
         }
@@ -185,6 +190,7 @@ impl Settings {
                 && p.focus_distance > 0.
                 && p.aperture.is_finite()
                 && (0.0..=32.0).contains(&p.aperture)
+                && p.f_number.is_none_or(|n| (0.5..=64.0).contains(&n))
                 && p.shutter.is_finite()
                 && (0.0..=1.0).contains(&p.shutter),
             "Invalid lens"

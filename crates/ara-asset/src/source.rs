@@ -350,7 +350,10 @@ impl AssetPipeline {
                             })?;
                         let digest = match known.and_then(|(_, hash)| *hash) {
                             Some(hash) => hash,
-                            None => Digest::of(&std::fs::read(checked_path(&root, &root, path)?)?),
+                            None => Digest::of(
+                                &std::fs::read(checked_path(&root, &root, path)?)
+                                    .map_err(|e| io_at(e, path))?,
+                            ),
                         };
                         asset.asset_dependencies.insert(path.to_owned(), digest);
                         if let Some(id) = parts.id {

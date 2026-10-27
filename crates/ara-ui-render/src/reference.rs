@@ -2,6 +2,7 @@
 use crate::gpu::{Batch, Clip, Instance, Pipeline, TextureUpload, UiGpu};
 use ara_ui::{Result, paint::Box2};
 use std::collections::BTreeMap;
+use std::ops::Sub;
 struct Texture {
     width: u32,
     height: u32,
@@ -66,7 +67,10 @@ impl UiGpu for CpuGpu {
         let target = self.target.as_mut().ok_or("ARA4052: draw before begin")?;
         let width = target.width();
         let height = target.height();
-        let texture = if matches!(batch.pipeline, Pipeline::Shape | Pipeline::Line) {
+        let texture = if matches!(
+            batch.pipeline,
+            Pipeline::Shape | Pipeline::Line | Pipeline::Fill
+        ) {
             None
         } else {
             Some(
@@ -119,6 +123,7 @@ impl UiGpu for CpuGpu {
                             .sqrt();
                             color[3] *= (i.params[0] - distance + 0.5).clamp(0., 1.);
                         }
+                        Pipeline::Fill => color = fill_sample(i, r, p),
                         Pipeline::Shape => {
                             let outer = (0.5 - distance(r, i.params[0], p)).clamp(0.0, 1.0);
                             let coverage = if i.params[1] > 0.0 {
@@ -200,6 +205,80 @@ impl UiGpu for CpuGpu {
     }
     fn end(&mut self) -> Result<()> {
         Ok(())
+    }
+}
+/// What `Pipeline::Fill` paints at pixel centre `p` of instance rect `r` (the shader's
+/// mode 9): straight RGBA with the shape's coverage in alpha.
+pub(crate) fn fill_sample(i: &Instance, r: Box2, p: [f32; 2]) -> [f32; 4] {
+    let local = [p[0] - r.x, p[1] - r.y];
+    let kind = i.params[1].round() as u32;
+    let mut coverage = (0.5 - distance(r, i.params[0], p)).clamp(0.0, 1.0);
+    let mut color = match kind {
+        0 => {
+            let flags = i.params[3].round() as u32;
+            let t = if flags & 1 != 0 {
+                local[1] / r.h.max(0.0001)
+            } else {
+                local[0] / r.w.max(0.0001)
+            }
+            .clamp(0.0, 1.0);
+            let c: [f32; 4] = std::array::from_fn(|k| {
+                if k < 3 && flags & 2 != 0 {
+                    linear_to_srgb(
+                        srgb_to_linear(i.color[k])
+                            + (srgb_to_linear(i.uv[k]) - srgb_to_linear(i.color[k])) * t,
+                    )
+                } else {
+                    i.color[k] + (i.uv[k] - i.color[k]) * t
+                }
+            });
+            c
+        }
+        1 => {
+            let [r_, g, b] = hue((local[0] / r.w.max(0.0001)).clamp(0.0, 1.0));
+            [r_, g, b, i.color[3]]
+        }
+        2 => {
+            let d = [local[0] - r.w / 2.0, local[1] - r.h / 2.0];
+            let radius = d[0].hypot(d[1]);
+            let outer = r.w.min(r.h) / 2.0;
+            let inner = outer - i.params[2];
+            coverage =
+                (outer - radius + 0.5).clamp(0.0, 1.0) * (radius - inner + 0.5).clamp(0.0, 1.0);
+            let angle = (-d[1]).atan2(d[0]);
+            let [r_, g, b] = hue((angle / std::f32::consts::TAU).rem_euclid(1.0));
+            [r_, g, b, i.color[3]]
+        }
+        _ => {
+            let cell = i.params[2].max(1.0);
+            let q = (local[0] / cell).floor() as i64 + (local[1] / cell).floor() as i64;
+            if q.rem_euclid(2) == 0 { i.color } else { i.uv }
+        }
+    };
+    color[3] *= coverage;
+    color
+}
+/// Full-saturation, full-value RGB at hue `h` in turns.
+fn hue(h: f32) -> [f32; 3] {
+    [0.0, 4.0, 2.0].map(|o: f32| {
+        ((h * 6.0 + o).rem_euclid(6.0) - 3.0)
+            .abs()
+            .sub(1.0)
+            .clamp(0.0, 1.0)
+    })
+}
+fn srgb_to_linear(c: f32) -> f32 {
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+fn linear_to_srgb(c: f32) -> f32 {
+    if c <= 0.003_130_8 {
+        c * 12.92
+    } else {
+        1.055 * c.max(0.0).powf(1.0 / 2.4) - 0.055
     }
 }
 fn distance(r: Box2, radius: f32, p: [f32; 2]) -> f32 {

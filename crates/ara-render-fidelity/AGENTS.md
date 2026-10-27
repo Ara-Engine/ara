@@ -42,10 +42,13 @@ No authoritative gameplay or authoring state lives here.
   High 0.5, Epic 2/3 transport scale.
 - `bake_probe_surfaces`: one-time ray-traced probe surface caches for the raster
   renderer's GI (`ara_render::look::gi`); needs one rendered RT frame.
-- `environment::FrameEnvironment::resolve(&frame.look, env.exposure)`: the scene's
-  `SkyAtmosphere`/`HeightFog`/`PostProcess` → `view.set_environment`; `raster()`
-  gives the raster renderer's `Look`, `manual_exposure()` its exposure, and
-  `ground_sun()` the attenuated sun.
+- `environment::FrameEnvironment::resolve(&frame.look, camera, env.exposure)`: the scene's
+  `SkyAtmosphere`/`HeightFog` and the post-process volumes blended at `camera` →
+  `view.set_environment`; `raster()` gives the raster renderer's `Look` (grading, lens,
+  AO/SSR tuning; `lut` indexes `SceneLook::luts`), `manual_exposure()` its exposure, and
+  `ground_sun()` the attenuated sun. Volume DoF and motion blur switch the fidelity view to
+  `Quality::Cinematic` (`PostSettings::f_number`: the thin lens for the camera's FOV);
+  lift/gamma/gain, chromatic aberration, the LUT and AO/SSR tuning are raster-only.
 
 ## Gates
 Use CARGO_BUILD_JOBS=2. `cargo test -p ara-render-fidelity`,

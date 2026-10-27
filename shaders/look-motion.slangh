@@ -1,0 +1,41 @@
+// Motion blur from post-process volumes: a reconstruction filter after McGuire et al.
+// 2012 over the resolved display image. Velocities come from the native motion vectors
+// (render resolution, unjittered UV per frame; Frame.look.w) scaled by the shutter
+// (look.motion.x) and clamped to the preset's longest blur. look-motion.slang takes each
+// 16-pixel tile's largest velocity, then the largest of its 3x3 neighbourhood; the post
+// pass's motion variant gathers along that direction with depth- and speed-aware
+// weights. Include after look.slangh.
+static const uint MOTION_TILE=16;
+// Display-pixel blur vector at display pixel `p` (the shutter's sweep).
+float2 motionAt(Frame f,Look l,int2 p){
+    int2 size=int2(f.sizes.xy);int2 c=clamp(int2((float2(p)+0.5)*float2(size)/float2(f.extent.xy)),int2(0),size-1);
+    float2 v=pixel(f.look.w,c).xy*float2(f.extent.xy)*l.motion.x;float length2=dot(v,v),longest=l.motion.z;
+    return length2>longest*longest?v*(longest*rsqrt(length2)):v;
+}
+// Linear camera distance for reversed-Z depth at display pixel `p` (the sky is far).
+float motionDepth(Frame f,int2 p){
+    int2 size=int2(f.sizes.xy);int2 c=clamp(int2((float2(p)+0.5)*float2(size)/float2(f.extent.xy)),int2(0),size-1);
+    float d=gbufferDepth(f,c);return d>0?1/d:1e6;
+}
+float cone(float distance,float speed){return saturate(1-distance/max(speed,1e-3));}
+float cylinder(float distance,float speed){return 1-smoothstep(0.95*speed,1.05*speed,distance);}
+// `behind` is 1 where depth a lies behind depth b (soft over 2% of the distance).
+float behind(float a,float b){return saturate((a-b)/(0.02*b+0.05));}
+// The blurred colour at display pixel `p` of the image `input` (pre-exposed like the
+// history), or `centre` (that pixel's own colour) where nothing nearby moves.
+float3 motionGather(Frame f,Look l,uint input,int2 p,float3 centre,out bool moving){
+    float2 dominant=pixel(l.motionImages.y,p/int(MOTION_TILE)).xy;float reach=length(dominant);moving=reach>=0.5;
+    if(!moving)return centre;
+    float2 v=motionAt(f,l,p);float speed=max(length(v),0.5),depth=motionDepth(f,p);
+    float weight=1/speed;float3 sum=centre*weight;uint n=max(uint(l.motion.y),2u);
+    for(uint i=0;i<n;i++){
+        // Fixed, symmetric taps across the shutter's sweep (the centre is the pixel
+        // itself), colour filtered at the exact tap so taps do not step pixel by pixel.
+        float t=(i+0.5)/n-0.5;float2 at=float2(p)+0.5+dominant*t;
+        int2 q=clamp(int2(floor(at)),int2(0),int2(f.extent.xy)-1);
+        float distance=reach*abs(t),qSpeed=max(length(motionAt(f,l,q)),0.5),qDepth=motionDepth(f,q);
+        float front=behind(depth,qDepth),back=behind(qDepth,depth);
+        float w=front*cone(distance,qSpeed)+back*cone(distance,speed)+cylinder(distance,qSpeed)*cylinder(distance,speed)*2;
+        sum+=historyTex(input,at/float2(f.extent.xy)).rgb*w;weight+=w;
+    }return sum/weight;
+}

@@ -4,6 +4,13 @@
 //! owner learns of each frame through `play.frame` once its GPU work completed and
 //! hands slots back with `play.release`. Raw input arrives as `play.device` and goes
 //! through the same [`Mapper`] as windowed input.
+//!
+//! Play entry: frames render from the first content frame, but none is published
+//! until the presentation is ready (textures resident, emitter lights adopted, probe
+//! GI converged and faded in) or [`ENTRY_CAP`] has passed. Local simulations hold
+//! meanwhile (`Embedded::entering`), so Play starts lit, at its first tick, when the
+//! owner first shows it. `ARA_PLAY_FIRST_FRAME=<dir>` saves each player's first
+//! published frame there for visual verification; leave it unset for timing runs.
 use crate::{device, input::DeviceEvent, input::Mapper};
 use anyhow::{Context, Result, ensure};
 use ara_gpu::{
@@ -70,6 +77,20 @@ pub struct DeviceParams {
 
 /// Largest surface edge accepted (the renderer's targets scale with it).
 const MAX_EDGE: u32 = 8192;
+/// Longest a Play entry waits for a ready presentation after its first content
+/// frame (which uploads the scene) before publishing anyway.
+const ENTRY_CAP: Duration = Duration::from_millis(1500);
+
+/// Where a Play entry stands (module docs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Entry {
+    /// No content frame has completed since the world started.
+    Waiting,
+    /// Unpublished frames render, since the first content frame completed.
+    Since(Instant),
+    /// Frames publish.
+    Open,
+}
 
 fn check(size: [u32; 2]) -> Result<()> {
     ensure!(
@@ -90,6 +111,7 @@ pub struct Embedded {
     pending: Option<[u32; 2]>,
     /// The owner's raw input, mapped like windowed input.
     pub input: Mapper,
+    entry: Entry,
     frames: u32,
     frame_times: Vec<f32>,
     since: Instant,
@@ -134,6 +156,7 @@ impl Embedded {
                 dirty: true,
                 pending: None,
                 input: Mapper::default(),
+                entry: Entry::Waiting,
                 frames: 0,
                 frame_times: Vec::new(),
                 since: Instant::now(),
@@ -180,13 +203,25 @@ impl Embedded {
         }
     }
 
-    /// Whether a frame is due at `now`: a slot is free and the surface is new or the
-    /// frame cap allows the next frame. Due frames extract, update audio and
-    /// [`Embedded::render`]. Never blocks on the owner: while it holds every other
-    /// slot no frame is due (the simulation keeps ticking), and the first release
-    /// makes the next one due at once.
+    /// A new world starts a Play entry: nothing publishes until it is lit.
+    pub fn begin_entry(&mut self) {
+        self.entry = Entry::Waiting;
+    }
+
+    /// The Play entry has not published its first frame yet; the host holds a local
+    /// simulation meanwhile.
+    pub fn entering(&self) -> bool {
+        self.entry != Entry::Open
+    }
+
+    /// Whether a frame is due at `now`: a slot is free and the surface is new, the
+    /// Play entry is converging (unpaced) or the frame cap allows the next frame. Due
+    /// frames extract, update audio and [`Embedded::render`]. Never blocks on the
+    /// owner: while it holds every other slot no frame is due (the simulation keeps
+    /// ticking), and the first release makes the next one due at once.
     pub fn due(&self, now: Instant) -> bool {
-        self.ring.free() > 0 && (self.dirty || self.last.is_none_or(|l| now - l >= self.interval))
+        self.ring.free() > 0
+            && (self.dirty || self.entering() || self.last.is_none_or(|l| now - l >= self.interval))
     }
 
     /// Renders a due `frame` into a free slot; the notice to send once it returns.
@@ -198,10 +233,19 @@ impl Embedded {
     ) -> Result<Option<FrameReady>> {
         let started = Instant::now();
         self.last = Some(started);
-        if frame.draws.is_empty() || self.ring.free() == 0 {
+        if frame.draws.is_empty() {
+            // Nothing to light: an entry would never become ready.
+            self.entry = Entry::Open;
+            return Ok(None);
+        }
+        if self.ring.free() == 0 {
             return Ok(None);
         }
         presenter.present_with(frame, resolve)?;
+        let entering = self.entering();
+        if !self.admit(presenter) {
+            return Ok(None);
+        }
         let rendered_at_us = now_us();
         let copy = Instant::now();
         let renderer = presenter.renderer().context("renderer missing")?;
@@ -219,6 +263,9 @@ impl Embedded {
             return Ok(None);
         };
         let publish_us = copy.elapsed().as_micros() as u64;
+        if entering && let Some(dir) = std::env::var_os("ARA_PLAY_FIRST_FRAME") {
+            save_first_frame(presenter, frame, Path::new(&dir))?;
+        }
         let cost = started.elapsed();
         self.dirty = false;
         self.frames += 1;
@@ -231,6 +278,35 @@ impl Embedded {
         }))
     }
 
+    /// Whether a completed presentation may publish. An entry opens once the
+    /// presentation is ready, or at [`ENTRY_CAP`] with what was still pending logged.
+    fn admit(&mut self, presenter: &Presenter) -> bool {
+        let since = match self.entry {
+            Entry::Open => return true,
+            Entry::Waiting => Instant::now(),
+            Entry::Since(since) => since,
+        };
+        let readiness = presenter.readiness();
+        let waited = since.elapsed();
+        if readiness.is_ready() {
+            eprintln!(
+                "ara-player: Play entry lit {} ms after its first content frame",
+                waited.as_millis()
+            );
+        } else if waited >= ENTRY_CAP {
+            eprintln!(
+                "ara-player: Play entry published at the {} ms cap before its presentation was ready: {}",
+                ENTRY_CAP.as_millis(),
+                serde_json::to_string(&readiness).unwrap_or_default()
+            );
+        } else {
+            self.entry = Entry::Since(since);
+            return false;
+        }
+        self.entry = Entry::Open;
+        true
+    }
+
     /// Frames per second and p95 frame cost since the previous call.
     pub fn take_stats(&mut self) -> (f64, f64) {
         let stats = device::frame_stats(self.frames, self.since, &mut self.frame_times);
@@ -238,6 +314,30 @@ impl Embedded {
         self.since = Instant::now();
         stats
     }
+}
+
+/// Saves the presentation just published as `play-entry-<pid>.png` in `dir`.
+fn save_first_frame(presenter: &mut Presenter, frame: &RenderFrame, dir: &Path) -> Result<()> {
+    let request = ara_render::capture::CaptureRequest {
+        camera: ara_runtime_render::camera(frame)?,
+        size: presenter.output_size(),
+        mode: ara_render::capture::ViewMode::Lit,
+        deterministic: false,
+        exposure: frame.environment.exposure,
+        settle_frames: 1,
+        tick: frame.tick,
+        seed: 0,
+        marks: None,
+    };
+    let capture = presenter
+        .renderer_mut()
+        .context("renderer missing")?
+        .capture_completed(&request)?;
+    std::fs::create_dir_all(dir)?;
+    capture
+        .image
+        .save(dir.join(format!("play-entry-{}.png", std::process::id())))?;
+    Ok(())
 }
 
 /// Warm device and pipelines without a window or shared ring. The idle view is
@@ -261,6 +361,61 @@ pub(crate) fn prewarm(
 mod tests {
     use super::*;
     use ara_runtime_render::{QualityChoice, QualityPreset, RenderOptions};
+
+    #[test]
+    fn play_entry_publishes_only_a_ready_presentation_or_at_its_cap() -> Result<()> {
+        // The ring borrows the presenter's native device: drop it first.
+        struct Session {
+            ring: Embedded,
+            presenter: Presenter,
+        }
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-player/embedded-entry")
+            .join(std::process::id().to_string());
+        let params = EmbedParams {
+            width: 128,
+            height: 72,
+            max_fps: Some(30),
+        };
+        let (ring, presenter) = Embedded::open(
+            &params,
+            &root,
+            QualityChoice::Preset(QualityPreset::High),
+            RenderOptions::default(),
+            None,
+        )?;
+        let mut session = Session { ring, presenter };
+        session.ring.begin_entry();
+        let frame = device::warm_frame();
+        let started = Instant::now();
+        loop {
+            assert!(session.ring.entering());
+            // Entering frames are due at once, whatever the frame cap.
+            assert!(session.ring.due(Instant::now()));
+            let published = session
+                .ring
+                .render(&mut session.presenter, &frame, || Ok(Default::default()))?;
+            if published.is_some() {
+                break;
+            }
+            assert!(
+                started.elapsed() < ENTRY_CAP + Duration::from_secs(30),
+                "the entry never published"
+            );
+        }
+        assert!(
+            session.presenter.readiness().is_ready() || started.elapsed() >= ENTRY_CAP,
+            "the first published frame was neither ready nor capped"
+        );
+        assert!(!session.ring.entering());
+        session
+            .presenter
+            .renderer()
+            .context("embedded renderer")?
+            .gpu()
+            .assert_clean()?;
+        Ok(())
+    }
 
     #[test]
     fn embedded_gpu_defaults_to_raster_and_honours_the_rt_opt_in() -> Result<()> {

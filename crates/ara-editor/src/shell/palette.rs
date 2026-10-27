@@ -238,9 +238,10 @@ impl Shell {
     }
     pub(super) fn palette(&mut self, editor: &mut Editor, out: &mut String) -> ara_ui::Result<()> {
         let width = (self.ui.size[0] - 32.).min(640.);
+        // A popover centred below a point near the top: a click outside closes it.
         out.push_str(&format!(
-            "<panel id='palette' class='palette' style='left:{}px; top:{}px; width:{width}px'>",
-            ((self.ui.size[0] - width) * 0.5).max(16.),
+            "<popover id='palette' class='palette' at='{},{}' placement='bottom-center' offset='0' style='width:{width}px'>",
+            self.ui.size[0] * 0.5,
             self.ui.size[1] * 0.16
         ));
         self.bindings.insert(
@@ -311,7 +312,7 @@ impl Shell {
             self.bindings
                 .insert(ara_ui::source::stable_id(&id), item.binding);
         }
-        out.push_str("</scroll><panel id='palette-footer' class='row' style='height:22px;padding-left:8px'><text id='palette-footer-copy' class='caption' text='↑↓ choose  ·  Enter run  ·  Esc close  ·  Agents call these commands through editor.command' /></panel></panel>");
+        out.push_str("</scroll><panel id='palette-footer' class='row' style='height:22px;padding-left:8px'><text id='palette-footer-copy' class='caption' text='↑↓ choose  ·  Enter run  ·  Esc close  ·  Agents call these commands through editor.command' /></panel></popover>");
         Ok(())
     }
     fn palette_form(

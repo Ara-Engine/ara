@@ -1,4 +1,4 @@
-//! Four native PSOs are retained by the renderer across content generations.
+//! Five native PSOs are retained by the renderer across content generations.
 use super::*;
 use ara_gpu::vulkan::{PipelinePreparation, PipelinePreparationId};
 
@@ -15,6 +15,9 @@ pub(in crate::renderer) struct NativePipelines {
     /// (`Quality::terrain_detail` zero): terrain keeps its top projection, and
     /// compiled without the side projections, every pixel saves their registers.
     pub gbuffer_top: Pipeline,
+    /// Triangle edges for the wireframe view modes (`ViewMode::wire`): the camera
+    /// draws again into the wire mask, depth-tested against the frame's depth.
+    pub wire: Pipeline,
 }
 
 impl NativePipelines {
@@ -30,11 +33,12 @@ impl NativePipelines {
 }
 
 /// Cooked recipe names, in `NativePipelines` field order.
-const RECIPES: [&str; 4] = [
+const RECIPES: [&str; 5] = [
     "native_shadow",
     "native_gbuffer",
     "native_forward",
     "native_gbuffer_top",
+    "native_wire",
 ];
 
 #[derive(Default)]
@@ -73,14 +77,16 @@ impl Renderer {
                 self.native_pipelines = Pipelines::Empty;
             }
             if let Some(handles) = result? {
-                let [shadow, gbuffer, forward, gbuffer_top]: [Pipeline; RECIPES.len()] = handles
-                    .try_into()
-                    .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
+                let [shadow, gbuffer, forward, gbuffer_top, wire]: [Pipeline; RECIPES.len()] =
+                    handles
+                        .try_into()
+                        .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
                 self.native_pipelines = Pipelines::Ready(NativePipelines {
                     shadow,
                     gbuffer,
                     forward,
                     gbuffer_top,
+                    wire,
                 });
             }
         }

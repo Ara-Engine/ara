@@ -45,7 +45,7 @@ pub(super) fn prepare(
                 p[..3].copy_from_slice(&n);
             }
             TextureUsage::Mask => p[0] = p[settings.mask_channel as usize],
-            TextureUsage::Hdr | TextureUsage::Linear => {}
+            TextureUsage::Hdr | TextureUsage::Linear | TextureUsage::Lut => {}
         }
         Ok(())
     })?;

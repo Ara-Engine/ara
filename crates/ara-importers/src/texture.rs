@@ -45,6 +45,9 @@ pub enum TextureUsage {
     Mask,
     /// Nonnegative linear radiance, BC6H UFLOAT.
     Hdr,
+    /// A colour lookup table strip (post-process volumes' grading): values kept as
+    /// authored, uncompressed RGBA half floats, without mips.
+    Lut,
 }
 /// Declarative texture import settings.
 #[derive(Debug, Clone, Serialize, Deserialize, ara_schema::Schema)]
@@ -496,6 +499,7 @@ fn decode_texture(
         TextureUsage::Normal => TextureFormat::Bc5,
         TextureUsage::Mask => TextureFormat::Bc4,
         TextureUsage::Hdr => TextureFormat::Bc6h,
+        TextureUsage::Lut => TextureFormat::Rgba16Float,
     };
     let pixels = pixels::prepare(image, usage, settings, cancellation)?;
     if usage == TextureUsage::Hdr {
@@ -524,7 +528,8 @@ fn decode_texture(
         usage,
         format,
         pixels,
-        mipmaps: settings.mipmaps,
+        // A lookup table is sampled at its texels only.
+        mipmaps: settings.mipmaps && usage != TextureUsage::Lut,
     })
 }
 fn generate_mips(

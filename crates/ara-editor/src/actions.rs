@@ -1,5 +1,5 @@
 //! Reflected editor actions. Each successful navigation command produces reversible ops.
-use crate::state::{EditorState, Navigation, Tool, default_layout};
+use crate::state::{EditorState, Navigation, Tool};
 use ara_diag::Diagnostic;
 use ara_host::{Cx, Method, Service, parse};
 use ara_render_fidelity::presets::QualityPreset;
@@ -134,7 +134,7 @@ impl Service for EditorService {
             Method::new::<EditorTool>(
                 db,
                 "editor.tool",
-                "Configure translate/rotate/scale handles and snapping.",
+                "Configure translate/rotate/scale/universal handles and snapping.",
             ),
             Method::new::<EditorEntityView>(
                 db,
@@ -246,6 +246,7 @@ impl Service for EditorService {
     }
     fn call(&mut self, cx: &mut Cx<'_>, method: &str, params: Value) -> R {
         let result = self.dispatch(cx, method, params);
+        self.report_layout_notice(cx);
         // Preferences and layouts that could not be written are warnings on the bus,
         // not stderr. Their writes run on writer threads, so a failure shows up here
         // with the next call.
@@ -258,8 +259,20 @@ impl Service for EditorService {
         }
         result
     }
+    fn tick(&mut self, cx: &mut Cx<'_>) {
+        self.report_layout_notice(cx);
+    }
 }
 impl EditorService {
+    /// A migration is informational and must be visible even before the first UI command.
+    fn report_layout_notice(&mut self, cx: &mut Cx<'_>) {
+        if self.navigation.take_layout_notice() {
+            cx.log(
+                Diagnostic::info(crate::codes::LAYOUT_RESET, crate::state::MIGRATION_NOTICE)
+                    .subject(ara_diag::Subject::system("editor")),
+            );
+        }
+    }
     fn dispatch(&mut self, cx: &mut Cx<'_>, method: &str, params: Value) -> R {
         if method == "editor.state" {
             return Ok(json!({"state":self.navigation.state}));
@@ -293,6 +306,8 @@ impl EditorService {
                 target: &target,
                 clipboard_entities: false,
                 clipboard_value: false,
+                clipboard_component: false,
+                component_position: None,
                 logs: crate::shell::LogView::default(),
                 assets_show_all: false,
                 game: (true, "free", false),
@@ -335,6 +350,7 @@ impl EditorService {
                         Kind::Number { min, max, step, unit } => ("number", Value::Null, json!({"min": min, "max": max, "step": step, "unit": unit})),
                         Kind::Text => ("text", Value::Null, Value::Null),
                         Kind::Map => ("map", Value::Null, Value::Null),
+                        Kind::Colors { max } => ("colors", Value::Null, json!({"max": max})),
                     };
                     json!({"key": d.key, "scope": d.scope, "category": d.category, "label": d.label, "description": d.description, "control": control, "options": options, "range": range, "value": self.settings.value(d.key), "modified": self.settings.modified(d.key)})
                 })
@@ -409,6 +425,19 @@ impl EditorService {
                 }
                 if let Some(folder) = p.folder {
                     state.asset_folder = folder;
+                }
+                if let Some(width) = p.sidebar_width {
+                    state.asset_sidebar_width = width.clamp(96., 480.);
+                }
+                if let Some(folder) = p.toggle_folder {
+                    let expand = p
+                        .expand_folder
+                        .unwrap_or_else(|| !state.asset_expanded_folders.contains(&folder));
+                    if expand {
+                        state.asset_expanded_folders.insert(folder);
+                    } else {
+                        state.asset_expanded_folders.remove(&folder);
+                    }
                 }
                 if let Some(grid) = p.grid {
                     state.asset_grid = grid;
@@ -529,6 +558,8 @@ impl EditorService {
                             | "roughnessMetal"
                             | "entityIds"
                             | "shadowCascades"
+                            | "wireframe"
+                            | "litWireframe"
                     ) {
                         return Err(vec![crate::invalid(format!("unknown view mode `{mode}`"))]);
                     }
@@ -573,8 +604,16 @@ impl EditorService {
                         .join(format!("{}.json", safe_name(&p.name)?));
                     let text = std::fs::read_to_string(&path)
                         .map_err(|_| vec![crate::invalid(format!("no layout `{}`", p.name))])?;
-                    let mut dock = DockLayout::new(default_layout()).map_err(ui_error)?;
-                    dock.restore(&text).map_err(ui_error)?;
+                    let (dock, migrated) = crate::state::restore_layout(&text).map_err(ui_error)?;
+                    if migrated {
+                        state.set_dock(&dock);
+                        crate::state::write_layout(&path, &state)
+                            .map_err(|e| vec![crate::invalid(e.to_string())])?;
+                        cx.log(Diagnostic::info(
+                            crate::codes::LAYOUT_RESET,
+                            crate::state::MIGRATION_NOTICE,
+                        ));
+                    }
                     dock
                 };
                 state.set_dock(&dock);
@@ -829,6 +868,7 @@ impl EditorService {
                     } else {
                         dock.activate(&panel).map_err(ui_error)?;
                     }
+                    dock.expand_panel(&panel);
                 }
                 state.set_dock(&dock);
             }

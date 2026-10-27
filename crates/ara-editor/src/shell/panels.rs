@@ -225,7 +225,7 @@ impl Shell {
                     format!("empty-header-fill-{area}"),
                 ),
             };
-            out.push_str(&format!("<panel id='{host}' class='panel-header'>{}<text id='{title_id}' class='panel-title' text='{}' /><panel id='{fill_id}' class='fill' />",icons::icon(&host,panel_icon(&panel)),escape(title(&panel))));
+            out.push_str(&format!("<panel id='{host}' class='panel-header' cursor='grab'>{}<text id='{title_id}' class='panel-title' text='{}' /><panel id='{fill_id}' class='fill' />",icons::icon(&host,panel_icon(&panel)),escape(title(&panel))));
             host
         } else {
             out.push_str(&format!("<panel id='tabs-{area}' class='tabbar'>"));
@@ -251,7 +251,7 @@ impl Shell {
                     },
                     escape(title(tab))
                 );
-                out.push_str(&format!("<button id='{tab_id}' class='tab{}' label='{}' description='{}: drag to move, right-click for options' action='Dispatch'>{}{label}</button>",if active{" tab-selected"}else{""},escape(title(tab)),escape(title(tab)),if active{icons::icon_in(&tab_id,panel_icon(tab),"fg")}else{icons::icon(&tab_id,panel_icon(tab))}));
+                out.push_str(&format!("<button id='{tab_id}' cursor='grab' class='tab{}' label='{}' description='{}: drag to move, right-click for options' action='Dispatch'>{}{label}</button>",if active{" tab-selected"}else{""},escape(title(tab)),escape(title(tab)),if active{icons::icon_in(&tab_id,panel_icon(tab),"fg")}else{icons::icon(&tab_id,panel_icon(tab))}));
             }
             out.push_str(&format!("<panel id='tabs-fill-{area}' class='fill' />"));
             format!("tabs-{area}")
@@ -407,176 +407,6 @@ impl Shell {
             format!("<text id='{id}-label' text='{}' />", escape(text))
         };
         out.push_str(&format!("<button id='{id}' class='ghost' style='padding-left:6px;padding-right:4px' label='{}' description='{}' action='Dispatch'>{}{words}{}</button>",escape(if text.is_empty(){description}else{text}),escape(description),icons::icon(id,icon),icons::icon_in(&format!("{id}-more"),"chevron-down","icon-sm")));
-    }
-    pub(super) fn scene_panel(&mut self, editor: &Editor, out: &mut String) {
-        if !editor.state.hide_overlays {
-            out.push_str("<panel id='scene-tools' class='viewport-bar'><panel id='transform-segment' class='segment'>");
-            let tool = editor.state.tool;
-            let gizmos = !editor.state.hide_gizmos;
-            for (id, command, icon, label, on) in [
-                (
-                    "tool-select",
-                    "view.tool.select",
-                    "mouse-pointer",
-                    "Select",
-                    !gizmos,
-                ),
-                (
-                    "tool-Translate",
-                    "view.tool.move",
-                    "move-3d",
-                    "Move",
-                    gizmos && tool == crate::state::Tool::Translate,
-                ),
-                (
-                    "tool-Rotate",
-                    "view.tool.rotate",
-                    "rotate-3d",
-                    "Rotate",
-                    gizmos && tool == crate::state::Tool::Rotate,
-                ),
-                (
-                    "tool-Scale",
-                    "view.tool.scale",
-                    "scaling",
-                    "Scale",
-                    gizmos && tool == crate::state::Tool::Scale,
-                ),
-            ] {
-                self.bind_command(id, command, Target::None);
-                let keys = self
-                    .keymap
-                    .chords(command)
-                    .first()
-                    .map(|c| c.text())
-                    .unwrap_or_default();
-                out.push_str(&format!("<button id='{id}' class='segment-button tool-button{}' label='{label}' description='{label} · {keys}' action='Dispatch'>{}</button>",if on{" selected"}else{""},if on{icons::icon_in(id,icon,"on-selection")}else{icons::icon(id,icon)}));
-            }
-            out.push_str("</panel>");
-            // Space and pivot: the icon is the state; the tooltip says what a click does.
-            let local = editor.state.local;
-            let centre = editor.state.centre;
-            for (id, command, icon, state, other) in [
-                (
-                    "tool-space",
-                    "view.space",
-                    if local { "box" } else { "globe" },
-                    if local { "Local axes" } else { "World axes" },
-                    if local { "world axes" } else { "local axes" },
-                ),
-                (
-                    "tool-pivot",
-                    "view.pivot",
-                    if centre { "circle-dot" } else { "crosshair" },
-                    if centre {
-                        "Around the selection centre"
-                    } else {
-                        "Around each pivot"
-                    },
-                    if centre {
-                        "each pivot"
-                    } else {
-                        "the selection centre"
-                    },
-                ),
-            ] {
-                self.bind_command(id, command, Target::None);
-                out.push_str(&format!("<button id='{id}' class='ghost icon-button' label='{state}' description='{state} · click for {other}' action='Dispatch'>{}</button>",icons::icon(id,icon)));
-            }
-            out.push_str("<panel id='snap-sep' class='toolbar-sep' />");
-            // Snapping: one magnet, then the three increments as value menus (muted off).
-            let snap = editor.state.snapping;
-            self.bind_command("snap-toggle", "snap.toggle", Target::None);
-            out.push_str(&format!("<button id='snap-toggle' class='{} icon-button' label='Snapping' description='Snapping is {} · click to turn it {}' action='Dispatch'>{}</button>",if snap{"selected"}else{"ghost"},if snap{"on"}else{"off"},if snap{"off"}else{"on"},if snap{icons::icon_in("snap-toggle","magnet","on-selection")}else{icons::icon("snap-toggle","magnet")}));
-            for (id, command, icon, what, value) in [
-                (
-                    "snap-move",
-                    "snap.grid",
-                    "grid-2x2",
-                    "Move increment",
-                    format!("{} m", editor.state.move_snap),
-                ),
-                (
-                    "snap-rotate",
-                    "snap.rotation",
-                    "rotate-3d",
-                    "Rotate increment",
-                    format!("{}°", editor.state.rotate_snap),
-                ),
-                (
-                    "snap-scale",
-                    "snap.scale",
-                    "scaling",
-                    "Scale increment",
-                    format!("{}", editor.state.scale_snap),
-                ),
-            ] {
-                self.bind_command(id, command, Target::None);
-                let tone = if snap { "fg" } else { "muted" };
-                out.push_str(&format!("<button id='{id}' class='ghost snap-value' label='{what}' description='{what}: {} · click to choose' action='Dispatch'>{}<text id='{id}-text' class='{tone}' text='{}' />{}</button>",escape(&value),icons::icon_in(id,icon,tone),escape(&value),icons::icon_in(&format!("{id}-more"),"chevron-down","icon-sm")));
-            }
-            out.push_str("<panel id='scene-fill' class='fill' />");
-            // Below 820 px the camera and view menus drop their words (last layout).
-            let narrow = self
-                .ui
-                .find("scene-tools")
-                .is_some_and(|i| self.ui.nodes[i].rect.w < 820.);
-            self.tool_menu(
-                out,
-                "view-camera",
-                Context::Camera,
-                "video",
-                if narrow { "" } else { "Perspective" },
-                "Camera views and speed",
-            );
-            // Typed in place; Enter or leaving the field applies it via `editor.camera`.
-            self.bindings
-                .insert(ara_ui::source::stable_id("view-fov"), Binding::CameraFov);
-            out.push_str(&format!("<field id='view-fov' class='number' style='width:42px' text='{}' label='Field of view' description='Vertical field of view in degrees (10–120)' action='Dispatch' />",editor.state.camera.fov_label()));
-            let state = &editor.state;
-            let mode = match state.view_mode.as_str() {
-                "baseColor" => "Base color".into(),
-                "normals" => "Normals".into(),
-                "depth" => "Depth".into(),
-                "roughnessMetal" => "Rough / metal".into(),
-                "entityIds" => "Entity IDs".into(),
-                "shadowCascades" => "Cascades".into(),
-                // Lit shows the preset the view renders with (`Lit · Auto` until detected).
-                _ if narrow => "Lit".into(),
-                _ => format!(
-                    "Lit · {}",
-                    state
-                        .resolve_quality(state.render_choice())
-                        .map_or("Auto", crate::state::preset_title)
-                ),
-            };
-            self.tool_menu(
-                out,
-                "view-mode",
-                Context::ViewModes,
-                "sun-medium",
-                &mode,
-                "View mode and rendering quality",
-            );
-            self.tool_menu(
-                out,
-                "view-show",
-                Context::Show,
-                "eye",
-                "",
-                "Show: grid, outlines, gizmos and overlays",
-            );
-            self.tool_icon(out, "frame", "view.frame", "focus", editor, false);
-            out.push_str("</panel>");
-        }
-        out.push_str("<panel id='scene-surface' style='flex-grow:1;flex-basis:0px;min-height:0px'><image id='viewport-image' src='editor-viewport' style='width:100%;height:100%' label='Scene viewport' />");
-        if !editor.state.hide_overlays && !editor.state.hide_orientation && !editor.state.game_view
-        {
-            self.axis_markup(editor, out);
-        }
-        self.notices_markup(editor, out);
-        self.loading_markup(editor, out);
-        out.push_str("<panel id='gizmo-readout' class='readout' style='left:0px;top:0px'><text id='gizmo-readout-text' class='mono' text='' /></panel></panel>");
     }
 }
 pub(super) fn display(v: &Value) -> String {

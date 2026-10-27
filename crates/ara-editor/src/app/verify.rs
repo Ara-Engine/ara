@@ -47,6 +47,29 @@ impl Verification {
         let mut clipboard = OsClipboard;
         match self.step {
             0 => {
+                self.screenshot(
+                    "titlebar-main",
+                    editor,
+                    shell,
+                    gpu,
+                    ui_renderer,
+                    renderer,
+                    scene_view,
+                )?;
+                shell.click("brand", &mut clipboard)?;
+                shell.dispatch(editor)?;
+                self.screenshot(
+                    "titlebar-about",
+                    editor,
+                    shell,
+                    gpu,
+                    ui_renderer,
+                    renderer,
+                    scene_view,
+                )?;
+                shell.click("dialog-close", &mut clipboard)?;
+                shell.dispatch(editor)?;
+                shell.rebuild(editor)?;
                 self.entity = crate::world::resolve(editor.host.store(), &editor.state.doc)
                     .map_err(|d| format!("{d:?}"))?
                     .iter()
@@ -424,6 +447,7 @@ impl Verification {
                 self.gizmo,
                 &mut shell.outlines,
                 editor.host.store().revision(),
+                &shell.ui.sheet,
             )?;
             shell.outlines.upload(ui_renderer, gpu)?;
             gpu.overlays(rect, overlay::ENTITY_IMAGE, overlays);

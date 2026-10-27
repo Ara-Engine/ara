@@ -6,6 +6,7 @@ mod descriptors;
 mod diagnostics_tests;
 mod environment;
 mod presentation;
+mod priority;
 mod resources;
 pub use resources::image_barrier;
 pub(crate) use resources::{BufferAllocation, ImageAllocation};
@@ -132,6 +133,10 @@ pub struct Diagnostic {
 /// Driver identity and queue capabilities recorded with every measurement.
 #[derive(Serialize)]
 pub struct DeviceInfo {
+    /// Accepted graphics priority request; background/headless devices use medium.
+    pub graphics_global_priority: &'static str,
+    /// Optional priority extension enabled for a windowed device; HIGH can be denied.
+    pub global_priority_extension: Option<&'static str>,
     /// Native device name.
     pub name: String,
     /// PCI vendor identity used by the pipeline cache.
