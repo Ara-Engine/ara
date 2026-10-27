@@ -102,15 +102,21 @@ impl ToolPaths {
             .and_then(Path::parent)
             .map(|p| p.join("dotnet/artifacts/bin"));
         let override_path = std::env::var_os("ARA_DOTNET_ARTIFACTS").map(PathBuf::from);
+        let packaged = exe
+            .as_deref()
+            .and_then(Path::parent)
+            .is_some_and(|dir| dir.join("engine.json").is_file());
         let checkout = project
             .ancestors()
             .chain(exe.as_deref().into_iter().flat_map(Path::ancestors))
+            .filter(|_| !packaged)
             .map(|p| p.join("dotnet/artifacts/bin"));
         installed
             .into_iter()
             .chain(override_path)
             .chain(checkout)
             .find_map(|bin| {
+                let bin = std::fs::canonicalize(bin).ok()?;
                 let compile_server = bin.join("Ara.CompileServer/release/Ara.CompileServer.dll");
                 let host_dir = bin.join("Ara.Host/release");
                 (compile_server.is_file() && host_dir.join("Ara.Host.dll").is_file()).then_some(
@@ -126,6 +132,7 @@ impl ToolPaths {
 /// Return the authoritative module/source inventory under `ara_doc::AUTHORING_ROOT`.
 /// No schemas are inferred by scanning `.ara`; every output path comes from its module.
 pub fn inventory(root: &Path) -> Result<Inventory, Diagnostic> {
+    let root = &std::fs::canonicalize(root).map_err(io)?;
     if !source_hint(&root.join(ara_doc::AUTHORING_ROOT), true)? {
         return Ok(Inventory::default());
     }
@@ -136,6 +143,11 @@ pub fn inventory(root: &Path) -> Result<Inventory, Diagnostic> {
 /// schema results. Compiler errors stay in `diagnostics`, so an editor can display
 /// them while keeping the project open; check/export must reject error results.
 pub fn compile(root: &Path, domain: crate::ModuleProfile) -> Result<Inventory, Diagnostic> {
+    let root = &std::fs::canonicalize(root).map_err(io)?;
+    compile_canonical(root, domain)
+}
+
+fn compile_canonical(root: &Path, domain: crate::ModuleProfile) -> Result<Inventory, Diagnostic> {
     if !source_hint(&root.join(ara_doc::AUTHORING_ROOT), true)? {
         return Ok(Inventory::default());
     }
@@ -147,7 +159,7 @@ pub fn compile(root: &Path, domain: crate::ModuleProfile) -> Result<Inventory, D
 /// when compilation has coded diagnostics; generated outputs never enter game/.
 pub fn publish(root: &Path, domain: crate::ModuleProfile) -> Result<Inventory, Diagnostic> {
     let root = &std::fs::canonicalize(root).map_err(io)?;
-    let mut inventory = compile(root, domain)?;
+    let mut inventory = compile_canonical(root, domain)?;
     for module in &inventory.modules {
         let Some(schema) = &module.schema else {
             continue;
@@ -255,6 +267,7 @@ impl Inventory {
     /// Runtime module descriptors, excluding editor assemblies and refusing any
     /// error in the graph rather than returning a partially loadable player.
     pub fn gameplay_specs(&self, root: &Path) -> Result<Vec<crate::ModuleSpec>, Vec<Diagnostic>> {
+        let root = &std::fs::canonicalize(root).map_err(|error| vec![io(error)])?;
         let errors: Vec<_> = self
             .diagnostics
             .iter()
@@ -296,9 +309,7 @@ fn source_hint(directory: &Path, root: bool) -> Result<bool, Diagnostic> {
         }
         let name = entry.file_name().to_string_lossy().into_owned();
         if kind.is_dir() {
-            if ![".ara", ".git", "packages"].contains(&name.as_str())
-                && source_hint(&entry.path(), false)?
-            {
+            if ![".ara", ".git"].contains(&name.as_str()) && source_hint(&entry.path(), false)? {
                 return Ok(true);
             }
         } else if name.to_ascii_lowercase().ends_with(".cs")

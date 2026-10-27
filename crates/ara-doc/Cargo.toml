@@ -14,10 +14,18 @@ sha2.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 
+[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
+unicode-casefold = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+unicode-normalization = "0.1"
+
 [dev-dependencies]
 ara-components.workspace = true
 insta = { workspace = true }
 proptest = { workspace = true }
+unicode-casefold = "0.2"
+unicode-normalization = "0.1"
 
 [lints]
 workspace = true

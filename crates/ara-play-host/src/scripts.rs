@@ -290,12 +290,13 @@ name=\"Root\"
             r#"{"name":"Nested"}"#,
         )
         .unwrap();
+        let canonical = std::fs::canonicalize(&root).unwrap();
         assert_eq!(
             modules(&root).unwrap(),
             vec![
-                root.join(".ara/scripts/Gameplay"),
-                root.join(".ara/scripts/Nested"),
-                root.join(".ara/scripts/Root")
+                canonical.join(".ara/scripts/Gameplay"),
+                canonical.join(".ara/scripts/Nested"),
+                canonical.join(".ara/scripts/Root")
             ]
         );
         std::fs::remove_dir_all(root).unwrap();

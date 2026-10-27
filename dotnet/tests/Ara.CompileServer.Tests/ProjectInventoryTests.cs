@@ -3,6 +3,21 @@ namespace Ara.CompileServer.Tests;
 public sealed class ProjectInventoryTests
 {
     [Fact]
+    public async Task Packages_inside_authored_content_are_sources_but_project_packages_are_not()
+    {
+        var root = InstalledTools.Scratch("authored-packages");
+        Directory.CreateDirectory(Path.Combine(root, "game", "packages", "nested"));
+        Directory.CreateDirectory(Path.Combine(root, "packages", "plugin"));
+        File.WriteAllText(Path.Combine(root, "game", "packages", "nested", "Utility.cs"), "public static class Utility { public static int Value => 7; }");
+        File.WriteAllText(Path.Combine(root, "packages", "plugin", "Wrong.cs"), "#error project plugin packages are not authored source");
+        using var result = await InstalledTools.Run("--compile-project", new { project=root, authoringRoot="game", domain="gameplay" });
+        Assert.Empty(result.RootElement.GetProperty("diagnostics").EnumerateArray());
+        var source = Assert.Single(result.RootElement.GetProperty("sources").EnumerateArray());
+        Assert.Equal("packages/nested/Utility.cs", source.GetProperty("path").GetString());
+        Assert.Equal("compiled", result.RootElement.GetProperty("modules")[0].GetProperty("result").GetString());
+    }
+
+    [Fact]
     public async Task Helper_only_modules_have_loadable_registration_and_explicit_inputs()
     {
         var root = InstalledTools.Scratch("helper-module");

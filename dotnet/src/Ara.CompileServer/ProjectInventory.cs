@@ -112,7 +112,7 @@ internal static class ProjectInventory
                 if ((attributes & FileAttributes.Directory) != 0)
                 {
                     var name = Path.GetFileName(path);
-                    if (name is ".ara" or ".git" or "packages") continue;
+                    if (name is ".ara" or ".git") continue;
                     Walk(path, owner, editor);
                 }
                 else if (Path.GetExtension(path).Equals(".cs", StringComparison.OrdinalIgnoreCase))
