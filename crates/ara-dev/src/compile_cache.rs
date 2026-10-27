@@ -7,6 +7,103 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
+use serde::Serialize;
+
+/// Gate builds are usually cold after disk cleanup. Avoid multi-GB incremental
+/// writes, which also make Rust libraries ineligible for the optional sccache.
+#[derive(Serialize)]
+pub(crate) struct GatePolicy {
+    pub(crate) incremental: String,
+    pub(crate) cache: &'static str,
+    #[serde(skip)]
+    wrapper: Option<OsString>,
+}
+
+impl GatePolicy {
+    pub(crate) fn from_env(bypass: bool) -> Self {
+        Self::new(
+            bypass,
+            std::env::var_os("ARA_SHARED_BUILD_DIR").is_some_and(|v| !v.is_empty()),
+            std::env::var_os("CARGO_INCREMENTAL")
+                .or_else(|| std::env::var_os("CARGO_BUILD_INCREMENTAL")),
+            std::env::var_os("RUSTC_WRAPPER"),
+            optional_sccache(),
+        )
+    }
+
+    fn new(
+        bypass: bool,
+        shared: bool,
+        incremental: Option<OsString>,
+        wrapper: Option<OsString>,
+        installed: Option<OsString>,
+    ) -> Self {
+        let incremental =
+            incremental.map_or_else(|| "0".into(), |v| v.to_string_lossy().into_owned());
+        let (cache, wrapper) = if bypass || shared {
+            (
+                if shared {
+                    "shared Cargo fingerprints"
+                } else {
+                    "disabled by flag"
+                },
+                Some(OsString::new()),
+            )
+        } else if incremental == "1" && wrapper.as_ref().is_none_or(|v| is_sccache(v)) {
+            // sccache 0.18 exits before compilation when CARGO_INCREMENTAL=1.
+            // Preserve the requested probe/debug mode using Cargo's own cache.
+            ("incremental requires direct rustc", Some(OsString::new()))
+        } else if let Some(wrapper) = wrapper {
+            (
+                if wrapper.is_empty() {
+                    "disabled by environment"
+                } else {
+                    "caller wrapper"
+                },
+                Some(wrapper),
+            )
+        } else if let Some(installed) = installed {
+            ("optional sccache", Some(installed))
+        } else {
+            ("Cargo configured wrapper or direct rustc", None)
+        };
+        Self {
+            incremental,
+            cache,
+            wrapper,
+        }
+    }
+
+    pub(crate) fn bypassed(&self) -> bool {
+        self.wrapper.as_ref().is_some_and(|v| v.is_empty())
+    }
+
+    pub(crate) fn apply(&self, command: &mut Command) {
+        command.env("CARGO_INCREMENTAL", &self.incremental);
+        if let Some(wrapper) = &self.wrapper {
+            command.env("RUSTC_WRAPPER", wrapper);
+        }
+        // Retry mid-compile server I/O loss through the cache's direct compiler
+        // fallback. Startup/configuration errors remain actionable (--no-compiler-cache).
+        if std::env::var_os("SCCACHE_IGNORE_SERVER_IO_ERROR").is_none() {
+            command.env("SCCACHE_IGNORE_SERVER_IO_ERROR", "1");
+        }
+    }
+}
+
+fn optional_sccache() -> Option<OsString> {
+    let name = format!("sccache{}", std::env::consts::EXE_SUFFIX);
+    std::env::split_paths(&std::env::var_os("PATH")?)
+        .map(|directory| directory.join(&name))
+        .find(|path| path.is_file())
+        .map(PathBuf::into_os_string)
+}
+
+fn is_sccache(value: &std::ffi::OsStr) -> bool {
+    Path::new(value)
+        .file_stem()
+        .is_some_and(|name| name.eq_ignore_ascii_case("sccache"))
+}
 
 pub(crate) struct Lease {
     _file: File,
@@ -98,6 +195,49 @@ pub(crate) fn cargo(root: &Path, args: &[OsString]) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn gate_cache_is_optional_and_nonincremental_without_changing_focused_defaults() {
+        let installed = Some(OsString::from("available/sccache"));
+        let auto = GatePolicy::new(false, false, None, None, installed.clone());
+        assert_eq!(auto.incremental, "0");
+        assert_eq!(auto.cache, "optional sccache");
+        assert!(!auto.bypassed());
+        let mut gate = Command::new("cargo");
+        auto.apply(&mut gate);
+        assert_eq!(
+            gate.get_envs()
+                .find(|(name, _)| *name == "CARGO_INCREMENTAL")
+                .and_then(|(_, v)| v),
+            Some(std::ffi::OsStr::new("0"))
+        );
+        let absent = GatePolicy::new(false, false, None, None, None);
+        assert!(absent.wrapper.is_none(), "do not require installing a tool");
+        let incremental = GatePolicy::new(false, false, Some("1".into()), None, installed.clone());
+        assert!(
+            incremental.bypassed(),
+            "sccache rejects an explicit incremental build"
+        );
+        for (bypass, shared) in [(true, false), (false, true)] {
+            let policy = GatePolicy::new(bypass, shared, Some("1".into()), None, installed.clone());
+            assert!(policy.bypassed());
+            assert_eq!(
+                policy.incremental, "1",
+                "preserve explicit measurement override"
+            );
+        }
+        for wrapper in [OsString::new(), "custom-wrapper".into()] {
+            let policy =
+                GatePolicy::new(false, false, None, Some(wrapper.clone()), installed.clone());
+            assert_eq!(policy.wrapper, Some(wrapper));
+        }
+        let mut focused = Command::new("cargo");
+        configure_with(&mut focused, None, false);
+        assert!(
+            !focused
+                .get_envs()
+                .any(|(key, _)| key == "CARGO_INCREMENTAL")
+        );
+    }
     #[test]
     fn explicit_build_jobs_survive_both_cache_modes_and_unset_defaults_to_two() {
         for shared in [false, true] {
