@@ -90,6 +90,14 @@ impl Presenter {
         self.options = options;
     }
 
+    /// Take GPU pass timestamps (on by default). Off, Metal skips its timestamp
+    /// dispatches and `stats().gpu_ms` and `pass_timings` stay empty. On the M5 Pro
+    /// that measured neutral (Outpost) to 1.4% slower (Showcase), so players keep
+    /// the default; it exists for overhead measurements.
+    pub fn set_pass_timing(&mut self, enabled: bool) {
+        self.pass_timing = enabled;
+    }
+
     /// Enable/disable raster probe GI (enabled by default): content is acquired once
     /// in the background (ray-traced on a separate device, cached on disk by
     /// content) and relit every frame; frames show sky-only ambient until then.
@@ -190,6 +198,7 @@ impl Presenter {
             .renderer
             .as_mut()
             .context("presentation device initialized")?;
+        renderer.gpu_mut().set_pass_timing(self.pass_timing);
         renderer.gpu_mut().reset_timing_window();
         let plan = Plan::resolve(
             self.choice,

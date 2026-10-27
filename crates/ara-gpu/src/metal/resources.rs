@@ -27,6 +27,14 @@ pub(super) struct NativeImage {
     pub storage: Option<crate::HeapIndex>,
 }
 
+impl NativeImage {
+    /// A transient attachment in tile memory only, with no allocation to make resident.
+    pub fn memoryless(&self) -> bool {
+        self.usage
+            .contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT)
+    }
+}
+
 pub(super) fn buffer(
     device: &ProtocolObject<dyn MTLDevice>,
     size: u64,
@@ -94,7 +102,15 @@ pub(super) fn image(
     // SAFETY: `levels` was checked against the full mip chain of this extent.
     unsafe { descriptor.setMipmapLevelCount(levels as usize) };
     descriptor.setUsage(texture_usage(usage));
-    descriptor.setStorageMode(MTLStorageMode::Private);
+    crate::attachments::validate_usage(usage)?;
+    // Transient attachments live in tile memory only, with no backing allocation.
+    descriptor.setStorageMode(
+        if usage.contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT) {
+            MTLStorageMode::Memoryless
+        } else {
+            MTLStorageMode::Private
+        },
+    );
     let texture = device
         .newTextureWithDescriptor(&descriptor)
         .ok_or_else(|| nil("texture"))?;

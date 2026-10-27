@@ -572,6 +572,82 @@ fn clear_depth_clears_only_its_tile_and_leaves_color_untouched() {
 }
 
 #[test]
+fn a_transient_depth_is_memoryless_and_lives_within_one_scope() {
+    let mut gpu = device();
+    gpu.msl_clear();
+    let transient =
+        vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::TRANSIENT_ATTACHMENT;
+    let depth = gpu
+        .create_image(8, 8, vk::Format::D32_SFLOAT, transient)
+        .expect("transient depth");
+    let storage = gpu
+        .images
+        .get(depth)
+        .expect("depth")
+        .raw
+        .texture
+        .storageMode();
+    assert_eq!(storage, MTLStorageMode::Memoryless);
+    assert!(matches!(
+        gpu.create_image(
+            8,
+            8,
+            vk::Format::D32_SFLOAT,
+            transient | vk::ImageUsageFlags::SAMPLED
+        ),
+        Err(GpuError::Contract(_))
+    ));
+    let color = gpu
+        .create_image(
+            8,
+            8,
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+        )
+        .expect("color");
+    let colors = gpu.create_readback_buffer(256).expect("color readback");
+    // Two scopes: the transient depth is cleared and written in tile memory each time,
+    // never loaded or stored (Metal rejects either on a memoryless texture).
+    let mut rec = gpu.begin(Queue::Graphics);
+    for clear in [Some([0., 0., 1., 1.]), None] {
+        rec.push(Command::BeginRendering {
+            colors: vec![Attachment {
+                image: color,
+                clear,
+            }],
+            depth: Some(Attachment {
+                image: depth,
+                clear: Some([1.; 4]),
+            }),
+            size: [8, 8],
+        });
+        rec.push(Command::ClearDepth {
+            origin: [2, 4],
+            size: [4, 2],
+            depth: 0.25,
+        });
+        rec.push(Command::EndRendering);
+    }
+    rec.barriers([Barrier {
+        resource: Resource::Image(color),
+        before: Access::Color,
+        after: Access::CopySource,
+        handoff: None,
+    }]);
+    rec.push(Command::ReadImage {
+        source: color,
+        destination: colors,
+    });
+    let point = gpu.submit(rec.finish(), &[]).expect("submit");
+    gpu.resolve(point).expect("resolve");
+    let pixels = words(&gpu.read(colors).expect("read color"));
+    assert!(
+        pixels.iter().all(|&p| p == 0xffff_0000),
+        "color kept across scopes"
+    );
+}
+
+#[test]
 fn the_cooked_clear_pipeline_resolves_and_names_missing_converter_artifacts() {
     let gpu = device();
     // Until the canonical host cooks metallibs, loading names the missing lane;

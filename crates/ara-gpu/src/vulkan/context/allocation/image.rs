@@ -36,14 +36,30 @@ pub(crate) fn image(
         let mut view = vk::ImageView::null();
         let result = (|| -> Result<_> {
             let req = device.get_image_memory_requirements(handle);
+            let device_local = || {
+                memory_type(
+                    memory_properties,
+                    req.memory_type_bits,
+                    vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                )
+            };
+            // Transient attachments prefer memory that tile-based GPUs never commit;
+            // desktop GPUs have none and use ordinary device-local memory.
+            let index = if usage.contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT) {
+                memory_type(
+                    memory_properties,
+                    req.memory_type_bits,
+                    vk::MemoryPropertyFlags::DEVICE_LOCAL
+                        | vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
+                )
+                .or_else(|_| device_local())?
+            } else {
+                device_local()?
+            };
             memory = device.allocate_memory(
                 &vk::MemoryAllocateInfo::default()
                     .allocation_size(req.size)
-                    .memory_type_index(memory_type(
-                        memory_properties,
-                        req.memory_type_bits,
-                        vk::MemoryPropertyFlags::DEVICE_LOCAL,
-                    )?),
+                    .memory_type_index(index),
                 None,
             )?;
             device.bind_image_memory(handle, memory, 0)?;

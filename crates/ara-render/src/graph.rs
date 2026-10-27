@@ -32,6 +32,8 @@ pub struct TransientImage {
 struct GraphResource {
     resource: Resource,
     state: State,
+    /// Contents are dead after the last use (`Graph::discard`).
+    discard: bool,
 }
 struct Pass {
     name: String,
@@ -71,7 +73,11 @@ impl Graph {
     /// Import owned storage with its actual last usage and queue.
     pub fn import(&mut self, resource: Resource, state: State) -> ResourceId {
         let id = ResourceId(self.resources.len());
-        self.resources.push(GraphResource { resource, state });
+        self.resources.push(GraphResource {
+            resource,
+            state,
+            discard: false,
+        });
         id
     }
     /// Allocate a transient image and import it in Undefined state.
@@ -109,6 +115,18 @@ impl Graph {
             after: BTreeSet::new(),
         });
         id
+    }
+    /// Declare that nothing outside this graph reads the resource's contents after
+    /// its last use here, and the next graph does not read them before writing. The
+    /// last using pass ends with a discard barrier (`after: Access::Undefined`), so
+    /// tile-based GPUs skip storing (and, for colour targets, loading) them, and the
+    /// final state is Undefined.
+    pub fn discard(&mut self, id: ResourceId) -> Result<()> {
+        self.resources
+            .get_mut(id.0)
+            .ok_or_else(|| anyhow::anyhow!("Unknown graph resource"))?
+            .discard = true;
+        Ok(())
     }
     /// Add a semantic ordering edge, for side effects not expressed as resources.
     pub fn after(&mut self, pass: PassId, dependency: PassId) -> Result<()> {
@@ -255,6 +273,17 @@ impl Graph {
             passes[index].waits.sort_unstable();
             passes[index].waits.dedup();
         }
+        for (id, resource) in self.resources.iter().enumerate() {
+            if let (true, Some(last)) = (resource.discard, last_pass[id]) {
+                passes[last].after.push(Barrier {
+                    resource: resource.resource,
+                    before: states[id].access,
+                    after: Access::Undefined,
+                    handoff: None,
+                });
+                states[id].access = Access::Undefined;
+            }
+        }
         Ok(CompiledGraph {
             passes,
             final_states: states,
@@ -291,6 +320,30 @@ mod tests {
         assert_eq!(release.before, acquire.before);
         assert_eq!(release.after, acquire.after);
         assert_eq!(c.passes[1].waits, [0]);
+    }
+    #[test]
+    fn a_discarded_resource_ends_its_last_pass_undefined() {
+        let mut g = Graph::default();
+        let state = State {
+            access: Access::ShaderRead,
+            queue: Queue::Graphics,
+        };
+        let (kept, dead) = (g.import(buffer(), state), g.import(buffer(), state));
+        g.discard(dead).unwrap();
+        let both = [(kept, Access::Color), (dead, Access::Color)];
+        g.pass("gbuffer", Queue::Graphics, both);
+        g.pass("forward", Queue::Graphics, both);
+        let c = g.compile().unwrap();
+        assert!(c.passes[0].after.is_empty());
+        let discard = c.passes[1].after[0];
+        assert_eq!(discard.resource, g.resources[dead.0].resource);
+        assert_eq!(
+            (discard.before, discard.after),
+            (Access::Color, Access::Undefined)
+        );
+        assert_eq!(c.passes[1].after.len(), 1);
+        assert_eq!(c.final_states[dead.0].access, Access::Undefined);
+        assert_eq!(c.final_states[kept.0].access, Access::Color);
     }
     #[test]
     fn rejects_cycles_and_uninitialized_reads() {
