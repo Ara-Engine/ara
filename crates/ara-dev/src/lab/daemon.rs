@@ -41,6 +41,8 @@ struct Lab {
     max_sessions: u32,
     binaries: crate::binaries::Binaries,
     build: Option<Build>,
+    dependency_job: Option<super::dependencies::IndexJob>,
+    dependency_stamp: Option<(u64, std::time::SystemTime)>,
     rebuild: bool,
     next_build: Instant,
     last_build: Value,
@@ -93,6 +95,16 @@ impl Lab {
     }
     fn tick(&mut self) -> Result<()> {
         self.publish_import()?;
+        if let Some(job) = &mut self.dependency_job
+            && let Some(status) = job.child.try_wait()?
+        {
+            let job = self.dependency_job.take().context("dependency index job")?;
+            self.event(
+                "shader_dependency_index",
+                json!({"success":status.success(),"log":job.log}),
+            );
+        }
+
         let mut finished = Vec::new();
         if let Some(executable) = self.binaries.get("ara-player").cloned() {
             for (name, pending) in &mut self.preparing {
@@ -133,6 +145,7 @@ impl Lab {
         }
         self.activity.compiling.store(
             self.build.is_some()
+                || self.dependency_job.is_some()
                 || self.cook.is_some()
                 || !self.cooks.is_empty()
                 || self.rebuild
@@ -154,17 +167,34 @@ impl Lab {
                     .rust_latest
                     .store(false, std::sync::atomic::Ordering::Release);
             }
+            if !path
+                .extension()
+                .is_some_and(|e| e == "slang" || e == "slangh" || e == "h")
+                && !path.file_name().is_some_and(|n| n == "pipelines.json")
+            {
+                continue;
+            }
+            if cfg!(target_os = "macos") {
+                continue;
+            }
             for manifest in self.watch.manifests() {
-                if path.starts_with(manifest.parent().context("shader source parent")?) {
+                if super::dependencies::affected(
+                    &self.root, &self.base, &manifest, "baseline", path,
+                )? {
                     self.cooks.insert(("baseline".into(), manifest.clone()));
-                    let relative = manifest.strip_prefix(&self.root)?;
-                    for name in self.variants.affected(relative) {
-                        self.variants.queued(&name, relative);
+                }
+                for name in self.variants.affected(manifest.strip_prefix(&self.root)?) {
+                    if super::dependencies::affected(
+                        &self.root, &self.base, &manifest, &name, path,
+                    )? {
+                        self.variants
+                            .queued(&name, manifest.strip_prefix(&self.root)?);
                         self.cooks.insert((name, manifest.clone()));
                     }
                 }
             }
         }
+
         if !changes.is_empty() {
             self.variants.save(&self.base)?;
             self.event("source_changes", json!(changes));
@@ -275,6 +305,23 @@ impl Lab {
         self.last_build["player_reused"] = json!(reused);
         self.binaries = binaries;
         session::write(&self.base.join("binaries.json"), &self.binaries)?;
+        if !cfg!(target_os = "macos")
+            && let Some(executable) = self.binaries.get("ara-shader-cook")
+        {
+            let meta = fs::metadata(executable)?;
+            let stamp = (meta.len(), meta.modified()?);
+            if self.dependency_stamp.as_ref() != Some(&stamp) && self.dependency_job.is_none() {
+                self.dependency_job = Some(super::dependencies::prime(
+                    &self.root,
+                    &self.base,
+                    executable,
+                    &self.watch.manifests(),
+                    &self.variants,
+                )?);
+                self.dependency_stamp = Some(stamp);
+            }
+        }
+
         if !reused {
             session::write(
                 &self.base.join("generation.json"),
@@ -453,6 +500,8 @@ pub(crate) fn run_with_strategy(
         max_sessions,
         binaries: Default::default(),
         build: None,
+        dependency_job: None,
+        dependency_stamp: None,
         rebuild: true,
         next_build: Instant::now(),
         last_build: Value::Null,

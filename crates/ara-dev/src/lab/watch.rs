@@ -72,10 +72,15 @@ impl Watch {
             self.pending = current;
             self.changed_at = Some(Instant::now());
         }
-        if self
-            .changed_at
-            .is_none_or(|t| t.elapsed() < Duration::from_millis(400))
-        {
+        let rust_changed = self.files.keys().chain(self.pending.keys()).any(|path| {
+            self.files.get(path) != self.pending.get(path)
+                && path
+                    .extension()
+                    .is_some_and(|e| e == "rs" || e == "toml" || e == "lock")
+        });
+        if self.changed_at.is_none_or(|t| {
+            t.elapsed() < Duration::from_millis(if rust_changed { 400 } else { 100 })
+        }) {
             return Ok(Vec::new());
         }
         let changed = self

@@ -336,7 +336,10 @@ JSON-RPC. All CLI results are JSON. Track names are independent of agent claims;
 claim overlaps warn and retain both owners. Claims never prevent an edit.
 
 The daemon watches every `pipelines.json` (including generated VFX), with a
-400 ms source debounce. Cooks publish under `target/ara-dev/lab/shaders`, leaving
+100 ms shader debounce and 400 ms Rust debounce. Literal source/include dependency
+indexes skip unrelated packages and variant siblings; uncertain imports fall back
+to conservative invalidation. Each cook reuses unchanged pipelines. Cooks publish
+under `target/ara-dev/lab/shaders`, leaving
 tracked cooked files untouched. Existing cooked outputs seed the cache. Rust
 edits queue a single incremental build. Successful binaries are copied to a new
 generation before starting replacements, avoiding Windows executable locking.
@@ -509,6 +512,34 @@ byte. An unchanged player keeps its PID, selection and temporal cache generation
 A native no-op rebuild took 2.60 s (2.20 s in Cargo) with the same PID and generation.
 Hotpatch strategies opt into this optimization explicitly; a successful patch still
 advances the quality-cache generation even when it requests no restart.
+
+The PC shader-save target was measured again on 2026-10-28 using an isolated
+four-pipeline post variant, three real source changes and no reload requests:
+
+| Stage | M2 four workers, before | After dependency/publication changes |
+|---|---:|---:|
+| Save to debounced detection | 0.676–0.706 s | 0.311–0.318 s |
+| Cook child, including startup | 2.073–2.752 s, including unrelated baseline cook | 0.901–1.024 s, four affected pipelines only |
+| Publish profile and player view | Full-tree copies; not separately instrumented | 0.310–0.314 s |
+| Metadata and SPIR-V load | Not separately instrumented | 6.84–8.02 ms |
+| Native PSO creation | Not separately instrumented | 117.37–214.60 ms |
+| Save to first new warm frame, observed status | 6.124–6.803 s | **1.803, 1.802, 1.814 s** |
+
+The earlier loaded outlier reached the new epoch after 20.82 s. Its final
+`compile_ms` combined load/PSO field could describe a forced no-op reload, so it is
+not used to infer the missing stage splits. New status exposes `load_ms`, `pso_ms`
+and a correlated `shader_reload` request/first-frame timestamp. The first-frame
+timestamps themselves were 1.780–1.808 s after save; status observation is a
+conservative bound. These are iteration latency observations under concurrent
+build load, not GPU performance comparisons.
+
+The lab caches the SDK fingerprint while its executable/DLL identity is unchanged,
+publishes only affected cohorts into existing views, and avoids rebasing a variant
+unless its recipe changes. A recipe change still restores removed overrides from
+baseline. Compilation and native PSO creation remain asynchronous; drawing uses the
+old PSO until the new cohort is ready. A visual reload does not start a timing
+window or pay measurement warmup. Evidence is under
+`target/lab-baseline/shader-latency/{m2-baseline,after-fastpath}.json`.
 
 The Mac mirror is experimental until native build and Metal validation pass. The PC endpoint owns its transport:
 

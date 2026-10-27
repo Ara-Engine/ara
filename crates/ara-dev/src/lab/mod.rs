@@ -3,6 +3,7 @@ mod ab;
 pub(crate) mod build;
 mod claims;
 mod daemon;
+mod dependencies;
 mod generations;
 mod mac;
 mod mirror;

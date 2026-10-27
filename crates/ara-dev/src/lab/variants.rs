@@ -15,6 +15,8 @@ pub(super) struct Recipe {
 }
 #[derive(Deserialize, Serialize)]
 struct Definition {
+    #[serde(default = "rebase")]
+    rebase: bool,
     recipe: Recipe,
     #[serde(default)]
     pending: BTreeSet<PathBuf>,
@@ -25,6 +27,9 @@ struct Definition {
 }
 #[derive(Default, Deserialize, Serialize)]
 pub(super) struct Variants(BTreeMap<String, Definition>);
+fn rebase() -> bool {
+    true
+}
 
 impl Variants {
     pub fn load(base: &Path) -> Self {
@@ -82,6 +87,7 @@ impl Variants {
         self.0.insert(
             name.into(),
             Definition {
+                rebase: true,
                 recipe,
                 pending: Default::default(),
                 results: Default::default(),
@@ -154,17 +160,22 @@ impl Variants {
         );
         Ok(())
     }
-    pub fn publish(&mut self, root: &Path, base: &Path, name: &str) -> Result<()> {
+    pub fn publish(&mut self, root: &Path, base: &Path, name: &str) -> Result<bool> {
         let v = self.0.get_mut(name).context("unknown variant")?;
         let destination = profile(base, name);
-        publish_tree(&profile(base, "baseline"), &destination)?;
+        let rebased = !v.published || v.rebase;
+        if rebased {
+            publish_tree(&profile(base, "baseline"), &destination)?;
+        }
         for manifest in v.recipe.packages.keys() {
             let source = watch::output(root, &cache(base, name), &root.join(manifest))?;
             let relative = source.strip_prefix(cache(base, name).join("shaders"))?;
             publish_tree(&source, &destination.join(relative))?;
         }
         v.published = true;
-        self.save(base)
+        v.rebase = false;
+        self.save(base)?;
+        Ok(rebased)
     }
     pub fn baseline_changed(
         &self,
@@ -262,4 +273,49 @@ pub(super) fn publish_tree(source: &Path, destination: &Path) -> Result<()> {
         fs::rename(temporary, target)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn changed_recipe_rebases_removed_overrides_before_publication() -> Result<()> {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/lab-tests")
+            .join(session::id());
+        let base = root.join("lab");
+        fs::create_dir_all(base.join("shaders/crates/a/cooked"))?;
+        let manifest = root.join("crates/a/shaders/pipelines.json");
+        fs::create_dir_all(manifest.parent().context("manifest parent")?)?;
+        fs::write(&manifest, b"{}")?;
+        fs::write(base.join("shaders/crates/a/cooked/a.json"), b"baseline")?;
+        let other = root.join("crates/b/shaders/pipelines.json");
+        fs::create_dir_all(other.parent().context("other parent")?)?;
+        fs::write(&other, b"{}")?;
+        fs::create_dir_all(base.join("shaders/crates/b/cooked"))?;
+        fs::write(base.join("shaders/crates/b/cooked/b.json"), b"baseline-b")?;
+        let manifests = [manifest.clone(), other.clone()];
+        let mut variants = Variants::default();
+        let recipe = json!({"packages":{"crates/a/shaders/pipelines.json":{"pipelines":{"a":{"defines":{"TEST":"1"}}}},"crates/b/shaders/pipelines.json":{"pipelines":{"b":{"defines":{"TEST":"1"}}}}}});
+        variants.register(&base, "test", recipe, &manifests, &root)?;
+        for (manifest, file) in [(&manifest, "a.json"), (&other, "b.json")] {
+            let output = watch::output(&root, &cache(&base, "test"), manifest)?;
+            fs::create_dir_all(&output)?;
+            fs::write(output.join(file), b"variant")?;
+        }
+        variants.publish(&root, &base, "test")?;
+        let recipe = json!({"packages":{"crates/a/shaders/pipelines.json":{"pipelines":{"a":{"defines":{"TEST":"2"}}}}}});
+        variants.register(&base, "test", recipe, &manifests, &root)?;
+        variants.publish(&root, &base, "test")?;
+        assert_eq!(
+            fs::read(profile(&base, "test").join("crates/a/cooked/a.json"))?,
+            b"variant"
+        );
+        assert_eq!(
+            fs::read(profile(&base, "test").join("crates/b/cooked/b.json"))?,
+            b"baseline-b"
+        );
+        fs::remove_dir_all(root)?;
+        Ok(())
+    }
 }

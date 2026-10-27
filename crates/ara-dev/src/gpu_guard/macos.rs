@@ -11,6 +11,16 @@ use std::{
     time::Instant,
 };
 
+// Mach's public SDK ABI; libc omits port deallocation and deprecates its host helper.
+unsafe extern "C" {
+    fn mach_host_self() -> libc::mach_port_t;
+    fn mach_port_deallocate(
+        task: libc::mach_port_t,
+        name: libc::mach_port_t,
+    ) -> libc::kern_return_t;
+    static mach_task_self_: libc::mach_port_t;
+}
+
 #[repr(C)]
 struct Usage {
     uuid: [u8; 16],
@@ -98,7 +108,7 @@ pub(super) fn cpu() -> Result<cpu::Raw> {
     let mut ticks: libc::host_cpu_load_info = unsafe { std::mem::zeroed() };
     let mut count = libc::HOST_CPU_LOAD_INFO_COUNT;
     // SAFETY: obtain one query-only send right, released below on every path.
-    let host = unsafe { libc::mach_host_self() };
+    let host = unsafe { mach_host_self() };
     // SAFETY: four natural_t counters and their exact count are writable.
     let status = unsafe {
         libc::host_statistics(
@@ -109,7 +119,7 @@ pub(super) fn cpu() -> Result<cpu::Raw> {
         )
     };
     // SAFETY: release exactly the host send right obtained above.
-    unsafe { libc::mach_port_deallocate(libc::mach_task_self(), host) };
+    unsafe { mach_port_deallocate(mach_task_self_, host) };
     ensure!(
         status == 0 && count == libc::HOST_CPU_LOAD_INFO_COUNT,
         "host CPU ticks unavailable: {status}"

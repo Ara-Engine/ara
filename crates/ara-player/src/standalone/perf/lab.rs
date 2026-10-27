@@ -200,8 +200,24 @@ impl Capture {
         Ok(metrics)
     }
 }
+#[cfg(feature = "fidelity-lab")]
+#[derive(serde::Serialize)]
+pub(super) struct ShaderReload {
+    pub requested_epoch: u64,
+    pub request_unix_ms: u64,
+    pub first_new_frame_unix_ms: Option<u64>,
+}
+#[cfg(feature = "fidelity-lab")]
+pub(super) fn unix_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
 #[derive(Default)]
 pub(super) struct State {
+    #[cfg(feature = "fidelity-lab")]
+    pub shader_reload: Option<ShaderReload>,
     pub camera: Option<CameraView>,
     pub capture: Option<Capture>,
     pub reply: Option<PathBuf>,
@@ -213,6 +229,8 @@ pub(super) struct State {
     pub temporal: Option<TemporalRequest>,
     #[cfg(feature = "fidelity-lab")]
     pub repaint: bool,
+    #[cfg(feature = "fidelity-lab")]
+    pub reloading: bool,
 }
 impl State {
     pub fn respond(&mut self, value: &Value) -> Result<()> {
@@ -236,7 +254,7 @@ impl Window {
         let idle = self.options.lab_idle && !self.collecting && self.lab.capture.is_none();
         #[cfg(feature = "fidelity-lab")]
         {
-            idle && self.lab.temporal.is_none() && !self.lab.repaint
+            idle && self.lab.temporal.is_none() && !self.lab.repaint && !self.lab.reloading
         }
         #[cfg(not(feature = "fidelity-lab"))]
         {
