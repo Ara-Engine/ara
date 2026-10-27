@@ -452,6 +452,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             }
             if let Some(check) = &mut content_drags {
                 let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                let scene_ready =
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
                 check.inject(
                     &mut editor,
                     &mut shell,
@@ -460,6 +462,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     scale,
                     &scene_view,
                     &mut events,
+                    scene_ready,
                 )?;
             }
             if content_drags
@@ -467,10 +470,15 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 .is_some_and(content_drags::ContentDrags::finished)
                 && navigation_check.is_none()
             {
-                navigation_check = Some(navigation_verify::NavigationCheck::new(&options.output));
+                navigation_check = Some(navigation_verify::NavigationCheck::new(
+                    &editor,
+                    &options.output,
+                )?);
             }
             if let Some(check) = &mut navigation_check {
                 let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                let scene_ready =
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
                 check.inject(
                     &mut editor,
                     &mut shell,
@@ -478,6 +486,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     scale,
                     &scene_view,
                     &mut events,
+                    scene_ready,
                 )?;
             }
             if navigation_check
@@ -1602,15 +1611,24 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 }
             }
             if let Some(check) = &mut content_drags {
-                check.end(&editor, &mut shell, &mut gpu, &floats)?;
-            }
-            if let Some(check) = &mut navigation_check {
                 check.end(
                     &editor,
+                    &mut shell,
+                    &mut gpu,
+                    &floats,
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision),
+                )?;
+            }
+            if let Some(check) = &mut navigation_check {
+                let scene_ready =
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
+                check.end(
+                    &mut editor,
                     &shell,
                     &mut gpu,
                     &scene_view,
                     frame_start.elapsed().as_secs_f64() * 1000.,
+                    scene_ready,
                 )?;
             }
             if let Some(check) = &mut selection_check {
@@ -1917,6 +1935,17 @@ fn headless(options: Options) -> ara_ui::Result<()> {
     editor.host.flush();
     renderer.gpu().assert_clean()?;
     Ok(())
+}
+fn verification_scene_ready(
+    renderer: &Renderer,
+    scene: &viewport::SceneView,
+    editor: &Editor,
+    revision: u64,
+) -> bool {
+    revision == editor.host.store().revision()
+        && renderer.presentation_ready()
+        && scene.snap_ready(&editor.state.doc)
+        && !scene.needs_frame(editor.state.quality)
 }
 fn extent_scaled(rect: ara_ui::paint::Box2, dpi: f32) -> [u32; 2] {
     [

@@ -7,6 +7,51 @@ use glam::{Mat4, Vec3, Vec4};
 use std::collections::BTreeSet;
 
 impl SceneView {
+    /// Bounds from the published native instances of one exact imported model
+    /// generation. A loading shape or a preceding model generation cannot pass.
+    pub(in crate::app) fn selected_imported_bounds(
+        &self,
+        selection: &[String],
+        channels: &Channels,
+        asset: &str,
+        digest: ara_asset::Digest,
+    ) -> Option<[Vec3; 2]> {
+        let frame = self.raster_frame.as_ref()?;
+        let scene = self.raster.as_ref()?.scene()?;
+        let mut bounds: Option<[Vec3; 2]> = None;
+        for draw in &frame.draws {
+            let Some(address) = channels.target_of(draw.entity) else {
+                continue;
+            };
+            if !selection.iter().any(|selected| selected == address) {
+                continue;
+            }
+            let ara_runtime::extract::Geometry::Model { model, primitive } = &draw.geometry else {
+                return None;
+            };
+            if model.asset != asset
+                || model.digest != digest
+                || *primitive >= model.primitives.len()
+            {
+                return None;
+            }
+            // RasterView publishes its prepared native content before returning
+            // this retained frame. Resolve the same stable draw in that content.
+            let instance = scene
+                .instances
+                .iter()
+                .find(|instance| instance.entity == draw.entity)?;
+            let current = instance.bounds(scene.geometry.get(instance.geometry)?);
+            if !current.iter().all(|point| point.is_finite()) || !current[0].cmple(current[1]).all()
+            {
+                return None;
+            }
+            bounds = Some(bounds.map_or(current, |bounds| {
+                [bounds[0].min(current[0]), bounds[1].max(current[1])]
+            }));
+        }
+        bounds
+    }
     /// Actual world-space bounds of the selected rendered primitives, for framing evidence.
     pub(in crate::app) fn selected_bounds(
         &self,

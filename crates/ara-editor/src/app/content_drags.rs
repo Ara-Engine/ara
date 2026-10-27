@@ -22,6 +22,7 @@ const PREVIEW: u32 = BEGIN + 4;
 const RELEASE: u32 = BEGIN + 7;
 const FINISH: u32 = RELEASE + SETTLE;
 const PATIENCE: u32 = 144 * 120;
+const SCENE_PATIENCE: Duration = Duration::from_secs(120);
 
 #[derive(Clone, Copy, Debug)]
 enum Act {
@@ -37,6 +38,75 @@ enum Act {
     Component,
     FloatingReference,
     OsImport,
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod readiness_tests {
+    use super::*;
+
+    fn at(age: u32) -> ContentDrags {
+        ContentDrags {
+            output: PathBuf::new(),
+            index: 0,
+            age,
+            waiting: false,
+            waited: 0,
+            scene_wait: None,
+            scene_wait_polls: 0,
+            cancel_pending: false,
+            failed_frame: false,
+            source: None,
+            before_revision: 0,
+            before_entities: Vec::new(),
+            results: Vec::new(),
+            trace: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn every_capture_and_input_start_waits_for_presented_scene_without_advancing() {
+        for age in [SETTLE, BEGIN, PREVIEW, FINISH] {
+            let mut check = at(age);
+            let now = Instant::now();
+            assert!(!check.checkpoint_ready(false, now).unwrap());
+            assert!(
+                !check
+                    .checkpoint_ready(false, now + Duration::from_secs(1))
+                    .unwrap()
+            );
+            assert_eq!(check.age, age);
+            assert_eq!(check.trace[0]["sceneReady"], false);
+            assert!(
+                check
+                    .checkpoint_ready(true, now + Duration::from_secs(2))
+                    .unwrap()
+            );
+            assert_eq!(check.trace[1]["stage"], "scene-ready");
+            assert_eq!(check.trace[1]["waitSeconds"], 2.);
+            assert!(check.scene_wait.is_none());
+        }
+        assert!(
+            at(BEGIN + 1)
+                .checkpoint_ready(false, Instant::now())
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn deadline_is_wall_time_and_cannot_accept_late_readiness() {
+        let mut check = at(PREVIEW);
+        let now = Instant::now();
+        // Fast offscreen UI frames cannot consume a time budget prematurely.
+        for _ in 0..20_000 {
+            assert!(!check.checkpoint_ready(false, now).unwrap());
+        }
+        assert!(check.checkpoint_ready(true, now + SCENE_PATIENCE).is_err());
+        let failure = check.trace.last().unwrap();
+        assert_eq!(failure["stage"], "scene-timeout");
+        assert_eq!(failure["sceneReady"], true);
+        assert_eq!(failure["limitSeconds"], SCENE_PATIENCE.as_secs());
+    }
 }
 const ACTS: &[Act] = &[
     Act::MultiReorder,
@@ -84,6 +154,9 @@ pub(super) struct ContentDrags {
     age: u32,
     waiting: bool,
     waited: u32,
+    scene_wait: Option<Instant>,
+    scene_wait_polls: u64,
+    cancel_pending: bool,
     failed_frame: bool,
     source: Option<Point>,
     before_revision: u64,
@@ -96,6 +169,11 @@ impl ContentDrags {
         if !editor.host.root().join(".ara-behaviour-fixture").is_file() {
             return Err("Behaviour verification requires its isolated fixture project".into());
         }
+        editor.apply(
+            vec![json!({"cmd":"import.initialize","args":{"source":"assets/rock.glb","preset":"fast"}})],
+            "Initialize isolated behaviour model import",
+            None,
+        )?;
         let mut commands: Vec<_> = IDS.iter().enumerate().map(|(n, id)| json!({"cmd":"entity.create","args":{"id":id,"name":format!("Drag object {}",n+1),"components":{"Transform":{"position":[n as f32 * 2. - 4.,0.5,0.]},"MeshRenderer":{}}}})).collect();
         commands.push(json!({"cmd":"entity.create","args":{"id":CAMERA,"name":"Follow camera","components":{"Transform":{"position":[0.,3.,-6.]},"Camera":{},"FollowCamera":{}}}}));
         commands.push(json!({"cmd":"entity.create","args":{"id":"e_dragfloor","name":"Drop surface","components":{"Transform":{},"MeshRenderer":{"shape":"plane","size":[30.,1.,30.]}}}}));
@@ -112,6 +190,9 @@ impl ContentDrags {
             age: 0,
             waiting: false,
             waited: 0,
+            scene_wait: None,
+            scene_wait_polls: 0,
+            cancel_pending: false,
             failed_frame: false,
             source: None,
             before_revision: 0,
@@ -141,23 +222,29 @@ impl ContentDrags {
         scale: f32,
         scene: &viewport::SceneView,
         events: &mut Vec<(u32, Event)>,
+        scene_ready: bool,
     ) -> ara_ui::Result<()> {
+        if std::mem::take(&mut self.cancel_pending) {
+            self.cancel_input(shell, events);
+            self.failed_frame = true;
+            return Ok(());
+        }
         let Some(&act) = ACTS.get(self.index) else {
             return Ok(());
         };
         self.waiting = false;
-        if let Err(error) = self.input(act, editor, shell, window, floats, scale, scene, events) {
-            shell.leave();
-            shell.desktop_pointer = None;
-            events.retain(|(_, event)| !matches!(event, Event::MouseButton { .. }));
-            events.push((
-                0,
-                Event::Key {
-                    scancode: 41,
-                    pressed: true,
-                    repeat: false,
-                },
-            ));
+        let result = (|| {
+            if !self.checkpoint_ready(scene_ready, Instant::now())? {
+                self.waiting = true;
+                return Ok(());
+            }
+            self.input(act, editor, shell, window, floats, scale, scene, events)
+        })();
+        if self.waiting && self.scene_wait_polls == 1 {
+            self.write()?;
+        }
+        if let Err(error) = result {
+            self.cancel_input(shell, events);
             self.results.push(json!({"behaviour":act.label(),"ok":false,"error":error.to_string(),"trace":self.trace}));
             self.advance();
             self.failed_frame = true;
@@ -165,10 +252,64 @@ impl ContentDrags {
         }
         Ok(())
     }
+    fn cancel_input(&self, shell: &mut Shell, events: &mut Vec<(u32, Event)>) {
+        shell.leave();
+        shell.desktop_pointer = None;
+        events.retain(|(_, event)| !matches!(event, Event::MouseButton { .. }));
+        for pressed in [true, false] {
+            events.push((
+                0,
+                Event::Key {
+                    scancode: 41,
+                    pressed,
+                    repeat: false,
+                },
+            ));
+        }
+    }
+    /// Native UI frames can complete before their asynchronous Scene image. Hold
+    /// the exact checkpoint, using wall time rather than a guessed frame count.
+    fn checkpoint_ready(&mut self, ready: bool, now: Instant) -> ara_ui::Result<bool> {
+        if ![SETTLE, BEGIN, PREVIEW, FINISH].contains(&self.age) {
+            return Ok(true);
+        }
+        if let Some(started) = self.scene_wait
+            && now.duration_since(started) >= SCENE_PATIENCE
+        {
+            self.trace.push(json!({"stage":"scene-timeout","age":self.age,"sceneReady":ready,
+                "waitSeconds":now.duration_since(started).as_secs_f64(),"polls":self.scene_wait_polls,
+                "limitSeconds":SCENE_PATIENCE.as_secs()}));
+            return Err(format!(
+                "Presented Scene did not become ready at checkpoint {} within {} seconds",
+                self.age,
+                SCENE_PATIENCE.as_secs()
+            )
+            .into());
+        }
+        if ready {
+            if let Some(started) = self.scene_wait.take() {
+                self.trace.push(json!({"stage":"scene-ready","age":self.age,"sceneReady":true,
+                    "waitSeconds":now.duration_since(started).as_secs_f64(),"polls":self.scene_wait_polls}));
+            }
+            self.scene_wait_polls = 0;
+            return Ok(true);
+        }
+        if self.scene_wait.is_none() {
+            self.scene_wait = Some(now);
+            self.trace.push(
+                json!({"stage":"scene-wait","age":self.age,"sceneReady":false,
+                "limitSeconds":SCENE_PATIENCE.as_secs()}),
+            );
+        }
+        self.scene_wait_polls += 1;
+        Ok(false)
+    }
     fn advance(&mut self) {
         self.index += 1;
         self.age = 0;
         self.waited = 0;
+        self.scene_wait = None;
+        self.scene_wait_polls = 0;
         self.source = None;
         self.trace.clear();
     }
@@ -179,15 +320,34 @@ impl ContentDrags {
         shell: &mut Shell,
         gpu: &mut NativeUi,
         floats: &windows::Floats,
+        scene_ready: bool,
     ) -> ara_ui::Result<()> {
         if std::mem::take(&mut self.failed_frame) || self.finished() {
             return Ok(());
         }
         if self.waiting {
-            self.waited += 1;
+            if self.scene_wait.is_none() {
+                self.waited += 1;
+            }
             return Ok(());
         }
         let act = ACTS[self.index];
+        match self.checkpoint_ready(scene_ready, Instant::now()) {
+            Ok(true) => {}
+            Ok(false) => {
+                if self.scene_wait_polls == 1 {
+                    self.write()?;
+                }
+                return Ok(());
+            }
+            Err(error) => {
+                self.results.push(json!({"behaviour":act.label(),"ok":false,"error":error.to_string(),"trace":self.trace}));
+                shell.desktop_pointer = None;
+                self.cancel_pending = true;
+                self.advance();
+                return self.write();
+            }
+        }
         if [SETTLE, PREVIEW, FINISH].contains(&self.age) {
             let stage = if self.age == SETTLE {
                 "before"
@@ -210,7 +370,7 @@ impl ContentDrags {
                     .save(self.output.join(format!("{prefix}-{}.png", float.id)))?;
             }
             gpu.select_target(0);
-            self.trace.push(json!({"stage":stage,"pointer":shell.pointer,"dragging":shell.content_dragging(),"drop":shell.content_drag_report(),"layout":shell.layout_report()}));
+            self.trace.push(json!({"stage":stage,"sceneReady":scene_ready,"pointer":shell.pointer,"dragging":shell.content_dragging(),"drop":shell.content_drag_report(),"layout":shell.layout_report()}));
         }
         if self.age >= FINISH {
             let (ok, observed) = self
@@ -229,7 +389,11 @@ impl ContentDrags {
         std::fs::write(
             self.output.join("behaviours.json"),
             ara_json::to_canonical_string(
-                &json!({"behaviours":self.results,"passed":self.results.iter().filter(|result| result["ok"]==true).count(),"failed":self.failures().len(),"completed":self.finished()}),
+                &json!({"behaviours":self.results,"passed":self.results.iter().filter(|result| result["ok"]==true).count(),"failed":self.failures().len(),"completed":self.finished(),
+                    "sceneReadinessRequired":true,"sceneWaitLimitSeconds":SCENE_PATIENCE.as_secs(),
+                    "current":{"behaviour":ACTS.get(self.index).map(|act|act.label()),"age":self.age,
+                        "waitingForScene":self.scene_wait.is_some(),"sceneWaitSeconds":self.scene_wait.map(|started|started.elapsed().as_secs_f64()),
+                        "sceneReadinessPolls":self.scene_wait_polls}}),
             ),
         )?;
         let mut html = String::from(

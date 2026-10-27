@@ -8,6 +8,20 @@ use std::path::Path;
 const HOLD: u32 = 120;
 const BEAM: &str = "e_framebeam";
 const BOOKMARK: &str = "Audit orthographic detail";
+const MODEL: &str = "assets/rock.glb";
+const FIXTURE_PATIENCE: Duration = Duration::from_secs(120);
+
+struct ModelSource {
+    asset: String,
+    digest: ara_asset::Digest,
+    publication: u64,
+}
+struct FixtureWait {
+    phase: &'static str,
+    started: Instant,
+    polls: u64,
+    reported: Option<Instant>,
+}
 #[derive(Clone, Copy)]
 enum Act {
     Fly(f32),
@@ -56,13 +70,22 @@ pub(super) struct NavigationCheck {
     started: Option<Instant>,
     input_to_capture_ms: Option<f64>,
     intermediate: Option<crate::state::Camera>,
+    assets: ara_play_host::PublishedAssets,
+    asset_snapshot: Option<std::sync::Arc<ara_play_host::PublishedSnapshot>>,
+    asset_progress: Option<std::sync::Arc<ara_play_host::ImportProgress>>,
+    asset_revision: u64,
+    progress_revision: u64,
+    model_source: Option<ModelSource>,
+    fixture_wait: Option<FixtureWait>,
+    fixture_status: Value,
+    fixture_trace: Vec<Value>,
 }
 fn centre(rect: Box2) -> [f32; 2] {
     [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5]
 }
 impl NavigationCheck {
-    pub fn new(output: &Path) -> Self {
-        Self {
+    pub fn new(editor: &Editor, output: &Path) -> ara_ui::Result<Self> {
+        Ok(Self {
             output: output.into(),
             index: 0,
             age: 0,
@@ -76,7 +99,16 @@ impl NavigationCheck {
             started: None,
             input_to_capture_ms: None,
             intermediate: None,
-        }
+            assets: ara_play_host::PublishedAssets::for_project(editor.host.root())?,
+            asset_snapshot: None,
+            asset_progress: None,
+            asset_revision: u64::MAX,
+            progress_revision: u64::MAX,
+            model_source: None,
+            fixture_wait: None,
+            fixture_status: Value::Null,
+            fixture_trace: Vec::new(),
+        })
     }
     pub fn finished(&self) -> bool {
         self.index >= ACTS.len()
@@ -106,12 +138,16 @@ impl NavigationCheck {
         scale: f32,
         scene_view: &viewport::SceneView,
         events: &mut Vec<(u32, Event)>,
+        scene_ready: bool,
     ) -> ara_ui::Result<()> {
         let Some(&act) = ACTS.get(self.index) else {
             return Ok(());
         };
         self.waiting = false;
         if self.age == 0 {
+            if matches!(act, Act::Frame) && !self.model_published(editor)? {
+                return Ok(());
+            }
             shell.leave();
             shell.menu = None;
             shell.dialog = None;
@@ -131,14 +167,11 @@ impl NavigationCheck {
                 shell.dialog = Some(crate::shell::Dialog::about());
             }
             if matches!(act, Act::Frame) {
-                let asset = editor
-                    .host
-                    .store()
-                    .workspace()
-                    .index()
-                    .id_of("assets/rock.glb")
-                    .ok_or("J1 imported model fixture has not published")?;
-                let reference = format!("@assets/rock.glb#{asset}");
+                let source = self
+                    .model_source
+                    .as_ref()
+                    .ok_or("J1 published model identity is missing")?;
+                let reference = format!("@{MODEL}#{}", source.asset);
                 editor.apply(vec![json!({"cmd":"entity.create","args":{"id":BEAM,"name":"Imported long beam","components":{"Transform":{"scale":[80.,0.1,0.1]},"MeshRenderer":{"model":reference}}}})],"Create J1 imported-bounds fixture",None)?;
                 editor.action("editor.select", json!({"entities":[BEAM]}))?;
             }
@@ -160,15 +193,8 @@ impl NavigationCheck {
             };
         } else if self.age == 1 {
             if matches!(act, Act::Frame)
-                && scene_view
-                    .selected_bounds(&[BEAM.into()], &shell.outlines.channels)
-                    .is_none()
+                && !self.native_model_ready(editor, shell, scene_view, scene_ready)?
             {
-                self.waiting = true;
-                self.waited += 1;
-                if self.waited > 144 * 120 {
-                    return Err("J1 imported native geometry did not become available".into());
-                }
                 return Ok(());
             }
             events.push((
@@ -181,6 +207,11 @@ impl NavigationCheck {
         } else if matches!(act, Act::Projection | Act::Bookmark) {
             self.camera_input(act, editor, shell, window, scale, events)?;
         } else if self.age == 2 {
+            if matches!(act, Act::Frame)
+                && !self.native_model_ready(editor, shell, scene_view, scene_ready)?
+            {
+                return Ok(());
+            }
             self.started = Some(Instant::now());
             if matches!(act, Act::Frame) {
                 for pressed in [true, false] {
@@ -302,8 +333,9 @@ impl NavigationCheck {
                     .as_array()
                     .is_some_and(|views| views.iter().any(|view| view["name"] == BOOKMARK))
                 {
-                    return self
-                        .wait_for("Native bookmark Save did not publish its typed navigation edit");
+                    return self.wait_for(
+                        "Native bookmark Save did not publish its typed navigation edit",
+                    );
                 }
             }
             (Act::Bookmark, 9) => {
@@ -333,19 +365,209 @@ impl NavigationCheck {
         }
         Ok(())
     }
+    fn refresh_assets(&mut self) {
+        if self.asset_revision != self.assets.revision()
+            && let Some(snapshot) = self.assets.snapshot()
+        {
+            self.asset_revision = snapshot.revision();
+            self.asset_snapshot = Some(snapshot);
+        }
+        let revision = self.assets.progress_revision();
+        if self.progress_revision != revision
+            && let Some(progress) = self.assets.progress()
+        {
+            self.progress_revision = revision;
+            self.asset_progress = Some(progress);
+        }
+    }
+    fn model_published(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        self.refresh_assets();
+        let asset = editor
+            .host
+            .store()
+            .workspace()
+            .index()
+            .id_of(MODEL)
+            .map(str::to_owned);
+        let generation = asset.as_ref().and_then(|asset| {
+            let snapshot = self.asset_snapshot.as_ref()?;
+            let generation = snapshot.generation(asset)?;
+            Some((
+                generation.digest(),
+                generation.kinds().contains(&ara_asset::ArtifactKind::Mesh),
+                snapshot.revision(),
+            ))
+        });
+        let failure = self
+            .asset_progress
+            .as_ref()
+            .and_then(|progress| {
+                asset
+                    .as_ref()
+                    .and_then(|asset| progress.failed.get(asset))
+                    .or_else(|| progress.failed.get(MODEL))
+            })
+            .cloned();
+        let status = json!({"path":MODEL,"asset":asset,"generation":generation.map(|(digest,_,_)|digest.to_string()),
+            "readerRevision":self.assets.revision(),"snapshotRevision":self.asset_snapshot.as_ref().map(|snapshot|snapshot.revision()),
+            "importProgress":self.asset_progress.as_ref().map(|progress|json!({"done":progress.done,"total":progress.total,"pending":progress.pending,"failed":progress.failed}))});
+        if let Some(failure) = failure {
+            self.fixture_status = status;
+            return self.fixture_failure(
+                editor,
+                &format!("J1 model import failed for {MODEL}: {failure}"),
+            );
+        }
+        let Some((digest, mesh, publication)) = generation else {
+            return self.fixture_pending(editor, "model-publication", status);
+        };
+        if !mesh {
+            self.fixture_status = status;
+            return self.fixture_failure(
+                editor,
+                "J1 rock generation published without a mesh artifact",
+            );
+        }
+        let Some(asset) = asset else {
+            return self.fixture_pending(editor, "model-publication", status);
+        };
+        self.model_source = Some(ModelSource {
+            asset,
+            digest,
+            publication,
+        });
+        self.fixture_ready(editor, "model-publication", status)
+    }
+    fn imported_bounds(&self, shell: &Shell, scene: &viewport::SceneView) -> Option<[Vec3; 2]> {
+        let source = self.model_source.as_ref()?;
+        scene.selected_imported_bounds(
+            &[BEAM.into()],
+            &shell.outlines.channels,
+            &source.asset,
+            source.digest,
+        )
+    }
+    fn native_model_ready(
+        &mut self,
+        editor: &mut Editor,
+        shell: &Shell,
+        scene: &viewport::SceneView,
+        scene_ready: bool,
+    ) -> ara_ui::Result<bool> {
+        let bounds = self.imported_bounds(shell, scene);
+        let status = json!({"sceneReady":scene_ready,"exactImportedGeometry":bounds.is_some(),
+            "bounds":bounds.map(|bounds|bounds.map(|point|point.to_array())),"source":self.model_proof()});
+        if !scene_ready || bounds.is_none() {
+            return self.fixture_pending(editor, "native-model-presentation", status);
+        }
+        self.fixture_ready(editor, "native-model-presentation", status)
+    }
+    fn fixture_pending(
+        &mut self,
+        editor: &mut Editor,
+        phase: &'static str,
+        status: Value,
+    ) -> ara_ui::Result<bool> {
+        let now = Instant::now();
+        if self
+            .fixture_wait
+            .as_ref()
+            .is_none_or(|wait| wait.phase != phase)
+        {
+            self.fixture_wait = Some(FixtureWait {
+                phase,
+                started: now,
+                polls: 0,
+                reported: None,
+            });
+            self.fixture_trace.push(json!({"phase":phase,"state":"waiting","limitSeconds":FIXTURE_PATIENCE.as_secs(),"status":status}));
+        }
+        self.fixture_status = status;
+        self.waiting = true;
+        let wait = self
+            .fixture_wait
+            .as_mut()
+            .ok_or("J1 fixture wait state is missing")?;
+        wait.polls += 1;
+        if now.duration_since(wait.started) >= FIXTURE_PATIENCE {
+            return self.fixture_failure(
+                editor,
+                &format!(
+                    "J1 {phase} did not become ready within {} real seconds",
+                    FIXTURE_PATIENCE.as_secs()
+                ),
+            );
+        }
+        if wait
+            .reported
+            .is_none_or(|reported| now.duration_since(reported) >= Duration::from_secs(1))
+        {
+            wait.reported = Some(now);
+            self.write()?;
+        }
+        Ok(false)
+    }
+    fn fixture_ready(
+        &mut self,
+        editor: &mut Editor,
+        phase: &'static str,
+        status: Value,
+    ) -> ara_ui::Result<bool> {
+        self.fixture_status = status;
+        if self
+            .fixture_wait
+            .as_ref()
+            .is_some_and(|wait| wait.started.elapsed() >= FIXTURE_PATIENCE)
+        {
+            return self.fixture_failure(
+                editor,
+                &format!(
+                    "J1 {phase} exceeded its {} real-second readiness deadline",
+                    FIXTURE_PATIENCE.as_secs()
+                ),
+            );
+        }
+        if let Some(wait) = self.fixture_wait.take() {
+            self.fixture_trace.push(json!({"phase":phase,"state":"ready","seconds":wait.started.elapsed().as_secs_f64(),"polls":wait.polls,"status":self.fixture_status}));
+        } else {
+            self.fixture_trace.push(json!({"phase":phase,"state":"ready","seconds":0.,"polls":0,"status":self.fixture_status}));
+        }
+        self.waiting = false;
+        Ok(true)
+    }
+    fn fixture_failure(&mut self, editor: &mut Editor, message: &str) -> ara_ui::Result<bool> {
+        editor.report_error(message);
+        self.fixture_trace.push(json!({"state":"failed","error":message,"status":self.fixture_status,
+            "wait":self.fixture_wait.as_ref().map(|wait|json!({"phase":wait.phase,"seconds":wait.started.elapsed().as_secs_f64(),"polls":wait.polls}))}));
+        self.results.push(json!({"journey":ACTS[self.index].label(),"ok":false,"error":message,"fixtureStatus":self.fixture_status,"fixtureTrace":self.fixture_trace,"modelProof":self.model_proof()}));
+        self.write()?;
+        Err(message.to_owned().into())
+    }
+    fn model_proof(&self) -> Value {
+        self.model_source.as_ref().map_or(Value::Null, |source|json!({"path":MODEL,"asset":source.asset,
+            "digest":source.digest.to_string(),"publicationRevision":source.publication,
+            "nativeProvenance":"Retained Geometry::Model asset/digest matched to the prepared native instance by Draw.entity; procedural placeholders rejected"}))
+    }
     /// Read native completed targets after presentation, then record displacement and frame costs.
     pub fn end(
         &mut self,
-        editor: &Editor,
+        editor: &mut Editor,
         shell: &Shell,
         gpu: &mut NativeUi,
         scene_view: &viewport::SceneView,
         frame_ms: f64,
+        scene_ready: bool,
     ) -> ara_ui::Result<()> {
         let Some(&act) = ACTS.get(self.index) else {
             return Ok(());
         };
         if self.waiting {
+            return Ok(());
+        }
+        if matches!(act, Act::Frame)
+            && self.age == 1
+            && !self.native_model_ready(editor, shell, scene_view, scene_ready)?
+        {
             return Ok(());
         }
         if self.fly_dt().is_some() && frame_ms.is_finite() {
@@ -366,16 +588,27 @@ impl NavigationCheck {
             )?;
         }
         let projection = if matches!(act, Act::Frame) {
-            scene_view
-                .selected_bounds(&[BEAM.into()], &shell.outlines.channels)
-                .and_then(|bounds| {
-                    shell
-                        .viewport()
-                        .map(|viewport| projected(&editor.state.camera, viewport, bounds))
-                })
+            self.imported_bounds(shell, scene_view).and_then(|bounds| {
+                shell
+                    .viewport()
+                    .map(|viewport| projected(&editor.state.camera, viewport, bounds))
+            })
         } else {
             None
         };
+        if matches!(act, Act::Frame) && self.age >= 4 {
+            let ready = scene_ready
+                && projection
+                    .as_ref()
+                    .is_some_and(|projection| projection["fits"] == true)
+                && editor.state.camera != self.before;
+            let status = json!({"sceneReady":scene_ready,"projection":projection,"source":self.model_proof(),"cameraChanged":editor.state.camera!=self.before});
+            if !ready {
+                self.fixture_pending(editor, "framed-model-presentation", status)?;
+                return Ok(());
+            }
+            self.fixture_ready(editor, "framed-model-presentation", status)?;
+        }
         let finish = match act {
             Act::Look => self.age >= 8,
             Act::Frame => {
@@ -447,7 +680,8 @@ impl NavigationCheck {
             ),
         };
         self.frame_ms.sort_by(f64::total_cmp);
-        self.results.push(json!({"journey":act.label(),"ok":ok,"inputSeconds":if matches!(act,Act::Fly(_)|Act::Panel|Act::Modal){1.}else{0.},"expected":expected,"displacementMetres":displacement,"beforeCamera":self.before,"intermediateCamera":self.intermediate,"afterCamera":editor.state.camera,"inputToCaptureMs":self.input_to_capture_ms,"frameP50Ms":self.frame_ms.get(self.frame_ms.len()/2),"frameP95Ms":self.frame_ms.get(self.frame_ms.len()*95/100),"frameMaxMs":self.frame_ms.last(),"projection":projection}));
+        self.results.push(json!({"journey":act.label(),"ok":ok,"inputSeconds":if matches!(act,Act::Fly(_)|Act::Panel|Act::Modal){1.}else{0.},"expected":expected,"displacementMetres":displacement,"beforeCamera":self.before,"intermediateCamera":self.intermediate,"afterCamera":editor.state.camera,"inputToCaptureMs":self.input_to_capture_ms,"frameP50Ms":self.frame_ms.get(self.frame_ms.len()/2),"frameP95Ms":self.frame_ms.get(self.frame_ms.len()*95/100),"frameMaxMs":self.frame_ms.last(),"projection":projection,
+            "sceneReady":scene_ready,"modelProof":if matches!(act,Act::Frame){self.model_proof()}else{Value::Null},"fixtureTrace":self.fixture_trace}));
         self.index += 1;
         self.age = 0;
         self.waited = 0;
@@ -455,6 +689,9 @@ impl NavigationCheck {
         self.input_to_capture_ms = None;
         self.frame_ms.clear();
         self.intermediate = None;
+        self.fixture_wait = None;
+        self.fixture_status = Value::Null;
+        self.fixture_trace.clear();
         self.write()?;
         Ok(())
     }
@@ -477,7 +714,9 @@ impl NavigationCheck {
         std::fs::write(
             self.output.join("navigation.json"),
             ara_json::to_canonical_string(
-                &json!({"journeys":self.results,"completed":self.finished(),"passed":self.results.iter().filter(|result|result["ok"]==true).count(),"failed":self.failures().len()}),
+                &json!({"journeys":self.results,"completed":self.finished(),"passed":self.results.iter().filter(|result|result["ok"]==true).count(),"failed":self.failures().len(),
+                    "current":{"journey":ACTS.get(self.index).map(|act|act.label()),"age":self.age,"fixtureStatus":self.fixture_status,
+                        "wait":self.fixture_wait.as_ref().map(|wait|json!({"phase":wait.phase,"seconds":wait.started.elapsed().as_secs_f64(),"polls":wait.polls,"limitSeconds":FIXTURE_PATIENCE.as_secs()}))}}),
             ),
         )?;
         Ok(())
