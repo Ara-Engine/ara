@@ -222,6 +222,7 @@ impl Presenter {
             point,
             allocator,
             chunks: Vec::new(),
+            timing: None,
         });
         Device::wait(gpu, point)
     }

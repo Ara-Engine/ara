@@ -60,17 +60,23 @@ struct Recording<'a> {
     root: [u32; 8],
     /// Color and depth formats of the open rendering scope.
     formats: (Vec<MTLPixelFormat>, Option<MTLPixelFormat>),
+    /// Timestamp heap laid out as in [`super::timestamps`].
+    heap: &'a ProtocolObject<dyn MTL4CounterHeap>,
+    /// Passes begun so far, and the indices of passes still open.
+    passes: usize,
+    open: Vec<usize>,
 }
 
 impl MetalDevice {
-    /// Encode `list` into `cmd`. Errors leave `cmd` uncommitted; partially recorded
-    /// commands are discarded with it.
+    /// Encode `list` into `cmd`, writing its timestamps into `heap`. Errors leave
+    /// `cmd` uncommitted; partially recorded commands are discarded with it.
     pub(super) fn encode(
         &mut self,
         cmd: &ProtocolObject<dyn MTL4CommandBuffer>,
         list: &CommandList,
         scratch: &mut Scratch,
         created: &mut Vec<Chunk>,
+        heap: &ProtocolObject<dyn MTL4CounterHeap>,
     ) -> Result<()> {
         let mut rec = Recording {
             cmd,
@@ -82,12 +88,20 @@ impl MetalDevice {
             bound: None,
             root: [0; 8],
             formats: (Vec::new(), None),
+            heap,
+            passes: 0,
+            open: Vec::new(),
         };
-        let result = list
-            .commands
-            .iter()
+        rec.timestamp(0);
+        // Pass begins move after their leading barriers, as on Vulkan.
+        let result = crate::vulkan::timestamps::commands(&list.commands)
             .try_for_each(|command| self.encode_one(&mut rec, list.queue, command));
+        // Unclosed passes end with the list, so every slot is written.
+        while let Some(pass) = rec.open.pop() {
+            rec.timestamp(2 + 2 * pass);
+        }
         rec.end();
+        rec.timestamp(1 + 2 * rec.passes);
         result
     }
 
@@ -329,8 +343,21 @@ impl MetalDevice {
                         );
                 }
             }
-            Command::BeginPass(label) => rec.cmd.pushDebugGroup(&NSString::from_str(label)),
-            Command::EndPass => rec.cmd.popDebugGroup(),
+            Command::BeginPass(label) => {
+                let pass = rec.passes;
+                rec.passes += 1;
+                rec.open.push(pass);
+                rec.timestamp(1 + 2 * pass);
+                rec.cmd.pushDebugGroup(&NSString::from_str(label));
+            }
+            Command::EndPass => {
+                let pass = rec
+                    .open
+                    .pop()
+                    .ok_or_else(|| GpuError::Contract("EndPass without BeginPass".into()))?;
+                rec.timestamp(2 + 2 * pass);
+                rec.cmd.popDebugGroup();
+            }
             Command::ClearDepth { .. } => {
                 return Err(GpuError::Contract(
                     "ClearDepth needs a cooked clear pipeline on Metal (not yet available)".into(),
@@ -597,6 +624,29 @@ impl MetalDevice {
 }
 
 impl Recording<'_> {
+    /// Write timestamp slot `index` at this point. Outside rendering the open compute
+    /// encoder is closed and the timestamp goes between encoders on the command
+    /// buffer, so begin and end use one ordered mechanism (mixing command-buffer and
+    /// in-encoder timestamps gave end < begin under load). Splitting the encoder
+    /// orders nothing that the barrier lowering does not already order.
+    fn timestamp(&mut self, index: usize) {
+        if let Active::Render(encoder) = &self.active {
+            // SAFETY: the heap was sized by `submit` for this list's 2 * passes + 2
+            // slots, and `index` stays below that.
+            unsafe {
+                encoder.writeTimestampWithGranularity_afterStage_intoHeap_atIndex(
+                    MTL4TimestampGranularity::Precise,
+                    MTLRenderStages::Fragment,
+                    self.heap,
+                    index,
+                );
+            }
+            return;
+        }
+        self.end();
+        // SAFETY: as above; no encoder is open on the command buffer.
+        unsafe { self.cmd.writeTimestampIntoHeap_atIndex(self.heap, index) };
+    }
     fn render(&self) -> Result<&ProtocolObject<dyn MTL4RenderCommandEncoder>> {
         match &self.active {
             Active::Render(encoder) => Ok(encoder),

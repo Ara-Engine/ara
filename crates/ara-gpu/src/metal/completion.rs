@@ -87,7 +87,7 @@ impl MetalDevice {
         })
     }
     /// Poll without waiting. None retains the frame; Some releases its recording
-    /// storage. Pass timings are empty until Metal counter sampling lands.
+    /// storage and returns every pass timing.
     pub fn poll_completion(&mut self, frame: &mut Completion) -> Result<Option<Vec<PassTiming>>> {
         self.check_completion(frame)?;
         if self.deferred.is_some() {
@@ -154,8 +154,10 @@ impl MetalDevice {
         frame: &mut Completion,
         mut consume: impl FnMut(TimelinePoint, Vec<PassTiming>),
     ) -> Result<()> {
-        for point in frame.points.drain(..) {
-            consume(point, Vec::new());
+        // Every point completed (checked by the callers); reclaim resolves them.
+        self.reclaim()?;
+        for point in std::mem::take(&mut frame.points) {
+            consume(point, self.take_timings(point));
         }
         self.completion_pending = false;
         frame.resolved = true;

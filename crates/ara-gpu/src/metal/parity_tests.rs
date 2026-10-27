@@ -201,3 +201,51 @@ fn windowless_presenter_copies_a_completed_frame_into_the_drawable() {
         Err(GpuError::Contract(_))
     ));
 }
+
+#[test]
+fn labelled_passes_resolve_to_ordered_timings_and_a_mixed_queue_window() {
+    let mut gpu = device();
+    let source = gpu
+        .create_buffer(1 << 20, vk::BufferUsageFlags::TRANSFER_SRC, true)
+        .expect("source");
+    let target = gpu
+        .create_buffer(1 << 20, vk::BufferUsageFlags::TRANSFER_DST, true)
+        .expect("target");
+    let copy = |gpu: &MetalDevice, queue| {
+        let mut rec = gpu.begin(queue);
+        for label in ["First", "Second"] {
+            rec.push(Command::BeginPass(label.into()));
+            rec.push(Command::CopyBuffer {
+                source,
+                destination: target,
+                size: 1 << 20,
+            });
+            rec.push(Command::EndPass);
+        }
+        rec.finish()
+    };
+    gpu.reset_timing_window();
+    let (graphics, compute) = (copy(&gpu, Queue::Graphics), copy(&gpu, Queue::Compute));
+    let first = gpu.submit(graphics, &[]).expect("graphics");
+    let second = gpu.submit(compute, &[first]).expect("compute");
+    assert!(
+        gpu.timing_window().is_none(),
+        "unresolved work has no window yet"
+    );
+    gpu.resolve(second).expect("compute timings");
+    let passes = gpu.resolve(first).expect("graphics timings");
+    let labels: Vec<&str> = passes.iter().map(|p| p.pass.as_str()).collect();
+    assert_eq!(labels, ["First", "Second"]);
+    assert!(
+        passes
+            .iter()
+            .all(|p| p.end_ms >= p.start_ms && p.queue == Queue::Graphics)
+    );
+    assert!(passes[1].start_ms >= passes[0].start_ms);
+    let window = gpu
+        .timing_window()
+        .expect("both queues share the GPU clock");
+    assert!(window.milliseconds() >= passes.iter().map(|p| p.milliseconds).sum::<f64>() * 0.5);
+    assert!(gpu.timing_window_gaps().is_some());
+    assert!(gpu.host_wait_stats().calls >= 1);
+}

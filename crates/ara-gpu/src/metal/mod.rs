@@ -15,9 +15,10 @@
 //! Also mirrored: deferred frame completion ([`Completion`]), off-thread resource and
 //! pipeline preparation, and CAMetalLayer presentation ([`present::Presenter`]).
 //!
-//! Not yet available: timestamps (no pass timings are returned), acceleration
-//! structures, mesh/task stages, `ClearDepth`, shader hot reload, HDR output and
-//! shared surfaces.
+//! Pass timings come from MTL4 timestamp heaps ([`timestamps`]) on one GPU clock.
+//!
+//! Not yet available: acceleration structures, mesh/task stages, `ClearDepth`,
+//! shader hot reload, HDR output and shared surfaces.
 mod abi;
 mod completion;
 mod encode;
@@ -32,6 +33,7 @@ mod scratch;
 mod tables;
 #[cfg(test)]
 mod tests;
+mod timestamps;
 mod worker;
 
 pub use completion::Completion;
@@ -108,7 +110,12 @@ struct Pending {
     point: TimelinePoint,
     allocator: Retained<ProtocolObject<dyn MTL4CommandAllocator>>,
     chunks: Vec<scratch::Chunk>,
+    /// Timestamps of a graph submission; presentation copies carry none.
+    timing: Option<timestamps::Timing>,
 }
+
+/// Resolved pass timings kept for `resolve`/completion callers (bounded).
+const RESOLVED_TIMINGS: usize = 1024;
 
 /// Metal device capabilities recorded at creation.
 #[derive(Debug, Clone)]
@@ -160,6 +167,11 @@ pub struct MetalDevice {
     completion_pending: bool,
     resource_worker: Option<prepare::ResourceWorker>,
     pipeline_worker: Option<prepare::PipelineWorker>,
+    timestamp_pool: timestamps::Pool,
+    /// Pass timings of completed submissions, oldest first, until resolved.
+    timings: std::collections::VecDeque<(TimelinePoint, Vec<PassTiming>)>,
+    timing_window: crate::vulkan::timestamps::Window,
+    waits: crate::vulkan::waits::Counter,
 }
 
 impl MetalDevice {
@@ -241,6 +253,10 @@ impl MetalDevice {
             completion_pending: false,
             resource_worker: None,
             pipeline_worker: None,
+            timestamp_pool: timestamps::Pool::default(),
+            timings: std::collections::VecDeque::new(),
+            timing_window: Default::default(),
+            waits: Default::default(),
         })
     }
 
@@ -480,7 +496,16 @@ impl MetalDevice {
         cmd.beginCommandBufferWithAllocator(&allocator);
         let mut scratch = scratch::Scratch::default();
         let mut created = Vec::new();
-        let encoded = self.encode(&cmd, &list, &mut scratch, &mut created);
+        let labels = list
+            .commands
+            .iter()
+            .filter_map(|command| match command {
+                commands::Command::BeginPass(label) => Some(label.clone()),
+                _ => None,
+            })
+            .collect();
+        let timing = self.timestamp_pool.take(&self.device, labels)?;
+        let encoded = self.encode(&cmd, &list, &mut scratch, &mut created, &timing.heap.heap);
         cmd.endCommandBuffer();
         for chunk in &created {
             self.residency
@@ -492,6 +517,7 @@ impl MetalDevice {
             allocator.reset();
             self.allocators.push(allocator);
             self.scratch.recycle(scratch.chunks);
+            self.timestamp_pool.recycle(timing.heap);
             return Err(error);
         }
         if std::mem::take(&mut self.residency_dirty) {
@@ -523,6 +549,7 @@ impl MetalDevice {
             point,
             allocator,
             chunks: scratch.chunks,
+            timing: Some(timing),
         });
         if let Some(points) = &mut self.deferred {
             points.push(point);
@@ -539,27 +566,72 @@ impl MetalDevice {
         }
         Ok(point)
     }
-    /// Wait for a submission and release its recording storage. Metal counter
-    /// sampling is not wired yet, so no pass timings are returned.
+    /// Wait for a submission, release its recording storage and return its pass
+    /// timings (GPU timestamps on the shared device clock).
     pub fn resolve(&mut self, point: TimelinePoint) -> Result<Vec<PassTiming>> {
         Device::wait(self, point)?;
         self.reclaim()?;
-        Ok(Vec::new())
+        Ok(self.take_timings(point))
+    }
+    /// Start a measurement boundary: only later, resolved submissions contribute.
+    pub fn reset_timing_window(&mut self) {
+        self.timing_window.reset(self.submitted);
+    }
+    /// Completed submission span since the reset; None while any is unresolved.
+    /// Both queues share one GPU clock, so mixed-queue spans are always defined.
+    pub fn timing_window(&self) -> Option<commands::TimestampSpan> {
+        if self
+            .pending
+            .iter()
+            .any(|p| self.timing_window.includes(p.point))
+        {
+            return None;
+        }
+        self.timing_window.span(true)
+    }
+    /// Time between this window's submission intervals; overlap counts once.
+    pub fn timing_window_gaps(&self) -> Option<f64> {
+        self.timing_window()?;
+        self.timing_window.gaps(true)
+    }
+    /// Cumulative host time spent in explicit GPU waits on this device.
+    pub fn host_wait_stats(&self) -> vulkan::HostWaitStats {
+        self.waits.snapshot()
     }
 
-    /// Return completed allocators and scratch chunks to their pools.
-    fn reclaim(&mut self) -> Result<()> {
+    /// Pass timings of a completed, reclaimed submission (once).
+    pub(super) fn take_timings(&mut self, point: TimelinePoint) -> Vec<PassTiming> {
+        self.timings
+            .iter()
+            .position(|(p, _)| *p == point)
+            .and_then(|at| self.timings.remove(at))
+            .map(|(_, passes)| passes)
+            .unwrap_or_default()
+    }
+
+    /// Return completed allocators, scratch chunks and timestamp heaps to their pools,
+    /// keeping each submission's pass timings until it is resolved.
+    pub(super) fn reclaim(&mut self) -> Result<()> {
         let done = Device::completed(self)?;
         let mut index = 0;
         while index < self.pending.len() {
             let point = self.pending[index].point;
-            if done[point.queue.index()] >= point.value {
-                let pending = self.pending.swap_remove(index);
-                pending.allocator.reset();
-                self.allocators.push(pending.allocator);
-                self.scratch.recycle(pending.chunks);
-            } else {
+            if done[point.queue.index()] < point.value {
                 index += 1;
+                continue;
+            }
+            let pending = self.pending.swap_remove(index);
+            pending.allocator.reset();
+            self.allocators.push(pending.allocator);
+            self.scratch.recycle(pending.chunks);
+            if let Some(timing) = pending.timing {
+                let (passes, span) = timestamps::resolve(&self.device, &timing, point.queue)?;
+                self.timestamp_pool.recycle(timing.heap);
+                self.timing_window.observe(point, span);
+                if self.timings.len() == RESOLVED_TIMINGS {
+                    self.timings.pop_front();
+                }
+                self.timings.push_back((point, passes));
             }
         }
         Ok(())
@@ -572,8 +644,8 @@ impl Device for MetalDevice {
             id,
             dedicated: true,
             timestamps: descriptors::TimestampCaps {
-                valid_bits: 0,
-                period_ns: 0.,
+                valid_bits: 64,
+                period_ns: (1e9 / self.device.queryTimestampFrequency() as f64) as f32,
             },
         })
     }
@@ -628,8 +700,10 @@ impl Device for MetalDevice {
                 "Cannot wait on an unsubmitted timeline point".into(),
             ));
         }
-        if self.events[point.queue.index()]
-            .waitUntilSignaledValue_timeoutMS(point.value, WAIT_TIMEOUT_MS)
+        let event = &self.events[point.queue.index()];
+        if self
+            .waits
+            .measure(|| event.waitUntilSignaledValue_timeoutMS(point.value, WAIT_TIMEOUT_MS))
         {
             Ok(())
         } else {
