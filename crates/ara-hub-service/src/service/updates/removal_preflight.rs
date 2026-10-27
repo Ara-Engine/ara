@@ -21,7 +21,7 @@ impl Hub {
         }
         let root = self.updates.config.engines.join(&version);
         let engine = self.registry.engine(&version)?;
-        if engine.executable != root.join("ara.exe") {
+        if !same_executable(engine, &root) {
             return Err(invalid(
                 "only Hub-managed installations can be inspected for uninstall; remove registration for external builds",
             ));
