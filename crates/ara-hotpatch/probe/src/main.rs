@@ -1,4 +1,5 @@
 //! Real renderer, fixed scene, no window. Control/captures stay under an explicit scratch folder.
+mod fidelity;
 use anyhow::{Context, Result, bail};
 use ara_gpu::{Access, GpuDevice, Resource};
 use ara_render::{
@@ -19,6 +20,7 @@ fn main() -> Result<()> {
     let mut output = PathBuf::from("target/ara-hotpatch/render-probe");
     let mut start = None;
     let mut gpu_child = false;
+    let mut fidelity = false;
     let mut args = arguments.iter().skip(1);
     while let Some(arg) = args.next() {
         match arg.to_str() {
@@ -31,6 +33,7 @@ fn main() -> Result<()> {
                 ))
             }
             Some("--gpu-child") => gpu_child = true,
+            Some("--fidelity") => fidelity = true,
             _ => bail!("unknown render probe argument: {arg:?}"),
         }
     }
@@ -60,6 +63,9 @@ fn main() -> Result<()> {
             "GPU admission start file timed out"
         );
         std::thread::sleep(Duration::from_millis(50));
+    }
+    if fidelity {
+        return fidelity::run(output, patches, began);
     }
     let size = [320, 180];
     let mut renderer = Renderer::new_native(

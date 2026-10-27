@@ -1,8 +1,40 @@
 # S11: Rust hotpatch checkpoints (2026-10-27)
 
-**Current: real native render patches work on both platforms.** Windows body
-edits measured 3.86–8.94 s; the first Mac body edit measured 1.04 s. A repeat-save
-CLI cache bug still blocks readiness; simulation/editor live proofs are pending.
+**Windows functional checkpoint:** all three actual dispatch paths patch without
+restarting. This remains an experimental dev feature: observed edits exceed the
+2–3 s target and vary substantially on this shared PC with D: build outputs.
+
+| Windows native CLI v2 | First body edit | Repeat body edit | Restore/recovery |
+| --- | ---: | ---: | ---: |
+| Fidelity render pass | 21.87 s | 4.33 s | 6.67 / 11.37 s |
+| Bevy ECS system | 3.85 s | 34.57 s | 5.22 / 6.25 s |
+| Editor panel | 20.59 s | 33.06 s | 29.47 / 13.18 s |
+
+These are save-to-observed-output wall times, including workspace replay,
+compilation, linking, delivery and output sampling. They are not DX's shorter
+tip-only compile timer. Each row kept its process and state alive. Mac raster
+rendering previously passed around 1 s; Mac ECS/editor measurements remain pending
+AC power (the latest SSH battery check could not connect). No Mac build was run.
+
+## Live/rebuild contract
+
+| Change | Ara action |
+| --- | --- |
+| Synchronous body behind a hot render/system/panel entry, with unchanged signature and data definitions | Publish at the next quiescent frame boundary; system runs it on the next tick |
+| Existing ECS entities/components/resources and GPU handles | Preserve them; existing queue-timeline retirement continues |
+| Fresh synchronous closures in reviewed `record_frame`, `record_post_process`, `draw_panel` entries | Live with the enclosing hot scope |
+| Type/field/enum/signature, reflected schema, static/TLS initializer, manifests, dependencies or native source | Reject with needs rebuild; restart to establish a new baseline |
+| Async/futures, generic or trait-implementation bodies, impl Trait, retained/unreviewed closures or vtables | Rebuild; retained objects are not re-instanced |
+| GPU resource creation/retirement or resource layout changes | Rebuild; no live resource migration |
+| External dylib/plugin ABI or code | Rebuild; Subsecond patch libraries themselves remain loaded for process lifetime |
+| Shader-only edits | Existing independent shader reload/cohort checks |
+| Replay, snapshot restore or network continuation after any applied Rust patch | Refuse with ARA7603; process/header/hash are marked, including legacy-reader format rejection |
+| Editor's separately built Play companion | Keeps built code; player Rust iteration uses its own driver/baseline |
+| Shipping/export executable | Feature is off by default, release compilation rejects runtime opt-in, export rejects the marker |
+
+The lab adapter is still pending; its default remains rebuild plus warm restart.
+Source inputs must remain stable while the compiler reads them. The source guard
+is a conservative compatibility policy, not arbitrary Rust ABI/state migration.
 
 ## Minimal loop spike
 
@@ -159,14 +191,164 @@ The rapid repeat then timed out with generation 2 still running. Inspection of
 dx 0.8.0-alpha.3 `serve/runner.rs` identifies a source-cache bug: RSX diffing exits
 on the first Rust body difference in a file batch, leaving other file snapshots
 stale. After a two-file recovery, saving a body matching that stale snapshot can
-be silently ignored. This blocks calling the integration solid. A small optional
-CLI patch is being verified: native-engine mode replays Rust saves directly,
+be silently ignored. This blocked the initial checkpoint. A small optional
+CLI patch was verified next: native-engine mode replays Rust saves directly,
 including queued saves, bypassing RSX diffing. Normal Ara builds still need no dx.
 
 Mac evidence: `target/hotpatch-research/mac-render-r1{.log,-measurements.json}`,
 before/after PNGs there, and the isolated remote worktree's
 `target/hotpatch-proof/mac-render-r1/`. Both probe and original driver were stopped.
 Simulation/editor live-patch measurements remain pending on both platforms.
+
+### Prepared native CLI: repeat-save recovery verified
+
+The native-only CLI patch fixes the reproduced stale RSX snapshot issue. It does
+not change normal Dioxus operation. `ara-dev hotpatch --install-dx` builds the
+optional pinned tool; launch checks both its base version and native capability.
+Normal workspace builds do not execute this setup.
+
+| Real native renderer, one unchanged PID | Windows (D: build disk) | macOS (AC) |
+| --- | ---: | ---: |
+| First edited body to changed GPU capture | 4,137.52 ms | 1,029.68 ms |
+| Layout rejection, old frames continue | 341.91 ms | 188.66 ms |
+| Restore compatible layout/body | 4,213.75 ms | 971.69 ms |
+| Rapid repeat of edited body | 7,205.64 ms | 975.71 ms |
+| Restore original body again | 4,305.09 ms | 912.34 ms |
+
+Windows PID 42784 and Mac PID 11760 survived the entire sequence. Output captures
+changed and returned to the original hashes; captures were visually inspected.
+Windows ran under the machine GPU guard; Mac used Metal validation, with no
+per-process GPU-performance claim. Both drivers were stopped and sources restored.
+Evidence: `target/hotpatch-research/{render-driver-r10,measure-render-r10,mac-render-r2,mac-measure-render-r2}.log`
+and per-generation captures/measurements in `target/hotpatch-proof/`.
+
+### Fidelity recording and failed-build queue recovery
+
+The actual `FidelityView::record_frame` body patched on Windows in PID 48068:
+**11,234.79 ms** from an exposure edit to a visibly changed GPU capture. Changing
+`GpuFrame.inverse_vp` from `Mat4` to `[Mat4; 2]` was rejected in **523.13 ms**;
+the old frames continued. These are shared-PC, BelowNormal, D: observations.
+The body edit's DX breakdown was 6,697 ms workspace replay, 2,645 ms tip compile,
+495 ms object caching and 585 ms linking. DX's shorter `compileMs`/summary omits
+workspace replay. Source validation/delivery/publication accounted for another
+approximately 0.65 s.
+
+The compatible save made during the rejected compile remained queued. Upstream
+`serve/mod.rs` drains pending changes after `BuildReady`, but not `BuildFailed`.
+Ara's native-only v2 patch drains that failure queue too. Its optional installer
+checks the exact pinned source diff before building. The later v2 sequence below
+verified recovery. Initial evidence:
+`target/hotpatch-research/{fidelity-driver-r3,measure-fidelity-r3}.log` and
+`target/hotpatch-proof/windows-fidelity-r3/` (both captures visually inspected).
+
+The source guard permits literal-producing macros and fresh synchronous closures
+inside the reviewed recording and panel entries. A test uses the actual fidelity
+source to keep that entry patchable. Declarations, persisted environments and
+resource creation/retirement remain rebuild boundaries. DX's hash-suffixed native
+filenames are accepted by exact bin identity; helpers/Play companions cannot
+register against an editor's patch table.
+
+### Windows native v2 fidelity sequence
+
+One PID **50652** survived all five phases, with captures changing and returning
+to the exact baseline hash. The before, edited and restored captures were visually
+inspected. Compatible saves made during the rejected compile were processed.
+
+| Phase | Edit to observed frame/event |
+| --- | ---: |
+| First exposure body edit | 21,872.43 ms |
+| Incompatible GPU-frame layout rejected | 484.47 ms |
+| Compatible recovery to original output | 6,665.72 ms |
+| Repeat body edit | 4,326.02 ms |
+| Restore original output again | 11,369.74 ms |
+
+Evidence: `target/hotpatch-proof/windows-fidelity-v2-r1/measurements.json`,
+`target/hotpatch-research/fidelity-v2-r1-{driver.out,driver.err,measure}.log`.
+The outer PowerShell harness miscounted its decoded JSON array after collecting
+all five measurements and stopped the driver; the array handling was corrected
+before the ECS/editor runs. This did not invalidate the captured live sequence,
+but this run is not evidence of a clean guard/device shutdown.
+
+### Windows ECS dispatch and persisted state
+
+A real `Session` and named Bevy system changed a registered Transform increment
+from 1 to 2, then back, twice in PID **33136**. Entity **4294967293** survived;
+its counter continued forward rather than resetting.
+
+| Phase | Edit to observed tick |
+| --- | ---: |
+| First system body edit | 3,846.69 ms |
+| Restore original increment | 5,216.41 ms |
+| Repeat body edit | 34,567.61 ms |
+| Restore again | 6,245.00 ms |
+
+The outlier was in DX's compile phase (**33,203 ms**); publication remained
+approximately 0.4 s after delivery. These are shared-PC observations, not a
+quiet-machine latency claim. The session's serialized replay flag survived a
+binary round trip. Patched replay and snapshot headers use format 2, so legacy
+readers refuse them too; ordinary artifacts retain format 1. Replay, checkpoint
+restore and adapter-driven network continuation refused, without changing the
+tick, entity or component value. The final original body still left the process
+explicitly tainted.
+
+Evidence: `target/hotpatch-proof/windows-sim-v2-r4/measurements.json` and
+`target/hotpatch-research/sim-v2-r4-*`. A harness cleanup check encountered an
+already-exiting process with no module path after these four measurements; the
+read-only wait was corrected before the editor run. Functional measurements
+preceded that cleanup error.
+
+The initial ECS fixture queried Bevy's internal resource entities too; it now
+selects the entity containing Transform. Its fast startup also needs the native
+websocket/ASLR handshake to settle before timing the first save.
+
+### External build-directory cache workaround
+
+With Cargo outputs on D: outside the checkout, DX can treat every rlib as an
+external/compiler library and write a zero-byte `libdeps-*.a`. The first link
+skips that archive, but the cached path tests only existence and force-loads it,
+causing LLD's `unknown file type`. Ara's linker facade ignores only that known
+zero-byte generated archive (including its `/WHOLEARCHIVE:` argument); DX still
+passes the original compiler rlibs. A regression test links through the real
+pinned LLD and verifies that nonempty and unrelated archives remain untouched.
+This workaround does not change normal workspace linking or delete evidence.
+
+### Windows editor panel and paired Play startup
+
+The actual editor `draw_panel` changed Console to a visible `RUST PATCH LIVE`
+panel, restored Console, repeated the edit and restored again. The editor PID
+**28144** and protocol session **ses_ayaq18bw** stayed unchanged throughout.
+Production layout capture detected the marker; GPU captures confirmed it visually.
+The baseline, changed and restored screenshots were inspected. No window was shown.
+
+| Phase | Edit to observed layout and GPU capture |
+| --- | ---: |
+| First panel body edit | 20,593.90 ms |
+| Restore Console | 29,474.36 ms |
+| Repeat panel body edit | 33,060.12 ms |
+| Restore Console again | 13,178.83 ms |
+
+The editor exited gracefully, and the Windows GPU guard reported valid. Evidence:
+`target/hotpatch-proof/windows-editor-project-v2-r4/.ara/hotpatch-proof/measurements.json`
+and `target/hotpatch-research/editor-v2-r4-*`. Initial startup was expensive:
+12m23s for the matching editor/player Cargo build, then approximately 11m for the
+DX fat build. These are separate from the edit timings.
+
+Capture inspection exposed stack overflows in the separately built, opt-level 0
+Play companion's graphics prewarm. A direct hidden prewarm reproduced this with
+the default 1 MiB Windows executable stack. Changing only its reserve to 16 MiB
+completed prewarm and reached the expected owner connection error. The dev-only
+linker facade now supplies the same reserve to DX hosts, and standard MSVC
+`editbin` sets it on the paired companion after linking. A real-LLD/editbin test
+verifies the PE stack reserve. Normal workspace and shipping linking stay unchanged.
+
+The original editor/pool startup was rerun with that companion: editor PID
+**43752**, `play.status.pool.headless = 1`, still ready ten seconds later, exactly
+one companion log and no overflow/respawn. Editor and companion exited normally;
+GPU attribution was valid. Evidence:
+`target/hotpatch-proof/windows-editor-stack-fixed/{pool-ready.json,pool-still-ready.json,driver.err.log}`.
+The local harness initially misread its single GPU-report line as a character;
+read-only parsing afterward confirmed the valid report. This was a report-reader
+error after clean shutdown, not a missing readiness or cleanup check.
 
 ### Dispatch overhead and checkpoint validation
 
@@ -183,3 +365,14 @@ and diagnostic catalog coverage pass. An initial catalog test caught duplicate
 ARA7603 declarations; the warning now has one canonical owner. Explicit hidden
 player GPU startup and error-retirement tests also pass. No visible test window.
 Checkpoint logs are `target/hotpatch-research/stage2-*`.
+
+The next checkpoint adds native CLI installation/capability v2, external D: cache
+handling, editor companion pairing, the three dispatch proofs, and persisted
+determinism rejection. Portable changed-crate Clippy/tests and diagnostic coverage
+passed on m6u; Windows repeated native facade/runtime/tooling Clippy/tests and
+catalog coverage. The stack correction additionally reruns ara-dev's focused
+checks, including the real MSVC editbin regression. Logs:
+`target/hotpatch-research/{linux-stage3f,linux-editor-stage3,windows-stage3-*}.log`.
+One ara-dev fixture run found the machine's installed sccache instead of exercising
+its intended missing-cache path. The final run uses the pinned compiler's bin
+directory without the user Cargo tool directory, as in the preceding native gate.

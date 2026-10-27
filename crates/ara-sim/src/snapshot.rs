@@ -123,7 +123,8 @@ impl Snapshot {
 /// Portable replay artifact. Systems are supplied by the matching engine build.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Replay {
-    /// Replay format version.
+    /// Format 1 is reproducible; format 2 marks Rust-patched development history
+    /// so readers predating the taint flag also refuse it.
     pub format: u32,
     /// Canonical initial scene/dependency digest.
     pub scene_hash: StateHash,
@@ -275,7 +276,7 @@ impl Session {
             }
         }
         Ok(Snapshot {
-            format: 1,
+            format: if self.rust_hotpatched() { 2 } else { 1 },
             schema_hash: self.schema_hash(),
             build_hash,
             scene_hash,

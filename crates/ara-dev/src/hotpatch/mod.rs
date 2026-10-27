@@ -1,7 +1,9 @@
 //! Optional dx lane. The lab can probe availability before selecting this strategy.
+mod companion;
 mod compiler;
 pub(crate) mod linker;
 mod response;
+mod tool;
 #[cfg(windows)]
 mod windows_stubs;
 use anyhow::{Context, Result, bail, ensure};
@@ -21,11 +23,28 @@ pub(crate) fn forward() -> Option<std::process::ExitCode> {
     linker::forward().or_else(compiler::forward)
 }
 
+/// Keep fat/thin artifacts and tool caches beneath the caller's selected Cargo disk.
+fn output_root(root: &Path) -> PathBuf {
+    let path = std::env::var_os("CARGO_TARGET_DIR")
+        .or_else(|| std::env::var_os("CARGO_BUILD_TARGET_DIR"))
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("target"));
+    if path.is_absolute() {
+        path
+    } else {
+        root.join(path)
+    }
+}
+
 #[derive(Args)]
 pub(crate) struct Options {
-    /// Explicit dx executable (otherwise ARA_DX, then PATH).
+    /// Explicit dx executable (otherwise ARA_DX, the prepared local tool, then PATH).
     #[arg(long)]
     dx: Option<PathBuf>,
+    /// Prepare optional pinned dx with the native Rust save fix (network/build opt-in).
+    #[arg(long, conflicts_with = "args", conflicts_with = "dx")]
+    install_dx: bool,
     /// Local devserver port, distinct for each simultaneous host.
     #[arg(long, default_value_t = 18080)]
     port: u16,
@@ -33,14 +52,14 @@ pub(crate) struct Options {
     #[arg(long)]
     plan: bool,
     /// player|editor followed by native application arguments.
-    #[arg(last = true, required = true, num_args = 1..)]
+    #[arg(last = true, required_unless_present = "install_dx", num_args = 1..)]
     args: Vec<OsString>,
 }
 
 /// Cheap lab capability probe. An error selects its existing warm-restart strategy.
 pub(crate) fn available(dx: &Path) -> Result<()> {
-    let output = Command::new(dx).arg("--version").output()
-        .with_context(|| format!("ARA7600: optional dx is missing at {}; install dioxus-cli {DX_VERSION} or set ARA_DX", dx.display()))?;
+    let output = tool::command(dx).arg("--version").output()
+        .with_context(|| format!("ARA7600: optional dx is missing at {}; run ara-dev hotpatch --install-dx or set ARA_DX", dx.display()))?;
     ensure!(output.status.success(), "ARA7600: dx --version failed");
     let text = String::from_utf8(output.stdout)?;
     ensure!(
@@ -48,7 +67,7 @@ pub(crate) fn available(dx: &Path) -> Result<()> {
         "ARA7600: expected dioxus-cli {DX_VERSION}, got {}; set ARA_DX to a matching tool",
         text.trim()
     );
-    Ok(())
+    tool::capability(dx)
 }
 
 fn target(args: &[OsString]) -> Result<(&'static str, &'static str, &'static str)> {
@@ -58,17 +77,22 @@ fn target(args: &[OsString]) -> Result<(&'static str, &'static str, &'static str
             Ok(("ara-editor-hotpatch", "ara-editor-hotpatch", "hotpatch"))
         }
         Some("render-probe") => Ok(("ara-hotpatch-probe", "ara-hotpatch-probe", "hotpatch")),
+        Some("sim-probe") => Ok((
+            "ara-hotpatch-sim-probe",
+            "ara-hotpatch-sim-probe",
+            "hotpatch",
+        )),
         _ => bail!("use ara-dev hotpatch -- player|editor [native arguments]"),
     }
 }
 
 /// Launch the native host; all runtime diagnostics retain the host PID and generation.
 pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
+    if options.install_dx {
+        return tool::install(root, options.plan).context("ARA7600: optional dx setup failed");
+    }
     let (package, bin, feature) = target(&options.args)?;
-    let dx = options
-        .dx
-        .or_else(|| std::env::var_os("ARA_DX").map(PathBuf::from))
-        .unwrap_or_else(|| "dx".into());
+    let dx = tool::select(root, options.dx);
     available(&dx)?;
     if options.plan {
         println!(
@@ -79,14 +103,19 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
         return Ok(true);
     }
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
-    let directory = root
-        .join("target/ara-hotpatch")
-        .join(format!("run-{stamp}"));
+    let artifacts = output_root(root).join("ara-hotpatch");
+    let companion = (package == "ara-editor-hotpatch")
+        .then(|| companion::prepare(root, &artifacts))
+        .transpose()?;
+    let directory = artifacts.join(format!("run-{stamp}"));
     std::fs::create_dir_all(&directory)?;
     let contract_path = directory.join("contract.json");
     eprintln!("Capturing Rust compatibility baseline (off the frame thread)...");
     ara_hotpatch::Contract::capture(root)?.write(&contract_path)?;
     let mut command = Command::new(&dx);
+    if let Some(player) = companion {
+        command.env("ARA_PLAYER", player);
+    }
     command.current_dir(root).args([
         "serve",
         "--platform",
@@ -115,6 +144,7 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
     let cache = directory.join("dx");
     std::fs::create_dir_all(&cache)?;
     command
+        .env("ARA_NATIVE_RUST_PATCH", "1")
         .arg("--verbose")
         .arg("--session-cache-dir")
         .arg(cache);
@@ -123,17 +153,18 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
     command
         .env("ARA_HOTPATCH_ARGS", native_args(&options.args[1..])?)
         .env("ARA_HOTPATCH_DRIVER", std::env::current_exe()?);
+    // Helper processes and the independently built editor Play companion must
+    // never register against this host's native PID/ASLR patch baseline.
+    command.env("ARA_HOTPATCH_HOST_BIN", bin);
+    command.env_remove("ARA_HOTPATCH_GPU_CHILD");
     command
         .env("ARA_HOTPATCH_CONTRACT", contract_path)
         .env(
             "CARGO_BUILD_JOBS",
             if cfg!(target_os = "macos") { "2" } else { "4" },
         )
-        .env("CARGO_TARGET_DIR", root.join("target/ara-hotpatch/build"))
-        .env(
-            "CARGO_BUILD_BUILD_DIR",
-            root.join("target/ara-hotpatch/intermediates"),
-        )
+        .env("CARGO_TARGET_DIR", artifacts.join("build"))
+        .env("CARGO_BUILD_BUILD_DIR", artifacts.join("intermediates"))
         .env("RUSTC_WRAPPER", "")
         .env("ARA_CONFIG_DIR", directory.join("profile"))
         .env("ARA_CRASH_DIR", directory.join("crashes"));
@@ -158,6 +189,24 @@ fn native_args(args: &[OsString]) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
+    #[test]
+    fn optional_setup_plan_needs_no_app_and_rejects_mixed_launch_arguments() {
+        let cli =
+            crate::Cli::try_parse_from(["ara-dev", "hotpatch", "--install-dx", "--plan"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            crate::Command::Hotpatch(Options {
+                install_dx: true,
+                plan: true,
+                ..
+            })
+        ));
+        assert!(
+            crate::Cli::try_parse_from(["ara-dev", "hotpatch", "--install-dx", "--", "player"])
+                .is_err()
+        );
+    }
     #[test]
     fn editor_uses_a_bin_only_tip_and_arguments_remain_data() {
         assert_eq!(

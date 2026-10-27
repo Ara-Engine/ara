@@ -31,6 +31,9 @@ pub(super) fn prepare_argument(arg: OsString) -> Result<OsString> {
     };
     let mut encoded = Vec::with_capacity(args.len());
     for argument in args {
+        if empty_dx_archive(std::ffi::OsStr::new(argument)) {
+            continue;
+        }
         #[cfg(windows)]
         if Path::new(argument)
             .file_name()
@@ -46,6 +49,20 @@ pub(super) fn prepare_argument(arg: OsString) -> Result<OsString> {
     let normalized = file.with_file_name(format!("ara-link-{}.rsp", std::process::id()));
     std::fs::write(&normalized, encoded).context("quote dx linker response")?;
     Ok(format!("@{}", normalized.display()).into())
+}
+
+/// DX writes a zero-byte libdeps archive when target outputs are outside its
+/// checkout. Its first link skips it; cached links mistakenly force-load it.
+/// The original compiler rlibs remain on the command line in both cases.
+pub(super) fn empty_dx_archive(argument: &std::ffi::OsStr) -> bool {
+    let Some(text) = argument.to_str() else {
+        return false;
+    };
+    let path = Path::new(text.strip_prefix("/WHOLEARCHIVE:").unwrap_or(text));
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|name| name.starts_with("libdeps-") && name.ends_with(".a"))
+        && std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.len() == 0)
 }
 
 // LLVM's Windows response parser follows the MSVC backslash-before-quote rules.
@@ -76,10 +93,7 @@ mod tests {
 
     #[test]
     fn dx_raw_response_with_spaces_links_through_the_real_lld() {
-        let root =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/hotpatch-link-tests");
-        fs::create_dir_all(&root).unwrap();
-        let scratch = tempfile::tempdir_in(root).unwrap();
+        let scratch = tempfile::tempdir().unwrap();
         let source = scratch.path().join("entry.rs");
         let object = scratch.path().join("entry.obj");
         fs::write(
@@ -107,7 +121,9 @@ mod tests {
             .join("lib/rustlib/x86_64-pc-windows-msvc/bin/rust-lld.exe");
         let response = scratch.path().join("link_args.json");
         let executable = scratch.path().join("entry.exe");
-        fs::write(&response, format!("/NOLOGO\n/NODEFAULTLIB\n/ENTRY:entry\n/SUBSYSTEM:CONSOLE\n/OUT:{}\n/LIBPATH:{}\n{}\n", executable.display(), scratch.path().join("SDK path with spaces").display(), object.display())).unwrap();
+        let empty = scratch.path().join("libdeps-test.a");
+        fs::write(&empty, []).unwrap();
+        fs::write(&response, format!("/NOLOGO\n/NODEFAULTLIB\n/ENTRY:entry\n/SUBSYSTEM:CONSOLE\n/OUT:{}\n/LIBPATH:{}\n/WHOLEARCHIVE:{}\n{}\n", executable.display(), scratch.path().join("SDK path with spaces").display(), empty.display(), object.display())).unwrap();
         let arg = OsString::from(format!("@{}", response.display()));
         let raw = Command::new(&lld)
             .args(["-flavor", "link"])
@@ -129,5 +145,18 @@ mod tests {
             String::from_utf8_lossy(&fixed.stderr)
         );
         assert!(executable.is_file());
+        super::super::linker::prepare_companion(&executable).unwrap();
+        let image = fs::read(&executable).unwrap();
+        let pe = u32::from_le_bytes(image[60..64].try_into().unwrap()) as usize;
+        let stack = pe + 24 + 72;
+        assert_eq!(
+            u64::from_le_bytes(image[stack..stack + 8].try_into().unwrap()),
+            16 * 1024 * 1024
+        );
+        fs::write(&empty, b"!<arch>\n").unwrap();
+        assert!(!empty_dx_archive(empty.as_os_str()));
+        let unrelated = scratch.path().join("custom.a");
+        fs::write(&unrelated, []).unwrap();
+        assert!(!empty_dx_archive(unrelated.as_os_str()));
     }
 }

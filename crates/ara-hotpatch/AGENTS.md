@@ -16,4 +16,7 @@ source contract only with evidence that persisted state remains compatible.
 Measured limitations: `spikes/s11-rust-hotpatch/RESULT.md`.
 
 Check default tooling and `--features runtime` with focused clippy/tests. Real patch
-tests need optional matching dx and scratch profiles under target.
+tests need optional prepared dx (`ara-dev hotpatch --install-dx`) and scratch profiles.
+The driver honors CARGO_TARGET_DIR for all fat/thin/tool caches. The reviewed
+synchronous render/panel entries may change frame-local closures; retained closure
+environments and every layout/signature still require rebuilding.

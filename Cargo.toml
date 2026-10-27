@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "crates/ara-hotpatch/probe", "crates/ara-hotpatch/editor"]
+members = ["crates/*", "crates/ara-hotpatch/probe", "crates/ara-hotpatch/editor", "crates/ara-hotpatch/sim-probe"]
 # Spikes are throwaway experiments with their own Cargo workspaces.
 exclude = ["spikes"]
 

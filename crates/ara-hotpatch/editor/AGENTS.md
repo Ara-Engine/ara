@@ -7,5 +7,7 @@ dependency watcher gaps. It has no runtime target without `--features hotpatch`.
 Panel, process and authoring behavior belong to ara-editor. Do not fork its main
 function here. Test via `ara-dev hotpatch -- editor <scratch project>` with an
 offscreen bounded run; keep profile/captures under target.
+On Windows the tip admits its real editor child through the GPU queue after the
+fat build, so compilation holds no GPU lease and captures have exact attribution.
 
 Focused check: `cargo clippy -p ara-editor-hotpatch --all-targets --features hotpatch -- -D warnings`.

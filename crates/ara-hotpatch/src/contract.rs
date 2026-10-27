@@ -39,7 +39,8 @@ impl Contract {
         Ok(Self { root, files })
     }
 
-    /// Refuse declaration, build-input, async, generic or closure-bearing body edits.
+    /// Refuse declarations/build inputs and bodies with retained, unsupported state.
+    /// Reviewed recording entries may change their synchronous frame-local closures.
     /// Run off the frame thread, before loading any patch library.
     pub fn validate(&self) -> Result<()> {
         self.validate_scope(None)
@@ -161,7 +162,8 @@ fn fingerprint_bytes(path: &Path, bytes: &[u8]) -> Result<Input> {
     {
         let mut file = syn::parse_file(std::str::from_utf8(bytes)?)
             .with_context(|| format!("parse {}", path.display()))?;
-        Bodies.visit_file_mut(&mut file);
+        let source = path.to_string_lossy().replace('\\', "/");
+        Bodies { source: &source }.visit_file_mut(&mut file);
         blake3::hash(file.to_token_stream().to_string().as_bytes())
             .to_hex()
             .to_string()
@@ -171,10 +173,30 @@ fn fingerprint_bytes(path: &Path, bytes: &[u8]) -> Result<Input> {
     Ok(Input { bytes: hash, shape })
 }
 
-struct Bodies;
-impl Bodies {
+struct Bodies<'a> {
+    source: &'a str,
+}
+impl Bodies<'_> {
     fn body(&mut self, sig: &syn::Signature, body: &mut syn::Block) {
-        let mut retained = Retained(false);
+        // These reviewed entry points hold a Lease until synchronous recording/UI
+        // work ends. Their iterator/memoization closures are fresh frame locals;
+        // none is the persisted function environment passed through HotFn.
+        let scoped = (sig.ident == "record_frame"
+            && [
+                "crates/ara-render/src/renderer/passes.rs",
+                "crates/ara-render-fidelity/src/render.rs",
+            ]
+            .iter()
+            .any(|path| self.source.ends_with(*path)))
+            || (sig.ident == "record_post_process"
+                && self
+                    .source
+                    .ends_with("crates/ara-render-fidelity/src/features.rs"))
+            || (sig.ident == "draw_panel"
+                && self
+                    .source
+                    .ends_with("crates/ara-editor/src/shell/panels.rs"));
+        let mut retained = Retained(false, scoped);
         retained.visit_block(body);
         retained.visit_return_type(&sig.output);
         if sig.constness.is_some()
@@ -191,7 +213,7 @@ impl Bodies {
         visit_mut::visit_block_mut(self, body);
     }
 }
-impl VisitMut for Bodies {
+impl VisitMut for Bodies<'_> {
     fn visit_item_impl_mut(&mut self, node: &mut syn::ItemImpl) {
         // Inherited type parameters and existing vtables are retained state too.
         if node.generics.params.is_empty() && node.trait_.is_none() {
@@ -211,38 +233,48 @@ impl VisitMut for Bodies {
         }
     }
 }
-struct Retained(bool);
-impl<'ast> Visit<'ast> for Retained {
-    fn visit_macro(&mut self, node: &'ast syn::Macro) {
-        // Unknown macros may define statics/types or store callbacks. Pure formatting
-        // and assertion macros are allowed only without hidden declarations/closures.
-        let pure = node.path.segments.last().is_some_and(|s| {
-            matches!(
-                s.ident.to_string().as_str(),
-                "format"
-                    | "format_args"
-                    | "println"
-                    | "eprintln"
-                    | "write"
-                    | "writeln"
-                    | "vec"
-                    | "matches"
-                    | "assert"
-                    | "assert_eq"
-                    | "assert_ne"
-                    | "debug_assert"
-                    | "debug_assert_eq"
-                    | "debug_assert_ne"
-                    | "ensure"
-                    | "bail"
-                    | "anyhow"
-            )
-        });
-        let tokens = node.tokens.to_string();
-        if !pure
-            || tokens.split_whitespace().any(|t| {
-                matches!(
-                    t,
+struct Retained(bool, bool);
+fn pure_macro(name: &str, scoped: bool) -> bool {
+    // These expand to literal values or a synchronous scope guard, never new
+    // declarations/retained environments. Their nested arguments are checked too.
+    (scoped
+        && matches!(
+            name,
+            "cpu_scope" | "env" | "option_env" | "concat" | "stringify"
+        ))
+        || matches!(
+            name,
+            "format"
+                | "format_args"
+                | "println"
+                | "eprintln"
+                | "write"
+                | "writeln"
+                | "vec"
+                | "matches"
+                | "assert"
+                | "assert_eq"
+                | "assert_ne"
+                | "debug_assert"
+                | "debug_assert_eq"
+                | "debug_assert_ne"
+                | "ensure"
+                | "bail"
+                | "anyhow"
+        )
+}
+
+fn macro_tokens(tokens: proc_macro2::TokenStream, scoped: bool) -> bool {
+    use proc_macro2::TokenTree;
+    let tokens: Vec<_> = tokens.into_iter().collect();
+    for (index, token) in tokens.iter().enumerate() {
+        match token {
+            TokenTree::Group(group) if !macro_tokens(group.stream(), scoped) => return false,
+            TokenTree::Punct(p) if p.as_char() == '|' && !scoped => return false,
+            TokenTree::Ident(ident) => {
+                let name = ident.to_string();
+                if matches!(
+                    name.as_str(),
                     "struct"
                         | "enum"
                         | "type"
@@ -251,20 +283,44 @@ impl<'ast> Visit<'ast> for Retained {
                         | "static"
                         | "thread_local"
                         | "async"
-                        | "|"
-                        | "||"
-                )
-            })
-        {
+                ) {
+                    return false;
+                }
+                if matches!(tokens.get(index + 1), Some(TokenTree::Punct(p)) if p.as_char() == '!')
+                    && matches!(tokens.get(index + 2), Some(TokenTree::Group(_)))
+                    && !pure_macro(&name, scoped)
+                {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+    }
+    true
+}
+impl<'ast> Visit<'ast> for Retained {
+    fn visit_macro(&mut self, node: &'ast syn::Macro) {
+        // Unknown macros may define statics/types or store callbacks. Pure formatting
+        // and assertion macros are allowed only without hidden declarations/closures.
+        let pure = node
+            .path
+            .segments
+            .last()
+            .is_some_and(|s| pure_macro(&s.ident.to_string(), self.1));
+        if !pure || !macro_tokens(node.tokens.clone(), self.1) {
             self.0 = true;
         }
     }
-    fn visit_expr_closure(&mut self, _: &'ast syn::ExprClosure) {
-        self.0 = true;
+    fn visit_expr_closure(&mut self, node: &'ast syn::ExprClosure) {
+        self.0 |= !self.1 || node.asyncness.is_some();
+        syn::visit::visit_expr_closure(self, node);
     }
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
         let method = node.method.to_string();
-        if method.starts_with("create_")
+        if matches!(
+            method.as_str(),
+            "create" | "allocate" | "destroy" | "retire"
+        ) || method.starts_with("create_")
             || method.starts_with("allocate_")
             || method.starts_with("destroy_")
             || method.starts_with("retire_")
@@ -294,6 +350,46 @@ mod tests {
         fingerprint_bytes(Path::new("a.rs"), text.as_bytes())
             .unwrap()
             .shape
+    }
+    #[test]
+    fn real_fidelity_recording_body_is_live_with_its_literal_macros_and_local_closures() {
+        let path = Path::new("crates/ara-render-fidelity/src/render.rs");
+        let source = include_str!("../../ara-render-fidelity/src/render.rs");
+        let anchor = "let (frame, vp, camera) = self.frame(input)?;";
+        assert!(source.contains(anchor));
+        let edited = source.replace(
+            anchor,
+            "let (frame, vp, camera) = self.frame(input)?; let _proof = 7;",
+        );
+        assert_eq!(
+            fingerprint_bytes(path, source.as_bytes()).unwrap().shape,
+            fingerprint_bytes(path, edited.as_bytes()).unwrap().shape,
+        );
+    }
+    #[test]
+    fn reviewed_recording_locals_can_change_but_persisted_layouts_cannot() {
+        let path = Path::new("crates/ara-render-fidelity/src/render.rs");
+        let shape = |text: &str| fingerprint_bytes(path, text.as_bytes()).unwrap().shape;
+        assert_eq!(
+            shape("fn record_frame() { let a = [1].map(|v| v+1); }"),
+            shape("fn record_frame() { let a = [1].map(|v| v+2); }")
+        );
+        assert_ne!(
+            shape("fn record_frame() { let a = || { struct S(u32); }; }"),
+            shape("fn record_frame() { let a = || { struct S(u64); }; }")
+        );
+        assert_ne!(
+            shape("fn record_frame() { let a = async { 1 }; }"),
+            shape("fn record_frame() { let a = async { 2 }; }")
+        );
+        assert_ne!(
+            shape("fn record_frame() { gpu.create_image(1); }"),
+            shape("fn record_frame() { gpu.create_image(2); }")
+        );
+        assert_eq!(
+            shape("fn record_frame() { ara_gpu::cpu_scope!(\"a\"); }"),
+            shape("fn record_frame() { ara_gpu::cpu_scope!(\"b\"); }")
+        );
     }
     #[test]
     fn body_changes_preserve_the_contract_but_layouts_do_not() {
@@ -330,6 +426,10 @@ mod tests {
 
     #[test]
     fn macros_cannot_hide_new_persistent_layouts() {
+        assert_ne!(
+            shape("fn f() { format!(\"{}\", hidden!(A)); }"),
+            shape("fn f() { format!(\"{}\", hidden!(B)); }")
+        );
         assert_ne!(
             shape("fn f() { thread_local! { static A: u32 = 1; } }"),
             shape("fn f() { thread_local! { static A: u64 = 1; } }")

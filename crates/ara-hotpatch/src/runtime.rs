@@ -133,7 +133,16 @@ impl Hotpatch {
         eprintln!("{BUILD_MARKER}: experimental Rust hotpatch host");
         let (sender, receiver) = mpsc::channel();
         let pending = Arc::new(AtomicBool::new(false));
-        if let Some(endpoint) = dioxus_cli_config::devserver_ws_endpoint() {
+        let endpoint = dioxus_cli_config::devserver_ws_endpoint().filter(|_| {
+            if let (Ok(executable), Some(expected)) = (
+                std::env::current_exe(), std::env::var_os("ARA_HOTPATCH_HOST_BIN"),
+            ) && !host_matches(&executable, Some(&expected)) {
+                eprintln!("Rust hotpatch: this companion keeps its built code; use its own player driver for Rust iteration");
+                return false;
+            }
+            true
+        });
+        if let Some(endpoint) = endpoint {
             #[cfg(windows)]
             {
                 // SAFETY: This changes only our host's priority, using its always-valid
@@ -247,6 +256,12 @@ struct Reload {
 }
 
 fn receive(endpoint: &str, sender: &mpsc::Sender<Delivery>, ready: &AtomicBool) -> Result<()> {
+    let executable = std::env::current_exe()?;
+    let expected = std::env::var_os("ARA_HOTPATCH_HOST_BIN");
+    anyhow::ensure!(
+        host_matches(&executable, expected.as_deref()),
+        "ARA7600: this helper/Play companion has a different patch baseline; launch its own ara-dev hotpatch player lane"
+    );
     anyhow::ensure!(
         endpoint.starts_with("ws://127.0.0.1:")
             || endpoint.starts_with("ws://localhost:")
@@ -314,9 +329,52 @@ fn receive(endpoint: &str, sender: &mpsc::Sender<Delivery>, ready: &AtomicBool) 
     Ok(())
 }
 
+fn host_matches(executable: &std::path::Path, expected: Option<&std::ffi::OsStr>) -> bool {
+    let Some((stem, expected)) = executable
+        .file_stem()
+        .and_then(|n| n.to_str())
+        .zip(expected.and_then(|n| n.to_str()))
+    else {
+        return false;
+    };
+    // DX retains Cargo's artifact hash in the bundled native filename. Helpers
+    // still need the exact bin name; an arbitrary prefix match is not sufficient.
+    stem == expected
+        || stem
+            .strip_prefix(expected)
+            .and_then(|s| s.strip_prefix('-'))
+            .is_some_and(|suffix| {
+                (8..=64).contains(&suffix.len()) && suffix.bytes().all(|b| b.is_ascii_hexdigit())
+            })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn native_identity_accepts_cargo_hashes_and_refuses_other_companions() {
+        let expected = Some(std::ffi::OsStr::new("ara-editor-hotpatch"));
+        assert!(host_matches(
+            std::path::Path::new("ara-editor-hotpatch.exe"),
+            expected
+        ));
+        assert!(host_matches(
+            std::path::Path::new("ara-editor-hotpatch-e8e1de04.exe"),
+            expected
+        ));
+        assert!(!host_matches(
+            std::path::Path::new("ara-player-e8e1de04.exe"),
+            expected
+        ));
+        assert!(!host_matches(
+            std::path::Path::new("ara-editor-hotpatch-helper.exe"),
+            expected
+        ));
+        assert!(!host_matches(
+            std::path::Path::new("ara-editor-hotpatch.exe"),
+            None
+        ));
+    }
     #[test]
     fn publication_defers_until_all_hot_work_finishes() {
         let lease = Lease::enter();

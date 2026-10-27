@@ -6,12 +6,15 @@ owner: ara-hotpatch
 The optional development patcher could not start. Ordinary builds do not need dx.
 
 Causes:
-- dx is missing, has a different protocol version, or cannot find its native linker.
+- dx is missing, has a different protocol/native capability version, or cannot find its native linker.
+- The Windows SDK/MSVC tools are incomplete, including editbin for the unoptimized Play companion's stack reserve.
 - The player was started without ara-dev's source compatibility contract.
 
 Fixes:
-- Install dioxus-cli 0.8.0-alpha.3, or point ARA_DX at that executable.
+- Run `ara-dev hotpatch --install-dx` to prepare the pinned optional CLI with the native Rust save fix.
+- Or point ARA_DX at an already prepared 0.8.0-alpha.3 tool (native capability v2).
 - Launch with ara-dev hotpatch. Read docs/dev/ara-dev.md for Windows setup.
+- Repair the existing MSVC C++/Windows SDK installation if link or editbin cannot be located.
 
 ## ARA7601 hotpatch::APPLIED: Rust patch applied
 owner: ara-hotpatch
@@ -34,7 +37,7 @@ the changed source contract or library-load error.
 
 Causes:
 - A type/resource layout, function signature, static, build input or source set changed.
-- An async, generic, impl Trait or closure-bearing body changed.
+- An async, generic, impl Trait or unreviewed closure-bearing body changed.
 - The patch library could not be loaded for this process.
 
 Fixes:

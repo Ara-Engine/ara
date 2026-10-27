@@ -44,7 +44,8 @@ Local developer binary. Uses git/cargo subprocesses; ara-hotpatch is tooling-onl
   `history-match` finds unique full-message/tree/metadata forks; see `docs/releases.md`.
 - `perf`: optimized incremental build, once-frozen Outpost pack, GPU-locked frame
   windows, JSON/deltas, warm-player file controls and local stdio MCP bridge.
-- `hotpatch`: optional dx 0.8.0-alpha.3; body-only source contract, guarded compiler/linker,
+- `hotpatch`: `--install-dx` prepares optional pinned dx plus its native Rust save fix;
+  ordinary builds never require it. Body-only source contract, guarded compiler/linker,
   frame-boundary player/editor publication. Windows facade stays inside this command.
   `render-probe` is a windowless pass proof; acquire the GPU queue before its start file.
 - `preview`: isolate a workspace-version commit, package/smoke/sign both kinds

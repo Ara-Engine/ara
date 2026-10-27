@@ -1,6 +1,6 @@
 # Manual opt-in measurement. Edits two Rust sources and restores them in finally.
 # Start ara-dev hotpatch render-probe separately with this same scratch Output.
-param([Parameter(Mandatory=$true)][string]$Output, [Parameter(Mandatory=$true)][string]$Root)
+param([Parameter(Mandatory=$true)][string]$Output, [Parameter(Mandatory=$true)][string]$Root, [switch]$Fidelity)
 $ErrorActionPreference = 'Stop'
 [IO.Directory]::CreateDirectory($Output) | Out-Null
 $passPath = Join-Path $Root 'crates/ara-render/src/renderer/passes.rs'
@@ -10,6 +10,18 @@ $layoutBefore = [IO.File]::ReadAllText($layoutPath)
 $encoding = [Text.UTF8Encoding]::new($false)
 $old = 'words[5] = u32::from(lit);'
 $new = 'words[5] = u32::from(!lit);'
+if ($Fidelity) {
+    $passPath = Join-Path $Root 'crates/ara-render-fidelity/src/render.rs'
+    $layoutPath = Join-Path $Root 'crates/ara-render-fidelity/src/frame.rs'
+    $passBefore = [IO.File]::ReadAllText($passPath)
+    $layoutBefore = [IO.File]::ReadAllText($layoutPath)
+    $old = 'let (frame, vp, camera) = self.frame(input)?;'
+    $new = 'let original = self.settings.post.compensation;' + "`n" +
+        '        self.settings.post.compensation = original + 3.;' + "`n" +
+        '        let recorded = self.frame(input);' + "`n" +
+        '        self.settings.post.compensation = original;' + "`n" +
+        '        let (frame, vp, camera) = recorded?;'
+}
 if (($passBefore.Split(@($old), [StringSplitOptions]::None)).Length -ne 2) { throw 'pass probe anchor is not unique' }
 function Read-State {
     try { Get-Content -LiteralPath (Join-Path $Output 'status.json') -Raw | ConvertFrom-Json } catch { $null }
@@ -35,8 +47,10 @@ try {
         if ($phase -in @('body', 'body-repeat')) {
             [IO.File]::WriteAllText($passPath, $passBefore.Replace($old, $new), $encoding)
         } elseif ($phase -eq 'layout') {
-            if (-not $layoutBefore.Contains('pub vp: Mat4,')) { throw 'layout probe anchor is missing' }
-            [IO.File]::WriteAllText($layoutPath, $layoutBefore.Replace('pub vp: Mat4,', 'pub vp: [Mat4; 2],'), $encoding)
+            $layoutOld = if ($Fidelity) { 'inverse_vp: Mat4,' } else { 'pub vp: Mat4,' }
+            $layoutNew = if ($Fidelity) { 'inverse_vp: [Mat4; 2],' } else { 'pub vp: [Mat4; 2],' }
+            if (-not $layoutBefore.Contains($layoutOld)) { throw 'layout probe anchor is missing' }
+            [IO.File]::WriteAllText($layoutPath, $layoutBefore.Replace($layoutOld, $layoutNew), $encoding)
         } else {
             [IO.File]::WriteAllText($layoutPath, $layoutBefore, $encoding)
             [IO.File]::WriteAllText($passPath, $passBefore, $encoding)

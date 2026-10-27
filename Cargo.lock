@@ -1053,6 +1053,7 @@ dependencies = [
  "ara-diag",
  "blake3",
  "dioxus-cli-config",
+ "proc-macro2",
  "quote",
  "serde",
  "serde_json",
@@ -1071,7 +1072,23 @@ dependencies = [
  "ara-gpu",
  "ara-hotpatch",
  "ara-render",
+ "ara-render-fidelity",
  "glam 0.30.9",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-hotpatch-sim-probe"
+version = "0.0.1-alpha"
+dependencies = [
+ "anyhow",
+ "ara-components",
+ "ara-doc",
+ "ara-hotpatch",
+ "ara-input",
+ "ara-schema",
+ "ara-sim",
+ "bevy_ecs",
  "serde_json",
 ]
 

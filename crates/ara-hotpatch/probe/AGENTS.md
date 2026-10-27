@@ -1,6 +1,8 @@
 # ara-hotpatch-probe
 
-Windowless native instanced renderer proving real Rust pass edits. This bin needs
+Windowless native instanced renderer proving real Rust pass edits. `--fidelity`
+instead keeps an RT FidelityView alive and exercises its real recording graph.
+This bin needs
 the `hotpatch` feature and optional dx through `ara-dev hotpatch -- render-probe`.
 It acquires the GPU queue after the fat build; its child alone owns publication.
 

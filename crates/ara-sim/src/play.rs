@@ -305,7 +305,7 @@ impl PlayControl {
         }
         let initial = self.checkpoint()?;
         self.recording = Some(Replay {
-            format: 1,
+            format: if self.session.rust_hotpatched() { 2 } else { 1 },
             scene_hash: initial.scene_hash,
             seed: initial.context.seed,
             build_hash: self.build,
@@ -340,6 +340,9 @@ impl PlayControl {
             .take()
             .ok_or_else(|| SimError("not recording".into()))?;
         replay.rust_hotpatched |= self.session.rust_hotpatched();
+        if replay.rust_hotpatched {
+            replay.format = 2;
+        }
         if let Some(last) = replay.ticks.last_mut()
             && last.hash.is_none()
         {

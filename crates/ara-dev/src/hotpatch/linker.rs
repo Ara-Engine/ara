@@ -5,6 +5,24 @@ use std::{
     process::{Command, ExitCode},
 };
 
+// Opt-level 0 keeps large renderer startup frames that optimized builds eliminate.
+#[cfg(windows)]
+const STACK_RESERVE: &str = "/STACK:16777216";
+
+/// The normally linked editor companion needs the same dev-only stack as dx hosts.
+#[cfg(windows)]
+pub(super) fn prepare_companion(player: &Path) -> Result<()> {
+    let tool = cc::windows_registry::find_tool("x86_64-pc-windows-msvc", "editbin.exe")
+        .ok_or_else(|| anyhow::anyhow!("ARA7600: MSVC editbin not found for hotpatch companion"))?;
+    let mut command = tool.to_command();
+    command.args(["/NOLOGO", STACK_RESERVE]).arg(player);
+    anyhow::ensure!(
+        crate::process::run(&mut command, None)?.success(),
+        "ARA7600: cannot reserve the hotpatch companion's startup stack"
+    );
+    Ok(())
+}
+
 /// A copy named link.exe forwards raw linker arguments before clap sees them.
 pub(crate) fn forward() -> Option<ExitCode> {
     let executable = std::env::current_exe().ok()?;
@@ -23,10 +41,16 @@ pub(crate) fn forward() -> Option<ExitCode> {
             return Some(ExitCode::FAILURE);
         }
     };
+    let args: Vec<_> = args
+        .into_iter()
+        .filter(|arg| !super::response::empty_dx_archive(arg))
+        .collect();
     let mut command = Command::new(linker);
     if !args.iter().any(|a| a == "-flavor") {
         command.args(["-flavor", "link"]);
     }
+    #[cfg(windows)]
+    command.arg(STACK_RESERVE);
     Some(match command.args(args).status() {
         Ok(status) => ExitCode::from(status.code().unwrap_or(1) as u8),
         Err(error) => {
@@ -50,7 +74,9 @@ pub(super) fn configure(root: &Path, command: &mut Command) -> Result<()> {
     // Key by tool bytes so another running host never has its facade overwritten.
     let executable = std::env::current_exe()?;
     let key = blake3::hash(&std::fs::read(&executable)?).to_hex();
-    let tools = root.join("target/ara-hotpatch/tools").join(key.as_str());
+    let tools = super::output_root(root)
+        .join("ara-hotpatch/tools")
+        .join(key.as_str());
     std::fs::create_dir_all(&tools)?;
     let directory = tools.as_path();
     let compiler = directory.join(if cfg!(windows) { "rustc.exe" } else { "rustc" });
