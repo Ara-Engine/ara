@@ -478,15 +478,15 @@ impl Shell {
                                 diagnostic.location.line,
                                 diagnostic.location.column,
                             )?;
-                        } else if let Some(doc) = diagnostic.location.doc.as_deref() {
-                            if let Some(path) = editor.host.store().workspace().path_of(doc) {
-                                self.open_script_location(
-                                    editor,
-                                    path,
-                                    diagnostic.location.line,
-                                    diagnostic.location.column,
-                                )?;
-                            }
+                        } else if let Some(doc) = diagnostic.location.doc.as_deref()
+                            && let Some(path) = editor.host.store().workspace().path_of(doc)
+                        {
+                            self.open_script_location(
+                                editor,
+                                path,
+                                diagnostic.location.line,
+                                diagnostic.location.column,
+                            )?;
                         }
                         rebuild = true;
                     }

@@ -281,10 +281,13 @@ impl Shell {
             }
             self.event(InputEvent::Cancel, clipboard)?;
             // Esc only reaches the keymap (e.g. Unreal's Stop) when nothing else consumed it.
-            if !had_drag && !had_overlay && !had_modal && !field {
-                if !self.selection_escape(editor)? {
-                    self.run_chord(editor, chord)?;
-                }
+            if !had_drag
+                && !had_overlay
+                && !had_modal
+                && !field
+                && !self.selection_escape(editor)?
+            {
+                self.run_chord(editor, chord)?;
             }
             self.rebuild(editor)?;
             return Ok(true);
@@ -354,12 +357,12 @@ impl Shell {
             }
             return self.open_context(editor);
         }
-        if !alt && !field {
-            if self.asset_selection_key(editor, scancode)?
-                || self.hierarchy_key(editor, scancode)?
-            {
-                return Ok(true);
-            }
+        if !alt
+            && !field
+            && (self.asset_selection_key(editor, scancode)?
+                || self.hierarchy_key(editor, scancode)?)
+        {
+            return Ok(true);
         }
         self.run_chord(editor, chord)
     }

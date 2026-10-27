@@ -5,7 +5,7 @@ use ara_ui::source::stable_id;
 mod content;
 
 pub(crate) enum Drag {
-    Content(content::ContentDrag),
+    Content(Box<content::ContentDrag>),
     Tab {
         panel: String,
         start: [f32; 2],
@@ -68,6 +68,7 @@ impl Shell {
         };
         self.drag = payload
             .and_then(|payload| content::ContentDrag::begin(payload, self))
+            .map(Box::new)
             .map(Drag::Content);
     }
     /// Resolve a release against the current model, then commit one atomic authoring batch.

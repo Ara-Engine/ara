@@ -409,6 +409,7 @@ fn edge_params(index: usize) -> Value {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

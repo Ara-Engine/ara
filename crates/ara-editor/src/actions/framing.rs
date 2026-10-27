@@ -16,49 +16,6 @@ pub(crate) struct PendingFrame {
     agent: bool,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn late_bounds_never_override_a_new_human_camera_or_selection() {
-        let mut state = EditorState {
-            doc: "sc_test001".into(),
-            selection: vec!["e_box001".into()],
-            ..EditorState::default()
-        };
-        let frame = PendingFrame::new(&state, false, false, 1., false);
-        assert!(frame.still_requested(&state, "human"));
-        state.camera.target.x += 1.;
-        assert!(!frame.still_requested(&state, "human"));
-        state.camera = frame.camera;
-        state.selection.clear();
-        assert!(!frame.still_requested(&state, "human"));
-    }
-    #[test]
-    fn a_pending_agent_frame_observes_only_that_agents_presence() {
-        let mut state = EditorState {
-            doc: "sc_agent01".into(),
-            selection: vec!["e_agent01".into()],
-            ..EditorState::default()
-        };
-        let frame = PendingFrame::new(&state, false, false, 1., true);
-        state.presence.insert(
-            "agent".into(),
-            crate::state::AgentPresence {
-                author: "Agent".into(),
-                doc: state.doc.clone(),
-                selection: state.selection.clone(),
-                camera: state.camera,
-            },
-        );
-        state.doc = "sc_human01".into();
-        state.selection.clear();
-        state.camera.target.x += 10.;
-        assert!(frame.still_requested(&state, "agent"));
-        state.presence.remove("agent");
-        assert!(!frame.still_requested(&state, "agent"));
-    }
-}
 impl PendingFrame {
     pub(super) fn new(
         state: &EditorState,
@@ -170,5 +127,49 @@ impl EditorService {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn late_bounds_never_override_a_new_human_camera_or_selection() {
+        let mut state = EditorState {
+            doc: "sc_test001".into(),
+            selection: vec!["e_box001".into()],
+            ..EditorState::default()
+        };
+        let frame = PendingFrame::new(&state, false, false, 1., false);
+        assert!(frame.still_requested(&state, "human"));
+        state.camera.target.x += 1.;
+        assert!(!frame.still_requested(&state, "human"));
+        state.camera = frame.camera;
+        state.selection.clear();
+        assert!(!frame.still_requested(&state, "human"));
+    }
+    #[test]
+    fn a_pending_agent_frame_observes_only_that_agents_presence() {
+        let mut state = EditorState {
+            doc: "sc_agent01".into(),
+            selection: vec!["e_agent01".into()],
+            ..EditorState::default()
+        };
+        let frame = PendingFrame::new(&state, false, false, 1., true);
+        state.presence.insert(
+            "agent".into(),
+            crate::state::AgentPresence {
+                author: "Agent".into(),
+                doc: state.doc.clone(),
+                selection: state.selection.clone(),
+                camera: state.camera,
+            },
+        );
+        state.doc = "sc_human01".into();
+        state.selection.clear();
+        state.camera.target.x += 10.;
+        assert!(frame.still_requested(&state, "agent"));
+        state.presence.remove("agent");
+        assert!(!frame.still_requested(&state, "agent"));
     }
 }
