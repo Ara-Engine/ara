@@ -83,6 +83,10 @@ pub type Result<T> = std::result::Result<T, GpuError>;
 /// `ARA_GPU_EXTERNAL`: a shared surface cannot be exported or imported (named-code
 /// slot 6006, documented in `ara-diag/codes/gpu.md`).
 pub const GPU_EXTERNAL: ara_diag::Code = ara_diag::Code(6006);
+/// `ARA_GPU_METAL_COOK_SKIPPED`: the cook host has no Metal Shader Converter, so
+/// metallib artifacts were not cooked (a warning; named-code slot 6007,
+/// documented in `ara-diag/codes/gpu.md`).
+pub const GPU_METAL_COOK_SKIPPED: ara_diag::Code = ara_diag::Code(6007);
 
 impl From<&GpuError> for ara_diag::Diagnostic {
     /// The error as a bus diagnostic under its `ARA_GPU_*` named code.

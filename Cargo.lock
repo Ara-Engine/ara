@@ -1946,6 +1946,7 @@ name = "ara-shader-cook"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-diag",
  "ara-gpu",
  "serde",
  "serde_json",

@@ -37,5 +37,11 @@ Experiment outputs belong under target/; refreshing tracked cooked files is expl
 The SDK-backed test checks reuse, corrupt-artifact recovery and preservation of
 the last good cook after compiler failure. It runs the real Slang/DXIL tools.
 
-No runtime compilation, no Slang Metal target. The Mac backend consumes DXIL
-through Apple's converter and adds its metallib/reflection artifacts after S1.
+No runtime compilation, no Slang Metal target. Optional Metal lane (`src/metal.rs`):
+when Metal Shader Converter is found (`ARA_METAL_SHADERCONVERTER`, `PATH`, Apple's
+default install), each stage's DXIL becomes `<entry>.metallib` + `<entry>.metal.json`
+under its key with the fixed `metal/root-signature.json`; stages refresh when the
+converter version, root signature or metallib hash changes. Without it the cook
+succeeds and warns `ARA_GPU_METAL_COOK_SKIPPED` (ARA6007) once per process.
+Windows is the canonical cook host: never commit cooked artifacts made on a Mac
+(the Mac's Slang can't load dxc for DXIL; `tests/incremental.rs` is ignored there).
