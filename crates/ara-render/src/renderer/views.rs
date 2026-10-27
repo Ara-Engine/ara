@@ -3,6 +3,7 @@ use super::*;
 use anyhow::Context;
 use std::sync::{Arc, Weak, mpsc};
 mod asynchronous;
+mod captures;
 mod preparation;
 mod state;
 #[cfg(test)]
@@ -80,6 +81,11 @@ pub(super) struct Views {
     pending: Option<u64>,
     requested: Option<u64>,
     preparing: Option<ara_gpu::GpuCompletion>,
+    /// Reflection captures (`look::captures`): specs, atlas and bake plan. Every
+    /// camera's frames read them (`Captures::write`); only primary frames bake.
+    pub(super) captures: crate::look::captures::Captures,
+    /// The square camera captures bake their faces through (`captures.rs`).
+    capture_view: Option<ViewState>,
 }
 impl Default for Views {
     fn default() -> Self {
@@ -93,6 +99,8 @@ impl Default for Views {
             pending: None,
             requested: None,
             preparing: None,
+            captures: Default::default(),
+            capture_view: None,
         }
     }
 }

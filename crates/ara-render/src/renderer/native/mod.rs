@@ -15,6 +15,7 @@ mod environment;
 pub(in crate::renderer) mod pipelines;
 mod prepared;
 pub use prepared::{NativeContent, NativeSeed};
+pub(in crate::renderer) mod rays;
 #[cfg(test)]
 mod tests;
 mod updates;
@@ -850,13 +851,37 @@ impl Native {
 
     /// Records the camera's forward draws (pass 5) through the High/Epic tier's PSO
     /// when `high` (`Quality::high_tier`).
+    /// Records the sorted forward draws, switching to the refractive PSOs for
+    /// transmissive ones (`Culling::refract`); `high` selects the High/Epic tier's.
     pub(super) fn record_forward(&self, recorder: &mut Recorder, root: RootConstants, high: bool) {
-        let pipeline = if high {
-            self.pipelines.forward_high
+        let [plain, refract] = if high {
+            [self.pipelines.forward_high, self.pipelines.refract_high]
         } else {
-            self.pipelines.forward
+            [self.pipelines.forward, self.pipelines.refract]
         };
-        self.record_with(recorder, root, 5, pipeline);
+        let mut bound = None;
+        for (batch, &refractive) in self.culling.draws[5].iter().zip(&self.culling.refract) {
+            let pipeline = if refractive { refract } else { plain };
+            if bound != Some(pipeline) {
+                recorder.push(Command::Pipeline(pipeline));
+                bound = Some(pipeline);
+            }
+            self.record_batch(recorder, root, batch);
+        }
+    }
+
+    /// The render-pixel rect (x0, y0, x1, y1) this frame's refractive forward draws
+    /// sample the copied opaque scene in (`look::refract`); `None` without any.
+    pub(super) fn refraction_rect(&self, size: [u32; 2]) -> Option<[u32; 4]> {
+        let [x0, y0, x1, y1] = self.culling.refract_rect?;
+        let [w, h] = size.map(|v| v as f32);
+        let rect = [
+            (x0 * w).floor() as u32,
+            (y0 * h).floor() as u32,
+            ((x1 * w).ceil() as u32).min(size[0]),
+            ((y1 * h).ceil() as u32).min(size[1]),
+        ];
+        (rect[2] > rect[0] && rect[3] > rect[1]).then_some(rect)
     }
 
     /// Records the G-buffer draws (pass 4) through the PSO for the preset's
@@ -881,22 +906,26 @@ impl Native {
         ara_gpu::cpu_scope!("RasterNative.record");
         recorder.push(Command::Pipeline(pipeline));
         for batch in &self.culling.draws[pass] {
-            if batch.count == 0 {
-                continue;
-            }
-            let mut constants = root;
-            constants.words[1] = self.material_index;
-            constants.words[2] = self.instance_index;
-            constants.words[3] = batch.first;
-            constants.words[5] = self.pool.table_index().unwrap_or(0);
-            constants.words[6] = self.textures.binding().map_or(0, |b| b.buffer_index);
-            constants.words[7] = self.visible_index;
-            recorder.push(Command::Constants(constants));
-            recorder.push(Command::DrawProcedural {
-                vertices: batch.vertices,
-                instances: batch.count,
-            });
+            self.record_batch(recorder, root, batch);
         }
+    }
+
+    fn record_batch(&self, recorder: &mut Recorder, root: RootConstants, batch: &batches::Batch) {
+        if batch.count == 0 {
+            return;
+        }
+        let mut constants = root;
+        constants.words[1] = self.material_index;
+        constants.words[2] = self.instance_index;
+        constants.words[3] = batch.first;
+        constants.words[5] = self.pool.table_index().unwrap_or(0);
+        constants.words[6] = self.textures.binding().map_or(0, |b| b.buffer_index);
+        constants.words[7] = self.visible_index;
+        recorder.push(Command::Constants(constants));
+        recorder.push(Command::DrawProcedural {
+            vertices: batch.vertices,
+            instances: batch.count,
+        });
     }
 
     /// Records page `page` of the last `cull_native_shadow_pages` with the shadow

@@ -112,10 +112,12 @@ impl Renderer {
             look,
             native: None,
             native_pipelines: Default::default(),
+            rays: Default::default(),
             views: views::Views::default(),
             secondary_active: false,
             live: None,
             entity_epoch: 0,
+            tsr: crate::tsr::Tsr::from_env(),
         })
     }
 

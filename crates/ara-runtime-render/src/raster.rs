@@ -59,6 +59,8 @@ pub struct RasterView {
     lut: Option<std::sync::Arc<ara_components::post::ColorLut>>,
     fades: fade::Fades,
     placeholder_changes: ara_render::instanced::Changes,
+    /// Reflection captures: authored, or placed over the current generation.
+    captures: crate::captures::Placement,
 }
 
 impl RasterView {
@@ -96,6 +98,7 @@ impl RasterView {
             lut: None,
             fades: Default::default(),
             placeholder_changes: Default::default(),
+            captures: Default::default(),
         }
     }
 
@@ -458,6 +461,15 @@ impl RasterView {
                 renderer.set_look(raster_look)?;
             }
             crate::apply_lut(renderer, frame, &look, &mut self.lut)?;
+            // Reflection captures: authored, else placed over this generation's content.
+            if let Some(prepared) = &self.prepared {
+                let limit = plan
+                    .quality
+                    .reflection_captures
+                    .map_or(0, |r| r.captures as usize);
+                let specs = self.captures.specs(frame, &prepared.scene, self.key, limit);
+                renderer.set_reflection_captures(&specs)?;
+            }
             self.adopt_emitters(false)?;
             let prepared = self.prepared.as_mut().context("native raster content")?;
             if snapshot_changed {

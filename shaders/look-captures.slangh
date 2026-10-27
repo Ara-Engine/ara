@@ -1,0 +1,94 @@
+// Local reflection captures (look/captures.rs): box-influenced, box-projected
+// octahedral radiance maps the raster renderer bakes of its own lit scene (six
+// unjittered 90-degree faces), GGX-prefiltered into five roughness levels (0, .25,
+// .5, .75, 1) per capture in one RGBA16F atlas, and relit every frame by the ratio
+// of the ambient light at the capture point now to what it was at the bake.
+// Include after look.slangh.
+// Look rows (constant indices only, as for the GI lattices):
+//   captureInfo[0]: x records (host buffer), y captures, z atlas (sampled), w the
+//   frame buffer (device-local; below)
+//   captureInfo[1]: xy atlas texels, z this frame's visible baked captures (bit per
+//   record, in blending order), w debug modes (CAPTURE_DEBUG_*; `ARA_CAPTURE_DEBUG`)
+// The frame buffer, rewritten every frame before lighting: per capture a copy of
+// its record, its relight ratio and its baseline (`captureRefitMain`), then one
+// capture mask per 16x16 render tile (`captureTilesMain`), so a pixel tests only
+// the captures that reach its tile.
+// Shading reads them only in the High/Epic tier's PSOs (`ibl`'s `high`).
+static const uint CAPTURE_LEVELS=5,CAPTURE_RECORD=128,CAPTURE_SLOT=160,CAPTURE_MAX=16;
+static const uint CAPTURE_TILES=CAPTURE_MAX*CAPTURE_SLOT,CAPTURE_TILE_CAPACITY=512*512;
+// Debug modes: every surface a mirror of the captures alone; captures under no SSR.
+static const uint CAPTURE_DEBUG_MIRROR=1,CAPTURE_DEBUG_ONLY=2;
+// One capture (look/captures.rs `CaptureSpec::record`), in two halves so pixels
+// outside its influence load only the first: a rigid local frame (metres) and its
+// influence box (fading over `influence.w` inside it); then the projection box rays
+// leave through, the capture point and its atlas column.
+struct CaptureCull{
+    float4 rows[3];    // world to local: rotation rows, translation in w
+    float4 influence;  // local influence half-extents, w blend distance (m)
+};
+struct CaptureShade{
+    float4 projection; // local projection box centre, w unused
+    float4 extent;     // projection box half-extents, w radiance multiplier
+    float4 origin;     // world capture point, w unused
+    uint4 tile;        // x,y the column's origin (level 0's bordered tile), z level-0 interior texels
+};
+CaptureCull captureCull(Look l,uint i){return buffers[NonUniformResourceIndex(l.captureInfo[0].w)].Load<CaptureCull>(i*CAPTURE_SLOT);}
+CaptureShade captureShade(Look l,uint i){return buffers[NonUniformResourceIndex(l.captureInfo[0].w)].Load<CaptureShade>(i*CAPTURE_SLOT+64);}
+// Relight ratio times the capture's multiplier; w is zero until a bake lands.
+float4 captureRatio(Look l,uint i){return buffers[NonUniformResourceIndex(l.captureInfo[0].w)].Load<float4>(i*CAPTURE_SLOT+CAPTURE_RECORD);}
+// Influence weight of capture `c` at `world` (0 outside, 1 a blend distance inside),
+// before smoothing; `local` is `world` in the capture's frame.
+float captureInfluence(CaptureCull c,float3 world,out float3 local){
+    local=float3(dot(c.rows[0].xyz,world)+c.rows[0].w,dot(c.rows[1].xyz,world)+c.rows[1].w,dot(c.rows[2].xyz,world)+c.rows[2].w);
+    float3 inside=c.influence.xyz-abs(local);
+    return saturate(min(inside.x,min(inside.y,inside.z))/max(c.influence.w,1e-3));
+}
+// The captures that can reach render pixel `p` (deferred lighting): its tile's mask.
+uint captureTileMask(Frame f,Look l,int2 p){
+    uint tile=uint(p.y)/16*((f.extent.x+15)/16)+uint(p.x)/16;
+    return tile<CAPTURE_TILE_CAPACITY?buffers[NonUniformResourceIndex(l.captureInfo[0].w)].Load(CAPTURE_TILES+tile*4):l.captureInfo[1].z;
+}
+// First row of roughness level `k`'s bordered tile in a column whose level 0 has
+// `n` interior texels (levels halve; each tile has a one-texel border).
+uint captureLevelY(uint n,uint k){return 2*n-((2*n)>>k)+2*k;}
+// Bilinear radiance along `d` from level `k` of capture `c`: borders repeat the
+// texels across the octahedral edges, so hardware filtering is seamless.
+float3 captureLevel(Look l,CaptureShade c,float3 d,uint k){
+    float n=float(c.tile.z>>k);float2 origin=float2(c.tile.x,c.tile.y+captureLevelY(c.tile.z,k))+1;
+    float2 uv=(origin+octEncode(d)*n)/float2(l.captureInfo[1].xy);
+    return textures[NonUniformResourceIndex(l.captureInfo[0].z)].SampleLevel(samplers[2],uv,0).rgb;
+}
+// Specular radiance the captures in `mask` (a tile's, or every visible one for
+// forward surfaces) reflect at `world` along the GGX lobe of normal `n`, view `v`
+// and perceptual `roughness`: rgb radiance, a its coverage (zero: none). The mask is
+// uniform across a tile, so the loop is too (usually one or two bits); captures
+// blend front to back by influence in record order (priority, then smaller first).
+// Each looks up the lobe's dominant direction where it leaves the projection box,
+// as seen from the capture point, sharpening the lobe when that hit is nearer the
+// surface than the capture point (Lagarde & Zanuttini 2012): one pair of
+// roughness-level fetches per contributing capture.
+float4 captureReflection(Look l,float3 world,float3 n,float3 v,float roughness,uint mask){
+    float4 sum=0;
+    if(mask==0)return sum;
+    // GGX dominant direction (Lagarde & de Rousiers 2014): rough lobes lean to the normal.
+    float a=roughness*roughness,s=1-a;float3 r=normalize(lerp(n,reflect(-v,n),s*(sqrt(s)+a)));
+    while(mask!=0){
+        uint i=firstbitlow(mask);mask&=mask-1;
+        CaptureCull c=captureCull(l,i);float3 p;float w=captureInfluence(c,world,p);
+        [branch]if(w>0&&sum.a<0.999){
+            float4 ratio=captureRatio(l,i);
+            CaptureShade d=captureShade(l,i);
+            float3 dir=float3(dot(c.rows[0].xyz,r),dot(c.rows[1].xyz,r),dot(c.rows[2].xyz,r)),q=p-d.projection.xyz;
+            // Slab exit: the nearest of the three far planes along `dir`.
+            float3 safe=float3(abs(dir.x)>1e-5?dir.x:1e-5,abs(dir.y)>1e-5?dir.y:1e-5,abs(dir.z)>1e-5?dir.z:1e-5);
+            float3 exits=(d.extent.xyz*sign(safe)-q)/safe;float t=max(min(exits.x,min(exits.y,exits.z)),0);
+            float3 toHit=world+r*t-d.origin.xyz;float far=length(toHit);float3 along=far>1e-4?toHit/far:r;
+            float level=min(roughness,roughness*t/max(far,1e-4))*(CAPTURE_LEVELS-1);
+            uint low=min(uint(level),CAPTURE_LEVELS-1),high=min(low+1,CAPTURE_LEVELS-1);
+            float3 radiance=lerp(captureLevel(l,d,along,low),captureLevel(l,d,along,high),level-float(low))*ratio.rgb;
+            float share=w*w*(3-2*w)*(1-sum.a)*ratio.w;sum+=float4(radiance*share,share);
+        }
+    }
+    if(sum.a>0)sum.rgb/=sum.a;
+    return sum;
+}

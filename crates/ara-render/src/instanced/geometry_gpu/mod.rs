@@ -1,7 +1,9 @@
 //! Shared native geometry allocations; instance transforms live in separate frame data.
 use super::{Scene, Vertex};
 use anyhow::{Result, ensure};
-use ara_gpu::{AccelerationStructure, Access, Buffer, Device, GpuDevice, Resource};
+use ara_gpu::{
+    AccelerationStructure, Access, Buffer, Device, GpuDevice, Resource, acceleration::TriangleRange,
+};
 
 mod pack;
 mod pose;
@@ -66,6 +68,9 @@ pub struct GeometryGpu {
     pending_pose: bool,
     // Bits 0..2 (skin slots) and bit 3 (row table) written since the consuming frame.
     pose_host_writes: u8,
+    /// Vertex/index buffers are acceleration-structure build inputs (RT devices):
+    /// callers may build their own BLASes over `triangles` (hybrid ray queries).
+    ray_inputs: bool,
     stats: GeometryUpload,
 }
 
@@ -97,6 +102,32 @@ impl GeometryGpu {
     /// BLAS for a geometry-table entry; absent on the raster path.
     pub fn blas(&self, entry: u32) -> Option<AccelerationStructure> {
         self.structures.get(entry as usize).copied()
+    }
+
+    /// Triangle input of a geometry-table entry for a caller-owned BLAS (the raster
+    /// renderer's hybrid ray queries): the current pose's vertices for deforming
+    /// geometry, so a committed pose changes `vertices`. `None` when the buffers are
+    /// not acceleration-structure inputs (devices without RT, seedless preparations).
+    pub fn triangles(&self, entry: u32) -> Option<TriangleRange> {
+        let lod = self
+            .lod_data
+            .get(entry as usize)
+            .filter(|_| self.ray_inputs)?;
+        let indices = self.static_pool?;
+        let vertices = if lod.deforming {
+            self.dynamic?[self.current_slot]
+        } else {
+            indices
+        };
+        Some(TriangleRange {
+            vertices,
+            vertex_offset: lod.vertex_offset,
+            vertex_count: lod.vertex_count,
+            vertex_stride: std::mem::size_of::<Vertex>() as u64,
+            indices,
+            index_offset: lod.index_offset,
+            index_count: lod.index_count,
+        })
     }
 
     /// Last content upload's byte counts and GPU timings.

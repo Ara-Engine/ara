@@ -307,3 +307,12 @@ impl Native {
         }
     }
 }
+
+impl Native {
+    /// Instance rows rewritten this frame and instances whose skin pose changed
+    /// (`renderer::rt` refreshes their TLAS transforms and skin BLASes from these);
+    /// cleared once a frame is presented.
+    pub(in crate::renderer) fn ray_changes(&self) -> (&[usize], &[usize]) {
+        (&self.changes.rows.list, &self.changes.skins.list)
+    }
+}

@@ -1,0 +1,231 @@
+// Hybrid ray queries (D29; ara_render renderer::rt): High/Epic on devices with
+// hardware ray queries trace deterministic rays against the native content's TLAS
+// (one instance per native instance, finest LOD, real transforms). Rays answer
+// nearest-surface and visibility questions; hits shade from the lighting caches
+// (probe GI, sky, sun through one shadow ray, shadow-mapped local lights), never by
+// recursion, so nothing here adds noise.
+// Include after raster.slangh, look.slangh, look-shading.slangh and
+// native_sample.slangh. A pipeline that includes this header uses binding 4 (ray
+// queries): create it only on RT devices (DeviceInfo::ray_tracing).
+#pragma once
+BIND(4) RaytracingAccelerationStructure acceleration[16] : register(t0,space4);
+// Look record rows (look/frame.rs rt_params, rt_info; written by renderer::rt):
+// rtParams[0]: x reflection roughness cut, y longest ray (m), z ray-cone spread per
+//   render pixel (rad), w largest reflection blur sigma (render px).
+// rtParams[1]: x ray-origin bias (m), y bias per metre from the camera, z reflection
+//   intensity (the look's SSR tuning).
+// rtInfo[0]: x TLAS (acceleration heap), y instance rows, z geometry table, w
+//   materials (buffers). rtInfo[1]: x texture residency table, y instance -> LOD 0
+//   geometry entry (u32 per instance), z this frame's reflections (sampled; 0
+//   none), w RT_ENABLED | RT_HAS_MASKED.
+static const uint RT_ENABLED=1,RT_HAS_MASKED=2;
+// Instance masks (renderer::native::rays): opaque geometry, alpha-tested cutouts
+// (resolved in a non-opaque query) and blended/transmissive surfaces.
+static const uint RT_OPAQUE=1,RT_MASKED=2,RT_TRANSPARENT=4;
+// Scene lights a hit evaluates directly (tiled lists only cover the screen).
+static const uint RT_HIT_LIGHTS=64;
+bool rtEnabled(Look l){return (l.rtInfo[1].w&RT_ENABLED)!=0;}
+// Native records, as the raster fill reads them (native-raster.slang): 64-byte
+// vertices, 320-byte materials, 192-byte instance rows after a 128-byte header,
+// 32-byte geometry-table rows (vertex buffer/offset, index buffer/offset).
+struct RtVertex {float3 position;float3 normal;float2 uv;float4 tangent;float2 uv1;uint weights;uint reserved;};
+struct RtUv {float2 offset;float2 scale;float rotation;uint set;uint2 reserved;};
+struct RtMaterial {Material pbr;RtUv uv[6];uint4 slots;float4 factors;uint4 layers;};
+struct RtInstance {uint4 meta;float4x4 world;float4x4 previous;float4 nx;float4 ny;float4 nz;};
+// A committed hit: distance along the ray, native instance (row index), triangle
+// within its LOD 0 range, barycentrics of corners b and c, and whether the ray met
+// the triangle's front (counter-clockwise) side.
+struct RtHit {float distance;uint instance;uint primitive;float2 barycentrics;bool front;};
+// A hit triangle: corners in world space (normals and tangents transformed as the
+// G-buffer's vertices), barycentric weights and the instance's material.
+struct RtTriangle {RtVertex a;RtVertex b;RtVertex c;float3 w;uint material;};
+RtInstance rtInstance(Look l,uint instance){return buffers[NonUniformResourceIndex(l.rtInfo[0].y)].Load<RtInstance>(128+instance*192);}
+RtMaterial rtMaterial(Look l,uint id){return buffers[NonUniformResourceIndex(l.rtInfo[0].w)].Load<RtMaterial>(id*320);}
+RtVertex rtWorldVertex(RtInstance i,RtVertex v){
+    v.position=mul(i.world,float4(v.position,1)).xyz;
+    v.normal=float3(dot(i.nx.xyz,v.normal),dot(i.ny.xyz,v.normal),dot(i.nz.xyz,v.normal));
+    v.tangent=float4(mul(i.world,float4(v.tangent.xyz,0)).xyz,v.tangent.w*asfloat(i.meta.w));
+    return v;
+}
+RtTriangle rtTriangle(Look l,uint instance,uint primitive,float2 bary){
+    RtInstance i=rtInstance(l,instance);uint entry=buffers[NonUniformResourceIndex(l.rtInfo[1].y)].Load(instance*4);
+    uint4 g=buffers[NonUniformResourceIndex(l.rtInfo[0].z)].Load4(entry*32);
+    uint3 ix=buffers[NonUniformResourceIndex(g.z)].Load3(g.w+primitive*12);
+    RtTriangle t;t.w=float3(1-bary.x-bary.y,bary);t.material=i.meta.x;
+    t.a=rtWorldVertex(i,buffers[NonUniformResourceIndex(g.x)].Load<RtVertex>(g.y+ix.x*64));
+    t.b=rtWorldVertex(i,buffers[NonUniformResourceIndex(g.x)].Load<RtVertex>(g.y+ix.y*64));
+    t.c=rtWorldVertex(i,buffers[NonUniformResourceIndex(g.x)].Load<RtVertex>(g.y+ix.z*64));
+    return t;
+}
+float2 rtUv(RtUv t,RtVertex v){float2 p=(t.set==0?v.uv:v.uv1)*t.scale;float s,c;sincos(t.rotation,s,c);return t.offset+float2(c*p.x-s*p.y,s*p.x+c*p.y);}
+// Map `slot` of `m` at the hit (as native-raster.slang sampleMap), at the mip a ray
+// cone `width` metres wide covers: the triangle's texels per metre times the width.
+float4 rtMap(Look l,RtMaterial m,uint slot,RtTriangle t,float width){
+    uint id=slot<4?m.pbr.textures[min(slot,3)]:(slot==4?m.slots.x:m.slots.y);
+    if(id==0xffffffff)return float4(slot==1?float3(0,0,1):float3(1),1);
+    float2 a=rtUv(m.uv[slot],t.a),b=rtUv(m.uv[slot],t.b),c=rtUv(m.uv[slot],t.c);
+    float2 uv=a*t.w.x+b*t.w.y+c*t.w.z;uint table=l.rtInfo[1].x;
+    float2 size=float2(ntInfo(table,id).zw);float2 du=(b-a)*size,dv=(c-a)*size;
+    float texels=abs(du.x*dv.y-du.y*dv.x),area=length(cross(t.b.position-t.a.position,t.c.position-t.a.position));
+    float lod=max(0,log2(max(width,1e-6))+0.5*log2(max(texels,1e-12)/max(area,1e-12)));
+    if(slot==1)return float4(ntNormal(table,id,uv,lod,m.pbr.surface.y),1);
+    bool decode=slot==0?(m.pbr.flags.y&(1u<<25))!=0:slot==3 && (m.pbr.flags.y&(1u<<26))!=0;
+    return ntSampleColorLevel(table,id,uv,lod,decode);
+}
+// Normal-mapped shading normal around the interpolated vertex normal `n`: the
+// authored tangent frame, or one derived from the normal map's UVs (slots.w).
+float3 rtNormal(Look l,RtMaterial m,RtTriangle t,float3 n,float width){
+    if(m.pbr.textures.y==0xffffffff)return n;
+    float4 tangent=t.a.tangent*t.w.x+t.b.tangent*t.w.y+t.c.tangent*t.w.z;
+    float3 tg=tangent.xyz-n*dot(tangent.xyz,n);float handedness=tangent.w<0?-1:1;
+    if(m.slots.w!=0){
+        float2 u=rtUv(m.uv[1],t.a),du=rtUv(m.uv[1],t.b)-u,dv=rtUv(m.uv[1],t.c)-u;float determinant=du.x*dv.y-du.y*dv.x;
+        if(abs(determinant)>1e-10){
+            float3 e1=t.b.position-t.a.position,e2=t.c.position-t.a.position;
+            tg=(e1*dv.y-e2*du.y)/determinant;tg-=n*dot(tg,n);
+            handedness=dot(cross(n,tg),(e2*du.x-e1*dv.x)/determinant)<0?-1:1;
+        }
+    }
+    if(dot(tg,tg)<1e-12)return n;
+    tg=normalize(tg);float3 sampled=rtMap(l,m,1,t,width).xyz;
+    return normalize(tg*sampled.x+cross(n,tg)*handedness*sampled.y+n*sampled.z);
+}
+// One material's surface at the hit (native-raster.slang surfaceMaterial with
+// explicit mips; no geometric specular AA: a cone-filtered ray is not a pixel).
+Surface rtMaterialSurface(Look l,RtMaterial m,RtTriangle t,float3 n,float width){
+    Surface s;float4 base=rtMap(l,m,0,t,width)*m.pbr.color;s.albedo=max(0,base.rgb);s.alpha=base.a;
+    s.normal=rtNormal(l,m,t,n,width);
+    float4 mr=rtMap(l,m,2,t,width);s.roughness=clamp(m.pbr.emissiveRoughness.w*mr.g,0.045,1);s.metal=saturate(m.pbr.surface.x*mr.b);
+    s.emissive=max(0,m.pbr.emissiveRoughness.rgb*rtMap(l,m,3,t,width).rgb);
+    s.ao=lerp(1,rtMap(l,m,4,t,width).r,m.factors.x);
+    s.transmission=saturate(m.factors.y*rtMap(l,m,5,t,width).r)*(1-s.metal);return s;
+}
+float4 rtWeights(uint packed){return float4(packed&255,(packed>>8)&255,(packed>>16)&255,packed>>24)/255.;}
+// The hit's surface; terrain splats (slots.z layers) blend their layers by the
+// vertex weights in the top projection.
+Surface rtSurfaceOf(Look l,uint material,RtTriangle t,float3 n,float width){
+    RtMaterial m=rtMaterial(l,material);
+    if(m.slots.z==0)return rtMaterialSurface(l,m,t,n,width);
+    float4 weights=rtWeights(t.a.weights)*t.w.x+rtWeights(t.b.weights)*t.w.y+rtWeights(t.c.weights)*t.w.z;
+    if(m.slots.z<4)weights.w=0;if(m.slots.z<3)weights.z=0;if(m.slots.z<2)weights.y=0;
+    float sum=dot(weights,float4(1));weights=sum>1e-8?weights/sum:float4(1,0,0,0);
+    Surface s=(Surface)0;
+    for(uint i=0;i<min(m.slots.z,4u);i++){
+        float w=weights[i];if(w<=0)continue;
+        Surface layer=rtMaterialSurface(l,rtMaterial(l,m.layers[i]),t,n,width);
+        s.albedo+=layer.albedo*w;s.alpha+=layer.alpha*w;s.normal+=layer.normal*w;s.roughness+=layer.roughness*w;
+        s.metal+=layer.metal*w;s.emissive+=layer.emissive*w;s.ao+=layer.ao*w;s.transmission+=layer.transmission*w;
+    }
+    s.normal=dot(s.normal,s.normal)>1e-12?normalize(s.normal):n;return s;
+}
+// Whether an alpha-tested candidate is solid: base colour alpha against the cutoff.
+bool rtAlphaAccept(Look l,uint instance,uint primitive,float2 bary,float width){
+    RtTriangle t=rtTriangle(l,instance,primitive,bary);RtMaterial m=rtMaterial(l,t.material);
+    if(m.pbr.flags.x!=1 || m.slots.z>0)return true;
+    return rtMap(l,m,0,t,width).a*m.pbr.color.a>=m.pbr.surface.w;
+}
+// Nearest hit along a unit `direction` within `tmax` among instances in `mask`.
+// Opaque instances traverse entirely in hardware; alpha-tested ones (RT_MASKED) run
+// a second, non-opaque query that tests their cutouts, at the mip of a cone that
+// widens by `spread` metres per metre travelled. Returns false on a miss.
+bool rtTrace(Frame f,Look l,float3 origin,float3 direction,float tmax,out RtHit hit,uint mask=RT_OPAQUE|RT_MASKED,float spread=0.002){
+    hit=(RtHit)0;hit.distance=tmax;bool found=false;
+    RayDesc ray;ray.Origin=origin;ray.Direction=direction;ray.TMin=1e-4;ray.TMax=tmax;
+    uint solid=mask&~RT_MASKED;
+    if(solid!=0){
+        RayQuery<RAY_FLAG_NONE> q;q.TraceRayInline(acceleration[l.rtInfo[0].x],RAY_FLAG_FORCE_OPAQUE,solid,ray);
+        while(q.Proceed()){}
+        if(q.CommittedStatus()==COMMITTED_TRIANGLE_HIT){
+            hit.distance=q.CommittedRayT();hit.instance=q.CommittedInstanceID();hit.primitive=q.CommittedPrimitiveIndex();
+            hit.barycentrics=q.CommittedTriangleBarycentrics();hit.front=q.CommittedTriangleFrontFace();found=true;ray.TMax=hit.distance;
+        }
+    }
+    if((mask&RT_MASKED)!=0 && (l.rtInfo[1].w&RT_HAS_MASKED)!=0){
+        RayQuery<RAY_FLAG_NONE> q;q.TraceRayInline(acceleration[l.rtInfo[0].x],RAY_FLAG_FORCE_NON_OPAQUE,RT_MASKED,ray);
+        while(q.Proceed()){
+            if(q.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE
+                && rtAlphaAccept(l,q.CandidateInstanceID(),q.CandidatePrimitiveIndex(),q.CandidateTriangleBarycentrics(),q.CandidateTriangleRayT()*spread))
+                q.CommitNonOpaqueTriangleHit();
+        }
+        if(q.CommittedStatus()==COMMITTED_TRIANGLE_HIT){
+            hit.distance=q.CommittedRayT();hit.instance=q.CommittedInstanceID();hit.primitive=q.CommittedPrimitiveIndex();
+            hit.barycentrics=q.CommittedTriangleBarycentrics();hit.front=q.CommittedTriangleFrontFace();found=true;
+        }
+    }
+    return found;
+}
+// Whether anything opaque or alpha-tested lies within `tmax` along `direction`
+// (shadow rays: the first hit ends the search).
+bool rtOccluded(Frame f,Look l,float3 origin,float3 direction,float tmax,float spread=0.002){
+    RayDesc ray;ray.Origin=origin;ray.Direction=direction;ray.TMin=1e-4;ray.TMax=tmax;
+    RayQuery<RAY_FLAG_NONE> q;q.TraceRayInline(acceleration[l.rtInfo[0].x],RAY_FLAG_FORCE_OPAQUE|RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,RT_OPAQUE,ray);
+    while(q.Proceed()){}
+    if(q.CommittedStatus()==COMMITTED_TRIANGLE_HIT)return true;
+    if((l.rtInfo[1].w&RT_HAS_MASKED)==0)return false;
+    RayQuery<RAY_FLAG_NONE> m;m.TraceRayInline(acceleration[l.rtInfo[0].x],RAY_FLAG_FORCE_NON_OPAQUE|RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,RT_MASKED,ray);
+    while(m.Proceed()){
+        if(m.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE
+            && rtAlphaAccept(l,m.CandidateInstanceID(),m.CandidatePrimitiveIndex(),m.CandidateTriangleBarycentrics(),m.CandidateTriangleRayT()*spread))
+            m.CommitNonOpaqueTriangleHit();
+    }
+    return m.CommittedStatus()==COMMITTED_TRIANGLE_HIT;
+}
+// The shading surface at `hit` seen along `direction`, its world position and its
+// geometric normal. Both normals face the ray (thin double-sided geometry shades
+// its visible side). `width`: the ray cone's footprint at the hit (m), for mips.
+Surface rtSurface(Look l,RtHit hit,float3 direction,float width,out float3 position,out float3 geometric){
+    RtTriangle t=rtTriangle(l,hit.instance,hit.primitive,hit.barycentrics);
+    position=t.a.position*t.w.x+t.b.position*t.w.y+t.c.position*t.w.z;
+    float3 n=t.a.normal*t.w.x+t.b.normal*t.w.y+t.c.normal*t.w.z;
+    geometric=cross(t.b.position-t.a.position,t.c.position-t.a.position);
+    geometric=dot(geometric,geometric)>1e-20?normalize(geometric):-direction;
+    n=dot(n,n)>1e-12?normalize(n):geometric;
+    // Mirrored instances flip the winding: the vertex normals name the outside.
+    if(dot(geometric,n)<0)geometric=-geometric;
+    if(dot(geometric,direction)>0){geometric=-geometric;n=-n;}
+    Surface s=rtSurfaceOf(l,t.material,t,n,width);
+    if(dot(s.normal,geometric)<=0)s.normal=n;
+    return s;
+}
+// Radiance leaving a hit towards `v` (unit, back towards the ray's origin), from
+// the lighting caches only: emission, probe GI and sky light (ibl, as forward
+// surfaces see them), the sun through one shadow ray (and the horizon of distant
+// landforms), and the scene's first RT_HIT_LIGHTS local lights through their shadow
+// maps. No recursion and no fog along the ray.
+float3 rtShadeHit(Frame f,Look l,Surface s,float3 position,float3 geometric,float3 v){
+    float3 c=s.emissive+ibl(f,l,s,position,v,int2(0,0),false);
+    float3 sun=f.sunDirection.xyz;
+    if(dot(s.normal,sun)>0 && dot(geometric,sun)>-0.1){
+        float lit=horizonSun(l,position);
+        float bias=l.rtParams[1].x+l.rtParams[1].y*length(position-f.camera.xyz);
+        if(lit>0 && !rtOccluded(f,l,position+geometric*bias,sun,l.rtParams[0].y))c+=brdf(s,v,sun)*sunAt(f,l,position)*lit;
+    }
+    uint count=min(f.extent.z,RT_HIT_LIGHTS);
+    for(uint i=0;i<count;i++){
+        Light light=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64);
+        float3 delta=light.positionRange.xyz-position;float range=light.positionRange.w;
+        if(dot(delta,delta)>=range*range)continue;
+        float d2=max(dot(delta,delta),max(0.01,light.parameters.z*light.parameters.z));float d=sqrt(d2);float3 toLight=normalize(delta);
+        if(dot(s.normal,toLight)<=0)continue;
+        float fade=pow(saturate(1-pow(d/range,4)),2);float spot=1;
+        if(light.parameters.x>0.5)spot=smoothstep(light.directionOuter.w,light.parameters.y,dot(-toLight,light.directionOuter.xyz));
+        float3 illuminance=light.colorLumens.rgb*(light.colorLumens.w/(4*PI*d2))*fade*spot;
+        if(any(illuminance>0))c+=brdf(s,v,toLight)*illuminance*localShadow(l,i,position,s.normal,light.positionRange.xyz);
+    }
+    return c;
+}
+// The prefiltered sky/environment (ibl's five-level strip) at `level` 0..4.
+float3 rtPrefiltered(Frame f,Look l,float2 uv,float level){
+    uint prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;float lo=floor(level),hi=min(lo+1,4);
+    return lerp(envTex(prefilter,float2(uv.x,(uv.y*127+0.5+lo*128)/640)).rgb,envTex(prefilter,float2(uv.x,(uv.y*127+0.5+hi*128)/640)).rgb,frac(level));
+}
+// Radiance arriving along a ray that leaves the scene: the sky without its sun
+// disk (the sun's highlight is the reflecting surface's direct light) or the
+// environment map, blended into the prefiltered sky by `roughness`, so a glossy
+// miss is already cone filtered.
+float3 rtMiss(Frame f,Look l,float3 direction,float roughness){
+    float2 uv=environmentUv(direction);float level=saturate(roughness)*4;
+    float3 sharp=physicalSky(l)?skyRadiance(f,l,direction,false):envTex(f.extra.w,uv).rgb;
+    if(level<=0)return sharp;
+    return level<1?lerp(sharp,rtPrefiltered(f,l,uv,1),level):rtPrefiltered(f,l,uv,level);
+}

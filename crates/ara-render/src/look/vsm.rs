@@ -10,7 +10,9 @@
 //! light view cropped to the page; moved casters invalidate the pages their old and
 //! new bounds touch. `VSM.Project` looks each G-buffer pixel's level up in a
 //! toroidal page table (`look-vsm.slangh`, falling back to the next three coarser
-//! levels) into a render-size mask lighting reads, which uses the cascades and far
+//! levels) and filters it contact-hardening for the sun's disc (a blocker search one
+//! level coarser, `look-vsm.slang` vsmSoftVisibility) into a render-size mask lighting
+//! reads, which uses the cascades and far
 //! map where it has no page; GI relight compares its hits in its own pipeline. No
 //! other shader inlines page lookups: their registers would cost every preset.
 //!

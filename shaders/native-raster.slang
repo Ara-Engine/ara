@@ -2,6 +2,7 @@
 #include "raster.slangh"
 #include "look.slangh"
 #include "look-shading.slangh"
+#include "look-refract.slangh"
 #include "native_sample.slangh"
 struct NativeVertex {float3 position;float3 normal;float2 uv;float4 tangent;float2 uv1;uint weights;uint reserved;};
 struct NativeUv {float2 offset;float2 scale;float rotation;uint set;uint2 reserved;};
@@ -246,3 +247,21 @@ Forward nativeForward(Varying v,bool high){Surface s=surface<1>(v);Frame f=frame
 Forward nativeForwardFragment(Varying v){return nativeForward(v,false);}
 [shader("fragment")]
 Forward nativeForwardHighFragment(Varying v){return nativeForward(v,true);}
+// Transmissive forward draws (NativePipelines::refract): the surface composites the
+// opaque scene it refracts (look-refract.slangh) instead of blending a film. A
+// volume's back faces are its far side, which its front faces already refract
+// through; a thin wall shades both sides, facing the viewer.
+Forward nativeRefract(Varying v,bool front,bool high){
+    Surface s=surface<1>(v);NativeMaterial m=material(v.material);uint2 volume=uint2(asuint(m.factors.z),asuint(m.factors.w));
+    float3 geometric=safeNormalize(v.normal,float3(0,1,0));
+    if(!front){if((volume.x&0xffff)!=0)discard;s.normal=-s.normal;geometric=-geometric;}
+    // The instance's scale (the cube root of its determinant) for the mesh-space thickness.
+    float4x4 world=buffers[NonUniformResourceIndex(root.material)].Load<float4x4>(128+(v.id-1)*192+16);
+    float scale=pow(abs(determinant((float3x3)world)),1./3.);
+    Frame f=frame();Look l=look(f);Forward o;o.color=refractColour(f,l,s,volume,scale,v.world,geometric,int2(v.clip.xy),high);
+    o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;
+}
+[shader("fragment")]
+Forward nativeForwardRefractFragment(Varying v,bool front:SV_IsFrontFace){return nativeRefract(v,front,false);}
+[shader("fragment")]
+Forward nativeForwardRefractHighFragment(Varying v,bool front:SV_IsFrontFace){return nativeRefract(v,front,true);}

@@ -7,6 +7,7 @@ mod budgets;
 mod gbuffer;
 mod lens;
 mod prepared;
+mod rays;
 mod shadow_patches;
 mod shadows;
 mod wire;

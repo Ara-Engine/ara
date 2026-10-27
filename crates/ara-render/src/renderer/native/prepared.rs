@@ -8,6 +8,9 @@ pub struct NativeSeed {
     previous: Option<GeometrySeed>,
     limit: u64,
     shadow_slots: usize,
+    /// The device has ray queries: geometry is allocated as acceleration-structure
+    /// input for the hybrid High/Epic path (`renderer::rt`).
+    ray_inputs: bool,
 }
 
 /// Immutable CPU-prepared native content. Construct on the content worker, poll
@@ -34,6 +37,7 @@ impl NativeContent {
             scene.validated(),
             seed.as_ref().map_or(u64::from(u32::MAX), |seed| seed.limit),
             seed.as_ref().and_then(|seed| seed.previous.as_ref()),
+            seed.as_ref().is_some_and(|seed| seed.ray_inputs),
         )?;
         let shadow_slots = seed.as_ref().map_or(0, |seed| seed.shadow_slots);
         Ok(Self {
@@ -99,6 +103,7 @@ impl Renderer {
         NativeSeed {
             previous: self.native.as_ref().map(|n| n.pool.preparation_seed()),
             limit: geometry_storage_limit(&self.gpu),
+            ray_inputs: self.gpu.info().ray_tracing,
             shadow_slots: shadow_slots.max(
                 self.native
                     .as_ref()

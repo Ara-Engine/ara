@@ -1,4 +1,4 @@
-//! Six native PSOs are retained by the renderer across content generations.
+//! Eight native PSOs are retained by the renderer across content generations.
 use super::*;
 use ara_gpu::vulkan::{PipelinePreparation, PipelinePreparationId};
 
@@ -20,6 +20,12 @@ pub(in crate::renderer) struct NativePipelines {
     pub wire: Pipeline,
     /// The forward pass with the High/Epic tier's code (`Quality::high_tier`).
     pub forward_high: Pipeline,
+    /// Transmissive forward draws (`batches::is_refractive`): refraction of the
+    /// copied opaque scene, absorption and Fresnel, composited as final colour
+    /// (look-refract.slangh), so ordinary transparency compiles none of it.
+    pub refract: Pipeline,
+    /// The refractive forward pass with the High/Epic tier's code.
+    pub refract_high: Pipeline,
 }
 
 impl NativePipelines {
@@ -35,13 +41,15 @@ impl NativePipelines {
 }
 
 /// Cooked recipe names, in `NativePipelines` field order.
-const RECIPES: [&str; 6] = [
+const RECIPES: [&str; 8] = [
     "native_shadow",
     "native_gbuffer",
     "native_forward",
     "native_gbuffer_top",
     "native_wire",
     "native_forward_high",
+    "native_forward_refract",
+    "native_forward_refract_high",
 ];
 
 #[derive(Default)]
@@ -80,11 +88,18 @@ impl Renderer {
                 self.native_pipelines = Pipelines::Empty;
             }
             if let Some(handles) = result? {
-                let [shadow, gbuffer, forward, gbuffer_top, wire, forward_high]: [Pipeline;
-                    RECIPES.len()] =
-                    handles
-                        .try_into()
-                        .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
+                let [
+                    shadow,
+                    gbuffer,
+                    forward,
+                    gbuffer_top,
+                    wire,
+                    forward_high,
+                    refract,
+                    refract_high,
+                ]: [Pipeline; RECIPES.len()] = handles
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
                 self.native_pipelines = Pipelines::Ready(NativePipelines {
                     shadow,
                     gbuffer,
@@ -92,6 +107,8 @@ impl Renderer {
                     gbuffer_top,
                     wire,
                     forward_high,
+                    refract,
+                    refract_high,
                 });
             }
         }

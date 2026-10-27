@@ -3,7 +3,13 @@ use super::*;
 use std::collections::BTreeMap;
 
 pub(super) fn is_transparent(material: &crate::instanced::Material) -> bool {
-    material.pbr.flags[0] == 2 || material.extras.transmission_factor > 0.
+    material.pbr.flags[0] == 2 || is_refractive(material)
+}
+
+/// Transmissive materials draw in the forward pass through the refractive PSOs
+/// (`NativePipelines::refract`), over a copy of the lit opaque scene.
+pub(super) fn is_refractive(material: &crate::instanced::Material) -> bool {
+    material.extras.transmission_factor > 0.
 }
 
 #[derive(Clone, Copy, Default)]
@@ -20,6 +26,8 @@ pub(super) struct Group {
     pub errors: Vec<f32>,
     pub instances: Vec<usize>,
     pub transparent: bool,
+    /// A transmissive group (`is_refractive`), drawn by the refractive forward PSOs.
+    pub refract: bool,
     pub offset: usize,
     pub slot: usize,
 }
@@ -72,6 +80,7 @@ impl Groups {
                         .collect(),
                     instances,
                     transparent: is_transparent(&scene.materials[material]),
+                    refract: is_refractive(&scene.materials[material]),
                 }
             })
             .collect();

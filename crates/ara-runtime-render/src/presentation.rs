@@ -92,6 +92,13 @@ impl Presenter {
         self.render_scale = scale.map(|s| s.clamp(0.1, 1.));
     }
 
+    /// Enables (the default) or disables D29's hybrid ray queries on High/Epic: off,
+    /// an RT device renders those presets' raster path, as a GPU without ray queries
+    /// would (A/B measurements). Applies from the next prepared frame.
+    pub fn set_ray_queries(&mut self, enabled: bool) {
+        self.ray_queries = enabled;
+    }
+
     /// Renderer selection: raster everywhere, or the opt-in ray-traced tiers.
     pub fn set_render_options(&mut self, options: RenderOptions) {
         self.options = options;
@@ -172,12 +179,10 @@ impl Presenter {
         let renderer = if let Some(gpu) = self.initial_device.take() {
             Renderer::with_device(scene, [64, 64], gpu)?
         } else {
-            let create = if self.options.ray_tracing {
-                Renderer::new
-            } else {
-                Renderer::new_raster
-            };
-            create(scene, [64, 64], &self.extensions, &self.cache)?
+            // D29: one device with hardware ray queries where the GPU has them, so
+            // High/Epic add ray-traced reflections (and the opt-in fidelity renderer
+            // runs) without recreating the device when the preset changes.
+            Renderer::new_hybrid(scene, [64, 64], &self.extensions, &self.cache)?
         };
         self.renderer = Some(renderer);
         Ok(())
@@ -208,6 +213,9 @@ impl Presenter {
             raster.render_size = raster
                 .display_size
                 .map(|v| ((v as f32 * scale).round() as u32).clamp(1, v));
+        }
+        if let (false, RenderPath::Raster(raster)) = (self.ray_queries, &mut plan.path) {
+            raster.quality.ray_queries = None;
         }
         if self.plan != Some(plan) {
             eprintln!(

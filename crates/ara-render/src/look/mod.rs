@@ -6,6 +6,7 @@
 //! Hosts map the scene's authored look onto [`Look`] and call
 //! [`crate::Renderer::set_look`] at a frame boundary. The defaults reproduce the
 //! M1 baseline: manual exposure, the ACES fit, no bloom, no sky and no fog.
+pub mod captures;
 pub(crate) mod cascades;
 pub(crate) mod far;
 pub(crate) mod frame;
@@ -15,6 +16,7 @@ pub(crate) mod horizon;
 mod lens;
 pub(crate) mod local;
 pub(crate) mod passes;
+pub(crate) mod refract;
 pub(crate) mod vsm;
 
 pub use crate::renderer::post::ToneCurve;
@@ -28,8 +30,9 @@ pub use lens::{
 pub struct Quality {
     /// Sun shadow cascades.
     pub shadows: Shadows,
-    /// Screen-space ambient occlusion (GTAO at half resolution); `None` keeps
-    /// only material occlusion.
+    /// Screen-space ambient occlusion (GTAO at half resolution; with `high_tier`, a
+    /// visibility bitmask that also bounces last frame's colour from geometry within
+    /// the radius); `None` keeps only material occlusion.
     pub ambient_occlusion: Option<AmbientOcclusion>,
     /// Screen-space reflections (half resolution) over probe and environment
     /// reflections; `None` keeps only those.
@@ -51,6 +54,10 @@ pub struct Quality {
     /// ambient bounce) is compiled into those variants alone, so lower presets pay
     /// nothing for its code.
     pub high_tier: bool,
+    /// Local reflection captures (`look::captures`), baked off the hot path and read
+    /// by the High/Epic PSOs (`high_tier`) under screen-space reflections; `None`
+    /// keeps probe and sky reflections.
+    pub reflection_captures: Option<ReflectionCaptures>,
     /// Cached shadows for the brightest local lights in view; `None` leaves
     /// local lights unshadowed.
     pub local_shadows: Option<LocalShadows>,
@@ -75,6 +82,23 @@ pub struct Quality {
     /// Motion blur where a look asks for it (the post pass's motion variant; needs the
     /// native renderer's motion vectors); `None` ignores looks' shutter.
     pub motion_blur: Option<MotionBlurQuality>,
+    /// Hardware ray queries of the hybrid High/Epic path (D29; `renderer::rt`):
+    /// deterministic mirror and glossy reflections below a roughness cut, which
+    /// replace screen-space reflections there. They run only on native content on
+    /// devices with ray queries; other devices keep the raster path of the same
+    /// preset. `None`: raster only.
+    pub ray_queries: Option<RayQueries>,
+}
+
+/// Hybrid ray-query budgets (`Quality::ray_queries`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RayQueries {
+    /// Surfaces at most this rough trace one reflection ray per pixel (the GGX
+    /// lobe's dominant direction, cone-filtered by roughness and hit distance);
+    /// rougher ones keep screen-space, probe and environment reflections.
+    pub reflection_roughness: f32,
+    /// Longest reflection ray in metres; misses see the sky.
+    pub distance: f32,
 }
 
 /// Virtual shadow map budgets (`look::vsm`).
@@ -99,12 +123,14 @@ impl Default for Quality {
             lod_pixels: 1.,
             min_pixels: 1.5,
             high_tier: false,
+            reflection_captures: None,
             terrain_detail: 150.,
             local_shadows: None,
             horizon: None,
             virtual_shadows: None,
             depth_of_field: None,
             motion_blur: None,
+            ray_queries: None,
         }
     }
 }
@@ -122,6 +148,16 @@ pub struct LocalShadows {
     /// Probe GI relight and the froxel fog sample these shadows too, so shadowed
     /// local lights stop leaking through walls into bounce light and fog.
     pub in_gi_and_fog: bool,
+}
+
+/// Local reflection capture budgets (`look::captures`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ReflectionCaptures {
+    /// Level-0 texels per side of each capture's octahedral map (a power of two,
+    /// 64 to 512), unless a capture asks for its own; its faces render at this size.
+    pub resolution: u32,
+    /// Captures kept at most (1 to `captures::MAX_CAPTURES`), by priority, then size.
+    pub captures: u32,
 }
 
 /// Ground-truth-based ambient occlusion (horizon search per screen slice).
@@ -204,6 +240,14 @@ pub struct FarShadows {
 impl Quality {
     /// Rejects budgets the renderer cannot allocate.
     pub fn validate(&self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.reflection_captures.is_none_or(|r| {
+                r.resolution.is_power_of_two()
+                    && (64..=512).contains(&r.resolution)
+                    && (1..=captures::MAX_CAPTURES as u32).contains(&r.captures)
+            }),
+            "Invalid reflection capture budget"
+        );
         let s = &self.shadows;
         anyhow::ensure!(
             (1..=4).contains(&s.cascades)
@@ -254,6 +298,12 @@ impl Quality {
                 })
                 && self.motion_blur.is_none_or(|m| {
                     (4..=32).contains(&m.samples) && (4.0..=32.0).contains(&m.max_length)
+                })
+                && self.ray_queries.is_none_or(|r| {
+                    r.reflection_roughness > 0.
+                        && r.reflection_roughness <= 1.
+                        && r.distance.is_finite()
+                        && r.distance > 0.
                 }),
             "Invalid raster quality"
         );

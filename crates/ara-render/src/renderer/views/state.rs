@@ -16,6 +16,8 @@ pub(super) struct ViewState {
     frame_number: u32,
     last_timings: Vec<PassTiming>,
     pub look: LookGpu,
+    /// This view's TSR images and histories (`tsr::TsrView`).
+    pub tsr: crate::tsr::TsrView,
     native: Option<native::NativeView>,
     source_hash: String,
 }
@@ -78,6 +80,7 @@ impl ViewState {
                     frame_number: 0,
                     last_timings: Vec::new(),
                     look,
+                    tsr: Default::default(),
                     native: None,
                     source_hash: renderer.content.base_hash.to_owned(),
                 },
@@ -162,6 +165,7 @@ impl ViewState {
         std::mem::swap(&mut self.frame_number, &mut renderer.frame_number);
         std::mem::swap(&mut self.last_timings, &mut renderer.last_timings);
         std::mem::swap(&mut self.look, &mut renderer.look);
+        std::mem::swap(&mut self.tsr, &mut renderer.tsr.view);
         if let (Some(source), Some(view)) = (&mut renderer.native, &mut self.native) {
             source.swap_view(view);
         }
@@ -195,6 +199,10 @@ impl ViewState {
         }
         if let Some(vsm) = self.look.vsm {
             vsm.destroy(gpu)?;
+        }
+        self.tsr.destroy(gpu)?;
+        if let Some(refract) = self.look.refract {
+            refract.destroy(gpu)?;
         }
         if let Some(native) = self.native {
             native.destroy(gpu)?;
@@ -263,5 +271,6 @@ fn fork_look(
         vsm: None,
         probe_staging: Vec::new(),
         probe_writes: Vec::new(),
+        refract: None,
     })
 }

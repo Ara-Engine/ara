@@ -1,6 +1,6 @@
 //! The authorable look of a scene: physical sky and height fog (the first entity in
 //! stable-ID order carrying each), post-process volumes (`crate::post`, all of them),
-//! plus the project's rendering quality setting. Renderers receive them through the
+//! reflection captures (all of them), plus the project's rendering quality setting. Renderers receive them through the
 //! runtime extraction; the sun is the scene's directional light. Every field doc is an
 //! inspector tooltip.
 
@@ -106,6 +106,88 @@ impl Default for HeightFog {
             falloff: 60.0,
             albedo: Color([0.9, 0.9, 0.9, 1.0]),
             anisotropy: 0.3,
+        }
+    }
+}
+
+/// Texels per side of a reflection capture's map.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Schema, Serialize, Deserialize)]
+#[ara(module = "render")]
+#[serde(rename_all = "camelCase")]
+pub enum CaptureResolution {
+    /// The quality preset's (512 texels on High and Epic).
+    #[default]
+    Auto,
+    /// 128 texels: soft, distant or rough reflections.
+    Low,
+    /// 256 texels.
+    Medium,
+    /// 512 texels: mirrors and polished metal seen up close.
+    High,
+}
+
+impl CaptureResolution {
+    /// Texels per side; zero for the quality preset's.
+    pub fn texels(self) -> u32 {
+        match self {
+            Self::Auto => 0,
+            Self::Low => 128,
+            Self::Medium => 256,
+            Self::High => 512,
+        }
+    }
+}
+
+/// A local reflection capture (High and Epic): the renderer bakes the lit scene
+/// around `captureOffset` and smooth surfaces inside the influence box reflect it,
+/// so mirrors and metals show the room around them, including what is off screen.
+/// Reflected directions are corrected against the projection box: match it to the
+/// room's walls and floor. Bakes refresh when content or lighting changes. Without
+/// any, the renderer places captures over the scene's content automatically.
+#[derive(Debug, Clone, Copy, PartialEq, Component, Schema, Serialize, Deserialize)]
+#[ara(component, module = "render")]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReflectionCapture {
+    /// Half-size of the influence box along the entity's axes (scaled by its
+    /// transform): surfaces inside it reflect this capture.
+    #[ara(default = [5, 3, 5], unit = Meters, range(min = 0.01))]
+    pub extents: [f32; 3],
+    /// Distance inside the influence box over which the capture fades into its
+    /// neighbours and the sky.
+    #[ara(default = 1, unit = Meters, range(min = 0))]
+    pub blend: f32,
+    /// Half-size of the projection box reflections land on; match the room's walls.
+    /// Zero uses `extents`.
+    #[ara(default = [0, 0, 0], unit = Meters, range(min = 0))]
+    pub projection_extents: [f32; 3],
+    /// Centre of the projection box relative to the entity.
+    #[ara(unit = Meters)]
+    pub projection_offset: [f32; 3],
+    /// Where the capture is taken, relative to the entity. Keep it in open space,
+    /// near the reflective surfaces it serves.
+    #[ara(unit = Meters)]
+    pub capture_offset: [f32; 3],
+    /// Overlapping captures blend in priority order (higher first), then smaller
+    /// boxes first.
+    pub priority: i32,
+    /// Texels per side of the captured map.
+    pub resolution: CaptureResolution,
+    /// Brightness multiplier of the reflection.
+    #[ara(default = 1, range(min = 0, max = 8))]
+    pub intensity: f32,
+}
+
+impl Default for ReflectionCapture {
+    fn default() -> Self {
+        Self {
+            extents: [5.0, 3.0, 5.0],
+            blend: 1.0,
+            projection_extents: [0.0; 3],
+            projection_offset: [0.0; 3],
+            capture_offset: [0.0; 3],
+            priority: 0,
+            resolution: CaptureResolution::Auto,
+            intensity: 1.0,
         }
     }
 }

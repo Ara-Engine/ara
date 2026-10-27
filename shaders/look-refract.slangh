@@ -1,0 +1,134 @@
+// Screen-space refraction of transmissive forward surfaces (look/refract.rs).
+// Include after look-shading.slangh.
+//
+// The copy: frames whose forward pass draws a transmissive material copy the lit
+// opaque scene after deferred lighting (Refract.Copy), inside the render-pixel rect
+// the refractive draws sample (refractInfo[1]: x0, y0, x1, y1). Level 0 is the
+// render size; levels 1..4, each a [1 3 3 1] blur of the level above at half its
+// size (Refract.Down1..4), sit side by side beneath it. rgb radiance, a view depth
+// (m; zero where no opaque surface was drawn).
+// refractInfo[0]: x atlas (sampled), y atlas (storage), z blurred levels.
+// refractParams[0]: x march steps.
+uint2 refractLevelSize(Frame f,uint level){return max(f.extent.xy>>level,uint2(1));}
+uint2 refractLevelOrigin(Frame f,uint level){
+    if(level==0)return uint2(0,0);
+    uint x=0;for(uint j=1;j<level;j++)x+=max(f.extent.x>>j,1u);return uint2(x,f.extent.y);
+}
+float2 refractAtlasSize(Frame f){return float2(f.extent.x,f.extent.y+max(f.extent.y/2,1u));}
+// The texels (x0, y0, x1, y1) of level `level` this frame copied: the rect, rounded out.
+uint4 refractRect(Look l,uint level){uint4 r=l.refractInfo[1];uint up=(1u<<level)-1;return uint4(r.xy>>level,(r.zw+up)>>level);}
+float refractViewDepth(Frame f,float3 world){return dot(world-f.camera.xyz,f.forward.xyz);}
+// Render-pixel position of a world point through the frame's (jittered) projection.
+float2 refractPixel(Frame f,float3 world){
+    float4 c=mul(f.vp,float4(world,1));float2 n=c.xy/c.w;return float2((n.x*0.5+0.5)*f.extent.x,(0.5-n.y*0.5)*f.extent.y);
+}
+// Bilinear radiance of level `level` at render uv, clamped inside the copied rect.
+float3 refractLevel(Frame f,Look l,uint level,float2 uv){
+    float4 r=float4(refractRect(l,level));float2 p=clamp(uv*float2(refractLevelSize(f,level)),r.xy+0.5,max(r.zw-0.5,r.xy+0.5));
+    return historyTex(l.refractInfo[0].x,(float2(refractLevelOrigin(f,level))+p)/refractAtlasSize(f)).rgb;
+}
+// Radiance at render uv blurred to `level` (0 sharp to 4), between levels.
+float3 refractSample(Frame f,Look l,float2 uv,float level){
+    uint top=l.refractInfo[0].z;level=clamp(level,0.,float(top));uint lo=uint(level),hi=min(lo+1,top);
+    float3 a=refractLevel(f,l,lo,uv);
+    return level>float(lo)?lerp(a,refractLevel(f,l,hi,uv),level-float(lo)):a;
+}
+// The copied view depth at render pixel `p`: zero where no surface, -1 outside the rect.
+float refractDepthAt(Look l,int2 p){
+    uint4 r=l.refractInfo[1];if(any(p<int2(r.xy))||any(p>=int2(r.zw)))return -1;
+    return pixel(l.refractInfo[0].x,p).a;
+}
+// The blur level whose texels match a footprint of `radius` metres at view depth `depth`.
+float refractLevelFor(Frame f,float radius,float depth){
+    float pixels=radius*0.5*float(f.extent.y)*length(f.vp[1].xyz)/max(depth,1e-3);return log2(1+pixels);
+}
+// A material's KHR_materials_ior/volume (instanced::Volume::pack): IOR, mesh-space
+// thickness (zero: thin-walled) and absorption coefficients per metre.
+struct RefractVolume {float ior;float thickness;float3 absorption;};
+RefractVolume refractVolume(uint2 words){
+    RefractVolume m;uint code=words.x>>16,h=words.x&0xffff;
+    m.ior=code==0?1.5:1+float(code-1)/32767.;
+    m.thickness=h<0x400?float(h)*5.96046448e-8:asfloat((((h>>10)+112)<<23)|((h&0x3ff)<<13));
+    m.absorption=float3(words.y&511,(words.y>>9)&511,(words.y>>18)&511)*exp2(float(words.y>>27)-24.);
+    return m;
+}
+// Radiance the ray (o, d) brings back from the opaque scene: a march of the copied
+// depth over `reach` metres (quadratic steps, then a binary refinement), read at the
+// blur level of the rough lobe's footprint there (`spread` radians per metre past
+// the surface, `travelled` metres already crossed inside). Rays that leave the rect
+// or meet nothing read the sky or environment, prefiltered by `roughness`.
+float3 refractTrace(Frame f,Look l,float3 o,float3 d,float reach,float spread,float travelled,float roughness,float2 uv){
+    // End in front of the near plane, as the reflection march does.
+    float ahead=refractViewDepth(f,o),toward=dot(d,f.forward.xyz);
+    if(toward<0)reach=min(reach,max(ahead-f.camera.w*2,0)/-toward);
+    uint steps=max(uint(l.refractParams[0].x),1u);float previous=0;
+    for(uint i=1;i<=steps;i++){
+        float s=float(i)/float(steps),t=reach*s*s;float3 q=o+d*t;
+        float scene=refractDepthAt(l,int2(refractPixel(f,q)));if(scene<0)break;
+        float depth=refractViewDepth(f,q);
+        // Behind the copied surface: a crossing within this step is a hit; far behind,
+        // the ray passed behind a nearer object and marches on.
+        if(scene>0 && depth>scene && depth-scene<(t-previous)*max(abs(toward),0.2)+0.02*depth){
+            float lo=previous,hi=t;
+            for(uint k=0;k<4;k++){
+                float m=(lo+hi)*0.5;float3 c=o+d*m;float z=refractDepthAt(l,int2(refractPixel(f,c)));
+                if(z>0 && refractViewDepth(f,c)>z)hi=m;else lo=m;
+            }
+            float3 at=o+d*hi;
+            return refractSample(f,l,refractPixel(f,at)/float2(f.extent.xy),refractLevelFor(f,spread*(travelled+hi),refractViewDepth(f,at)));
+        }
+        previous=t;
+    }
+    uint prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;float2 e=environmentUv(d);float level=roughness*4,low=floor(level),high=min(low+1,4);
+    float3 sky=lerp(envTex(prefilter,float2(e.x,(e.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(e.x,(e.y*127+0.5+high*128)/640)).rgb,frac(level));
+    return physicalSky(l)?sky:applyFog(f,l,sky,f.camera.xyz+d*FOG_RANGE,uv);
+}
+// Final colour of a transmissive forward surface, premultiplied by its coverage
+// (the forward pass's ONE, ONE_MINUS_SRC_ALPHA blending composites it over the
+// scene). One `shade` gives its reflection (the dielectric layer reflects with the
+// IOR's F0 where it transmits: Surface.metal 1 makes F0 the albedo), any remaining
+// diffuse or metal layer and emission; the opaque scene seen through it adds the
+// energy the specular lobe leaves (the split-sum fit `ibl` uses). A volume
+// (thickness > 0) is modelled as the sphere matching the surface's curvature,
+// a slab where flat: the ray refracts in, crosses it with Beer-Lambert absorption,
+// refracts out at the far side and marches the copied scene. Thin walls bend no
+// rays. The base colour tints each interface light crosses (glTF
+// KHR_materials_transmission); roughness widens the lobe at each, read as blur.
+// `geometric`: the interpolated normal facing the viewer; `scale`: the instance's
+// scale (the thickness is in mesh units); `high`: the High/Epic tier's shading.
+float4 refractColour(Frame f,Look l,Surface s,uint2 volume,float scale,float3 world,float3 geometric,int2 p,bool high){
+    RefractVolume m=refractVolume(volume);float tau=s.transmission;
+    float3 v=normalize(f.camera.xyz-world),n=s.normal;float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
+    float f0=(m.ior-1)/(m.ior+1);f0*=f0;
+    Surface r=s;r.albedo=lerp(s.albedo,float3(f0),tau);r.metal=lerp(s.metal,1.,tau);r.transmission=0;
+    float3 reflected=applyFog(f,l,shade(f,l,r,world,p,false,high),world,uv);
+    float nv=saturate(dot(n,v));float4 c=s.roughness*float4(-1,-0.0275,-0.572,0.022)+float4(1,0.0425,1.04,-0.04);
+    float a004=min(c.x*c.x,exp2(-9.28*nv))*c.x+c.y;float2 ab=float2(-1.04,1.04)*a004+c.zw;
+    float through=saturate(1-(f0*ab.x+ab.y));
+    // GGX's lobe width (roughness squared) bent by (1 - 1/IOR) at an interface; twice
+    // that for the tails a single width would miss.
+    float spread=2*s.roughness*s.roughness*(1-1/m.ior);
+    // Surface curvature from the screen derivatives of the geometric normal.
+    float3 dn=ddx(geometric),en=ddy(geometric),dp=ddx(world),ep=ddy(world);
+    float curvature=sqrt(max(dot(dn,dn)/max(dot(dp,dp),1e-12),dot(en,en)/max(dot(ep,ep),1e-12)));
+    float behind=refractDepthAt(l,p),front=refractViewDepth(f,world);
+    float3 transmitted;
+    if(m.thickness<=0){
+        float distance=behind>0?max(behind-front,0)/max(dot(-v,f.forward.xyz),0.2):10;
+        transmitted=refractSample(f,l,uv,refractLevelFor(f,spread*distance,front+distance))*s.albedo;
+    }else{
+        float thickness=m.thickness*scale;
+        float3 t1=refract(-v,n,1/m.ior);if(dot(t1,t1)<1e-6)t1=-v;
+        float radius=max(1/max(curvature,1e-4),thickness*0.5),cosine=max(-dot(t1,geometric),0.05);
+        float chord=min(2*radius*cosine,thickness/cosine);
+        float3 exit=world+t1*chord,n2=normalize(exit-(world-geometric*radius));
+        float3 t2=refract(t1,-n2,m.ior);float leave;
+        // Total internal reflection where the far side's estimate is too steep: keep
+        // the ray, at the normal-incidence loss.
+        if(dot(t2,t2)<1e-6){t2=t1;leave=1-f0;}else{float x=1-saturate(dot(t2,n2));leave=1-(f0+(1-f0)*x*x*x*x*x);}
+        float reach=behind>0?2.5*max(behind-refractViewDepth(f,exit),thickness):FOG_RANGE*0.01;
+        float3 traced=refractTrace(f,l,exit,t2,reach,spread,chord,s.roughness,uv);
+        transmitted=traced*exp(-m.absorption*chord)*s.albedo*s.albedo*leave;
+    }
+    return float4((reflected+tau*through*transmitted)*s.alpha,s.alpha);
+}

@@ -1,0 +1,190 @@
+// This file is part of the FidelityFX SDK.
+//
+// Copyright (C) 2024 Advanced Micro Devices, Inc.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files(the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and /or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions :
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+// Ara: Ara TSR's engine signals and its accumulate-path functions, what a drop-in
+// FSR cannot see or does at a higher cost. Include after
+// ffx_fsr3upscaler_common.h. Reactive mask generation follows FSR 3.1's
+// autogen-reactive pass (ffx_fsr3upscaler_autogen_reactive_pass.hlsl).
+//
+// Masks (prepare inputs stores them per render pixel when any signal exists this
+// frame; prepare reactivity reads them as FSR's reactive and
+// transparency-and-composition inputs, accumulate the third):
+// - transparency: where this frame copied the lit opaque scene (look::refract,
+//   frames with transmissive draws, inside its rect), FSR's autogen of opaque-only
+//   against composited colour, split by the parallax between the frontmost
+//   surface's motion and the camera motion of the opaque surface behind it.
+//   Moving: reactive (history reset) and composition (tighter clipping, no locks),
+//   so refracted content does not smear. Still: "still transparency", which lowers
+//   the current frame's weight (kernel.w) so thin transparent surfaces' specular
+//   sparkle averages out as the area-sampled truth does;
+// - reflections: SSR confidence (half resolution), a light reactive while the
+//   surface moves, since reflections move with their virtual image, not the surface;
+// - the host's coverage (Renderer::finish_reactive: particles composited in finish).
+
+// FSR's autogen as AMD's sample configures it: tonemapped, largest channel change,
+// thresholded to a binary value (scale, threshold, value: TsrConstants.autogen).
+float tsrAutogen(float3 pre,float3 post){
+    TsrConstants c=tsr();float3 delta=abs(Tonemap(post)-Tonemap(pre));
+    float value=max(delta.x,max(delta.y,delta.z))*c.autogen.x;
+    return value<c.autogen.y?0:c.autogen.z;
+}
+// Stores render pixel p's masks (scratch region 6: reactive, composition, still
+// transparency) when any signal exists this frame (TSR_OPTION_MASKS).
+void tsrPrepareMasks(int2 p){
+    TsrConstants c=tsr();int2 size=c.renderSize.xy;
+    if(!tsrOption(TSR_OPTION_MASKS) || !tsrInside(p,size))return;
+    float reactive=0,composition=0,still=0;
+    // The frontmost surface's motion (LoadInputMotionVector), render pixels.
+    float2 front=LoadInputMotionVector(FfxUInt32x2(p));
+    const uint none=0xffffffffu;
+    if(c.signalInputs.y!=none && all(p>=int2(c.opaqueRect.xy)) && all(p<int2(c.opaqueRect.zw))){
+        float scale=tsrInputScale();
+        float3 pre=max(textures[NonUniformResourceIndex(c.signalInputs.y)].Load(int3(p,0)).rgb,0)*scale;
+        float3 post=max(textures[NonUniformResourceIndex(c.signalInputs.z)].Load(int3(p,0)).rgb,0)*scale;
+        float transparency=tsrAutogen(pre,post);
+        // Against the camera motion of the opaque depth behind (forward surfaces
+        // write no depth).
+        float2 behind=tsrCameraMotion(p,textures[NonUniformResourceIndex(c.inputs.y)].Load(int3(p,0)).x);
+        float gate=saturate(length((front-behind)*float2(size))/c.autogen.w);
+        reactive=transparency*gate;
+        composition=transparency*gate*c.signals.w;
+        still=transparency*(1-gate);
+    }
+    if(c.signalInputs.w!=none){
+        float confidence=saturate(textures[NonUniformResourceIndex(c.signalInputs.w)].Load(int3(p/2,0)).a);
+        reactive=max(reactive,confidence*c.signals.z*saturate(length(front*float2(size))/c.autogen.w));
+    }
+    if(c.external.x!=none)reactive=max(reactive,saturate(textures[NonUniformResourceIndex(c.external.x)].Load(int3(p,0)).x));
+    uint packed=uint(saturate(reactive)*2047+0.5)|(uint(saturate(composition)*2047+0.5)<<11)|(uint(saturate(still)*1023+0.5)<<22);
+    buffers[NonUniformResourceIndex(c.resources.y)].Store(tsrScratch(6,p),packed);
+}
+
+// FSR's LoadPreparedColor (YCoCg of the pre-exposed colour), stored once per render
+// pixel by prepare inputs for the accumulate pass' nine taps (sampled0.w).
+void tsrStorePrepared(int2 p){
+    if(!tsrInside(p,RenderSize()))return;
+    float3 rgb=ffxMax(FfxFloat32x3(0,0,0),LoadInputColor(FfxUInt32x2(p)))*Exposure();
+    images[NonUniformResourceIndex(tsr().storage0.w)][p]=float4(RGBToYCoCg(rgb),1);
+}
+
+// FSR's shading change pass evaluated where prepare reactivity samples it (that
+// pass' formula over the pyramid's mips 0 to 2, ffx_fsr3upscaler_shading_change.h),
+// instead of a half-size image interpolated: `uv` is FSR's (jitter re-applied).
+FfxFloat32 SampleShadingChange(FfxFloat32x2 uv){
+    if(!tsrOption(TSR_OPTION_SHADING_CHANGE))return 0;
+    const FfxFloat32x2 fMipUv=ClampUv(uv+Jitter()/RenderSize(),ShadingChangeRenderSize(),GetSPDMipDimensions(0));
+    FfxFloat32 fShadingChange=0;
+    FFX_UNROLL
+    for(FfxInt32 iMipLevel=0;iMipLevel<3;iMipLevel++){
+        const FfxFloat32x2 fSample=SampleSPDMipLevel(fMipUv,iMipLevel);
+        const FfxFloat32 fChange=abs(fSample.x*fSample.y);
+        if(fChange>0)fShadingChange=ffxMax(fShadingChange,fChange);
+    }
+    return ffxSaturate(fShadingChange)*tsr().frame.w;
+}
+
+// Ara path upsampling weight (FFX_FSR3UPSCALER_OPTION_UPSAMPLE_USE_LANCZOS_TYPE 3)
+// in place of FSR's Lanczos-2 approximation: a positive Gaussian of the sample's
+// offset in display pixels, as an area sample's footprint (FSR's Lanczos lobes
+// over-sharpen against area-sampled truth as the scale approaches 1). Its spread
+// follows FSR's kernel-bias weight (`confidence`: 1 with settled history, lower when
+// disoccluded, shading changed or newly accumulating) from kernel.y to kernel.x, and
+// the weight is normalised so settled pixels accumulate at FSR's rate (FSR's sum of
+// Lanczos weights is the render-to-display pixel area ratio; kernel.z scales it).
+FfxFloat32 TsrUpsampleWeight(FfxFloat32x2 fSrcSampleOffset,FfxFloat32 confidence){
+    TsrConstants c=tsr();float2 d=fSrcSampleOffset/c.scale.xy;
+    float spread=lerp(c.kernel.y,c.kernel.x,saturate(confidence));
+    return c.kernel.z*c.kernel.x/PI*exp(-spread*dot(d,d));
+}
+
+// The current frame's weight scale for still transparency (kernel.w, at the render
+// pixel under display pixel `params`): longer accumulation for thin transparent
+// surfaces' sparkle.
+FfxFloat32 TsrUpsampledWeightScale(FfxFloat32x2 lrUv){
+    return lerp(1,tsr().kernel.w,tsrMask(int2(lrUv*float2(MaxRenderSize())),22,10));
+}
+
+#ifdef TSR_ARA_HISTORY
+// Ara path reprojection: last frame's display history (sampled, hardware bilinear)
+// through a five-tap Catmull-Rom, as baseline.slang historyCatmullRom, in place of
+// FSR's sixteen-tap Lanczos-2; then FSR's deringing, a clamp to the 2x2 texels
+// around the sample. Returns colour and lock (w).
+FfxFloat32x4 TsrReprojectHistory(FfxFloat32x2 uv){
+    float2 size=float2(PreviousFrameUpscaleSize()),position=uv*size,centre=floor(position-0.5)+0.5,t=position-centre;
+    float2 w0=t*(-0.5+t*(1-0.5*t)),w1=1+t*t*(-2.5+1.5*t),w2=t*(0.5+t*(2-1.5*t)),w3=t*t*(-0.5+0.5*t);
+    float2 w12=w1+w2,p0=(centre-1)/size,p3=(centre+2)/size,p12=(centre+w2/w12)/size;
+    Texture2D<float4> history=textures[NonUniformResourceIndex(tsr().options.y)];
+    float4 sum=history.SampleLevel(samplers[2],float2(p12.x,p0.y),0)*(w12.x*w0.y)
+        +history.SampleLevel(samplers[2],float2(p0.x,p12.y),0)*(w0.x*w12.y)
+        +history.SampleLevel(samplers[2],p12,0)*(w12.x*w12.y)
+        +history.SampleLevel(samplers[2],float2(p3.x,p12.y),0)*(w3.x*w12.y)
+        +history.SampleLevel(samplers[2],float2(p12.x,p3.y),0)*(w12.x*w3.y);
+    float4 colour=sum/(w12.x*w0.y+w0.x*w12.y+w12.x*w12.y+w3.x*w12.y+w12.x*w3.y);
+    uint2 base=uint2(int2(centre-0.5));
+    float4 a=LoadHistory(base),b=LoadHistory(base+uint2(1,0)),c=LoadHistory(base+uint2(0,1)),d=LoadHistory(base+uint2(1,1));
+    return clamp(colour,min(min(a,b),min(c,d)),max(max(a,b),max(c,d)));
+}
+#endif
+
+// Exact history validity from entity IDs, refining FSR's depth-based disocclusion
+// (`depthDisocclusion`, ComputeDisocclusions) at render pixel p. Both frames keep
+// the ID at their nearest-depth (dilated) sample; `uv + motion` is FSR's
+// reprojection. Over the 2x2 footprint FSR reprojects with:
+// - the entity was there with a consistent depth (within `signals.y` times FSR's
+//   required separation): the same surface, so history is kept even where FSR's
+//   splatted depth flagged thin geometry;
+// - the entity was there at another depth (self-occlusion within one entity):
+//   FSR's verdict stands;
+// - the entity is absent from last frame's 3x3 around the reprojected pixel (the
+//   background, ID 0, counts as an entity): a new surface, disoccluded by
+//   `signals.x`. The wider absence test spares sub-pixel geometry whose coverage
+//   moves with the jitter; transparent pixels (masks) keep FSR's verdict, since
+//   their ID is the transparent layer's over an opaque depth.
+float TsrIdDisocclusion(int2 p,float2 uv,float2 motion,float deviceDepth,float depthDisocclusion){
+    TsrConstants c=tsr();
+    if(FrameIndex()==0 || c.signalInputs.x==0xffffffffu || !tsrInside(p,c.renderSize.xy))return depthDisocclusion;
+    float2 reprojected=uv+motion;if(!IsUvInside(reprojected))return depthDisocclusion;
+    int2 size=PreviousFrameRenderSize();uint id=tsrDilatedId(p,true);
+    BilinearSamplingData footprint=GetBilinearSamplingData(reprojected,size);
+    float z=GetViewSpaceDepth(deviceDepth);
+    float separation=c.signals.y*1.37e-05f*length(float2(c.renderSize.xy)*0.5);
+    bool matched=false,consistent=false;
+    FFX_UNROLL
+    for(int i=0;i<4;i++){
+        int2 q=ClampLoad(footprint.iBasePos,footprint.iOffsets[i],size);
+        if(footprint.fWeights[i]>fReconstructedDepthBilinearWeightThreshold && tsrDilatedId(q,false)==id){
+            matched=true;float previous=GetViewSpaceDepth(tsrPreviousDilatedDepth(q));
+            consistent=consistent || abs(z-previous)<=separation*max(z,previous);
+        }
+    }
+    if(consistent)return 0;
+    if(matched || tsrMask(p,11,11)>0 || tsrMask(p,22,10)>0)return depthDisocclusion;
+    int2 centre=int2(floor(reprojected*float2(size)));
+    FFX_UNROLL
+    for(int y=-1;y<=1;y++){
+        FFX_UNROLL
+        for(int x=-1;x<=1;x++){
+            if(tsrDilatedId(ClampLoad(centre,int2(x,y),size),false)==id)return depthDisocclusion;
+        }
+    }
+    return max(depthDisocclusion,c.signals.x);
+}

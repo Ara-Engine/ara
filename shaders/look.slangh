@@ -63,6 +63,9 @@ struct Look {
     float4 rtParams[2];      uint4 rtInfo[2];
     float4 refractParams[2]; uint4 refractInfo[2];
     float4 shadowParams[2];  uint4 shadowInfo[2];
+    // shadowParams[0]: visibility-bitmask ambient light (look-ao.slang aoBitmaskMain), x
+    // sample thickness (m), y bounce intensity; shadowInfo[0].x bit 0: last frame's colour
+    // pyramid feeds the bounce. The soft sun shadows read sunLux.w; [1] is spare.
 };
 static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64;
 Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(0);}

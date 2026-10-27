@@ -48,10 +48,14 @@ impl GeometryGpu {
             })
             .collect();
         let mut allocated = Vec::new();
+        // RT devices keep acceleration-structure inputs for the raster renderer's
+        // own BLASes (hybrid ray queries), even when this pool builds none.
+        let ray_inputs = rt || gpu.info().ray_tracing;
         match Self::upload(
             gpu,
             packed,
             rt,
+            ray_inputs,
             previous.and_then(|p| p.static_pool),
             &mut allocated,
             None,
@@ -73,10 +77,13 @@ impl GeometryGpu {
         }
     }
 
+    /// `rt` builds a BLAS per LOD; `ray_inputs` (implied by `rt`) allocates the
+    /// buffers as acceleration-structure build inputs without building any.
     pub(super) fn upload(
         gpu: &mut GpuDevice,
         packed: pack::Packed,
         rt: bool,
+        ray_inputs: bool,
         resident: Option<Buffer>,
         allocated: &mut Vec<Resource>,
         mut prepared: Option<&mut preparation::Buffers>,
@@ -96,6 +103,7 @@ impl GeometryGpu {
             presented_slot: 0,
             pending_pose: false,
             pose_host_writes: 0,
+            ray_inputs: rt || ray_inputs,
             stats: GeometryUpload::default(),
         };
         result.stats.geometries = result.ranges.len();
@@ -104,7 +112,7 @@ impl GeometryGpu {
             return Ok((result, None));
         }
         let usage = vk::BufferUsageFlags::STORAGE_BUFFER
-            | if rt {
+            | if result.ray_inputs {
                 vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                     | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
             } else {

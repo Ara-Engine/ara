@@ -9,7 +9,7 @@ use anyhow::{Result, bail};
 use ara_gpu::GpuDevice;
 use ara_render::look::{
     AmbientOcclusion, DepthOfFieldQuality, FarShadows, LocalShadows, MotionBlurQuality, Quality,
-    Reflections, Shadows, VirtualShadows,
+    RayQueries, ReflectionCaptures, Reflections, Shadows, VirtualShadows,
 };
 
 /// User-facing quality tier. D27: every tier is raster by default
@@ -25,11 +25,13 @@ pub enum QualityPreset {
     /// Raster: 0.55 render scale, three cascades and bloom. Ray traced: ReSTIR at
     /// 0.4 scale, rough reflections from the probe field above roughness 0.35.
     Medium,
-    /// Raster: four 2048 cascades to 150 m. Ray traced: ReSTIR at half scale,
-    /// paths ending in the probe field after one traced event.
+    /// Raster: four 2048 cascades to 150 m; on RT devices (D29) hardware ray
+    /// queries reflect surfaces below roughness 0.3. Ray traced: ReSTIR at half
+    /// scale, paths ending in the probe field after one traced event.
     High,
-    /// Raster: four cascades to 250 m, the largest GI budget. Ray traced: ReSTIR
-    /// at two-thirds scale with two traced events before the probe field.
+    /// Raster: four cascades to 250 m, the largest GI budget; on RT devices ray
+    /// queries reflect surfaces below roughness 0.5. Ray traced: ReSTIR at
+    /// two-thirds scale with two traced events before the probe field.
     Epic,
 }
 
@@ -235,8 +237,18 @@ pub struct RasterPlan {
     pub render_size: [u32; 2],
     /// Display resolution.
     pub display_size: [u32; 2],
-    /// Shadows, probe GI budget and post effects.
+    /// Shadows, probe GI budget and post effects. D29: on devices with hardware ray
+    /// queries High and Epic keep `quality.ray_queries` (the hybrid path); other
+    /// devices resolve the same preset without it (the raster High/Epic path).
     pub quality: Quality,
+}
+
+impl RasterPlan {
+    /// Whether this plan adds hardware ray queries to the raster renderer (D29's
+    /// hybrid High/Epic path on RT devices).
+    pub fn hybrid(&self) -> bool {
+        self.quality.ray_queries.is_some()
+    }
 }
 
 /// Renderer selection options.
@@ -313,6 +325,14 @@ impl QualityPreset {
                 max_length,
             })
         };
+        // D29 hybrid ray queries (High/Epic): mirror and glossy reflections below
+        // the roughness cut. `Plan::resolve` drops them on devices without RT.
+        let rays = |reflection_roughness, distance| {
+            Some(RayQueries {
+                reflection_roughness,
+                distance,
+            })
+        };
         match self {
             // LOD error and the cull size are in render pixels (about two
             // display pixels each at Low's scale).
@@ -326,12 +346,14 @@ impl QualityPreset {
                 lod_pixels: 6.,
                 min_pixels: 6.,
                 high_tier: false,
+                reflection_captures: None,
                 terrain_detail: 0.,
                 local_shadows: None,
                 horizon: Some(1024),
                 virtual_shadows: None,
                 depth_of_field: dof(12, 0.01),
                 motion_blur: None,
+                ray_queries: None,
             },
             Self::Medium => Quality {
                 shadows: shadows(3, 1024, 100., (1024, 1000.)),
@@ -343,6 +365,7 @@ impl QualityPreset {
                 lod_pixels: 3.,
                 min_pixels: 3.,
                 high_tier: false,
+                reflection_captures: None,
                 terrain_detail: 40.,
                 local_shadows: Some(LocalShadows {
                     lights: 2,
@@ -354,6 +377,7 @@ impl QualityPreset {
                 virtual_shadows: None,
                 depth_of_field: dof(20, 0.015),
                 motion_blur: motion(8, 24.),
+                ray_queries: None,
             },
             Self::High => Quality {
                 shadows: shadows(4, 2048, 150., (2048, 1500.)),
@@ -365,6 +389,10 @@ impl QualityPreset {
                 lod_pixels: 1.,
                 min_pixels: 1.5,
                 high_tier: true,
+                reflection_captures: Some(ReflectionCaptures {
+                    resolution: 512,
+                    captures: 8,
+                }),
                 terrain_detail: 150.,
                 local_shadows: Some(LocalShadows {
                     lights: 4,
@@ -380,6 +408,7 @@ impl QualityPreset {
                 }),
                 depth_of_field: dof(32, 0.02),
                 motion_blur: motion(12, 32.),
+                ray_queries: rays(0.3, 1500.),
             },
             Self::Epic => Quality {
                 shadows: shadows(4, 2048, 250., (2048, 2000.)),
@@ -391,6 +420,10 @@ impl QualityPreset {
                 lod_pixels: 1.,
                 min_pixels: 1.,
                 high_tier: true,
+                reflection_captures: Some(ReflectionCaptures {
+                    resolution: 512,
+                    captures: 16,
+                }),
                 terrain_detail: 300.,
                 local_shadows: Some(LocalShadows {
                     lights: 8,
@@ -406,6 +439,7 @@ impl QualityPreset {
                 }),
                 depth_of_field: dof(48, 0.025),
                 motion_blur: motion(16, 32.),
+                ray_queries: rays(0.5, 2000.),
             },
         }
     }
@@ -444,10 +478,18 @@ impl Plan {
         };
         let preset = requested;
         let scaled = |scale: f32| display_size.map(|v| ((v as f32 * scale).round() as u32).max(1));
+        // D29: High/Epic add hardware ray queries only where the device has them.
+        let quality = Quality {
+            ray_queries: preset
+                .raster_quality()
+                .ray_queries
+                .filter(|_| capabilities.ray_tracing),
+            ..preset.raster_quality()
+        };
         let raster = RenderPath::Raster(RasterPlan {
             render_size: scaled(preset.raster_scale()),
             display_size,
-            quality: preset.raster_quality(),
+            quality,
         });
         let path = match preset {
             _ if !traced => raster,
@@ -609,6 +651,29 @@ mod tests {
         .unwrap();
         assert_eq!(plan.preset, QualityPreset::High);
         assert!(matches!(plan.path, RenderPath::Raster(_)));
+    }
+
+    #[test]
+    fn high_and_epic_add_ray_queries_only_on_rt_devices() {
+        let raster = Capabilities {
+            ray_tracing: false,
+            ..RT
+        };
+        for preset in QualityPreset::ALL {
+            let choice = QualityChoice::Preset(preset);
+            let hybrid = |caps| match Plan::resolve(choice, caps, [2560, 1440], Default::default())
+                .unwrap()
+                .path
+            {
+                RenderPath::Raster(plan) => {
+                    plan.quality.validate().unwrap();
+                    plan.hybrid()
+                }
+                RenderPath::Fidelity(_) => unreachable!("raster by default"),
+            };
+            assert_eq!(hybrid(&RT), preset >= QualityPreset::High, "{preset}");
+            assert!(!hybrid(&raster), "{preset}");
+        }
     }
 
     #[test]
