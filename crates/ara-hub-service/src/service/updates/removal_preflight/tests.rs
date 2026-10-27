@@ -186,6 +186,60 @@ fn current_service_installation_is_refused_before_confirmation() {
 }
 
 #[test]
+fn service_path_alias_is_refused_for_inspection_and_confirmed_removal() {
+    let (root, mut hub) = fixture();
+    let install = root.join("engines/1.0.0");
+    // Windows registration simplifies the canonical scratch path's verbatim prefix.
+    hub.config.engine.executable = dunce::simplified(&install.join("ara.exe")).to_path_buf();
+    let registry = fs::read(hub.config.directory.join("registry.json")).expect("registry");
+    for method in ["hub.engine.uninstall.preflight", "hub.engine.uninstall"] {
+        let error = hub
+            .call(method, json!({"version":"1.0.0"}))
+            .expect_err("the current service must stay installed");
+        assert!(error.message.contains("hosts the running Hub service"));
+    }
+    assert!(install.join("ara.exe").is_file());
+    assert_eq!(
+        fs::read(hub.config.directory.join("registry.json")).expect("unchanged registry"),
+        registry
+    );
+    assert!(hub.updates.jobs.is_empty());
+}
+
+#[test]
+fn confirmed_removal_accepts_the_registered_managed_path_alias() {
+    let (root, mut hub) = fixture();
+    let started = hub
+        .call("hub.engine.uninstall", json!({"version":"1.0.0"}))
+        .expect("registered managed engine");
+    let job = finished(&mut hub, started["id"].as_str().expect("job ID"));
+    assert_eq!(job["state"], "complete", "{job}");
+    assert!(!root.join("engines/1.0.0").exists());
+    assert!(hub.registry.engine("1.0.0").is_err());
+}
+
+#[test]
+#[cfg(windows)]
+fn long_service_path_inside_the_installation_is_refused() {
+    let (root, mut hub) = fixture();
+    let install = root.join("engines/1.0.0");
+    let nested = install.join("x".repeat(200));
+    fs::create_dir_all(&nested).expect("long owned directory");
+    let executable = nested.join("ara.exe");
+    assert!(executable.as_os_str().len() > 260);
+    fs::write(&executable, b"service").expect("owned service");
+    hub.config.engine.executable = executable.clone();
+    for method in ["hub.engine.uninstall.preflight", "hub.engine.uninstall"] {
+        let error = hub
+            .call(method, json!({"version":"1.0.0"}))
+            .expect_err("the nested running service must stay installed");
+        assert!(error.message.contains("hosts the running Hub service"));
+    }
+    assert!(executable.is_file());
+    assert!(hub.updates.jobs.is_empty());
+}
+
+#[test]
 #[cfg(unix)]
 fn linked_inputs_and_linked_ownership_are_never_followed() {
     use std::os::unix::fs::symlink;
