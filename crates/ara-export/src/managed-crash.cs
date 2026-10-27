@@ -15,8 +15,8 @@ internal static class CrashCapture
     internal static void Install()
     {
         AppDomain.CurrentDomain.UnhandledException += OnUnhandled;
-        if (Array.IndexOf(Environment.GetCommandLineArgs(), "--crash-probe") >= 0 &&
-            Array.IndexOf(Environment.GetCommandLineArgs(), "managed") >= 0)
+        if (Array.IndexOf(global::System.Environment.GetCommandLineArgs(), "--crash-probe") >= 0 &&
+            Array.IndexOf(global::System.Environment.GetCommandLineArgs(), "managed") >= 0)
             new System.Threading.Thread(ThrowProbe) { IsBackground = true }.Start();
     }
 
@@ -26,19 +26,19 @@ internal static class CrashCapture
     {
         try
         {
-            var executable = Environment.ProcessPath ?? throw new IOException("Process path unavailable");
+            var executable = global::System.Environment.ProcessPath ?? throw new IOException("Process path unavailable");
             using var config = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(executable)!, "ara-crash.json")));
             var buildId = config.RootElement.GetProperty("buildId").GetString() ?? "unknown";
             if (buildId.Length != 64 || Array.Exists(buildId.ToCharArray(), c => !Uri.IsHexDigit(c))) return;
             var state = OperatingSystem.IsWindows()
-                ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
-                : Environment.GetEnvironmentVariable("XDG_STATE_HOME") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "state");
-            var directory = Environment.GetEnvironmentVariable("ARA_CRASH_DIR") ?? Path.Combine(state, "Ara", "crashes", buildId);
+                ? global::System.Environment.GetFolderPath(global::System.Environment.SpecialFolder.LocalApplicationData)
+                : global::System.Environment.GetEnvironmentVariable("XDG_STATE_HOME") ?? Path.Combine(global::System.Environment.GetFolderPath(global::System.Environment.SpecialFolder.UserProfile), ".local", "state");
+            var directory = global::System.Environment.GetEnvironmentVariable("ARA_CRASH_DIR") ?? Path.Combine(state, "Ara", "crashes", buildId);
             Directory.CreateDirectory(directory);
             var exception = args.ExceptionObject as Exception;
             var message = exception?.Message ?? args.ExceptionObject.ToString() ?? "Unhandled managed exception";
             var stack = exception?.ToString() ?? message;
-            var path = Path.Combine(directory, $"{Environment.ProcessId}-{Guid.NewGuid():N}.managed");
+            var path = Path.Combine(directory, $"{global::System.Environment.ProcessId}-{Guid.NewGuid():N}.managed");
             using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
             using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
             writer.Write(Encoding.ASCII.GetBytes("ARAMCS1\0"));
