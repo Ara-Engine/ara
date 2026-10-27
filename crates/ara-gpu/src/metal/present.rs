@@ -1,14 +1,15 @@
 //! CAMetalLayer presentation, the Metal counterpart of `ara-platform`'s Vulkan
 //! `Present`. The layer is BGRA8 with sRGB-encoded values (what the Vulkan path
-//! selects as `B8G8R8A8_UNORM` + `SRGB_NONLINEAR`), so engine output written in the
-//! reported surface format is presented by a plain copy into the drawable.
+//! selects as `B8G8R8A8_UNORM` + `SRGB_NONLINEAR`). Like the Vulkan blit, `display`
+//! scales and converts any completed colour image to the drawable ([`super::transfer`]).
 //!
 //! Like the Vulkan v0 presenter, `display` is serialized: it orders the copy after all
-//! submitted work, presents, and waits for its own submission before returning.
-//! Scaled presentation and HDR (EDR) output are not implemented yet.
+//! submitted work, presents, and waits for its own command buffer before returning.
+//! HDR (EDR) output is not implemented yet.
 use super::MetalDevice;
 use super::native::{nil, pool};
-use crate::{Device, GpuError, Image, Queue, Result};
+use super::transfer::Transfer;
+use crate::{GpuError, Image, Result};
 use ash::vk;
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
@@ -27,8 +28,7 @@ const SURFACE: vk::SurfaceFormatKHR = vk::SurfaceFormatKHR {
 /// A CAMetalLayer bound to one device, presenting completed engine images.
 pub struct Presenter {
     layer: Retained<CAMetalLayer>,
-    /// The graphics queue holding the layer's residency set.
-    queue: Retained<ProtocolObject<dyn MTL4CommandQueue>>,
+    transfer: Transfer,
     size: [u32; 2],
 }
 
@@ -61,14 +61,12 @@ impl Presenter {
     ) -> Result<Self> {
         layer.setDevice(Some(&gpu.device));
         layer.setPixelFormat(PIXEL);
-        // Copies write the drawable, so it cannot be a framebuffer-only texture.
+        // Blits and the scale kernel write the drawable, so it cannot be a
+        // framebuffer-only texture.
         layer.setFramebufferOnly(false);
-        // Drawable textures live in the layer's residency set (macOS 15+).
-        let queue = gpu.queues[Queue::Graphics.index()].clone();
-        queue.addResidencySet(&layer.residencySet());
         let mut presenter = Self {
             layer,
-            queue,
+            transfer: Transfer::new(gpu)?,
             size: [0; 2],
         };
         presenter.resize(size)?;
@@ -86,7 +84,7 @@ impl Presenter {
         self.size = size;
         Ok(())
     }
-    /// The format engine output must use to be presented by copy.
+    /// The drawable format; engine output in any colour format is converted.
     pub fn surface_format(&self) -> vk::SurfaceFormatKHR {
         SURFACE
     }
@@ -94,16 +92,16 @@ impl Presenter {
     pub fn size(&self) -> [u32; 2] {
         self.size
     }
-    /// Present a `B8G8R8A8_UNORM` image of the presenter's size with transfer-source
-    /// usage, after all work already submitted on this device.
-    pub fn display(&mut self, gpu: &mut MetalDevice, source: Image) -> Result<()> {
+    /// Present a completed colour image with transfer-source usage, scaled to the
+    /// drawable, after all work already submitted on this device.
+    pub fn display(&mut self, gpu: &MetalDevice, source: Image) -> Result<()> {
         self.present(gpu, source, None)
     }
 
     /// `readback` (tests) also copies the drawable into a host buffer before presenting.
     pub(super) fn present(
         &mut self,
-        gpu: &mut MetalDevice,
+        gpu: &MetalDevice,
         source: Image,
         readback: Option<crate::Buffer>,
     ) -> Result<()> {
@@ -111,19 +109,15 @@ impl Presenter {
     }
     fn present_now(
         &mut self,
-        gpu: &mut MetalDevice,
+        gpu: &MetalDevice,
         source: Image,
         readback: Option<crate::Buffer>,
     ) -> Result<()> {
         let image = &gpu.images.get(source)?.raw;
-        if image.size != self.size
-            || image.info.pixel != PIXEL
-            || !image.usage.contains(vk::ImageUsageFlags::TRANSFER_SRC)
-        {
-            return Err(GpuError::Contract(format!(
-                "Presented images must be {}x{} B8G8R8A8_UNORM transfer sources",
-                self.size[0], self.size[1]
-            )));
+        if image.info.depth || !image.usage.contains(vk::ImageUsageFlags::TRANSFER_SRC) {
+            return Err(GpuError::Contract(
+                "Presented images must be colour transfer sources".into(),
+            ));
         }
         let texture = image.texture.clone();
         let readback = readback
@@ -134,57 +128,28 @@ impl Presenter {
             .nextDrawable()
             .ok_or_else(|| nil("CAMetalLayer nextDrawable"))?;
         let target = drawable.texture();
-        let [width, height] = self.size;
-        let mtl_drawable = ProtocolObject::from_ref(&*drawable);
-        let point = gpu.submit_serialized(
-            |encoder| {
+        let [width, height] = self.size.map(|v| v as usize);
+        self.transfer.run(gpu, |transfer, cmd| {
+            transfer.copy(cmd, &texture, &target)?;
+            if let Some(buffer) = &readback {
+                let blit = cmd.blitCommandEncoder().ok_or_else(|| nil("blit encoder"))?;
                 let extent = MTLSize {
-                    width: width as usize,
-                    height: height as usize,
+                    width,
+                    height,
                     depth: 1,
                 };
-                let origin = MTLOrigin { x: 0, y: 0, z: 0 };
-                // SAFETY: equally sized BGRA8 textures (checked); the drawable is
-                // resident through the layer's residency set and the source through the
-                // device's.
+                // SAFETY: callers size the readback buffer for the whole drawable
+                // (tests only).
                 unsafe {
-                    encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toTexture_destinationSlice_destinationLevel_destinationOrigin(
-                        &texture, 0, 0, origin, extent, &target, 0, 0, origin,
+                    blit.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage(
+                        &target, 0, 0, MTLOrigin { x: 0, y: 0, z: 0 }, extent,
+                        buffer, 0, width * 4, width * height * 4,
                     );
                 }
-                if let Some(buffer) = &readback {
-                    encoder.barrierAfterEncoderStages_beforeEncoderStages_visibilityOptions(
-                        MTLStages::Blit,
-                        MTLStages::Blit,
-                        MTL4VisibilityOptions::Device,
-                    );
-                    let row = width as usize * 4;
-                    // SAFETY: the readback buffer was created by this device; callers
-                    // size it for the whole drawable (tests only).
-                    unsafe {
-                        encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage(
-                            &target, 0, 0, origin, extent, buffer, 0, row, row * height as usize,
-                        );
-                    }
-                }
-            },
-            |native, before| {
-                if before {
-                    native.waitForDrawable(mtl_drawable);
-                } else {
-                    native.signalDrawable(mtl_drawable);
-                }
-            },
-        )?;
-        drawable.present();
-        gpu.images.get_mut(source)?.last[point.queue.index()] = point.value;
-        Device::wait(gpu, point)
-    }
-}
-
-impl Drop for Presenter {
-    fn drop(&mut self) {
-        // `display` waited for its own submission, so no drawable is still in use.
-        self.queue.removeResidencySet(&self.layer.residencySet());
+                blit.endEncoding();
+            }
+            cmd.presentDrawable(ProtocolObject::from_ref(&*drawable));
+            Ok(())
+        })
     }
 }

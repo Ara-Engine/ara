@@ -99,10 +99,9 @@ fn shared_surfaces_round_trip_between_devices_skip_when_full_and_resize() {
         !ring.release(held[0]),
         "a stale generation's release is ignored"
     );
-    assert!(
-        publish(&mut ring, &producer, size, 10).is_none(),
-        "mid-resize frame"
-    );
+    // A source still at the old size is scaled into the new generation's slots.
+    let scaled = publish(&mut ring, &producer, size, 10).expect("a scaled frame");
+    assert_eq!(scaled.generation, 2);
 }
 
 #[test]

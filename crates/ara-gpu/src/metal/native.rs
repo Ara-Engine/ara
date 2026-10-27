@@ -83,7 +83,13 @@ pub(super) fn raw_format(raw: i32) -> Result<MTLPixelFormat> {
 /// Texture usage implied by the portable image usage flags.
 pub(super) fn texture_usage(usage: vk::ImageUsageFlags) -> MTLTextureUsage {
     let mut metal = MTLTextureUsage::Unknown;
-    if usage.intersects(vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::INPUT_ATTACHMENT) {
+    // Copy sources are also sampled: presentation and shared surfaces scale and
+    // convert them with a compute kernel ([`super::transfer`]).
+    if usage.intersects(
+        vk::ImageUsageFlags::SAMPLED
+            | vk::ImageUsageFlags::INPUT_ATTACHMENT
+            | vk::ImageUsageFlags::TRANSFER_SRC,
+    ) {
         metal |= MTLTextureUsage::ShaderRead;
     }
     if usage.contains(vk::ImageUsageFlags::STORAGE) {

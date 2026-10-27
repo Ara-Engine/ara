@@ -51,6 +51,7 @@ mod tables;
 #[cfg(test)]
 mod tests;
 mod timestamps;
+mod transfer;
 mod worker;
 
 pub use completion::Completion;

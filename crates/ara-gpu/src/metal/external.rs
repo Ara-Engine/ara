@@ -2,21 +2,22 @@
 //! IOSurfaces. The producer's ring slots are global IOSurfaces (their IDs travel as
 //! [`SlotDesc::handle`]); the owner looks them up ([`SharedSurface`]) and wraps them
 //! as textures. Like the Vulkan rings, each side owns its slot textures and a private
-//! command queue ([`Copier`]), takes the device by shared reference and cleans up on
-//! drop. Unified memory needs no queue-family transfer: the producer waits for its
+//! copy queue ([`super::transfer`]), takes the device by shared reference and cleans
+//! up on drop. Unified memory needs no queue-family transfer: the producer waits for its
 //! copy before sending `FrameReady`, and the owner releases a slot only after its own
 //! sampling completed.
 //!
 //! The backend-neutral methods (`create`, `recreate`, `publish_image`, `read_pixels`,
 //! `exchange`, `desc`) match `vulkan::external`'s, unsafe where Vulkan's are, so call
 //! sites compile unchanged against `GpuDevice`.
-use super::native::{nil, ns_error, pool};
-use super::{MetalDevice, WAIT_TIMEOUT_MS};
+use super::MetalDevice;
+use super::native::{nil, pool};
+use super::transfer::Transfer;
 use crate::shared::{
     DeviceIdentity, Frame, IoSurface, Ring, SLOTS, SharedSurface, SlotDesc, SurfaceDesc,
     SurfaceFormat,
 };
-use crate::{GpuError, Image, Queue, Result};
+use crate::{GpuError, Image, Result};
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
 use objc2_core_foundation::{CFBoolean, CFDictionary, CFNumber, CFString, CFType};
@@ -27,105 +28,14 @@ use objc2_io_surface::{
     kIOSurfacePixelFormat, kIOSurfaceWidth,
 };
 use objc2_metal::*;
-use std::ptr::NonNull;
 
 /// `'RGBA'`: 8-bit RGBA in memory order, matching `R8G8B8A8_UNORM`.
 const PIXEL_FORMAT_RGBA: i32 = 0x5247_4241;
 
 type Texture = Retained<ProtocolObject<dyn MTLTexture>>;
-type Encoder = ProtocolObject<dyn MTL4ComputeCommandEncoder>;
-
-/// A private queue for slot copies. Each copy waits on the device's timelines for
-/// everything already submitted, then signals and waits on its own event.
-struct Copier {
-    queue: Retained<ProtocolObject<dyn MTL4CommandQueue>>,
-    allocator: Retained<ProtocolObject<dyn MTL4CommandAllocator>>,
-    event: Retained<ProtocolObject<dyn MTLSharedEvent>>,
-    value: u64,
-    /// Slot textures and transient readback buffers.
-    residency: Retained<ProtocolObject<dyn MTLResidencySet>>,
-}
-
-impl Copier {
-    /// `sources` also makes the device's own allocations resident (producer copies).
-    fn new(gpu: &MetalDevice, sources: bool) -> Result<Self> {
-        let device = &gpu.device;
-        let queue = device
-            .newMTL4CommandQueue()
-            .ok_or_else(|| nil("MTL4 queue"))?;
-        let residency = device
-            .newResidencySetWithDescriptor_error(&MTLResidencySetDescriptor::new())
-            .map_err(|e| ns_error("residency set", &e))?;
-        queue.addResidencySet(&residency);
-        if sources {
-            queue.addResidencySet(&gpu.residency);
-        }
-        Ok(Self {
-            queue,
-            allocator: device
-                .newCommandAllocator()
-                .ok_or_else(|| nil("command allocator"))?,
-            event: device.newSharedEvent().ok_or_else(|| nil("shared event"))?,
-            value: 0,
-            residency,
-        })
-    }
-    fn hold(&self, allocation: &ProtocolObject<dyn MTLAllocation>) {
-        self.residency.addAllocation(allocation);
-        self.residency.commit();
-    }
-    fn release(&self, allocation: &ProtocolObject<dyn MTLAllocation>) {
-        self.residency.removeAllocation(allocation);
-        self.residency.commit();
-    }
-    /// Encode blits after all of `gpu`'s submitted work, commit and wait.
-    fn copy(&mut self, gpu: &MetalDevice, encode: impl FnOnce(&Encoder)) -> Result<()> {
-        // The previous copy completed (waited below), so the allocator is reusable.
-        self.allocator.reset();
-        let cmd = gpu
-            .device
-            .newCommandBuffer()
-            .ok_or_else(|| nil("command buffer"))?;
-        cmd.beginCommandBufferWithAllocator(&self.allocator);
-        let Some(encoder) = cmd.computeCommandEncoder() else {
-            cmd.endCommandBuffer();
-            return Err(nil("compute encoder"));
-        };
-        encode(&encoder);
-        encoder.endEncoding();
-        cmd.endCommandBuffer();
-        for queue in [Queue::Graphics, Queue::Compute] {
-            let value = gpu.submitted[queue.index()];
-            if value > 0 {
-                self.queue.waitForEvent_value(
-                    ProtocolObject::from_ref(&*gpu.events[queue.index()]),
-                    value,
-                );
-            }
-        }
-        let buffers = [NonNull::from(&*cmd)];
-        // SAFETY: one ended, never-committed command buffer; the array outlives the call.
-        unsafe { self.queue.commit_count(NonNull::from(&buffers[0]), 1) };
-        self.value += 1;
-        let event = ProtocolObject::from_ref(&*self.event);
-        self.queue.signalEvent_value(event, self.value);
-        let value = self.value;
-        let done = gpu.waits.measure(|| {
-            self.event
-                .waitUntilSignaledValue_timeoutMS(value, WAIT_TIMEOUT_MS)
-        });
-        if done {
-            Ok(())
-        } else {
-            Err(GpuError::Backend(anyhow::anyhow!(
-                "Shared-surface copy timed out after {WAIT_TIMEOUT_MS} ms"
-            )))
-        }
-    }
-}
 
 /// An RGBA8 texture over one slot surface.
-fn texture(gpu: &MetalDevice, surface: &IOSurfaceRef) -> Result<Texture> {
+fn texture(gpu: &MetalDevice, surface: &IOSurfaceRef, usage: MTLTextureUsage) -> Result<Texture> {
     // SAFETY: an RGBA8 2D descriptor matching the surface's extent.
     let descriptor = unsafe {
         MTLTextureDescriptor::texture2DDescriptorWithPixelFormat_width_height_mipmapped(
@@ -135,7 +45,7 @@ fn texture(gpu: &MetalDevice, surface: &IOSurfaceRef) -> Result<Texture> {
             false,
         )
     };
-    descriptor.setUsage(MTLTextureUsage::ShaderRead);
+    descriptor.setUsage(usage);
     descriptor.setStorageMode(MTLStorageMode::Shared);
     gpu.device
         .newTextureWithDescriptor_iosurface_plane(&descriptor, surface, 0)
@@ -149,7 +59,7 @@ pub struct ExportRing {
     slots: Vec<(IoSurface, Texture)>,
     identity: DeviceIdentity,
     serial: u64,
-    copier: Copier,
+    transfer: Transfer,
 }
 
 impl ExportRing {
@@ -164,7 +74,7 @@ impl ExportRing {
             slots: Vec::new(),
             identity: gpu.info.identity,
             serial: 0,
-            copier: pool(|| Copier::new(gpu, true))?,
+            transfer: Transfer::new(gpu)?,
         };
         // SAFETY: forwarded caller contract.
         unsafe { ring.recreate(gpu, size)? };
@@ -185,17 +95,14 @@ impl ExportRing {
             (0..SLOTS)
                 .map(|_| {
                     let surface = create_surface(size)?;
-                    let target = texture(gpu, &surface)?;
+                    // Scaled publication writes slots with a compute kernel.
+                    let usage = MTLTextureUsage::ShaderRead | MTLTextureUsage::ShaderWrite;
+                    let target = texture(gpu, &surface, usage)?;
                     Ok((surface, target))
                 })
                 .collect::<Result<Vec<_>>>()
         })?;
-        for (_, old) in std::mem::replace(&mut self.slots, slots) {
-            self.copier.release(ProtocolObject::from_ref(&*old));
-        }
-        for (_, target) in &self.slots {
-            self.copier.hold(ProtocolObject::from_ref(&**target));
-        }
+        self.slots = slots;
         self.ring = Ring::new(self.ring.generation() + 1);
         self.size = size;
         Ok(())
@@ -232,10 +139,9 @@ impl ExportRing {
     pub fn release(&mut self, frame: Frame) -> bool {
         self.ring.release(frame)
     }
-    /// Copy a completed `R8G8B8A8_UNORM` transfer source into a free slot and wait.
-    /// None (nothing written) while the owner holds every other slot, and while
-    /// `source_size` differs from the ring's: Metal has no scaling blit, and a scaled
-    /// pass needs a cooked pipeline, so a mid-resize frame keeps the last-good one.
+    /// Copy a completed colour image into a free slot, scaling it when its extent
+    /// differs (a view resize in progress keeps publishing), and wait. None (nothing
+    /// written) while the owner holds every other slot.
     /// # Safety
     /// As Vulkan's `publish_scaled`: `source` is a completed image on `gpu`.
     pub unsafe fn publish_image(
@@ -246,28 +152,18 @@ impl ExportRing {
         tick: u64,
     ) -> Result<Option<Frame>> {
         let raw = &gpu.images.get(source)?.raw;
-        if raw.size != source_size || raw.info.pixel != MTLPixelFormat::RGBA8Unorm {
+        if raw.size != source_size || raw.info.depth {
             return Err(GpuError::Contract(
-                "shared publication needs an RGBA8 source of its stated size".into(),
+                "shared publication needs a colour source of its stated size".into(),
             ));
-        }
-        if source_size != self.size {
-            return Ok(None);
         }
         let Some(slot) = self.ring.begin() else {
             return Ok(None);
         };
         let (from, to) = (raw.texture.clone(), self.slots[slot as usize].1.clone());
         let copied = pool(|| {
-            self.copier.copy(gpu, |encoder| {
-                // SAFETY: equally sized RGBA8 textures (checked), both resident on
-                // the copier's queue.
-                unsafe {
-                    encoder.copyFromTexture_sourceSlice_sourceLevel_toTexture_destinationSlice_destinationLevel_sliceCount_levelCount(
-                        &from, 0, 0, &to, 0, 0, 1, 1,
-                    );
-                }
-            })
+            self.transfer
+                .run(gpu, |transfer, cmd| transfer.copy(cmd, &from, &to))
         });
         if let Err(error) = copied {
             self.ring.abandon(slot);
@@ -313,7 +209,7 @@ pub struct ImportedSurface {
     /// Retains the surfaces for as long as the textures exist.
     _surfaces: SharedSurface,
     owned: [bool; SLOTS],
-    copier: Copier,
+    transfer: Transfer,
 }
 
 impl ImportedSurface {
@@ -330,24 +226,20 @@ impl ImportedSurface {
         let shared = surface
             .try_clone()
             .map_err(|e| GpuError::External(e.to_string()))?;
-        let copier = pool(|| Copier::new(gpu, false))?;
         let textures = pool(|| {
             shared
                 .surfaces()
                 .iter()
-                .map(|slot| texture(gpu, slot))
+                .map(|slot| texture(gpu, slot, MTLTextureUsage::ShaderRead))
                 .collect::<Result<Vec<_>>>()
         })?;
-        for texture in &textures {
-            copier.hold(ProtocolObject::from_ref(&**texture));
-        }
         Ok(Self {
             generation: desc.generation,
             size: [desc.width, desc.height],
             textures,
             _surfaces: shared,
             owned: [false; SLOTS],
-            copier,
+            transfer: Transfer::new(gpu)?,
         })
     }
     /// The imported generation.
@@ -388,7 +280,7 @@ impl ImportedSurface {
     }
     /// Read an owned slot as tightly packed RGBA8 rows (tests, screenshots).
     /// # Safety
-    /// As Vulkan's `read`: this thread owns the copy queue.
+    /// As Vulkan's `read`: this thread owns the import's copy queue.
     pub unsafe fn read_pixels(&mut self, gpu: &MetalDevice, slot: u32) -> Result<Vec<u8>> {
         if !self.owns(slot) {
             return Err(GpuError::Contract(format!(
@@ -403,8 +295,8 @@ impl ImportedSurface {
                 .device
                 .newBufferWithLength_options(row * height, MTLResourceOptions::StorageModeShared)
                 .ok_or_else(|| nil("readback buffer"))?;
-            self.copier.hold(ProtocolObject::from_ref(&*buffer));
-            let copied = self.copier.copy(gpu, |encoder| {
+            self.transfer.run(gpu, |_, cmd| {
+                let blit = cmd.blitCommandEncoder().ok_or_else(|| nil("blit encoder"))?;
                 let extent = MTLSize {
                     width,
                     height,
@@ -412,14 +304,14 @@ impl ImportedSurface {
                 };
                 // SAFETY: the whole slot into a buffer of exactly its packed size.
                 unsafe {
-                    encoder.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage(
+                    blit.copyFromTexture_sourceSlice_sourceLevel_sourceOrigin_sourceSize_toBuffer_destinationOffset_destinationBytesPerRow_destinationBytesPerImage(
                         &source, 0, 0, MTLOrigin { x: 0, y: 0, z: 0 }, extent,
                         &buffer, 0, row, row * height,
                     );
                 }
-            });
-            self.copier.release(ProtocolObject::from_ref(&*buffer));
-            copied?;
+                blit.endEncoding();
+                Ok(())
+            })?;
             // SAFETY: the copy completed (waited) and nothing else writes the buffer;
             // a shared buffer's contents span its whole length.
             let bytes = unsafe {

@@ -147,20 +147,13 @@ fn pipeline_preparation_reports_missing_metal_artifacts_as_a_contract_error() {
     );
 }
 
-#[test]
-fn windowless_presenter_copies_a_completed_frame_into_the_drawable() {
-    let mut gpu = device();
-    let size = [32, 16];
-    let mut presenter = present::Presenter::new(&gpu, size).expect("presenter");
-    assert_eq!(
-        presenter.surface_format().format,
-        vk::Format::B8G8R8A8_UNORM
-    );
+/// A completed colour image of `format` and `size`, cleared to `color`.
+fn cleared(gpu: &mut MetalDevice, format: vk::Format, size: [u32; 2], color: [f32; 4]) -> Image {
     let frame = gpu
         .create_image(
             size[0],
             size[1],
-            vk::Format::B8G8R8A8_UNORM,
+            format,
             vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
         )
         .expect("frame");
@@ -168,36 +161,58 @@ fn windowless_presenter_copies_a_completed_frame_into_the_drawable() {
     rec.push(Command::BeginRendering {
         colors: vec![Attachment {
             image: frame,
-            clear: Some([0.25, 0.5, 1.0, 1.0]),
+            clear: Some(color),
         }],
         depth: None,
         size,
     });
     rec.push(Command::EndRendering);
     gpu.submit(rec.finish(), &[]).expect("render");
+    frame
+}
+
+#[test]
+fn windowless_presenter_copies_scales_and_converts_completed_frames() {
+    let mut gpu = device();
+    let size = [32, 16];
+    let mut presenter = present::Presenter::new(&gpu, size).expect("presenter");
+    assert_eq!(
+        presenter.surface_format().format,
+        vk::Format::B8G8R8A8_UNORM
+    );
     let readback = gpu
         .create_readback_buffer(u64::from(size[0] * size[1] * 4))
         .expect("readback");
-    presenter
-        .present(&mut gpu, frame, Some(readback))
-        .expect("present");
-    let pixels: Vec<u32> = bytemuck::cast_slice(&gpu.read(readback).expect("read")).to_vec();
     // BGRA bytes of (0.25, 0.5, 1.0, 1.0): b=255, g=128, r=64, a=255.
-    assert!(
-        pixels.iter().all(|&p| p == 0xff40_80ff),
-        "{:08x}",
-        pixels[0]
-    );
-    let wrong = gpu
+    let expected = 0xff40_80ff;
+    let color = [0.25, 0.5, 1.0, 1.0];
+    // An equal BGRA8 frame is blitted; a smaller RGBA8 one (the renderer's output
+    // format) is scaled and converted. A solid colour survives both exactly.
+    for (format, extent) in [
+        (vk::Format::B8G8R8A8_UNORM, size),
+        (vk::Format::R8G8B8A8_UNORM, [8, 4]),
+    ] {
+        let frame = cleared(&mut gpu, format, extent, color);
+        presenter
+            .present(&gpu, frame, Some(readback))
+            .expect("present");
+        let pixels: Vec<u32> = bytemuck::cast_slice(&gpu.read(readback).expect("read")).to_vec();
+        assert!(
+            pixels.iter().all(|&p| p == expected),
+            "{format:?} {extent:?}: {:08x}",
+            pixels[0]
+        );
+    }
+    let depth = gpu
         .create_image(
             8,
             8,
-            vk::Format::B8G8R8A8_UNORM,
-            vk::ImageUsageFlags::TRANSFER_SRC,
+            vk::Format::D32_SFLOAT,
+            vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
         )
-        .expect("wrong size");
+        .expect("depth");
     assert!(matches!(
-        presenter.display(&mut gpu, wrong),
+        presenter.display(&gpu, depth),
         Err(GpuError::Contract(_))
     ));
 }

@@ -59,7 +59,7 @@ fn main() {
         });
         rec.push(Command::EndRendering);
         gpu.submit(rec.finish(), &[]).expect("render");
-        presenter.display(&mut gpu, frame).expect("present");
+        presenter.display(&gpu, frame).expect("present");
     }
     drop(presenter);
     // SAFETY: the presenter released its layer reference; destroy in creation order.

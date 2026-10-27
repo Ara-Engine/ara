@@ -967,6 +967,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "objc2-io-surface",
  "objc2-metal 0.3.2",
+ "objc2-metal-performance-shaders",
  "objc2-quartz-core 0.3.2",
  "serde",
  "serde_json",
@@ -9155,6 +9156,18 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
  "objc2-io-surface",
+]
+
+[[package]]
+name = "objc2-metal-performance-shaders"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46a10f15ff4e2045f947ffca8a17fc351b155c321de16f04278a008a1f446784"
+dependencies = [
+ "bitflags 2.13.2",
+ "objc2 0.6.5",
+ "objc2-foundation 0.3.2",
+ "objc2-metal 0.3.2",
 ]
 
 [[package]]
