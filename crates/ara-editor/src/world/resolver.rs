@@ -21,6 +21,7 @@ use ara_ops::Store;
 #[derive(Default)]
 pub struct SceneResolver {
     buffers: Vec<Buffer>,
+    unavailable: Arc<Resolved>,
 }
 
 /// One scene's resolution at one revision.
@@ -96,6 +97,20 @@ impl Buffer {
 }
 
 impl SceneResolver {
+    /// Resolve the active scene for display, retaining an empty view while its
+    /// document is absent. Reappearing documents use normal revision/generation
+    /// invalidation; authoring callers must continue to use [`Self::resolve`].
+    pub fn presentation(
+        &mut self,
+        store: &Store,
+        doc: &str,
+    ) -> Result<Arc<Resolved>, Vec<Diagnostic>> {
+        if super::document_available(store, doc) {
+            self.resolve(store, doc)
+        } else {
+            Ok(Arc::clone(&self.unavailable))
+        }
+    }
     /// `world::resolve(store, doc)`, reusing earlier resolutions where it can.
     pub fn resolve(&mut self, store: &Store, doc: &str) -> Result<Arc<Resolved>, Vec<Diagnostic>> {
         let ws = store.workspace();
@@ -271,6 +286,48 @@ mod tests {
             Value::Object(map) => map,
             _ => unreachable!("records are objects"),
         }
+    }
+
+    #[test]
+    fn presentation_recovers_unloaded_documents_without_relaxing_strict_resolution() {
+        let mut store = store();
+        let mut resolver = SceneResolver::default();
+        let before = resolver.presentation(&store, "sc_level001").unwrap();
+        let revision = store.revision();
+        let (path, document) = store.unload_doc("sc_level001").unwrap();
+        assert!(resolver.resolve(&store, "sc_level001").is_err());
+        assert!(
+            resolver
+                .presentation(&store, "sc_level001")
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            resolver
+                .presentation(&store, "levels/level.scene")
+                .unwrap()
+                .is_empty()
+        );
+        store.load_doc(path, document);
+        assert_eq!(
+            *resolver.presentation(&store, "sc_level001").unwrap(),
+            *before
+        );
+        assert_eq!(
+            store.revision(),
+            revision,
+            "Display never creates fallback records"
+        );
+
+        // A loaded scene's invalid prefab graph is still an actual resolution error.
+        // Only the absent active document has an empty presentation state.
+        let (path, prefab) = store.unload_doc("pf_crate001").unwrap();
+        assert!(resolver.presentation(&store, "sc_level001").is_err());
+        store.load_doc(path, prefab);
+        assert_eq!(
+            *resolver.presentation(&store, "sc_level001").unwrap(),
+            *before
+        );
     }
 
     /// One transaction's edits: a scene record's fields, an instance's overrides and

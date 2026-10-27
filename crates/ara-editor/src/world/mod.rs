@@ -52,6 +52,16 @@ impl DocumentView {
     pub fn new(store: &Store, doc: &str) -> Result<Self, Vec<Diagnostic>> {
         Ok(Self::with_entities(store, Arc::new(resolve(store, doc)?)))
     }
+    /// Present an unavailable active document as an empty scene. Navigation keeps
+    /// its identity so undo/redo or a file reload can restore the same view. This
+    /// does not relax document validation for authoring commands.
+    pub fn for_presentation(store: &Store, doc: &str) -> Result<Self, Vec<Diagnostic>> {
+        if document_available(store, doc) {
+            Self::new(store, doc)
+        } else {
+            Ok(Self::with_entities(store, Arc::new(Resolved::new())))
+        }
+    }
     /// The view of `entities`, the open scene already resolved at the store's current
     /// revision (no second resolve), with the import settings parsed.
     pub fn with_entities(store: &Store, entities: Arc<Resolved>) -> Self {
@@ -103,6 +113,14 @@ impl DocumentView {
     pub(crate) fn ghosts(&self) -> &BTreeMap<String, ara_doc::Record> {
         &self.ghosts
     }
+}
+/// Whether a document identifier or indexed path currently names a loaded document.
+pub fn document_available(store: &Store, doc: &str) -> bool {
+    store
+        .workspace()
+        .find(doc)
+        .and_then(|id| store.workspace().doc(id.as_str()))
+        .is_some()
 }
 /// Resolve one loaded scene and its prefab graph, preserving diagnostics.
 pub fn resolve(store: &Store, doc: &str) -> Result<Resolved, Vec<Diagnostic>> {
