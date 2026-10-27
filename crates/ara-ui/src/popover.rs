@@ -4,7 +4,8 @@
 //! the element named by `anchor` (its painted rect, so an anchor inside a scrolled list
 //! is followed) or the point `at='x,y'`. `placement` names the preferred side and
 //! alignment (`bottom-start`, the default, `top-end`, `right-start`, `left-center`, ...)
-//! and `offset` the gap to the anchor (4 px). A popover sizes to its content; it flips to
+//! and `offset` the signed gap to the anchor (4 px; negative overlaps its edge).
+//! A popover sizes to its content; it flips to
 //! the opposite side when its content does not fit the preferred one and the other has
 //! more room, shifts along the other axis to stay [`MARGIN`] inside the window and, when
 //! still too tall, takes the room it has and scrolls its content (it is a scroll view).
@@ -132,11 +133,7 @@ pub fn place(
     // windows, monitor changes). Normalize them before calculating available room.
     let window = window.map(|v| if v.is_finite() { v.max(0.0) } else { 0.0 });
     let content = content.map(|v| if v.is_finite() { v.max(0.0) } else { 0.0 });
-    let offset = if offset.is_finite() {
-        offset.max(0.0)
-    } else {
-        OFFSET
-    };
+    let offset = if offset.is_finite() { offset } else { OFFSET };
     let coordinate = |value: f32, extent: f32| {
         if value.is_finite() {
             value.clamp(0.0, extent)
@@ -175,8 +172,10 @@ pub fn place(
     } else {
         (content[0], content[1])
     };
-    let before = (a_main - offset - MARGIN).max(0.0);
-    let after = (w_main - MARGIN - (a_main + a_main_len) - offset).max(0.0);
+    // An overlap can make the anchor-relative room larger than the surface.
+    // Bound the resulting box before clamping its origin into the viewport.
+    let before = (a_main - offset - MARGIN).clamp(0.0, w_main);
+    let after = (w_main - MARGIN - (a_main + a_main_len) - offset).clamp(0.0, w_main);
     let prefers_after = matches!(placement.side, Side::Bottom | Side::Right);
     let (preferred, other) = if prefers_after {
         (after, before)
@@ -359,8 +358,8 @@ impl Ui {
                 .map(|o| o.parse::<f32>())
                 .transpose()?
                 .unwrap_or(OFFSET);
-            if !offset.is_finite() || offset < 0.0 {
-                return Err("ARA4046: popover offset must be finite and non-negative".into());
+            if !offset.is_finite() {
+                return Err("ARA4046: popover offset must be finite".into());
             }
             let id = stable_id(&self.nodes[i].element.id);
             // A horizontal clamp changed the text's measurement width. If its
