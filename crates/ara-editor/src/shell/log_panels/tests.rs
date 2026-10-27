@@ -1,5 +1,6 @@
 //! Console identity must preserve unrelated failures sharing a diagnostic code.
 use super::*;
+use std::path::PathBuf;
 
 fn entry(message: &str, file: &str, line: u32, origin: &str) -> Entry {
     let mut diagnostic = ara_diag::Diagnostic::error(ara_diag::codes::INVALID_PARAMS, message);

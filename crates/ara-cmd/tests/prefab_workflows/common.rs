@@ -71,7 +71,7 @@ pub fn run(
     store: &mut Store,
     registry: &Registry,
     doc: &str,
-    command: &str,
+    command: &'static str,
     params: Value,
 ) -> BatchResult {
     registry
