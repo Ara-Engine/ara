@@ -36,9 +36,12 @@ void rtReflectMain(uint3 tid:SV_DispatchThreadID){
             float width=spread*(distance+hit.distance)+2*alpha*hit.distance;
             float3 position,geometric;Surface s=rtSurface(l,hit,d,width,position,geometric);
             radiance=rtShadeHit(f,l,s,position,geometric,-d);
-            // The reflected lobe's spread (about 1.4 alpha rad) at the hit, as the
-            // camera sees it across the reflector: the blur sigma in render pixels.
-            sigma=1.4*alpha*hit.distance/max((distance+hit.distance)*spread,1e-6);
+            // The reflected lobe's spread at the hit (a Gaussian sigma of about 0.7
+            // alpha rad), as the camera sees it across the reflector: the blur sigma in
+            // render pixels. Lobes within the G-buffer's roughness floor and geometric
+            // specular-AA widening (alpha 0.0064) stay mirrors: that widening fights
+            // highlight aliasing, not reflected detail, which the resolve antialiases.
+            sigma=0.7*max(alpha-0.0064,0)*hit.distance/max((distance+hit.distance)*spread,1e-6);
         }else radiance=rtMiss(f,l,d,roughness);
         result=float4(min(radiance,float3(60000)),sigma);
     }
