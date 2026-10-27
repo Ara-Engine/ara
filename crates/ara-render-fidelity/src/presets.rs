@@ -152,11 +152,7 @@ impl Capabilities {
     pub fn of(gpu: &GpuDevice) -> Self {
         Self {
             ray_tracing: gpu.info().ray_tracing,
-            device_local_mib: gpu
-                .context()
-                .info
-                .discrete
-                .then_some(gpu.info().device_local_mib),
+            device_local_mib: gpu.info().discrete.then_some(gpu.info().device_local_mib),
         }
     }
 }

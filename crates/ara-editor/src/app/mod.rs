@@ -1143,7 +1143,6 @@ pub fn run(options: Options) -> ara_ui::Result<()> {
                 // Unavailable when the device was replaced this frame.
                 let host_wait_ms = renderer
                     .gpu()
-                    .context()
                     .host_wait_stats()
                     .elapsed_since(Some(waits_before))
                     .map(|waited| waited.as_secs_f64() * 1000.);

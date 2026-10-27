@@ -83,15 +83,7 @@ fn demo_renders_moves_skins_and_relights_headless() {
     first.write(&root.join("demo-start.png")).unwrap();
     assert!(presenter.stats().rebuilt);
     assert!(presenter.renderer().unwrap().is_native());
-    assert!(
-        !presenter
-            .renderer()
-            .unwrap()
-            .gpu()
-            .context()
-            .info
-            .ray_tracing
-    );
+    assert!(!presenter.renderer().unwrap().gpu().info().ray_tracing);
     assert_eq!(
         presenter
             .renderer()
@@ -101,14 +93,7 @@ fn demo_renders_moves_skins_and_relights_headless() {
             .blas,
         0
     );
-    if presenter
-        .renderer()
-        .unwrap()
-        .gpu()
-        .context()
-        .info
-        .ray_tracing
-    {
+    if presenter.renderer().unwrap().gpu().info().ray_tracing {
         assert_eq!(
             presenter.quality(),
             Some(ara_runtime_render::QualityPreset::High)
@@ -156,8 +141,7 @@ fn demo_renders_moves_skins_and_relights_headless() {
         .renderer()
         .unwrap()
         .gpu()
-        .context()
-        .info
+        .info()
         .timestamp_clock
         .is_some()
     {
