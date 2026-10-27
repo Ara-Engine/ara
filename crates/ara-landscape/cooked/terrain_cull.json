@@ -6,6 +6,13 @@
     {
       "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainCull.dxil",
       "dxil_hash": "0c72b8fa882589a362f0b280fa15661afefb0da7a3ac599586d82fff0371753b",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainCull.metallib",
+        "metallib_hash": "9564ad2eb5d262cf39da662cc61c1dcc02d946d548cdf3430c825d042557a5b1",
+        "reflection": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainCull.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "terrainCull",
       "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/terrainCull.spv",
       "spirv_entry": "main",

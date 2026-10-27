@@ -18,6 +18,10 @@ ash = { workspace = true }
 bytemuck = { workspace = true }
 image = { workspace = true, features = ["png"] }
 
+[dev-dependencies]
+ara-render = { path = "../ara-render" }
+ara-ui-text = { path = "../ara-ui-text" }
+
 # The Metal adapter (macOS) reads its cooked pipeline manifest and retains slot textures.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.2"

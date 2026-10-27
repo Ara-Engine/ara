@@ -31,11 +31,19 @@ pub(super) enum NativePipeline {
 }
 
 /// The subset of converter reflection (`--output-reflection-file`) the runtime uses,
-/// with the field names Apple's reflection guide documents.
+/// in the converter 4.0 shape: stage details live under `state`.
 #[derive(serde::Deserialize)]
 pub(super) struct Reflection {
     #[serde(rename = "EntryPoint")]
     pub entry_point: String,
+    #[serde(default)]
+    state: StageReflection,
+}
+
+/// Per-stage reflection details (`state`): compute thread-group size and whether a
+/// vertex stage reads converter draw parameters.
+#[derive(Default, serde::Deserialize)]
+struct StageReflection {
     #[serde(default)]
     tg_size: Option<[u32; 3]>,
     #[serde(default)]
@@ -58,7 +66,7 @@ pub(super) fn create(
         .iter()
         .map(|(stage, library, reflection)| (*stage, &**library, reflection.entry_point.as_str()))
         .collect::<Vec<_>>();
-    let threads = libraries.iter().find_map(|(_, _, r)| r.tg_size);
+    let threads = libraries.iter().find_map(|(_, _, r)| r.state.tg_size);
     build(device, compiler, &functions, &cooked.state, threads)
 }
 
@@ -95,9 +103,9 @@ pub(super) fn load(
         &std::fs::read(dir.join(&metal.reflection)).map_err(anyhow::Error::from)?,
     )
     .map_err(anyhow::Error::from)?;
-    if reflection.needs_draw_params {
-        // The draw-parameter buffers (bind points 4/5) are defined only by the
-        // converter's runtime header; this lane is enabled once it is verified.
+    if reflection.state.needs_draw_params {
+        // No cooked stage reads converter draw parameters; binding IRRuntimeDrawParams
+        // and the index type at 4/5 waits for the first one that does.
         return Err(GpuError::Contract(format!(
             "{}: converter draw parameters are not supported by the Metal backend yet",
             stage.source_entry

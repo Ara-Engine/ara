@@ -1,0 +1,50 @@
+{
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "b8ed53beb3fbc0ce7e0c2abd336f3ab62dea7e38f8ef20b79b0f0612925af1ee",
+  "stages": [
+    {
+      "dxil": "b8ed53beb3fbc0ce7e0c2abd336f3ab62dea7e38f8ef20b79b0f0612925af1ee/fragmentMain.dxil",
+      "dxil_hash": "77e14a278857a6726a9ed8fde97167612b2dc79bdba41c4277e86fb4060295c1",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "b8ed53beb3fbc0ce7e0c2abd336f3ab62dea7e38f8ef20b79b0f0612925af1ee/fragmentMain.metallib",
+        "metallib_hash": "cc17c7d8bb13ab1ebe1a1482967d07d7780f27288ae113155f68e24953a5afa3",
+        "reflection": "b8ed53beb3fbc0ce7e0c2abd336f3ab62dea7e38f8ef20b79b0f0612925af1ee/fragmentMain.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
+      "source_entry": "fragmentMain",
+      "spirv": "b8ed53beb3fbc0ce7e0c2abd336f3ab62dea7e38f8ef20b79b0f0612925af1ee/fragmentMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "6551641128b40d30afe3a1168d525e905af81ce3cff245b22796f2dd9f116ad0",
+      "stage": "fragment"
+    },
+    {
+      "dxil": "b8ed53beb3fbc0ce7e0c2abd336f3ab62dea7e38f8ef20b79b0f0612925af1ee/vertexMain.dxil",
+      "dxil_hash": "c10a301b493a6b42f5a83db1fb59361e6441c691dc8e10046ff68147fe2caf7b",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "b8ed53beb3fbc0ce7e0c2abd336f3ab62dea7e38f8ef20b79b0f0612925af1ee/vertexMain.metallib",
+        "metallib_hash": "e5b1c62583f19f129e1b9efc94e566a396f2e09fa64bef0195de5227092af683",
+        "reflection": "b8ed53beb3fbc0ce7e0c2abd336f3ab62dea7e38f8ef20b79b0f0612925af1ee/vertexMain.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
+      "source_entry": "vertexMain",
+      "spirv": "b8ed53beb3fbc0ce7e0c2abd336f3ab62dea7e38f8ef20b79b0f0612925af1ee/vertexMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "b8240dc8ca8772cbeeb01468989f95860f859293336e92647c24ae4a6cbdf65f",
+      "stage": "vertex"
+    }
+  ],
+  "state": {
+    "blend": true,
+    "color_formats": [
+      37
+    ],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

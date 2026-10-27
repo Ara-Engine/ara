@@ -13,7 +13,7 @@ Metal 4 GPU family is supported; the reference machine is a MacBook Pro M5 Pro.
 | Rust | pinned 1.99.1 | `rustup` installs it from `rust-toolchain.toml` on first use. |
 | Vulkan SDK (LunarG) | 1.4.363.0 | Provides `slangc`, `spirv-val` and `dxc`. Install headless into your home directory, see below. Set `VULKAN_SDK=$HOME/VulkanSDK/1.4.363.0/macOS`. |
 | .NET SDK | 10 | The C# host (`ara-script`, `dotnet/`). The macOS installer puts it in `/usr/local/share/dotnet`. |
-| Metal Shader Converter | 3.x or later, optional | Only on the canonical cook host (Windows) to produce metallibs; on a Mac only for header/ABI verification. A signed-in Apple download: https://developer.apple.com/download/all/?q=metal%20shader%20converter. Installs to `/opt/metal-shaderconverter`. |
+| Metal Shader Converter | 4.0 or later, optional | Only on the canonical cook host (Windows, `C:Program FilesMetal Shader Converter`) to produce metallibs; on a Mac only for header/ABI verification. A signed-in Apple download: https://developer.apple.com/download/all/?q=metal%20shader%20converter. The macOS pkg installs to `/usr/local`; without admin rights, `pkgutil --expand-full` it into your home directory and set `ARA_METAL_SHADERCONVERTER` to the expanded `usr/local/bin/metal-shaderconverter`. |
 
 Headless Vulkan SDK install (no admin rights, nothing outside the target directory):
 
@@ -68,7 +68,9 @@ in `caffeinate -dimsu <command>` (macOS sleeps after a minute on battery).
   (ARA6007) and the Metal backend refuses those pipelines with `ARA_GPU_CONTRACT`.
 - `crates/ara-shader-cook/metal/root-signature.json` is the one global root
   signature. It mirrors the Vulkan set-0 layout; the runtime side of the same
-  layout is `crates/ara-gpu/src/metal/abi.rs`.
+  layout is `crates/ara-gpu/src/metal/abi.rs`. The converter appends the three
+  static samplers as a fifth table, so every stage's top-level argument buffer is
+  32 constant bytes plus five table addresses (72 bytes).
 
 ## Status
 

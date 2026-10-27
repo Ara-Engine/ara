@@ -72,11 +72,25 @@ public sealed partial class Spinner : Behaviour
 {
     /// <summary>Completed gameplay ticks.</summary>
     [Property] public partial int Ticks { get; set; }
+    /// <summary>Owner returned by this world's input callback.</summary>
+    [Property] public partial ulong Owner { get; set; }
+    /// <summary>Axis returned by the fixed-tick input callback.</summary>
+    [Property] public partial float Axis { get; set; }
+    /// <summary>Lights returned by the reflected component query.</summary>
+    [Property] public partial int Lights { get; set; }
     /// <inheritdoc/>
     protected override void OnTick(in Tick tick)
     {
         Ticks++;
         Get<Transform>().Rotation.Y += Get<Core.SpinRate>().Degrees;
+        Get<Light>().Intensity = Ticks;
+        Owner = Input.Player(Entity);
+        Axis = Input.Axis2(Owner, "Move").X;
+        Span<Entity> scratch = stackalloc Entity[4];
+        Lights = World.Query<Light>(scratch).Length;
+        Navigation.GoTo(Entity, new Vector3(Ticks, 0, 0));
+        Movement.Stop(Entity);
+        Animation.SetBool(Entity, "Moving", true);
     }
 }
 "#,
@@ -136,7 +150,7 @@ public sealed partial class Spinner : Behaviour
     // Documents may carry script columns before module registration at prepare.
     let scene: PlayScene = serde_json::from_value(json!({
         "format":1,"scene":"sc_shipping","documents":[{"path":"main.scene","kind":"scene","id":"sc_shipping",
-        "records":{"e_spinner":{"Transform":{},"SpinRate":{"degrees":2},"Spinner":{"ticks":0}}}}],"types":[],"seed":7,"tick_hz":60,
+        "records":{"e_spinner":{"Transform":{},"Light":{},"PlayerControl":{"player":7},"SpinRate":{"degrees":2},"Spinner":{"ticks":0}}}}],"types":[],"seed":7,"tick_hz":60,
         "assets":{},"cache":"","nav_cache":null,"scripts":ScriptScene::shipping("game/scripts.json"),"imports":{}
     })).unwrap();
     let packed = ara_pack::build(
@@ -191,12 +205,21 @@ public sealed partial class Spinner : Behaviour
     }
     tools::write_json(&manifest_path, &serde_json::to_value(valid).unwrap()).unwrap();
     let mut game = runtime(&loaded).unwrap();
+    let mut second = runtime(&loaded).unwrap();
+    let second_entity = second.play().session().entity("e_spinner").unwrap();
+    second
+        .play_mut()
+        .session_mut()
+        .world_mut()
+        .get_mut::<ara_runtime::components::PlayerControl>(second_entity)
+        .unwrap()
+        .player = 9;
     game.step(6, &[]).unwrap();
     let session = game.play().session();
     let entity = session.entity("e_spinner").unwrap();
     assert_eq!(
         ara_runtime_script::read(session.world(), entity, "Spinner"),
-        Some(json!({"ticks":6}))
+        Some(json!({"ticks":6,"owner":7,"axis":0.0,"lights":1}))
     );
     assert_eq!(
         session
@@ -223,6 +246,23 @@ public sealed partial class Spinner : Behaviour
             session.entity("e_spinner").unwrap(),
             "Spinner"
         ),
-        Some(json!({"ticks":6}))
+        Some(json!({"ticks":6,"owner":7,"axis":0.0,"lights":1}))
+    );
+    drop(game);
+    // The same generated shipping entry owns a second host, still callable after
+    // the first is destroyed, beyond the old 2.7-second failure window.
+    second.step(240, &[]).unwrap();
+    assert_eq!(
+        ara_runtime_script::read(second.world(), second_entity, "Spinner"),
+        Some(json!({"ticks":240,"owner":9,"axis":0.0,"lights":1}))
+    );
+    assert_eq!(
+        second
+            .play()
+            .session()
+            .component("e_spinner", "Light")
+            .unwrap()
+            .unwrap()["intensity"],
+        json!(240.0)
     );
 }

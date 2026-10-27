@@ -6,6 +6,13 @@
     {
       "dxil": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteFragment.dxil",
       "dxil_hash": "2eb75eafa19545031d3ad71e7a656e2bc1943d11166f222359469543403a420e",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteFragment.metallib",
+        "metallib_hash": "c9c0c52b572c67b84d8fffc8b004d6e44ab0fe15c6ac666ea236f279d85b5c11",
+        "reflection": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteFragment.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "spriteFragment",
       "spirv": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteFragment.spv",
       "spirv_entry": "main",
@@ -15,6 +22,13 @@
     {
       "dxil": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteVertex.dxil",
       "dxil_hash": "3abcc867fb70eda923ee182fe67965509d087a0937890116c78df078defe7e95",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteVertex.metallib",
+        "metallib_hash": "b7802c0d0e21729f90cd7a6120f9f21a56857ca77fb4dc64c400ddec8dd118cd",
+        "reflection": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteVertex.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "spriteVertex",
       "spirv": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteVertex.spv",
       "spirv_entry": "main",

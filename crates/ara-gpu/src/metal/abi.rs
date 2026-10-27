@@ -1,12 +1,12 @@
-//! Metal Shader Converter binding ABI, limited to what Apple's converter guides
-//! document (binding model, pipeline setup, reference). Anything the guides leave to
-//! `metal_irconverter_runtime.h` (draw-parameter buffers, acceleration-structure
-//! headers) waits for the installed header instead of being guessed here.
+//! Metal Shader Converter binding ABI, verified against the 4.0.3 converter headers
+//! (`metal_irconverter_runtime.h`, `ir_raytracing.h`) and its reflection output.
 //!
 //! Ara converts every stage with one explicit global root signature that mirrors the
 //! Vulkan set-0 layout (`cooked::BINDING_LAYOUT`). Root constants come first, then
-//! one 64-bit table address per descriptor table, so the top-level argument buffer
-//! layout is identical for every pipeline.
+//! one 64-bit table address per descriptor table, then the static-sampler table the
+//! converter appends, so the top-level argument buffer layout is identical for every
+//! pipeline. No cooked stage needs converter draw parameters (bind points 4 and 5);
+//! the pipeline loader rejects one that does.
 
 /// `kIRArgumentBufferBindPoint`: argument-table buffer slot of the top-level buffer.
 pub const ARGUMENT_BUFFER_BIND_POINT: usize = 2;
@@ -25,17 +25,22 @@ pub const BUFFERS: u32 = 4_096;
 pub const STORAGE_IMAGES: u32 = 64;
 /// Acceleration-structure table capacity (`RaytracingAccelerationStructure[16] : t0, space4`).
 pub const ACCELERATIONS: u32 = 16;
+/// Static samplers of the root signature (`SamplerState s0..s2 : space0`).
+pub const SAMPLERS: u32 = 3;
 
 /// One converter descriptor-table entry (`IRDescriptorTableEntry`): a GPU address for
-/// buffers and acceleration-structure headers, a resource ID for textures, metadata.
+/// buffers and acceleration-structure headers, a resource ID for textures and
+/// samplers, metadata.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct TableEntry {
-    /// Buffer or acceleration-structure header GPU address; zero for textures.
+    /// Buffer or acceleration-structure header GPU address, or a sampler's
+    /// `MTLResourceID`; zero for textures.
     pub gpu_va: u64,
-    /// Texture `MTLResourceID`; zero for buffers.
+    /// Texture `MTLResourceID`; zero for buffers and samplers.
     pub resource_id: u64,
     /// Buffers: byte length in the low 32 bits, untyped. Textures: min LOD clamp bits.
+    /// Samplers: LOD bias bits.
     pub metadata: u64,
 }
 
@@ -54,6 +59,14 @@ impl TableEntry {
         Self {
             gpu_va: 0,
             resource_id,
+            metadata: u64::from(0f32.to_bits()),
+        }
+    }
+    /// A sampler (created with argument-buffer support) with no LOD bias.
+    pub fn sampler(resource_id: u64) -> Self {
+        Self {
+            gpu_va: resource_id,
+            resource_id: 0,
             metadata: u64::from(0f32.to_bits()),
         }
     }
@@ -77,21 +90,27 @@ pub struct TopLevel {
     pub storage_images: u64,
     /// Root parameter 4: acceleration-structure table address.
     pub accelerations: u64,
+    /// The static samplers' table, which the converter places after the parameters.
+    pub samplers: u64,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn layouts_match_the_documented_converter_encoding() {
+    fn layouts_match_the_converter_encoding() {
         assert_eq!(ENTRY_BYTES, 24);
-        assert_eq!(std::mem::size_of::<TopLevel>(), 64);
+        // The 4.0.3 reflection of every cooked stage: 32 constant bytes, then five
+        // 8-byte tables at 32..=64.
+        assert_eq!(std::mem::size_of::<TopLevel>(), 72);
         assert_eq!(std::mem::offset_of!(TopLevel, textures), 32);
         assert_eq!(std::mem::offset_of!(TopLevel, accelerations), 56);
+        assert_eq!(std::mem::offset_of!(TopLevel, samplers), 64);
         assert_eq!(
             TableEntry::buffer(64, u64::MAX).metadata,
             u64::from(u32::MAX)
         );
         assert_eq!(TableEntry::texture(7).resource_id, 7);
+        assert_eq!(TableEntry::sampler(9).gpu_va, 9);
     }
 }

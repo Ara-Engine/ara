@@ -6,6 +6,13 @@
     {
       "dxil": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/horizonSunMain.dxil",
       "dxil_hash": "3c48a69a8e3637212deee827d9ada2638d2778e3461576955783d2b5b6c9d146",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/horizonSunMain.metallib",
+        "metallib_hash": "c951c9cf8e8d3f5144d0c16ff3027c6a41d7a865d9a85f526ec052165be74856",
+        "reflection": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/horizonSunMain.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "horizonSunMain",
       "spirv": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/horizonSunMain.spv",
       "spirv_entry": "main",

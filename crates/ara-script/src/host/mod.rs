@@ -271,6 +271,9 @@ impl ScriptHost {
             ctx.boost.disable();
         }
         let (init, loaded) = clr::start(&config.runtime).map_err(|d| vec![d])?;
+        // Once native initialization can run, its runtime threads may outlive even
+        // a failed handshake. Keep the image mapped on rejection as well as success.
+        let loaded = ManuallyDrop::new(loaded);
         let enc = matches!(config.runtime, Runtime::Jit { enc: true, .. });
         let host = HostInit {
             abi_version: abi::ABI_VERSION,
@@ -279,7 +282,9 @@ impl ScriptHost {
             ctx: std::ptr::from_ref::<HostCtx>(ctx).cast_mut().cast(),
             api: HostCtx::api(),
         };
-        let mut api = MaybeUninit::<ScriptApi>::uninit();
+        // Foreign initializers can incorrectly return success without filling every
+        // slot. Keep bytes initialized and nullable until each slot is validated.
+        let mut api = MaybeUninit::<ScriptApi>::zeroed();
         // SAFETY: `init` is `ara_script_init`; `host` and `api` are valid for the call, and
         // `ctx` is leaked, so it outlives the runtime's use of it.
         let rc = unsafe { init(&host, api.as_mut_ptr()) };
@@ -300,8 +305,14 @@ impl ScriptHost {
             ));
             return Err(problems);
         }
-        // SAFETY: `ara_script_init` returned 0, which means it filled every entry.
-        let api = unsafe { api.assume_init() };
+        // SAFETY: every byte was zeroed before the foreign initializer ran; non-null
+        // entries are required to follow the generated ABI and stay mapped in loaded.
+        let api = unsafe { ScriptApi::read_checked(api.as_ptr()) }.map_err(|slot| {
+            vec![Diagnostic::error(
+                codes::RUNTIME_START,
+                format!("ara_script_init returned success with null {slot}; rebuild the NativeAOT image and player with the same Ara SDK"),
+            )]
+        })?;
         world.insert_resource(registry.catalog());
         world.insert_resource(ScriptEvents::default());
         world.insert_resource(ScriptTick(Tick {
@@ -315,7 +326,7 @@ impl ScriptHost {
             ctx,
             api,
             registry,
-            _runtime: ManuallyDrop::new(loaded),
+            _runtime: loaded,
             compile_server: config.compile_server,
             schedule: None,
             behaviours: Vec::new(),

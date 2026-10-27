@@ -6,6 +6,13 @@
     {
       "dxil": "c40d123aad6a2d01ee0bcb5f35976e8fce3fa27ef6a8306eccd7605a1e54f19e/clearDepthVertex.dxil",
       "dxil_hash": "3b87aa63f89b7b3ab5f5d937964a024d8966177c8642ffcfe09c804c21b9c947",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "c40d123aad6a2d01ee0bcb5f35976e8fce3fa27ef6a8306eccd7605a1e54f19e/clearDepthVertex.metallib",
+        "metallib_hash": "93d8710060572a344ad14848338ea0384f1bd736959ddc95e3b9e3523fa5ec8f",
+        "reflection": "c40d123aad6a2d01ee0bcb5f35976e8fce3fa27ef6a8306eccd7605a1e54f19e/clearDepthVertex.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "clearDepthVertex",
       "spirv": "c40d123aad6a2d01ee0bcb5f35976e8fce3fa27ef6a8306eccd7605a1e54f19e/clearDepthVertex.spv",
       "spirv_entry": "main",

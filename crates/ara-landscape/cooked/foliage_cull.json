@@ -6,6 +6,13 @@
     {
       "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageCull.dxil",
       "dxil_hash": "a721dccd558176de82cbe0e676ad29ba0bcd5a145ff94464d5e7135b8b24ba07",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageCull.metallib",
+        "metallib_hash": "4396b795b527b1c55b0f6f42e7dfee4cbaf60db46e8cf5d79ca69f7135d3f96a",
+        "reflection": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageCull.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "foliageCull",
       "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageCull.spv",
       "spirv_entry": "main",

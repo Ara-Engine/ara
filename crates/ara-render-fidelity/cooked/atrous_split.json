@@ -6,6 +6,13 @@
     {
       "dxil": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/atrousSplitMain.dxil",
       "dxil_hash": "7c0e97295757689faf38702f2aad186f8353d0006e093620846c78e2c5657741",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/atrousSplitMain.metallib",
+        "metallib_hash": "4bc38112bb77246a8447c9ae15cf858d4d1f88c6ec0d5eb01cb0ca7793368cba",
+        "reflection": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/atrousSplitMain.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "atrousSplitMain",
       "spirv": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/atrousSplitMain.spv",
       "spirv_entry": "main",

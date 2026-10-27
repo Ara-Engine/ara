@@ -6,6 +6,13 @@
     {
       "dxil": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/primaryRasterMain.dxil",
       "dxil_hash": "a180632493e25203fb176e166ee2545979787c298ebfd91b458632de18b0db89",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/primaryRasterMain.metallib",
+        "metallib_hash": "c1dd19ee94fc088f0c6a0a4b16cdc514fc5aea9f5ab9d74a7a50cecd31f9ab3a",
+        "reflection": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/primaryRasterMain.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "primaryRasterMain",
       "spirv": "d2dea5981ce625a9e55c9fe40c483a8247f2102b575d84cc0486a579eee127c3/primaryRasterMain.spv",
       "spirv_entry": "main",

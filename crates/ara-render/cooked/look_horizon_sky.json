@@ -6,6 +6,13 @@
     {
       "dxil": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/horizonSkyMain.dxil",
       "dxil_hash": "9a734f7703d6f7aef1fafbe0653ed012dc187b47124236d97ada2a898a6dba82",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/horizonSkyMain.metallib",
+        "metallib_hash": "17ba50ba5a5aa69c1d9232c9523078989fba4170bcad07ef1d6263e3a8be5604",
+        "reflection": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/horizonSkyMain.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "horizonSkyMain",
       "spirv": "18b2b4b9f049dde1669d5ac2979968226e9a86e34c0c5ae47aa32c8119236c71/horizonSkyMain.spv",
       "spirv_entry": "main",

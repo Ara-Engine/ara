@@ -6,6 +6,13 @@
     {
       "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageDepth.dxil",
       "dxil_hash": "c1260198e60e42fc3062bba49f2dcf86f20de3c07dd7cdc15c8be813ab877085",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageDepth.metallib",
+        "metallib_hash": "b25343dff93ad1a7672653855f07230f6ab11be77b270ca272cc96ab68bcbc95",
+        "reflection": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageDepth.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "foliageDepth",
       "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageDepth.spv",
       "spirv_entry": "main",
@@ -15,6 +22,13 @@
     {
       "dxil": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageVertex.dxil",
       "dxil_hash": "b0f6adad07889106f4a2857db92b03dfb70908b531e69ea4c167e4471452bfbd",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageVertex.metallib",
+        "metallib_hash": "1c3d2730eade76091a08719fdfb42097c862736b8feffb16ec4bd423fb5434c0",
+        "reflection": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageVertex.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
       "source_entry": "foliageVertex",
       "spirv": "3c841d93da2afa4c0c075d2b9865ecde13098dec1c8f1e194347cd1b51e131cc/foliageVertex.spv",
       "spirv_entry": "main",
