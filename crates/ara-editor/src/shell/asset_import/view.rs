@@ -46,7 +46,7 @@ impl Shell {
             } else {
                 &job.destination
             };
-            out.push_str(&format!("<panel id='{key}' class='notice' style='flex-direction:column;align-items:stretch;gap:4px;min-width:0px;flex-shrink:0'><panel id='{key}-heading' class='row' style='gap:6px;min-width:0px;align-self:stretch;flex-shrink:0'><text id='{key}-title' class='fill' style='white-space:normal;min-width:0px;max-height:44px;overflow:hidden' description='{}' text='{} file{} → {}' />",
+            out.push_str(&format!("<panel id='{key}' class='notice' style='flex-direction:column;align-items:stretch;gap:4px;min-width:0px;flex-shrink:0'><panel id='{key}-heading' class='row' style='gap:6px;min-width:0px;flex-shrink:0'><text id='{key}-title' class='fill' style='white-space:normal;min-width:0px;max-height:44px;overflow:hidden' description='{}' text='{} file{} → {}' />",
                 escape(destination),job.sources,if job.sources==1 {""} else {"s"},escape(destination)));
             let (command, label) = if running {
                 ("assets.import.cancel", "Cancel")
