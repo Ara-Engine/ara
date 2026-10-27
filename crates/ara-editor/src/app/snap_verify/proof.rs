@@ -36,7 +36,7 @@ impl SnapCheck {
         )?;
         let records = fixture::records(editor)?;
         let preview=editor.gesture.as_ref().map(|gesture|json!({"base":gesture.base,"roots":gesture.current.iter().map(|(id,matrix)|(id,matrix.to_cols_array())).collect::<std::collections::BTreeMap<_,_>>()}));
-        self.trace.push(json!({"stage":stage,"surface":surface,"window":native.map(|float|float.sdl),"windowRect":native.map(|float|float.rect),"viewport":rect,"dpi":dpi,"camera":editor.state.camera,"records":records,"revision":editor.host.store().revision(),"selection":editor.state.selection,"gesture":preview,"readout":shell.ui.find("gizmo-readout-text").and_then(|index|shell.ui.nodes[index].text.as_ref().map(|text|text.value.as_str())),"from":self.from,"to":self.to}));
+        self.trace.push(json!({"stage":stage,"surface":surface,"window":native.map(|float|float.sdl),"windowRect":native.map(|float|float.rect),"viewport":rect,"dpi":dpi,"camera":editor.state.camera,"doc":editor.state.doc,"hidden":editor.state.hidden,"locked":editor.state.locked,"readiness":self.readiness,"readinessSample":"before-native-frame","records":records,"revision":editor.host.store().revision(),"selection":editor.state.selection,"gesture":preview,"readout":shell.ui.find("gizmo-readout-text").and_then(|index|shell.ui.nodes[index].text.as_ref().map(|text|text.value.as_str())),"from":self.from,"to":self.to}));
         shell.leave();
         Ok(())
     }

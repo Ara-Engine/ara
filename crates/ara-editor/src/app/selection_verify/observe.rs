@@ -12,11 +12,50 @@ fn expected(values: impl IntoIterator<Item = String>) -> BTreeSet<String> {
     values.into_iter().collect()
 }
 impl SelectionCheck {
+    pub(super) fn diagnostics(
+        &self,
+        editor: &Editor,
+        shell: &Shell,
+        controller: &controller::Controller,
+    ) -> Value {
+        let identity =
+            |id: Option<u64>| {
+                id.map(|id| json!({
+            "stableId":id,
+            "id":shell.ui.by_id(id).map(|index|shell.ui.nodes[index].element.id.as_str()),
+        }))
+            };
+        let endpoints = [self.from,self.to].map(|point| {
+            let hit = shell.ui.hit_test(point[0], point[1]).map(|index| &shell.ui.nodes[index]);
+            json!({
+                "point":point,
+                "insideViewport":shell.viewport().is_some_and(|rect|rect.contains(point[0],point[1])),
+                "hit":hit.map(|node|json!({"id":node.element.id,"tag":node.element.tag,"rect":node.rect})),
+            })
+        });
+        json!({
+            "frame":self.age,
+            "waitedFrames":self.waited,
+            "camera":editor.state.camera,
+            "readiness":self.readiness,
+            "orthographicFit":self.orthographic_fit,
+            "endpoints":endpoints,
+            "capture":identity(shell.input.captured()),
+            "focus":identity(shell.input.focused()),
+            "controller":controller.interaction_report(),
+            "gesture":editor.gesture.as_ref().map(|gesture|json!({"base":gesture.base,"roots":gesture.initial.keys().collect::<Vec<_>>()})),
+            "contentDrag":shell.content_drag_report(),
+            "tabPending":shell.tab_pending(),
+            "modal":shell.modal_active(),
+            "choice":shell.choice_open(),
+        })
+    }
     pub(super) fn observe(
         &self,
         act: Act,
         editor: &Editor,
         shell: &Shell,
+        controller: &controller::Controller,
     ) -> ara_ui::Result<(bool, Value)> {
         let after = fixture::records(editor)?;
         let actual: BTreeSet<_> = editor.state.selection.iter().cloned().collect();
@@ -72,13 +111,21 @@ impl SelectionCheck {
                     selected(&trace["selection"]) == initial
                         && trace["revision"] == self.before_revision
                 });
+                let capture_released = !controller.pointer_gestures_pending()
+                    && shell.input.captured().is_none()
+                    && !shell.content_pending()
+                    && !shell.tab_pending();
+                let projection = act != Act::MarqueeReverse
+                    || (editor.state.camera.projection
+                        == crate::state::CameraProjection::Orthographic
+                        && self.orthographic_fit.is_some());
                 (
-                    actual == wanted && unchanged && staged,
-                    json!({"selected":actual,"expected":wanted,"selectionDeferredUntilRelease":staged,"hiddenExcluded":!actual.contains(HIDDEN),"lockedExcluded":!actual.contains(LOCKED),"from":self.from,"to":self.to}),
+                    actual == wanted && unchanged && staged && capture_released && projection,
+                    json!({"selected":actual,"expected":wanted,"selectionDeferredUntilRelease":staged,"hiddenExcluded":!actual.contains(HIDDEN),"lockedExcluded":!actual.contains(LOCKED),"captureReleased":capture_released,"projectionVerified":projection,"from":self.from,"to":self.to,"diagnostics":self.diagnostics(editor,shell,controller)}),
                 )
             }
             Act::Duplicate | Act::DuplicateEscape => {
-                self.duplicate_result(act, editor, &after, preview)
+                self.duplicate_result(act, editor, shell, controller, &after, preview)
             }
         };
         Ok((ok, detail))
@@ -87,6 +134,8 @@ impl SelectionCheck {
         &self,
         act: Act,
         editor: &Editor,
+        shell: &Shell,
+        controller: &controller::Controller,
         after: &Value,
         preview: Option<&Value>,
     ) -> (bool, Value) {
@@ -101,9 +150,14 @@ impl SelectionCheck {
         if act == Act::DuplicateEscape {
             let unchanged = after == &self.before_records
                 && editor.host.store().revision() == self.before_revision;
+            let capture_released = editor.gesture.is_none()
+                && !controller.pointer_gestures_pending()
+                && shell.input.captured().is_none()
+                && !shell.content_pending()
+                && !shell.tab_pending();
             return (
-                unchanged && preview_staged && editor.gesture.is_none(),
-                json!({"unchanged":unchanged,"previewStaged":preview_staged,"captureReleased":editor.gesture.is_none()}),
+                unchanged && preview_staged && capture_released,
+                json!({"unchanged":unchanged,"previewStaged":preview_staged,"captureReleased":capture_released,"diagnostics":self.diagnostics(editor,shell,controller)}),
             );
         }
         let committed = self

@@ -161,3 +161,130 @@ fn deleted_source_refuses_alt_duplicate_without_partial_copies() {
     assert_eq!(editor.host.store().revision(), revision);
     assert!(editor.gesture.is_none());
 }
+
+#[test]
+fn pointer_cancellation_discards_alt_preview_and_all_native_capture_before_release() {
+    let (mut editor, mut shell) = open();
+    let before = records(&editor);
+    let revision = editor.host.store().revision();
+    let mut controller = preview(&mut editor, &mut shell);
+    controller.buttons[1] = true;
+    controller.keys.insert(226);
+    let menu = shell.shown_node("menu-title-0").unwrap();
+    let rect = shell.ui.nodes[menu].rect;
+    let mut clipboard = crate::native::SessionClipboard::new(true);
+    shell
+        .event(
+            InputEvent::PointerDown([rect.x + rect.w * 0.5, rect.y + rect.h * 0.5]),
+            &mut clipboard,
+        )
+        .unwrap();
+    assert!(shell.input.captured().is_some());
+    let focus = shell.input.focused();
+    assert!(editor.gesture.is_some());
+
+    // The same cancellation entry point is used by the viewport key owner and
+    // the outer drag router, which can consume Escape before Shell::key.
+    controller
+        .cancel_pointer_gestures(&mut editor, &mut shell)
+        .unwrap();
+    assert!(editor.gesture.is_none());
+    assert!(controller.gizmo.is_none());
+    assert!(!controller.buttons_down());
+    assert!(controller.keys.is_empty());
+    assert!(shell.input.captured().is_none());
+    assert_eq!(shell.input.focused(), focus);
+    assert_eq!(records(&editor), before);
+    assert_eq!(editor.host.store().revision(), revision);
+    // A physical release arriving after Escape cannot commit the old preview.
+    controller.finish_gizmo(&mut editor).unwrap();
+    assert_eq!(records(&editor), before);
+    assert_eq!(editor.host.store().revision(), revision);
+}
+
+#[test]
+fn alt_pointer_chord_does_not_turn_the_next_escape_into_a_menu_mnemonic_cancel() {
+    let (mut editor, mut shell) = open();
+    let before = records(&editor);
+    let revision = editor.host.store().revision();
+    let mut clipboard = crate::native::SessionClipboard::new(true);
+    for (case, chord) in [
+        ("retained-press", true),
+        ("retained-wheel", true),
+        ("native-wheel", true),
+        ("native-held-motion", true),
+        ("retained-held-motion", true),
+        ("hover", false),
+    ] {
+        let viewport = shell.viewport().unwrap();
+        let point = [viewport.x + viewport.w * 0.5, viewport.y + viewport.h * 0.5];
+        let mut native_owner = Controller::default();
+        if case == "native-held-motion" {
+            native_owner.buttons[1] = true;
+        } else if case == "retained-held-motion" {
+            let menu = shell.shown_node("menu-title-0").unwrap();
+            let rect = shell.ui.nodes[menu].rect;
+            shell
+                .event(
+                    InputEvent::PointerDown([rect.x + rect.w * 0.5, rect.y + rect.h * 0.5]),
+                    &mut clipboard,
+                )
+                .unwrap();
+            assert!(shell.input.captured().is_some());
+        }
+        shell.key(&mut editor, 226, true, &mut clipboard).unwrap();
+        match case {
+            "retained-press" => shell
+                .event(InputEvent::PointerDown(point), &mut clipboard)
+                .unwrap(),
+            "retained-wheel" => shell
+                .event(
+                    InputEvent::Wheel {
+                        position: point,
+                        delta: [0., 28.],
+                    },
+                    &mut clipboard,
+                )
+                .unwrap(),
+            "native-wheel" => native_owner.note_pointer_chord(&Event::Wheel([0., 1.]), &mut shell),
+            "native-held-motion" => native_owner.note_pointer_chord(
+                &Event::MouseMotion {
+                    position: point,
+                    delta: [1., 0.],
+                },
+                &mut shell,
+            ),
+            "retained-held-motion" => shell
+                .event(InputEvent::PointerMove(point), &mut clipboard)
+                .unwrap(),
+            "hover" => {
+                // Neither native nor retained hover is use of an Alt chord.
+                native_owner.note_pointer_chord(
+                    &Event::MouseMotion {
+                        position: point,
+                        delta: [1., 0.],
+                    },
+                    &mut shell,
+                );
+                shell
+                    .event(InputEvent::PointerMove(point), &mut clipboard)
+                    .unwrap();
+            }
+            _ => unreachable!(),
+        }
+        shell.cancel_pointer_capture();
+        shell.key(&mut editor, 226, false, &mut clipboard).unwrap();
+        let mut controller = preview(&mut editor, &mut shell);
+        shell.key(&mut editor, 41, true, &mut clipboard).unwrap();
+        assert_eq!(
+            editor.gesture.is_none(),
+            chord,
+            "{case}: pointer use consumes Alt tap; hover preserves genuine menu activation"
+        );
+        controller
+            .cancel_pointer_gestures(&mut editor, &mut shell)
+            .unwrap();
+        assert_eq!(records(&editor), before, "{case}");
+        assert_eq!(editor.host.store().revision(), revision, "{case}");
+    }
+}

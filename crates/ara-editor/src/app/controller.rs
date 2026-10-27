@@ -42,11 +42,62 @@ impl Controller {
     pub fn buttons_down(&self) -> bool {
         self.buttons.iter().any(|b| *b)
     }
+    /// A held native pointer or staged viewport operation still owns capture.
+    pub fn pointer_gestures_pending(&self) -> bool {
+        self.buttons_down() || self.fly_capture || self.gizmo.is_some() || self.marquee.is_some()
+    }
+    /// Alt used with a pointer is a chord; incidental hover preserves an Alt tap.
+    fn note_pointer_chord(&self, event: &Event, shell: &mut Shell) {
+        if matches!(
+            event,
+            Event::MouseButton { pressed: true, .. } | Event::Wheel(_)
+        ) || (matches!(event, Event::MouseMotion { .. }) && self.buttons_down())
+        {
+            shell.note_pointer_chord();
+        }
+    }
     /// Forget a button whose release another window consumed.
     pub fn release(&mut self, button: usize) {
         if let Some(b) = self.buttons.get_mut(button) {
             *b = false;
         }
+    }
+    /// Cancel a native pointer gesture even when a drag router consumes Escape
+    /// before ordinary field, menu or shortcut handling. Input scopes stay open.
+    pub fn cancel_pointer_gestures(
+        &mut self,
+        editor: &mut Editor,
+        shell: &mut Shell,
+    ) -> ara_ui::Result<()> {
+        editor.finish_gesture(true)?;
+        editor.end_field_gestures()?;
+        self.gizmo = None;
+        self.marquee = None;
+        self.buttons = [false; 4];
+        self.keys.clear();
+        self.fly_capture = false;
+        shell.set_marquee(None);
+        shell.show_readout(None);
+        shell.drag = None;
+        shell.drop_preview = None;
+        shell.cancel_pointer_capture();
+        Ok(())
+    }
+    /// Inspect the actual native gesture owner when an offscreen journey fails.
+    pub fn interaction_report(&self) -> Value {
+        json!({
+            "pending":self.pointer_gestures_pending(),
+            "buttons":self.buttons,
+            "keys":self.keys,
+            "flyCapture":self.fly_capture,
+            "gizmo":self.gizmo.as_ref().map(|drag| json!({
+                "handle":format!("{:?}",drag.handle),
+                "duplicate":drag.duplicate,
+                "start":drag.start,
+                "typed":drag.typed,
+            })),
+            "marquee":self.marquee.is_some(),
+        })
     }
     /// Hovered and dragged gizmo handles, for drawing.
     pub fn gizmo_state(&self) -> overlay::GizmoState {
@@ -249,6 +300,7 @@ impl Controller {
             shell.show_readout(None);
             return Ok((true, true, false));
         }
+        self.note_pointer_chord(&event, shell);
         match &event {
             Event::TextInput { text } => {
                 let changed = shell.native_text(text, clipboard)?;
@@ -331,9 +383,11 @@ impl Controller {
                 } else {
                     self.keys.remove(&scancode);
                 }
-                if pressed && scancode == 41 && self.marquee.take().is_some() {
-                    shell.set_marquee(None);
-                    return Ok((true, false, false));
+                if pressed && scancode == 41 && (self.marquee.is_some() || self.gizmo.is_some()) {
+                    // A viewport gesture owns Escape before menu mnemonics,
+                    // text composition or any other Shell early return.
+                    self.cancel_pointer_gestures(editor, shell)?;
+                    return Ok((true, true, false));
                 }
                 if pressed
                     && self.gizmo.is_some()

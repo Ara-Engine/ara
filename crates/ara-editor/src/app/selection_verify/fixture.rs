@@ -51,7 +51,7 @@ impl SelectionCheck {
         )?;
         editor.action(
             "editor.camera",
-            json!({"target":[0.,0.,0.],"yaw":0.,"pitch":0.,"distance":20.,"fovYDegrees":50.}),
+            json!({"target":[0.,0.,0.],"yaw":0.,"pitch":0.,"distance":20.,"fovYDegrees":50.,"projection":if act==Act::MarqueeReverse{"orthographic"}else{"perspective"},"orthographicHeight":10.}),
         )?;
         let entities = crate::world::resolve(editor.host.store(), &editor.state.doc)
             .map_err(|error| format!("{error:?}"))?;

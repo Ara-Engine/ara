@@ -510,6 +510,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     scale,
                     &scene_view,
                     &mut events,
+                    &controller,
                 )?;
             }
             if selection_check
@@ -1654,7 +1655,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 )?;
             }
             if let Some(check) = &mut selection_check {
-                check.end(&editor, &mut shell, &mut gpu)?;
+                check.end(&editor, &mut shell, &mut gpu, &controller)?;
             }
             if let Some(check) = &mut snapping_check {
                 check.end(&editor, &mut shell, &mut gpu, &floats)?;
@@ -2061,6 +2062,12 @@ fn route_event(
     scene_view: &viewport::SceneView,
     clipboard: &mut dyn ara_ui_text::Clipboard,
 ) -> ara_ui::Result<(bool, bool, bool)> {
+    if matches!(
+        event,
+        Event::MouseButton { pressed: true, .. } | Event::Wheel(_)
+    ) {
+        shell.note_pointer_chord();
+    }
     if shell.game_captured && (shell.modal_active() || shell.choice_open()) {
         game_input(&Event::FocusLost, editor, shell, dpi);
     }
@@ -2083,10 +2090,8 @@ fn route_event(
                 pressed: true,
                 ..
             } => {
-                shell.drag = None;
-                shell.release_tab_capture(clipboard)?;
-                controller.release(1);
-                return Ok((true, false, false));
+                controller.cancel_pointer_gestures(editor, shell)?;
+                return Ok((true, true, false));
             }
             Event::MouseMotion { .. } => {
                 track_content_drag(
@@ -2140,14 +2145,11 @@ fn route_event(
                 pressed: true,
                 ..
             } => {
-                shell.drag = None;
-                shell.drop_preview = None;
-                shell.release_tab_capture(clipboard)?;
-                controller.release(1);
+                controller.cancel_pointer_gestures(editor, shell)?;
                 for float in &mut floats.windows {
                     float.dirty = true;
                 }
-                return Ok((true, false, false));
+                return Ok((true, true, false));
             }
             Event::MouseMotion { .. } => {
                 let global = desktop_pointer(shell);

@@ -1,7 +1,10 @@
 //! J2/J3 selection gestures through the production native event router, on the behaviour fixture.
 use super::*;
 use ara_ui::paint::Box2;
-use std::{collections::BTreeSet, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+};
 mod fixture;
 mod input;
 mod observe;
@@ -94,6 +97,8 @@ pub(super) struct SelectionCheck {
     before_revision: u64,
     before_records: Value,
     committed_records: Option<Value>,
+    readiness: Value,
+    orthographic_fit: Option<Value>,
     trace: Vec<Value>,
     results: Vec<Value>,
 }
@@ -117,6 +122,8 @@ impl SelectionCheck {
             before_revision: 0,
             before_records: Value::Null,
             committed_records: None,
+            readiness: Value::Null,
+            orthographic_fit: None,
             trace: Vec::new(),
             results: Vec::new(),
         })
@@ -143,17 +150,29 @@ impl SelectionCheck {
         scale: f32,
         scene: &viewport::SceneView,
         events: &mut Vec<(u32, Event)>,
+        controller: &controller::Controller,
     ) -> ara_ui::Result<()> {
         let Some(&act) = ACTS.get(self.index) else {
             return Ok(());
         };
         self.waiting = false;
+        self.readiness = json!({
+            "sameDocument":scene.snap_ready(&editor.state.doc),
+            "document":editor.state.doc,
+            "viewport":shell.viewport(),
+            "scale":scale,
+            "bounds":MESHES.into_iter().map(|id| {
+                let bounds=scene.selected_bounds(&[id.into()], &shell.outlines.channels);
+                (id,bounds.map(|bounds|bounds.map(|point|point.to_array())))
+            }).collect::<BTreeMap<_,_>>(),
+        });
         if let Err(error) = self.input(act, editor, shell, window, scale, scene, events) {
+            let diagnostics = self.diagnostics(editor, shell, controller);
             shell.leave();
             shell.desktop_pointer = None;
             events.clear();
             events.push((0, Event::FocusLost));
-            self.results.push(json!({"journey":act.label(),"ok":false,"error":error.to_string(),"trace":self.trace}));
+            self.results.push(json!({"journey":act.label(),"ok":false,"error":error.to_string(),"diagnostics":diagnostics,"trace":self.trace}));
             self.advance();
             self.failed_frame = true;
             self.write()?;
@@ -166,6 +185,7 @@ impl SelectionCheck {
         editor: &Editor,
         shell: &mut Shell,
         gpu: &mut NativeUi,
+        controller: &controller::Controller,
     ) -> ara_ui::Result<()> {
         if std::mem::take(&mut self.failed_frame) || self.finished() {
             return Ok(());
@@ -184,14 +204,14 @@ impl SelectionCheck {
             _ => None,
         };
         if let Some(stage) = stage {
-            self.capture(editor, shell, gpu, act, stage)?;
+            self.capture(editor, shell, gpu, act, stage, controller)?;
             if stage == "committed" {
                 self.committed_records = Some(fixture::records(editor)?);
             }
         }
         if self.age >= act.finish() {
             let (ok, observed) = self
-                .observe(act, editor, shell)
+                .observe(act, editor, shell, controller)
                 .unwrap_or_else(|error| (false, json!({"error":error.to_string()})));
             self.results.push(json!({"journey":act.label(),"ok":ok,"beforeRevision":self.before_revision,"afterRevision":editor.host.store().revision(),"observed":observed,"trace":self.trace,"capturePrefix":self.prefix(act)}));
             self.advance();
@@ -207,6 +227,10 @@ impl SelectionCheck {
         self.waited = 0;
         self.trace.clear();
         self.committed_records = None;
+        self.readiness = Value::Null;
+        self.orthographic_fit = None;
+        self.from = [0.; 2];
+        self.to = [0.; 2];
     }
     fn prefix(&self, act: Act) -> String {
         format!("selection-{:02}-{}", self.index + 1, act.label())
@@ -218,6 +242,7 @@ impl SelectionCheck {
         gpu: &mut NativeUi,
         act: Act,
         stage: &str,
+        controller: &controller::Controller,
     ) -> ara_ui::Result<()> {
         let prefix = format!("{}-{stage}", self.prefix(act));
         gpu.select_target(0);
@@ -239,7 +264,7 @@ impl SelectionCheck {
                 }
             });
         let preview = editor.gesture.as_ref().map(|gesture| json!({"base":gesture.base,"roots":gesture.current.iter().map(|(entity,matrix)|(entity,matrix.to_cols_array())).collect::<std::collections::BTreeMap<_,_>>()}));
-        self.trace.push(json!({"stage":stage,"selection":editor.state.selection,"focusedEntity":focused,"hierarchyOffset":shell.hierarchy_offset,"pointer":shell.pointer,"from":self.from,"to":self.to,"revision":editor.host.store().revision(),"gesture":preview,"records":fixture::records(editor)?}));
+        self.trace.push(json!({"stage":stage,"selection":editor.state.selection,"focusedEntity":focused,"hierarchyOffset":shell.hierarchy_offset,"pointer":shell.pointer,"from":self.from,"to":self.to,"revision":editor.host.store().revision(),"gesture":preview,"diagnostics":self.diagnostics(editor,shell,controller),"records":fixture::records(editor)?}));
         Ok(())
     }
     pub fn write(&self) -> ara_ui::Result<()> {

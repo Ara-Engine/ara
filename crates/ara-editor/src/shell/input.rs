@@ -138,6 +138,14 @@ impl Shell {
         event: InputEvent,
         clipboard: &mut dyn Clipboard,
     ) -> ara_ui::Result<()> {
+        if matches!(event, InputEvent::PointerDown(_) | InputEvent::Wheel { .. })
+            || (matches!(event, InputEvent::PointerMove(_))
+                && (self.input.captured().is_some()
+                    || self.input.scrolling()
+                    || self.input.scrubbing()))
+        {
+            self.note_pointer_chord();
+        }
         if let Some(host) = &mut self.toolkit_verify {
             host.event(&mut self.ui, &mut self.input, event, clipboard)?;
             self.native_input

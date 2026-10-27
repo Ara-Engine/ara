@@ -3,6 +3,7 @@
 mod captures;
 mod fixture;
 mod measure;
+mod row_sizing;
 
 use super::*;
 use commands::{Target, menus::Context};

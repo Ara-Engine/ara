@@ -31,12 +31,14 @@ impl SnapCheck {
         shell.leave();
         shell.desktop_pointer = None;
         shell.menu = None;
+        shell.dialog = None;
+        editor.action("editor.palette", json!({"open":false}))?;
         editor.action("editor.layout.reset", json!({}))?;
         editor.action("editor.focus", json!({"panel":"scene"}))?;
         editor.action("editor.select",json!({"entities":if act==Act::DropInvalid {vec![SOURCE,CHILD,EMPTY]}else{vec![SOURCE,CHILD]}}))?;
         editor.action(
             "editor.tool",
-            json!({"tool":"translate","local":false,"snapping":true,"moveSnap":5.}),
+            json!({"tool":"translate","local":false,"centre":false,"snapping":true,"moveSnap":5.}),
         )?;
         editor.action("editor.view", json!({"gizmos":true,"gameView":false}))?;
         editor.action(
@@ -54,20 +56,14 @@ impl SnapCheck {
         editor.action("editor.camera",json!({"target":[0,3,0],"yaw":0.,"pitch":0.45,"distance":24.,"fovYDegrees":50.,"projection":if act==Act::Ortho {"orthographic"}else{"perspective"},"orthographicHeight":18.}))?;
         editor.apply(vec![json!({"cmd":"transform.set","args":{"entities":[SOURCE],"position":if act.drop(){[4,9,0]}else{[-4,7,0]},"rotation":[0,0,0],"scale":[1,1,1]}})],"Reset native snap fixture",None)?;
         let view = editor.view()?;
-        let hidden: Vec<_> = view
-            .entities()
-            .keys()
-            .filter(|id| {
-                id.as_str() != SOURCE
-                    && id.as_str() != CHILD
-                    && id.as_str() != TARGET
-                    && id.as_str() != EMPTY
-            })
-            .cloned()
-            .collect();
-        for id in hidden {
-            if !editor.state.hidden.contains(&id) {
-                editor.action("editor.visibility", json!({"entity":id,"enabled":false}))?;
+        for id in view.entities().keys() {
+            let own = [SOURCE, CHILD, TARGET, EMPTY].contains(&id.as_str());
+            let hidden = !own;
+            if editor.state.hidden.contains(id) != hidden {
+                editor.action("editor.visibility", json!({"entity":id,"enabled":hidden}))?;
+            }
+            if own && editor.state.locked.contains(id) {
+                editor.action("editor.lock", json!({"entity":id,"enabled":false}))?;
             }
         }
         if act == Act::Floating {

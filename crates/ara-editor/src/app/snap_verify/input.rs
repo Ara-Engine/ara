@@ -19,10 +19,13 @@ impl SnapCheck {
         scene: &viewport::SceneView,
     ) -> ara_ui::Result<bool> {
         if !scene.snap_ready(&editor.state.doc) {
-            return Ok(false);
+            return Ok(self.unready(
+                "presented-scene-document-not-ready",
+                json!({"doc":editor.state.doc}),
+            ));
         }
         let Some((host, rect)) = shell.scene_host() else {
-            return Ok(false);
+            return Ok(self.unready("scene-host-missing", Value::Null));
         };
         let ui = host
             .and_then(|id| shell.surface(id))
@@ -31,7 +34,7 @@ impl SnapCheck {
         let targets =
             scene.snap_vertices(|id| shell.outlines.channels.target_of(id) == Some(TARGET));
         if vertices.is_empty() || targets.is_empty() {
-            return Ok(false);
+            return Ok(self.unready("selected-or-target-native-vertices-missing",json!({"sourceVertices":vertices.len(),"targetVertices":targets.len(),"viewport":rect})));
         }
         let excluded: BTreeSet<_> = vertices.iter().map(|vertex| vertex.entity).collect();
         self.vertices = vertices.iter().map(|vertex| vertex.position).collect();
@@ -43,7 +46,7 @@ impl SnapCheck {
         if act.vertex() {
             let Some((from, vertex)) = vertices.iter().find_map(|vertex| {
                 let point = overlay::project(&editor.state.camera, rect, vertex.position)?;
-                if ui.hit_test(point[0], point[1]).is_some() {
+                if !rect.contains(point[0], point[1]) || ui.hit_test(point[0], point[1]).is_some() {
                     return None;
                 }
                 let picked =
@@ -51,16 +54,19 @@ impl SnapCheck {
                 (picked.position.distance(vertex.position) < 1e-4)
                     .then_some((point, picked.position))
             }) else {
-                return Ok(false);
+                return Ok(self.unready("source-vertex-not-visibly-acquirable",json!({"sourceVertices":vertices.len(),"targetVertices":targets.len(),"viewport":rect})));
             };
             let Some((to, target)) = targets.iter().find_map(|vertex| {
                 let point = overlay::project(&editor.state.camera, rect, vertex.position)?;
+                if !rect.contains(point[0], point[1]) || ui.hit_test(point[0], point[1]).is_some() {
+                    return None;
+                }
                 let picked =
                     scene.snap_vertex(&editor.state.camera, rect, point, 18., &excluded)?;
                 (shell.outlines.channels.target_of(picked.entity) == Some(TARGET))
                     .then_some((point, picked.position))
             }) else {
-                return Ok(false);
+                return Ok(self.unready("target-vertex-not-visibly-acquirable",json!({"sourceVertices":vertices.len(),"targetVertices":targets.len(),"viewport":rect})));
             };
             self.from = from;
             self.to = to;
@@ -86,7 +92,7 @@ impl SnapCheck {
                 (low.z + high.z) * 0.5,
             );
             let Some(hit) = scene.ray_hit_excluding(origin, -Vec3::Y, &excluded) else {
-                return Ok(false);
+                return Ok(self.unready("vertical-drop-has-no-native-triangle-hit",json!({"rayOrigin":origin.to_array(),"sourceVertices":vertices.len(),"targetVertices":targets.len()})));
             };
             self.target = Some(Vec3::from(hit.position));
             self.normal = Some(if hit.normal[1] < 0. {
@@ -99,18 +105,26 @@ impl SnapCheck {
                 .ok_or("Snap proof has no Translate handles")?;
             let arm = glam::Vec2::from(handles.ends[0]) - glam::Vec2::from(handles.origin);
             self.from = (glam::Vec2::from(handles.origin) + arm * 0.65).to_array();
-            if overlay::hit(&handles, self.from) != Some(overlay::Handle::Axis(0)) {
-                return Ok(false);
+            let picked_handle = overlay::hit(&handles, self.from);
+            if picked_handle != Some(overlay::Handle::Axis(0)) {
+                return Ok(self.unready("source-x-handle-pick-differs",json!({"from":self.from,"origin":handles.origin,"ends":handles.ends,"picked":format!("{picked_handle:?}"),"viewport":rect})));
+            }
+            if !rect.contains(self.from[0], self.from[1])
+                || ui.hit_test(self.from[0], self.from[1]).is_some()
+            {
+                return Ok(self.unready("source-x-handle-obstructed-by-ui",json!({"from":self.from,"viewport":rect,
+                    "hit":ui.hit_test(self.from[0],self.from[1]).map(|index|ui.nodes[index].element.id.as_str())})));
             }
             self.to = overlay::project(&editor.state.camera, rect, Vec3::new(4., 3., 0.))
                 .ok_or("Snap target outside camera")?;
             let Some(hit) =
                 scene.surface_hit_excluding(&editor.state.camera, rect, self.to, &excluded)
             else {
-                return Ok(false);
+                return Ok(self.unready("target-pointer-has-no-native-triangle-hit",json!({"to":self.to,"viewport":rect,"sourceVertices":vertices.len(),"targetVertices":targets.len()})));
             };
             if shell.outlines.channels.target_of(hit.entity) != Some(TARGET) {
-                return Ok(false);
+                return Ok(self.unready("target-pointer-hit-another-entity",json!({"to":self.to,"hitEntity":hit.entity,
+                    "hitAddress":shell.outlines.channels.target_of(hit.entity),"hitPosition":hit.position,"viewport":rect})));
             }
             let mut normal = Vec3::from(hit.normal);
             let (_, direction) = editor
@@ -140,7 +154,12 @@ impl SnapCheck {
                 self.to = [rect.x - 100., rect.y - 100.];
             }
         }
+        self.readiness = json!({"reason":"ready","sourceVertices":vertices.len(),"targetVertices":targets.len(),"viewport":rect,"from":self.from,"to":self.to});
         Ok(true)
+    }
+    fn unready(&mut self, reason: &str, detail: Value) -> bool {
+        self.readiness = json!({"reason":reason,"detail":detail});
+        false
     }
 
     #[allow(clippy::too_many_arguments)]

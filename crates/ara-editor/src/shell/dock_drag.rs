@@ -241,15 +241,9 @@ impl Shell {
     /// Release capture in the source window too, even when the drop closes it.
     pub(crate) fn release_tab_capture(
         &mut self,
-        clipboard: &mut dyn ara_ui_text::Clipboard,
+        _clipboard: &mut dyn ara_ui_text::Clipboard,
     ) -> ara_ui::Result<()> {
-        self.input
-            .event(&mut self.ui, InputEvent::Cancel, clipboard)?;
-        for surface in &mut self.floats {
-            surface
-                .input
-                .event(&mut surface.ui, InputEvent::Cancel, clipboard)?;
-        }
+        self.cancel_pointer_capture();
         self.invalidate_dock_drag();
         Ok(())
     }

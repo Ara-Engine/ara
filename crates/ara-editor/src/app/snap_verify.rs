@@ -13,6 +13,7 @@ const BEFORE: u32 = 6;
 const PREVIEW: u32 = 12;
 const AFTER: u32 = 18;
 const FINISH: u32 = 30;
+const READINESS_PATIENCE: Duration = Duration::from_secs(60);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Act {
@@ -71,6 +72,10 @@ pub(super) struct SnapCheck {
     age: u32,
     waiting: bool,
     waited: u32,
+    wait_started: Option<Instant>,
+    waiting_captured: bool,
+    pending_failure: Option<String>,
+    readiness: Value,
     from: [f32; 2],
     to: [f32; 2],
     delta: Vec3,
@@ -96,6 +101,10 @@ impl SnapCheck {
             age: 0,
             waiting: false,
             waited: 0,
+            wait_started: None,
+            waiting_captured: false,
+            pending_failure: None,
+            readiness: Value::Null,
             from: [0.; 2],
             to: [0.; 2],
             delta: Vec3::ZERO,
@@ -137,17 +146,58 @@ impl SnapCheck {
         };
         self.waiting = false;
         if self.age == 0 {
+            // Each proof owns its input lifecycle. Cancel any failed preceding
+            // gesture through the production route rather than clearing its model.
+            events.push((window.id(), Event::FocusLost));
+            self.trace.push(json!({"stage":"inherited-input","camera":editor.state.camera,"doc":editor.state.doc,
+                "selection":editor.state.selection,"gestureActive":editor.gesture.is_some(),"hidden":editor.state.hidden,"locked":editor.state.locked}));
             return self.setup(act, editor, shell);
         }
-        if self.age == BEFORE && !self.acquire(act, editor, shell, scene)? {
-            self.waiting = true;
-            self.waited += 1;
-            if self.waited > 144 * 60 {
-                return Err(
-                    format!("Native snap fixture did not become ready: {}", act.label()).into(),
-                );
+        if self.age == BEFORE {
+            match self.acquire(act, editor, shell, scene) {
+                Ok(true) => {
+                    if self
+                        .wait_started
+                        .is_some_and(|started| started.elapsed() >= READINESS_PATIENCE)
+                    {
+                        let message = format!(
+                            "Native snap fixture became ready after its {} real-second deadline: {}",
+                            READINESS_PATIENCE.as_secs(),
+                            act.label()
+                        );
+                        editor.report_error(&message);
+                        self.pending_failure = Some(message);
+                        self.waiting = true;
+                        return Ok(());
+                    }
+                }
+                Ok(false) => {
+                    self.waiting = true;
+                    self.waited += 1;
+                    let started = self.wait_started.get_or_insert_with(Instant::now);
+                    if started.elapsed() >= READINESS_PATIENCE {
+                        let message = format!(
+                            "Native snap fixture did not become ready within {} real seconds: {} ({})",
+                            READINESS_PATIENCE.as_secs(),
+                            act.label(),
+                            self.readiness["reason"]
+                                .as_str()
+                                .unwrap_or("unknown rejection")
+                        );
+                        editor.report_error(&message);
+                        self.pending_failure = Some(message);
+                    }
+                    return Ok(());
+                }
+                Err(error) => {
+                    let message =
+                        format!("Native snap acquisition failed: {}: {error}", act.label());
+                    editor.report_error(&message);
+                    self.pending_failure = Some(message);
+                    self.waiting = true;
+                    return Ok(());
+                }
             }
-            return Ok(());
         }
         self.input(act, editor, shell, window, floats, scale, events)
     }
@@ -160,10 +210,33 @@ impl SnapCheck {
         gpu: &mut NativeUi,
         floats: &windows::Floats,
     ) -> ara_ui::Result<()> {
-        if self.waiting || self.finished() {
+        if self.finished() {
             return Ok(());
         }
         let act = ACTS[self.index];
+        if let Some(message) = self.pending_failure.take() {
+            let capture_error = self
+                .capture(act, "not-ready", editor, shell, gpu, floats)
+                .err()
+                .map(|error| error.to_string());
+            self.results.push(json!({"journey":act.label(),"ok":false,"error":message,
+                "readiness":self.readiness,"readinessSample":"before-native-frame","camera":editor.state.camera,"doc":editor.state.doc,
+                "selection":editor.state.selection,"gestureActive":editor.gesture.is_some(),"waitedSeconds":self.wait_started.map(|started|started.elapsed().as_secs_f64()),
+                "waitedFrames":self.waited,"captureError":capture_error,"trace":self.trace}));
+            self.write()?;
+            return Err(message.into());
+        }
+        if self.waiting {
+            if !self.waiting_captured {
+                if let Err(error) = self.capture(act, "waiting", editor, shell, gpu, floats) {
+                    self.trace
+                        .push(json!({"stage":"waiting-capture-failed","error":error.to_string()}));
+                }
+                self.waiting_captured = true;
+                self.write()?;
+            }
+            return Ok(());
+        }
         if [BEFORE, PREVIEW, AFTER, 22, 26].contains(&self.age) {
             let stage = match self.age {
                 BEFORE => "before",
@@ -184,6 +257,9 @@ impl SnapCheck {
             self.index += 1;
             self.age = 0;
             self.waited = 0;
+            self.wait_started = None;
+            self.waiting_captured = false;
+            self.readiness = Value::Null;
             self.trace.clear();
             self.committed = None;
             self.write()?;
@@ -197,7 +273,9 @@ impl SnapCheck {
         std::fs::write(
             self.output.join("snapping.json"),
             ara_json::to_canonical_string(
-                &json!({"completed":self.finished(),"passed":self.results.iter().filter(|result|result["ok"]==true).count(),"failed":self.failures().len(),"journeys":self.results,"geometry":"presented native mesh triangles and primary-LOD vertices; no ground-plane fallback","input":"SDL events tagged to the Scene host with its own display/UI scale"}),
+                &json!({"completed":self.finished(),"passed":self.results.iter().filter(|result|result["ok"]==true).count(),"failed":self.failures().len(),"journeys":self.results,"geometry":"presented native mesh triangles and primary-LOD vertices; no ground-plane fallback","input":"SDL events tagged to the Scene host with its own display/UI scale",
+                    "current":{"journey":ACTS.get(self.index).map(|act|act.label()),"age":self.age,"readiness":self.readiness,"readinessSample":"before-native-frame",
+                        "waitedSeconds":self.wait_started.map(|started|started.elapsed().as_secs_f64()),"waitedFrames":self.waited,"limitSeconds":READINESS_PATIENCE.as_secs()}}),
             ),
         )?;
         Ok(())

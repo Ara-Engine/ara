@@ -114,18 +114,55 @@ impl SelectionCheck {
         if act.hierarchy() {
             return self.hierarchy_input(act, shell, scale, events);
         }
-        if self.age == 7 {
+        if (4..=7).contains(&self.age) {
             let Some(viewport) = shell.viewport() else {
                 return self.wait();
             };
             // Retained native geometry, not a guessed unit cube, determines both marquee corners.
-            if !MESHES.iter().all(|id| {
-                scene
-                    .selected_bounds(&[(*id).into()], &shell.outlines.channels)
-                    .is_some()
-            }) {
+            if !scene.snap_ready(&editor.state.doc)
+                || !MESHES.iter().all(|id| {
+                    scene
+                        .selected_bounds(&[(*id).into()], &shell.outlines.channels)
+                        .is_some()
+                })
+            {
                 return self.wait();
             }
+            if act == Act::MarqueeReverse && self.orthographic_fit.is_none() {
+                // Navigation verification deliberately leaves an orthographic
+                // camera behind. This reverse-direction case keeps that real
+                // projection but fits all three presented meshes to its viewport.
+                let ids: Vec<_> = MESHES.into_iter().map(str::to_owned).collect();
+                let Some(bounds) = scene.selected_bounds(&ids, &shell.outlines.channels) else {
+                    return self.wait();
+                };
+                let inset = 48.;
+                let usable = [viewport.w - inset * 2., viewport.h - inset * 2.];
+                if usable
+                    .into_iter()
+                    .any(|span| !span.is_finite() || span <= 0.)
+                {
+                    return Err("Orthographic marquee requires room for the presented meshes and native toolbar margins".into());
+                }
+                let span = bounds[1] - bounds[0];
+                let height = (span.y * viewport.h / usable[1])
+                    .max(span.x * viewport.h / usable[0])
+                    .max(0.1);
+                let target = (bounds[0] + bounds[1]) * 0.5;
+                editor.action("editor.camera",json!({"target":target.to_array(),"projection":"orthographic","orthographicHeight":height}))?;
+                shell.rebuild(editor)?;
+                self.orthographic_fit = Some(
+                    json!({"bounds":bounds.map(|point|point.to_array()),"viewport":viewport,"inset":inset,"height":height,"target":target.to_array()}),
+                );
+                // Let the real event loop present the fitted camera before the
+                // before capture and the native pointer press.
+                return self.wait();
+            }
+        }
+        if self.age == 7 {
+            let viewport = shell
+                .viewport()
+                .ok_or("Selection viewport disappeared after readiness")?;
             if act.duplicate() {
                 let view = shell.document_view(editor)?;
                 let Some(handles) = overlay::handles(&view, &editor.state, viewport) else {

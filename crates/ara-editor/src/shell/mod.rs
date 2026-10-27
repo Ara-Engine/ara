@@ -842,6 +842,17 @@ impl Shell {
     pub(crate) fn shown_node(&self, id: &str) -> Option<usize> {
         self.ui.find(id).filter(|i| self.ui.shown(*i))
     }
+    /// Pointer use makes Alt part of a chord rather than a menubar tap.
+    pub(crate) fn note_pointer_chord(&mut self) {
+        self.alt_tap = false;
+    }
+    /// End pointer capture on every native surface while retaining modal scopes.
+    pub(crate) fn cancel_pointer_capture(&mut self) {
+        self.input.cancel_interaction(&mut self.ui);
+        for surface in &mut self.floats {
+            surface.input.cancel_interaction(&mut surface.ui);
+        }
+    }
     fn stylesheet(&self, editor: &Editor) -> String {
         let mut css = self
             .styles
