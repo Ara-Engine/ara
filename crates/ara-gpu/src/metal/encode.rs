@@ -475,9 +475,13 @@ impl MetalDevice {
                 rec.timestamp(2 + 2 * pass);
                 rec.cmd.popDebugGroup();
             }
-            Command::BuildAccelerationStructure(_) | Command::DrawMeshTasksIndirect { .. } => {
+            Command::BuildAccelerationStructure(structure) => {
+                let encoder = rec.compute(self)?;
+                self.encode_as_build(encoder, *structure)?;
+            }
+            Command::DrawMeshTasksIndirect { .. } => {
                 return Err(GpuError::Contract(
-                    "Ray tracing and mesh tiers are not available on the Metal backend yet".into(),
+                    "The mesh tier is not available on the Metal backend yet".into(),
                 ));
             }
         }
