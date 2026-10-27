@@ -19,7 +19,13 @@ fn main() {
     // SAFETY: SDL is used from the main thread only, before any window exists; the
     // hint and title are NUL-terminated literals.
     let (window, view) = unsafe {
-        assert!(SDL_SetHint(SDL_HINT_MAC_BACKGROUND_APP, c"1".as_ptr()));
+        // Override priority: an `SDL_MAC_BACKGROUND_APP` environment variable would
+        // otherwise take precedence and make a normal-priority hint fail.
+        assert!(SDL_SetHintWithPriority(
+            SDL_HINT_MAC_BACKGROUND_APP,
+            c"1".as_ptr(),
+            SDL_HINT_OVERRIDE
+        ));
         assert!(SDL_Init(SDL_INIT_VIDEO), "SDL video init");
         let window = SDL_CreateWindow(
             c"ara-metal-sdl-test".as_ptr(),
