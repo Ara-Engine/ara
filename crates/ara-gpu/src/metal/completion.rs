@@ -13,12 +13,21 @@ pub struct Completion {
     points: Vec<TimelinePoint>,
     device: u64,
     resolved: bool,
+    window: (Option<crate::commands::TimestampSpan>, Option<f64>),
 }
 
 impl Completion {
     /// Whether its submissions have been consumed.
     pub fn is_resolved(&self) -> bool {
         self.resolved
+    }
+    /// This frame's own device span once consumed (see the Vulkan completion).
+    pub fn timing_window(&self) -> Option<crate::commands::TimestampSpan> {
+        self.window.0
+    }
+    /// Gaps between this frame's submission intervals once consumed.
+    pub fn timing_window_gaps(&self) -> Option<f64> {
+        self.window.1
     }
 }
 
@@ -59,11 +68,17 @@ impl MetalDevice {
         self.deferred.as_ref().map_or(0, Vec::len)
     }
     fn begin_completion(&mut self) -> Result<()> {
-        if self.deferred.is_some() || self.completion_pending {
+        if self.deferred.is_some() {
             return Err(GpuError::Contract("Nested deferred completion".into()));
         }
+        if self.pending_completions >= crate::FRAMES_IN_FLIGHT {
+            return Err(GpuError::Contract(
+                "Frames in flight are at their limit; consume the oldest first".into(),
+            ));
+        }
+        // With a pending frame, its own submissions are the work in flight.
         let completed = Device::completed(self)?;
-        if (0..2).any(|q| completed[q] < self.submitted[q]) {
+        if self.pending_completions == 0 && (0..2).any(|q| completed[q] < self.submitted[q]) {
             return Err(GpuError::Contract(
                 "Previous frame is still in flight".into(),
             ));
@@ -80,11 +95,12 @@ impl MetalDevice {
             .deferred
             .take()
             .ok_or_else(|| GpuError::Contract("No deferred completion scope".into()))?;
-        self.completion_pending = true;
+        self.pending_completions += 1;
         Ok(Completion {
             points,
             device: self.identity,
             resolved: false,
+            window: (None, None),
         })
     }
     /// Poll without waiting. None retains the frame; Some releases its recording
@@ -157,12 +173,17 @@ impl MetalDevice {
     ) -> Result<()> {
         // Every point completed (checked by the callers); reclaim resolves them.
         self.reclaim()?;
-        for point in std::mem::take(&mut frame.points) {
+        let points = std::mem::take(&mut frame.points);
+        for &point in &points {
             consume(point, self.take_timings(point));
         }
-        self.completion_pending = false;
+        frame.window = crate::vulkan::timestamps::frame_window(&self.recent_spans, &points, true);
+        self.pending_completions = self.pending_completions.saturating_sub(1);
         frame.resolved = true;
-        self.publish_completed_to_ui()?;
+        // With another frame still in flight, the last one to complete publishes.
+        if self.pending_completions == 0 {
+            self.publish_completed_to_ui()?;
+        }
         Device::collect(self)?;
         self.assert_clean()
     }

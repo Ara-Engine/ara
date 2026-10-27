@@ -196,9 +196,19 @@ impl Presenter {
     ) -> Result<()> {
         ara_gpu::cpu_scope!("Presenter.prepare");
         self.stats = PresentStats::default();
-        // Preparation writes host-visible storage the frame in flight still reads;
-        // waiting it reports its GPU costs into this present's stats.
+        // Preparation outside a frame scope writes host-visible storage a frame in
+        // flight still reads; waiting it reports its GPU costs into these stats.
         self.drain()?;
+        self.prepare_content(frame, resolve)
+    }
+
+    /// `prepare_with` without the drain: inside an open frame scope (overlapped
+    /// presents) its uploads become GPU-ordered behind the frame in flight.
+    fn prepare_content(
+        &mut self,
+        frame: &RenderFrame,
+        resolve: impl FnOnce() -> Result<Content>,
+    ) -> Result<()> {
         let started = Instant::now();
         self.ensure_device()?;
         let renderer = self
@@ -360,9 +370,78 @@ impl Presenter {
             .renderer
             .as_mut()
             .context("raster presentation device")?;
-        let costs = RasterView::finish_batched(renderer, submitted)?;
+        let finished = RasterView::finish_batched(renderer, submitted)?;
         self.stats.in_flight_wait = started.elapsed();
-        self.completed(costs);
+        self.completed(finished.costs);
+        Ok(())
+    }
+
+    /// Whether the next present can record while the frame in flight runs: frames
+    /// in flight, one pending, and steady raster presentation (same plan; a path
+    /// or device change drains first).
+    fn overlap_ready(&self) -> Result<bool> {
+        let (Some(renderer), true, true, true) = (
+            &self.renderer,
+            self.frames_in_flight,
+            self.in_flight.is_some(),
+            self.live.is_none() && self.raster.is_some(),
+        ) else {
+            return Ok(false);
+        };
+        let plan = Plan::resolve(
+            self.choice,
+            &Capabilities::of(renderer.gpu()),
+            self.size,
+            self.options,
+        )?;
+        Ok(self.plan == Some(plan) && matches!(plan.path, RenderPath::Raster(_)))
+    }
+
+    /// Frame N+1 prepares, records and submits in its own scope while frame N runs,
+    /// so the GPU never idles on recording; then frame N is waited and reported
+    /// (from its own completion window: N+1's work overlaps the device's).
+    fn present_overlapped(
+        &mut self,
+        frame: &RenderFrame,
+        resolve: impl FnOnce() -> Result<Content>,
+    ) -> Result<()> {
+        self.stats = PresentStats::default();
+        let camera = camera(frame)?;
+        let renderer = self
+            .renderer
+            .as_mut()
+            .context("raster presentation device")?;
+        let mut opened = RasterView::begin_batched(renderer)?;
+        opened.prepared = self.prepare_content(frame, resolve);
+        let started = Instant::now();
+        let raster = self.raster.as_mut().context("raster view")?;
+        let renderer = self
+            .renderer
+            .as_mut()
+            .context("raster presentation device")?;
+        let (published, size) = (&mut self.published, self.size);
+        let submitted = raster.end_batched(
+            renderer,
+            frame,
+            &camera,
+            ViewMode::Lit,
+            opened,
+            |renderer| {
+                let source = renderer.output();
+                Published::publish(published, renderer.gpu_mut(), source, size).map(drop)
+            },
+        )?;
+        if let Some(previous) = self.in_flight.replace(submitted) {
+            let waited = Instant::now();
+            let finished = RasterView::finish_batched(renderer, previous)?;
+            self.stats.in_flight_wait = waited.elapsed();
+            self.stats.gpu_ms = finished.costs.accounted_ms();
+            self.stats.gpu = Some(finished.costs);
+            self.stats.gpu_span_ms = finished.span_ms;
+            self.stats.gpu_submission_gap_ms = finished.gaps_ms;
+        }
+        self.stats.render = started.elapsed();
+        self.published_quality = self.plan.map(|plan| plan.preset);
         Ok(())
     }
 
@@ -396,6 +475,9 @@ impl Presenter {
     ) -> Result<()> {
         ara_gpu::cpu_scope!("Presenter.present");
         let result = (|| {
+            if self.overlap_ready()? {
+                return self.present_overlapped(frame, resolve);
+            }
             self.prepare_with(frame, resolve)?;
             let started = Instant::now();
             if let Some(raster) = &mut self.raster
@@ -420,8 +502,8 @@ impl Presenter {
                 if self.frames_in_flight {
                     self.in_flight = Some(submitted);
                 } else {
-                    let costs = RasterView::finish_batched(renderer, submitted)?;
-                    self.completed(costs);
+                    let finished = RasterView::finish_batched(renderer, submitted)?;
+                    self.completed(finished.costs);
                 }
             } else {
                 let source = if let Some(live) = &mut self.live {

@@ -1,9 +1,10 @@
 //! One completion boundary for the player's view, particles, post and publication.
 use super::*;
+use ara_gpu::vulkan::PassTiming;
 
 /// A raster frame submitted in one deferred scope. [`RasterView::finish_batched`]
-/// waits it: at once on synchronous presenters, or at the start of the next frame
-/// with frames in flight (`Presenter::set_frames_in_flight`).
+/// waits it: at once on synchronous presenters, or after the next frame is
+/// submitted with frames in flight (`Presenter::set_frames_in_flight`).
 pub(crate) struct Submitted {
     completion: ara_gpu::GpuCompletion,
     /// Effects submissions, in scope order (the rest is the view).
@@ -13,27 +14,56 @@ pub(crate) struct Submitted {
     rendered: Result<GpuFrameCosts>,
 }
 
+/// An open frame scope (`RasterView::begin_batched`). `prepared` is the result
+/// of work the owner did inside it before recording (preparation); on error the
+/// frame is not recorded, but the scope still ends with a completion to drain.
+pub(crate) struct Opened {
+    completed: Vec<PassTiming>,
+    pub prepared: Result<()>,
+}
+
+/// A finished frame: its costs, and its own device span and submission gaps in
+/// milliseconds (exact while another frame overlaps it in flight).
+pub(crate) struct Finished {
+    pub costs: GpuFrameCosts,
+    pub span_ms: Option<f64>,
+    pub gaps_ms: Option<f64>,
+}
+
 impl RasterView {
-    /// Records and submits the frame, then `publish` (output publication) in the
-    /// same scope; nothing waits. Even a rejected frame may have submitted
-    /// uploads/draws, so the result always carries the completion to drain before
-    /// another frame reuses storage; errors surface from `finish_batched`.
-    pub(crate) fn submit_batched(
+    /// Opens the frame's deferred scope. Recording clears the renderer's timings;
+    /// the returned last completed ones stay visible until this frame completes.
+    pub(crate) fn begin_batched(renderer: &mut Renderer) -> Result<Opened> {
+        renderer
+            .gpu_mut()
+            .begin_deferred_completion_on_current_queue()?;
+        Ok(Opened {
+            completed: renderer.take_timings(),
+            prepared: Ok(()),
+        })
+    }
+
+    /// Records the frame (unless the scope's `prepared` work failed) and `publish`
+    /// (output publication), then ends the scope; nothing waits. Even a
+    /// rejected frame may have submitted uploads/draws, so the result always carries
+    /// the completion to drain before another frame reuses storage; errors surface
+    /// from `finish_batched`.
+    pub(crate) fn end_batched(
         &mut self,
         renderer: &mut Renderer,
         frame: &RenderFrame,
         camera: &CameraSpec,
         mode: ViewMode,
+        opened: Opened,
         publish: impl FnOnce(&mut Renderer) -> Result<()>,
     ) -> Result<Submitted> {
-        renderer
-            .gpu_mut()
-            .begin_deferred_completion_on_current_queue()?;
-        // Recording clears the renderer's timings; the last completed frame's stay
-        // visible until this one completes (`finish_batched`).
-        let completed = renderer.take_timings();
+        let Opened {
+            completed,
+            prepared,
+        } = opened;
         let mut boundaries = [0; 2];
-        let mut rendered = self.render_recorded(renderer, frame, camera, mode, &mut boundaries);
+        let mut rendered = prepared
+            .and_then(|()| self.render_recorded(renderer, frame, camera, mode, &mut boundaries));
         let publication = renderer.gpu().deferred_submission_count();
         if rendered.is_ok()
             && let Err(error) = publish(renderer)
@@ -50,12 +80,26 @@ impl RasterView {
         })
     }
 
+    /// Opens a scope, records and submits the frame, then `publish` in the same
+    /// scope (`begin_batched` + `end_batched`).
+    pub(crate) fn submit_batched(
+        &mut self,
+        renderer: &mut Renderer,
+        frame: &RenderFrame,
+        camera: &CameraSpec,
+        mode: ViewMode,
+        publish: impl FnOnce(&mut Renderer) -> Result<()>,
+    ) -> Result<Submitted> {
+        let opened = Self::begin_batched(renderer)?;
+        self.end_batched(renderer, frame, camera, mode, opened, publish)
+    }
+
     /// Waits a [`Submitted`] frame and splits its pass timings into view, effects
     /// and publication; the view's become the renderer's completed timings.
     pub(crate) fn finish_batched(
         renderer: &mut Renderer,
         submitted: Submitted,
-    ) -> Result<GpuFrameCosts> {
+    ) -> Result<Finished> {
         let Submitted {
             mut completion,
             boundaries,
@@ -83,6 +127,10 @@ impl RasterView {
         costs.effects_ms = effects_ms;
         costs.publication_ms = publication_ms;
         renderer.set_completed_timings(view);
-        Ok(costs)
+        Ok(Finished {
+            costs,
+            span_ms: completion.timing_window().map(|span| span.milliseconds()),
+            gaps_ms: completion.timing_window_gaps(),
+        })
     }
 }

@@ -164,7 +164,8 @@ pub struct MetalDevice {
     /// Submitted values when the scope began; every scoped submission waits on them.
     deferred_waits: [u64; 2],
     /// An ended scope awaits poll/wait.
-    completion_pending: bool,
+    /// Ended deferred scopes not yet consumed (at most `FRAMES_IN_FLIGHT`).
+    pending_completions: usize,
     resource_worker: Option<prepare::ResourceWorker>,
     pipeline_worker: Option<prepare::PipelineWorker>,
     timestamp_pool: timestamps::Pool,
@@ -173,6 +174,7 @@ pub struct MetalDevice {
     /// Pass timings of completed submissions, oldest first, until resolved.
     timings: std::collections::VecDeque<(TimelinePoint, Vec<PassTiming>)>,
     timing_window: crate::vulkan::timestamps::Window,
+    recent_spans: std::collections::VecDeque<(TimelinePoint, commands::TimestampSpan)>,
     waits: crate::vulkan::waits::Counter,
     /// The cooked `ClearDepth` pipeline, loaded on first use.
     clear: Option<clear::Clear>,
@@ -275,13 +277,14 @@ impl MetalDevice {
             },
             deferred: None,
             deferred_waits: [0; 2],
-            completion_pending: false,
+            pending_completions: 0,
             resource_worker: None,
             pipeline_worker: None,
             timestamp_pool: timestamps::Pool::default(),
             pass_timing: true,
             timings: std::collections::VecDeque::new(),
             timing_window: Default::default(),
+            recent_spans: Default::default(),
             waits: Default::default(),
             clear: None,
             shader_status: Default::default(),
@@ -813,6 +816,7 @@ impl MetalDevice {
                 self.timestamp_pool.recycle(&timing);
                 let (passes, span) = resolved?;
                 self.timing_window.observe(point, span);
+                crate::vulkan::timestamps::remember(&mut self.recent_spans, point, span);
                 if self.timings.len() == RESOLVED_TIMINGS {
                     self.timings.pop_front();
                 }

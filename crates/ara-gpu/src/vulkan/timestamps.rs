@@ -110,6 +110,39 @@ fn relative_tick(tick: u64, origin: u64, bits: u32) -> i64 {
     (tick.wrapping_sub(origin) << shift) as i64 >> shift
 }
 
+/// Resolved submission intervals a device remembers for `Completion` windows: a
+/// frame's points resolve before (Metal reclaim) or while (Vulkan) it is consumed.
+pub(crate) const RECENT_SPANS: usize = 64;
+
+/// Remembers `point`'s interval for the completion that owns it (`frame_window`).
+pub(crate) fn remember(
+    recent: &mut std::collections::VecDeque<(TimelinePoint, TimestampSpan)>,
+    point: TimelinePoint,
+    interval: TimestampSpan,
+) {
+    if recent.len() == RECENT_SPANS {
+        recent.pop_front();
+    }
+    recent.push_back((point, interval));
+}
+
+/// The span and inter-submission gaps of one frame's `points`, from remembered
+/// intervals: exact while another frame's submissions overlap it in flight.
+pub(crate) fn frame_window(
+    recent: &std::collections::VecDeque<(TimelinePoint, TimestampSpan)>,
+    points: &[TimelinePoint],
+    shared_clock: bool,
+) -> (Option<TimestampSpan>, Option<f64>) {
+    let mut window = Window::default();
+    window.reset([0, 0]);
+    for (point, interval) in recent {
+        if points.contains(point) {
+            window.observe(*point, *interval);
+        }
+    }
+    (window.span(shared_clock), window.gaps(shared_clock))
+}
+
 #[derive(Default)]
 pub(crate) struct Window {
     active: bool,
