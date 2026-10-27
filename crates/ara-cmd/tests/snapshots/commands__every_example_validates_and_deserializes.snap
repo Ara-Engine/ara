@@ -147,6 +147,37 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       }
     ]
   },
+  "prefab.apply": {
+    "kind": "command",
+    "summary": "Apply overrides and removals to a chosen prefab source in one undoable transaction.",
+    "params": "PrefabApplyParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit:scene",
+    "examples": [
+      {
+        "entity": "e_4f9a"
+      }
+    ]
+  },
+  "prefab.create": {
+    "kind": "command",
+    "summary": "Create a prefab asset and replace its source subtree in one undoable transaction.",
+    "params": "PrefabCreateParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit:scene",
+    "examples": [
+      {
+        "entity": "e_8b21",
+        "path": "prefabs/crate.prefab"
+      }
+    ]
+  },
   "prefab.instantiate": {
     "kind": "command",
     "summary": "Place an instance of a prefab; its content stays linked to the prefab.",
@@ -197,6 +228,22 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
         "entity": "e_4f9a/e_m4tz",
         "path": "MeshRenderer.tint",
         "value": [1, 0, 0, 1]
+      }
+    ]
+  },
+  "prefab.variant": {
+    "kind": "command",
+    "summary": "Create a linked prefab variant while preserving base inheritance and instance placement.",
+    "params": "PrefabCreateParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit:scene",
+    "examples": [
+      {
+        "entity": "e_4f9a",
+        "path": "prefabs/crate-red.prefab"
       }
     ]
   },
