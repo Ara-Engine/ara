@@ -124,7 +124,3 @@ cargo run -p ara-player -- --root PACK --headless --quality high   # writes PACK
 - Loopback UDP is delivered asynchronously on macOS: tests wait on delivery events,
   never on fixed sleeps.
 - Vulkan backend GPU tests are ignored on macOS (no Vulkan driver; D12).
-- Metal commits each command list. Vulkan batches a synchronous presenter's lists into
-  one queue submission, which `ara-runtime-render`'s
-  `live_tick_advances_and_draws_in_one_particle_graph` asserts, so that test fails on
-  macOS until Metal batches its command buffers per presenter scope.

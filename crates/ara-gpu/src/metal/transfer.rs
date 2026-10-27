@@ -73,7 +73,7 @@ impl Transfer {
             .ok_or_else(|| nil("command buffer"))?;
         if let Some(gpu) = after {
             for queue in [Queue::Graphics, Queue::Compute] {
-                let value = gpu.submitted[queue.index()];
+                let value = gpu.flushed[queue.index()];
                 if value > 0 {
                     cmd.encodeWaitForEvent_value(
                         ProtocolObject::from_ref(&*gpu.events[queue.index()]),

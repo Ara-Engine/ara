@@ -75,6 +75,7 @@ impl MetalDevice {
     /// End a scope even when frame preparation failed. Its submitted commands
     /// still own their resources until the returned completion has been drained.
     pub fn end_deferred_completion(&mut self) -> Result<Completion> {
+        self.flush();
         let points = self
             .deferred
             .take()

@@ -209,6 +209,49 @@ fn a_resolve_inside_a_deferred_scope_leaves_its_timings_to_the_completion() {
 }
 
 #[test]
+fn a_frame_scope_commits_its_lists_in_one_ordered_submission() {
+    let mut gpu = device();
+    let [fill, twice] = ["fill", "twice"].map(|entry| {
+        gpu.msl_pipeline(
+            &[(Stage::Compute, entry)],
+            &RenderState::default(),
+            Some([64, 1, 1]),
+        )
+    });
+    let data = storage(&mut gpu, 64);
+    let slot = gpu.storage_buffer(data).expect("slot");
+    let before = gpu.submission_stats();
+    gpu.begin_deferred_completion_on_current_queue()
+        .expect("scope");
+    let mut last = None;
+    // Each list depends on the previous one's writes: fill, then double twice.
+    for pipeline in [fill, twice, twice] {
+        let mut rec = gpu.begin(Queue::Graphics);
+        rec.push(Command::Pipeline(pipeline));
+        rec.push(Command::Constants(RootConstants {
+            words: [slot.index, 7, 64, 0, 0, 0, 0, 0],
+        }));
+        rec.push(Command::Dispatch([1, 1, 1]));
+        last = Some(gpu.submit(rec.finish(), &[]).expect("submit"));
+    }
+    let last = last.expect("recorded");
+    // Recorded work is committed at the scope's end, so it cannot be waited on yet.
+    assert!(Device::wait(&gpu, last).is_err());
+    let mut completion = gpu.end_deferred_completion().expect("end");
+    let after = gpu.submission_stats();
+    assert_eq!(
+        (
+            after.queue_submissions - before.queue_submissions,
+            after.command_lists - before.command_lists
+        ),
+        (1, 3)
+    );
+    gpu.wait_completion(&mut completion).expect("complete");
+    let values = words(&gpu.read(data).expect("read"));
+    assert_eq!(values, (0..64).map(|i| (7 + i) * 4).collect::<Vec<_>>());
+}
+
+#[test]
 fn graphics_waits_on_the_compute_timeline_and_encoder_barriers_order_dispatches() {
     let mut gpu = device();
     let fill = gpu.msl_pipeline(
