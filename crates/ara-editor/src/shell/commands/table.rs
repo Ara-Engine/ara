@@ -759,7 +759,7 @@ fn build() -> Vec<Spec> {
             let projection=if e.state.camera.projection==crate::state::CameraProjection::Perspective {"orthographic"}else{"perspective"};
             act(e,"editor.camera",json!({"projection":projection}))
         }).when(|c|Avail::Checked(c.state.camera.projection==crate::state::CameraProjection::Orthographic)),
-        cmd("view.camera.default", "Default View", "video", "", "Return to the default three-quarter perspective.", |_, e, _| camera(e, 0.6, 0.4)),
+        cmd("view.camera.default", "Default View", "video", "", "Return to the default three-quarter perspective.", |_, e, _| act(e,"editor.camera",json!({"yaw":0.6,"pitch":0.4,"projection":"perspective"}))),
         cmd("view.camera.fov", "Field of View…", "scan-eye", "", "Choose the Scene view's vertical field of view.", |s, _, _| { s.open_value_menu("fov"); Ok(()) })
             .labelled(|c| format!("Field of View ({})…", c.state.camera.fov_label())),
         cmd("view.camera.fov.set", "Set Field of View", "scan-eye", "", "Set the Scene view's vertical field of view: target `46` (degrees, 10–120).", |_, e, t| {

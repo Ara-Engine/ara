@@ -695,24 +695,39 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             }
             let input_ms = routed_at.elapsed().as_secs_f64() * 1000.;
             if let Some(request) = shell.window_request.take() {
-                match request {
-                    crate::shell::WindowRequest::Minimize => window.minimize()?,
-                    crate::shell::WindowRequest::Maximize => window.toggle_maximize()?,
-                    crate::shell::WindowRequest::Fullscreen => window.toggle_fullscreen()?,
-                    crate::shell::WindowRequest::Raise(id) => {
-                        if let Some(f) = floats.windows.iter().find(|f| f.id == id) {
-                            f.window.raise();
+                if offscreen
+                    && matches!(
+                        request,
+                        crate::shell::WindowRequest::Minimize
+                            | crate::shell::WindowRequest::Maximize
+                            | crate::shell::WindowRequest::Fullscreen
+                            | crate::shell::WindowRequest::Raise(_)
+                    )
+                {
+                    shell.status_note = Some(
+                        "Native window activation is unavailable during offscreen verification"
+                            .into(),
+                    );
+                } else {
+                    match request {
+                        crate::shell::WindowRequest::Minimize => window.minimize()?,
+                        crate::shell::WindowRequest::Maximize => window.toggle_maximize()?,
+                        crate::shell::WindowRequest::Fullscreen => window.toggle_fullscreen()?,
+                        crate::shell::WindowRequest::Raise(id) => {
+                            if let Some(f) = floats.windows.iter().find(|f| f.id == id) {
+                                f.window.raise();
+                            }
                         }
-                    }
-                    crate::shell::WindowRequest::Gather => floats.gather(&window)?,
-                    crate::shell::WindowRequest::Import => {
-                        if !offscreen {
-                            import_dialog(&window, &editor);
+                        crate::shell::WindowRequest::Gather => floats.gather(&window)?,
+                        crate::shell::WindowRequest::Import => {
+                            if !offscreen {
+                                import_dialog(&window, &editor);
+                            }
                         }
-                    }
-                    crate::shell::WindowRequest::Quit => {
-                        if monkey.is_none() {
-                            exit_requested = shell.request_quit(&mut editor)?;
+                        crate::shell::WindowRequest::Quit => {
+                            if monkey.is_none() {
+                                exit_requested = shell.request_quit(&mut editor)?;
+                            }
                         }
                     }
                 }
