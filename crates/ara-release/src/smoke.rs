@@ -1,5 +1,7 @@
 //! The shipped binaries are the test subjects; no development executable is used.
 mod build;
+#[cfg(feature = "rehearsal")]
+pub(crate) mod hub_replay;
 mod hub_upgrade;
 mod installation;
 #[cfg(feature = "rehearsal")]
