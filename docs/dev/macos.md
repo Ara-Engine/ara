@@ -77,7 +77,7 @@ in `caffeinate -dimsu <command>` (macOS sleeps after a minute on battery).
 | Kernel and platform-independent crates | Green (`cargo test`); the whole workspace type-checks. |
 | SDL3 platform layer (`ara-platform`, `ara-audio`) | Green. |
 | `ara-gpu` Metal 4 core | Buffers, textures, converter tables, pipelines from metallibs, both queues with shared-event timelines (async compute), deferred completion, preparation workers, GPU pass timings and the timing window, CAMetalLayer presenter (windowless and through an SDL3 Metal view). Tested with runtime-compiled MSL laid out like converter output. |
-| Not yet on Metal | Persistent pipeline archives, acceleration structures/ray query, mesh stages, `ClearDepth`, shader hot reload, HDR output, shared surfaces (D19 embedded Play), converter draw parameters. |
+| Not yet on Metal | Persistent pipeline archives, acceleration structures/ray query, mesh stages, shader hot reload, HDR output, converter draw parameters. `ClearDepth` and shared surfaces exist but need converter-cooked shaders (ClearDepth) or the editor wiring (D19, seam step 3). |
 | Renderer, player, editor | Waiting on the renderer seam (`VulkanDevice` → `GpuDevice` across consumers) and on converter-cooked engine shaders. |
 | C# host (`ara-script`, osx-arm64) | Green: JIT hosting, NativeAOT sample, L1/L3 reload, the out-of-process compile server and module tests. Needs `dotnet` on `PATH`. |
 

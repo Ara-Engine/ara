@@ -117,7 +117,7 @@ producer's memory type and size). Between owners slots are owned by
 validation layer only learns external layouts from a transition), owner → producer
 transfers SRC→SRC; each side waits on a fence before notifying the other. A slot is
 written only after the owner released that exact frame (generation, slot, serial).
-Metal: unsupported (error).
+Metal: global IOSurfaces (`metal::external`; IDs as slot handles, same-session trust).
 
 `prepare_pipelines` admits two PSO batches (running/queued/ready); poll/cancel never waits. One compiler owns a private persisted cache.
 Caches check vendor/device/UUID/driver and save atomically; cooked artifact and layout hashes are checked separately.

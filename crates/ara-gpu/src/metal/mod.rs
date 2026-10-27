@@ -19,12 +19,17 @@
 //!
 //! `ClearDepth` draws the cooked vertex-only `clear_depth` pipeline ([`clear`]).
 //!
+//! Shared surfaces (D19) use global IOSurfaces ([`external`]).
+//!
 //! Not yet available: acceleration structures, mesh/task stages,
-//! shader hot reload, HDR output and shared surfaces.
+//! shader hot reload and HDR output.
 mod abi;
 mod clear;
 mod completion;
 mod encode;
+pub mod external;
+#[cfg(test)]
+mod external_tests;
 mod native;
 #[cfg(test)]
 mod parity_tests;
