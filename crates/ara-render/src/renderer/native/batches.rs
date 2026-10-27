@@ -11,6 +11,23 @@ pub(super) fn is_translucent(material: &crate::instanced::Material) -> bool {
     material.pbr.flags[0] == 2
 }
 
+/// Blended double-sided volumes (`Group::planar` false) draw their back faces, then
+/// their front faces, so their far side composites under their near side; every other
+/// blended draw takes one pass over both sides, as single-sided and flat ones need.
+pub(super) fn is_two_pass(material: &crate::instanced::Material, planar: bool) -> bool {
+    material.pbr.flags[0] == 2
+        && !is_refractive(material)
+        && material.pbr.flags[1] & crate::scene::DOUBLE_SIDED != 0
+        && !planar
+}
+
+/// Whether local bounds are flat (a card, quad or sheet): no face can lie behind
+/// another of the same draw, so drawing order within it never matters.
+pub(super) fn is_planar([lo, hi]: [Vec3; 2]) -> bool {
+    let extent = hi - lo;
+    extent.min_element() <= (extent.max_element() * 0.01).max(1e-4)
+}
+
 /// Transmissive materials draw in the forward pass through the refractive PSOs
 /// (`NativePipelines::refract`), over a copy of the lit opaque scene.
 pub(super) fn is_refractive(material: &crate::instanced::Material) -> bool {
@@ -40,6 +57,10 @@ pub(super) struct Group {
     pub refract: bool,
     /// A blended group (`is_translucent`), drawn into the translucent sun map.
     pub translucent: bool,
+    /// Its geometry is flat (`is_planar`).
+    pub planar: bool,
+    /// Its forward draws take a back-face and a front-face pass (`is_two_pass`).
+    pub two_pass: bool,
     pub offset: usize,
     pub slot: usize,
 }
@@ -100,6 +121,11 @@ impl Groups {
                     transparent: is_transparent(&scene.materials[material]),
                     refract: is_refractive(&scene.materials[material]),
                     translucent: is_translucent(&scene.materials[material]),
+                    planar: is_planar(scene.geometry[geometry].bounds),
+                    two_pass: is_two_pass(
+                        &scene.materials[material],
+                        is_planar(scene.geometry[geometry].bounds),
+                    ),
                 }
             })
             .collect();

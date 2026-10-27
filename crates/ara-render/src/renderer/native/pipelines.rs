@@ -1,4 +1,4 @@
-//! Twelve native PSOs are retained by the renderer across content generations.
+//! Fourteen native PSOs are retained by the renderer across content generations.
 use super::*;
 use ara_gpu::vulkan::{PipelinePreparation, PipelinePreparationId};
 
@@ -13,8 +13,7 @@ pub(in crate::renderer) struct NativePipelines {
     /// which read the G-buffer it blends into.
     pub forward: Pipeline,
     /// The forward pass of lit frames: colour, ids and motion only, since nothing
-    /// reads the G-buffer after it. Front faces only: `forward_lit_back` draws an
-    /// instance's back faces first, so closed films composite far side under near.
+    /// reads the G-buffer after it; both sides in one pass.
     pub forward_lit: Pipeline,
     /// The G-buffer fill for presets without terrain detail
     /// (`Quality::terrain_detail` zero): terrain keeps its top projection, and
@@ -37,6 +36,11 @@ pub(in crate::renderer) struct NativePipelines {
     pub forward_high_back: Pipeline,
     /// Blended casters' film opacity into the translucent sun map (`look::translucent`).
     pub translucent: Pipeline,
+    /// The front faces of double-sided blended volumes, after `forward_lit_back`, so
+    /// closed films composite far side under near (`batches::is_two_pass`).
+    pub forward_lit_front: Pipeline,
+    /// The front faces of double-sided blended volumes with the High/Epic tier's code.
+    pub forward_high_front: Pipeline,
 }
 
 impl NativePipelines {
@@ -52,7 +56,7 @@ impl NativePipelines {
 }
 
 /// Cooked recipe names, in `NativePipelines` field order.
-const RECIPES: [&str; 12] = [
+const RECIPES: [&str; 14] = [
     "native_shadow",
     "native_gbuffer",
     "native_forward",
@@ -65,6 +69,8 @@ const RECIPES: [&str; 12] = [
     "native_forward_lit_back",
     "native_forward_high_back",
     "native_shadow_translucent",
+    "native_forward_lit_front",
+    "native_forward_high_front",
 ];
 
 #[derive(Default)]
@@ -116,6 +122,8 @@ impl Renderer {
                     forward_lit_back,
                     forward_high_back,
                     translucent,
+                    forward_lit_front,
+                    forward_high_front,
                 ]: [Pipeline; RECIPES.len()] = handles
                     .try_into()
                     .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
@@ -132,6 +140,8 @@ impl Renderer {
                     forward_lit_back,
                     forward_high_back,
                     translucent,
+                    forward_lit_front,
+                    forward_high_front,
                 }));
             }
         }

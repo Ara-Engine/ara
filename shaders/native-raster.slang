@@ -274,10 +274,11 @@ bool facesViewer(Varying v){return dot(v.normal,frame().camera.xyz-v.world)>=0;}
 // A forward fragment's surface. Double-sided transparency lights each side as seen
 // (glTF: back faces reverse their normals before lighting), as a path tracer does;
 // lit from outside, a film's far side caught sunlight its near side never sees.
-// FACES is a compile-time pass choice: 0 both sides (debug views), 1 back faces only,
-// 2 front faces only. Lit frames draw each transparent instance's back faces before
-// its front faces (NativePipelines::forward_lit_back), so a closed film composites
-// far over near side instead of in triangle order (blocks along the tessellation).
+// FACES is a compile-time pass choice: 0 both sides, 1 back faces only,
+// 2 front faces only. Lit frames draw a double-sided blended volume's back faces
+// before its front faces (NativePipelines::forward_lit_back/front), so a closed film
+// composites far under near side instead of in triangle order (blocks along the
+// tessellation); every other blended draw takes one pass over both sides.
 // The sun is a disk, not a point: forward surfaces (often thin, glossy and lit at
 // grazing angles) widen their lobe to at least its angular radius (GGX alpha), so a
 // mirror-like rim shows the sun's area-filtered highlight rather than a sub-pixel peak.
@@ -296,11 +297,15 @@ Forward nativeForwardFragment(Varying v){return nativeForward(v,false);}
 struct ForwardLit {float4 color:SV_Target0;float id:SV_Target1;float4 velocity:SV_Target2;};
 ForwardLit nativeForwardLit<let FACES:int>(Varying v,bool high){Surface s=forwardSurface<FACES>(v);Frame f=frame();Look l=look(f);ForwardLit o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),high);o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;}
 [shader("fragment")]
-ForwardLit nativeForwardLitFragment(Varying v){return nativeForwardLit<2>(v,false);}
+ForwardLit nativeForwardLitFragment(Varying v){return nativeForwardLit<0>(v,false);}
+[shader("fragment")]
+ForwardLit nativeForwardLitFrontFragment(Varying v){return nativeForwardLit<2>(v,false);}
 [shader("fragment")]
 ForwardLit nativeForwardLitBackFragment(Varying v){return nativeForwardLit<1>(v,false);}
 [shader("fragment")]
-ForwardLit nativeForwardHighFragment(Varying v){return nativeForwardLit<2>(v,true);}
+ForwardLit nativeForwardHighFragment(Varying v){return nativeForwardLit<0>(v,true);}
+[shader("fragment")]
+ForwardLit nativeForwardHighFrontFragment(Varying v){return nativeForwardLit<2>(v,true);}
 [shader("fragment")]
 ForwardLit nativeForwardHighBackFragment(Varying v){return nativeForwardLit<1>(v,true);}
 // Transmissive forward draws (NativePipelines::refract): the surface composites the

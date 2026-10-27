@@ -41,6 +41,10 @@ struct InstanceRow {
     normal: [[f32; 4]; 3],
 }
 
+/// Blended casters narrower than this angle from the camera (radians, by bounds
+/// diagonal) cast no translucent sun shadow: a few pixels at most.
+const TRANSLUCENT_MIN_ANGLE: f32 = 0.004;
+
 pub(super) struct Native {
     pool: GeometryGpu,
     textures: Box<dyn Textures>,
@@ -67,6 +71,9 @@ pub(super) struct Native {
     upload: TextureStats,
     material_dirty: bool,
     update_gpu_ms: f64,
+    /// Advances whenever a blended caster moves, deforms or changes material, or a
+    /// material becomes or stops being blended: the translucent sun map's cache key.
+    translucent_revision: u64,
 }
 
 impl Renderer {
@@ -376,8 +383,17 @@ impl Renderer {
             .reduce(|[lo, hi], [a, b]| [lo.min(a), hi.max(b)])
     }
 
-    /// World bounds of the blended casters (`look::translucent`); `None` without any.
-    pub(crate) fn native_translucent_bounds(&self) -> Option<[Vec3; 2]> {
+    /// World bounds of the blended casters whose shadows can show
+    /// (`look::translucent`): within `range` metres of the camera at `camera` and
+    /// subtending at least `TRANSLUCENT_MIN_ANGLE` from it; and the blended casters'
+    /// change revision. `None` without any such caster. The bounds change only when
+    /// casters enter or leave that set or move, so the map's fit holds while the
+    /// camera moves.
+    pub(crate) fn native_translucent_casters(
+        &self,
+        camera: Vec3,
+        range: f32,
+    ) -> Option<([Vec3; 2], u64)> {
         let native = self.native.as_ref()?;
         native
             .groups
@@ -386,7 +402,12 @@ impl Renderer {
             .filter(|group| group.translucent)
             .flat_map(|group| &group.instances)
             .map(|&i| native.bounds[i])
+            .filter(|&[lo, hi]| {
+                let distance = (camera.clamp(lo, hi) - camera).length();
+                distance <= range && (hi - lo).length() >= distance * TRANSLUCENT_MIN_ANGLE
+            })
             .reduce(|[lo, hi], [a, b]| [lo.min(a), hi.max(b)])
+            .map(|bounds| (bounds, native.translucent_revision))
     }
 
     /// Culls the blended casters seen from the sun through the translucent sun map's
@@ -847,6 +868,7 @@ impl Native {
             upload,
             material_dirty: true,
             update_gpu_ms: 0.,
+            translucent_revision: 0,
         };
         Ok(result)
     }
@@ -917,27 +939,28 @@ impl Native {
         traced: Option<Pipeline>,
     ) {
         let p = &self.pipelines;
-        // Blended draws: back faces, then front faces (none: the debug views' single
-        // pass shades both); refractive draws composite in one.
-        let [back, front, refract] = match (lit, high) {
-            (false, _) => [None, Some(p.forward), Some(p.forward)],
-            (true, false) => [
-                Some(p.forward_lit_back),
-                Some(p.forward_lit),
-                Some(p.refract),
-            ],
-            (true, true) => [
-                Some(p.forward_high_back),
-                Some(p.forward_high),
-                Some(traced.unwrap_or(p.refract_high)),
-            ],
+        // One pass over both sides, the back- and front-face passes of double-sided
+        // blended volumes (none in the debug views), and the refractive pass.
+        let (both, sides, refract) = match (lit, high) {
+            (false, _) => (p.forward, None, p.forward),
+            (true, false) => (
+                p.forward_lit,
+                Some([p.forward_lit_back, p.forward_lit_front]),
+                p.refract,
+            ),
+            (true, true) => (
+                p.forward_high,
+                Some([p.forward_high_back, p.forward_high_front]),
+                traced.unwrap_or(p.refract_high),
+            ),
         };
         let mut bound = None;
-        for (batch, &refractive) in self.culling.draws[5].iter().zip(&self.culling.refract) {
-            let passes = if refractive {
-                [None, refract]
-            } else {
-                [back, front]
+        let kinds = self.culling.refract.iter().zip(&self.culling.two_pass);
+        for (batch, (&refractive, &two_pass)) in self.culling.draws[5].iter().zip(kinds) {
+            let passes = match (refractive, two_pass, sides) {
+                (true, _, _) => [Some(refract), None],
+                (false, true, Some([back, front])) => [Some(back), Some(front)],
+                _ => [Some(both), None],
             };
             for pipeline in passes.into_iter().flatten() {
                 if bound != Some(pipeline) {

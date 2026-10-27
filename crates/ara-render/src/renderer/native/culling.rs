@@ -38,6 +38,9 @@ pub(super) struct Culling {
     transparent: Vec<(f32, usize, usize)>,
     /// Per forward draw (`draws[5]`), whether it refracts (`batches::is_refractive`).
     pub(super) refract: Vec<bool>,
+    /// Per forward draw, whether it takes back- and front-face passes
+    /// (`batches::is_two_pass`).
+    pub(super) two_pass: Vec<bool>,
     /// Normalised screen rect (x0, y0, x1, y1; +y down) the visible refractive
     /// draws sample the opaque scene in: their bounds, widened by their own size
     /// on every side for rays bent sideways; `None` without refractive draws.
@@ -104,6 +107,7 @@ impl Culling {
             transparent_dirty: true,
             transparent: Vec::with_capacity(instances),
             refract: Vec::new(),
+            two_pass: Vec::new(),
             refract_rect: None,
             scratch: (0..groups
                 .groups
@@ -182,6 +186,11 @@ impl Culling {
             }
             if groups.groups[g].refract != refract {
                 groups.groups[g].refract = refract;
+                self.transparent_dirty = true;
+            }
+            let two_pass = batches::is_two_pass(value, groups.groups[g].planar);
+            if groups.groups[g].two_pass != two_pass {
+                groups.groups[g].two_pass = two_pass;
                 self.transparent_dirty = true;
             }
         }
@@ -380,6 +389,7 @@ impl Culling {
             .sort_unstable_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
         let first = 5 * self.selected.len();
         self.refract.clear();
+        self.two_pass.clear();
         self.refract_rect = None;
         let matrix = camera.projection * camera.view;
         for (n, &(_, i, g)) in self.transparent.iter().enumerate() {
@@ -393,6 +403,7 @@ impl Culling {
             self.visible[first + n] = [i as u32, groups.groups[g].first + lod as u32];
             let refract = groups.groups[g].refract;
             self.refract.push(refract);
+            self.two_pass.push(groups.groups[g].two_pass);
             if refract {
                 let rect = refract_rect(matrix, bounds[i]);
                 self.refract_rect = Some(self.refract_rect.map_or(rect, |r| {

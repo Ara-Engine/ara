@@ -8,8 +8,10 @@
 //! Receivers behind the nearest film (the virtual page projection and the High
 //! tier's lighting and forward shading) take the filtered transmittance. Frames
 //! without blended casters declare nothing; the map is allocated on first use and
-//! redrawn only when its fit (the sun, the casters' bounds) changes or casters
-//! changed inside its light volume (the cascades' caster-change signal).
+//! redrawn only when its fit (the sun, the bounds of the casters near the camera)
+//! changes, a blended caster moved or changed material (the native content's
+//! blended-caster revision), or the content was replaced. Opaque casters never
+//! invalidate it: it holds blended casters alone.
 use super::{frame::LookFrame, gpu::LookGpu};
 use crate::graph::{Graph, ResourceId, State};
 use anyhow::Result;
@@ -31,9 +33,9 @@ pub(crate) struct TranslucentSun {
     pub frame: Buffer,
     pub frame_index: u32,
     states: [State; 2],
-    /// The light matrix the map holds; `None` until drawn.
-    drawn: Option<Mat4>,
-    /// Casters changed inside the drawn light volume since.
+    /// The light matrix and blended-caster revision the map holds; `None` until drawn.
+    drawn: Option<(Mat4, u64)>,
+    /// The content was replaced since.
     stale: bool,
 }
 
@@ -66,7 +68,8 @@ pub(crate) fn fit(bounds: [Vec3; 2], sun: Vec3) -> (Mat4, f32) {
 
 impl LookGpu {
     /// Prepares this frame's translucent sun map over blended casters within world
-    /// `bounds`: allocates it on first use (`frame_bytes`: the frame record's size)
+    /// `bounds` at caster revision `revision`: allocates it on first use
+    /// (`frame_bytes`: the frame record's size)
     /// and writes the look record's rows (look-translucent.slangh). Returns the light
     /// matrix and, when the map must be redrawn, the buffer the caller uploads a copy
     /// of the frame record into with that matrix as cascade 0 (as the far map's)
@@ -77,6 +80,7 @@ impl LookGpu {
         look: &mut LookFrame,
         frame_bytes: u64,
         bounds: [Vec3; 2],
+        revision: u64,
         sun: Vec3,
     ) -> Result<(Mat4, Option<Buffer>)> {
         if self.translucent.is_none() {
@@ -91,14 +95,15 @@ impl LookGpu {
             RESOLUTION as f32,
             0.,
         ];
-        let redraw = map.drawn != Some(matrix) || map.stale;
+        let redraw = map.drawn != Some((matrix, revision)) || map.stale;
         Ok((matrix, redraw.then_some(map.frame)))
     }
 
-    /// The map now holds `matrix`'s view (its pass was recorded this frame).
-    pub(crate) fn translucent_drawn(&mut self, matrix: Mat4) {
+    /// The map now holds `matrix`'s view of caster revision `revision` (its pass was
+    /// recorded this frame).
+    pub(crate) fn translucent_drawn(&mut self, matrix: Mat4, revision: u64) {
         if let Some(map) = &mut self.translucent {
-            map.drawn = Some(matrix);
+            map.drawn = Some((matrix, revision));
             map.stale = false;
         }
     }
@@ -166,15 +171,10 @@ impl TranslucentSun {
         result
     }
 
-    /// Records this frame's caster changes (`all`: new content; `bounds`: old and new
-    /// world bounds of changed casters) against the drawn map.
-    pub(crate) fn observe(&mut self, all: bool, bounds: &[[Vec3; 2]]) {
-        if let Some(matrix) = self.drawn {
-            self.stale |= all
-                || bounds
-                    .iter()
-                    .any(|&[lo, hi]| super::far::overlaps(matrix, lo, hi));
-        }
+    /// Records whether the content was replaced (`all`); blended casters' own
+    /// changes arrive as their revision (`LookGpu::translucent_sun`).
+    pub(crate) fn observe(&mut self, all: bool) {
+        self.stale |= all;
     }
 
     /// Retires the map of a released view.

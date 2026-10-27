@@ -179,6 +179,10 @@ impl Native {
                 (i * std::mem::size_of_val(&material)) as u64,
                 bytemuck::bytes_of(&material),
             )?;
+            if batches::is_translucent(&material) || batches::is_translucent(&self.material_data[i])
+            {
+                self.translucent_revision = self.translucent_revision.wrapping_add(1);
+            }
             self.material_data[i] = material;
             self.material_dirty = true;
             self.changes.materials += 1;
@@ -211,6 +215,9 @@ impl Native {
         self.changes.caster(i, self.bounds[i], next);
         self.bounds[i] = next;
         self.culling.instance(&self.groups, i, instance.world, next);
+        if self.groups.groups[self.groups.instance_group[i]].translucent {
+            self.translucent_revision = self.translucent_revision.wrapping_add(1);
+        }
     }
 
     pub(in crate::renderer) fn prepare(

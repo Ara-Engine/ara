@@ -672,6 +672,25 @@
       "vertex_stride": 0
     }
   },
+  "native_forward_high_front": {
+    "entries": {
+      "nativeForwardHighFrontFragment": "fragment",
+      "nativeGeometryVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        109,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "native_forward_lit": {
     "entries": {
       "nativeForwardLitFragment": "fragment",
@@ -694,6 +713,25 @@
   "native_forward_lit_back": {
     "entries": {
       "nativeForwardLitBackFragment": "fragment",
+      "nativeGeometryVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        109,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_lit_front": {
+    "entries": {
+      "nativeForwardLitFrontFragment": "fragment",
       "nativeGeometryVertex": "vertex"
     },
     "source": "native-raster.slang",

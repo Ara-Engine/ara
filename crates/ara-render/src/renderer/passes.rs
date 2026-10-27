@@ -126,7 +126,7 @@ impl Renderer {
             local.cache.observe(all, bounds);
         }
         if let Some(translucent) = &mut translucent {
-            translucent.observe(all, bounds);
+            translucent.observe(all);
         }
         (
             self.look.far,
@@ -487,16 +487,18 @@ impl Renderer {
         }
         // Blended casters' sun shadows (look::translucent) on High/Epic, whose shading
         // and virtual page projection alone compile the lookup.
-        let translucent_bounds = self
-            .native_translucent_bounds()
+        // Only casters within the cascades' reach shadow anything they show.
+        let translucent_casters = self
+            .native_translucent_casters(camera.position, self.look.quality.shadows.distance)
             .filter(|_| self.look.quality.high_tier);
         let mut translucent_draw = None;
-        if let Some(bounds) = translucent_bounds {
+        if let Some((bounds, revision)) = translucent_casters {
             let (matrix, record) = self.look.translucent_sun(
                 &mut self.gpu,
                 &mut look_frame,
                 std::mem::size_of_val(&frame) as u64,
                 bounds,
+                revision,
                 self.content.sun_direction,
             )?;
             if let Some(record) = record {
@@ -505,7 +507,7 @@ impl Renderer {
                 self.gpu
                     .upload_queued(record, bytemuck::bytes_of(&translucent_frame))?;
                 self.cull_native_translucent(matrix)?;
-                translucent_draw = Some(matrix);
+                translucent_draw = Some((matrix, revision));
             }
         }
         // Every camera reads the baked reflection captures (look::captures).
@@ -704,7 +706,7 @@ impl Renderer {
             .local
             .filter(|_| local_written)
             .map(|local| (local, Access::ShaderRead));
-        let translucent = translucent_bounds.and_then(|_| self.look.translucent_ids(&mut graph));
+        let translucent = translucent_casters.and_then(|_| self.look.translucent_ids(&mut graph));
         if let (Some([depth, transmittance]), Some(_)) = (translucent, translucent_draw) {
             let pass = graph.pass(
                 "TranslucentSun",
@@ -1649,8 +1651,8 @@ impl Renderer {
         if let Some(ids) = translucent {
             self.look.translucent_finish(ids, &compiled.final_states);
         }
-        if let Some(matrix) = translucent_draw {
-            self.look.translucent_drawn(matrix);
+        if let Some((matrix, revision)) = translucent_draw {
+            self.look.translucent_drawn(matrix, revision);
         }
         if let (Some(far), Some((matrix, view))) = (&mut self.look.far, far_draw) {
             far.cache.drawn(matrix, view);
