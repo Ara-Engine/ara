@@ -12,6 +12,40 @@ use std::{
 /// A macOS (Mach-O) player gets the Metal artifacts instead of SPIR-V and DXIL, the
 /// packages only Metal loads from disk, and the game icon as `AppIcon.icns`.
 pub fn build_runtime_template(player: &Path, engine: &Path, output: &Path) -> Result<()> {
+    let Inventory { files, icon } = inventory(player, engine)?;
+    if let Some(parent) = output.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output)?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = zip::write::SimpleFileOptions::default()
+        .last_modified_time(zip::DateTime::default())
+        .compression_method(zip::CompressionMethod::Deflated);
+    for (name, path) in files {
+        zip.start_file(name, options)?;
+        std::io::copy(&mut std::fs::File::open(path)?, &mut zip)?;
+    }
+    if let Some(icon) = icon {
+        zip.start_file(crate::macos::ICON, options)?;
+        zip.write_all(&icon)?;
+    }
+    zip.start_file("engine.json", options)?;
+    let marker = serde_json::json!({"format":"ara.player.runtime-template/1"});
+    zip.write_all(ara_json::to_canonical_string(&ara_json::sort_keys(&marker)).as_bytes())?;
+    zip.finish()?;
+    Ok(())
+}
+
+pub(crate) struct Inventory {
+    pub files: BTreeMap<String, PathBuf>,
+    pub icon: Option<Vec<u8>>,
+}
+
+/// The exact inputs read by packaging, also used by the read-only preflight.
+pub(crate) fn inventory(player: &Path, engine: &Path) -> Result<Inventory> {
     let player_name = player
         .file_name()
         .context("player executable filename")?
@@ -24,6 +58,15 @@ pub fn build_runtime_template(player: &Path, engine: &Path, output: &Path) -> Re
     let metal = mach_o(player)?;
     let mut files = BTreeMap::new();
     files.insert(player_name.to_owned(), player.to_owned());
+    if let Some(notices) = [
+        engine.join("THIRD_PARTY_NOTICES.txt"),
+        engine.join("THIRD_PARTY_NOTICES.md"),
+    ]
+    .into_iter()
+    .find(|path| path.is_file())
+    {
+        files.insert("THIRD_PARTY_NOTICES.txt".into(), notices);
+    }
     let packages: &[&str] = if metal {
         &[
             "ara-render",
@@ -54,46 +97,25 @@ pub fn build_runtime_template(player: &Path, engine: &Path, output: &Path) -> Re
             engine.join("crates").join(package).join("cooked")
         };
         ensure!(root.is_dir(), "missing cooked {package} resources");
-        resources(
+        let manifests = resources(
             &root,
             &root,
             &format!("resources/{package}"),
             metal,
             &mut files,
         )?;
+        ensure!(manifests > 0, "missing cooked {package} pipeline manifests");
     }
     let icon = if metal {
-        Some(crate::macos::icns(
-            &engine.join("assets/brand/icons/game"),
-            "ara-game",
-        )?)
+        Some(if engine.join(crate::macos::ICON).is_file() {
+            std::fs::read(engine.join(crate::macos::ICON))?
+        } else {
+            crate::macos::icns(&engine.join("assets/brand/icons/game"), "ara-game")?
+        })
     } else {
         None
     };
-    if let Some(parent) = output.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(output)?;
-    let mut zip = zip::ZipWriter::new(file);
-    let options = zip::write::SimpleFileOptions::default()
-        .last_modified_time(zip::DateTime::default())
-        .compression_method(zip::CompressionMethod::Deflated);
-    for (name, path) in files {
-        zip.start_file(name, options)?;
-        std::io::copy(&mut std::fs::File::open(path)?, &mut zip)?;
-    }
-    if let Some(icon) = icon {
-        zip.start_file(crate::macos::ICON, options)?;
-        zip.write_all(&icon)?;
-    }
-    zip.start_file("engine.json", options)?;
-    let marker = serde_json::json!({"format":"ara.player.runtime-template/1"});
-    zip.write_all(ara_json::to_canonical_string(&ara_json::sort_keys(&marker)).as_bytes())?;
-    zip.finish()?;
-    Ok(())
+    Ok(Inventory { files, icon })
 }
 
 /// Whether `player` is a Mach-O executable, the macOS player.
@@ -107,31 +129,29 @@ fn mach_o(player: &Path) -> Result<bool> {
     ))
 }
 
-/// Adds a package's manifests and the artifacts their stages name: SPIR-V and DXIL
-/// with reflection, or with `metal` the metallib and its converter reflection.
+/// Adds runtime artifacts named by manifests: SPIR-V/DXIL, or Metal libraries and
+/// their required converter reflection. Slang reflection is an offline cook cache.
 fn resources(
     root: &Path,
     directory: &Path,
     prefix: &str,
     metal: bool,
     files: &mut BTreeMap<String, PathBuf>,
-) -> Result<()> {
+) -> Result<usize> {
+    let mut manifests = 0;
     for entry in std::fs::read_dir(directory)? {
         let entry = entry?;
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') {
+            continue;
+        }
         if entry.file_type()?.is_dir() {
             if name.len() != 64 || !name.bytes().all(|b| b.is_ascii_hexdigit()) {
-                resources(root, &path, prefix, metal, files)?;
+                manifests += resources(root, &path, prefix, metal, files)?;
             }
             continue;
         }
-        let relative = path
-            .strip_prefix(root)?
-            .to_string_lossy()
-            .replace('\\', "/");
-        ara_pack::validate_path(&relative)?;
-        files.insert(format!("{prefix}/{relative}"), path.to_owned());
         if path.extension().is_none_or(|extension| extension != "json") {
             continue;
         }
@@ -139,6 +159,18 @@ fn resources(
         let Some(stages) = value.get("stages").and_then(serde_json::Value::as_array) else {
             continue;
         };
+        ensure!(
+            !stages.is_empty(),
+            "empty cooked pipeline {}",
+            path.display()
+        );
+        let relative = path
+            .strip_prefix(root)?
+            .to_string_lossy()
+            .replace('\\', "/");
+        ara_pack::validate_path(&relative)?;
+        files.insert(format!("{prefix}/{relative}"), path.to_owned());
+        manifests += 1;
         for stage in stages {
             if metal {
                 let cooked = stage.get("metal").with_context(|| {
@@ -154,11 +186,12 @@ fn resources(
                         .context("cooked Metal stage field")?;
                     ara_pack::validate_path(name)?;
                     let artifact = path.parent().context("pipeline directory")?.join(name);
-                    ensure!(
-                        artifact.is_file(),
-                        "missing cooked artifact {}",
-                        artifact.display()
-                    );
+                    artifact_ready(
+                        &artifact,
+                        cooked
+                            .get(format!("{field}_hash"))
+                            .and_then(serde_json::Value::as_str),
+                    )?;
                     let relative = artifact
                         .strip_prefix(root)?
                         .to_string_lossy()
@@ -167,28 +200,47 @@ fn resources(
                 }
                 continue;
             }
-            for (field, reflection) in [("spirv", "spirv.json"), ("dxil", "dxil.json")] {
+            ensure!(
+                stage
+                    .get("spirv")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some(),
+                "{} has a stage without SPIR-V",
+                path.display()
+            );
+            for field in ["spirv", "dxil"] {
                 let Some(name) = stage.get(field).and_then(serde_json::Value::as_str) else {
                     continue;
                 };
                 ara_pack::validate_path(name)?;
                 let artifact = path.parent().context("pipeline directory")?.join(name);
-                ensure!(
-                    artifact.is_file(),
-                    "missing cooked artifact {}",
-                    artifact.display()
-                );
-                for file in [artifact.to_owned(), artifact.with_extension(reflection)] {
-                    if file.is_file() {
-                        let relative = file
-                            .strip_prefix(root)?
-                            .to_string_lossy()
-                            .replace('\\', "/");
-                        files.insert(format!("{prefix}/{relative}"), file);
-                    }
-                }
+                artifact_ready(
+                    &artifact,
+                    stage
+                        .get(format!("{field}_hash"))
+                        .and_then(serde_json::Value::as_str),
+                )?;
+                let relative = artifact
+                    .strip_prefix(root)?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                files.insert(format!("{prefix}/{relative}"), artifact);
             }
         }
+    }
+    Ok(manifests)
+}
+
+fn artifact_ready(path: &Path, expected: Option<&str>) -> Result<()> {
+    use sha2::{Digest, Sha256};
+    ensure!(path.is_file(), "missing cooked artifact {}", path.display());
+    if let Some(expected) = expected {
+        let actual = format!("{:x}", Sha256::digest(std::fs::read(path)?));
+        ensure!(
+            actual == expected,
+            "cooked artifact checksum differs: {}",
+            path.display()
+        );
     }
     Ok(())
 }
@@ -199,7 +251,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn runtime_bundle_is_stable_and_excludes_unused_cooked_cohorts() {
+    fn clean_runtime_bundle_needs_no_slang_reflection_and_excludes_unused_cohorts() {
         let scratch = tempfile::tempdir().unwrap();
         let player = scratch.path().join("ara-player.exe");
         std::fs::write(&player, b"prebuilt player").unwrap();
@@ -219,6 +271,17 @@ mod tests {
             }
             std::fs::write(root.join(&key).join("main.spv"), b"current shader").unwrap();
             std::fs::write(root.join(&stale).join("main.spv"), b"obsolete shader").unwrap();
+            for (file, bytes) in [
+                (".gitignore", "/*/*.json"),
+                (
+                    ".ara-pipeline-inputs.json",
+                    "offline cache, deliberately not JSON",
+                ),
+                ("cook-notes.txt", "offline compiler notes"),
+                ("cook-settings.json", "{\"offline\":true}"),
+            ] {
+                std::fs::write(root.join(file), bytes).unwrap();
+            }
             let value = serde_json::json!({"stages":[{"spirv":format!("{key}/main.spv")} ]});
             std::fs::write(
                 root.join("main.json"),
@@ -245,6 +308,24 @@ mod tests {
                 .by_name(&format!("resources/ara-render/{stale}/main.spv"))
                 .is_err()
         );
+        assert!(
+            archive
+                .file_names()
+                .all(|name| !name.ends_with(".spirv.json") && !name.ends_with(".dxil.json"))
+        );
+        for file in [
+            ".gitignore",
+            ".ara-pipeline-inputs.json",
+            "cook-notes.txt",
+            "cook-settings.json",
+        ] {
+            assert!(
+                archive
+                    .by_name(&format!("resources/ara-render/{file}"))
+                    .is_err(),
+                "offline {file} must stay outside the runtime payload"
+            );
+        }
         let unpacked = scratch.path().join("game");
         let executable =
             crate::runtime::unpack_template(&first, &unpacked, "ara-player.exe").unwrap();

@@ -63,9 +63,8 @@ fn package(
     }
     let main = project.main_scene().ok_or("project has no main scene")?;
     let scene = workspace
-        .docs()
-        .find(|(path, doc)| *path == main || doc.id.as_str() == main)
-        .map(|(_, doc)| doc.id.to_string())
+        .find(&main)
+        .map(ToString::to_string)
         .ok_or("project main scene is not loaded")?;
     let mut wanted = BTreeSet::new();
     for (_, doc) in workspace.docs() {
@@ -113,7 +112,16 @@ fn package(
         scene,
         documents: PlayScene::documents(&workspace)
             .into_iter()
-            .filter(|document| !matches!(document.kind.as_str(), "project" | "import"))
+            .filter(|document| {
+                !workspace.is_project_document(&document.id)
+                    && !matches!(document.kind.as_str(), "project" | "import")
+            })
+            .map(|mut document| {
+                if let Some(storage) = workspace.path_of(&document.id) {
+                    document.path = workspace.reference_path(storage).to_owned();
+                }
+                document
+            })
             .collect(),
         types,
         seed: 1,

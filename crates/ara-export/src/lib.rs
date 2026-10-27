@@ -4,6 +4,7 @@
 #![warn(missing_docs)]
 pub mod android;
 pub mod apple;
+mod branding;
 mod bus;
 /// Generic ZIP, self-extracting installer, tar.gz, AppImage and upload manifests.
 pub mod distribution;
@@ -12,9 +13,12 @@ pub mod doctor;
 /// Versioned NDJSON progress/artifact/diagnostic stream.
 pub mod event;
 mod files;
+mod layout;
 mod macos;
 mod native;
 mod pipeline;
+/// Read-only checks for the installed player, symbols and complete cooked cohort.
+pub mod preflight;
 /// Schema-registered project export documents.
 pub mod preset;
 mod runtime;

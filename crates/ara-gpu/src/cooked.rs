@@ -2,7 +2,7 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-/// The folder a shipped player's data lives in: the executable's folder, or inside a
+/// The folder a shipped player's data lives in: its sibling `data` folder, or inside a
 /// macOS app bundle (`X.app/Contents/MacOS/<exe>`) its `Contents/Resources`, where the
 /// launch file, pack and cooked resources sit outside the signed code.
 pub fn install_root() -> Option<std::path::PathBuf> {
@@ -15,7 +15,32 @@ pub fn install_root() -> Option<std::path::PathBuf> {
     {
         return Some(contents.join("Resources"));
     }
-    Some(dir.to_path_buf())
+    Some(player_data_root(dir))
+}
+
+/// Resolves a relocated game's data without using the working directory. Legacy
+/// flat players and engine/editor installs keep their existing root. A sibling
+/// `data` is selected only when its launch manifest names a supported player contract.
+pub fn player_data_root(root: &std::path::Path) -> std::path::PathBuf {
+    let data = root.join("data");
+    let launch = std::fs::read(data.join("ara-launch.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
+    let valid = launch.as_ref().is_some_and(|value| {
+        matches!(
+            value.get("contract").and_then(serde_json::Value::as_str),
+            Some("ara.player.runtime/1" | "ara.player.conformance/1")
+        ) && value
+            .get("pack")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|path| {
+                !path.is_empty()
+                    && !path.starts_with(['/', '\\'])
+                    && !path.contains([':', '\\'])
+                    && path.split('/').all(|part| !matches!(part, "" | "." | ".."))
+            })
+    });
+    if valid { data } else { root.to_owned() }
 }
 
 /// Finds installed cooked resources in the [`install_root`], falling back to a checkout.
@@ -81,6 +106,44 @@ mod override_tests {
             Some(cooked.to_owned())
         );
         assert!(override_dir(cooked, "ara-render", None).is_none());
+    }
+
+    #[test]
+    fn relocated_player_data_requires_a_supported_launch_manifest() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/player-data-root")
+            .join(format!(
+                "{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("clock")
+                    .as_nanos()
+            ));
+        std::fs::create_dir_all(root.join("data")).expect("scratch data");
+        assert_eq!(player_data_root(&root), root);
+        for (contract, pack, valid) in [
+            ("ara.player.runtime/1", "game.arapack", true),
+            ("ara.player.conformance/1", "game.arapack", true),
+            ("untrusted", "game.arapack", false),
+            ("ara.player.runtime/1", "../game.arapack", false),
+        ] {
+            std::fs::write(
+                root.join("data/ara-launch.json"),
+                serde_json::to_vec(&serde_json::json!({"contract":contract,"pack":pack}))
+                    .expect("manifest"),
+            )
+            .expect("fixture");
+            assert_eq!(
+                player_data_root(&root),
+                if valid {
+                    root.join("data")
+                } else {
+                    root.clone()
+                }
+            );
+        }
+        std::fs::remove_dir_all(&root).expect("remove own scratch");
     }
 }
 

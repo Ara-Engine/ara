@@ -1569,3 +1569,51 @@ Causes:
 Fixes:
 - Fix the cause shown in the output, then run `install.ps1 -RegisterOnly` in the installation folder (or run setup again and choose Replace).
 - Check `hub-start.log` in the Ara config folder when the Hub service failed to start.
+
+## ARA8124 export::LAYOUT_001: Invalid game identity or shipping layout
+owner: ara-export
+shown as: ARA-EXP-LAYOUT-001
+
+The application name, version, icon format or assembled folder cannot form a portable, clean game distribution. Export stops before publishing the build.
+
+Causes:
+- The game name contains path characters, reserved Windows device names or trailing dots/spaces.
+- The game version has more than four numeric components or a component exceeds 65535.
+- The game icon has a different format from the target platform.
+- A verification capture, log, dump or symbol file entered the shipping folder.
+
+Fixes:
+- Choose a portable game name and a version such as `1.0.0`.
+- Select an ICO for Windows, ICNS for macOS, or SVG for Linux.
+- Keep diagnostic evidence under the export report, logs or symbols folders outside `build/`.
+
+## ARA8125 export::BRAND_001: Game executable resources could not be updated
+owner: ara-export
+shown as: ARA-EXP-BRAND-001
+
+The copied Windows player could not receive its game version/name or custom icon before signing. No player package is published.
+
+Causes:
+- The ICO directory or one of its images is malformed.
+- Windows could not open, update or commit the copied executable resources.
+- A Windows game was exported on another host without the Windows resource-stamping API.
+
+Fixes:
+- Export the Windows player on Windows and keep the executable writable until signing completes.
+- Supply a valid ICO and retry in a new output directory.
+
+## ARA8126 export::PREFLIGHT_001: Installed runtime cohort cannot be exported
+owner: ara-export
+shown as: ARA-EXP-PREFLIGHT-001
+
+Read-only preflight found a missing or corrupt player companion, mismatched Windows player/PDB identity, missing pipeline/reflection files, or shader bytes that differ from their cooked manifest. Export stops before compiling gameplay or publishing a player folder.
+
+Causes:
+- The installed engine is incomplete or mixes player, PDB and cooked resources from different builds.
+- A pinned runtime ZIP omits one of the resources the player needs.
+- A source-checkout companion or shader cohort has not been rebuilt after changing the engine.
+
+Fixes:
+- Close projects using the affected installed version, then use Ara Hub Repair or `ara hub repair <version>` to restore the signed pinned release. Repair preserves other versions and never closes projects automatically.
+- In a checkout, rebuild the matching player and PDB through ara-dev and re-cook the affected shader manifests.
+- Rebuild and re-pin incomplete custom runtime templates from the corrected engine cohort.

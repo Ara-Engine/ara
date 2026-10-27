@@ -58,6 +58,8 @@ pub enum HubCommand {
     },
     /// Download, verify and register an engine version side by side.
     Install { version: String },
+    /// Reinstall a pinned engine from its signed release after closing projects using it.
+    Repair { version: String },
     /// Remove a Hub-managed engine, rejecting open project pins.
     Uninstall { version: String },
     /// Cancel a download returned by hub.engine.install or hub.update.prepare.
@@ -148,9 +150,17 @@ pub fn hub(command: HubCommand) -> Result<bool, RpcError> {
     }
     let directory = ara_hub_service::config_dir().map_err(io_error)?;
     let mut client = ara_hub_service::connect_or_start(&directory, &executable)?;
-    if let HubCommand::Install { version } = command {
+    if matches!(
+        &command,
+        HubCommand::Install { .. } | HubCommand::Repair { .. }
+    ) {
+        let (version, method) = match &command {
+            HubCommand::Install { version } => (version, "hub.engine.install"),
+            HubCommand::Repair { version } => (version, "hub.engine.repair"),
+            _ => unreachable!("matched install or repair"),
+        };
         available_releases(&mut client, "preview")?;
-        let job = client.call("hub.engine.install", json!({"version":version}))?;
+        let job = client.call(method, json!({"version":version}))?;
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(14_400);
         let mut last_progress: Option<u64> = None;
         loop {
@@ -245,7 +255,10 @@ pub fn hub(command: HubCommand) -> Result<bool, RpcError> {
         }
         HubCommand::Shutdown => ("hub.shutdown", json!({})),
         HubCommand::Activity => ("hub.activity", json!({})),
-        HubCommand::Install { .. } | HubCommand::InstallMcp { .. } | HubCommand::Serve { .. } => {
+        HubCommand::Install { .. }
+        | HubCommand::Repair { .. }
+        | HubCommand::InstallMcp { .. }
+        | HubCommand::Serve { .. } => {
             unreachable!("handled above")
         }
     };
