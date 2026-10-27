@@ -181,6 +181,10 @@ impl Window {
 }
 
 impl VulkanDevice {
+    /// Metal's switch for timestamps outside profiling, where each one costs a driver
+    /// dispatch. Vulkan timestamps are query writes inside the command buffer with no
+    /// measurable cost, so this backend keeps timing every pass.
+    pub fn set_pass_timing(&mut self, _enabled: bool) {}
     /// Start a measurement boundary. Only subsequently submitted, resolved work
     /// contributes; uploads, unlabelled lists and gaps between submissions count.
     pub fn reset_timing_window(&mut self) {

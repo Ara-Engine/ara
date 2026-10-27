@@ -20,7 +20,7 @@ pub(in crate::renderer) mod rays;
 mod tests;
 mod updates;
 mod view;
-use batches::Groups;
+use batches::{Batch, Groups};
 use culling::{Culling, PageView};
 pub(in crate::renderer) use view::NativeView;
 
@@ -849,15 +849,22 @@ impl Native {
         }
     }
 
-    /// Records the camera's forward draws (pass 5) through the High/Epic tier's PSO
-    /// when `high` (`Quality::high_tier`).
-    /// Records the sorted forward draws, switching to the refractive PSOs for
-    /// transmissive ones (`Culling::refract`); `high` selects the High/Epic tier's.
-    pub(super) fn record_forward(&self, recorder: &mut Recorder, root: RootConstants, high: bool) {
-        let [plain, refract] = if high {
-            [self.pipelines.forward_high, self.pipelines.refract_high]
-        } else {
-            [self.pipelines.forward, self.pipelines.refract]
+    /// Records the sorted forward draws (pass 5). Lit frames write colour, ids and
+    /// motion only (nothing reads the G-buffer after them) and switch to the
+    /// refractive PSOs for transmissive draws (`Culling::refract`); `high` selects
+    /// the High/Epic tier's. Debug views blend every draw into the G-buffer they
+    /// display through the full forward PSO.
+    pub(super) fn record_forward(
+        &self,
+        recorder: &mut Recorder,
+        root: RootConstants,
+        lit: bool,
+        high: bool,
+    ) {
+        let [plain, refract] = match (lit, high) {
+            (false, _) => [self.pipelines.forward; 2],
+            (true, false) => [self.pipelines.forward_lit, self.pipelines.refract],
+            (true, true) => [self.pipelines.forward_high, self.pipelines.refract_high],
         };
         let mut bound = None;
         for (batch, &refractive) in self.culling.draws[5].iter().zip(&self.culling.refract) {
@@ -866,7 +873,7 @@ impl Native {
                 recorder.push(Command::Pipeline(pipeline));
                 bound = Some(pipeline);
             }
-            self.record_batch(recorder, root, batch);
+            self.record_batch(recorder, root, batch, pipeline);
         }
     }
 
@@ -896,6 +903,26 @@ impl Native {
         self.record_with(recorder, root, 4, pipeline);
     }
 
+    /// One draw of `batch`: indexed, so shared vertices are shaded once, except
+    /// through the wire PSO, whose edges need each triangle's own three corners.
+    fn draw(&self, batch: &Batch, pipeline: Pipeline) -> Command {
+        if pipeline == self.pipelines.wire {
+            return Command::DrawProcedural {
+                vertices: batch.vertices,
+                instances: batch.count,
+            };
+        }
+        Command::DrawIndexedProcedural {
+            indices: self
+                .pool
+                .index_buffer()
+                .expect("drawn batches have pooled geometry"),
+            first_index: batch.first_index,
+            count: batch.vertices,
+            instances: batch.count,
+        }
+    }
+
     fn record_with(
         &self,
         recorder: &mut Recorder,
@@ -906,11 +933,17 @@ impl Native {
         ara_gpu::cpu_scope!("RasterNative.record");
         recorder.push(Command::Pipeline(pipeline));
         for batch in &self.culling.draws[pass] {
-            self.record_batch(recorder, root, batch);
+            self.record_batch(recorder, root, batch, pipeline);
         }
     }
 
-    fn record_batch(&self, recorder: &mut Recorder, root: RootConstants, batch: &batches::Batch) {
+    fn record_batch(
+        &self,
+        recorder: &mut Recorder,
+        root: RootConstants,
+        batch: &batches::Batch,
+        pipeline: Pipeline,
+    ) {
         if batch.count == 0 {
             return;
         }
@@ -922,10 +955,7 @@ impl Native {
         constants.words[6] = self.textures.binding().map_or(0, |b| b.buffer_index);
         constants.words[7] = self.visible_index;
         recorder.push(Command::Constants(constants));
-        recorder.push(Command::DrawProcedural {
-            vertices: batch.vertices,
-            instances: batch.count,
-        });
+        recorder.push(self.draw(batch, pipeline));
     }
 
     /// Records page `page` of the last `cull_native_shadow_pages` with the shadow
@@ -947,10 +977,7 @@ impl Native {
             constants.words[6] = self.textures.binding().map_or(0, |b| b.buffer_index);
             constants.words[7] = rows;
             recorder.push(Command::Constants(constants));
-            recorder.push(Command::DrawProcedural {
-                vertices: batch.vertices,
-                instances: batch.count,
-            });
+            recorder.push(self.draw(batch, self.pipelines.shadow));
         }
     }
 

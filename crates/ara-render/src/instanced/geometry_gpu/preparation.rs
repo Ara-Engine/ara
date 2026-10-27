@@ -66,7 +66,10 @@ impl GeometryPreparation {
             .collect();
         let mut buffers = Buffers::default();
         if !packed.lods.is_empty() {
+            // Indexed native draws bind the pool as their index buffer; RT devices
+            // also build acceleration structures straight from it.
             let storage = vk::BufferUsageFlags::STORAGE_BUFFER
+                | vk::BufferUsageFlags::INDEX_BUFFER
                 | if ray_inputs {
                     vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
                         | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR

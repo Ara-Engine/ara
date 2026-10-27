@@ -415,6 +415,20 @@
       "vertex_stride": 0
     }
   },
+  "look_refract": {
+    "entries": {
+      "refractMain": "compute"
+    },
+    "source": "look-refract.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_rt_filter": {
     "entries": {
       "rtFilterMain": "compute"
@@ -589,10 +603,63 @@
       "color_formats": [
         109,
         100,
-        43,
-        77,
-        37,
-        122,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_lit": {
+    "entries": {
+      "nativeForwardLitFragment": "fragment",
+      "nativeGeometryVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        109,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_refract": {
+    "entries": {
+      "nativeGeometryVertex": "vertex",
+      "nativeForwardRefractFragment": "fragment"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        109,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_refract_high": {
+    "entries": {
+      "nativeGeometryVertex": "vertex",
+      "nativeForwardRefractHighFragment": "fragment"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        109,
+        100,
         83
       ],
       "depth_format": 126,

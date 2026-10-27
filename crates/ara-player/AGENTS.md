@@ -32,7 +32,7 @@ presenter before hello and reuse its device at embed; surface-less services allo
 
 ## Modules
 
-- `game_app/`: native menus/settings, lobby, bots and the art-only `levels/menu.scene` backdrop (no C# host). `game_ui/`: bindings, labels and GPU/CPU composition; captures keep UDP polling.
+- `game_app/`: native menus/settings, lobby, bots and the art-only `levels/menu.scene` backdrop (no C# host). `game_ui/`: bindings, labels and GPU/CPU composition; captures keep UDP polling. Windowed UI lays out in window points (SDL pointer units) and renders at the pixel density (2 on Retina); offscreen snapshots use scale 1.
 - `world/feedback.rs`: replicated event counters become audio, VFX and animation.
 - `packed.rs` and `standalone.rs`: the authored exported world and immutable pack source;
   ara-pack's bounded `native-decode` is linked into this player and its runtime templates.

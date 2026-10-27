@@ -1,6 +1,7 @@
 use super::image_copy::copy_regions;
 use super::recording::access;
 use super::*;
+use crate::attachments::{Load, Ops};
 use crate::commands::*;
 
 impl VulkanDevice {
@@ -10,12 +11,16 @@ impl VulkanDevice {
         queue: Queue,
         query: vk::QueryPool,
         timestamp: &mut u32,
+        scopes: &mut std::vec::IntoIter<Vec<crate::attachments::Ops>>,
         command: &Command,
     ) -> Result<()> {
         let device = &self.context.device;
         // SAFETY: All handles were validated, scopes checked, and command buffer is recording.
         unsafe {
             match command {
+                // A discard orders nothing; `attachments::ops` already consumed it, and
+                // Vulkan has no transition to UNDEFINED.
+                Command::Barrier(b) if b.after == Access::Undefined => {}
                 Command::Barrier(b) => {
                     let source_queue = b.handoff.map(|h| h.from).unwrap_or(queue);
                     let dest_queue = b.handoff.map(|h| h.to).unwrap_or(queue);
@@ -131,7 +136,10 @@ impl VulkanDevice {
                     depth,
                     size,
                 } => {
-                    let attachment = |a: &Attachment, depth: bool| -> Result<_> {
+                    let ops = scopes
+                        .next()
+                        .expect("attachments::ops lists every rendering scope of the list");
+                    let attachment = |a: &Attachment, depth: bool, ops: Ops| -> Result<_> {
                         Ok(vk::RenderingAttachmentInfo::default()
                             .image_view(self.images.get(a.image)?.raw.view)
                             .image_layout(if depth {
@@ -139,12 +147,16 @@ impl VulkanDevice {
                             } else {
                                 vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL
                             })
-                            .load_op(if a.clear.is_some() {
-                                vk::AttachmentLoadOp::CLEAR
-                            } else {
-                                vk::AttachmentLoadOp::LOAD
+                            .load_op(match ops.load {
+                                Load::Clear => vk::AttachmentLoadOp::CLEAR,
+                                Load::Keep => vk::AttachmentLoadOp::LOAD,
+                                Load::DontCare => vk::AttachmentLoadOp::DONT_CARE,
                             })
-                            .store_op(vk::AttachmentStoreOp::STORE)
+                            .store_op(if ops.store {
+                                vk::AttachmentStoreOp::STORE
+                            } else {
+                                vk::AttachmentStoreOp::DONT_CARE
+                            })
                             .clear_value(if depth {
                                 vk::ClearValue {
                                     depth_stencil: vk::ClearDepthStencilValue {
@@ -160,11 +172,15 @@ impl VulkanDevice {
                                 }
                             }))
                     };
+                    let depth = depth
+                        .as_ref()
+                        .map(|a| attachment(a, true, ops[colors.len()]))
+                        .transpose()?;
                     let colors = colors
                         .iter()
-                        .map(|a| attachment(a, false))
+                        .zip(&ops)
+                        .map(|(a, ops)| attachment(a, false, *ops))
                         .collect::<Result<Vec<_>>>()?;
-                    let depth = depth.as_ref().map(|a| attachment(a, true)).transpose()?;
                     let mut info = vk::RenderingInfo::default()
                         .render_area(vk::Rect2D {
                             offset: vk::Offset2D::default(),
@@ -249,6 +265,20 @@ impl VulkanDevice {
                     vertices,
                     instances,
                 } => device.cmd_draw(cmd, *vertices, *instances, 0, 0),
+                Command::DrawIndexedProcedural {
+                    indices,
+                    first_index,
+                    count,
+                    instances,
+                } => {
+                    device.cmd_bind_index_buffer(
+                        cmd,
+                        self.buffers.get(*indices)?.raw.handle,
+                        0,
+                        vk::IndexType::UINT32,
+                    );
+                    device.cmd_draw_indexed(cmd, *count, *instances, *first_index, 0, 0);
+                }
                 Command::EndRendering => device.cmd_end_rendering(cmd),
                 Command::UploadImage {
                     source,

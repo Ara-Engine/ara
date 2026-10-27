@@ -744,7 +744,7 @@ impl Captures {
                 gpu.records_index,
                 self.records.len() as u32,
                 gpu.sampled,
-                gpu.state_index,
+                gpu.frame_index,
             ],
             [layout.size[0], layout.size[1], visible, debug_modes()],
         ];
@@ -765,7 +765,7 @@ impl Captures {
         Some(CaptureIds {
             atlas: graph.import(Resource::Image(gpu.atlas), gpu.atlas_state),
             records: graph.import(Resource::Buffer(gpu.records), state(Access::HostWrite)),
-            state: graph.import(Resource::Buffer(gpu.state), state(gpu.state_access)),
+            frame: graph.import(Resource::Buffer(gpu.frame), state(gpu.frame_access)),
         })
     }
 
@@ -774,7 +774,7 @@ impl Captures {
     pub(crate) fn finish(&mut self, ids: &CaptureIds, final_states: &[State]) {
         if let Some(gpu) = &mut self.gpu {
             gpu.atlas_state = final_states[ids.atlas.0];
-            gpu.state_access = final_states[ids.state.0].access;
+            gpu.frame_access = final_states[ids.frame.0].access;
             self.rebaseline = 0;
         }
     }

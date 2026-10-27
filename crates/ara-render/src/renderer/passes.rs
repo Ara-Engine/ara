@@ -31,7 +31,9 @@ enum Recipe {
     GBuffer,
     Tile,
     Lighting,
-    Forward,
+    /// Blended and transmissive draws; `true` through the native lit PSO, which
+    /// leaves the G-buffer alone (only the debug views read it afterwards).
+    Forward(bool),
     Taa,
     /// One Ara TSR dispatch (`crate::tsr`), declared instead of `Taa` when selected.
     Tsr(crate::tsr::TsrPass),
@@ -488,6 +490,11 @@ impl Renderer {
             .zip(&self.targets.states)
             .map(|(&image, &state)| graph.import(Resource::Image(image), state))
             .collect::<Vec<_>>();
+        // GBuffer rewrites these every frame and only this graph reads them: after
+        // their last pass, tile-based GPUs neither store nor reload them.
+        for target in [ALBEDO, NORMAL, MATERIAL, EMISSIVE] {
+            graph.discard(ids[target])?;
+        }
         let tile = graph.import(
             Resource::Buffer(self.targets.tiles),
             State {
@@ -523,7 +530,14 @@ impl Renderer {
                         queue: Queue::Graphics,
                     },
                 );
-                graphics.push((id, Access::ShaderRead));
+                // The geometry pool stays in Geometry: indexed draws read it as
+                // their index buffer as well as through shader storage.
+                let read = if access == Access::Geometry {
+                    access
+                } else {
+                    Access::ShaderRead
+                };
+                graphics.push((id, read));
             });
         }
         let mut frame_input = None;
@@ -779,7 +793,7 @@ impl Renderer {
             let refit = graph.pass(
                 "Captures.Refit",
                 Queue::Graphics,
-                [(c.records, Access::ShaderRead), (c.state, Access::Storage)]
+                [(c.records, Access::ShaderRead), (c.frame, Access::Storage)]
                     .into_iter()
                     .chain(look_reads.iter().copied())
                     .chain(cascade_reads.iter().copied())
@@ -790,7 +804,7 @@ impl Renderer {
             capture_reads = vec![
                 (c.atlas, Access::ShaderRead),
                 (c.records, Access::ShaderRead),
-                (c.state, Access::ShaderRead),
+                (c.frame, Access::ShaderRead),
             ];
         }
         let lighting = graph.pass(
@@ -824,20 +838,25 @@ impl Renderer {
             }
             Some(atlas)
         });
+        // Lit native frames blend colour, ids and motion only, so the G-buffer's
+        // last use (and its discard) is lighting; the debug views (and the
+        // baseline PSO) also blend into the G-buffer they display.
+        let forward_lit = mode.lit() && self.native.is_some();
+        let forward_gbuffer = (!forward_lit)
+            .then_some([ALBEDO, NORMAL, MATERIAL, EMISSIVE].map(|t| (ids[t], Access::Color)))
+            .into_iter()
+            .flatten();
         let forward = graph.pass(
             "ForwardTransparency",
             Queue::Graphics,
             [
                 (ids[HDR], Access::Color),
-                (ids[ALBEDO], Access::Color),
-                (ids[NORMAL], Access::Color),
-                (ids[MATERIAL], Access::Color),
-                (ids[EMISSIVE], Access::Color),
                 (ids[DEPTH], Access::Depth),
                 (ids[ID], Access::Color),
                 (tile, Access::ShaderRead),
             ]
             .into_iter()
+            .chain(forward_gbuffer)
             .chain(cascade_reads.iter().copied())
             .chain(far_read)
             .chain(local_read)
@@ -848,7 +867,7 @@ impl Renderer {
             // Hybrid frames' TLAS, for forward variants that trace (look-rt.slangh).
             .chain(self.rays.tlas_read()),
         );
-        declare(forward, Recipe::Forward);
+        declare(forward, Recipe::Forward(forward_lit));
         let mut shaded = shadow_passes;
         shaded.extend([gbuffer, lighting, forward]);
         if self.look.frame_wire {
@@ -1365,41 +1384,27 @@ impl Renderer {
                         recorder.push(Command::Fullscreen);
                         recorder.push(Command::EndRendering);
                     }
-                    Recipe::Forward => {
+                    Recipe::Forward(lit) => {
                         recorder.push(Command::Pipeline(self.pipelines.forward));
+                        // Attachment order matches the PSOs' targets: colour, id,
+                        // then the G-buffer (unless lit), then motion (native).
+                        let gbuffer: &[usize] = if lit {
+                            &[]
+                        } else {
+                            &[ALBEDO, NORMAL, MATERIAL, EMISSIVE]
+                        };
+                        let native_motion = self.native.as_ref().map(|_| MOTION);
                         recorder.push(Command::BeginRendering {
-                            colors: vec![
-                                Attachment {
-                                    image: self.targets.images[HDR],
+                            colors: [HDR, ID]
+                                .iter()
+                                .chain(gbuffer)
+                                .copied()
+                                .chain(native_motion)
+                                .map(|target| Attachment {
+                                    image: self.targets.images[target],
                                     clear: None,
-                                },
-                                Attachment {
-                                    image: self.targets.images[ID],
-                                    clear: None,
-                                },
-                                Attachment {
-                                    image: self.targets.images[ALBEDO],
-                                    clear: None,
-                                },
-                                Attachment {
-                                    image: self.targets.images[NORMAL],
-                                    clear: None,
-                                },
-                                Attachment {
-                                    image: self.targets.images[MATERIAL],
-                                    clear: None,
-                                },
-                                Attachment {
-                                    image: self.targets.images[EMISSIVE],
-                                    clear: None,
-                                },
-                            ]
-                            .into_iter()
-                            .chain(self.native.as_ref().map(|_| Attachment {
-                                image: self.targets.images[MOTION],
-                                clear: None,
-                            }))
-                            .collect(),
+                                })
+                                .collect(),
                             depth: Some(Attachment {
                                 image: self.targets.images[DEPTH],
                                 clear: None,
@@ -1410,6 +1415,7 @@ impl Renderer {
                             native.record_forward(
                                 &mut recorder,
                                 footprint,
+                                lit,
                                 self.look.quality.high_tier,
                             );
                         }

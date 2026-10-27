@@ -14,7 +14,14 @@ const APPLE_VENDOR: u32 = 0x106b;
 /// Largest 2D texture extent on Apple silicon GPUs.
 const MAX_IMAGE_DIMENSION: u32 = 16_384;
 
-/// Capabilities recorded once at device creation.
+/// The RT tier (D29): ray queries on GPUs with hardware ray tracing, Apple9 (M3) and
+/// later. Earlier Apple GPUs trace in software and take the raster fallback.
+pub(super) fn hardware_ray_tracing(device: &ProtocolObject<dyn MTLDevice>) -> bool {
+    device.supportsRaytracing() && device.supportsFamily(MTLGPUFamily::Apple9)
+}
+
+/// Capabilities recorded once at device creation; `ray_tracing` is set by the
+/// RT-tier constructor ([`hardware_ray_tracing`]).
 pub(super) fn device_info(device: &ProtocolObject<dyn MTLDevice>) -> DeviceInfo {
     let frequency = device.queryTimestampFrequency().max(1);
     DeviceInfo {

@@ -149,6 +149,7 @@ impl Culling {
                 first: cursor as u32,
                 count: chunk.len() as u32,
                 vertices: group.counts[lod],
+                first_index: group.first_indices[lod],
             };
             cursor += chunk.len();
         }
