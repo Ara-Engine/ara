@@ -681,6 +681,29 @@ public partial struct Camera2d : IComponent<Camera2d>
 }
 
 /// <summary>
+/// Texels per side of a reflection capture's map.
+/// </summary>
+public enum CaptureResolution : uint
+{
+    /// <summary>
+    /// The quality preset's (512 texels on High and Epic).
+    /// </summary>
+    Auto = 0,
+    /// <summary>
+    /// 128 texels: soft, distant or rough reflections.
+    /// </summary>
+    Low = 1,
+    /// <summary>
+    /// 256 texels.
+    /// </summary>
+    Medium = 2,
+    /// <summary>
+    /// 512 texels: mirrors and polished metal seen up close.
+    /// </summary>
+    High = 3,
+}
+
+/// <summary>
 /// Predicted capsule movement: slopes, stairs, moving platforms, crouching and pushing.
 /// </summary>
 [StructLayout(LayoutKind.Explicit, Size = 40)]
@@ -3166,6 +3189,87 @@ public partial struct PrimitiveMaterialOverride
 }
 
 /// <summary>
+/// A local reflection capture (High and Epic): the renderer bakes the lit scene around <c>captureOffset</c> and smooth surfaces inside the influence box reflect it, so mirrors and metals show the room around them, including what is off screen. Reflected directions are corrected against the projection box: match it to the room's walls and floor. Bakes refresh when content or lighting changes. Without any, the renderer places captures over the scene's content automatically.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 64)]
+[EngineComponent("ReflectionCapture", Module = "render")]
+public partial struct ReflectionCapture : IComponent<ReflectionCapture>
+{
+    /// <summary>
+    /// Half-size of the influence box along the entity's axes (scaled by its transform): surfaces inside it reflect this capture.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0.01, ∞]. Default: [5,3,5].
+    /// </remarks>
+    [FieldOffset(0), Unit("m"), Min(0.01), Default(5, 3, 5)]
+    public Vector3 Extents;
+    /// <summary>
+    /// Distance inside the influence box over which the capture fades into its neighbours and the sky.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: 1.
+    /// </remarks>
+    [FieldOffset(12), Unit("m"), Min(0), Default(1)]
+    public float Blend;
+    /// <summary>
+    /// Half-size of the projection box reflections land on; match the room's walls. Zero uses <c>extents</c>.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, ∞]. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(16), Unit("m"), Min(0), Default(0, 0, 0)]
+    public Vector3 ProjectionExtents;
+    /// <summary>
+    /// Centre of the projection box relative to the entity.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(28), Unit("m"), Default(0, 0, 0)]
+    public Vector3 ProjectionOffset;
+    /// <summary>
+    /// Where the capture is taken, relative to the entity. Keep it in open space, near the reflective surfaces it serves.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(40), Unit("m"), Default(0, 0, 0)]
+    public Vector3 CaptureOffset;
+    /// <summary>
+    /// Overlapping captures blend in priority order (higher first), then smaller boxes first.
+    /// </summary>
+    /// <remarks>
+    /// Default: 0.
+    /// </remarks>
+    [FieldOffset(52), Default(0)]
+    public int Priority;
+    /// <summary>
+    /// Texels per side of the captured map.
+    /// </summary>
+    /// <remarks>
+    /// Default: "auto".
+    /// </remarks>
+    [FieldOffset(56), Default("auto")]
+    public CaptureResolution Resolution;
+    /// <summary>
+    /// Brightness multiplier of the reflection.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 8]. Default: 1.
+    /// </remarks>
+    [FieldOffset(60), Range(0, 8), Default(1)]
+    public float Intensity;
+    /// <summary>Stable engine component index.</summary>
+    public static uint TypeIndex => 40;
+    /// <inheritdoc/>
+    public static ref ReflectionCapture Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadReflectionCapture, EngineValueCodecs.WriteReflectionCapture);
+    /// <inheritdoc/>
+    public static void Insert(in Commands commands, Entity entity, in ReflectionCapture value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteReflectionCapture));
+    /// <inheritdoc/>
+    public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
 /// A room or space with its own reverb. The listener's zone drives the room reverb; sources in other zones reach the listener through portals.
 /// </summary>
 [EngineComponent("ReverbZone", Module = "audio")]
@@ -3276,7 +3380,7 @@ public partial struct ReverbZone : IComponent<ReverbZone>
     [Default(true)]
     public bool UseBaked;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 40;
+    public static uint TypeIndex => 41;
     /// <inheritdoc/>
     public static ref ReverbZone Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadReverbZone, EngineValueCodecs.WriteReverbZone);
     /// <inheritdoc/>
@@ -3325,7 +3429,7 @@ public partial struct RigidBody : IComponent<RigidBody>
     [FieldOffset(9), Default(false)]
     public bool Continuous;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 41;
+    public static uint TypeIndex => 42;
     /// <inheritdoc/>
     public static ref RigidBody Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadRigidBody, EngineValueCodecs.WriteRigidBody);
     /// <inheritdoc/>
@@ -3382,7 +3486,7 @@ public partial struct RigidBody2d : IComponent<RigidBody2d>
     [FieldOffset(10), Default(false)]
     public bool LockRotation;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 42;
+    public static uint TypeIndex => 43;
     /// <inheritdoc/>
     public static ref RigidBody2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadRigidBody2d, EngineValueCodecs.WriteRigidBody2d);
     /// <inheritdoc/>
@@ -3431,7 +3535,7 @@ public partial struct SkyAtmosphere : IComponent<SkyAtmosphere>
     [FieldOffset(12), Unit("m"), Range(500, 20000), Default(2200)]
     public float CloudHeight;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 43;
+    public static uint TypeIndex => 44;
     /// <inheritdoc/>
     public static ref SkyAtmosphere Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadSkyAtmosphere, EngineValueCodecs.WriteSkyAtmosphere);
     /// <inheritdoc/>
@@ -3543,7 +3647,7 @@ public partial struct Sprite : IComponent<Sprite>
     [Default(1, 1)]
     public Vector2 Parallax;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 44;
+    public static uint TypeIndex => 45;
     /// <inheritdoc/>
     public static ref Sprite Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadSprite, EngineValueCodecs.WriteSprite);
     /// <inheritdoc/>
@@ -3583,7 +3687,7 @@ public partial struct Stimulus : IComponent<Stimulus>
     [Range(0, 10), Default(1)]
     public float Visibility;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 45;
+    public static uint TypeIndex => 46;
     /// <inheritdoc/>
     public static ref Stimulus Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadStimulus, EngineValueCodecs.WriteStimulus);
     /// <inheritdoc/>
@@ -3607,7 +3711,7 @@ public partial struct StreamedWorld : IComponent<StreamedWorld>
     [Default(Json = "null")]
     public string? World;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 46;
+    public static uint TypeIndex => 47;
     /// <inheritdoc/>
     public static ref StreamedWorld Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadStreamedWorld, EngineValueCodecs.WriteStreamedWorld);
     /// <inheritdoc/>
@@ -3639,7 +3743,7 @@ public partial struct Terrain : IComponent<Terrain>
     [Default(Json = "null")]
     public string? Foliage;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 47;
+    public static uint TypeIndex => 48;
     /// <inheritdoc/>
     public static ref Terrain Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadTerrain, EngineValueCodecs.WriteTerrain);
     /// <inheritdoc/>
@@ -3672,7 +3776,7 @@ public partial struct TerrainChunk : IComponent<TerrainChunk>
     [FieldOffset(4), Default(0)]
     public int Z;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 48;
+    public static uint TypeIndex => 49;
     /// <inheritdoc/>
     public static ref TerrainChunk Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadTerrainChunk, EngineValueCodecs.WriteTerrainChunk);
     /// <inheritdoc/>
@@ -3696,7 +3800,7 @@ public partial struct TileColliderSource2d : IComponent<TileColliderSource2d>
     [Default(Json = "null")]
     public string? Owner;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 49;
+    public static uint TypeIndex => 50;
     /// <inheritdoc/>
     public static ref TileColliderSource2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadTileColliderSource2d, EngineValueCodecs.WriteTileColliderSource2d);
     /// <inheritdoc/>
@@ -3910,7 +4014,7 @@ public partial struct Tilemap : IComponent<Tilemap>
     [Default(Json = "[]")]
     public TileRule[] Rules;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 50;
+    public static uint TypeIndex => 51;
     /// <inheritdoc/>
     public static ref Tilemap Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadTilemap, EngineValueCodecs.WriteTilemap);
     /// <inheritdoc/>
@@ -3936,6 +4040,18 @@ public enum ToneMapping : uint
     /// Narkowicz's per-channel ACES fit (the legacy curve; saturated highlights).
     /// </summary>
     AcesFit = 2,
+    /// <summary>
+    /// AgX as Blender 5.1 forms it (Cycles' default view): keeps mid grey, bends bright saturated light smoothly towards white instead of clipping its hue.
+    /// </summary>
+    Agx = 3,
+    /// <summary>
+    /// AgX with Blender's Punchy look: deeper shadows and more contrast.
+    /// </summary>
+    AgxPunchy = 4,
+    /// <summary>
+    /// AgX with Blender's Medium High Contrast look: contrast 1.2 about mid grey.
+    /// </summary>
+    AgxMediumHighContrast = 5,
 }
 
 /// <summary>
@@ -4077,7 +4193,7 @@ public partial struct Vehicle : IComponent<Vehicle>
     [FieldOffset(52), Range(1, 15), Default(1)]
     public uint Layer;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 51;
+    public static uint TypeIndex => 52;
     /// <inheritdoc/>
     public static ref Vehicle Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVehicle, EngineValueCodecs.WriteVehicle);
     /// <inheritdoc/>
@@ -4126,7 +4242,7 @@ public partial struct VehicleInput : IComponent<VehicleInput>
     [FieldOffset(12), Range(0, 1), Replicate(Audience.Owner, Rollback = true), Default(0)]
     public float HandBrake;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 52;
+    public static uint TypeIndex => 53;
     /// <inheritdoc/>
     public static ref VehicleInput Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVehicleInput, EngineValueCodecs.WriteVehicleInput);
     /// <inheritdoc/>
@@ -4167,7 +4283,7 @@ public partial struct VehicleTelemetry : IComponent<VehicleTelemetry>
     [FieldOffset(8), Replicate(Audience.Relevant, Rollback = true), Default(0)]
     public int Gear;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 53;
+    public static uint TypeIndex => 54;
     /// <inheritdoc/>
     public static ref VehicleTelemetry Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVehicleTelemetry, EngineValueCodecs.WriteVehicleTelemetry);
     /// <inheritdoc/>
@@ -4200,7 +4316,7 @@ public partial struct Velocity : IComponent<Velocity>
     [FieldOffset(12), Unit("rad/s"), Replicate(Audience.Relevant, Rollback = true), Default(0, 0, 0)]
     public Vector3 Angular;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 54;
+    public static uint TypeIndex => 55;
     /// <inheritdoc/>
     public static ref Velocity Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVelocity, EngineValueCodecs.WriteVelocity);
     /// <inheritdoc/>
@@ -4233,7 +4349,7 @@ public partial struct Velocity2d : IComponent<Velocity2d>
     [FieldOffset(8), Unit("rad/s"), Replicate(Audience.Relevant, Rollback = true), Default(0)]
     public float Angular;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 55;
+    public static uint TypeIndex => 56;
     /// <inheritdoc/>
     public static ref Velocity2d Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVelocity2d, EngineValueCodecs.WriteVelocity2d);
     /// <inheritdoc/>
@@ -4273,7 +4389,7 @@ public partial struct VisualEffect : IComponent<VisualEffect>
     [Range(0, 50), Default(1)]
     public float Intensity;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 56;
+    public static uint TypeIndex => 57;
     /// <inheritdoc/>
     public static ref VisualEffect Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadVisualEffect, EngineValueCodecs.WriteVisualEffect);
     /// <inheritdoc/>
@@ -4349,7 +4465,7 @@ public partial struct Wanderer : IComponent<Wanderer>
     [FieldOffset(40), Default(0)]
     public uint Goals;
     /// <summary>Stable engine component index.</summary>
-    public static uint TypeIndex => 57;
+    public static uint TypeIndex => 58;
     /// <inheritdoc/>
     public static ref Wanderer Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadWanderer, EngineValueCodecs.WriteWanderer);
     /// <inheritdoc/>
@@ -4377,7 +4493,7 @@ public enum ZoneShape : uint
 public static class EngineComponents
 {
     /// <summary>Schema names by TypeIndex.</summary>
-    public static readonly string[] Names = ["Transform", "AcousticPortal", "AcousticSource", "AcousticSurface", "Animator", "AudioGraphSource", "AudioListener", "AudioSource", "Brain", "Camera", "Camera2d", "CharacterController", "CharacterController2d", "CharacterInput", "CharacterInput2d", "CharacterMotion", "CharacterMotion2d", "Collider", "Collider2d", "Environment", "Flipbook", "FollowCamera", "HeightFog", "Joint", "Light", "Light2d", "MeshRenderer", "MusicSource", "NavAgent", "NavAgentType", "NavArea", "NavLink", "NavMeshSurface", "NavObstacle", "Perceiver", "PhysicsId", "PhysicsPose", "PhysicsPose2d", "PlayerControl", "PostProcessVolume", "ReverbZone", "RigidBody", "RigidBody2d", "SkyAtmosphere", "Sprite", "Stimulus", "StreamedWorld", "Terrain", "TerrainChunk", "TileColliderSource2d", "Tilemap", "Vehicle", "VehicleInput", "VehicleTelemetry", "Velocity", "Velocity2d", "VisualEffect", "Wanderer"];
+    public static readonly string[] Names = ["Transform", "AcousticPortal", "AcousticSource", "AcousticSurface", "Animator", "AudioGraphSource", "AudioListener", "AudioSource", "Brain", "Camera", "Camera2d", "CharacterController", "CharacterController2d", "CharacterInput", "CharacterInput2d", "CharacterMotion", "CharacterMotion2d", "Collider", "Collider2d", "Environment", "Flipbook", "FollowCamera", "HeightFog", "Joint", "Light", "Light2d", "MeshRenderer", "MusicSource", "NavAgent", "NavAgentType", "NavArea", "NavLink", "NavMeshSurface", "NavObstacle", "Perceiver", "PhysicsId", "PhysicsPose", "PhysicsPose2d", "PlayerControl", "PostProcessVolume", "ReflectionCapture", "ReverbZone", "RigidBody", "RigidBody2d", "SkyAtmosphere", "Sprite", "Stimulus", "StreamedWorld", "Terrain", "TerrainChunk", "TileColliderSource2d", "Tilemap", "Vehicle", "VehicleInput", "VehicleTelemetry", "Velocity", "Velocity2d", "VisualEffect", "Wanderer"];
     internal static readonly string[] DefaultJson = [
         "{\"position\":[0,0,0],\"rotation\":[0,0,0],\"scale\":[1,1,1]}",
         "{\"a\":\"\",\"b\":\"\",\"position\":[0,0,0],\"width\":1,\"height\":2,\"open\":1}",
@@ -4419,6 +4535,7 @@ public static class EngineComponents
         "{\"position\":[0,0],\"rotation\":0}",
         "{\"player\":1,\"walkSpeed\":1.6,\"runSpeed\":4.5,\"jumpSpeed\":4.5,\"turnRate\":540,\"yaw\":0,\"camera\":null}",
         "{\"shape\":\"global\",\"blendDistance\":0,\"priority\":0,\"weight\":1,\"overrides\":[]}",
+        "{\"extents\":[5,3,5],\"blend\":1,\"projectionExtents\":[0,0,0],\"projectionOffset\":[0,0,0],\"captureOffset\":[0,0,0],\"priority\":0,\"resolution\":\"auto\",\"intensity\":1}",
         "{\"name\":\"\",\"shape\":\"box\",\"position\":[0,0,0],\"rotation\":[0,0,0,1],\"halfExtents\":[5,3,5],\"radius\":5,\"fade\":1,\"priority\":0,\"material\":\"generic\",\"rt60\":null,\"wet\":1,\"earlyReflections\":true,\"useBaked\":true}",
         "{\"motion\":\"static\",\"mass\":0,\"allowSleep\":true,\"continuous\":false}",
         "{\"motion\":\"static\",\"mass\":0,\"allowSleep\":true,\"continuous\":false,\"lockRotation\":false}",
@@ -4958,6 +5075,23 @@ internal static class EngineValueCodecs
         }
         w.WriteEndObject();
     }
+    internal static CaptureResolution ReadCaptureResolution(JsonElement v)
+        => v.GetString() switch
+        {
+            "auto" => CaptureResolution.Auto,
+            "low" => CaptureResolution.Low,
+            "medium" => CaptureResolution.Medium,
+            "high" => CaptureResolution.High,
+            _ => throw new JsonException("unknown enum variant")
+        };
+    internal static void WriteCaptureResolution(Utf8JsonWriter w, CaptureResolution v) => w.WriteStringValue(v switch
+    {
+        CaptureResolution.Auto => "auto",
+        CaptureResolution.Low => "low",
+        CaptureResolution.Medium => "medium",
+        CaptureResolution.High => "high",
+        _ => throw new JsonException("unknown enum value")
+    });
     internal static CharacterController ReadCharacterController(JsonElement v)
         => new()
         {
@@ -6827,6 +6961,71 @@ internal static class EngineValueCodecs
         }
         w.WriteEndObject();
     }
+    internal static ReflectionCapture ReadReflectionCapture(JsonElement v)
+        => new()
+        {
+            Extents = new Vector3(Field(v, "extents", "[5,3,5]")[0].GetSingle(), Field(v, "extents", "[5,3,5]")[1].GetSingle(), Field(v, "extents", "[5,3,5]")[2].GetSingle()),
+            Blend = Field(v, "blend", "1").GetSingle(),
+            ProjectionExtents = new Vector3(Field(v, "projectionExtents", "[0,0,0]")[0].GetSingle(), Field(v, "projectionExtents", "[0,0,0]")[1].GetSingle(), Field(v, "projectionExtents", "[0,0,0]")[2].GetSingle()),
+            ProjectionOffset = new Vector3(Field(v, "projectionOffset", "[0,0,0]")[0].GetSingle(), Field(v, "projectionOffset", "[0,0,0]")[1].GetSingle(), Field(v, "projectionOffset", "[0,0,0]")[2].GetSingle()),
+            CaptureOffset = new Vector3(Field(v, "captureOffset", "[0,0,0]")[0].GetSingle(), Field(v, "captureOffset", "[0,0,0]")[1].GetSingle(), Field(v, "captureOffset", "[0,0,0]")[2].GetSingle()),
+            Priority = Field(v, "priority", "0").GetInt32(),
+            Resolution = ReadCaptureResolution(Field(v, "resolution", "\"auto\"")),
+            Intensity = Field(v, "intensity", "1").GetSingle(),
+        };
+    internal static void WriteReflectionCapture(Utf8JsonWriter w, ReflectionCapture v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("extents");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Extents.X);
+        WriteFloat(w, v.Extents.Y);
+        WriteFloat(w, v.Extents.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("blend");
+        {
+        WriteFloat(w, v.Blend);
+        }
+        w.WritePropertyName("projectionExtents");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.ProjectionExtents.X);
+        WriteFloat(w, v.ProjectionExtents.Y);
+        WriteFloat(w, v.ProjectionExtents.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("projectionOffset");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.ProjectionOffset.X);
+        WriteFloat(w, v.ProjectionOffset.Y);
+        WriteFloat(w, v.ProjectionOffset.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("captureOffset");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.CaptureOffset.X);
+        WriteFloat(w, v.CaptureOffset.Y);
+        WriteFloat(w, v.CaptureOffset.Z);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("priority");
+        {
+        w.WriteNumberValue(v.Priority);
+        }
+        w.WritePropertyName("resolution");
+        {
+        WriteCaptureResolution(w, v.Resolution);
+        }
+        w.WritePropertyName("intensity");
+        {
+        WriteFloat(w, v.Intensity);
+        }
+        w.WriteEndObject();
+    }
     internal static ReverbZone ReadReverbZone(JsonElement v)
         => new()
         {
@@ -7392,6 +7591,9 @@ internal static class EngineValueCodecs
             "filmic" => ToneMapping.Filmic,
             "neutral" => ToneMapping.Neutral,
             "acesFit" => ToneMapping.AcesFit,
+            "agx" => ToneMapping.Agx,
+            "agxPunchy" => ToneMapping.AgxPunchy,
+            "agxMediumHighContrast" => ToneMapping.AgxMediumHighContrast,
             _ => throw new JsonException("unknown enum variant")
         };
     internal static void WriteToneMapping(Utf8JsonWriter w, ToneMapping v) => w.WriteStringValue(v switch
@@ -7399,6 +7601,9 @@ internal static class EngineValueCodecs
         ToneMapping.Filmic => "filmic",
         ToneMapping.Neutral => "neutral",
         ToneMapping.AcesFit => "acesFit",
+        ToneMapping.Agx => "agx",
+        ToneMapping.AgxPunchy => "agxPunchy",
+        ToneMapping.AgxMediumHighContrast => "agxMediumHighContrast",
         _ => throw new JsonException("unknown enum value")
     });
     internal static Transform ReadTransform(JsonElement v)
