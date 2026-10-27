@@ -23,7 +23,12 @@ internal sealed class CompileClient : IDisposable
     internal CompileClient(string serverDll, DevModuleLoader loader)
     {
         _loader = loader;
-        var name = $"ara-compile-{Environment.ProcessId}-{Guid.NewGuid():N}";
+        // Unix pipes are domain sockets, by default under $TMPDIR; macOS's long $TMPDIR
+        // exceeds the 104-byte socket path limit, so other platforms use a short rooted
+        // path, which .NET takes verbatim on both ends.
+        var name = OperatingSystem.IsWindows()
+            ? $"ara-compile-{Environment.ProcessId}-{Guid.NewGuid():N}"
+            : $"/tmp/ara-{Environment.ProcessId}-{Guid.NewGuid():N}";
         _pipe = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
         var appHost = Path.ChangeExtension(serverDll, RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : null);
         var psi = File.Exists(appHost)
