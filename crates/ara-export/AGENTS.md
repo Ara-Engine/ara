@@ -23,6 +23,8 @@ Only C# and explicitly declared native plugins compile during an export.
 Runtime pins use `scripts::prepare`: project `ara.module.toml` gameplay modules,
 dependency graph, SDK generators/analyzers, then one NativeAOT `ara_script_init`
 image. `game/scripts.json` carries ABI/layout identity and the linked inventory.
+`ara-export scripts --rid RID` (`scripts::build`) builds just that image and manifest,
+for hosts without an export lane yet (osx-arm64 players; docs/dev/macos.md).
 `ARA_DOTNET_SDK` selects SDK sources; `ARA_DOTNET_ARTIFACTS` selects prebuilt tools.
 `tests/shipping_scripts.rs` exports a behaviour, relocates the pack/image, deletes
 source, exercises all per-host callbacks in two worlds and restores ECS state; stale ABI/layout must fail `ARA0921`.

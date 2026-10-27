@@ -13,7 +13,6 @@ use serde_json::json;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
-    process::Command,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -233,26 +232,8 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
     } else {
         Some(tools::project_path(&project, &p.script_project)?)
     };
-    let crash_source = d.work.join("AraCrash.g.cs");
-    std::fs::write(&crash_source, include_str!("managed-crash.cs"))?;
-    let crash_targets = d.work.join("AraCrash.targets");
     // Attach once in the linked entry image, rather than once per module.
-    let crash_condition = if runtime_scripts {
-        " Condition=\"'$(AraNativeEntry)' == 'true'\""
-    } else {
-        ""
-    };
-    std::fs::write(
-        &crash_targets,
-        format!(
-            "<Project><ItemGroup{crash_condition}><Compile Include=\"{}\" /></ItemGroup></Project>",
-            quick_xml::escape::escape(
-                crash_source
-                    .to_str()
-                    .context("non-UTF8 managed crash source path")?
-            )
-        ),
-    )?;
+    let crash_targets = crate::scripts::crash_targets(&d.work, runtime_scripts)?;
     let mut scripts = BTreeMap::new();
     d.stage("script", |d| {
         let Some(script_project) = &script_project else {
@@ -272,35 +253,14 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
         };
         for (arch, rid) in targets {
             let out = d.work.join("script").join(arch);
-            let lane = if p.lane == ScriptLane::NativeAot {
-                "aot"
-            } else {
-                "r2r"
-            };
-            let mut cmd = Command::new("dotnet");
-            cmd.arg("publish")
-                .arg(script_project)
-                .args([
-                    "-c",
-                    "Release",
-                    "-r",
-                    rid,
-                    "--nologo",
-                    "--disable-build-servers",
-                    "-o",
-                ])
-                .arg(&out)
-                .arg(format!("-p:AraLane={lane}"))
-                .arg("-p:Deterministic=true")
-                .arg("-p:InvariantGlobalization=true")
-                .arg("-p:UseSharedCompilation=false")
-                .arg("-p:DebugSymbols=true")
-                .arg("-p:StripSymbols=false")
-                .arg(format!(
-                    "-p:CustomBeforeMicrosoftCommonTargets={}",
-                    crash_targets.display()
-                ))
-                .env("PATH", toolchain.path()?);
+            let mut cmd = crate::scripts::publish_command(
+                script_project,
+                rid,
+                &out,
+                p.lane == ScriptLane::NativeAot,
+                &crash_targets,
+                &toolchain,
+            )?;
             if !runtime_scripts {
                 cmd.arg(format!(
                     "-p:BaseIntermediateOutputPath={}/",
@@ -310,17 +270,6 @@ fn run(r: &ExportRequest, d: &mut Driver<'_>, started: Instant) -> Result<Export
                     "-p:BaseOutputPath={}/",
                     d.work.join("bin").join(arch).display()
                 ));
-            }
-            if p.lane == ScriptLane::NativeAot {
-                cmd.args(["-p:PublishAot=true", "-p:NativeLib=Shared"]);
-            } else {
-                cmd.args([
-                    "-p:PublishAot=false",
-                    "-p:OutputType=Exe",
-                    "-p:SelfContained=true",
-                    "-p:PublishReadyToRun=true",
-                    "-p:PublishTrimmed=false",
-                ]);
             }
             if p.platform == Platform::Linux && p.lane == ScriptLane::NativeAot {
                 let zig = toolchain
