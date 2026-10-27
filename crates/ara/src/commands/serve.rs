@@ -97,6 +97,7 @@ fn run_daemon(
     )
     .map_err(|d| d.to_string())?;
     let root = host.root().to_path_buf();
+    crate::assets::register(&mut host).map_err(|diagnostic| diagnostic.to_string())?;
     // "Why can't I hear X?" next to the built-in explainers.
     ara_audio_why::register(host.why());
     // "Why is this NPC stuck?": brain, perception and navigation causes.

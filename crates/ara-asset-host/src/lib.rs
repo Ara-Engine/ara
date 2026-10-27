@@ -1,6 +1,10 @@
 //! Immutable source-to-input graphs prepared away from the editor's frame thread.
 #![deny(missing_docs)]
 
+pub mod import;
+pub mod service;
+pub use service::AssetService;
+
 use ara_asset::{
     Cancellation, DependencyGraph, Digest, Error, ImportInput, ProcessWorker, Result, SourceAsset,
 };

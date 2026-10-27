@@ -25,7 +25,7 @@ pub struct SourceAsset {
     pub thread_budget: u16,
     /// Stable ID from the import sidecar.
     pub id: String,
-    /// Project-relative media path.
+    /// Authored-root-relative media path (the asset reference path).
     pub path: String,
     /// Stable importer ID installed in the process worker.
     pub importer: String,
@@ -38,6 +38,25 @@ pub struct SourceAsset {
     /// Content hashes of any cooked asset inputs.
     pub asset_dependencies: BTreeMap<String, Digest>,
 }
+
+/// Resolves the authored root once for background source I/O. A root already
+/// pointing at authored content (dependency inventory) remains unchanged.
+fn authored_root(project: &Path) -> PathBuf {
+    let modern = std::fs::read(project.join("ara.project.json"))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .and_then(|marker| {
+            marker
+                .get("layoutVersion")
+                .and_then(serde_json::Value::as_u64)
+        })
+        .is_some_and(|version| version >= 3);
+    if modern {
+        project.join(ara_doc::AUTHORING_ROOT)
+    } else {
+        project.to_owned()
+    }
+}
 /// Snapshots source and dependencies on a background/CLI thread. All native source
 /// parsing, including dependency discovery, runs in a disposable process.
 pub fn snapshot(
@@ -47,9 +66,12 @@ pub fn snapshot(
     cancellation: &Cancellation,
 ) -> Result<ImportInput> {
     let _trace = crate::trace::Scope::new("source.snapshot", &asset.path);
-    let root = root
+    let project_root = root
         .canonicalize()
         .map_err(|e| io_at(e, &root.display().to_string()))?;
+    let root = authored_root(&project_root)
+        .canonicalize()
+        .map_err(|e| io_at(e, &project_root.display().to_string()))?;
     let source_path = checked_path(&root, &root, &asset.path)?;
     let source = std::fs::read(&source_path).map_err(|e| io_at(e, &asset.path))?;
     let parent = source_path
@@ -78,7 +100,7 @@ pub fn snapshot(
         {
             let mut db = SchemaDb::new();
             crate::register_schema(&mut db);
-            crate::ProjectImportSettings::read(&root, &db)?.preset
+            crate::ProjectImportSettings::read(&project_root, &db)?.preset
         }
         None => crate::CookPreset::default(),
     };
@@ -141,6 +163,7 @@ struct SnapshotResult {
 /// Own it for the editor session; dropping cancels all work and removes the watcher.
 pub struct AssetPipeline {
     root: PathBuf,
+    authored_root: PathBuf,
     worker: ProcessWorker,
     schema: Arc<SchemaDb>,
     watcher: FileWatcher,
@@ -165,11 +188,13 @@ impl AssetPipeline {
     ) -> Result<Self> {
         let root = root.as_ref().canonicalize()?;
         let watcher = FileWatcher::new(&root)?;
+        let authored_root = authored_root(&root);
         let project_preset = Some(crate::ProjectImportSettings::read(&root, &schema)?.preset);
         let worker = worker.with_memo(cache.worker_memo_root());
         let (tx, rx) = mpsc::channel();
         Ok(Self {
             root,
+            authored_root,
             worker: worker.clone(),
             schema,
             watcher,
@@ -286,6 +311,7 @@ impl AssetPipeline {
         self.snapshots.insert(id.to_owned(), cancellation.clone());
         let tx = self.tx.clone();
         let root = self.root.clone();
+        let authored_root = self.authored_root.clone();
         let worker = self.worker.clone();
         let schema = Arc::clone(&self.schema);
         let configuration = self.configurations.get(id).cloned();
@@ -309,9 +335,9 @@ impl AssetPipeline {
         thread::spawn(move || {
             crate::worker::background_priority();
             let result = (|| {
-                let sidecar_path = root.join(format!("{}.import.json", asset.path));
+                let sidecar_path = authored_root.join(format!("{}.import.json", asset.path));
                 if let Ok(resolved) = sidecar_path.canonicalize()
-                    && !resolved.starts_with(&root)
+                    && !resolved.starts_with(&authored_root)
                 {
                     return Err(Error::Invalid("sidecar escapes project root".into()));
                 }
@@ -351,7 +377,7 @@ impl AssetPipeline {
                         let digest = match known.and_then(|(_, hash)| *hash) {
                             Some(hash) => hash,
                             None => Digest::of(
-                                &std::fs::read(checked_path(&root, &root, path)?)
+                                &std::fs::read(checked_path(&authored_root, &authored_root, path)?)
                                     .map_err(|e| io_at(e, path))?,
                             ),
                         };
@@ -397,27 +423,47 @@ impl AssetPipeline {
                 }
             }
         }
-        self.snapshot_changes.extend(self.watcher.changed()?);
+        let prefix =
+            (self.authored_root != self.root).then(|| format!("{}/", ara_doc::AUTHORING_ROOT));
+        let mut policy_changed = false;
+        for path in self.watcher.changed()? {
+            if ara_doc::file_state::same_path(&path, crate::PROJECT_IMPORT_SETTINGS_FILE)
+                || ara_doc::file_state::same_path(
+                    &path,
+                    crate::project_settings::SCOPED_PROJECT_IMPORT_SETTINGS_FILE,
+                )
+            {
+                policy_changed = true;
+            } else if let Some(prefix) = &prefix {
+                if let Some(relative) = path.strip_prefix(prefix) {
+                    self.snapshot_changes.insert(relative.to_owned());
+                }
+            } else {
+                self.snapshot_changes.insert(path);
+            }
+        }
         let mut invalidated = BTreeSet::new();
+        if policy_changed {
+            self.project_preset = None;
+            invalidated.extend(
+                self.sources
+                    .iter()
+                    .filter(|(_, asset)| {
+                        asset.preset.is_none()
+                            && matches!(
+                                asset.importer.as_str(),
+                                "ara.texture" | "ara.gltf" | "ara.fbx"
+                            )
+                    })
+                    .map(|(id, _)| id.clone()),
+            );
+        }
         let mut handled = Vec::new();
         for path in &self.snapshot_changes {
-            if *path == crate::PROJECT_IMPORT_SETTINGS_FILE {
-                self.project_preset = None;
-            }
             let users = self.reload.graph.invalidated_by(path);
             let mut known = !users.is_empty();
             invalidated.extend(users);
             for (id, asset) in &self.sources {
-                if *path == crate::PROJECT_IMPORT_SETTINGS_FILE
-                    && asset.preset.is_none()
-                    && matches!(
-                        asset.importer.as_str(),
-                        "ara.texture" | "ara.gltf" | "ara.fbx"
-                    )
-                {
-                    invalidated.insert(id.clone());
-                    known = true;
-                }
                 if *path == asset.path || *path == format!("{}.import.json", asset.path) {
                     invalidated.insert(id.clone());
                     known = true;

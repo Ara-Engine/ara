@@ -123,7 +123,7 @@ pub(crate) fn read(
     {
         return crate::ui_document::read(text, file);
     }
-    if file != crate::project::MARKER {
+    if file != crate::project::MARKER && file != crate::project_policy::PREFERENCES {
         return ara_doc::read(text, file, db, index);
     }
     let value = match ara_json::parse(text) {
@@ -143,7 +143,12 @@ pub(crate) fn read(
     };
     let mut doc = Document::new(
         "project",
-        AssetId::parse("pj_project").expect("valid project ID"),
+        AssetId::parse(if file == crate::project_policy::PREFERENCES {
+            crate::project_policy::PREFERENCES_ID
+        } else {
+            "pj_project"
+        })
+        .expect("valid project settings ID"),
     );
     doc.insert_unchecked(
         RecordId::parse("p_settings").expect("valid settings ID"),
@@ -156,7 +161,18 @@ pub(crate) fn read(
 }
 
 pub(crate) fn read_header(text: &str, file: &str, db: &SchemaDb) -> Option<(String, AssetId)> {
-    if file.ends_with(".ui") && !text.trim_start().starts_with('{') {
+    if file == crate::project_policy::PREFERENCES {
+        ara_json::parse(text)
+            .ok()
+            .filter(serde_json::Value::is_object)
+            .map(|_| {
+                (
+                    "project".into(),
+                    AssetId::parse(crate::project_policy::PREFERENCES_ID)
+                        .expect("valid preferences ID"),
+                )
+            })
+    } else if file.ends_with(".ui") && !text.trim_start().starts_with('{') {
         crate::ui_document::header(text, file)
     } else {
         ara_doc::read_header(text, db)

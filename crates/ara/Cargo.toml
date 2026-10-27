@@ -8,6 +8,8 @@ publish.workspace = true
 
 [dependencies]
 ara-asset = { path = "../ara-asset" }
+ara-asset-host = { path = "../ara-asset-host" }
+ara-update = { path = "../ara-update" }
 ara-crash = { path = "../ara-crash" }
 ara-shader-cook = { path = "../ara-shader-cook" }
 ara-hub-service = { path = "../ara-hub-service" }

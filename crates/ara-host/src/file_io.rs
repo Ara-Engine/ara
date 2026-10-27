@@ -76,6 +76,8 @@ enum Request {
     Diagnostics(DiagWrite),
     /// Answer `Settled` once everything requested before is done.
     Settle,
+    /// A tagged nonblocking physical-completion boundary.
+    Barrier(crate::files::FileCommitReceipt),
     /// Block the thread until `release` sends or closes, after telling `entered`.
     #[cfg(test)]
     Hold {
@@ -143,6 +145,8 @@ pub(crate) enum Reply {
     DiagnosticsFailed { seqs: Vec<u64>, error: String },
     /// Everything requested before the matching `settle` is done.
     Settled,
+    /// Everything before this tagged boundary has completed on the worker.
+    Barrier(crate::files::FileCommitReceipt),
 }
 
 /// The host's handle on its file thread. Dropping it lets queued saves finish, then
@@ -158,6 +162,7 @@ pub(crate) struct FileThread {
     journal_len: usize,
     /// Appends sent since the compaction in progress, if one is.
     compacting: Option<usize>,
+    disconnected: bool,
 }
 
 impl std::fmt::Debug for FileThread {
@@ -222,6 +227,7 @@ impl FileThread {
             pending: 0,
             journal_len,
             compacting: None,
+            disconnected: false,
         })
     }
 
@@ -257,6 +263,19 @@ impl FileThread {
     /// Ask for `Settled` once everything queued so far is done.
     pub(crate) fn settle(&self) {
         self.send(Request::Settle);
+    }
+    /// Queues a tagged acknowledgement, without waiting for the worker.
+    pub(crate) fn barrier(
+        &mut self,
+        receipt: crate::files::FileCommitReceipt,
+    ) -> Result<(), Diagnostic> {
+        self.requests.send(Request::Barrier(receipt)).map_err(|_| {
+            self.disconnected = true;
+            Diagnostic::error(codes::IO, "the project file worker is unavailable")
+        })
+    }
+    pub(crate) fn disconnected(&self) -> bool {
+        self.disconnected
     }
     /// Block the thread until the returned sender sends or drops; returns once the
     /// thread is held (tests: the host must not wait for it).
@@ -300,12 +319,25 @@ impl FileThread {
     }
     /// The next reply, if one is waiting.
     pub(crate) fn try_reply(&mut self) -> Option<Reply> {
-        let reply = self.replies.try_recv().ok()?;
+        let reply = match self.replies.try_recv() {
+            Ok(reply) => reply,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                self.disconnected = true;
+                return None;
+            }
+            Err(mpsc::TryRecvError::Empty) => return None,
+        };
         Some(self.count(reply))
     }
     /// The next reply, waiting for it; None if the thread is gone.
     pub(crate) fn reply(&mut self) -> Option<Reply> {
-        let reply = self.replies.recv().ok()?;
+        let reply = match self.replies.recv() {
+            Ok(reply) => reply,
+            Err(_) => {
+                self.disconnected = true;
+                return None;
+            }
+        };
         Some(self.count(reply))
     }
     fn count(&mut self, reply: Reply) -> Reply {
@@ -452,6 +484,7 @@ impl Worker {
                 }
             }
             Request::Settle => self.reply(Reply::Settled),
+            Request::Barrier(receipt) => self.reply(Reply::Barrier(receipt)),
             #[cfg(test)]
             Request::Hold { entered, release } => {
                 let _ = entered.send(());

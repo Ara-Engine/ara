@@ -185,7 +185,7 @@ fn commands_need_a_project_marker_and_skip_nested_projects() {
     let report = json_of(&out);
     assert_eq!(
         (code, report["files"].clone(), report["errors"].clone()),
-        (0, json!(2), json!(0)),
+        (0, json!(3), json!(0)),
         "{out}"
     );
 }

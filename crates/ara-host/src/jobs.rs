@@ -37,6 +37,8 @@ pub struct JobRecord {
     pub session: Option<String>,
     /// Status.
     pub status: JobStatus,
+    /// Whether cancellation can still prevent this job's mutation.
+    pub cancellable: bool,
     /// Progress in `[0, 1]`.
     pub progress: f32,
     /// Latest progress message.
@@ -63,6 +65,7 @@ impl Jobs {
             name: name.to_owned(),
             session,
             status: JobStatus::Running,
+            cancellable: true,
             progress: 0.0,
             message: String::new(),
             result: None,
@@ -91,6 +94,7 @@ impl Jobs {
             .by_id
             .get_mut(id)
             .filter(|j| j.status == JobStatus::Running)?;
+        job.cancellable = false;
         match result {
             Ok(v) => {
                 job.status = JobStatus::Done;
@@ -105,11 +109,23 @@ impl Jobs {
         Some(job)
     }
 
-    /// Marks a running job cancelled. Returns false if it was not running.
+    /// Marks the irreversible commit boundary; cancellation is refused afterward.
+    pub fn committing(&mut self, id: &str) -> Option<&JobRecord> {
+        let job = self
+            .by_id
+            .get_mut(id)
+            .filter(|job| job.status == JobStatus::Running && job.cancellable)?;
+        job.cancellable = false;
+        job.message = "Saving changes".into();
+        Some(job)
+    }
+
+    /// Marks a cancellable running job cancelled. Returns false after commit starts.
     pub fn cancel(&mut self, id: &str) -> bool {
         match self.by_id.get_mut(id) {
-            Some(j) if j.status == JobStatus::Running => {
+            Some(j) if j.status == JobStatus::Running && j.cancellable => {
                 j.status = JobStatus::Cancelled;
+                j.cancellable = false;
                 true
             }
             _ => false,

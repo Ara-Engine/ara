@@ -15,6 +15,22 @@ use serde_json::Value;
 mod files;
 pub use files::{AuthoredFile, AuthoredRole, AuthoredScope, authored_files, authored_root};
 
+/// Parses a frozen native document without reading the filesystem. `path` is its
+/// storage path; the supplied index resolves authored references and identities.
+pub fn read_document(
+    text: &str,
+    path: &str,
+    db: &SchemaDb,
+    index: Option<&AssetIndex>,
+) -> ReadResult {
+    read(text, path, db, index)
+}
+
+/// Serializes a frozen document in its native format without writing any files.
+pub fn write_document(doc: &Document, db: &SchemaDb) -> Result<String, Diagnostic> {
+    crate::project_settings::write(doc, db)
+}
+
 /// The file that marks a project root. Its contents are reserved for project settings.
 pub const MARKER: &str = "ara.project.json";
 /// Local, uncommitted state: journal, token, daemon file, lock, generated docs.
@@ -22,7 +38,7 @@ pub const STATE_DIR: &str = ".ara";
 const TYPES_SUFFIX: &str = ".types.json";
 const SIDECAR_SUFFIX: &str = ".import.json";
 /// Directories never scanned for project files (besides hidden ones).
-const SKIPPED: [&str; 3] = ["target", "node_modules", "spikes"];
+const SKIPPED: [&str; 5] = ["target", "node_modules", "spikes", "builds", "packages"];
 
 /// The nearest ancestor of `start` (inclusive) containing `ara.project.json`.
 pub fn discover(start: &Path) -> Option<PathBuf> {
@@ -51,8 +67,10 @@ pub fn no_project(start: &Path) -> Diagnostic {
 
 /// A project on disk.
 pub struct Project {
-    /// Project root; references are relative to it.
+    /// Project root, containing metadata, settings and the authored root.
     pub root: PathBuf,
+    /// Physical authored root; references are relative to it and storage paths stay project-relative.
+    pub authored_root: PathBuf,
     /// Built-in and project types.
     pub db: SchemaDb,
     /// Built-in commands.
@@ -65,6 +83,7 @@ pub struct Project {
     pub type_files: Vec<PathBuf>,
     /// Problems with the project's own type definitions and sidecars.
     pub diags: Vec<Diagnostic>,
+    project_files: HashSet<PathBuf>,
 }
 
 impl Project {
@@ -96,16 +115,40 @@ impl Project {
         let mut engine = crate::ui_document::register(&mut registry, &mut db);
         engine.extend(register(&mut db, &mut registry));
 
-        let mut files = Vec::new();
-        walk(&root, &root, &mut files);
+        let inventory = authored_files(&root, &db)?;
+        let project_files = inventory
+            .iter()
+            .filter(|entry| entry.scope == AuthoredScope::Project)
+            .map(|entry| root.join(&entry.storage_path))
+            .collect();
+        let files = inventory
+            .into_iter()
+            .filter(|entry| {
+                !matches!(
+                    entry.role,
+                    AuthoredRole::Folder | AuthoredRole::SymbolicLink
+                )
+            })
+            .filter(|entry| {
+                entry.scope == AuthoredScope::Authored
+                    || matches!(entry.role, AuthoredRole::Preferences)
+                    || entry.storage_path == "settings/ara.imports"
+                    || entry.storage_path == "ara.imports"
+                    || entry.storage_path == MARKER
+            })
+            .map(|entry| root.join(entry.storage_path))
+            .collect::<Vec<_>>();
+        let authored_root = authored_root(&root);
         let mut project = Project {
             root,
+            authored_root,
             db,
             registry,
             index: AssetIndex::new(),
             docs: Vec::new(),
             type_files: Vec::new(),
             diags: engine,
+            project_files,
         };
         let mut sidecars = Vec::new();
         for file in files {
@@ -128,12 +171,18 @@ impl Project {
             project.index_sidecar(file);
         }
         for file in project.docs.clone() {
+            if project.project_files.contains(&file) {
+                continue;
+            }
             if let Ok(text) = fs::read_to_string(&file)
                 && let Some((kind, id)) = read_header(&text, &project.rel(&file), &project.db)
+                && kind != "project"
             {
-                project
-                    .index
-                    .insert(id.to_string(), project.rel(&file), Some(kind));
+                project.index.insert(
+                    id.to_string(),
+                    project.reference_path(&project.rel(&file)).to_owned(),
+                    Some(kind),
+                );
             }
         }
         Ok(project)
@@ -141,9 +190,12 @@ impl Project {
 
     /// True if `path` has a registered document extension (`.scene`, `.prefab`).
     pub fn is_document(&self, path: &Path) -> bool {
-        path.extension()
-            .and_then(|e| e.to_str())
-            .is_some_and(|e| self.db.kinds().any(|k| k.extension == e))
+        path == self.root.join(MARKER)
+            || path == self.root.join(crate::project_policy::PREFERENCES)
+            || path
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| self.db.kinds().any(|k| k.extension == e))
     }
 
     /// A string field of `ara.project.json`.
@@ -154,16 +206,15 @@ impl Project {
             .and_then(|v| v.get(key).and_then(Value::as_str).map(str::to_owned))
     }
 
-    /// The project's main scene: `main` in `ara.project.json` (`ara init` writes
-    /// `levels/main.scene`), else `levels/main.scene` if it exists. Calls that name no
+    /// The project's main scene: `main` in `ara.project.json`, else the legacy
+    /// starter or a conventional scene under the chosen authored root. Calls naming no
     /// document default to it.
     pub fn main_scene(&self) -> Option<String> {
         self.marker_field("main").or_else(|| {
-            let starter = "levels/main.scene";
-            self.root
-                .join(starter)
-                .is_file()
-                .then(|| starter.to_owned())
+            [crate::project_policy::MAIN_SCENE, "scenes/main.scene"]
+                .into_iter()
+                .find(|starter| self.authored_root.join(starter).is_file())
+                .map(str::to_owned)
         })
     }
 
@@ -206,7 +257,8 @@ impl Project {
         match id {
             Some(id) if ara_doc::AssetId::parse(&id).is_ok() => {
                 let source = rel.strip_suffix(SIDECAR_SUFFIX).unwrap_or(&rel).to_owned();
-                self.index.insert(id, source, None);
+                self.index
+                    .insert(id, self.reference_path(&source).to_owned(), None);
             }
             _ => self.diags.push(
                 Diagnostic::error(codes::MISSING_DOC_ID, "import sidecar needs an asset `id`")
@@ -220,10 +272,32 @@ impl Project {
         rel_to(&self.root, path)
     }
 
+    /// Converts an authored-root-relative path to project-relative storage.
+    pub fn storage_path(&self, path: &str) -> String {
+        if self.authored_root == self.root {
+            path.to_owned()
+        } else {
+            format!("{}/{path}", ara_doc::AUTHORING_ROOT)
+        }
+    }
+    /// Converts project-relative storage to an authored reference path.
+    pub fn reference_path<'a>(&self, path: &'a str) -> &'a str {
+        if self.authored_root == self.root {
+            path
+        } else {
+            path.strip_prefix(ara_doc::AUTHORING_ROOT)
+                .and_then(|path| path.strip_prefix('/'))
+                .unwrap_or(path)
+        }
+    }
+
     /// Reads `extra` files plus every project document into a workspace. Returns the
     /// reader diagnostics per file (by relative path).
     pub fn load(&self, extra: &[PathBuf]) -> (Workspace, BTreeMap<String, Vec<Diagnostic>>) {
         let mut ws = Workspace::new(self.index.clone());
+        if self.authored_root != self.root {
+            ws.set_reference_root(ara_doc::AUTHORING_ROOT);
+        }
         let mut diags = BTreeMap::new();
         let mut seen = Vec::new();
         for file in self.docs.iter().chain(extra) {
@@ -237,7 +311,11 @@ impl Project {
                     let result = read(&text, &rel, &self.db, Some(&self.index));
                     if let Some(doc) = result.doc {
                         let source = asset_path(&rel, &doc.kind);
-                        ws.insert_with_asset_path(rel.clone(), doc, source);
+                        if self.project_files.contains(file) {
+                            ws.insert_project_document(rel.clone(), doc);
+                        } else {
+                            ws.insert_with_asset_path(rel.clone(), doc, source);
+                        }
                     }
                     diags.insert(rel, result.diags);
                 }
@@ -300,28 +378,49 @@ pub(crate) fn document_extensions(db: &SchemaDb) -> HashSet<String> {
 pub(crate) fn document_files(root: &Path, extensions: &HashSet<String>) -> Vec<PathBuf> {
     let mut files = Vec::new();
     walk(root, root, &mut files);
-    files.retain(|f| is_document(f, extensions));
+    files.retain(|f| {
+        *f == root.join(MARKER)
+            || *f == root.join(crate::project_policy::PREFERENCES)
+            || is_document(f, extensions)
+    });
     files
 }
 
 /// Whether `path` has one of the document `extensions`.
 pub(crate) fn is_document(path: &Path, extensions: &HashSet<String>) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| extensions.contains(e))
+    path == Path::new(MARKER)
+        || path == Path::new(crate::project_policy::PREFERENCES)
+        || path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| extensions.contains(e))
 }
 
 /// Whether `walk` visits the file at `rel` (relative to `root`): no hidden or
 /// skipped directory on the way, and no nested project.
 pub(crate) fn walked(root: &Path, rel: &Path) -> bool {
+    if authored_root(root) != root
+        && rel != Path::new(MARKER)
+        && rel != Path::new(crate::project_policy::PREFERENCES)
+        && rel != Path::new("settings/ara.imports")
+        && rel != Path::new("ara.imports")
+        && !rel.starts_with(ara_doc::AUTHORING_ROOT)
+    {
+        return false;
+    }
+
     let Some(parent) = rel.parent() else {
         return false;
     };
     let mut dir = root.to_path_buf();
     for part in parent.components() {
         let name = part.as_os_str().to_string_lossy();
+        let at_root = dir == root;
         dir.push(part);
-        if name.starts_with('.') || SKIPPED.contains(&name.as_ref()) || dir.join(MARKER).is_file() {
+        if name.starts_with('.')
+            || (at_root && SKIPPED.contains(&name.as_ref()))
+            || dir.join(MARKER).is_file()
+        {
             return false;
         }
     }
@@ -330,37 +429,25 @@ pub(crate) fn walked(root: &Path, rel: &Path) -> bool {
 
 /// Collects files under `dir`. Skips hidden directories (`.git`, `.ara`, `.refs`),
 /// build output, `spikes/` and nested projects (directories with their own marker).
-fn walk(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    // The directory entry knows its type: no metadata call per file (a symlink is
-    // followed to tell whether it is a directory).
-    let mut entries: Vec<(PathBuf, bool)> = entries
-        .filter_map(Result::ok)
-        .map(|e| {
-            let path = e.path();
-            let is_dir = e
-                .file_type()
-                .is_ok_and(|t| t.is_dir() || (t.is_symlink() && path.is_dir()));
-            (path, is_dir)
-        })
-        .collect();
-    entries.sort();
-    for (path, is_dir) in entries {
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or_default();
-        if is_dir {
-            let skip = name.starts_with('.')
-                || SKIPPED.contains(&name)
-                || (path != root && path.join(MARKER).is_file());
-            if !skip {
-                walk(root, &path, out);
-            }
-        } else {
-            out.push(path);
-        }
+fn walk(root: &Path, _dir: &Path, out: &mut Vec<PathBuf>) {
+    if let Ok(files) = authored_files(root, &SchemaDb::new()) {
+        out.extend(
+            files
+                .into_iter()
+                .filter(|entry| {
+                    !matches!(
+                        entry.role,
+                        AuthoredRole::Folder | AuthoredRole::SymbolicLink
+                    )
+                })
+                .filter(|entry| {
+                    entry.scope == AuthoredScope::Authored
+                        || matches!(entry.role, AuthoredRole::Preferences)
+                        || entry.storage_path == "settings/ara.imports"
+                        || entry.storage_path == "ara.imports"
+                        || entry.storage_path == MARKER
+                })
+                .map(|entry| root.join(entry.storage_path)),
+        );
     }
 }
