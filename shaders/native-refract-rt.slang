@@ -31,7 +31,7 @@ float4 refractColourRt(Frame f,Look l,Surface s,uint2 volume,float scale,float3 
         float chord=thickness/max(-dot(t1,geometric),0.05);float3 n2=geometric;RtHit back;
         float bias=l.rtParams[1].x+l.rtParams[1].y*length(world-f.camera.xyz);
         if(rtTrace(f,l,world+t1*bias,t1,thickness*4+bias,back,RT_TRANSPARENT)){
-            RtTriangle t=rtTriangle(l,back.instance,back.primitive,back.barycentrics);
+            RtTriangle t=rtHitTriangle(l,back);
             float3 nn=t.a.normal*t.w.x+t.b.normal*t.w.y+t.c.normal*t.w.z;
             chord=bias+back.distance;n2=dot(nn,nn)>1e-12?normalize(nn):t1;if(dot(n2,t1)<0)n2=-n2;
         }

@@ -11,7 +11,8 @@
 //! fresh structure at once for a new BLAS, and for motion (moved instances, skin
 //! refreshes) at most every `TLAS_INTERVAL` frames (ara-gpu acceleration
 //! structures are static: no refit). Builds are recorded in the frame
-//! graph (`RT.Accel`, after the G-buffer), so frames never wait on them.
+//! graph (`RT.Accel.BLAS` then `RT.Accel.TLAS`, after the G-buffer), so frames never
+//! wait on them.
 //!
 //! Reflections: `RT.Reflect` traces one ray per render pixel below the roughness
 //! cut (on-screen hits take this frame's screen-space ambient light);
@@ -50,8 +51,10 @@ const TLAS_INTERVAL: u32 = 4;
 /// One declared hybrid pass.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum RtPass {
-    /// BLAS and TLAS builds that this frame needs.
-    Accel,
+    /// The BLAS builds this frame needs (timed apart from the TLAS: `RT.Accel.BLAS`).
+    AccelBlas,
+    /// The TLAS build over them (`RT.Accel.TLAS`).
+    AccelTlas,
     /// One reflection ray per render pixel (`rtReflectMain`).
     Reflect,
     /// Rough lobes' occlusion, four rays per 2x2 pixels (`rtRoughMain`).
@@ -444,7 +447,7 @@ impl Rays {
         }
     }
 
-    /// Creates the BLAS of `entry` over its current vertices (built in `RT.Accel`).
+    /// Creates the BLAS of `entry` over its current vertices (built in `RT.Accel.BLAS`).
     fn build_blas(&mut self, gpu: &mut GpuDevice, native: &Native, entry: u32) -> Result<bool> {
         let range = native
             .ray_geometry()
@@ -544,6 +547,8 @@ impl Rays {
         self.transforms.clear();
         self.skins.clear();
         self.stale = false;
+        self.since_rebuild = 0;
+        self.pending = false;
         if retired {
             gpu.collect()?;
         }
@@ -691,17 +696,25 @@ impl Rays {
             ],
         };
         let mut passes = Vec::new();
-        let pending = !tlas.built || self.blas.iter().flatten().any(|b| !b.built);
-        if pending {
-            let accel = graph.pass(
-                "RT.Accel",
+        // BLAS builds read the shared pool after the G-buffer published skin poses; the
+        // TLAS builds after them. Two passes, so their costs are timed apart.
+        let mut previous = gbuffer;
+        if self.blas.iter().flatten().any(|b| !b.built) {
+            let blas = graph.pass("RT.Accel.BLAS", Queue::Graphics, reads.iter().copied());
+            graph.after(blas, previous)?;
+            passes.push((blas, RtPass::AccelBlas));
+            previous = blas;
+        }
+        if !tlas.built {
+            let build = graph.pass(
+                "RT.Accel.TLAS",
                 Queue::Graphics,
                 [(ids.tlas, Access::AsBuild)]
                     .into_iter()
                     .chain(reads.iter().copied()),
             );
-            graph.after(accel, gbuffer)?;
-            passes.push((accel, RtPass::Accel));
+            graph.after(build, previous)?;
+            passes.push((build, RtPass::AccelTlas));
         }
         let [trace, blur, rough, widened] = ids.images;
         let stages = [
@@ -796,7 +809,12 @@ impl Rays {
             1,
         ];
         match pass {
-            RtPass::Accel => self.record_builds(recorder),
+            RtPass::AccelBlas => self.record_blas_builds(recorder),
+            RtPass::AccelTlas => {
+                if let Some(tlas) = self.tlas.as_ref().filter(|t| !t.built) {
+                    recorder.push(Command::BuildAccelerationStructure(tlas.structure));
+                }
+            }
             RtPass::Reflect => {
                 recorder.push(Command::Pipeline(pipelines.reflect));
                 recorder.push(Command::Constants(RootConstants {
@@ -849,8 +867,8 @@ impl Rays {
     }
 
     /// Pending BLAS builds (their vertex/index inputs move from shader reads to
-    /// build reads first), then the TLAS over them.
-    fn record_builds(&self, recorder: &mut Recorder) {
+    /// build reads first), then their results to build and ray-query reads.
+    fn record_blas_builds(&self, recorder: &mut Recorder) {
         let edge = |resource, before, after| Barrier {
             resource,
             before,
@@ -882,9 +900,6 @@ impl Rays {
                 )
             })
         }));
-        if let Some(tlas) = self.tlas.as_ref().filter(|t| !t.built) {
-            recorder.push(Command::BuildAccelerationStructure(tlas.structure));
-        }
     }
 
     /// Records the final states of a submitted frame: its builds have run.

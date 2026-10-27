@@ -35,30 +35,46 @@ struct RtUv {float2 offset;float2 scale;float rotation;uint set;uint2 reserved;}
 struct RtMaterial {Material pbr;RtUv uv[6];uint4 slots;float4 factors;uint4 layers;};
 struct RtInstance {uint4 meta;float4x4 world;float4x4 previous;float4 nx;float4 ny;float4 nz;};
 // A committed hit: distance along the ray, native instance (row index), triangle
-// within its LOD 0 range, barycentrics of corners b and c, and whether the ray met
-// the triangle's front (counter-clockwise) side.
-struct RtHit {float distance;uint instance;uint primitive;float2 barycentrics;bool front;};
+// within its LOD 0 range, barycentrics of corners b and c, whether the ray met the
+// triangle's front (counter-clockwise) side, and the instance's object-to-world
+// transform as the TLAS that produced the hit holds it (motion refreshes of the TLAS
+// may lag the instance rows by a few frames: renderer::rt TLAS_INTERVAL).
+struct RtHit {float distance;uint instance;uint primitive;float2 barycentrics;bool front;float3x4 objectToWorld;};
 // A hit triangle: corners in world space (normals and tangents transformed as the
 // G-buffer's vertices), barycentric weights and the instance's material.
 struct RtTriangle {RtVertex a;RtVertex b;RtVertex c;float3 w;uint material;};
 RtInstance rtInstance(Look l,uint instance){return buffers[NonUniformResourceIndex(l.rtInfo[0].y)].Load<RtInstance>(128+instance*192);}
 RtMaterial rtMaterial(Look l,uint id){return buffers[NonUniformResourceIndex(l.rtInfo[0].w)].Load<RtMaterial>(id*320);}
-RtVertex rtWorldVertex(RtInstance i,RtVertex v){
-    v.position=mul(i.world,float4(v.position,1)).xyz;
-    v.normal=float3(dot(i.nx.xyz,v.normal),dot(i.ny.xyz,v.normal),dot(i.nz.xyz,v.normal));
-    v.tangent=float4(mul(i.world,float4(v.tangent.xyz,0)).xyz,v.tangent.w*asfloat(i.meta.w));
+// Corner `v` in world space through object-to-world `m`: normals by its inverse
+// transpose (the cofactor columns `k`, signed by `handedness`, the determinant's
+// sign, which also flips the tangent frame of mirrored instances).
+RtVertex rtWorldVertex(float3x4 m,float3 k0,float3 k1,float3 k2,float handedness,RtVertex v){
+    v.position=mul(m,float4(v.position,1));
+    v.normal=(k0*v.normal.x+k1*v.normal.y+k2*v.normal.z)*handedness;
+    v.tangent=float4(mul(m,float4(v.tangent.xyz,0)),v.tangent.w*handedness);
     return v;
 }
-RtTriangle rtTriangle(Look l,uint instance,uint primitive,float2 bary){
-    RtInstance i=rtInstance(l,instance);uint entry=buffers[NonUniformResourceIndex(l.rtInfo[1].y)].Load(instance*4);
+// Triangle `primitive` of instance `instance` through object-to-world `m`.
+RtTriangle rtTriangleThrough(Look l,uint instance,uint primitive,float2 bary,float3x4 m){
+    uint entry=buffers[NonUniformResourceIndex(l.rtInfo[1].y)].Load(instance*4);
     uint4 g=buffers[NonUniformResourceIndex(l.rtInfo[0].z)].Load4(entry*32);
     uint3 ix=buffers[NonUniformResourceIndex(g.z)].Load3(g.w+primitive*12);
-    RtTriangle t;t.w=float3(1-bary.x-bary.y,bary);t.material=i.meta.x;
-    t.a=rtWorldVertex(i,buffers[NonUniformResourceIndex(g.x)].Load<RtVertex>(g.y+ix.x*64));
-    t.b=rtWorldVertex(i,buffers[NonUniformResourceIndex(g.x)].Load<RtVertex>(g.y+ix.y*64));
-    t.c=rtWorldVertex(i,buffers[NonUniformResourceIndex(g.x)].Load<RtVertex>(g.y+ix.z*64));
+    float3 c0=float3(m[0][0],m[1][0],m[2][0]),c1=float3(m[0][1],m[1][1],m[2][1]),c2=float3(m[0][2],m[1][2],m[2][2]);
+    float3 k0=cross(c1,c2),k1=cross(c2,c0),k2=cross(c0,c1);float handedness=dot(c0,k0)<0?-1:1;
+    RtTriangle t;t.w=float3(1-bary.x-bary.y,bary);t.material=buffers[NonUniformResourceIndex(l.rtInfo[0].y)].Load(128+instance*192);
+    t.a=rtWorldVertex(m,k0,k1,k2,handedness,buffers[NonUniformResourceIndex(g.x)].Load<RtVertex>(g.y+ix.x*64));
+    t.b=rtWorldVertex(m,k0,k1,k2,handedness,buffers[NonUniformResourceIndex(g.x)].Load<RtVertex>(g.y+ix.y*64));
+    t.c=rtWorldVertex(m,k0,k1,k2,handedness,buffers[NonUniformResourceIndex(g.x)].Load<RtVertex>(g.y+ix.z*64));
     return t;
 }
+// A triangle as this frame's instance rows place it (alpha tests, back faces of a
+// traced interface).
+RtTriangle rtTriangle(Look l,uint instance,uint primitive,float2 bary){
+    float4x4 world=buffers[NonUniformResourceIndex(l.rtInfo[0].y)].Load<float4x4>(128+instance*192+16);
+    return rtTriangleThrough(l,instance,primitive,bary,float3x4(world[0],world[1],world[2]));
+}
+// A hit's triangle where the ray met it: through the TLAS's transform.
+RtTriangle rtHitTriangle(Look l,RtHit hit){return rtTriangleThrough(l,hit.instance,hit.primitive,hit.barycentrics,hit.objectToWorld);}
 float2 rtUv(RtUv t,RtVertex v){float2 p=(t.set==0?v.uv:v.uv1)*t.scale;float s,c;sincos(t.rotation,s,c);return t.offset+float2(c*p.x-s*p.y,s*p.x+c*p.y);}
 // Map `slot` of `m` at the hit (as native-raster.slang sampleMap), at the mip a ray
 // cone `width` metres wide covers: the triangle's texels per metre times the width.
@@ -139,7 +155,7 @@ bool rtTrace(Frame f,Look l,float3 origin,float3 direction,float tmax,out RtHit 
         while(q.Proceed()){}
         if(q.CommittedStatus()==COMMITTED_TRIANGLE_HIT){
             hit.distance=q.CommittedRayT();hit.instance=q.CommittedInstanceID();hit.primitive=q.CommittedPrimitiveIndex();
-            hit.barycentrics=q.CommittedTriangleBarycentrics();hit.front=q.CommittedTriangleFrontFace();found=true;ray.TMax=hit.distance;
+            hit.barycentrics=q.CommittedTriangleBarycentrics();hit.front=q.CommittedTriangleFrontFace();hit.objectToWorld=q.CommittedObjectToWorld3x4();found=true;ray.TMax=hit.distance;
         }
     }
     if((mask&RT_MASKED)!=0 && (l.rtInfo[1].w&RT_HAS_MASKED)!=0){
@@ -151,7 +167,7 @@ bool rtTrace(Frame f,Look l,float3 origin,float3 direction,float tmax,out RtHit 
         }
         if(q.CommittedStatus()==COMMITTED_TRIANGLE_HIT){
             hit.distance=q.CommittedRayT();hit.instance=q.CommittedInstanceID();hit.primitive=q.CommittedPrimitiveIndex();
-            hit.barycentrics=q.CommittedTriangleBarycentrics();hit.front=q.CommittedTriangleFrontFace();found=true;
+            hit.barycentrics=q.CommittedTriangleBarycentrics();hit.front=q.CommittedTriangleFrontFace();hit.objectToWorld=q.CommittedObjectToWorld3x4();found=true;
         }
     }
     return found;
@@ -176,7 +192,7 @@ bool rtOccluded(Frame f,Look l,float3 origin,float3 direction,float tmax,float s
 // geometric normal. Both normals face the ray (thin double-sided geometry shades
 // its visible side). `width`: the ray cone's footprint at the hit (m), for mips.
 Surface rtSurface(Look l,RtHit hit,float3 direction,float width,out float3 position,out float3 geometric){
-    RtTriangle t=rtTriangle(l,hit.instance,hit.primitive,hit.barycentrics);
+    RtTriangle t=rtHitTriangle(l,hit);
     position=t.a.position*t.w.x+t.b.position*t.w.y+t.c.position*t.w.z;
     float3 n=t.a.normal*t.w.x+t.b.normal*t.w.y+t.c.normal*t.w.z;
     geometric=cross(t.b.position-t.a.position,t.c.position-t.a.position);
