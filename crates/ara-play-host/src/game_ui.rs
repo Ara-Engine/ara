@@ -33,27 +33,42 @@ pub fn read(root: &Path) -> Result<Option<GameUi>, String> {
         }
         std::fs::read(root.join(path)).map_err(|e| format!("UI resource {path}: {e}"))
     };
+    let mut resource_paths = std::collections::BTreeMap::new();
+    let mut resource_diagnostics = Vec::new();
+    let mut load = |key: String, path: &str| {
+        resource_paths.insert(key, path.to_owned());
+        match bytes(path) {
+            Ok(bytes) => Some(bytes),
+            Err(error) => {
+                resource_diagnostics.push(error);
+                None
+            }
+        }
+    };
     let fonts = resources
         .fonts
         .iter()
-        .map(|path| bytes(path))
-        .collect::<Result<_, _>>()?;
+        .enumerate()
+        .map(|(index, path)| load(format!("font:{index}"), path).unwrap_or_default())
+        .collect();
     let images = resources
         .images
         .into_iter()
-        .map(|(name, path)| Ok((name, bytes(&path)?)))
-        .collect::<Result<_, String>>()?;
+        .filter_map(|(name, path)| load(format!("image:{name}"), &path).map(|bytes| (name, bytes)))
+        .collect();
+    let click = resources
+        .click
+        .as_deref()
+        .and_then(|path| load("click".into(), path))
+        .unwrap_or_default();
     Ok(Some(GameUi {
+        resource_paths,
+        resource_diagnostics,
         fonts,
         images,
         sounds: resources.sounds,
         music: resources.music,
-        click: resources
-            .click
-            .as_deref()
-            .map(bytes)
-            .transpose()?
-            .unwrap_or_default(),
+        click,
         markup: read("game.ui")?,
         stylesheet: read("game.css")?,
         bindings: serde_json::from_str(&read("bindings.json")?).map_err(|e| e.to_string())?,

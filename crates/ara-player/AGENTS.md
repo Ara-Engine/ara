@@ -141,10 +141,10 @@ factor edits, source-pivot changes and enable/disable transitions in headless Pl
 `tests/valley.rs` covers networked C#, terrain/foliage, streamed cells and audio.
 Both build .NET. Valley fixtures come from `ara-runtime-world`'s `valley` test.
 `tests/pending_game.rs` captures pending, failed and published models in a real child.
-`tests/embed.rs` (ignored; `--ignored`) is the D19 gate: the demo embedded through
-`PlayService::surfaces`, 90 frames imported on a second device of the test process
-(not black, close to a presented capture), W via `play.device` walks the Fox, typed
-and JSON resizes (new generations), stop; prints latency and per-frame cost.
+`tests/embed.rs` (`--ignored`) exercises `PlayService::surfaces`: 90 demo frames imported on another GPU device, comparisons against captures, raw W input, typed/JSON resize and stop.
+It prints frame latency and per-frame cost.
 `cargo clippy -p ara-player --all-targets -- -D warnings`.
+`cargo test -p ara-player --test embed hub_outpost -- --ignored` checks a fresh Hub Outpost template's native HUD for 30 seconds, then missing/corrupt reticles and path diagnostics.
+Use isolated Vulkan layers, `SDL_AUDIODRIVER=dummy`, and fresh `ARA_CONFIG_DIR`/`ARA_CRASH_DIR` under `target/`.
 `tests/prerequisites.rs` probes missing Vulkan/.NET startup diagnostics and doctor
 hints. Missing model sources stay playable with ARA7310 placeholders (`tests/pins.rs`).

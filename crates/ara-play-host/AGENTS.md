@@ -9,6 +9,8 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
 
 - `game_ui` packages `ui/game.ui`, its stylesheet and binding/resource manifests;
   resource paths stay inside the project and fonts/images travel with Play snapshots.
+  Failed optional resource reads travel as nonfatal diagnostics, with original
+  project-relative paths preserved for the player and editor console.
 
 - `PlayService::new(root, PlayConfig)`; `PlayConfig::for_project(root)` finds
   `ara-player`/`ara-import-worker` next to the current executable (or `ARA_PLAYER`,

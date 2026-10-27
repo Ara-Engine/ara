@@ -1505,6 +1505,7 @@ dependencies = [
  "ara-editor-gpu",
  "ara-gpu",
  "ara-host",
+ "ara-hub-service",
  "ara-import2d",
  "ara-importers",
  "ara-input",

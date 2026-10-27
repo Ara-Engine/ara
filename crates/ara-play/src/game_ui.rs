@@ -4,6 +4,13 @@ use serde::{Deserialize, Serialize};
 /// Authored `ui/game.ui`, `ui/game.css` and `ui/bindings.json` carried inside Play/export.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GameUi {
+    /// Project-relative resource paths keyed by `image:<name>`, `font:<index>` or `click`.
+    /// Retained across Play/export so resource diagnostics identify the authored file.
+    #[serde(default)]
+    pub resource_paths: std::collections::BTreeMap<String, String>,
+    /// Nonfatal resource-read failures; presentation reports them and keeps the HUD usable.
+    #[serde(default)]
+    pub resource_diagnostics: Vec<String>,
     /// Explicit licensed font bytes, packaged so exported games never use OS font discovery.
     #[serde(default)]
     pub fonts: Vec<Vec<u8>>,
