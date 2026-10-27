@@ -84,8 +84,8 @@ static const uint AO_SECTORS=32;
 // Ordered-dither index (0..15) of half-resolution pixel `p` in its 4x4 block.
 uint aoBayer(uint2 p){uint2 a=p&1,b=(p>>1)&1;return (((a.x^a.y)<<1)|a.y)*4+(((b.x^b.y)<<1)|b.y);}
 // acos to about 7e-5 rad (Abramowitz and Stegun 4.4.45): one square root, no
-// transcendental, far finer than a sector.
-float aoAcos(float x){float a=abs(x);float r=sqrt(1-a)*(1.5707288+a*(-0.2121144+a*(0.0742610-0.0187293*a)));return x<0?PI-r:r;}
+// transcendental, far finer than a sector. Arguments rounded past one clamp (no NaN).
+float aoAcos(float x){float a=min(abs(x),1);float r=sqrt(1-a)*(1.5707288+a*(-0.2121144+a*(0.0742610-0.0187293*a)));return x<0?PI-r:r;}
 // The share of the slice's hemisphere (n-pi/2..n+pi/2) below the direction at cosine
 // `c` from the view vector on side `side` (+1 towards the slice direction, where angles
 // grow), in GTAO's measure cos(x-n)|sin x|, whose integral from 0 to h is
@@ -119,6 +119,9 @@ void aoBitmaskMain(uint3 tid:SV_DispatchThreadID){
     int2 p=int2(tid.xy)*2;float depth=pixel(f.extra.x,p).x;
     if(depth<=0){images[NonUniformResourceIndex(l.aoImages.z)][tid.xy]=float4(0,0,0,1);return;}
     float2 centre=float2(p)+0.5;float3 P=worldAtDepth(f,centre,depth),N=normalize(gbufferNormal(f,p)),V=normalize(f.camera.xyz-P);
+    // Back faces (thin double-sided surfaces) occlude around the side the camera sees,
+    // as Cycles shades them: their stored normal points away from it.
+    if(dot(N,V)<0)N=-N;
     // Screen radius of the world radius at this distance.
     float3 side=normalize(cross(f.forward.xyz,abs(f.forward.y)<0.99?float3(0,1,0):float3(1,0,0)));
     float4 a=mul(f.vp,float4(P,1)),b=mul(f.vp,float4(P+side*l.ao.x,1));
@@ -127,6 +130,10 @@ void aoBitmaskMain(uint3 tid:SV_DispatchThreadID){
     uint pattern=aoBayer(tid.xy),slices=uint(l.ao.y),steps=uint(l.ao.z);
     float rotation=(float(pattern)+0.5)/16,jitter=(float((pattern*7+5)&15)+0.5)/16;
     float thickness=l.shadowParams[0].x;bool bounce=(l.shadowInfo[0].x&1)!=0;
+    // The brightest radiance a diffuse occluder of albedo one sends here: eight times
+    // the exposure's mid-grey key. Last frame's colour also holds specular glints and,
+    // on thin geometry, the background behind it; diffuse bounce never exceeds this.
+    float cap=8*0.18/exposureScale(f,exposureState(l).y);
     float visible=0,weights=0,radius2=l.ao.x*l.ao.x;float3 light=0;
     for(uint s=0;s<slices;s++){
         float phi=(float(s)+rotation)/float(slices)*PI;float2 direction=float2(cos(phi),sin(phi));
@@ -143,7 +150,7 @@ void aoBitmaskMain(uint3 tid:SV_DispatchThreadID){
             float sign=sideIndex==0?1.:-1.;uint full=sideIndex==0?positive:negative;
             // The sample hiding the most sectors on this side lends its radiance to every
             // sector the side hides: one radiance and normal fetch per side, not per sample.
-            uint sideBits=0,most=0;int2 source=0;float3 towards=0;float distance=0,span=1;
+            uint sideBits=0,most=0;int2 source=0;float3 towards=0;float span=1;
             for(uint k=0;k<steps&&(hidden&full)!=full;k++){
                 float t=(float(k)+jitter)/float(steps);float offset=max(t*t*radius,1+float(k));
                 float2 q=centre+direction*sign*offset;if(any(q<0)||any(q>=float2(f.extent.xy)))break;
@@ -159,12 +166,16 @@ void aoBitmaskMain(uint3 tid:SV_DispatchThreadID){
                 // Cutouts (gbufferOccluder) hide nothing.
                 if(gbufferOccluder(f,at)<0.5)continue;
                 hidden|=fresh;uint count=countbits(fresh);sideBits+=count;
-                if(count>most){most=count;source=at;towards=delta;span=len;distance=offset;}
+                if(count>most){most=count;source=at;towards=delta;span=len;}
             }
             if(bounce&&sideBits>0){
-                bool found;float3 radiance=aoRadiance(f,l,P+towards,distance>16?2:1,found);
-                // A diffuse sample sends its (view-independent) radiance where its front faces the pixel.
-                float facing=saturate(-dot(gbufferNormal(f,source),towards)/span*4);
+                // Half-resolution colour (the finest level: least background mixed in), as
+                // much as a diffuse surface of the occluder's albedo sends; metals send none.
+                bool found;float3 radiance=min(aoRadiance(f,l,P+towards,1,found),gbufferAlbedo(f,source).rgb*cap)*(1-gbufferMaterial(f,source).y);
+                // A diffuse sample sends its (view-independent) radiance where its front (the
+                // side the camera sees) faces the pixel.
+                float3 front=gbufferNormal(f,source);if(dot(front,f.camera.xyz-P-towards)<0)front=-front;
+                float facing=saturate(-dot(front,towards)/span*4);
                 if(found)received+=radiance*(facing*float(sideBits));
             }
         }
@@ -173,7 +184,9 @@ void aoBitmaskMain(uint3 tid:SV_DispatchThreadID){
     }
     // Open sectors carry no screen light; irradiance is pi times the cosine-weighted mean radiance.
     float v=weights>0?visible/weights:1;float3 e=weights>0?light/weights*(PI*l.shadowParams[0].y):0;
-    images[NonUniformResourceIndex(l.aoImages.z)][tid.xy]=float4(min(e,float3(60000)),v);
+    // Finite and non-negative whatever the input: the denoise and lighting average these.
+    v=isnan(v)?1:saturate(v);e=any(isnan(e))?float3(0):clamp(e,0,60000);
+    images[NonUniformResourceIndex(l.aoImages.z)][tid.xy]=float4(e,v);
 }
 // 4x4 depth-aware box around each half-resolution pixel of the bitmask trace: it holds
 // each phase of the trace's 4x4 pattern once, so the pattern averages out exactly on
@@ -188,7 +201,7 @@ void aoBitmaskDenoiseMain(uint3 tid:SV_DispatchThreadID){
     for(int y=-2;y<=1;y++)for(int x=-2;x<=1;x++){
         int2 q=clamp(c+int2(x,y),int2(0),int2(half)-1);float d=pixel(f.extra.x,q*2).x;
         // exp(-50 |d/depth - 1|): 2% relative depth is one e-fold; background weighs nothing.
-        float w=d>0?exp2(-abs(d-depth)*scale):0;sum+=pixel(l.aoImages.x,q)*w;total+=w;
+        float4 a=pixel(l.aoImages.x,q);float w=d>0&&!any(isnan(a))?exp2(-abs(d-depth)*scale):0;sum+=w>0?a*w:0;total+=w;
     }
     images[NonUniformResourceIndex(l.aoImages.w)][tid.xy]=total>1e-5?sum/total:pixel(l.aoImages.x,c);
 }

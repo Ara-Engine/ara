@@ -324,6 +324,8 @@ impl LookGpu {
             [(ids.image(AO_TRACE), Access::Storage)]
                 .into_iter()
                 .chain((bitmask && reflected).then(|| (ids.image(SSR_PYRAMID), Access::ShaderRead)))
+                // The exposure key caps the bounce's radiance.
+                .chain(bitmask.then_some((ids.state, Access::ShaderRead)))
                 .chain(common)
                 .chain(reads.iter().copied()),
         );
