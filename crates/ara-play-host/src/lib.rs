@@ -8,6 +8,7 @@
 pub mod assets;
 pub mod embed;
 mod game_ui;
+mod headless;
 mod keep;
 mod lifecycle;
 mod package;
@@ -178,6 +179,8 @@ pub struct PlayService {
     channel: Option<embed::Channel>,
     /// Warm a bounded headless graphics view only for an attached Game surface.
     graphics_prewarm: bool,
+    /// The daemon owns headless tools; editors retain their render-boundary capture service.
+    headless_automation: bool,
 }
 
 impl PlayService {
@@ -210,7 +213,15 @@ impl PlayService {
             next: 0,
             channel: None,
             graphics_prewarm: false,
+            headless_automation: false,
         }
+    }
+
+    /// Enables the daemon's one-shot run/capture tools. Native editors provide
+    /// their own capture service and keep the default Play-only registration.
+    pub fn with_headless_automation(mut self) -> Self {
+        self.headless_automation = true;
+        self
     }
 
     /// Starts building the player pool on a background thread, unless it exists, is
@@ -1137,6 +1148,8 @@ impl Service for PlayService {
     fn methods(&self, db: &mut SchemaDb) -> Vec<Method> {
         let play = |m: Method, action: &str| m.scope(Scope::Play).action("ara_play", action);
         vec![
+            Method::new::<headless::HeadlessRunParams>(db, "run", "Run a project or scene headless for exact fixed ticks or simulated seconds; returns results, logs and diagnostics.").scope(Scope::Play).tool("ara_run"),
+            Method::new::<headless::SceneCaptureParams>(db, "capture", "Render a scene or named camera offscreen to PNG at a resolution and quality preset; no windows.").scope(Scope::Play).tool("ara_capture"),
             play(Method::new::<PlayStartParams>(db, "play.start", "Start the scene in pooled player processes (local, host+N or dedicated+N; windowed or headless)."), "start"),
             play(Method::new::<WorldParams>(db, "play.stop", "Stop a play world; its single-use players exit."), "stop"),
             play(Method::new::<WorldParams>(db, "play.pause", "Freeze host-time ticking (explicit steps still work)."), "pause"),
@@ -1171,7 +1184,7 @@ impl Service for PlayService {
             Method::new::<TestRunParams>(db, "test.run", "Run a playtest (inputs, steps, tick-level assertions) in a fresh headless player; optionally twice for determinism.")
                 .scope(Scope::Play)
                 .tool("ara_test"),
-        ]
+        ].into_iter().filter(|m| self.headless_automation || !matches!(m.name.as_str(), "run" | "capture")).collect()
     }
 
     fn call(
@@ -1187,6 +1200,16 @@ impl Service for PlayService {
                 .map_or_else(|| latest.clone(), str::to_owned)
         };
         match method {
+            "run" => {
+                let p = parse(params)?;
+                let result = self.run_scene(cx, p);
+                self.with_notes(cx, result)
+            }
+            "capture" => {
+                let p = parse(params)?;
+                let result = self.capture_scene(cx, p);
+                self.with_notes(cx, result)
+            }
             "play.start" => {
                 let p: PlayStartParams = parse(params)?;
                 if p.background == Some(true) {

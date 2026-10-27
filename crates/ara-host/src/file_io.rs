@@ -620,6 +620,7 @@ mod tests {
 
     fn txn(n: u64) -> Entry {
         Entry::Txn {
+            untracked: false,
             session: None,
             txn: serde_json::from_value(serde_json::json!({
                 "id": format!("tx_{n}"), "author": "agent:a", "base": n - 1, "result": n, "ops": []

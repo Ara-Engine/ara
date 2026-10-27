@@ -506,6 +506,11 @@ fn targets(
 }
 
 fn record_review(st: &mut State, txn: &TxnId, entity: Option<&str>, status: ReviewStatus) {
+    if !st.review.is_tracked(txn)
+        && let Some(target) = st.store.txn(txn)
+    {
+        st.review.track(target);
+    }
     st.review.set(txn, entity, status);
     st.journal(Entry::Review {
         txn: txn.0.clone(),
@@ -546,11 +551,58 @@ pub(super) fn accept(st: &mut State, sid: &str, p: ReviewParams) -> R {
 
 pub(super) fn revert(st: &mut State, sid: &str, p: ReviewParams) -> R {
     let author = session(st, sid)?.author.clone();
-    let picked = targets(st, &p, &[ReviewStatus::Applied, ReviewStatus::Accepted])?;
-    if let Some(group) = p
-        .txn
-        .as_ref()
-        .and_then(|id| st.store.txn(&TxnId(id.clone())))
+    let mut picked = if p.txn.is_none() && p.entity.is_some() {
+        st.store
+            .history()
+            .iter()
+            .rev()
+            .filter(|t| st.store.undoable(&t.id) && !st.review.is_excluded(&t.id))
+            .filter_map(|t| {
+                let keys: Vec<_> = touched(t)
+                    .into_iter()
+                    .filter(|key| {
+                        p.entity.as_ref().is_some_and(|entity| {
+                            key == entity || key.ends_with(&format!("/{entity}"))
+                        }) && st
+                            .review
+                            .entities(&t.id)
+                            .and_then(|e| e.get(key))
+                            .is_none_or(|status| *status != ReviewStatus::Reverted)
+                    })
+                    .collect();
+                (!keys.is_empty()).then(|| (t.id.clone(), keys))
+            })
+            .collect()
+    } else {
+        targets(st, &p, &[ReviewStatus::Applied, ReviewStatus::Accepted])?
+    };
+    if p.txn.is_none() && p.entity.is_some() {
+        // An entity shortcut means one recent turn. Agent callers select their
+        // own attribution; humans can select the latest turn of either author kind.
+        if matches!(author, Author::Agent(_)) {
+            picked.retain(|(id, _)| st.store.txn(id).is_some_and(|t| t.author == author));
+        }
+        let latest = picked.first().map(|(id, _)| id.clone()).ok_or_else(|| vec![
+            Diagnostic::error(codes::NOT_REVIEWABLE, format!("{author} has no applicable changes for this entity; give a transaction ID to revert another agent's turn"))
+        ])?;
+        let group = st
+            .store
+            .txn(&latest)
+            .and_then(|t| crate::gesture::turn(t.label.as_deref()))
+            .map(|(id, _)| id.to_owned());
+        picked.retain(|(id, _)| {
+            *id == latest
+                || group.as_ref().is_some_and(|group| {
+                    st.store
+                        .txn(id)
+                        .and_then(|t| crate::gesture::turn(t.label.as_deref()))
+                        .is_some_and(|(id, _)| id == group)
+                })
+        });
+    }
+    if let Some(group) = picked
+        .first()
+        .and_then(|(id, _)| st.store.txn(id))
         .and_then(|t| crate::gesture::turn(t.label.as_deref()))
         .map(|(id, _)| id.to_owned())
     {
@@ -594,8 +646,32 @@ pub(super) fn revert(st: &mut State, sid: &str, p: ReviewParams) -> R {
                 None => continue,
             }
         };
-        done.push(json!({ "txn": txn, "entities": keys, "by": by }));
+        done.push(
+            json!({ "txn": txn, "entities": keys, "by": by, "author":target.author,
+            "why":target.why,"label":target.label }),
+        );
     }
     st.drain();
-    Ok(json!({ "reverted": done, "revision": st.store.revision() }))
+    let text: String = done
+        .iter()
+        .map(|t| {
+            format!(
+                "Reverted {} by {}: {} ({}).\n",
+                t["txn"].as_str().unwrap_or_default(),
+                t["author"].as_str().unwrap_or_default(),
+                t["why"]
+                    .as_str()
+                    .or_else(|| t["label"].as_str())
+                    .unwrap_or("entity changes"),
+                t["entities"]
+                    .as_array()
+                    .map_or_else(String::new, |keys| keys
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .collect::<Vec<_>>()
+                        .join(", "))
+            )
+        })
+        .collect();
+    Ok(json!({ "reverted": done, "revision": st.store.revision(), "text":text }))
 }

@@ -394,9 +394,9 @@ pub struct ReviewParams {
     /// Transaction (`tx_...`). With `entity`, only that entity's changes in it.
     pub txn: Option<String>,
     /// Entity (`e_8b21`, or `sc_arena001/e_8b21` to name the document). Without
-    /// `txn`: its changes in every unreviewed transaction.
+    /// `txn`: its latest applicable agent turn (the caller's own turn for agents).
     pub entity: Option<String>,
-    /// Every unreviewed transaction.
+    /// Every applicable transaction (accept is idempotent under D24).
     pub all: Option<bool>,
 }
 

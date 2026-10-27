@@ -221,6 +221,51 @@ fn init_writes_the_project_template() {
 }
 
 #[test]
+fn offline_redo_survives_each_cli_process_and_clears_after_a_new_edit() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/preview4-tests")
+        .join(format!("offline-redo-{}", std::process::id()));
+    fs::create_dir_all(&root).expect("scratch directory");
+    assert_eq!(ara_in(&root, &["init"]).0, 0);
+    let args = ["--author", "agent:redo", "--json"];
+    let invoke = |tail: &[&str]| {
+        let mut all = args.to_vec();
+        all.extend(tail);
+        let (code, out, error) = ara_in(&root, &all);
+        assert_eq!(code, 0, "{all:?}: {out}{error}");
+        json_of(&out)
+    };
+    let created = invoke(&[
+        "do",
+        "entity.create",
+        "-p",
+        "name=RedoProbe",
+        "--why",
+        "test redo",
+    ]);
+    let txn = created["txn"].clone();
+    let undo = invoke(&["undo"]);
+    assert_eq!(undo["reverts"], txn);
+    let redo = invoke(&["redo"]);
+    assert_eq!(redo["reverts"], undo["txn"]);
+    let (code, out, error) = ara_in(&root, &["query", "name:RedoProbe", "--json"]);
+    assert_eq!(code, 0, "{out}{error}");
+    assert!(out.contains("RedoProbe"));
+    invoke(&["undo"]);
+    invoke(&[
+        "do",
+        "entity.create",
+        "-p",
+        "name=NewProbe",
+        "--why",
+        "clear redo",
+    ]);
+    let (code, out, _) = ara_in(&root, &["redo", "--author", "agent:redo", "--json"]);
+    assert_eq!(code, 1, "{out}");
+    assert_eq!(json_of(&out)["diagnostics"][0]["code"], "ARA1505");
+}
+
+#[test]
 fn protocol_commands_work_offline_and_keep_history_between_runs() {
     let root = scratch("offline");
     ara_in(&root, &["init"]);

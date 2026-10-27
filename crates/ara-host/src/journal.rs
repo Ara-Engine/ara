@@ -50,6 +50,9 @@ pub enum Entry {
     },
     /// A committed transaction and the session that made it.
     Txn {
+        /// A compensating transaction that must not become a new reviewable turn.
+        #[serde(default)]
+        untracked: bool,
         /// Session handle, if a session made it (external edits have none).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         session: Option<String>,
@@ -228,6 +231,7 @@ pub fn compact(entries: &[Entry], keep: usize) -> Vec<Entry> {
             Entry::Txn {
                 session: Some(s),
                 txn,
+                ..
             } if kept.contains(txn.id.0.as_str()) => Some(s.as_str()),
             _ => None,
         })
@@ -282,6 +286,7 @@ mod tests {
 
     fn txn(n: u64) -> Entry {
         Entry::Txn {
+            untracked: false,
             session: Some(format!("ses_{n}")),
             txn: serde_json::from_value(json!({
                 "id": format!("tx_{n}"), "author": "agent:a", "base": n - 1, "result": n, "ops": []

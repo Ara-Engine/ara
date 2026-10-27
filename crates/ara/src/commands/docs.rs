@@ -4,6 +4,7 @@
 use std::fs;
 use std::path::Path;
 
+use ara_host::Service;
 use ara_host::docs;
 use serde_json::json;
 
@@ -13,21 +14,32 @@ use crate::project::Project;
 pub fn docs(project: &Project, out: Option<&Path>, json_out: bool) -> Result<bool, String> {
     let dir = out.map_or_else(|| project.root.join(".ara").join("docs"), Path::to_path_buf);
     let name = project.name();
-    let pages = docs::generate(
-        &project.db,
-        &project.registry,
-        &ara_host::core_methods(),
-        &name,
-    );
+    let mut methods = ara_host::core_methods();
+    let service = ara_play_host::PlayService::new(
+        &project.root,
+        ara_play_host::PlayConfig::for_project(&project.root),
+    )
+    .with_headless_automation();
+    let mut method_db = ara_schema::SchemaDb::new();
+    methods.extend(service.methods(&mut method_db).into_iter().map(|m| {
+        ara_proto::MethodInfo {
+            params: method_db
+                .get(&m.params)
+                .map(|t| method_db.type_json_schema(t))
+                .unwrap_or_default(),
+            name: m.name,
+            summary: m.summary,
+            scope: m.scope,
+            hints: m.hints,
+            tool: m.tool,
+            service: service.name().into(),
+        }
+    }));
+    let pages = docs::generate(&project.db, &project.registry, &methods, &name);
     let mut files = vec![
         (
             "docs.json".to_owned(),
-            docs::structured(
-                &project.db,
-                &project.registry,
-                &ara_host::core_methods(),
-                &name,
-            ),
+            docs::structured(&project.db, &project.registry, &methods, &name),
         ),
         ("llms.txt".to_owned(), docs::llms_txt(&pages, &name)),
         ("llms-full.txt".to_owned(), docs::llms_full(&pages, &name)),

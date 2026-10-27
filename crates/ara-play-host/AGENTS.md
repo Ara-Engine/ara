@@ -12,7 +12,9 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
   Failed optional resource reads travel as nonfatal diagnostics, with original
   project-relative paths preserved for the player and editor console.
 
-- `PlayService::new(root, PlayConfig)`; `PlayConfig::for_project(root)` finds
+- `PlayService::new(root, PlayConfig).with_headless_automation()` enables daemon
+  run/capture; native editors keep their render-boundary capture service.
+  `PlayConfig::for_project(root)` finds
   `ara-player`/`ara-import-worker` next to the current executable (or `ARA_PLAYER`,
   `ARA_IMPORT_WORKER`), the .NET host (`ScriptPaths::locate`: `ARA_DOTNET_ARTIFACTS`
   or the nearest `dotnet/artifacts/bin`; installed tools beside the executable take
@@ -65,6 +67,11 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
   `DeviceEvent`, `method` (wire names mirrored by ara-player; its unit test checks).
 
 ## Methods
+
+`run {scene?,ticks?|duration?,seed?,tickHz?}` runs a fresh headless world and returns
+tick/hash, logs, events and diagnostics. `capture {scene?,camera?,path?,width?,height?,preset?,ticks?,seed?,marks?}`
+captures the same snapshot offscreen to PNG. Both stop and reap their own players
+before returning, including on failure; they never create windows.
 
 `play.start {scene?, mode local|host|dedicated, clients, window, embed?: {width, height,
 maxFps?}, startPaused, seed, tickHz, hotReload}` → `{world: "play:N", players[{role,

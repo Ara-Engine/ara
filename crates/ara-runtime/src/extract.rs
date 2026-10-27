@@ -108,6 +108,38 @@ pub struct CameraView {
     pub fov: f32,
 }
 
+/// A named camera at its resolved ECS pose. Ambiguous names require an ID/address.
+pub fn named_camera(world: &mut World, selector: &str) -> Result<CameraView, String> {
+    let selector = selector.strip_prefix("name:").unwrap_or(selector);
+    let mut query = world.query::<(
+        &Identity,
+        &Camera,
+        Option<&SceneMetadata>,
+        Option<&WorldPose>,
+    )>();
+    let mut found = None;
+    for (identity, camera, metadata, pose) in query.iter(world) {
+        if identity.0 != selector
+            && !identity.0.ends_with(&format!("#{selector}"))
+            && metadata.is_none_or(|m| m.name != selector)
+        {
+            continue;
+        }
+        if found.is_some() {
+            return Err(format!(
+                "camera `{selector}` is ambiguous; use its document address"
+            ));
+        }
+        let pose = pose.map_or(Pose::IDENTITY, |p| p.0);
+        found = Some(CameraView {
+            position: pose.translation.to_array(),
+            forward: (pose.rotation * Vec3::NEG_Z).normalize().to_array(),
+            fov: camera.fov,
+        });
+    }
+    found.ok_or_else(|| format!("no Camera matches `{selector}`"))
+}
+
 /// Terrain for presentation: the shared evaluated tiles and foliage, and the tiles
 /// whose `TerrainChunk` entities are resident (detail pages follow them).
 #[derive(Clone)]

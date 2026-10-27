@@ -195,6 +195,7 @@ pub fn publish(
         min_hub_version: if kind == Kind::Engine {
             env!("CARGO_PKG_VERSION")
         } else {
+            // Protocol compatibility floor for Hub self-updates, independent of the release label.
             "0.0.1-alpha"
         }
         .into(),

@@ -470,8 +470,8 @@ expression: pretty
   },
   {
     "name": "ara_run",
-    "title": "Run code",
-    "description": "Run C# against the typed engine SDK inside a transaction (code mode). Edits still become commands, so they stay reviewable and revertible. Not available in this engine build yet: calls return diagnostic ARA1806 until a service provides it.",
+    "title": "Run a project",
+    "description": "Run the project or a scene headless for fixed ticks or simulated seconds. Returns the deterministic state hash, results, logs and diagnostics. Not available in this engine build yet: calls return diagnostic ARA1806 until a service provides it.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -485,7 +485,7 @@ expression: pretty
       ]
     },
     "annotations": {
-      "title": "Run code",
+      "title": "Run a project",
       "readOnlyHint": false,
       "destructiveHint": false,
       "idempotentHint": false,
@@ -784,11 +784,11 @@ expression: pretty
         },
         "entity": {
           "type": "string",
-          "description": "Entity (`e_8b21`, or `sc_arena001/e_8b21` to name the document). Without `txn`: its changes in every unreviewed transaction. (for: revert)"
+          "description": "Entity (`e_8b21`, or `sc_arena001/e_8b21` to name the document). Without `txn`: its latest applicable agent turn (the caller's own turn for agents). (for: revert)"
         },
         "all": {
           "type": "boolean",
-          "description": "Every unreviewed transaction. (for: revert)"
+          "description": "Every applicable transaction (accept is idempotent under D24). (for: revert)"
         },
         "subjects": {
           "type": "array",

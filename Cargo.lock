@@ -2213,6 +2213,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-diag",
  "ara-material",
+ "ara-schema",
  "serde",
  "serde_json",
 ]

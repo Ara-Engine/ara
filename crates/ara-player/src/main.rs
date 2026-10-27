@@ -887,6 +887,9 @@ impl Player {
                 let presenter2d = self
                     .presenter2d
                     .get_or_insert_with(|| Presenter2d::new(&self.args.gpu_cache));
+                if let Some(presenter) = &mut self.presenter {
+                    presenter.set_quality(params.preset.map(Into::into).unwrap_or(self.quality));
+                }
                 serde_json::to_value(world.capture(
                     &params,
                     self.presenter.as_mut(),

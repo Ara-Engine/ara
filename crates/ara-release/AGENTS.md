@@ -6,8 +6,8 @@ installed distribution. The setup stub both installers start with is the
 `ara-setup` crate (window, silent CLI, same-version replace; see its AGENTS.md);
 packaging appends the portable ZIP to `target/release/ara-setup.exe`.
 
-`cargo run -p ara-release -- package --version 0.0.1-alpha`
-`cargo run -p ara-release -- notes --version 0.0.1-alpha`
+`cargo run -p ara-release -- package --version <workspace.package.version>`
+`cargo run -p ara-release -- notes --version <workspace.package.version>`
 `cargo run -p ara-release -- smoke`
 `smoke --artifacts <existing release-dist>` tests packages without rebuilding them.
 Engine packaging/`notes` copy root RELEASE_NOTES.md verbatim and require its version header.

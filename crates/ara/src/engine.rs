@@ -35,6 +35,13 @@ pub fn endpoint(root: &Path) -> Result<Box<dyn Endpoint>, Diagnostic> {
                 ara_audio_why::register(h.why());
                 h.why().register(Box::new(ara_ai::why::NpcExplainer));
                 ara_world::service::register(&mut h)?;
+                h.register(Box::new(
+                    ara_play_host::PlayService::new(
+                        root,
+                        ara_play_host::PlayConfig::for_project(root),
+                    )
+                    .with_headless_automation(),
+                ))?;
                 return Ok(Box::new(h));
             }
             Err(d) if d.code == codes::DAEMON_RUNNING && start.elapsed() < LOCK_WAIT => {

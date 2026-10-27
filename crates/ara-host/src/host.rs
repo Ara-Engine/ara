@@ -730,6 +730,7 @@ impl State {
                 .map(|p| p.0.clone())
                 .or_else(|| self.calling.clone());
             self.journal(Entry::Txn {
+                untracked: self.untracked,
                 session: session.clone(),
                 txn: txn.clone(),
             });
@@ -760,6 +761,10 @@ impl State {
     }
 
     fn track_review(&mut self, txn: &Transaction) {
+        if self.untracked {
+            self.review.exclude(txn.id.clone());
+            return;
+        }
         match &txn.reverts {
             Some(target) if self.review.is_tracked(target) => {
                 self.review.set(target, None, ReviewStatus::Reverted);
@@ -850,7 +855,11 @@ impl State {
         }
         for e in entries {
             match e {
-                Entry::Txn { session, txn } => {
+                Entry::Txn {
+                    session,
+                    txn,
+                    untracked,
+                } => {
                     if stopped {
                         continue;
                     }
@@ -900,7 +909,11 @@ impl State {
                             if let Some(s) = session {
                                 self.txn_session.insert(txn.id.clone(), s.clone());
                             }
-                            self.track_review(txn);
+                            if !untracked {
+                                self.track_review(txn);
+                            } else {
+                                self.review.exclude(txn.id.clone());
+                            }
                         }
                         Err(diags) => {
                             stopped = true;
@@ -930,14 +943,22 @@ impl State {
                     txn,
                     entity,
                     status,
-                } => self.review.set(
-                    &TxnId(txn.clone()),
-                    entity.as_deref(),
-                    match status {
-                        ReviewStatus::Applied => ReviewStatus::Accepted,
-                        status => *status,
-                    },
-                ),
+                } => {
+                    let id = TxnId(txn.clone());
+                    if !self.review.is_tracked(&id)
+                        && let Some(target) = self.store.txn(&id)
+                    {
+                        self.review.track(target);
+                    }
+                    self.review.set(
+                        &id,
+                        entity.as_deref(),
+                        match status {
+                            ReviewStatus::Applied => ReviewStatus::Accepted,
+                            status => *status,
+                        },
+                    );
+                }
                 Entry::Base { .. } | Entry::Flush { .. } => {}
             }
         }

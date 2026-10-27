@@ -459,6 +459,125 @@ fn dry_run_equals_apply_and_symbols_map_to_real_ids() {
 }
 
 #[test]
+fn entity_revert_works_for_human_authored_cli_history_too() {
+    let dir = project("human-entity-revert");
+    let mut h = open(&dir, 414);
+    let human = begin(&mut h, "human");
+    let change = call(
+        &mut h,
+        "cmd.apply",
+        json!({"session":human,"commands":[
+            {"cmd":"property.set","args":{"entity":"e_flr1","path":"name","value":"Ground"}}
+        ]}),
+    );
+    let result = call(
+        &mut h,
+        "review.revert",
+        json!({"session":human,"entity":"e_flr1"}),
+    );
+    assert_eq!(result["reverted"][0]["txn"], change["txn"]);
+    assert_eq!(result["reverted"][0]["author"], "human");
+    assert_eq!(name_of(&mut h, &human, "e_flr1"), "Floor");
+}
+
+#[test]
+fn partial_entity_reverts_do_not_become_new_agent_turns_after_restart() {
+    for (index, who) in ["agent:builder", "human"].into_iter().enumerate() {
+        let dir = project(&format!("partial-revert-restart-{index}"));
+        let mut h = open(&dir, 412);
+        let agent = begin(&mut h, who);
+        let made = call(
+            &mut h,
+            "cmd.apply",
+            json!({"session":agent,"why":"two entity turn","commands":[
+                {"cmd":"property.set","args":{"entity":"e_flr1","path":"name","value":"Ground"}},
+                {"cmd":"entity.create","as":"marker","args":{"name":"Marker"}}
+            ]}),
+        );
+        let marker = made["ids"]["$marker"].as_str().expect("marker").to_owned();
+        call(
+            &mut h,
+            "review.revert",
+            json!({"session":agent,"entity":marker}),
+        );
+        drop(h);
+        let mut h = open(&dir, 413);
+        let agent = begin(&mut h, who);
+        assert_eq!(
+            fail(
+                &mut h,
+                "review.revert",
+                json!({"session":agent,"entity":marker})
+            )
+            .code,
+            codes::NOT_REVIEWABLE,
+            "a compensating transaction is not another authoring turn"
+        );
+        assert_eq!(name_of(&mut h, &agent, "e_flr1"), "Ground");
+    }
+}
+
+#[test]
+fn entity_revert_selects_the_calling_agents_latest_turn_and_reports_attribution() {
+    let dir = project("entity-latest-turn");
+    let mut h = open(&dir, 410);
+    let agent = begin(&mut h, "agent:builder");
+    let other = begin(&mut h, "agent:lighting");
+    let edit = |h: &mut Host, session: &str, name: &str| {
+        call(
+            h,
+            "cmd.apply",
+            json!({
+                "session":session,"why":name,"commands":[{"cmd":"property.set","args":{
+                    "entity":"e_flr1","path":"name","value":name
+                }}]
+            }),
+        )
+    };
+    edit(&mut h, &agent, "Ground");
+    let latest = edit(&mut h, &agent, "Recent ground");
+    call(
+        &mut h,
+        "cmd.apply",
+        json!({"session":other,"why":"light separately","commands":[
+            {"cmd":"property.set","args":{"entity":"e_flr1","path":"Transform.position","value":[1,0,0]}}
+        ]}),
+    );
+    call(&mut h, "review.accept", json!({"session":agent,"all":true}));
+    drop(h);
+    let mut h = open(&dir, 411);
+    let agent = begin(&mut h, "agent:builder");
+    let result = call(
+        &mut h,
+        "review.revert",
+        json!({"session":agent,"entity":"e_flr1"}),
+    );
+    assert_eq!(
+        result["reverted"].as_array().map(Vec::len),
+        Some(1),
+        "{result}"
+    );
+    assert_eq!(result["reverted"][0]["txn"], latest["txn"]);
+    assert_eq!(result["reverted"][0]["author"], "agent:builder");
+    assert!(
+        result["text"]
+            .as_str()
+            .is_some_and(|s| s.contains("Recent ground"))
+    );
+    assert_eq!(name_of(&mut h, &agent, "e_flr1"), "Ground");
+    let inspected = call(
+        &mut h,
+        "inspect",
+        json!({"session":agent,"entities":["e_flr1"],"format":"json"}),
+    );
+    assert!(
+        inspected.to_string().contains("1.0") || inspected.to_string().contains("[1,0,0]"),
+        "{inspected}"
+    );
+    call(&mut h, "review.accept", json!({"session":agent,"all":true}));
+}
+
+#[test]
 fn review_accepts_and_reverts_per_transaction_and_entity() {
     let dir = project("review");
     let mut h = open(&dir, 4);

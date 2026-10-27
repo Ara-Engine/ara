@@ -66,7 +66,7 @@ and the op stream for the Engine Protocol. Depends on ara-doc, ara-schema, ara-d
 - History is unbounded in memory. The on-disk journal, review state
   (applied/accepted/reverted) and checkpoints live in `ara-host`, which drives
   `restore` on startup.
-- `restore` does not rebuild redo stacks.
+- Live commits and `restore` share undo/redo stack transitions; journal replay preserves both stacks and new-edit invalidation.
 
 ## Testing
 

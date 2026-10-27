@@ -9,6 +9,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+mod readme;
 mod symbols_payload;
 
 const BINARIES: &[(&str, &str)] = &[
@@ -126,11 +127,11 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
         "uninstall.ps1",
         "launch-hub.ps1",
         "launch-editor.ps1",
-        "README-FIRST.txt",
         "LICENSE",
     ] {
         copy(&root.join("release").join(file), &stage.join(file))?;
     }
+    fs::write(stage.join("README-FIRST.txt"), readme::render(version))?;
     bundle_tools(root, &stage, &sdk)?;
     if hub {
         let script = stage.join("install.ps1");
