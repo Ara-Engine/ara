@@ -149,7 +149,8 @@ pub(crate) fn pack(
         .stdout(File::create(setup.join("export.jsonl"))?)
         .stderr(Stdio::inherit());
     eprintln!("Freezing {} once; {}", project.display(), setup.display());
-    crate::gpu::locked(3600, || {
+    // Freezing prepares a scene; the measurement that follows carries the guard.
+    crate::gpu::locked_unmeasured(3600, || {
         super::run_command(root, &mut command, "sample export", 1800)
     })?;
     // Export publishes a dist folder; accept only the actual runtime launch contract.

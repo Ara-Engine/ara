@@ -149,10 +149,29 @@ pub(crate) fn locked<T>(timeout: u64, operation: impl FnOnce() -> Result<T>) -> 
     )
 }
 
+/// Serializes GPU work like [`locked`] without judging foreign load. For preparation
+/// that is not a measurement (freezing perf scenes): an export's import workers can
+/// outlive the process that spawned them, so the guard cannot attribute them to us.
+pub(crate) fn locked_unmeasured<T>(
+    timeout: u64,
+    operation: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    locked_inner(timeout, None, operation)
+}
+
 fn locked_with<T>(
     timeout: u64,
     wait_for_quiet: bool,
     policy: crate::gpu_guard::Policy,
+    operation: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    locked_inner(timeout, Some((wait_for_quiet, policy)), operation)
+}
+
+/// Admission through the GPU queue, plus the foreign-load guard when `guard` is set.
+fn locked_inner<T>(
+    timeout: u64,
+    guard: Option<(bool, crate::gpu_guard::Policy)>,
     operation: impl FnOnce() -> Result<T>,
 ) -> Result<T> {
     let local = std::env::var_os("LOCALAPPDATA")
@@ -198,14 +217,11 @@ fn locked_with<T>(
         .map(PathBuf::from)
         .unwrap_or(std::env::current_dir()?);
     let path = crate::gpu_guard::default_path(&root);
-    let guard = if crate::gpu_guard::active() {
-        None
-    } else {
-        Some(crate::gpu_guard::Guard::start(
-            wait_for_quiet,
-            path.clone(),
-            policy,
-        )?)
+    let guard = match guard {
+        Some((wait_for_quiet, policy)) if !crate::gpu_guard::active() => Some(
+            crate::gpu_guard::Guard::start(wait_for_quiet, path.clone(), policy)?,
+        ),
+        _ => None,
     };
     let mut result = operation();
     if let Some(guard) = guard {
