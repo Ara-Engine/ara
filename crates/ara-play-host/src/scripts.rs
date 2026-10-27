@@ -282,6 +282,30 @@ impl PlayService {
 mod discovery_tests {
     use super::*;
     #[test]
+    fn a_root_module_keeps_its_generated_types_out_of_project_types() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-play-host/root-module-types")
+            .join(std::process::id().to_string());
+        std::fs::create_dir_all(root.join("types")).unwrap();
+        std::fs::write(
+            root.join("ara.module.toml"),
+            "[module]
+name=\"Root\"
+",
+        )
+        .unwrap();
+        std::fs::write(root.join("Root.types.json"), r#"{"types":{"Spinner":{}}}"#).unwrap();
+        std::fs::write(
+            root.join("types/Project.types.json"),
+            r#"{"types":{"Door":{}}}"#,
+        )
+        .unwrap();
+        let mut found = Vec::new();
+        crate::types_files(&root, &root, &mut found);
+        assert_eq!(found, vec![serde_json::json!({"types":{"Door":{}}})]);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     fn root_and_nested_modules_keep_their_own_identity() {
         let root =
             std::env::temp_dir().join(format!("ara-script-discovery-{}", std::process::id()));

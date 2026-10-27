@@ -1099,6 +1099,9 @@ fn types_files(root: &Path, dir: &Path, out: &mut Vec<Value>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
+    // A C# module's folder (the project root can be one) holds its generated types,
+    // which the player's host registers itself.
+    let module = dir.join("ara.module.toml").exists();
     let mut entries: Vec<_> = entries.flatten().collect();
     entries.sort_by_key(|e| e.path());
     for entry in entries {
@@ -1113,6 +1116,7 @@ fn types_files(root: &Path, dir: &Path, out: &mut Vec<Value>) {
                 types_files(root, &path, out);
             }
         } else if name.ends_with(".types.json")
+            && !module
             && let Some(value) = std::fs::read_to_string(&path)
                 .ok()
                 .and_then(|t| serde_json::from_str(&t).ok())
