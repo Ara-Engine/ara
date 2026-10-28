@@ -70,6 +70,14 @@ float3 bloomTent(Frame f,uint sampled,uint storage,bool inPlace,uint level,float
         sum+=v*(x==0?2:1)*(y==0?2:1);
     }return sum/16;
 }
+// One tap of bloomMain's 13-tap downsample: the scene `offset` texels from `uv`, out of
+// the history's encoding (`scale`), clamped against HDR overflow.
+float3 bloomTap(float2 uv,float2 offset,float2 texel,float scale){return min(historyTex(root.materials,uv+offset*texel).rgb*scale,float3(60000));}
+// One 2x2 block (taps a..d) of the 13-tap downsample: its mean, weighted (Karis) by
+// `weight` over 1 + exposed luminance, accumulated into `c` and `total`.
+void bloomBlock(float3 a,float3 b,float3 d,float3 e,float weight,float exposure,inout float3 c,inout float total){
+    float3 m=(a+b+d+e)/4;float w=weight/(1+luminance(m)*exposure);c+=m*w;total+=w;
+}
 [shader("compute")][numthreads(8,8,1)]
 void bloomMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);uint pass=root.material;
@@ -79,13 +87,20 @@ void bloomMain(uint3 tid:SV_DispatchThreadID){
         // 13-tap downsample (Jimenez 2014) of the scene to quarter resolution, taps two
         // texels apart (each bilinear), with Karis weights per 2x2 block on exposed
         // luminance, so lone HDR fireflies cannot flash into the glow.
-        float2 texel=2/float2(f.extent.xy),uv=(float2(p)+0.5)*2*texel;float3 t[13];float scale=1/inputScale(f,l,true);
-        float2 o[13]={float2(-2,-2),float2(0,-2),float2(2,-2),float2(-1,-1),float2(1,-1),float2(-2,0),float2(0,0),float2(2,0),float2(-1,1),float2(1,1),float2(-2,2),float2(0,2),float2(2,2)};
-        // Unrolled, so every index is a constant and the arrays stay in registers.
-        [unroll]for(uint i=0;i<13;i++)t[i]=min(historyTex(root.materials,uv+o[i]*texel).rgb*scale,float3(60000));
-        uint4 groups[5]={uint4(3,4,8,9),uint4(0,1,5,6),uint4(1,2,6,7),uint4(5,6,10,11),uint4(6,7,11,12)};
-        float exposure=exposureState(l).x;float weights[5]={0.5,0.125,0.125,0.125,0.125};c=0;float total=0;
-        [unroll]for(uint g=0;g<5;g++){uint4 k=groups[g];float3 m=(t[k.x]+t[k.y]+t[k.z]+t[k.w])/4;float w=weights[g]/(1+luminance(m)*exposure);c+=m*w;total+=w;}
+        // Named taps and blocks, no arrays: [unroll] is only a hint in the IR, and a
+        // runtime-indexed local array spills to scratch memory.
+        float2 texel=2/float2(f.extent.xy),uv=(float2(p)+0.5)*2*texel;float scale=1/inputScale(f,l,true);
+        float3 t0=bloomTap(uv,float2(-2,-2),texel,scale),t1=bloomTap(uv,float2(0,-2),texel,scale),t2=bloomTap(uv,float2(2,-2),texel,scale);
+        float3 t3=bloomTap(uv,float2(-1,-1),texel,scale),t4=bloomTap(uv,float2(1,-1),texel,scale);
+        float3 t5=bloomTap(uv,float2(-2,0),texel,scale),t6=bloomTap(uv,float2(0,0),texel,scale),t7=bloomTap(uv,float2(2,0),texel,scale);
+        float3 t8=bloomTap(uv,float2(-1,1),texel,scale),t9=bloomTap(uv,float2(1,1),texel,scale);
+        float3 t10=bloomTap(uv,float2(-2,2),texel,scale),t11=bloomTap(uv,float2(0,2),texel,scale),t12=bloomTap(uv,float2(2,2),texel,scale);
+        float exposure=exposureState(l).x;c=0;float total=0;
+        bloomBlock(t3,t4,t8,t9,0.5,exposure,c,total);
+        bloomBlock(t0,t1,t5,t6,0.125,exposure,c,total);
+        bloomBlock(t1,t2,t6,t7,0.125,exposure,c,total);
+        bloomBlock(t5,t6,t10,t11,0.125,exposure,c,total);
+        bloomBlock(t6,t7,t11,t12,0.125,exposure,c,total);
         c/=total;
     }else if(pass<5){
         // 4x4 [1 3 3 1] tent of the finer level, read in place from the down atlas.

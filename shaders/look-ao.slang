@@ -7,6 +7,25 @@
 #include "look.slangh"
 // Reversed-Z depth at full-resolution pixel `p` to a world position.
 float ign(float2 p,uint frame){p+=5.588238*float(frame&63);return frac(52.9829189*frac(dot(p,float2(0.06711056,0.00583715))));}
+// The highest horizon (cosine to V) on one side (`sign`) of a slice through `centre`
+// along screen `direction`: `steps` samples out to `radius` pixels from the point P.
+// One call per side, not a two-element array indexed by the side: a runtime-indexed
+// local array spills to scratch memory.
+float aoSideHorizon(Frame f,Look l,float2 centre,float2 direction,float sign,float radius,uint steps,float jitter,float3 P,float3 V){
+    float horizon=-1;
+    for(uint k=0;k<steps;k++){
+        float t=(float(k)+jitter)/float(steps);float offset=max(t*t*radius,1+float(k));
+        float2 q=centre+direction*sign*offset;if(any(q<0)||any(q>=float2(f.extent.xy)))break;
+        float sampleDepth=pixel(f.extra.x,int2(q)).x;if(sampleDepth<=0)continue;
+        float3 delta=worldAtDepth(f,floor(q)+0.5,sampleDepth)-P;float len=length(delta);
+        float falloff=saturate(1-len*len/(l.ao.x*l.ao.x));float cosine=dot(delta/max(len,1e-5),V);
+        // Distant samples and cutouts (gbufferOccluder, read only where the
+        // sample would raise the horizon) raise no horizon.
+        if(lerp(-1.,cosine,falloff)>horizon)
+            horizon=max(horizon,lerp(-1.,cosine,falloff*gbufferOccluder(f,int2(q))));
+    }
+    return horizon;
+}
 // Root word 2: half-resolution output pixel count per row is f.extent.x/2 rounded up.
 // Output: r ambient visibility, g distance to the camera (for the filters).
 [shader("compute")][numthreads(8,8,1)]
@@ -30,23 +49,10 @@ void aoTraceMain(uint3 tid:SV_DispatchThreadID){
         float3 axis=normalize(cross(sliceDirection,V));float3 projected=N-axis*dot(N,axis);float length2=dot(projected,projected);
         if(length2<1e-6)continue;float projectedLength=sqrt(length2);projected/=projectedLength;
         float n=sign(dot(projected,sliceDirection))*acos(clamp(dot(projected,V),-1.,1.));
-        float horizons[2]={-1,-1};
-        [unroll]for(uint sideIndex=0;sideIndex<2;sideIndex++){
-            float sign=sideIndex==0?1.:-1.;
-            for(uint k=0;k<steps;k++){
-                float t=(float(k)+jitter)/float(steps);float offset=max(t*t*radius,1+float(k));
-                float2 q=centre+direction*sign*offset;if(any(q<0)||any(q>=float2(f.extent.xy)))break;
-                float sampleDepth=pixel(f.extra.x,int2(q)).x;if(sampleDepth<=0)continue;
-                float3 delta=worldAtDepth(f,floor(q)+0.5,sampleDepth)-P;float len=length(delta);
-                float falloff=saturate(1-len*len/(l.ao.x*l.ao.x));float cosine=dot(delta/max(len,1e-5),V);
-                // Distant samples and cutouts (gbufferOccluder, read only where the
-                // sample would raise the horizon) raise no horizon.
-                if(lerp(-1.,cosine,falloff)>horizons[sideIndex])
-                    horizons[sideIndex]=max(horizons[sideIndex],lerp(-1.,cosine,falloff*gbufferOccluder(f,int2(q))));
-            }
-        }
+        float positive=aoSideHorizon(f,l,centre,direction,1.,radius,steps,jitter,P,V);
+        float negative=aoSideHorizon(f,l,centre,direction,-1.,radius,steps,jitter,P,V);
         // The positive side runs along sliceDirection (angles grow towards it).
-        float h0=n+max(-acos(horizons[1])-n,-PI/2),h1=n+min(acos(horizons[0])-n,PI/2);
+        float h0=n+max(-acos(negative)-n,-PI/2),h1=n+min(acos(positive)-n,PI/2);
         float arc=(-cos(2*h0-n)+cos(n)+2*h0*sin(n))+(-cos(2*h1-n)+cos(n)+2*h1*sin(n));
         visibility+=projectedLength*arc*0.25;
     }
