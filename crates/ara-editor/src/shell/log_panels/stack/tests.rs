@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)] // Isolated fixtures and retained interaction assertions.
 use super::*;
 use ara_ui::{input::InputEvent, source::stable_id};
+#[path = "tests/fixture.rs"]
 mod fixture;
 use fixture::Fixture;
 
