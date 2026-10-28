@@ -220,6 +220,118 @@ fn inline_banner_keeps_intrinsic_height_and_host_width_without_popup_limits() ->
     Ok(())
 }
 
+fn banner_rail() -> Result<Ui> {
+    Ui::editor(
+        "<ui id='root'><panel id='host' style='width:100%;height:260px'><scroll id='rail' style='height:auto;min-height:56px;max-height:180px;flex-basis:auto;flex-shrink:1;padding:4px;border-width:1px'><panel id='cards' style='gap:6px;padding:2px;flex-shrink:0'><banner id='first' style='padding:6px;gap:4px;font-size:12px'><panel id='heading' style='height:22px;flex-shrink:0'><text id='title' style='font-size:12px' text='Import files' /></panel><text id='message' text='Importing content' /><progress id='progress' style='height:3px' value='0.5' /></banner><banner id='second' style='padding:6px;font-size:12px'><text id='next-message' text='Next import' /></banner></panel></scroll><panel id='browser' style='min-height:0px;flex-grow:1;flex-shrink:1;flex-basis:1000px' /></panel></ui>",
+        EDITOR_CSS,
+        [330.0, 500.0],
+    )
+}
+
+#[test]
+fn banner_rail_reserves_the_measured_first_card_and_releases_it_after_reflow_or_dismissal()
+-> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let mut ui = banner_rail()?;
+    let first = ui.find("first").expect("first card");
+    let second = ui.find("second").expect("second card");
+    let rail = ui.find("rail").expect("rail");
+    let message = ui.find("message").expect("message");
+    let mut short_height = 0.0;
+    let mut long_height = 0.0;
+    for (copy, size, long) in [
+        ("Importing content", [330.0, 500.0], false),
+        (
+            "Preparing authored content with a detailed progress message that must wrap into additional readable lines.",
+            [330.0, 500.0],
+            true,
+        ),
+        ("Importing content", [330.0, 500.0], false),
+        ("Importing content", [230.0, 500.0], false),
+        ("Importing content", [330.0, 500.0], false),
+    ] {
+        ui.set_text(message, copy)?;
+        ui.resize(size)?;
+        ui.frame(&mut text)?;
+        let card = ui.nodes[first].rect;
+        let viewport = ui.nodes[rail].rect;
+        fits(card, viewport);
+        fits(ui.nodes[message].rect, ui.nodes[message].clip);
+        let progress = ui.find("progress").expect("progress");
+        fits(ui.nodes[progress].rect, ui.nodes[progress].clip);
+        assert!(
+            viewport.h <= 180.5,
+            "authored cap remains authoritative: {viewport:?}"
+        );
+        if long {
+            long_height = viewport.h;
+        } else if short_height == 0.0 {
+            short_height = viewport.h;
+        } else if size[0] == 330.0 {
+            assert!((viewport.h - short_height).abs() < 0.5);
+        }
+        assert_eq!(ui.frame(&mut text)?, Work::default());
+    }
+    assert!(
+        long_height > short_height,
+        "wrapped messages grow their first-card minimum"
+    );
+    ui.set_visible(first, false)?;
+    ui.frame(&mut text)?;
+    fits(ui.nodes[second].rect, ui.nodes[rail].rect);
+    assert!(
+        ui.nodes[rail].rect.h < short_height,
+        "dismissing the first card releases its fit"
+    );
+    ui.set_visible(second, false)?;
+    ui.frame(&mut text)?;
+    let restored = ui.tree.style(ui.nodes[rail].layout_id)?.min_size.height;
+    assert_eq!(
+        restored, ui.nodes[rail].computed.layout.min_size.height,
+        "an empty rail retains no stale runtime fit"
+    );
+    assert_eq!(ui.frame(&mut text)?, Work::default());
+    Ok(())
+}
+
+#[test]
+fn banner_rail_honors_its_explicit_cap_and_scrolls_an_oversized_first_card() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let mut ui = banner_rail()?;
+    let rail = ui.find("rail").expect("rail");
+    let first = ui.find("first").expect("first card");
+    let message = ui.find("message").expect("message");
+    ui.set_text(
+        message,
+        &"A detailed import inventory with created and renamed logical paths. ".repeat(30),
+    )?;
+    ui.frame(&mut text)?;
+    assert!(
+        ui.nodes[first].rect.h > 180.0,
+        "fixture must need internal scrolling"
+    );
+    assert!(
+        (ui.nodes[rail].rect.h - 180.0).abs() <= 0.5,
+        "the runtime minimum never defeats the authored cap"
+    );
+    assert!(ui.scroll_extent(rail)?[1] > ui.nodes[rail].rect.h);
+    assert!(
+        ui.scrollbars(rail)?
+            .iter()
+            .any(|bar| bar.axis == 1 && bar.maximum > 0.0)
+    );
+    assert_eq!(ui.frame(&mut text)?, Work::default());
+    ui.set_text(message, "Importing content")?;
+    ui.frame(&mut text)?;
+    assert!(
+        ui.nodes[rail].rect.h < 180.0,
+        "shorter copy releases a previously saturated cap"
+    );
+    fits(ui.nodes[first].rect, ui.nodes[rail].rect);
+    assert_eq!(ui.frame(&mut text)?, Work::default());
+    Ok(())
+}
+
 #[test]
 fn reconciled_message_copy_inherits_existing_feedback_typography() -> Result<()> {
     let mut text = TextSystem::bundled()?;

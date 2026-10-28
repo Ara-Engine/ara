@@ -60,7 +60,8 @@ float giLatticeCoverage(GiLattice g,float3 p){
 }
 // Irradiance facing `normal` (and with `both`, facing `reflection`) from one
 // lattice's eight probes (DDGI weights: trilinear, backface and Chebyshev
-// visibility against static moments), the point offset along the normal and
+// visibility against static moments, the latter two crushed cubically below 0.2 so
+// probes behind thin walls do not leak), the point offset along the normal and
 // towards `v` by the lattice's surface bias.
 void giLatticeLobes(Look l,GiLattice g,uint image,float3 position,float3 normal,float3 reflection,float3 v,bool both,out float3 diffuse,out float3 specular){
     float3 biased=position+normal*g.bias+v*(g.bias*0.33);float3 grid=(biased-g.origin)/g.spacing;
@@ -71,7 +72,8 @@ void giLatticeLobes(Look l,GiLattice g,uint image,float3 position,float3 normal,
         float3 delta=biased-(g.origin+float3(p)*g.spacing)-meta.xyz;float distance=length(delta);float3 dir=delta/max(distance,1e-6);
         float2 moments=giSampleMoments(l,id,dir);
         float variance=max(moments.y-moments.x*moments.x,0.0001);float visibility=distance<=moments.x?1:pow(variance/(variance+pow(distance-moments.x,2)),3);
-        float3 trilinear=lerp(1-alpha,alpha,float3(d));float weight=trilinear.x*trilinear.y*trilinear.z*max(0.02,pow(saturate(dot(-dir,normal)*0.5+0.5),2))*visibility;
+        float weight=max(0.02,pow(saturate(dot(-dir,normal)*0.5+0.5),2))*visibility;if(weight<0.2)weight*=weight*weight/0.04;
+        float3 trilinear=lerp(1-alpha,alpha,float3(d));weight*=trilinear.x*trilinear.y*trilinear.z;
         diffuse+=giSampleIrradiance(l,image,id,normal)*weight;if(both)specular+=giSampleIrradiance(l,image,id,reflection)*weight;total+=weight;
     }
     if(total>1e-6){diffuse/=total;specular/=total;}

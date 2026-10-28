@@ -82,10 +82,11 @@ pub fn add(
     let mut pinned = Vec::new();
     for (path, url) in files {
         eprintln!("  {id}: {path}");
-        let (blake3, size) = cache.download(&url, None)?;
+        let (blake3, size) = cache.download(&url, &[], None)?;
         pinned.push(File {
             path,
             url,
+            mirrors: vec![],
             size,
             blake3,
         });

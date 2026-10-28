@@ -138,6 +138,16 @@ fn feedback_measure_rejects_a_first_banner_taller_than_its_job_rail() {
         "a first job title without its result is not complete feedback: {:?}",
         audit.violations
     );
+    let ui = mounted(
+        "<ui id='root'><scroll id='rail' style='position:absolute;left:24px;top:24px;width:500px;height:35px;max-height:35px'><banner id='import-result' style='height:auto'><text id='import-result-copy' text='A deliberately bounded scroll viewport retains the complete long inventory for scrolling rather than growing past its explicit maximum.' /></banner></scroll></ui>",
+        CSS,
+        EditorTheme::Dark,
+        [720., 450.],
+    );
+    assert!(
+        feedback_geometry::audit(&ui).violations.is_empty(),
+        "an explicitly saturated scroll cap permits accessible scrolling"
+    );
 }
 
 fn hierarchy_point(shell: &Shell, entity: &str) -> [f32; 2] {

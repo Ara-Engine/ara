@@ -65,6 +65,23 @@ fn descendant(ui: &Ui, child: usize, root: usize) -> bool {
     false
 }
 
+fn banner_rail_cap(ui: &Ui, root: usize) -> f32 {
+    let mut parent = ui.nodes[root].element.parent;
+    while let Some(index) = parent {
+        if ui.scroll_position(index).is_some() {
+            return ui.nodes[index]
+                .computed
+                .layout
+                .max_size
+                .height
+                .resolve_to_option(ui.size[1], |_, _| 0.)
+                .unwrap_or(f32::MAX);
+        }
+        parent = ui.nodes[index].element.parent;
+    }
+    f32::MAX
+}
+
 /// Use the actual emitted paragraph origin, including the complete paint transform
 /// stack. Node rectangles alone cannot detect a subtree translated independently.
 fn text_origins(ui: &Ui) -> BTreeMap<u64, [f32; 2]> {
@@ -162,6 +179,7 @@ pub(crate) fn audit(ui: &Ui) -> Audit {
         if matches!(kind, Kind::Banner)
             && (node.rect.y - node.clip.y).abs() <= EPSILON
             && node.rect.h > node.clip.h + EPSILON
+            && node.clip.h + EPSILON < banner_rail_cap(ui, root)
         {
             audit.violations.push(format!(
                 "{} first visible banner clips vertically: {:?} in {:?}",

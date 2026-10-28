@@ -459,10 +459,13 @@ impl FidelityView {
             );
         }
         if resampling {
+            // The compact surface's F0 re-tints rebuilt lattice samples
+            // (`latticeSpecular`).
             temporal.extend([
                 (ids[SPEC_RAW], Access::ShaderRead),
                 (ids[SPEC_HISTORY0 + slot], Access::Storage),
                 (ids[SPEC_MOMENTS0 + slot], Access::Storage),
+                (ids[SURFACE_ALBEDO], Access::ShaderRead),
             ]);
             if !reset {
                 temporal.extend([
@@ -521,10 +524,13 @@ impl FidelityView {
                     SPEC_FILTER1
                 };
                 let target = if i == 1 { SPEC_FILTER1 } else { SPEC_FILTER0 };
+                // The compact surface's F0 demodulates specular taps
+                // (`specularModulation`).
                 uses.extend([
                     (ids[source], Access::ShaderRead),
                     (ids[target], Access::Storage),
                     (ids[SPEC_MOMENTS0 + slot], Access::ShaderRead),
+                    (ids[SURFACE_ALBEDO], Access::ShaderRead),
                 ]);
             }
             add(

@@ -171,7 +171,8 @@ pub struct DeviceInfo {
     pub geometry_shader: bool,
     /// VK_EXT_hdr_metadata enabled for native window presentation.
     pub hdr_metadata: bool,
-    /// Enabled 64-bit shader integer operations and buffer atomics.
+    /// Enabled 64-bit shader integer operations and buffer atomics (Metal: unsigned
+    /// 64-bit min/max only, Apple9 and later).
     pub buffer_int64_atomics: bool,
     /// Enabled optional Vulkan 1.3 integer dot products. Scalar shaders remain valid.
     pub shader_integer_dot_product: bool,

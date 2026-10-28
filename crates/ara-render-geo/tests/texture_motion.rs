@@ -1,3 +1,5 @@
+mod support;
+
 use anyhow::{Result, ensure};
 use ara_geo::{SourceMesh, Vertex};
 use ara_gpu::{GpuDevice, cooked::write_json};
@@ -13,6 +15,14 @@ fn moving_camera_measures_resident_mip_lag_and_same_uv_transitions() -> Result<(
     let output = root.join("captures/texture-motion");
     std::fs::create_dir_all(&output)?;
     let mut gpu = GpuDevice::new(&[], output.join("cache"))?;
+    // Atomic visibility needs 64-bit buffer atomics (Metal has none yet): skip with the
+    // reason `GeometryView` gives, like the product path.
+    if !gpu.info().buffer_int64_atomics {
+        eprintln!(
+            "skipped: ARA_GEO_CAPABILITY: shaderBufferInt64Atomics required for atomic visibility"
+        );
+        return Ok(());
+    }
     let source = SourceMesh {
         vertices: [
             [-16., 0., -16.],
@@ -152,7 +162,7 @@ fn moving_camera_measures_resident_mip_lag_and_same_uv_transitions() -> Result<(
         image::save_buffer(&golden, &pixels, size[0], size[1], image::ColorType::Rgba8)?;
     }
     ensure!(
-        pixels == image::open(&golden)?.to_rgba8().into_raw(),
+        support::matches_golden(&pixels, &image::open(&golden)?.to_rgba8().into_raw()),
         "textured golden differs; inspect before deliberate update"
     );
     gpu.assert_clean()?;

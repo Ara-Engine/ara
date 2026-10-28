@@ -31,7 +31,13 @@ an empty dir, `VK_LAYER_PATH` = the SDK `Bin`).
 ## Modules
 
 - `lock`, `fetch`, `sources`, `credits`: the manifest, downloads (curl, `-C -`
-  resume, BLAKE3 before publishing a blob), source resolution, attribution.
+  resume, BLAKE3 and size before publishing a blob), source resolution, attribution.
+  File-level `mirrors` are optional and ordered: try `url`, then each mirror,
+  against the same pins. Keep partial transfers separate per URL and retain every
+  attempt's curl/HTTP or integrity error on total failure. Use `Lock::write` for
+  lock edits; keep source pages, authors and licenses unchanged when adding mirrors.
+  Release packaging copies this lock into Hub templates. Maintainers publish the
+  pinned Kenney ZIPs to `sample-assets-v1`; agents do not upload release assets.
 - `kit`: generated glTF geometry over fetched texture sets, and the graphite suit
   palette image. Original models stay immutable; the importer merges opacity maps.
 - `build/`: `Ctx` (CLI batches, document lifecycle, project main, shared imports),
@@ -86,7 +92,9 @@ captures leave tracked sample evidence unchanged.
 `ara-samples game` also authors Outpost's native `content/levels/menu.scene` through entity
 and prefab commands; it shares the compound art but contains no gameplay components.
 
-`cargo test -p ara-samples` (lock validation, kit geometry, source-pivot bounds, fold-in maths).
+`cargo test -p ara-samples` (lock validation, mirror fallback/integrity/errors,
+kit geometry, source-pivot bounds, fold-in maths). Fetch tests use curl `file://`
+URLs and scratch files under `ARA_TEST_ROOT` or `target/`, without network access.
 `ARA_AUDIT_GEOMETRY=1` also audits fetched source-model bounds in the Outpost layout test;
 resolved world positions, ground-relative shots and bounds go under `target/ara-samples/`.
 `cargo clippy -p ara-samples --all-targets -- -D warnings`.
