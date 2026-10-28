@@ -3,9 +3,31 @@ use super::*;
 use crate::{Host, HostConfig, Project};
 use std::{
     path::PathBuf,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicU8, AtomicU64, Ordering},
+    },
     time::Duration,
 };
+
+struct Probe(Arc<AtomicU8>);
+impl Service for Probe {
+    fn name(&self) -> &'static str {
+        "divergence-probe"
+    }
+    fn methods(&self, _: &mut SchemaDb) -> Vec<Method> {
+        Vec::new()
+    }
+    fn call(&mut self, _: &mut Cx<'_>, _: &str, _: Value) -> Result<Value, Vec<Diagnostic>> {
+        unreachable!("The test probe publishes no callable methods")
+    }
+    fn tick(&mut self, cx: &mut Cx<'_>) {
+        let flags = u8::from(cx.document_diverged("pj_preferences"))
+            | (u8::from(cx.document_diverged("pj_project")) << 1)
+            | (u8::from(cx.document_diverged("pj_missing")) << 2);
+        self.0.store(flags, Ordering::Relaxed);
+    }
+}
 
 #[test]
 fn document_diverged_distinguishes_observed_invalid_policy_from_a_clean_document() {
@@ -36,30 +58,25 @@ fn document_diverged_distinguishes_observed_invalid_policy_from_a_clean_document
         },
     )
     .expect("Open fixture Host");
-    {
-        let cx = Cx {
-            st: &mut host.st,
-            conn: ConnId::LOCAL,
-            session: None,
-        };
-        assert!(!cx.document_diverged("pj_preferences"));
-        assert!(!cx.document_diverged("pj_project"));
-    }
+    let observed = Arc::new(AtomicU8::new(u8::MAX));
+    host.register(Box::new(Probe(Arc::clone(&observed))))
+        .expect("Register a test-only tick probe");
+    host.tick();
+    assert_eq!(
+        observed.load(Ordering::Relaxed),
+        0,
+        "Both loaded documents start clean"
+    );
+    let revision = host.store().revision();
     std::fs::write(&preferences, "{broken").expect("Introduce a real external parse failure");
     host.tick();
-    let revision = host.st.store.revision();
-    {
-        let cx = Cx {
-            st: &mut host.st,
-            conn: ConnId::LOCAL,
-            session: None,
-        };
-        assert!(cx.document_diverged("pj_preferences"));
-        assert!(!cx.document_diverged("pj_project"));
-        assert!(!cx.document_diverged("pj_missing"));
-    }
     assert_eq!(
-        host.st.store.revision(),
+        observed.load(Ordering::Relaxed),
+        1,
+        "Only the observed invalid preferences diverge; the marker and missing ID do not"
+    );
+    assert_eq!(
+        host.store().revision(),
         revision,
         "Reading divergence must not author a transaction"
     );
