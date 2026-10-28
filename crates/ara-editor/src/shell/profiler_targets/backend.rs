@@ -1,4 +1,4 @@
-//! Private UI port. The real PlayProfilingHandle adapter is required before player closure.
+//! Typed player profiling port and its owned Play mailbox adapter.
 mod play;
 pub(crate) use play::attach as attach_play;
 
