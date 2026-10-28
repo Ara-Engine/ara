@@ -323,7 +323,8 @@ fn shots<'a>(look: &'a Look, options: &Options<'_>) -> Vec<&'a Shot> {
 }
 
 /// The raster capture's view: `ARA_CAPTURE_VIEW` = albedo, normals, cascades,
-/// material (roughness/metal), wireframe or lit_wireframe for diagnosis; lit otherwise.
+/// material (roughness/metal), wireframe, lit_wireframe, gi_diffuse or overdraw for
+/// diagnosis; lit otherwise.
 fn view_mode() -> ViewMode {
     match std::env::var("ARA_CAPTURE_VIEW").as_deref() {
         Ok("albedo") => ViewMode::Albedo,
@@ -332,6 +333,8 @@ fn view_mode() -> ViewMode {
         Ok("material") => ViewMode::RoughnessMetal,
         Ok("wireframe") => ViewMode::Wireframe,
         Ok("lit_wireframe") => ViewMode::LitWireframe,
+        Ok("gi_diffuse") => ViewMode::GiDiffuse,
+        Ok("overdraw") => ViewMode::Overdraw,
         _ => ViewMode::Lit,
     }
 }
