@@ -271,13 +271,23 @@ float4 screenReflection(Frame f,Look l,int2 p){
     // Volume intensity (look.ssr.w) scales the hit confidence; probes fill the rest.
     float4 r=total>1e-3?sum/total:nearest;r.w*=l.ssr.w;return r;
 }
+// The direction probe and sky reflections are looked up along for a lobe of
+// perceptual `roughness` at normal `n`, viewed from `v`: GGX's dominant direction
+// (Lagarde and de Rousiers 2014), the mirror direction pulled towards the normal as
+// roughness grows. Along the mirror direction itself, a rough floor at a grazing view
+// averages the ground under the horizon and reflects too little sky.
+float3 specularDirection(float3 n,float3 v,float roughness){
+    float a=roughness*roughness,smooth=saturate(1-a);
+    return normalize(lerp(n,reflect(-v,n),smooth*(sqrt(smooth)+a)));
+}
 // Ambient light: the physical sky's IBL under a sky atmosphere, otherwise the
 // environment map's (32x16 irradiance, five-level 256x640 GGX prefilter strip for
 // roughness 0, .25, .5, .75, 1). Inside the probe volume, probe irradiance replaces
 // the sky's diffuse light and occludes its reflections by the ratio of probe to
 // sky irradiance facing the normal (sky visibility: a cosine lobe around the mirror
 // direction would count the ground below the horizon at grazing views); rough
-// reflections use the probes. Outside the volume, the heightfield's sky visibility
+// reflections use the probes. Reflections are looked up along specularDirection, the
+// lobe's dominant direction. Outside the volume, the heightfield's sky visibility
 // (look-horizon.slangh) occludes the sky's light instead. Reflected light takes the
 // compensated specular albedo of specularLobes' `o` (the split sum, scaled for multiple
 // scattering like direct light), diffuse light its Lambert base, and ambient occlusion
@@ -291,7 +301,7 @@ float4 screenReflection(Frame f,Look l,int2 p){
 // reflections composited over screen-space ones (rtReflection) instead.
 float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false) {
     uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x,prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;
-    float3 reflected=reflect(-v,s.normal);float2 uv=environmentUv(reflected);float level=s.roughness*4;float low=floor(level);float upper=min(low+1,4);
+    float3 reflected=specularDirection(s.normal,v,s.roughness);float2 uv=environmentUv(reflected);float level=s.roughness*4;float low=floor(level);float upper=min(low+1,4);
     float3 spec=lerp(envTex(prefilter,float2(uv.x,(uv.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(uv.x,(uv.y*127+0.5+upper*128)/640)).rgb,frac(level));
     float3 ambient=envTex(irradiance,environmentUv(s.normal)).rgb;
     float coverage=0;float3 diffuseGi=0,specularGi=0;

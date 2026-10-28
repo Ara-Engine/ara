@@ -72,8 +72,8 @@ void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){giRelight(gro
 [shader("compute")][numthreads(64,1,1)]
 void giRelightVsmMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){giRelight(group,lane,true);}
 // Two probe lobes per half-resolution pixel (the full-resolution pixel 2p): rgb
-// irradiance facing the normal (w: camera distance) and facing the mirror direction
-// (w: volume coverage). Lighting upsamples them depth-aware, so the per-pixel cost
+// irradiance facing the normal (w: camera distance) and facing the specular lobe's
+// dominant direction (specularDirection, as ibl looks it up; w: volume coverage). Lighting upsamples them depth-aware, so the per-pixel cost
 // of the eight-probe visibility search drops fourfold.
 [shader("compute")][numthreads(8,8,1)]
 void giGatherMain(uint3 tid:SV_DispatchThreadID){
@@ -81,7 +81,7 @@ void giGatherMain(uint3 tid:SV_DispatchThreadID){
     int2 p=int2(tid.xy)*2;bool covered;float3 world=gbufferWorld(f,p,covered);float4 diffuse=float4(0,0,0,1e9),specular=0;
     if(covered){
         float3 n=normalize(gbufferNormal(f,p)),v=normalize(f.camera.xyz-world.xyz),a,b;
-        float coverage=giPoolLobes(l,l.giImages.y,world.xyz,n,reflect(-v,n),v,true,a,b);
+        float coverage=giPoolLobes(l,l.giImages.y,world.xyz,n,specularDirection(n,v,gbufferMaterial(f,p).x),v,true,a,b);
         if(coverage>0){diffuse.rgb=a;specular=float4(b,coverage);}
         diffuse.w=length(world.xyz-f.camera.xyz);
     }
