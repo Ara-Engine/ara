@@ -1198,6 +1198,10 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             dirty |= shell.coalesce_rebuilds(&mut editor, |shell, editor| {
                 let mut changed = false;
                 for result in [
+                    // Background completion does not necessarily change a Store
+                    // or panel revision. Poll every frame; this keeps its existing
+                    // cheap revision guard and coalesces any requested rebuild.
+                    shell.rebuild_if_stale(editor),
                     shell.poll_reachability(editor),
                     shell.poll_hierarchy_filters(editor),
                     shell.poll_asset_imports(editor),
