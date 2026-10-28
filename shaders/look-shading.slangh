@@ -111,34 +111,82 @@ float visibility(Frame f,Look l,float3 world,float3 normal,float pages=-1){
     float v=pages>=0?pages:mapVisibility(f,l,world,normal);
     return v>0?min(v,horizonSun(l,world)):0;
 }
-float3 fresnel(float cosine,float3 f0){return f0+(1-f0)*pow(1-saturate(cosine),5);}
-// Analytic split-sum environment BRDF fit (Lazarov, Epic 2014): the GGX lobe's
-// directional albedo is F0*x + y. Its scale and bias already integrate Fresnel over
-// the lobe, so they take F0 (Fresnel at the view angle would make rough surfaces
-// mirror-bright at grazing angles); x + y is the albedo at F0 = 1 (Ess).
-float2 environmentBrdf(float nv,float roughness){
-    float4 r=roughness*float4(-1,-0.0275,-0.572,0.022)+float4(1,0.0425,1.04,-0.04);
-    float a004=min(r.x*r.x,exp2(-9.28*nv))*r.x+r.y;return float2(-1.04,1.04)*a004+r.zw;
+// Schlick's Fresnel. Cycles' metals use the F82-tint model (Hoffman 2023, "Generalization
+// of Adobe's Fresnel Model"): Schlick minus b cos (1 - cos)^6, b = Schlick(1/7) (1 - tint)
+// 7 / (6/7)^6, so F at cos 1/7 is Schlick times the tint. No content or material carries a
+// tint (white: b = 0, exactly Schlick); a tint subtracts that term here and b/126 in meanFresnel.
+float3 fresnel(float cosine,float3 f0){float m=1-saturate(cosine),m2=m*m;return f0+(1-f0)*(m2*m2*m);}
+// Hemispherical average of fresnel, 2 int F(mu) mu dmu.
+float3 meanFresnel(float3 f0){return f0+(1-f0)/21;}
+// Ara's GGX lobe (alpha `a` = roughness^2, height-correlated Smith masking as in Cycles):
+// the energy its single scattering loses towards a viewer with masking `g` = G1(v),
+// K = 1/E - 1 for Kulla and Conty 2017's directional albedo E. A polynomial fit to offline
+// quadrature (rows: powers of g, high to low; columns: 1, a, a^2, a^3): E within 0.44% for
+// n.v >= 0.01 (3.5% below, at silhouettes).
+float specularLoss(float g,float a){
+    float4 p=float4(1,a,a*a,a*a*a);
+    float k=dot(p,float4(-26.992674,24.19879,23.560875,-17.80212));
+    k=k*g+dot(p,float4(80.678413,-102.840874,-0.156378,15.487353));
+    k=k*g+dot(p,float4(-93.803902,161.34404,-96.72551,34.476097));
+    k=k*g+dot(p,float4(52.955402,-118.814537,120.470482,-54.776974));
+    k=k*g+dot(p,float4(-14.62627,41.991596,-56.709965,28.578594));
+    k=k*g+dot(p,float4(1.845784,-6.130684,11.342569,-5.297616));
+    return max(k*g+dot(p,float4(-0.052449,0.206786,-0.347631,0.213451)),0);
 }
-// Multiple-scattering scale of `s`'s specular lobe seen from `v`: single-scattering
-// GGX loses the light that bounces between microfacets, most on rough lobes (dark
-// rough metals), which 1 + F0 (1/Ess - 1) restores (Kulla and Conty 2017 as fitted by
-// Turquin 2019; Ess from environmentBrdf). The same for every light: shade computes it once.
-float3 specularScattering(Surface s,float3 v){
-    float2 ab=environmentBrdf(max(dot(s.normal,v),0.001),s.roughness);
-    return 1+lerp(float3(0.04),s.albedo,s.metal)*(1/clamp(ab.x+ab.y,0.05,1)-1);
+// The same lobe's mean Schlick weight s = <(1 - v.h)^5>, so its albedo with Fresnel is
+// E (f0 + (1 - f0) s): the split sum's scale E (1 - s) and bias E s (Karis 2013). Fit as
+// s = (1 - m)^5, m a polynomial (matrices: powers of roughness `r`, high to low; rows 1, g,
+// g^2; columns 1, nv, nv^2): a dielectric's albedo within 1%.
+float fresnelWeight(float g,float nv,float r){
+    float3 u=float3(1,nv,nv*nv),w=float3(1,g,g*g);
+    float m=dot(w,mul(float3x3(-0.312138,2.704782,1.929146,-2.604868,4.766642,-16.716455,2.793438,-8.240801,15.790338),u));
+    m=m*r+dot(w,mul(float3x3(0.830226,-8.764472,-0.782407,-1.695137,2.157336,25.210638,0.881528,6.947778,-25.12462),u));
+    m=m*r+dot(w,mul(float3x3(-0.057622,14.697845,-6.248118,0.16941,-15.589355,-0.322813,-0.113,1.872354,6.617512),u));
+    float t=1-saturate(m),t2=t*t;return t2*t2*t;
 }
-// Direct light reflected towards `v` from direction `l` (per unit illuminance), the
-// specular lobe scaled by `scattering` (specularScattering).
-float3 brdf(Surface s,float3 v,float3 l,float3 scattering) {
-    float3 h=normalize(v+l);float nl=saturate(dot(s.normal,l));float nv=max(dot(s.normal,v),0.001);float nh=saturate(dot(s.normal,h));float vh=saturate(dot(v,h));
-    float a=s.roughness*s.roughness;float a2=a*a;float d=a2/(PI*pow(nh*nh*(a2-1)+1,2));
-    float k=pow(s.roughness+1,2)/8;float g=nv/(nv*(1-k)+k)*nl/(nl*(1-k)+k);
-    float3 F=fresnel(vh,lerp(float3(0.04),s.albedo,s.metal));
-    return ((1-F)*(1-s.metal)*(1-s.transmission)*s.albedo/PI+d*g*F*scattering/max(4*nv*nl,0.001))*nl;
+// The lobe's hemispherical average albedo E_avg = 2 int E(mu) mu dmu (Kulla and Conty
+// 2017) at roughness `r`, within 0.2%.
+float averageAlbedo(float r){return 0.996096+r*(0.041679+r*(0.105196+r*(-1.868613+r*1.135544)));}
+// Kulla and Conty 2017's multiple-scattering Fresnel F_avg E_avg / (1 - F_avg (1 - E_avg)):
+// the share of the energy single scattering loses that leaves after bouncing between
+// microfacets. Darker channels lose more of it, which saturates rough gold and copper.
+float3 multipleFresnel(float3 mean,float eavg){return mean*eavg/(1-mean*(1-eavg));}
+// A surface's lobes towards the viewer (specularLobes), computed once per pixel and read
+// by brdf for every light and by ibl.
+struct Lobes{
+    float3 f0;     // Fresnel at normal incidence.
+    float3 scale;  // Multiple-scattering scale of the specular lobe, 1 + F_ms (1/E - 1).
+    float3 albedo; // Directional albedo of the scaled specular lobe, E (f0 + (1 - f0) s) scale.
+    float3 diffuse;// Lambert reflectance over PI under the dielectric layer, times 1 - (0.04 + 0.96 E s).
+    float nv,a2,lv;// clamp(n.v, 0.001, 1); alpha^2; sqrt(nv^2 (1 - a2) + a2), v's Smith term.
+};
+// Energy-compensated GGX as Cycles' Principled BSDF v2 evaluates it: single scattering
+// times 1 + F_ms (1/E - 1) for the view direction (Kulla and Conty 2017's albedos, applied
+// as Turquin 2019's scale), so a white rough lobe reflects all it receives and coloured
+// metals keep their multiple-bounce saturation. The Lambert base lies under a dielectric
+// (f0 0.04) layer, attenuated as Cycles layers it by that layer's albedo estimate towards
+// the viewer, f0 + (1 - f0) E s (the f0 share counted as fully reflected), the same for
+// every light and the environment.
+Lobes specularLobes(Surface s,float3 v){
+    Lobes o;o.nv=clamp(dot(s.normal,v),0.001,1);float a=s.roughness*s.roughness;o.a2=a*a;
+    o.lv=sqrt(o.nv*o.nv*(1-o.a2)+o.a2);float g=2*o.nv/(o.nv+o.lv);
+    float k=specularLoss(g,a),e=1/(1+k),bias=e*fresnelWeight(g,o.nv,s.roughness);
+    o.f0=lerp(float3(0.04),s.albedo,s.metal);o.scale=1+multipleFresnel(meanFresnel(o.f0),averageAlbedo(s.roughness))*k;
+    o.albedo=(o.f0*e+(1-o.f0)*bias)*o.scale;
+    o.diffuse=s.albedo*(1-s.metal)*(1-s.transmission)*(0.96-0.96*bias)/PI;
+    return o;
+}
+// Direct light reflected towards `v` from direction `l` (per unit illuminance) by
+// specularLobes' `o`: GGX D, the height-correlated Smith visibility G2 / (4 n.v n.l)
+// (Heitz 2014, as Cycles) and Schlick Fresnel, scaled for multiple scattering, over the
+// Lambert base.
+float3 brdf(Surface s,float3 v,float3 l,Lobes o){
+    float3 h=normalize(v+l);float nl=saturate(dot(s.normal,l)),nh=saturate(dot(s.normal,h)),vh=saturate(dot(v,h));
+    float t=nh*nh*(o.a2-1)+1,d=o.a2/(PI*t*t),visibility=0.5/(nl*o.lv+o.nv*sqrt(nl*nl*(1-o.a2)+o.a2));
+    return (o.diffuse+d*visibility*fresnel(vh,o.f0)*o.scale)*nl;
 }
 // brdf for a single light.
-float3 brdf(Surface s,float3 v,float3 l){return brdf(s,v,l,specularScattering(s,v));}
+float3 brdf(Surface s,float3 v,float3 l){return brdf(s,v,l,specularLobes(s,v));}
 // The High/Epic tier's screen-space ambient light at full-resolution pixel `p`
 // (look-ao.slang aoBitmaskMain): the denoised half-resolution visibility (returned,
 // with the volume intensity's power) and one-bounce irradiance from geometry within
@@ -226,19 +274,19 @@ float4 screenReflection(Frame f,Look l,int2 p){
 // sky irradiance facing the normal (sky visibility: a cosine lobe around the mirror
 // direction would count the ground below the horizon at grazing views); rough
 // reflections use the probes. Outside the volume, the heightfield's sky visibility
-// (look-horizon.slangh) occludes the sky's light instead. Rough lobes keep the energy
-// single scattering loses (multiple scattering), and ambient occlusion inter-reflects.
-// `gathered` reads the half-resolution gather at pixel `p` (deferred lighting);
-// forward surfaces search the probes directly.
+// (look-horizon.slangh) occludes the sky's light instead. Reflected light takes the
+// compensated specular albedo of specularLobes' `o` (the split sum, scaled for multiple
+// scattering like direct light), diffuse light its Lambert base, and ambient occlusion
+// inter-reflects. `gathered` reads the half-resolution gather at pixel `p` (deferred
+// lighting); forward surfaces search the probes directly.
 // `high`: the High/Epic tier's PSO variant (Quality::high_tier; lighting_high and
 // native_forward_high). Always a compile-time constant at the entry point, so
 // tier-only code costs other presets nothing. Its deferred pixels take the
 // visibility-bitmask pass's occlusion and near-field bounce (screenAmbient).
 // `rays`: the hybrid High/Epic variant (lighting_high_rt, D29) reads ray-traced
 // reflections composited over screen-space ones (rtReflection) instead.
-float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false) {
+float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false) {
     uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x,prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;
-    float nv=saturate(dot(s.normal,v));float3 f0=lerp(float3(0.04),s.albedo,s.metal);
     float3 reflected=reflect(-v,s.normal);float2 uv=environmentUv(reflected);float level=s.roughness*4;float low=floor(level);float upper=min(low+1,4);
     float3 spec=lerp(envTex(prefilter,float2(uv.x,(uv.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(uv.x,(uv.y*127+0.5+upper*128)/640)).rgb,frac(level));
     float3 ambient=envTex(irradiance,environmentUv(s.normal)).rgb;
@@ -279,11 +327,6 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,b
             if((debug&CAPTURE_DEBUG_ONLY)!=0)r.a*=1-c.a;
         }
     }
-    float2 ab=environmentBrdf(nv,s.roughness);float3 specularAlbedo=f0*ab.x+ab.y;
-    // Multiple scattering (Fdez-Aguera 2019): the share 1 - Ess that single-scattering
-    // GGX loses returns as a diffuse-like lobe tinted by the mean Fresnel and lit by the
-    // irradiance; diffuse keeps the energy neither specular term reflects.
-    float ess=saturate(ab.x+ab.y);float3 mean=f0+(1-f0)/21;float3 scattered=specularAlbedo*mean*(1-ess)/(1-(1-ess)*mean);
     // Traced reflections (SSR, RT; `r`) carry their own visibility, so specular
     // occlusion and the screen bounce fill darken only the probe/sky/capture fallback.
     float3 incident,specular;
@@ -295,31 +338,32 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,b
         // occlusion hides reflects the bounce's mean radiance. Material occlusion beyond
         // the screen's darkens both, with multi-bounce.
         float3 bounce;float visible=screenAmbient(f,l,p,bounce),ao=min(s.ao,visible);
-        float so=specularOcclusion(nv,ao,s.roughness),screenSo=specularOcclusion(nv,visible,s.roughness);
+        float so=specularOcclusion(o.nv,ao,s.roughness),screenSo=specularOcclusion(o.nv,visible,s.roughness);
         incident=(ambient*visible+bounce)*multiBounce(min(1,ao/max(visible,1e-4)),s.albedo);
-        specular=lerp((spec*screenSo+bounce*((1-screenSo)/(PI*max(1-visible,0.05))))*multiBounce(min(1,so/max(screenSo,1e-4)),f0),r.rgb,r.a);
+        specular=lerp((spec*screenSo+bounce*((1-screenSo)/(PI*max(1-visible,0.05))))*multiBounce(min(1,so/max(screenSo,1e-4)),o.f0),r.rgb,r.a);
     }else{
         // Multi-bounce for both lobes (Jimenez et al. 2016; F0 for the specular): occluded
         // cavities inter-reflect, so rough metals are not darkened twice (probe lobes
         // already see their surroundings, then ambient occlusion again).
-        incident=ambient*multiBounce(s.ao,s.albedo);specular=lerp(spec*multiBounce(specularOcclusion(nv,s.ao,s.roughness),f0),r.rgb,gathered?r.a:0);
+        incident=ambient*multiBounce(s.ao,s.albedo);specular=lerp(spec*multiBounce(specularOcclusion(o.nv,s.ao,s.roughness),o.f0),r.rgb,gathered?r.a:0);
     }
-    // Never negative where the specular lobes' albedo exceeds one (bright partly
-    // metallic texels): negative radiance turns black and spreads through the resolve.
-    float3 diffuse=incident*s.albedo*(1-s.metal)*(1-s.transmission)*max(1-specularAlbedo-scattered,0)/PI;
-    return diffuse+specular*specularAlbedo+incident*scattered/PI;
+    return incident*o.diffuse+specular*o.albedo;
+}
+// ibl with the surface's own specularLobes.
+float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false){
+    return ibl(f,l,s,specularLobes(s,v),world,v,p,gathered,high,rays);
 }
 // Linear HDR radiance leaving `world` towards the camera (before fog and exposure).
 // `gathered`: deferred G-buffer pixels read the half-resolution probe gather.
 float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered,bool high=false,bool rays=false) {
-    float3 v=normalize(f.camera.xyz-world),scattering=specularScattering(s,v);float3 result=s.emissive+ibl(f,l,s,world,v,p,gathered,high,rays);
+    float3 v=normalize(f.camera.xyz-world);Lobes o=specularLobes(s,v);float3 result=s.emissive+ibl(f,l,s,o,world,v,p,gathered,high,rays);
     // The sun lights front faces only (brdf ends in N.L): back faces skip its shadows.
     // The High tier passes the sun through blended casters (look-translucent.slangh);
     // virtual pages already hold it where they resolved this pixel.
     if(dot(s.normal,f.sunDirection.xyz)>0){
         float pages=gathered?vsmMask(l,p):-1,lit=visibility(f,l,world,s.normal,pages);
         if(high && pages<0 && lit>0)lit*=translucentSun(l,world);
-        result+=brdf(s,v,f.sunDirection.xyz,scattering)*sunAt(f,l,world)*lit;
+        result+=brdf(s,v,f.sunDirection.xyz,o)*sunAt(f,l,world)*lit;
     }
     uint tilesX=(f.extent.x+15)/16;uint tile=(uint(p.y)/16*tilesX+uint(p.x)/16)*TILE_STRIDE;
     uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);
@@ -334,7 +378,7 @@ float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered,bool hig
         // field softens instead of peaking.
         float3 illuminance=light.colorLumens.rgb*(light.colorLumens.w/(4*PI*d2))*fade*spot;
         if(any(illuminance>0))illuminance*=localShadow(l,index,world,s.normal,light.positionRange.xyz);
-        result+=brdf(s,v,toLight,scattering)*illuminance;
+        result+=brdf(s,v,toLight,o)*illuminance;
     }
     return result;
 }

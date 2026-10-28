@@ -223,12 +223,13 @@ float rtScreenVisibility(Frame f,Look l,float3 position,float3 geometric){
 // landforms), and the scene's first RT_HIT_LIGHTS local lights through their shadow
 // maps. No recursion and no fog along the ray.
 float3 rtShadeHit(Frame f,Look l,Surface s,float3 position,float3 geometric,float3 v){
-    float3 c=s.emissive+ibl(f,l,s,position,v,int2(0,0),false);
+    // The hit's lobes towards the ray, once for the environment and every light.
+    Lobes o=specularLobes(s,v);float3 c=s.emissive+ibl(f,l,s,o,position,v,int2(0,0),false);
     float3 sun=f.sunDirection.xyz;
     if(dot(s.normal,sun)>0 && dot(geometric,sun)>-0.1){
         float lit=horizonSun(l,position);
         float bias=l.rtParams[1].x+l.rtParams[1].y*length(position-f.camera.xyz);
-        if(lit>0 && !rtOccluded(f,l,position+geometric*bias,sun,l.rtParams[0].y))c+=brdf(s,v,sun)*sunAt(f,l,position)*lit;
+        if(lit>0 && !rtOccluded(f,l,position+geometric*bias,sun,l.rtParams[0].y))c+=brdf(s,v,sun,o)*sunAt(f,l,position)*lit;
     }
     uint count=min(f.extent.z,RT_HIT_LIGHTS);
     for(uint i=0;i<count;i++){
@@ -240,7 +241,7 @@ float3 rtShadeHit(Frame f,Look l,Surface s,float3 position,float3 geometric,floa
         float fade=pow(saturate(1-pow(d/range,4)),2);float spot=1;
         if(light.parameters.x>0.5)spot=smoothstep(light.directionOuter.w,light.parameters.y,dot(-toLight,light.directionOuter.xyz));
         float3 illuminance=light.colorLumens.rgb*(light.colorLumens.w/(4*PI*d2))*fade*spot;
-        if(any(illuminance>0))c+=brdf(s,v,toLight)*illuminance*localShadow(l,i,position,s.normal,light.positionRange.xyz);
+        if(any(illuminance>0))c+=brdf(s,v,toLight,o)*illuminance*localShadow(l,i,position,s.normal,light.positionRange.xyz);
     }
     return c;
 }
