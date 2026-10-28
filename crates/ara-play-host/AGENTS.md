@@ -39,6 +39,7 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
 - `package_scene_with_progress`: export snapshots wait on completed-cook progress,
   not a total deadline. `ARA_EXPORT_COOK_STALL_SECONDS` defaults to 600; completion
   counts and five-second heartbeats flow to the export job, pending IDs name stalls.
+  A referenced asset whose import failed fails the export with the importer's error.
 - `package_scene_for_export` retains that cook/progress contract while taking an
   explicit shipping script selection, without discovering dev hosts or compilers.
 - `PlayService::published` / `PublishedAssets::for_project`: acquire a read-only

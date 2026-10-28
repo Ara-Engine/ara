@@ -81,7 +81,14 @@ fn package(
         .filter(|(id, _)| wanted.contains(*id))
     {
         if !pins.contains_key(id) {
-            return Err(format!("export requires cooked generation {id}"));
+            // Name the importer's own error, so the export report alone explains a
+            // failed cook.
+            return Err(match assets.failure(id) {
+                Some(error) => {
+                    format!("export requires cooked generation {id}: its import failed: {error}")
+                }
+                None => format!("export requires cooked generation {id}"),
+            });
         }
     }
     let mut types = Vec::new();
