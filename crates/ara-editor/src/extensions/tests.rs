@@ -149,10 +149,19 @@ impl Harness {
     }
 
     fn complete(&mut self, session: &str, job: &str) -> Value {
+        self.complete_with_diagnostics(session, job, Vec::new())
+    }
+
+    fn complete_with_diagnostics(
+        &mut self,
+        session: &str,
+        job: &str,
+        diagnostics: Vec<Diagnostic>,
+    ) -> Value {
         self.send.send(Completion::Invoke(job.into(), Ok(Reply {
             catalog: Catalog {generation:Some("test-generation".into()),..Default::default()},
             accepted: true,
-            diagnostics: vec![],
+            diagnostics,
             authoring: vec![ara_host::params::CallSpec {cmd:"property.set".into(),args:Some(json!({"entity":"e_owner001","path":"name","value":"Callback authored"})),symbol:None}],
             selection: Some(vec!["e_owner001".into()]),
         }))).unwrap();
@@ -194,6 +203,46 @@ impl Harness {
             .call(ConnId::LOCAL, "editor.state", json!({"session":self.human}))
             .unwrap()["state"]
             .clone()
+    }
+}
+
+#[test]
+fn accepted_callback_publishes_informational_rows_and_warnings_without_failing_the_job() {
+    let project = Project::new();
+    let mut editor = project.open();
+    let human = editor.human.clone();
+    let job = editor.invoke(&human);
+    editor.complete_with_diagnostics(
+        &human,
+        &job,
+        vec![
+            Diagnostic::info(
+                ara_diag::codes::IO,
+                "Accepted callback informational result",
+            ),
+            Diagnostic::warning(ara_diag::codes::IO, "Accepted callback warning"),
+        ],
+    );
+    let logs = editor
+        .host
+        .call(
+            ConnId::LOCAL,
+            "logs",
+            json!({"severity":"info","group":false}),
+        )
+        .unwrap();
+    for message in [
+        "Accepted callback informational result",
+        "Accepted callback warning",
+    ] {
+        assert!(
+            logs["entries"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|entry| entry["diagnostic"]["message"] == message),
+            "{logs}"
+        );
     }
 }
 

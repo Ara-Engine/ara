@@ -87,6 +87,9 @@ impl EditorService {
                         if !reply.accepted {
                             return Err(reply.diagnostics);
                         }
+                        for diagnostic in reply.diagnostics {
+                            cx.log(diagnostic);
+                        }
                         if cx.store().revision() != pending.revision {
                             return Err(vec![Diagnostic::error(
                                 ara_diag::codes::STALE_BASE,
