@@ -32,6 +32,8 @@ use serde_json::Value;
 use crate::host::State;
 use crate::journal::{self, Entry};
 use crate::params::Keep;
+#[cfg(test)]
+mod deletion_tests;
 mod receipts;
 mod semantic;
 pub use receipts::FileCommitReceipt;
@@ -281,9 +283,23 @@ impl State {
                     self.reconcile(&id, text);
                 }
             }
-            Reply::Deleted { path } => {
-                if let Some((id, _)) = self.synced_at(&path) {
-                    self.deleted(&id);
+            Reply::Deleted { path, observed } => {
+                match self.files.io.current_deletion(&path, &observed) {
+                    Ok(true) => {
+                        if let Some((id, _)) = self.synced_at(&path)
+                            && self
+                                .store
+                                .workspace()
+                                .path_of(id.as_str())
+                                .is_some_and(|current| {
+                                    ara_doc::file_state::same_path(current, &path)
+                                })
+                        {
+                            self.deleted(&id);
+                        }
+                    }
+                    Ok(false) => {}
+                    Err(diagnostic) => self.log(diagnostic.file(path)),
                 }
             }
             Reply::Found { path, text, stamp } => self.found(path, text, stamp),

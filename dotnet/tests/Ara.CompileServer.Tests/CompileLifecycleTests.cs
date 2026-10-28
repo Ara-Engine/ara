@@ -162,6 +162,32 @@ public sealed class CompileLifecycleTests
     }
 
     [Fact]
+    public void Recovery_rejects_inputs_changed_during_preparation_and_cannot_publish_verified_success()
+    {
+        using var gate = new Gate();
+        var sink = new Sink();
+        using var server = new Coordinator(sink, gate);
+        server.Hello(true, "Baseline");
+        var path = Watch(server, InstalledTools.Scratch("recovery-stale-input"), 0, "Combat");
+        var before = sink.Messages.Count;
+        gate.Armed = 1;
+        server.Recover(82);
+        try {
+            Assert.True(gate.Entered.Wait(TimeSpan.FromSeconds(20)));
+            File.WriteAllText(path, Source.Replace("+= 1", "+= Missing"));
+        }
+        finally { gate.Release.Set(); }
+        Assert.True(server.WaitIdle(TimeSpan.FromSeconds(60)));
+        Assert.DoesNotContain(sink.Messages.Skip(before), message => message.Kind is MessageKind.Reload or MessageKind.Delta or MessageKind.Restart);
+        Assert.NotEqual("success", (string?)sink.Last("Combat")["data"]?["compile"]?["result"]);
+        Assert.NotEqual("current-module-inputs", (string?)sink.Last("Combat")["data"]?["compile"]?["validation"]);
+        var finished = sink.Messages.Last(message => message.Kind == MessageKind.RecoveryFinished);
+        var reader = new Protocol.Reader(finished.Payload);
+        Assert.Equal(82ul, reader.U64());
+        Assert.Equal("failed", reader.Str());
+    }
+
+    [Fact]
     public void Trivia_restoration_and_each_cascade_module_have_validated_independent_results()
     {
         var sink = new Sink();

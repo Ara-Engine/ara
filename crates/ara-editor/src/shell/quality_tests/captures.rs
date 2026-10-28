@@ -6,7 +6,7 @@ use super::*;
 fn native_full_editor_overlay_quality_captures() {
     let output = std::env::var_os("ARA_EDITOR_QUALITY_CAPTURE_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target/editor-quality/captures"));
+        .unwrap_or_else(|| crate::test_target().join("editor-quality/captures"));
     std::fs::create_dir_all(&output).unwrap();
     let project = Project::new();
     let device = ara_gpu::GpuDevice::new_raster(&[], output.join("gpu-cache")).unwrap();

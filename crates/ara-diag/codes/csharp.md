@@ -679,3 +679,20 @@ Causes:
 Fixes:
 - Restore matching worker artifacts and the required .NET runtime, then restart or replace the worker through its supervisor.
 - Fix the protocol or connection error named in the message and inspect prior command outcomes before retrying.
+
+## ARA0935 script::RECOVERY_RESULT: Explicit script recovery completed
+owner: ara-script
+
+The private Play control reports whether explicit recovery activated fresh code,
+had no script image to reload, or failed. `data.recovery` identifies the request and
+loaded module names. Compiler diagnostics retain their compile and Play bindings.
+
+Causes:
+- A user requested recovery after a script fault or stale binding.
+- Current inputs failed compilation or changed during preparation.
+- The engine bindings or module graph cannot be replaced in this process.
+
+Fixes:
+- Correct the reported compiler or input errors, then retry recovery.
+- If engine bindings or module boundaries changed, stop Play and reopen explicitly.
+- Failed recovery retains the last good code and disabled fault state; it never restarts Play automatically.

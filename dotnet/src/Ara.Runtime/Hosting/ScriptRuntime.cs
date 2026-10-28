@@ -98,6 +98,7 @@ public sealed unsafe class ScriptRuntime
                 SwapUpdate s => ApplySwap(s),
                 DeltaUpdate d => ApplyDelta(d),
                 ErrorUpdate e => Finish(ref e.Report, e.Slot, SlotOf(e.Slot), 0),
+                RecoveryCompletion recovery => ReportRecovery(recovery),
                 _ => 0,
             };
         }
@@ -109,6 +110,8 @@ public sealed unsafe class ScriptRuntime
         var slots = _slots;
         return index < slots.Length ? slots[index] : null;
     }
+
+    static uint ReportRecovery(RecoveryCompletion recovery) { recovery.Report(); return 0; }
 
     uint Finish(ref ReloadReport report, uint slotIndex, ModuleSlot? slot, ulong applyStart)
     {
@@ -172,6 +175,7 @@ public sealed unsafe class ScriptRuntime
             m.Report.Cascade = (uint)mods.Count;
             Finish(ref m.Report, m.Slot, SlotOf(m.Slot), t0);
         }
+        u.Completed?.Invoke(true);
         return AbiConst.BoundaryReloaded | AbiConst.BoundarySchemaChanged;
     }
 
@@ -186,6 +190,7 @@ public sealed unsafe class ScriptRuntime
             m.Rejected?.Invoke(why ?? "registration rejected");
             Finish(ref m.Report, m.Slot, SlotOf(m.Slot), t0);
         }
+        u.Completed?.Invoke(false);
         return 0;
     }
 
@@ -265,7 +270,7 @@ public sealed unsafe class ScriptRuntime
             if (Interlocked.Exchange(ref e.Faulted, 1) == 0)
             {
                 Interlocked.Increment(ref _faults);
-                Diag.Fault(AraCodes.SystemFault, $"system `{e.Name}`", ex);
+                Diag.Fault(AraCodes.SystemFault, $"system `{e.Name}`", ex, SlotOf(id >> 16)?.Name);
             }
             return AbiConst.RunFaulted;
         }
@@ -305,7 +310,7 @@ public sealed unsafe class ScriptRuntime
                     {
                         Interlocked.Exchange(ref entry.Faulted, 1);
                         Interlocked.Increment(ref _faults);
-                        Diag.Fault(AraCodes.BehaviourFault, $"behaviour `{entry.Name}` OnDestroy ({obj.Entity})", error);
+                        Diag.Fault(AraCodes.BehaviourFault, $"behaviour `{entry.Name}` OnDestroy ({obj.Entity})", error, SlotOf(id >> 16)?.Name);
                         EngineAccess.Discard();
                         status = AbiConst.RunFaulted;
                     }
@@ -354,7 +359,7 @@ public sealed unsafe class ScriptRuntime
             if (Interlocked.Exchange(ref entry.Faulted, 1) == 0)
             {
                 Interlocked.Increment(ref _faults);
-                Diag.Fault(AraCodes.BehaviourFault, $"behaviour `{entry.Name}`", ex);
+                Diag.Fault(AraCodes.BehaviourFault, $"behaviour `{entry.Name}`", ex, SlotOf(id >> 16)?.Name);
             }
             return AbiConst.RunFaulted;
         }
@@ -383,7 +388,7 @@ public sealed unsafe class ScriptRuntime
             if (Interlocked.Exchange(ref entry.Faulted, 1) == 0)
             {
                 Interlocked.Increment(ref _faults);
-                Diag.Fault(AraCodes.CommandFault, $"command `{entry.Name}`", ex);
+                Diag.Fault(AraCodes.CommandFault, $"command `{entry.Name}`", ex, SlotOf(id >> 16)?.Name);
             }
             return AbiConst.RunFaulted;
         }

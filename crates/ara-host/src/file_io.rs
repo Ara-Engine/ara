@@ -36,6 +36,19 @@ pub(crate) struct Stamp {
     len: u64,
 }
 
+/// The watched incarnation that observed a deletion, before the file disappeared.
+#[derive(Debug, Clone)]
+pub(crate) struct Deletion {
+    generation: Option<u64>,
+    stamp: Option<Stamp>,
+}
+
+#[derive(Debug)]
+struct Watched {
+    generation: Option<u64>,
+    stamp: Option<Stamp>,
+}
+
 /// The file's modified time and size, or None when it does not exist.
 pub(crate) fn stamp(path: &Path) -> Option<Stamp> {
     let m = fs::metadata(path).ok()?;
@@ -69,7 +82,10 @@ pub(crate) struct DiagWrite {
 /// What the host asks of the thread.
 enum Request {
     /// Append an entry to the journal and flush it to the OS.
-    Append(Entry),
+    Append {
+        entry: Entry,
+        generations: Vec<(String, Option<u64>)>,
+    },
     /// Compact the journal (`Journal::compact`), then answer `Compacted`.
     Compact,
     /// Write `.ara/diagnostics.jsonl`.
@@ -85,11 +101,15 @@ enum Request {
         release: Receiver<()>,
     },
     /// Watch a loaded document's file, as it was when read.
-    Track { path: String, stamp: Option<Stamp> },
+    Track {
+        path: String,
+        stamp: Option<Stamp>,
+        generation: Option<u64>,
+    },
     /// Stop watching a file (its document was unloaded).
     Untrack { path: String },
     /// Write a document canonically (temp file, then rename).
-    Save(Save),
+    Save { save: Save, generation: Option<u64> },
     /// Delete a document's file (the document was deleted, and that is flushed).
     Remove { id: AssetId, path: String, rev: u64 },
     /// Check every watched file and scan for new ones now, then answer `Done`.
@@ -110,7 +130,7 @@ pub(crate) enum Reply {
     /// last wrote: compare before merging).
     Changed { path: String, text: String },
     /// A watched file disappeared.
-    Deleted { path: String },
+    Deleted { path: String, observed: Deletion },
     /// A document file appeared that nothing watches. Reported again only when it
     /// changes; `track` it once loaded.
     Found {
@@ -163,6 +183,9 @@ pub(crate) struct FileThread {
     /// Appends sent since the compaction in progress, if one is.
     compacting: Option<usize>,
     disconnected: bool,
+    /// Host intent advances before queued materialization or saves can report echoes.
+    generations: HashMap<String, Option<u64>>,
+    next_generation: Option<u64>,
 }
 
 impl std::fmt::Debug for FileThread {
@@ -228,6 +251,8 @@ impl FileThread {
             journal_len,
             compacting: None,
             disconnected: false,
+            generations: HashMap::new(),
+            next_generation: Some(1),
         })
     }
 
@@ -241,7 +266,24 @@ impl FileThread {
         if let Some(since) = &mut self.compacting {
             *since += 1;
         }
-        self.send(Request::Append(entry));
+        let generations = if let Entry::Txn { txn, .. } = &entry {
+            let mut paths = std::collections::BTreeMap::new();
+            for op in &txn.ops {
+                if let ara_doc::Op::File { path, .. } | ara_doc::Op::Document { path, .. } = op {
+                    paths.insert(ara_doc::file_state::path_key(path), path.clone());
+                }
+            }
+            paths
+                .into_values()
+                .map(|path| {
+                    let generation = self.advance(&path);
+                    (path, generation)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        self.send(Request::Append { entry, generations });
     }
     /// Queue a journal compaction; `Compacted` answers it.
     pub(crate) fn compact(&mut self) {
@@ -292,22 +334,67 @@ impl FileThread {
     }
 
     /// Watch a loaded document's file from `stamp` (what it was when read).
-    pub(crate) fn track(&self, path: String, stamp: Option<Stamp>) {
-        self.send(Request::Track { path, stamp });
+    pub(crate) fn track(&mut self, path: String, stamp: Option<Stamp>) {
+        let generation = self.advance(&path);
+        self.send(Request::Track {
+            path,
+            stamp,
+            generation,
+        });
     }
     /// Stop watching a file.
-    pub(crate) fn untrack(&self, path: String) {
+    pub(crate) fn untrack(&mut self, path: String) {
         self.send(Request::Untrack { path });
     }
     /// Queue a save; its `Saved` reply arrives through `try_reply`/`reply`.
     pub(crate) fn save(&mut self, save: Save) {
         self.pending += 1;
-        self.send(Request::Save(save));
+        let generation = self.advance(&save.path);
+        self.send(Request::Save { save, generation });
     }
     /// Queue a file removal (after any queued save of it).
     pub(crate) fn remove(&mut self, id: AssetId, path: String, rev: u64) {
         self.pending += 1;
+        let _ = self.advance(&path);
         self.send(Request::Remove { id, path, rev });
+    }
+
+    fn advance(&mut self, path: &str) -> Option<u64> {
+        let generation = self.next_generation;
+        self.next_generation = generation.and_then(|generation| generation.checked_add(1));
+        self.generations
+            .insert(ara_doc::file_state::path_key(path), generation);
+        generation
+    }
+
+    /// Reject observations made before a newer owned transition or track request.
+    /// No filesystem access occurs on the authority/UI thread.
+    pub(crate) fn current_deletion(
+        &self,
+        path: &str,
+        observed: &Deletion,
+    ) -> Result<bool, Diagnostic> {
+        let Some(generation) = observed.generation else {
+            return Err(Diagnostic::error(
+                codes::IO,
+                "file-watch observation generation exhausted; restart the project authority",
+            ));
+        };
+        Ok(observed.stamp.is_some()
+            && self.generations.get(&ara_doc::file_state::path_key(path))
+                == Some(&Some(generation)))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn deletion_observation(&self, path: &str, stamp: Option<Stamp>) -> Deletion {
+        Deletion {
+            generation: self
+                .generations
+                .get(&ara_doc::file_state::path_key(path))
+                .copied()
+                .flatten(),
+            stamp,
+        }
     }
     /// Ask for a full check now; `Done` follows its findings.
     pub(crate) fn sync(&self) {
@@ -380,7 +467,7 @@ struct Worker {
     types: Vec<(PathBuf, Option<SystemTime>)>,
     journal: Journal,
     /// Loaded documents' files (project-relative) and their last seen stamp.
-    watched: HashMap<String, Option<Stamp>>,
+    watched: HashMap<String, Watched>,
     /// Document files nothing loads, as last reported.
     unwatched: HashMap<String, Option<Stamp>>,
     replies: Sender<Reply>,
@@ -420,10 +507,17 @@ impl Worker {
 
     fn handle(&mut self, request: Request) {
         match request {
-            Request::Append(entry) => {
+            Request::Append { entry, generations } => {
                 let result = self.journal.append(&entry).map_err(|e| {
                     Diagnostic::error(codes::IO, format!("cannot append to `.ara/journal`: {e}"))
                 });
+                if result.is_ok() {
+                    for (path, generation) in &generations {
+                        if let Some(watched) = self.watched.get_mut(path) {
+                            watched.generation = *generation;
+                        }
+                    }
+                }
                 if let Entry::Txn { txn, .. } = &entry
                     && txn
                         .ops
@@ -432,6 +526,15 @@ impl Worker {
                 {
                     let result = result.and_then(|()| {
                         crate::file_state::FileHistory::new(&self.root).materialize(&txn.ops)?;
+                        // Owned FileOps are writes too. Refresh their watched
+                        // baselines before queued OS notifications can echo a
+                        // move's deletion against the document's new location.
+                        for (path, generation) in &generations {
+                            if let Some(watched) = self.watched.get_mut(path) {
+                                watched.generation = *generation;
+                                watched.stamp = stamp(&self.root.join(path));
+                            }
+                        }
                         // A completed flush is distinct from a journaled intent:
                         // recovery must preserve later external edits, even when
                         // they restore bytes seen in an older transaction.
@@ -491,19 +594,24 @@ impl Worker {
                 // Bounded, so a host that does wait fails its test instead of hanging.
                 let _ = release.recv_timeout(Duration::from_secs(30));
             }
-            Request::Track { path, stamp } => {
+            Request::Track {
+                path,
+                stamp,
+                generation,
+            } => {
                 self.unwatched.remove(&path);
-                self.watched.insert(path, stamp);
+                self.watched.insert(path, Watched { generation, stamp });
             }
             Request::Untrack { path } => {
                 self.watched.remove(&path);
             }
-            Request::Save(save) => {
+            Request::Save { save, generation } => {
                 let result = self.write(&save);
                 if result.is_ok() {
                     let stamp = stamp(&self.root.join(&save.path));
                     self.unwatched.remove(&save.path);
-                    self.watched.insert(save.path.clone(), stamp);
+                    self.watched
+                        .insert(save.path.clone(), Watched { generation, stamp });
                 }
                 self.reply(Reply::Saved { save, result });
             }
@@ -611,14 +719,21 @@ impl Worker {
             return;
         };
         let now = stamp(&self.root.join(path));
-        if now == *known {
+        if now == known.stamp {
             return;
         }
         match now {
             None => {
-                self.watched.insert(path.to_owned(), None);
+                let observed = Deletion {
+                    generation: known.generation,
+                    stamp: known.stamp.clone(),
+                };
+                if let Some(watched) = self.watched.get_mut(path) {
+                    watched.stamp = None;
+                }
                 self.reply(Reply::Deleted {
                     path: path.to_owned(),
+                    observed,
                 });
             }
             Some(_) => {
@@ -626,7 +741,9 @@ impl Worker {
                 let Ok(text) = fs::read_to_string(self.root.join(path)) else {
                     return;
                 };
-                self.watched.insert(path.to_owned(), now);
+                if let Some(watched) = self.watched.get_mut(path) {
+                    watched.stamp = now;
+                }
                 self.reply(Reply::Changed {
                     path: path.to_owned(),
                     text,
@@ -711,6 +828,78 @@ fn slash(rel: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn owned_file_delete_recreate_refreshes_watch_baseline_but_external_delete_is_reported() {
+        let dir = std::env::var_os("ARA_TEST_ROOT")
+            .or_else(|| std::env::var_os("CARGO_TARGET_DIR"))
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+            .join(format!("owned-watch-baseline-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("scratch");
+        let path = "owned.txt";
+        fs::write(dir.join(path), b"native file bytes").expect("source");
+        let history = crate::file_state::FileHistory::new(&dir);
+        let state = history.snapshot(path).expect("snapshot");
+        let (journal, _, _) = Journal::open(&dir.join(".ara")).expect("journal");
+        let mut io = FileThread::start(
+            dir.clone(),
+            SchemaDb::new(),
+            Vec::new(),
+            journal,
+            Duration::ZERO,
+            Duration::ZERO,
+        )
+        .expect("worker");
+        io.track(path.into(), stamp(&dir.join(path)));
+        for (revision, prev, next) in [(1, state.clone(), None), (2, None, state)] {
+            let mut entry = txn(revision);
+            if let Entry::Txn { txn, .. } = &mut entry {
+                txn.ops.push(ara_doc::Op::File {
+                    doc: AssetId::parse("pj_project").expect("project ID"),
+                    id: ara_doc::RecordId::parse("f_owned").expect("file ID"),
+                    path: path.into(),
+                    prev,
+                    state: next,
+                });
+            }
+            io.append(entry);
+            io.sync();
+            loop {
+                match io.reply().expect("worker reply") {
+                    Reply::Materialized { result, .. } => result.expect("materialized"),
+                    Reply::Deleted { .. } => {
+                        panic!("owned transition must not echo as an external deletion")
+                    }
+                    Reply::Done => break,
+                    _ => {}
+                }
+            }
+        }
+        fs::remove_file(dir.join(path)).expect("genuine external deletion");
+        io.sync();
+        let mut observed = false;
+        loop {
+            match io.reply().expect("worker reply") {
+                Reply::Deleted {
+                    path,
+                    observed: deletion,
+                } => {
+                    assert!(
+                        io.current_deletion(&path, &deletion)
+                            .expect("live generation")
+                    );
+                    observed = true;
+                }
+                Reply::Done => break,
+                _ => {}
+            }
+        }
+        assert!(
+            observed,
+            "a genuine external deletion still reaches the authority"
+        );
+    }
 
     fn txn(n: u64) -> Entry {
         Entry::Txn {

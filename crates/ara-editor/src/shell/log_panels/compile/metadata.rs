@@ -167,7 +167,7 @@ impl Completion {
 
 /// C# source/analyzer/compiler and dependency diagnostics, excluding runtime faults.
 pub(super) fn compile_kind(diagnostic: &ara_diag::Diagnostic) -> bool {
-    !matches!(diagnostic.code.0,906|910..=912|920..=922|926..=927|930..=934|950..=953|960..=969)
+    !matches!(diagnostic.code.0,906|910..=912|920..=922|926..=927|930..=935|950..=953|960..=969)
 }
 
 /// Unknown tagged families remain visible with incomplete coverage until their owner is confirmed.

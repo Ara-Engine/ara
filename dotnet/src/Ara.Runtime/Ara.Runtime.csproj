@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Ara.Host" />
+    <InternalsVisibleTo Include="Ara.CompileServer" />
     <InternalsVisibleTo Include="Ara.Runtime.Tests" />
   </ItemGroup>
 </Project>

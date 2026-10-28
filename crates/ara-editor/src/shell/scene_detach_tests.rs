@@ -11,15 +11,11 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 struct Project(PathBuf);
 impl Project {
     fn new() -> Self {
-        let root = std::env::var_os("CARGO_TARGET_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("target"))
-            .join("scene-detach")
-            .join(format!(
-                "{}-{}",
-                std::process::id(),
-                NEXT.fetch_add(1, Ordering::Relaxed)
-            ));
+        let root = crate::test_target().join("scene-detach").join(format!(
+            "{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
         std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
         for (path, value) in [
             (

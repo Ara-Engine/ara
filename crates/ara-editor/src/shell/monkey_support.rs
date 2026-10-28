@@ -12,7 +12,7 @@ impl Shell {
             json!({"job":job,"ageMs":last.elapsed().as_millis()/1000*1000,"ageResolutionMs":1000,
                 "ageScope":"Since handle assignment or last status poll; not task lifetime"})
         });
-        json!({"build":self.build.is_some(),"runBuild":self.run.is_some(),"script":self.script_job.is_some(),"scriptJob":script_job,"scriptInventory":self.script_module_job_report(),
-            "busy":self.build.is_some() || self.run.is_some() || self.script_job.is_some() || self.script_module_busy()})
+        json!({"build":self.build.is_some(),"runBuild":self.run.is_some(),"script":self.script_job.is_some(),"scriptJob":script_job,"scriptInventory":self.script_module_job_report(),"scriptRecovery":self.script_recovery_resource_report(),
+            "busy":self.build.is_some() || self.run.is_some() || self.script_job.is_some() || self.script_module_busy() || self.script_recovery_busy()})
     }
 }

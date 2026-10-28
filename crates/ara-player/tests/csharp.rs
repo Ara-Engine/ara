@@ -11,6 +11,164 @@ use serde_json::{Value, json};
 use std::{path::Path, time::Instant};
 use support::{Agent, build_dotnet, demo_copy, outpost_module, repo};
 
+#[test]
+fn explicit_scoped_recovery_while_paused_preserves_world_state_and_refuses_stopped_world() {
+    use ara_play_host::{ScriptRecoveryOutcome, ScriptRecoveryRequest};
+    build_dotnet();
+    let dir = std::env::var_os("ARA_TEST_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| repo().join("target/player-csharp"))
+        .join(format!("scoped-recovery-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join(ara_doc::AUTHORING_ROOT)).unwrap();
+    std::fs::write(
+        dir.join("ara.project.json"),
+        ara_json::to_canonical_string(
+            &json!({"name":"Recovery","main":"main.scene","layoutVersion":4}),
+        ),
+    )
+    .unwrap();
+    let source = dir.join(ara_doc::AUTHORING_ROOT).join("Recovery.cs");
+    const CODE: &str = r#"
+/// <summary>ECS probe.</summary>
+[Component] public partial struct RecoveryProbe {
+    /// <summary>Updates.</summary>
+    public int Count;
+    /// <summary>Fault trigger.</summary>
+    public int Fault;
+}
+public static partial class Updating {
+    [Query] static void Run(ref RecoveryProbe p) {
+        if (p.Fault != 0) throw new System.InvalidOperationException("recover me");
+        p.Count += 1;
+    }
+}
+[Command("probe.fail")]
+public static partial class FailProbe {
+    /// <summary>Reports a nested command fault.</summary>
+    /// <param name="ctx">The command context.</param>
+    public static CommandResult Execute(ref CommandContext ctx) =>
+        throw new System.InvalidOperationException("command fault", new System.ArgumentException("inner cause"));
+}
+"#;
+    std::fs::write(&source, CODE).unwrap();
+    std::fs::write(dir.join(ara_doc::AUTHORING_ROOT).join("main.scene"),ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_recovery","records":{"e_probe":{"name":"Probe","RecoveryProbe":{"count":41,"fault":1}}}}))).unwrap();
+    let mut recovery = None;
+    let mut agent = Agent::open_with(
+        &dir,
+        5,
+        |_| {},
+        |service| recovery = Some(service.script_recovery()),
+    );
+    let mut recovery = recovery.unwrap();
+    agent.pool_ready();
+    let world = agent.play("start", json!({"startPaused":true,"hotReload":false}))["world"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    agent.play("step", json!({"world":world,"ticks":1}));
+    let mut system_fault = Value::Null;
+    agent.until("original system fault reaches scoped ingress", |agent| {
+        let events = agent.play("events", json!({"world":world}));
+        if let Some(event) = events["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|event| event["diagnostic"]["code"] == "ARA0910")
+        {
+            system_fault = event["diagnostic"].clone();
+        }
+        !system_fault.is_null()
+    });
+    assert_eq!(system_fault["data"]["module"], "game");
+    assert_eq!(system_fault["data"]["exception"]["schema"], 1);
+    let failed = agent.raw(
+        "ara_play",
+        json!({"action":"command","world":world,"name":"probe.fail","params":{}}),
+    );
+    assert_eq!(failed["isError"], true, "{failed}");
+    let mut command_fault = Value::Null;
+    agent.until("original command fault reaches scoped ingress", |agent| {
+        let events = agent.play("events", json!({"world":world}));
+        if let Some(event) = events["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|event| event["diagnostic"]["code"] == "ARA0912")
+        {
+            command_fault = event["diagnostic"].clone();
+        }
+        !command_fault.is_null()
+    });
+    assert_eq!(command_fault["data"]["module"], "game");
+    assert_eq!(
+        command_fault["data"]["exception"]["inners"][0]["type"],
+        "System.ArgumentException"
+    );
+    assert_eq!(command_fault["data"]["play"]["world"], world);
+    agent.play(
+        "patch",
+        json!({"world":world,"sets":[{"entity":"e_probe","path":"RecoveryProbe.fault","value":0}]}),
+    );
+    let before = agent.play(
+        "read",
+        json!({"world":world,"paths":["e_probe.RecoveryProbe.count"]}),
+    );
+    agent.host.tick();
+    let request = ScriptRecoveryRequest {
+        session: agent.session.clone(),
+        world: world.clone(),
+        player: Some(0),
+        why: Some("recover faulted scripts".into()),
+    };
+    let ticket = recovery.request(request.clone()).unwrap();
+    assert_eq!(recovery.request(request.clone()).unwrap(), ticket);
+    let mut result = None;
+    agent.until("scoped script recovery", |_| {
+        result = recovery.poll(ticket);
+        result.as_ref().is_some_and(|status| status.finished)
+    });
+    let result = result.unwrap();
+    assert_eq!(result.players.len(), 1);
+    assert_eq!(
+        result.players[0].outcome,
+        ScriptRecoveryOutcome::Reloaded,
+        "{result:?}"
+    );
+    assert!(!result.players[0].source.is_empty());
+    assert!(result.players[0].binding > 0);
+    assert_eq!(result.players[0].modules, ["game"]);
+    assert_eq!(
+        result.players[0].binding,
+        command_fault["data"]["play"]["binding"].as_u64().unwrap()
+    );
+    assert_eq!(
+        read(&mut agent, &json!(world), "e_probe.RecoveryProbe.count"),
+        json!(41)
+    );
+    assert_eq!(
+        agent.play(
+            "read",
+            json!({"world":world,"paths":["e_probe.RecoveryProbe.count"]})
+        )["tick"],
+        before["tick"]
+    );
+    agent.play("step", json!({"world":world,"ticks":1}));
+    assert_eq!(
+        read(&mut agent, &json!(world), "e_probe.RecoveryProbe.count"),
+        json!(42)
+    );
+    agent.play("stop", json!({"world":world}));
+    agent.host.tick();
+    let refused = recovery.request(request).unwrap();
+    agent.until("stopped-world refusal is published", |_| {
+        recovery.poll(refused).is_some_and(|status| status.finished)
+    });
+    let status = recovery.poll(refused).unwrap();
+    assert!(status.finished);
+    assert!(!status.diagnostics.is_empty());
+}
+
 fn read(agent: &mut Agent, world: &Value, path: &str) -> Value {
     agent.play("read", json!({"world": world, "paths": [path]}))["values"][path].clone()
 }

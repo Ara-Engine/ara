@@ -86,6 +86,8 @@ pub(crate) struct Ctx<'a> {
     pub probe_capture_blocker: Option<&'a str>,
     /// Cached reason why no owned capture request can be cancelled.
     pub probe_cancel_blocker: Option<&'a str>,
+    /// Owner-channel availability for explicit live C# reload.
+    pub script_recovery_blocker: Option<&'a str>,
     /// Build menu state.
     pub build: BuildState,
 }
@@ -250,6 +252,7 @@ impl Shell {
             pilot: self.pilot_active(),
             probe_capture_blocker: self.probe_capture_blocker(editor, target),
             probe_cancel_blocker: self.probe_cancel_blocker(editor, target),
+            script_recovery_blocker: self.script_recovery_blocker(editor),
             starting: editor.state.playing.is_none()
                 && (self.game_start.is_some() || editor.play_world.is_some()),
             build: BuildState {

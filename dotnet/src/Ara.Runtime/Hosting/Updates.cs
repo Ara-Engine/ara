@@ -38,6 +38,7 @@ public sealed class SwapUpdate : PendingUpdate
 {
     /// <summary>The modules, dependencies first.</summary>
     public required IReadOnlyList<ModuleSwap> Modules { get; init; }
+    internal Action<bool>? Completed { get; init; }
 }
 
 /// <summary>L1/L2: an EnC delta. <see cref="Apply"/> runs <c>MetadataUpdater.ApplyUpdate</c> on the tick thread.</summary>
@@ -121,7 +122,7 @@ public sealed class StaticModuleLoader(params (string Name, Action<ModuleBuilder
             try { modules[i].Register(builder); }
             catch (Exception e)
             {
-                Diag.Report(AraCodes.LoadFailed, "error", $"module `{modules[i].Name}`: Register threw {e.GetType().Name}: {e.Message}");
+                Diag.ReportException(AraCodes.LoadFailed, "error", $"module `{modules[i].Name}`: Register threw {e.GetType().Name}: {e.Message}", e);
                 return 1;
             }
             swaps.Add(new ModuleSwap { Slot = (uint)i, Name = modules[i].Name, Module = builder, Hot = false });
