@@ -285,8 +285,7 @@ fn undeclared_engine_does_not_claim_legacy_root_layout_support() {
             "hub.catalog",
             json!({"project":fixture.project}),
         )
-        .err()
-        .expect("v3-only engines cannot claim legacy root layout support");
+        .expect_err("v3-only engines cannot claim legacy root layout support");
     assert!(
         error
             .diagnostics()
