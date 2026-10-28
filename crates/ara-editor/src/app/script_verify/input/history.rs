@@ -89,14 +89,46 @@ impl ScriptCheck {
                 {
                     return Err("Fixed J10 lacks successful module state, runtime effect, or historical diagnostic evidence".into());
                 }
+                let projection = shell.compile_problem_state();
+                let retirement = retirement_evidence(&proof, &projection);
                 self.done(json!({"runtimeEffect":proof,"historicalConsoleSequence":seq,"historicalConsoleMessage":message,
                     "historicalConsoleSource":source,"historyExpandedViaNativePointer":true,
                     "ingress":"Protocol source.replace and ECS fixed-tick proof, followed by SDL Console palette/filter/history pointers",
-                    "currentProblemsCleared":Value::Null,"currentProblemsScope":"No active/resolved diagnostic lifecycle API; no assertion that a stale Problems row remains"}));
+                    "compileProjection":projection,"problemRetirementEvidence":retirement,
+                    "currentProblemsCleared":Value::Null,"currentProblemsScope":"The projection is observed separately; exact lifecycle metadata and a native post-fix Problems check are still required before asserting retirement"}));
             }
         }
         Ok(())
     }
+}
+// Observe exact provenance without turning an absent or partial compiler contract
+// into a passing retirement assertion. Console history is proved independently.
+fn retirement_evidence(proof: &Value, projection: &Value) -> Value {
+    let data = &proof["compileErrorHistory"]["diagnostic"]["data"];
+    let compile = &data["compile"];
+    let tagged = compile["schema"] == 1
+        && data["module"].is_string()
+        && compile["producer"].is_string()
+        && compile["profile"].is_string();
+    let scope = tagged
+        .then(|| {
+            projection["scopes"].as_array().and_then(|scopes| {
+                scopes.iter().find(|scope| {
+                    let key = &scope["key"];
+                    key["module"] == data["module"]
+                        && key["producer"] == compile["producer"]
+                        && key["profile"] == compile["profile"]
+                        && key["world"] == data["play"]["world"]
+                        && key["player"] == data["play"]["player"]
+                })
+            })
+        })
+        .flatten();
+    json!({"state":if !tagged {"pending-compiler-metadata"} else if scope.is_none() {"pending-matching-projection-scope"} else {"projection-observed-native-problems-check-pending"},
+        "diagnosticMetadataTagged":tagged,"matchingProjectionScope":scope,
+        "retirementVerified":Value::Null,
+        "scope":"Read-only exact module/producer/profile/world/player correlation, not a native Problems retirement pass",
+        "requiredNextCheck":"Newer bound attempt with verified current-module-inputs, complete coverage and zero active scoped errors; then native Problems excludes the resolved diagnostic while native Console retains its exact history"})
 }
 fn text(shell: &Shell, id: &str) -> String {
     shell

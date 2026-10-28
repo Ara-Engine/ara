@@ -68,7 +68,7 @@ impl ScriptCheck {
                         .ok_or("Native J10 proof disappeared")?
                         .report();
                     self.done(json!({"runtimeEffect":proof,"ingress":"Protocol source.replace jobs and background ECS reads; not native source editing",
-                        "currentProblemsCleared":Value::Null,"currentProblemsScope":"No active/resolved diagnostic lifecycle API; latest same-module Reload.errors only"}));
+                        "currentProblemsCleared":Value::Null,"currentProblemsScope":"Compile projection recorded separately; module Reload.errors alone is not a Problems retirement assertion"}));
                 }
             }
             5 => self.problems(editor, shell, window, scale, events)?,

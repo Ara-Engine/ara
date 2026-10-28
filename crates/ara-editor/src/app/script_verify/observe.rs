@@ -54,7 +54,8 @@ impl ScriptCheck {
         json!({"doc":editor.state.doc,"selection":editor.state.selection,"resource":editor.state.resource,
             "asset":editor.state.asset_path,"world":editor.play_world,"gameRunning":shell.game_running,"gameLive":shell.game_live,
             "modal":shell.modal_active(),"status":shell.status_note,"actor":authored,"revision":editor.host.store().revision(),
-            "scriptModuleInventory":shell.script_module_job_report(),"moduleCompileProof":self.proof.as_ref().map(Proof::report)})
+            "scriptModuleInventory":shell.script_module_job_report(),"moduleCompileProof":self.proof.as_ref().map(Proof::report),
+            "compileProjection":shell.compile_problem_state()})
     }
     fn capture(&self, shell: &Shell, gpu: &mut NativeUi, stage: &str) -> ara_ui::Result<()> {
         gpu.select_target(0);
@@ -68,6 +69,13 @@ impl ScriptCheck {
         Ok(())
     }
     pub fn write(&self) -> ara_ui::Result<()> {
+        let retirement = self
+            .results
+            .iter()
+            .find(|result| result["journey"] == CASES[6])
+            .map_or(Value::Null, |result| {
+                result["observed"]["problemRetirementEvidence"].clone()
+            });
         std::fs::write(
             self.output.join("script-behaviours.json"),
             ara_json::to_canonical_string(&json!({
@@ -76,7 +84,8 @@ impl ScriptCheck {
                 "ingress":"SDL_PushEvent -> Window::poll_tagged -> production route for all measured controls; typed source.replace and background ECS observations are separately labeled protocol",
                 "fixtures":self.fixture,"journeys":self.results,"nativeTrace":self.trace,
                 "runtimeEffect":self.proof.as_ref().map(Proof::report),"currentProblemsCleared":Value::Null,
-                "limits":["The current compile result is the latest structured Reload.errors for one module. Problems has diagnostic history, without an active/resolved compiler diagnostic API.",
+                "problemRetirementEvidence":retirement,
+                "limits":["The current compile projection is recorded. Exact compiler lifecycle metadata and native post-fix Problems verification are required before claiming retirement; module Reload.errors alone is insufficient.",
                     "The offscreen IDE guard is exercised; this journey intentionally does not launch or inspect an external IDE.",
                     "Runtime rates use authoritative ECS tick deltas, not shared-GPU wall-clock frame rates."],
                 "current":{"journey":CASES.get(self.index),"phase":self.phase,"phaseSeconds":self.started.elapsed().as_secs_f64()}

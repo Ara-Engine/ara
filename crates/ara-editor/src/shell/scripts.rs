@@ -225,8 +225,14 @@ impl Shell {
                 result["result"]["component"].as_str().unwrap_or("Script")
             )
         } else {
-            result["diagnostics"][0]["message"]
-                .as_str()
+            result["diagnostics"]
+                .as_array()
+                .and_then(|diagnostics| {
+                    diagnostics
+                        .iter()
+                        .find(|diagnostic| diagnostic["severity"] == "error")
+                })
+                .and_then(|diagnostic| diagnostic["message"].as_str())
                 .unwrap_or("Script compilation failed; see Problems")
                 .to_owned()
         });
