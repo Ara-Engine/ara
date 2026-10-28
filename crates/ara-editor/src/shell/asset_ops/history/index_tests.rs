@@ -267,6 +267,7 @@ fn undo_redo_waits_for_post_save_snapshot_and_failed_scan_retry_keeps_exact_sele
         revision,
         "Retry/read-model handoff must not author content"
     );
+    Ok(())
 }
 
 #[test]
