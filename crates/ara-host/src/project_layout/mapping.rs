@@ -1,7 +1,6 @@
 //! Preflights overlapping legacy roots before scheduling any filesystem changes.
 use super::migrate::{Migration, Rewrite, collect, io_error, problem};
 use ara_diag::Diagnostic;
-use serde_json::Value;
 use std::{
     collections::BTreeMap,
     fs,
