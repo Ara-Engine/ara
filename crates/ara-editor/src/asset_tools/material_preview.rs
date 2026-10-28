@@ -119,6 +119,12 @@ fn compile(folder: &Path, source: &str, hash: &str) -> anyhow::Result<()> {
         ("previewFragment", Stage::Fragment),
     ];
     let spawn = |command: &mut Command| {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            // Shader tools run in the preview worker without a desktop console.
+            command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
         command
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

@@ -364,6 +364,11 @@ fn settings_edits_are_undoable_commands_in_both_scopes() {
             json!({"key":"play.tickHz","value":"120"}),
         )
         .unwrap();
+    let canonical = ara_host::project_policy::policy(editor.host.store().workspace(), "settings")
+        .expect("Project settings enter the authority immediately");
+    assert_eq!(canonical["play.tickHz"], "120");
+    // The native edit remains nonblocking; disk assertions cross its save receipt.
+    editor.host.flush();
     let manifest: Value =
         serde_json::from_str(&std::fs::read_to_string(project.0.join("ara.project.json")).unwrap())
             .unwrap();

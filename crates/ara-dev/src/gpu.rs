@@ -306,10 +306,10 @@ fn locked_inner<T>(
         let report = guard.finish()?;
         *LAST_READING.lock().expect("guard evidence") =
             Some(serde_json::json!({"report":path,"reading":report,"status":report.status()}));
-        eprintln!(
-            "ARA_DEV_GPU_READING {}",
-            serde_json::json!({"status":report.status(),"report":path,"diagnostic":report.diagnostic(),"reading":report})
-        );
+        write_gpu_reading(
+            std::io::stderr().lock(),
+            &serde_json::json!({"status":report.status(),"report":path,"diagnostic":report.diagnostic(),"reading":report}),
+        )?;
         if report.invalid() {
             result = Err(crate::gpu_guard::invalid_error(report.detail()));
         }
@@ -318,6 +318,18 @@ fn locked_inner<T>(
     drop(ticket);
     result
 }
+
+/// Batch structured telemetry into native stderr writes and flush on every return path.
+fn write_gpu_reading(sink: impl Write, reading: &serde_json::Value) -> std::io::Result<()> {
+    let mut output = std::io::BufWriter::new(sink);
+    let written = writeln!(output, "ARA_DEV_GPU_READING {reading}");
+    let flushed = output.flush();
+    written.and(flushed)
+}
+
+#[cfg(test)]
+#[path = "gpu_telemetry_tests.rs"]
+mod telemetry_tests;
 
 #[cfg(test)]
 mod visual_tests {
