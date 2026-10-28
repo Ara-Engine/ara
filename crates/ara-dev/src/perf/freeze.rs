@@ -155,21 +155,26 @@ pub(crate) fn pack(
     crate::gpu::locked_unmeasured(3600, || {
         super::run_command(root, &mut command, "sample export", 1800)
     })?;
-    // Export publishes a dist folder; accept only the actual runtime launch contract.
-    let dist = if candidate.join("ara-launch.json").is_file() {
-        candidate
-    } else {
-        candidate.join("build")
-    };
-    ensure!(
-        dist.join("ara-launch.json").is_file(),
-        "export did not publish ara-launch.json"
-    );
+    let dist = launch_folder(&candidate).context("export did not publish ara-launch.json")?;
     if let Some(parent) = frozen.parent() {
         fs::create_dir_all(parent)?;
     }
     fs::rename(dist, frozen)?;
     Ok(frozen.to_owned())
+}
+
+/// The folder of an export that holds the runtime launch contract (`ara-launch.json`, its
+/// pack and resources), which the perf player reads as its scene: the export root, its
+/// `build/`, or `build/data/` (store-neutral distributions keep the runtime there, next
+/// to the launcher executable).
+fn launch_folder(candidate: &Path) -> Option<PathBuf> {
+    [
+        candidate.to_owned(),
+        candidate.join("build"),
+        candidate.join("build/data"),
+    ]
+    .into_iter()
+    .find(|folder| folder.join("ara-launch.json").is_file())
 }
 
 /// The shipping C# assembly stem for a frozen sample: its project name reduced to
@@ -195,6 +200,23 @@ fn assembly_stem(project: &Path) -> String {
 #[cfg(test)]
 mod assembly_tests {
     use super::*;
+
+    #[test]
+    fn the_launch_folder_follows_the_distribution_layout() -> Result<()> {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-dev/freeze-layout")
+            .join(std::process::id().to_string());
+        let _ = fs::remove_dir_all(&root);
+        assert_eq!(launch_folder(&root), None);
+        // A store-neutral distribution: the launcher in build/, the runtime in build/data/.
+        fs::create_dir_all(root.join("build/data"))?;
+        fs::write(root.join("build/data/ara-launch.json"), "{}")?;
+        assert_eq!(launch_folder(&root), Some(root.join("build/data")));
+        fs::write(root.join("build/ara-launch.json"), "{}")?;
+        assert_eq!(launch_folder(&root), Some(root.join("build")));
+        fs::remove_dir_all(&root)?;
+        Ok(())
+    }
 
     #[test]
     fn assembly_stem_comes_from_the_project_name_and_is_export_safe() {
