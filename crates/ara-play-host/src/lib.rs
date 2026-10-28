@@ -1539,7 +1539,6 @@ impl Service for PlayService {
                 Err(problems) => problems.into_iter().for_each(|d| cx.log(d)),
             }
         }
-        self.poll_catalog_refresh(cx);
         self.script_recovery.tick(
             &mut self.worlds,
             &mut self.script_diagnostics,
@@ -1552,6 +1551,7 @@ impl Service for PlayService {
             &self.root,
             &mut |diagnostic| cx.log(diagnostic),
         );
+        self.poll_catalog_refresh(cx);
         let playing = !self.worlds.is_empty();
         let allow = self
             .worlds

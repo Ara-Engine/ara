@@ -45,6 +45,14 @@ float3 bloomTent(Frame f,uint image,bool storage,uint level,float2 at){
         sum+=v*(x==0?2:1)*(y==0?2:1);
     }return sum/16;
 }
+// One tap of bloomMain's 13-tap downsample: FILTER0 `offset` texels from `uv`, clamped
+// against HDR overflow.
+float3 bloomTap(Frame f,float2 uv,float2 offset,float2 texel){return min(sampleImage(f,FILTER0,uv+offset*texel).rgb,float3(60000));}
+// One 2x2 block (taps a..d) of the 13-tap downsample: its mean, weighted (Karis) by
+// `weight` over 1 + exposed luminance, accumulated into `c` and `total`.
+void bloomBlock(float3 a,float3 b,float3 d,float3 e,float weight,float exposure,inout float3 c,inout float total){
+    float3 m=(a+b+d+e)/4;float w=weight/(1+luminance(m)*exposure);c+=m*w;total+=w;
+}
 [shader("compute")][numthreads(8,8,1)]
 void bloomMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();uint pass=root.pass;
@@ -53,17 +61,22 @@ void bloomMain(uint3 tid:SV_DispatchThreadID){
     if(pass==0){
         // 13-tap downsample (Jimenez 2014) with Karis luminance weights per 2x2
         // block, so lone HDR fireflies cannot flash into the glow.
-        float2 texel=1/float2(f.sizes.xy),uv=(float2(p)+0.5)*2*texel;float3 t[13];
-        float2 o[13]={float2(-2,-2),float2(0,-2),float2(2,-2),float2(-1,-1),float2(1,-1),float2(-2,0),float2(0,0),float2(2,0),float2(-1,1),float2(1,1),float2(-2,2),float2(0,2),float2(2,2)};
-        for(uint i=0;i<13;i++)t[i]=min(sampleImage(f,FILTER0,uv+o[i]*texel).rgb,float3(60000));
-        uint4 groups[5]={uint4(3,4,8,9),uint4(0,1,5,6),uint4(1,2,6,7),uint4(5,6,10,11),uint4(6,7,11,12)};
+        // Named taps and blocks, no arrays: a runtime-indexed local array spills to
+        // scratch memory (the NVIDIA hang pattern).
+        float2 texel=1/float2(f.sizes.xy),uv=(float2(p)+0.5)*2*texel;
+        float3 t0=bloomTap(f,uv,float2(-2,-2),texel),t1=bloomTap(f,uv,float2(0,-2),texel),t2=bloomTap(f,uv,float2(2,-2),texel);
+        float3 t3=bloomTap(f,uv,float2(-1,-1),texel),t4=bloomTap(f,uv,float2(1,-1),texel);
+        float3 t5=bloomTap(f,uv,float2(-2,0),texel),t6=bloomTap(f,uv,float2(0,0),texel),t7=bloomTap(f,uv,float2(2,0),texel);
+        float3 t8=bloomTap(f,uv,float2(-1,1),texel),t9=bloomTap(f,uv,float2(1,1),texel);
+        float3 t10=bloomTap(f,uv,float2(-2,2),texel),t11=bloomTap(f,uv,float2(0,2),texel),t12=bloomTap(f,uv,float2(2,2),texel);
         // Weights use exposed luminance; physical cd/m2 would weight every block ~1/L.
-        float exposure=buffers[NonUniformResourceIndex(f.control.y)].Load<float>(0);
-        float weights[5]={0.5,0.125,0.125,0.125,0.125};c=0;float total=0;
-        for(uint g=0;g<5;g++){
-            uint4 k=groups[g];float3 m=(t[k.x]+t[k.y]+t[k.z]+t[k.w])/4;
-            float w=weights[g]/(1+luminance(m)*exposure);c+=m*w;total+=w;
-        }c/=total;
+        float exposure=buffers[NonUniformResourceIndex(f.control.y)].Load<float>(0);c=0;float total=0;
+        bloomBlock(t3,t4,t8,t9,0.5,exposure,c,total);
+        bloomBlock(t0,t1,t5,t6,0.125,exposure,c,total);
+        bloomBlock(t1,t2,t6,t7,0.125,exposure,c,total);
+        bloomBlock(t5,t6,t10,t11,0.125,exposure,c,total);
+        bloomBlock(t6,t7,t11,t12,0.125,exposure,c,total);
+        c/=total;
     }else if(pass<5){
         // 4x4 [1 3 3 1] tent from the finer level, read in place from BLOOM0.
         c=0;for(int y=0;y<4;y++)for(int x=0;x<4;x++)c+=bloomLoad(f,BLOOM0,true,level-1,int2(p)*2+int2(x,y)-1)*(x==0||x==3?1:3)*(y==0||y==3?1:3);c/=64;

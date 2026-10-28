@@ -138,26 +138,39 @@ mod platform {
             return false;
         }
         // An exited process its parent has not reaped yet (a zombie) still answers
-        // signal zero; the BSD process status tells it apart.
+        // signal zero. On macOS, proc_pidinfo fails with ESRCH for zombies, but the
+        // kernel process table (sysctl KERN_PROC_PID) reports their SZOMB state.
         #[cfg(target_os = "macos")]
         {
-            /// `SZOMB` from <sys/proc.h>: exited, awaiting collection by its parent.
-            const SZOMB: u32 = 5;
-            // SAFETY: `proc_bsdinfo` is plain integers and byte arrays; all-zero is valid.
-            let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
-            let size = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
-            // SAFETY: `info` is a writable `proc_bsdinfo` of exactly `size` bytes, which is
-            // what PROC_PIDTBSDINFO fills.
-            let read = unsafe {
-                libc::proc_pidinfo(
-                    pid as libc::c_int,
-                    libc::PROC_PIDTBSDINFO,
+            // libc does not bind Apple's `struct kinfo_proc`; its 64-bit layout is
+            // frozen ABI: 648 bytes, with `kp_proc.p_stat` (a char) at byte 36.
+            const KINFO_PROC_SIZE: usize = 648;
+            const P_STAT_OFFSET: usize = 36;
+            let mut mib = [
+                libc::CTL_KERN,
+                libc::KERN_PROC,
+                libc::KERN_PROC_PID,
+                pid as libc::c_int,
+            ];
+            let mut info = [0u8; KINFO_PROC_SIZE];
+            let mut size = KINFO_PROC_SIZE;
+            // SAFETY: `mib` names a 4-level KERN_PROC_PID query and `info` is a writable
+            // buffer of `size` bytes, the most sysctl copies out; no new value is set.
+            let status = unsafe {
+                libc::sysctl(
+                    mib.as_mut_ptr(),
+                    mib.len() as libc::c_uint,
+                    info.as_mut_ptr().cast(),
+                    &mut size,
+                    std::ptr::null_mut(),
                     0,
-                    (&raw mut info).cast(),
-                    size,
                 )
             };
-            if read == size && info.pbi_status == SZOMB {
+            // A pid with no process copies out nothing (size 0).
+            if status == 0
+                && size == KINFO_PROC_SIZE
+                && u32::from(info[P_STAT_OFFSET]) == libc::SZOMB
+            {
                 return false;
             }
         }

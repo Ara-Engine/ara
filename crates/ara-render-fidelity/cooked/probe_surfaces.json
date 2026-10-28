@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927",
+  "key": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf",
   "stages": [
     {
-      "dxil": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927/probe_surfaces/probeSurfacesMain.dxil",
+      "dxil": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/probe_surfaces/probeSurfacesMain.dxil",
       "dxil_hash": "7553d6f89821bef540c65efd69d80031b6ab648eaf78b98183301d8528fe9a50",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927/probe_surfaces/probeSurfacesMain.metallib",
+        "metallib": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/probe_surfaces/probeSurfacesMain.metallib",
         "metallib_hash": "aa3197cb397001199f956220333750c13d1ab11c1d0e45fb9792934c547605c3",
-        "reflection": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927/probe_surfaces/probeSurfacesMain.metal.json",
+        "reflection": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/probe_surfaces/probeSurfacesMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "probeSurfacesMain",
-      "spirv": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927/probe_surfaces/probeSurfacesMain.spv",
+      "spirv": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/probe_surfaces/probeSurfacesMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "dbff38fb45235118234c82bd9a8d4833fb7297d2d9163d2358256e5169e696c8",
       "stage": "compute"

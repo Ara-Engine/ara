@@ -192,7 +192,7 @@ impl Fixture {
         Player {
             incarnation: format!("restart-test-{name}-{pid}"),
             child: child.into(),
-            link: ara_play::link::Pump::owner(Link::accept(stream).unwrap()).unwrap(),
+            link: ara_play::link::Pump::owner(Link::accept(stream).unwrap()).expect("owner IO"),
             hello: ara_play::Hello {
                 token: "restart-test".into(),
                 protocol: ara_play::PROTOCOL.into(),
