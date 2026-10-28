@@ -23,22 +23,28 @@ impl Shell {
         editor: &mut Editor,
         domain: &str,
     ) -> ara_ui::Result<()> {
-        let folder = &editor.state.asset_folder;
+        let folder = self
+            .browser
+            .authored_folder_ref(&editor.state.asset_folder)?;
         let extension = if domain == "animation" {
             "animation"
         } else {
             "graph"
         };
-        let path = format!(
-            "{}{domain}-{}.{}",
-            if folder.is_empty() {
-                String::new()
-            } else {
-                format!("{folder}/")
-            },
-            editor.host.store().revision(),
-            extension
-        );
+        let first = editor.host.store().revision();
+        let path = (first..first.saturating_add(10_000))
+            .map(|number| {
+                let leaf = format!("{domain}-{number}.{extension}");
+                if folder.is_empty() {
+                    leaf
+                } else {
+                    format!("{folder}/{leaf}")
+                }
+            })
+            .find(|path| {
+                ops::authored::available(&self.browser.files, editor.host.store().workspace(), path)
+            })
+            .ok_or("No unused resource name in this authored folder")?;
         let result = editor.action(
             "editor.resource.create",
             json!({"path":path,"domain":domain}),
@@ -193,6 +199,7 @@ impl Shell {
                     })
             })
         {
+            self.interaction.note();
             editor.action("editor.focus", json!({"panel": page}))?;
             self.follow_focus(editor)?;
             self.apply_canvas_view(editor);
@@ -206,6 +213,7 @@ impl Shell {
         let inside = rect.contains(self.pointer[0], self.pointer[1]);
         match event {
             Event::MouseMotion { position, .. } if self.canvas_dragging => {
+                self.interaction.note();
                 self.pointer = *position;
                 if let Some(canvas) = self.canvas_mut() {
                     canvas.motion(*position);
@@ -217,6 +225,7 @@ impl Shell {
                 button,
                 pressed: true,
             } if inside => {
+                self.interaction.note();
                 let (pointer, add) = (self.pointer, self.modifiers[0] || self.modifiers[1]);
                 if let Some(canvas) = self.canvas_mut() {
                     canvas.begin(pointer, *button, add, rect);
@@ -242,6 +251,7 @@ impl Shell {
                 Ok(true)
             }
             Event::Wheel(delta) if inside => {
+                self.interaction.note();
                 let pointer = self.pointer;
                 if let Some(canvas) = self.canvas_mut() {
                     canvas.zoom(pointer, delta[1], rect);
@@ -258,6 +268,7 @@ impl Shell {
                 pressed: true,
                 ..
             } if self.canvas_dragging => {
+                self.interaction.note();
                 self.canvas_dragging = false;
                 if let Some(canvas) = self.canvas_mut() {
                     canvas.cancel();
@@ -323,3 +334,7 @@ impl Shell {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod ownership_tests;

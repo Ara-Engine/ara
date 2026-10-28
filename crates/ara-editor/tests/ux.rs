@@ -117,7 +117,10 @@ fn import_panel_overlays_live_dependencies_and_applies_settings_with_one_content
     // The scene's browser snapshot predates this live authored edge.
     editor.apply(vec![json!({"cmd":"property.set","args":{"entity":"e_crate001","path":"MeshRenderer.model","value":"@models/crate.gltf#as_crate001"}})], "Use the crate model", None).unwrap();
     editor
-        .action("editor.workspace", json!({"asset":"levels/main.scene"}))
+        .action(
+            "editor.workspace",
+            json!({"asset":format!("{}/levels/main.scene",ara_doc::AUTHORING_ROOT)}),
+        )
         .unwrap();
     shell.rebuild(&mut editor).unwrap();
     let label = |shell: &Shell, id: &str| {
@@ -134,7 +137,7 @@ fn import_panel_overlays_live_dependencies_and_applies_settings_with_one_content
     shell.dispatch(&mut editor).unwrap();
     assert_eq!(
         editor.state.asset_path.as_deref(),
-        Some("models/crate.gltf")
+        Some(format!("{}/models/crate.gltf", ara_doc::AUTHORING_ROOT).as_str())
     );
     assert!(
         shell.ui.find("import-settings-title").is_some(),
@@ -317,6 +320,14 @@ fn panels_detach_into_floating_windows_and_redock() {
     editor
         .action("editor.select", json!({"entities":["e_crate001"]}))
         .unwrap();
+    let camera = editor.state.camera;
+    let selection = editor.state.selection.clone();
+    let doc = editor.state.doc.clone();
+    let content = ara_doc::write(
+        editor.host.store().workspace().doc(&doc).unwrap(),
+        editor.host.store().schema(),
+    );
+    let content_revision = editor.host.store().revision();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     editor
         .action(
@@ -334,6 +345,17 @@ fn panels_detach_into_floating_windows_and_redock() {
     assert!(shell.ui.find("inspector-scroll").is_some());
     assert!(shell.ui.find("edit-Transform-position-0").is_some());
     shell.leave();
+    assert_eq!(editor.state.camera, camera);
+    assert_eq!(editor.state.selection, selection);
+    assert_eq!(editor.state.doc, doc);
+    assert_eq!(editor.host.store().revision(), content_revision);
+    assert_eq!(
+        ara_doc::write(
+            editor.host.store().workspace().doc(&doc).unwrap(),
+            editor.host.store().schema()
+        ),
+        content
+    );
     // Window rects persist with the layout and survive a reopen.
     editor
         .action("editor.window", json!({"id":window,"rect":[40,60,500,640]}))
@@ -348,14 +370,97 @@ fn panels_detach_into_floating_windows_and_redock() {
     shell.drag_tab_to(&mut editor, "inspector", "view").unwrap();
     assert!(editor.state.floating.is_empty());
     assert!(ara_editor::state::panel_visible(&editor.state, "inspector"));
-    // The Scene viewport stays in the main window.
+    // Scene can detach into its own retained surface while a separate Inspector
+    // stays open. Redocking either panel must not discard the other's window.
+    editor
+        .action("editor.select", json!({"entities":selection}))
+        .unwrap();
+    editor
+        .action("editor.layout", json!({"panel":"scene"}))
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    assert!(shell.viewport().is_some());
+    let camera = editor.state.camera;
+    let content_revision = editor.host.store().revision();
+    let content_history = editor.host.store().history().len();
+    editor
+        .action(
+            "editor.layout.move",
+            json!({"panel":"scene","slot":"float","rect":[160,120,900,640]}),
+        )
+        .unwrap();
+    let scene_window = editor
+        .state
+        .floating
+        .iter()
+        .find(|window| {
+            ara_ui::docking::DockLayout::new(window.root.clone())
+                .unwrap()
+                .contains("scene")
+        })
+        .unwrap()
+        .id
+        .clone();
+    editor
+        .action(
+            "editor.layout.move",
+            json!({"panel":"inspector","slot":"float","rect":[1080,120,340,640]}),
+        )
+        .unwrap();
+    let inspector_window = editor
+        .state
+        .floating
+        .iter()
+        .find(|window| {
+            ara_ui::docking::DockLayout::new(window.root.clone())
+                .unwrap()
+                .contains("inspector")
+        })
+        .unwrap()
+        .clone();
+    assert_ne!(scene_window, inspector_window.id);
+    assert_eq!(editor.state.floating.len(), 2);
+    shell.rebuild(&mut editor).unwrap();
     assert!(
-        editor
-            .action(
-                "editor.layout.move",
-                json!({"panel":"scene","slot":"float"})
-            )
-            .is_err()
+        shell.viewport().is_none(),
+        "main must not retain the detached Scene's picking rectangle"
+    );
+    assert!(shell.enter(&scene_window));
+    let viewport = shell
+        .viewport()
+        .expect("floating Scene owns a real visible viewport");
+    assert!(viewport.w > 1. && viewport.h > 1.);
+    assert!(shell.ui.find("inspector-scroll").is_none());
+    shell.leave();
+    assert!(shell.enter(&inspector_window.id));
+    assert!(shell.ui.find("inspector-scroll").is_some());
+    assert!(shell.viewport().is_none());
+    shell.leave();
+    shell.drag_tab_to(&mut editor, "scene", "view").unwrap();
+    assert_eq!(editor.state.floating, vec![inspector_window.clone()]);
+    assert!(
+        shell.viewport().is_some(),
+        "redocked Scene becomes the main viewport again"
+    );
+    assert!(
+        !shell.enter(&scene_window),
+        "the emptied Scene window is removed"
+    );
+    shell.drag_tab_to(&mut editor, "inspector", "view").unwrap();
+    assert!(editor.state.floating.is_empty());
+    let dock = ara_ui::docking::DockLayout::new(editor.state.layout.clone()).unwrap();
+    assert!(dock.contains("scene") && dock.contains("inspector"));
+    assert_eq!(editor.state.camera, camera);
+    assert_eq!(editor.state.selection, selection);
+    assert_eq!(editor.state.doc, doc);
+    assert_eq!(editor.host.store().revision(), content_revision);
+    assert_eq!(editor.host.store().history().len(), content_history);
+    assert_eq!(
+        ara_doc::write(
+            editor.host.store().workspace().doc(&doc).unwrap(),
+            editor.host.store().schema()
+        ),
+        content
     );
     // Built-in layouts apply and Save as round-trips through .ara/layouts.
     editor
@@ -371,6 +476,16 @@ fn panels_detach_into_floating_windows_and_redock() {
     assert_eq!(
         editor.state.layout,
         ara_editor::state::preset_layout("levelDesign").unwrap()
+    );
+    assert_eq!(editor.state.camera, camera);
+    assert_eq!(editor.state.selection, selection);
+    assert_eq!(editor.host.store().history().len(), content_history);
+    assert_eq!(
+        ara_doc::write(
+            editor.host.store().workspace().doc(&doc).unwrap(),
+            editor.host.store().schema()
+        ),
+        content
     );
 }
 
@@ -399,10 +514,19 @@ fn settings_edits_are_undoable_commands_in_both_scopes() {
             json!({"key":"play.tickHz","value":"120"}),
         )
         .unwrap();
+    let canonical = ara_host::project_policy::policy(editor.host.store().workspace(), "settings")
+        .expect("Project settings enter the authority immediately");
+    assert_eq!(canonical["play.tickHz"], "120");
+    // The native edit remains nonblocking; disk assertions cross its save receipt.
+    editor.host.flush();
     let manifest: Value =
         serde_json::from_str(&std::fs::read_to_string(project.0.join("ara.project.json")).unwrap())
             .unwrap();
-    assert_eq!(manifest["settings"]["play.tickHz"], "120");
+    let policy = ara_host::project_policy::read(&project.0, "settings")
+        .unwrap()
+        .unwrap();
+    assert_eq!(policy["play.tickHz"], "120");
+    assert!(manifest.get("settings").is_none());
     assert_eq!(manifest["main"], "levels/main.scene");
     // Edit ▸ Undo follows focus: in Settings it undoes the last setting, with its label.
     let rows = shell.menu_rows(&mut editor, 1).unwrap();
@@ -800,6 +924,24 @@ fn prefab_from_selection_overrides_apply_revert_and_open() {
     editor
         .action("editor.select", json!({"entities":["e_crate001"]}))
         .unwrap();
+    let snapshot = |editor: &Editor| {
+        editor
+            .host
+            .store()
+            .workspace()
+            .docs()
+            .map(|(path, document)| {
+                (
+                    path.to_owned(),
+                    ara_doc::write(document, editor.host.store().schema()),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let before_create = snapshot(&editor);
+    let before_history = editor.host.store().history().len();
+    let before_view = editor.view().unwrap();
+    let before_poses = ara_editor::world::world_transforms(before_view.entities());
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     shell
         .run_command(&mut editor, "create.prefab", &Default::default())
@@ -817,10 +959,79 @@ fn prefab_from_selection_overrides_apply_revert_and_open() {
     );
     let instance = editor.state.selection[0].clone();
     let scene = workspace.doc("sc_test0001").unwrap();
-    assert!(scene.record("e_crate001").is_none());
-    assert!(ara_doc::prefab_of(scene.record(&instance).unwrap()).is_some());
+    assert_eq!(
+        instance, "e_crate001",
+        "conversion preserves the selected root identity"
+    );
+    assert_eq!(scene.records().len(), 1);
+    assert!(
+        scene.record("e_child001").is_none(),
+        "the child now belongs to the prefab source"
+    );
+    let reference = format!("@prefabs/salvage_crate.prefab#{prefab}");
+    assert_eq!(
+        ara_doc::prefab_of(scene.record(&instance).unwrap()),
+        Some(reference.as_str())
+    );
+    let source = workspace.doc(&prefab).unwrap();
+    let source_root = source.children(None)[0].to_string();
+    let source_child = source.children(Some(&source_root))[0].to_string();
+    assert_ne!(source_root, instance);
+    assert_ne!(source_child, "e_child001");
+    let child = format!("{instance}/{source_child}");
     let view = editor.view().unwrap();
     assert_eq!(view.entities().len(), 2, "instance root and its child");
+    assert!(view.entities().contains_key(&child));
+    let poses = ara_editor::world::world_transforms(view.entities());
+    for (old, current) in [
+        ("e_crate001", instance.as_str()),
+        ("e_child001", child.as_str()),
+    ] {
+        assert!(
+            before_poses[old]
+                .to_cols_array()
+                .into_iter()
+                .zip(poses[current].to_cols_array())
+                .all(|(before, after)| (before - after).abs() < 0.00001),
+            "conversion preserves world pose of {old}"
+        );
+    }
+    assert_eq!(
+        editor.host.store().history().len(),
+        before_history + 1,
+        "document creation, population and scene replacement are one transaction"
+    );
+    let create_txn = editor.host.store().history().last().unwrap().id.clone();
+    let after_create = snapshot(&editor);
+    shell
+        .run_command(&mut editor, "edit.undo", &Default::default())
+        .unwrap();
+    assert_eq!(
+        snapshot(&editor),
+        before_create,
+        "one Undo restores all authored documents"
+    );
+    assert!(editor.host.store().workspace().doc(&prefab).is_none());
+    assert_eq!(
+        editor
+            .host
+            .store()
+            .history()
+            .last()
+            .unwrap()
+            .reverts
+            .as_ref(),
+        Some(&create_txn)
+    );
+    shell
+        .run_command(&mut editor, "edit.redo", &Default::default())
+        .unwrap();
+    assert_eq!(
+        snapshot(&editor),
+        after_create,
+        "Redo restores the same prefab and instance identities"
+    );
+    assert_eq!(editor.state.selection, vec![instance.clone()]);
     // Override a field on the instance, then apply it to the prefab.
     editor
         .apply(
@@ -835,6 +1046,8 @@ fn prefab_from_selection_overrides_apply_revert_and_open() {
         shell.ui.nodes[overrides].text.as_ref().unwrap().value,
         "1 override"
     );
+    let before_apply = snapshot(&editor);
+    let before_apply_history = editor.host.store().history().len();
     shell
         .run_command(&mut editor, "prefab.apply_all", &Default::default())
         .unwrap();
@@ -855,6 +1068,42 @@ fn prefab_from_selection_overrides_apply_revert_and_open() {
             .overrides
             .is_empty()
     );
+    assert_eq!(
+        store.history().len(),
+        before_apply_history + 1,
+        "source edit and instance cleanup are one transaction"
+    );
+    let apply_txn = store.history().last().unwrap().id.clone();
+    let after_apply = snapshot(&editor);
+    shell
+        .run_command(&mut editor, "edit.undo", &Default::default())
+        .unwrap();
+    assert_eq!(
+        snapshot(&editor),
+        before_apply,
+        "one Undo restores both source and instance overrides"
+    );
+    assert_eq!(
+        editor
+            .host
+            .store()
+            .history()
+            .last()
+            .unwrap()
+            .reverts
+            .as_ref(),
+        Some(&apply_txn)
+    );
+    assert_eq!(
+        ara_editor::shell::prefab_ops::instance(editor.host.store(), "sc_test0001", &instance)
+            .unwrap()
+            .overrides,
+        vec!["Transform.scale"]
+    );
+    shell
+        .run_command(&mut editor, "edit.redo", &Default::default())
+        .unwrap();
+    assert_eq!(snapshot(&editor), after_apply);
     // A new override can be reverted; Open edits the prefab in the Scene view.
     editor
         .apply(
@@ -919,6 +1168,12 @@ fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
     .unwrap();
     let mut editor = Editor::open(&project.0).unwrap();
     editor
+        .action(
+            "editor.workspace",
+            json!({"folder":ara_doc::AUTHORING_ROOT}),
+        )
+        .unwrap();
+    editor
         .action("editor.layout.show", json!({"panel":"assets"}))
         .unwrap();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
@@ -967,7 +1222,10 @@ fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
         "{root_files:?}"
     );
     editor
-        .action("editor.workspace", json!({"folder":"models"}))
+        .action(
+            "editor.workspace",
+            json!({"folder":format!("{}/models",ara_doc::AUTHORING_ROOT)}),
+        )
         .unwrap();
     shell.rebuild(&mut editor).unwrap();
     assert_eq!(names(&shell), ["crate"]);
@@ -990,7 +1248,10 @@ fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
     // (every `cargo test`) a rebuild that reuses markup an input made stale fails.
     for (action, params) in [
         ("editor.search", json!({"panel":"assets","query":""})),
-        ("editor.workspace", json!({"asset":"models/crate.gltf"})),
+        (
+            "editor.workspace",
+            json!({"asset":format!("{}/models/crate.gltf",ara_doc::AUTHORING_ROOT)}),
+        ),
         ("editor.workspace", json!({"grid":false})),
         (
             "editor.settings.set",
@@ -1333,7 +1594,7 @@ fn camera_menu_and_toolbar_field_set_the_scene_field_of_view() {
     shell.commit_fields(&mut editor).unwrap();
     assert_eq!(editor.state.camera.fov_y_degrees, 47.5);
     let field = shell.ui.find("view-fov").unwrap();
-    assert_eq!(shell.ui.nodes[field].text.as_ref().unwrap().value, "47.5°");
+    assert_eq!(shell.ui.nodes[field].text.as_ref().unwrap().value, "47.5");
 
     // Align needs a Camera entity.
     editor
@@ -1352,9 +1613,12 @@ fn camera_menu_and_toolbar_field_set_the_scene_field_of_view() {
 /// canonical export preset, runtime player, no machine paths, script modules found
 /// by the export), and a project with a C# module can build.
 #[test]
-fn build_profile_comes_from_a_command_and_csharp_projects_can_build() {
+fn build_profile_creation_commits_once_and_keeps_csharp_build_available() {
     use ara_editor::shell::commands::Target;
     let project = Project::new();
+    let module = ara_host::project::authored_root(&project.0).join("features/gameplay");
+    std::fs::create_dir_all(&module).unwrap();
+    std::fs::write(module.join("ara.module.toml"), "name = \"Game\"\n").unwrap();
     let mut editor = Editor::open(&project.0).unwrap();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     let run = shell
@@ -1362,34 +1626,57 @@ fn build_profile_comes_from_a_command_and_csharp_projects_can_build() {
         .unwrap_err();
     assert!(run.to_string().contains("Build the project first"), "{run}");
 
+    let before = editor.host.store().history().len();
     shell
         .run_command(&mut editor, "build.profile.create", &Target::None)
         .unwrap();
-    let start = std::time::Instant::now();
+    let jobs = editor.action("jobs.list", json!({})).unwrap();
+    let job = jobs["jobs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|job| job["name"] == "build_profile.create")
+        .unwrap()["job"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let path = project.0.join("settings/builds/windows.export.json");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         editor.tick();
-        let jobs = editor.action("jobs.list", json!({})).unwrap();
-        let job = jobs["jobs"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|job| job["name"] == "build_profile.create")
-            .expect("profile creation uses the prepared asset service");
-        match job["status"].as_str().unwrap() {
-            "done" => break,
-            "running" => {}
-            _ => panic!("profile creation failed: {job}"),
+        let status = editor.action("jobs.status", json!({"job":job})).unwrap();
+        assert!(
+            status["status"] == "running" || status["status"] == "done",
+            "profile preparation failed: {status}"
+        );
+        if status["status"] == "done" && path.is_file() {
+            assert_eq!(status["result"]["ok"], true);
+            assert_eq!(editor.host.store().history().len(), before + 1);
+            assert_eq!(
+                status["result"]["txn"],
+                editor.host.store().history().last().unwrap().id.0
+            );
+            break;
         }
         assert!(
-            start.elapsed().as_secs() < 10,
-            "profile creation stalled: {job}"
+            std::time::Instant::now() < deadline,
+            "profile did not commit: {status}"
         );
-        std::thread::sleep(std::time::Duration::from_millis(5));
+        std::thread::sleep(std::time::Duration::from_millis(2));
     }
-    let text =
-        std::fs::read_to_string(project.0.join("settings/builds/windows.export.json")).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
     let preset = ara_export::ExportPreset::from_unpinned_text(&text).unwrap();
     assert_eq!(preset.platform, ara_export::Platform::Windows);
+    let authored = ara_host::project::authored_root(editor.host.root());
+    let content = authored.strip_prefix(editor.host.root()).unwrap();
+    assert_eq!(
+        preset.content,
+        if content.as_os_str().is_empty() {
+            ".".into()
+        } else {
+            content.to_string_lossy().replace('\\', "/")
+        }
+    );
     assert_eq!(
         preset.player_template,
         ara_export::preset::PlayerTemplate::Runtime
@@ -1399,12 +1686,26 @@ fn build_profile_comes_from_a_command_and_csharp_projects_can_build() {
         "pinned at build time, not here"
     );
     assert!(preset.script_project.is_empty());
+    // Reopening the UI consumes the committed index, rather than treating the
+    // initial asynchronous acknowledgement as a successful filesystem mutation.
+    drop(shell);
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !shell.poll_assets_for_test(&mut editor) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "profile index did not arrive"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
     assert!(
         shell
             .run_command(&mut editor, "build.profile.create", &Target::None)
             .is_err(),
         "an existing profile is never overwritten"
     );
+    assert_eq!(std::fs::read_to_string(path).unwrap(), text);
+    assert_eq!(editor.host.store().history().len(), before + 1);
 
     std::fs::create_dir_all(project.0.join(ara_doc::AUTHORING_ROOT).join("scripts/Game")).unwrap();
     std::fs::write(

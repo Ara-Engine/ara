@@ -5,7 +5,7 @@
 //! the ratio of the ambient light at each capture point now to what it was at its
 //! bake (id Tech style re-fit). Shading reads them in the High/Epic PSOs only.
 //!
-//! [`CaptureSpec`]s come from authored `ReflectionCapture` components or from
+//! [`CaptureSpec`]s come from authored `ReflectionProbe` components or from
 //! [`auto_place`]; `Renderer::set_reflection_captures` hands them over. [`Captures`]
 //! plans the bakes: on new specs, a new content generation or a lighting change
 //! (sun, local lights, sky, fog, probe GI arrival; rate-limited), never per frame.
@@ -77,7 +77,7 @@ pub struct CaptureSpec {
     /// Where captures overlap, higher priorities blend first (then smaller boxes).
     pub priority: i32,
     /// Level-0 interior texels per side of the octahedral map (a power of two,
-    /// 64 to 512); zero uses the quality's.
+    /// 64 to 1024); zero uses the quality's.
     pub resolution: u32,
     /// Radiance multiplier.
     pub intensity: f32,
@@ -110,7 +110,7 @@ impl CaptureSpec {
                 && self.blend >= 0.
                 && (self.resolution == 0
                     || (self.resolution.is_power_of_two()
-                        && (64..=512).contains(&self.resolution)))
+                        && (64..=1024).contains(&self.resolution)))
                 && self.intensity.is_finite()
                 && self.intensity >= 0.,
             "Invalid reflection capture"

@@ -70,6 +70,35 @@ impl Sections {
     }
 }
 impl Shell {
+    /// Insert a dragged component section before or after another section. This changes
+    /// the persisted Inspector layout only; component identity and authoring data stay intact.
+    pub(super) fn reorder_component(
+        &mut self,
+        source: &str,
+        target: &str,
+        after: bool,
+    ) -> ara_ui::Result<()> {
+        let mut components = self.inspector_sections.components.clone();
+        let source_index = components
+            .iter()
+            .position(|name| name == source)
+            .ok_or("The dragged component is no longer shown")?;
+        if !components.iter().any(|name| name == target) {
+            return Err("The destination component is no longer shown".into());
+        }
+        if source == target {
+            return Ok(());
+        }
+        let source = components.remove(source_index);
+        let target_index = components
+            .iter()
+            .position(|name| name == target)
+            .ok_or("The destination component is no longer shown")?;
+        components.insert(target_index + usize::from(after), source);
+        self.inspector_sections.preferences.order = components;
+        self.inspector_sections.save();
+        Ok(())
+    }
     /// Compact component navigation keeps the section list usable in narrow docks.
     pub(super) fn component_jumps(
         &mut self,

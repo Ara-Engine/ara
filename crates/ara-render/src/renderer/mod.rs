@@ -1,4 +1,5 @@
 //! Renderer orchestration. Extraction snapshots are uploaded once; frames record handles.
+mod capabilities;
 mod edit;
 mod frame;
 mod gi;

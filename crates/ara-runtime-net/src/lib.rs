@@ -24,7 +24,7 @@ mod mirror;
 pub use locomotion::{Locomotion, MotorInput, NetMotor};
 
 pub use ara_net::{Conditions, JoinToken};
-pub use host::{HostConfig, HostStats, NetHost};
+pub use host::{ClientLinkStats, HostConfig, HostStats, NetHost};
 pub use mirror::{MirrorStats, NetMirror};
 
 use ara_components::Transform;

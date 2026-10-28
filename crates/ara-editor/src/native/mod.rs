@@ -5,16 +5,12 @@ mod coordinates;
 pub(crate) mod frame;
 #[cfg(windows)]
 mod pacing;
-use ara_ui::{
-    Ui,
-    input::{InputEvent, InputState},
-};
-use ara_ui_text::{Clipboard, EditEvent};
-use sdl3_sys::{clipboard::*, events::*, keyboard::*, stdinc::SDL_free, video::*};
-use std::{
-    ffi::{CStr, CString, c_void},
-    sync::mpsc::{self, Receiver, Sender},
-};
+use ara_ui::{Ui, input::InputState};
+use ara_ui_text::Clipboard;
+#[cfg(not(windows))]
+use sdl3_sys::events::SDL_WaitEventTimeout;
+use sdl3_sys::{keyboard::*, stdinc::SDL_free, video::*};
+use std::ffi::CStr;
 
 /// Native event failures belong in diagnostics, never the window's fatal path.
 fn recover_input<T>(result: ara_ui::Result<T>) -> Option<T> {
@@ -33,40 +29,8 @@ fn recover_input<T>(result: ara_ui::Result<T>) -> Option<T> {
         .ok()
 }
 
-struct Watch {
-    window: SDL_WindowID,
-    send: Sender<EditEvent>,
-}
-unsafe extern "C" fn text_watch(user: *mut c_void, event: *mut SDL_Event) -> bool {
-    // SAFETY: SDL retains the boxed Watch until RemoveEventWatch; only the event's tagged member is read.
-    unsafe {
-        let state = &*user.cast::<Watch>();
-        let event = &*event;
-        let _ = state.window;
-        if event.r#type == SDL_EVENT_TEXT_INPUT.0 && !event.text.text.is_null() {
-            let text = CStr::from_ptr(event.text.text)
-                .to_string_lossy()
-                .into_owned();
-            let _ = state.send.send(EditEvent::ImeCommit(text));
-        }
-        if event.r#type == SDL_EVENT_TEXT_EDITING.0 && !event.edit.text.is_null() {
-            let text = CStr::from_ptr(event.edit.text)
-                .to_string_lossy()
-                .into_owned();
-            let begin = event.edit.start.max(0) as usize;
-            let count = event.edit.length.max(0) as usize;
-            let offset = |n: usize| text.char_indices().nth(n).map_or(text.len(), |(i, _)| i);
-            let selection = offset(begin)..offset(begin + count);
-            let _ = state.send.send(EditEvent::ImePreedit { text, selection });
-        }
-    }
-    true
-}
 pub(crate) struct Native {
     window: *mut SDL_Window,
-    watch: Box<Watch>,
-    edits: Receiver<EditEvent>,
-    composing: bool,
     text_active: bool,
     /// Window currently receiving OS text input (main or a floating window).
     text_window: *mut SDL_Window,
@@ -160,35 +124,10 @@ impl Native {
             SDL_free(windows.cast());
             found.ok_or_else(|| anyhow::anyhow!("editor SDL window was not found"))?
         };
-        let (send, edits) = mpsc::channel();
-        // SAFETY: Window is owned by ara-platform on this thread and remains live through Native teardown.
-        let window_id = unsafe { SDL_GetWindowID(window) };
-        let mut watch = Box::new(Watch {
-            window: window_id,
-            send,
-        });
-        // SAFETY: Box keeps userdata stable; callback is removed before userdata is freed.
-        anyhow::ensure!(
-            // SAFETY: The stable userdata is removed before it can be freed.
-            unsafe { SDL_AddEventWatch(Some(text_watch), (&mut *watch as *mut Watch).cast()) },
-            "SDL event watch failed"
-        );
         #[cfg(windows)]
-        let accessibility = match accessibility::Accessibility::new(window) {
-            Ok(a) => a,
-            Err(e) => {
-                // SAFETY: Undo the installed callback before returning and dropping its userdata.
-                unsafe {
-                    SDL_RemoveEventWatch(Some(text_watch), (&mut *watch as *mut Watch).cast());
-                }
-                return Err(e);
-            }
-        };
+        let accessibility = accessibility::Accessibility::new(window)?;
         Ok(Self {
             window,
-            watch,
-            edits,
-            composing: false,
             text_active: false,
             text_window: window,
             #[cfg(windows)]
@@ -253,61 +192,27 @@ impl Native {
         }
         Ok(())
     }
-    pub fn input(&mut self, ui: &mut Ui, input: &mut InputState) -> ara_ui::Result<bool> {
-        let mut changed = false;
-        let mut clipboard = OsClipboard;
-        while let Ok(edit) = self.edits.try_recv() {
-            let result = (|| -> ara_ui::Result<bool> {
-                match &edit {
-                    EditEvent::ImePreedit { text, .. } => {
-                        if !self.composing && !text.is_empty() {
-                            input.event(
-                                ui,
-                                InputEvent::Edit(EditEvent::ImeStart),
-                                &mut clipboard,
-                            )?;
-                            self.composing = true;
-                        }
-                        if text.is_empty() {
-                            input.event(
-                                ui,
-                                InputEvent::Edit(EditEvent::ImeCancel),
-                                &mut clipboard,
-                            )?;
-                            self.composing = false;
-                            return Ok(true);
-                        }
-                    }
-                    EditEvent::ImeCommit(_) => self.composing = false,
-                    _ => {}
-                }
-                input.event(ui, InputEvent::Edit(edit), &mut clipboard)?;
-                Ok(true)
-            })();
-            if let Some(applied) = recover_input(result) {
-                changed |= applied;
-            } else {
-                self.composing = false;
-                let _ = recover_input(input.event(
-                    ui,
-                    InputEvent::Edit(EditEvent::ImeCancel),
-                    &mut clipboard,
-                ));
-            }
-        }
+    pub fn input(
+        &mut self,
+        ui: &mut Ui,
+        input: &mut InputState,
+        clipboard: &mut dyn Clipboard,
+    ) -> ara_ui::Result<bool> {
         #[cfg(windows)]
         {
-            changed |= recover_input(self.accessibility.actions(ui, input, &mut clipboard))
-                .unwrap_or(false);
+            Ok(recover_input(self.accessibility.actions(ui, input, clipboard)).unwrap_or(false))
         }
-        Ok(changed)
+        #[cfg(not(windows))]
+        {
+            let _ = (ui, input, clipboard);
+            Ok(false)
+        }
     }
 }
 impl Drop for Native {
     fn drop(&mut self) {
-        // SAFETY: RemoveEventWatch synchronizes callback removal while userdata and window are still live.
+        // SAFETY: The platform still owns this main-thread window during teardown.
         unsafe {
-            SDL_RemoveEventWatch(Some(text_watch), (&mut *self.watch as *mut Watch).cast());
             if self.text_active {
                 SDL_StopTextInput(self.text_window);
             }
@@ -315,29 +220,43 @@ impl Drop for Native {
     }
 }
 pub(crate) struct OsClipboard;
-impl Clipboard for OsClipboard {
+/// Bounded runs exercise clipboard semantics without changing the desktop clipboard.
+pub(crate) struct SessionClipboard {
+    isolated: bool,
+    text: String,
+}
+impl SessionClipboard {
+    pub fn new(isolated: bool) -> Self {
+        Self {
+            isolated,
+            text: String::new(),
+        }
+    }
+}
+impl Clipboard for SessionClipboard {
     fn read(&mut self) -> ara_ui_text::Result<String> {
-        // SAFETY: SDL returns an owned UTF-8 string, released exactly once with its allocator.
-        unsafe {
-            let ptr = SDL_GetClipboardText();
-            if ptr.is_null() {
-                return Err("SDL clipboard read failed".into());
-            }
-            let text = CStr::from_ptr(ptr).to_string_lossy().into_owned();
-            SDL_free(ptr.cast());
-            Ok(text)
+        if self.isolated {
+            Ok(self.text.clone())
+        } else {
+            OsClipboard.read()
         }
     }
     fn write(&mut self, text: &str) -> ara_ui_text::Result<()> {
-        let result = (|| -> ara_ui_text::Result<()> {
-            let text = CString::new(text)?;
-            // SAFETY: SDL copies the nul-terminated string before returning.
-            if unsafe { SDL_SetClipboardText(text.as_ptr()) } {
-                Ok(())
-            } else {
-                Err("SDL clipboard write failed".into())
-            }
-        })();
+        if self.isolated {
+            self.text = text.into();
+            Ok(())
+        } else {
+            OsClipboard.write(text)
+        }
+    }
+}
+impl Clipboard for OsClipboard {
+    fn read(&mut self) -> ara_ui_text::Result<String> {
+        ara_platform::text::read_clipboard().map_err(|error| error.to_string().into())
+    }
+    fn write(&mut self, text: &str) -> ara_ui_text::Result<()> {
+        let result: ara_ui_text::Result<()> =
+            ara_platform::text::write_clipboard(text).map_err(|error| error.to_string().into());
         // Command-driven copies may intentionally ignore the return value.
         if let Err(error) = &result {
             eprintln!(

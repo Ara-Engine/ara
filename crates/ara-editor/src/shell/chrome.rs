@@ -38,19 +38,14 @@ impl Shell {
                 1 => format!("Connected · 1 agent{}", if active_agent { " editing" } else { "" }),
                 n => format!("Connected · {n} agents{}", if active_agent { " editing" } else { "" }),
             }));
-        let stopping = self
+        let starting = self
             .game_start
             .as_ref()
             // Once the game shows, it is playing whatever the last status read said.
             .filter(|_| editor.state.playing.is_some() && !self.game_live)
-            .map(|start| start.stopping);
-        if let Some(stopping) = stopping {
+            .map(game_panel::StartProgress::title);
+        if let Some(text) = starting {
             self.bind_command("status-play", "window.game", Target::None);
-            let text = if stopping {
-                "Stopping Play…"
-            } else {
-                "Starting Play…"
-            };
             out.push_str(&format!("<button id='status-play' class='chip' label='Play' description='Open the Game view' action='Dispatch'>{}<text id='status-play-text' class='fg' text='{text}' /></button>",icons::icon_in("status-play","loader-circle","accent")));
         } else if let Some(playing) = editor.state.playing {
             self.bind_command("status-play", "window.game", Target::None);

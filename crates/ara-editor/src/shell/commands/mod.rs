@@ -80,6 +80,12 @@ pub(crate) struct Ctx<'a> {
     pub game: (bool, &'static str, bool),
     /// Play was started and has no live world yet: Stop cancels the start.
     pub starting: bool,
+    /// The Scene view is explicitly piloting one authored Camera.
+    pub pilot: bool,
+    /// Cached renderer/UI reason why the targeted probe cannot be captured.
+    pub probe_capture_blocker: Option<&'a str>,
+    /// Cached reason why no owned capture request can be cancelled.
+    pub probe_cancel_blocker: Option<&'a str>,
     /// Build menu state.
     pub build: BuildState,
 }
@@ -89,7 +95,7 @@ pub struct BuildState {
     pub running: bool,
     /// A finished build exists (Run Build, Open Build Folder).
     pub built: bool,
-    /// The project has an export profile (`presets/*.export.json`).
+    /// The project has an export profile (`settings/builds/`, or legacy `presets/`).
     pub profile: bool,
 }
 /// Whether a command can run now.
@@ -225,7 +231,7 @@ pub(crate) fn keymap(state: &EditorState, extensions: &crate::extensions::Catalo
 }
 impl Shell {
     /// Availability inputs for the current editor state and a target.
-    pub(crate) fn ctx<'a>(&self, editor: &'a Editor, target: &'a Target) -> Ctx<'a> {
+    pub(crate) fn ctx<'a>(&'a self, editor: &'a Editor, target: &'a Target) -> Ctx<'a> {
         Ctx {
             state: &editor.state,
             extensions: &editor.extensions,
@@ -241,16 +247,18 @@ impl Shell {
             logs: self.log_view,
             assets_show_all: self.assets_show_all,
             game: (self.game_stats, self.game_aspect, self.game_live),
+            pilot: self.pilot_active(),
+            probe_capture_blocker: self.probe_capture_blocker(editor, target),
+            probe_cancel_blocker: self.probe_cancel_blocker(editor, target),
             starting: editor.state.playing.is_none()
                 && (self.game_start.is_some() || editor.play_world.is_some()),
             build: BuildState {
                 running: self.build.is_some() || self.run.is_some(),
                 built: self.last_build.is_some(),
-                profile: self
-                    .browser
-                    .items
-                    .iter()
-                    .any(|a| a.path.starts_with("presets/") && a.path.ends_with(".export.json")),
+                profile: self.browser.items.iter().any(|a| {
+                    (a.path.starts_with("settings/builds/") || a.path.starts_with("presets/"))
+                        && a.path.ends_with(".export.json")
+                }),
             },
         }
     }
@@ -272,6 +280,21 @@ impl Shell {
         id: &str,
         target: &Target,
     ) -> ara_ui::Result<()> {
+        if self.offscreen
+            && matches!(
+                id,
+                "assets.reveal"
+                    | "assets.open_ide"
+                    | "build.open_folder"
+                    | "tools.terminal"
+                    | "help.docs"
+                    | "help.logs"
+            )
+        {
+            return Err(
+                "Opening desktop applications is unavailable during offscreen verification".into(),
+            );
+        }
         if let Some(spec) = lookup(&editor.extensions, id)
             && spec.builtin.is_none()
         {
@@ -293,6 +316,9 @@ impl Shell {
         let Run::Do(run) = spec.run else {
             return Err(format!("{} is not available", spec.title).into());
         };
+        if self.confirm_command(editor, id, target)? {
+            return Ok(());
+        }
         self.menu = None;
         run(self, editor, target)
     }
@@ -300,11 +326,14 @@ impl Shell {
     pub fn run_queued(&mut self, editor: &mut Editor) -> bool {
         let queued = std::mem::take(&mut editor.queued_commands);
         let ran = !queued.is_empty();
+        let bypass = self.confirmation_bypass;
+        self.confirmation_bypass = true;
         for (id, target) in queued {
             if let Err(error) = self.run_command(editor, &id, &target) {
                 editor.report_failure(&*error);
             }
         }
+        self.confirmation_bypass = bypass;
         ran
     }
 }

@@ -137,6 +137,16 @@ impl Jobs {
         self.by_id.get(id)
     }
 
+    /// Changes only a running job's cancellation gate, returning actual changes.
+    pub(crate) fn set_cancellable(&mut self, id: &str, cancellable: bool) -> Option<&JobRecord> {
+        let job = self
+            .by_id
+            .get_mut(id)
+            .filter(|job| job.status == JobStatus::Running && job.cancellable != cancellable)?;
+        job.cancellable = cancellable;
+        Some(job)
+    }
+
     /// Every job, by ID.
     pub fn all(&self) -> impl Iterator<Item = &JobRecord> {
         self.by_id.values()

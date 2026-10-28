@@ -2,7 +2,7 @@
 use super::Shell;
 impl Shell {
     pub(crate) fn resizing_column(&self) -> bool {
-        if self.scrub.is_some() || matches!(self.drag, Some(super::Drag::Column { .. })) {
+        if self.scrub.is_some() || matches!(self.drag, Some(super::Drag::Column)) {
             return true;
         }
         self.shown_node("inspector-scroll").is_some_and(|i| {

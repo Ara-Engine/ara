@@ -13,9 +13,9 @@ use serde_json::{Value, json};
 struct CreateParams {
     /// Calling editor or agent session.
     session: String,
-    /// New project-relative asset document path.
+    /// New authored-relative document path; physical storage is under the content root.
     path: String,
-    /// material, vfx, graph, animation or scene (an empty scene document).
+    /// material, vfx, graph, animation, scene or prefab (the last two start empty).
     domain: String,
     /// Optional complete domain source for material/VFX import.
     source: Option<String>,
@@ -96,49 +96,20 @@ impl Service for AuthoringService {
             return cx.apply(parse(json!({"session":p.session,"doc":doc,"commands":commands,"why":p.why.unwrap_or_else(||"Edit animation canvas".into())}))?);
         }
         let p: CreateParams = parse(params)?;
-        if matches!(p.domain.as_str(), "scene" | "prefab") {
-            // An empty scene (File > New Scene) or prefab (Prefab from Selection).
-            let doc = cx
-                .create_document(&p.path, &p.domain)
-                .map_err(|d| vec![d])?;
-            return Ok(json!({"doc":doc,"path":p.path}));
-        }
-        if !matches!(
-            p.domain.as_str(),
-            "material" | "vfx" | "graph" | "animation"
-        ) {
-            return Err(vec![crate::invalid("unknown resource domain")]);
-        }
-        if let Some(source) = &p.source {
-            match p.domain.as_str() {
-                "material" => {
-                    ara_material::dsl::parse(source, "gr_validate")?;
-                }
-                "vfx" => {
-                    ara_vfx::Effect::parse(source).map_err(|d| vec![d])?;
-                }
-                _ => {}
-            }
-        }
-        let doc = cx
-            .create_document(
-                &p.path,
-                if p.domain == "animation" {
-                    "animation"
-                } else {
-                    "graph"
-                },
-            )
-            .map_err(|d| vec![d])?;
-        let command = if p.domain == "animation" {
-            json!({"cmd":"editor.animation.controller.set","args":{"record":"an_controller","controller":{}}})
-        } else {
-            json!({"cmd":"editor.graph.initialize","args":{"domain":p.domain,"source":p.source}})
-        };
+        let empty = matches!(p.domain.as_str(), "scene" | "prefab");
         let batch = parse(
-            json!({"session":p.session,"doc":doc,"why":p.why.unwrap_or_else(||format!("Create {}",p.domain)),"commands":[command]}),
+            json!({"session":p.session,"why":p.why.unwrap_or_else(||format!("Create {}",p.domain)),"commands":[{"cmd":"editor.resource.create.atomic","args":{"path":p.path,"domain":p.domain,"source":p.source}}]}),
         )?;
         let transaction = cx.apply(batch)?;
-        Ok(json!({"doc":doc,"path":p.path,"transaction":transaction}))
+        let created = &transaction["outputs"][0];
+        let doc = created["doc"]
+            .as_str()
+            .ok_or_else(|| vec![crate::invalid("resource creation returned no document")])?
+            .to_owned();
+        if empty {
+            Ok(json!({"doc":doc,"path":p.path}))
+        } else {
+            Ok(json!({"doc":doc,"path":p.path,"transaction":transaction}))
+        }
     }
 }

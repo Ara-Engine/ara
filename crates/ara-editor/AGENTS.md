@@ -79,8 +79,8 @@ read it; a disabled command returns `Avail::Blocked(reason)` and a deferred one 
 uncommanded buttons. Context-menu sources are `Shell::context_at`.
 `settings.rs` holds the settings table; edits are ops on a private store (undoable,
 `editor.settings.*`), user scope persists to `editor-settings.json` in
-`settings::config_dir()` (`ARA_CONFIG_DIR`, else `%APPDATA%\Ara`) and project scope
-to `ara.project.json`. `Editor::open` keeps user settings in memory.
+`settings::config_dir()` (`ARA_CONFIG_DIR`, else `%APPDATA%\Ara`) and project policy
+to `settings/project.json`; marker name/main stay in `ara.project.json`. Saves preserve unknown policy and migrate legacy sections after the preferences write succeeds. `Editor::open` keeps user settings in memory.
 Tests never touch the owner's profile: `.cargo/config.toml` gives every cargo-run
 process `ARA_CONFIG_DIR`/`ARA_CRASH_DIR` under `target/`, `config_dir()` refuses the OS
 profile under tests and cargo, and bounded runs (`Options::isolate_profile`) start
@@ -127,11 +127,7 @@ Game view (D19): `app/game.rs` imports the play host's shared surfaces
 Play starts in the background; `Shell::read_play_status` shows its phase, a failed start
 or a fault. Embeds unless `play.inGameView` is off. Outside Play `app/game_preview.rs`
 renders `Shell::gameplay_camera` (`SceneView::preview_game`) as `game-preview`; it stays, under the start's progress, until Play's first frame.
-Build (`shell/build.rs`): `build.current` exports the main scene with the first
-`presets/*.export.json` (else `build.profile.create` writes the portable, unpinned
-Windows runtime profile) into `builds/<profile>-<time>/build` on a thread, pinning
-this engine's runtime template (player + PDB, cooked shaders) under `.ara/export/`;
-C# modules ship NativeAOT. `build.run` launches it (offscreen: headless, `run.png`). Bounded runs are offscreen (hidden
+Build (`shell/build.rs`): `Shell::build_profile(editor,profile,destination)` waits off-thread for a canonical save/journal receipt, then exports the selected `settings/builds/*.export.json` profile (legacy `presets/` fallback). `shell/build_options.rs` owns the cached profile Select and destination prompt; ordinary Build creates a default profile when needed. A fresh envelope contains the named game in `build/`, with data and notices; `distribution.json` supplies its entry point. C# modules ship NativeAOT. `build.run` launches that entry point (offscreen: headless, `run.png`). Bounded runs are offscreen (hidden
 windows, UI readback); no capture route shows a window. `--verify-journey` (`app/journey.rs`) writes `journey.json` after
 every step; `--verify-first-hour` (`app/qa.rs`) replays a new user's first hour on a fresh (Hub-created) project into
 `first-hour.json`. `--verify-responsiveness` (`app/responsiveness.rs`, read by `ara-dev d26`) injects SDL-level input into
@@ -148,3 +144,6 @@ Tool pages (`docs/design/editor-tool-pages.md`) share a breadcrumb toolbar, side
 status strip; `graph/style.rs` names nodes/pins; swatches paint after layout. VFX Hide/Isolate
 are preview-only; its timeline drives `vfx_stream`. In Play the Animation page polls
 `play.read <entity>.AnimatorState` (`AnimationLive`). Imports use `import.initialize`/`configure`.
+
+The full --verify-behaviours route includes extended imports and asset lifecycle checks; --verify-behaviours-core runs the other native stories independently and writes verification-scope.json. A core result does not establish asset acceptance.
+The monkey deliberately invalidates the Scene after attempted actions, including rejected inputs. Its phase timings describe this stress workload; they are not ordinary user latency measurements.

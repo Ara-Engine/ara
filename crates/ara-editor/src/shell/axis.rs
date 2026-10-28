@@ -50,13 +50,14 @@ impl Shell {
 
     /// Update the widget without rebuilding or reshaping the surrounding panels.
     pub fn orient_axis(&mut self, camera: crate::state::Camera) {
-        if self.axis_camera == camera || self.current.is_some() {
+        self.position_axis();
+        if self.axis_camera == camera {
             return;
         }
-        self.axis_camera = camera;
-        let Some(root) = self.ui.find("view-cube") else {
+        let Some(root) = self.shown_node("view-cube") else {
             return;
         };
+        self.axis_camera = camera;
         let origin = self.ui.nodes[root].rect;
         for (axis, sign, _, p) in caps(&camera) {
             if let Some(i) = self.ui.find(&cap_id(axis, sign)) {
@@ -68,6 +69,26 @@ impl Shell {
                 ];
                 self.ui.nodes[i].dirty.paint = true;
             }
+        }
+    }
+
+    /// Keep the orientation aid in its Scene host after docking or resizing.
+    pub(super) fn position_axis(&mut self) {
+        let (Some(root), Some(viewport)) = (self.shown_node("view-cube"), self.viewport()) else {
+            return;
+        };
+        let node = &mut self.ui.nodes[root];
+        let base = [
+            node.rect.x - node.paint_offset[0],
+            node.rect.y - node.paint_offset[1],
+        ];
+        let offset = [
+            viewport.x + viewport.w - SIZE - 12. - base[0],
+            viewport.y + 12. - base[1],
+        ];
+        if node.paint_offset != offset {
+            node.paint_offset = offset;
+            node.dirty.paint = true;
         }
     }
 

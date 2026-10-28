@@ -61,11 +61,25 @@ impl Shell {
         if editor.state.focus == "vfx" {
             return self.vfx_inspector(editor, out);
         }
+        if editor.state.focus == "lighting" {
+            return self.lighting_inspector(editor, out);
+        }
         if editor.state.asset_path.is_some() {
             return self.import_panel(editor, out);
         }
-        let resolved = self.resolved(editor)?;
         self.nested_swatches.clear();
+        if !editor.document_available() {
+            self.empty(
+                out,
+                "inspector-unavailable",
+                "file-question",
+                "Scene unavailable",
+                "Restore this scene or use Redo to inspect its entities again. The current selection is preserved.",
+                &[],
+            );
+            return Ok(());
+        }
+        let resolved = self.resolved(editor)?;
         if editor.state.selection.is_empty() {
             self.empty(
                 out,
@@ -74,6 +88,22 @@ impl Shell {
                 "Nothing selected",
                 "Select an entity in the Scene or Hierarchy to edit its components.",
                 &[("inspector-empty-select", "Select all", "edit.select_all")],
+            );
+            return Ok(());
+        }
+        if !editor
+            .state
+            .selection
+            .iter()
+            .any(|id| resolved.contains_key(id))
+        {
+            self.empty(
+                out,
+                "inspector-selection-unavailable",
+                "mouse-pointer",
+                "Selection unavailable",
+                "The selected entities were removed. Undo restores them, or select another entity to continue.",
+                &[],
             );
             return Ok(());
         }
@@ -305,16 +335,14 @@ impl Shell {
         let r = self.ui.nodes[i].rect;
         let edge = self.label_edge().unwrap_or(r.x + self.label_px(r.w));
         if r.contains(self.pointer[0], self.pointer[1]) && (self.pointer[0] - edge).abs() <= 4. {
-            self.drag = Some(super::Drag::Column {
-                start: self.pointer,
-            });
+            self.drag = Some(super::Drag::Column);
             return true;
         }
         false
     }
     /// Follow the pointer while resizing the label column.
     pub(crate) fn drag_column(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
-        let Some(super::Drag::Column { .. }) = &self.drag else {
+        let Some(super::Drag::Column) = &self.drag else {
             return Ok(false);
         };
         let Some(i) = self.shown_node("inspector-scroll") else {

@@ -1,7 +1,7 @@
-//! The Game view (D19): Play inside the editor. The selected client's frames arrive
+//! The Game view (D19): Play inside the editor. Every rendering client's frames arrive
 //! through a shared GPU surface (`app/game.rs`), letterboxed to the aspect preset.
 //! Click the view to give it the keyboard and mouse; Esc (or clicking outside)
-//! gives them back. Host + clients and Dedicated + clients show a client selector.
+//! gives them back. Host and Dedicated modes display simultaneous client tiles.
 //! Outside Play it previews the scene through its gameplay camera, the view Play
 //! starts with (`app/game_preview.rs`), or says the scene has none. While Play starts
 //! the preview stays, under the start's progress, until Play's first frame.
@@ -23,21 +23,34 @@ impl Shell {
         let playing = editor.state.playing.is_some();
         out.push_str("<panel id='game-toolbar' class='viewport-bar'>");
         if self.game_players.len() > 1 {
-            out.push_str("<panel id='game-clients' class='segment'>");
-            for (n, player) in self.game_players.clone().into_iter().enumerate() {
-                let id = format!("game-client-{player}");
-                let label = match player {
-                    0 if self.game_players.len() > 1 => "Host".to_owned(),
-                    0 => "Local".to_owned(),
-                    p => format!("Client {p}"),
-                };
-                let on = self.game_client == player
-                    || (n == 0 && !self.game_players.contains(&self.game_client));
-                self.bind_command(&id, "game.client", Target::Text(player.to_string()));
-                out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{label}' description='Show and control {label}' action='Dispatch'><text id='{id}-label' text='{label}' /></button>",if on{" selected"}else{""}));
-            }
-            out.push_str("</panel>");
+            self.choice_button(
+                "game-client",
+                "Controlled player",
+                choices::Select {
+                    destination: choices::Destination::PlayClient,
+                    options: self
+                        .game_players
+                        .iter()
+                        .map(|&player| {
+                            (
+                                json!(player),
+                                play_controls::player_label(player, self.game_players.len()),
+                            )
+                        })
+                        .collect(),
+                    current: json!(self.game_client),
+                },
+                out,
+            );
         }
+        self.tool_icon(
+            out,
+            "game-options",
+            "play.options",
+            "settings-2",
+            editor,
+            self.play_controls.options,
+        );
         let aspect = ASPECTS
             .iter()
             .find(|a| a.0 == self.game_aspect)
@@ -60,6 +73,10 @@ impl Shell {
             self.game_stats,
         );
         out.push_str("</panel>");
+        self.play_controls_markup(editor, out);
+        if let Some(status) = self.game_commands_status {
+            out.push_str(&format!("<text id='game-command-refresh' class='caption' style='padding:4px;padding-left:10px;padding-right:10px;flex-shrink:0' text='{}' />", escape(status)));
+        }
         out.push_str("<panel id='game-surface' class='game-surface'>");
         if let Some(fault) = self.game_fault.clone() {
             let text = format!("{fault} · Details and fixes are in the Console.");
@@ -85,19 +102,8 @@ impl Shell {
                     ],
                 );
             }
-        } else if self.game_live {
-            // Letterbox inside the surface using last frame's layout.
-            let [w, h] = self.game_frame().unwrap_or([640., 360.]);
-            self.bind_command("game-frame", "game.capture", Target::None);
-            out.push_str(&format!("<button id='game-frame' class='game-frame' style='width:{w:.0}px;height:{h:.0}px' label='Game view' description='Click to play: keyboard and mouse go to the game until Esc' action='Dispatch'><image id='game-image' src='game-view' style='width:100%;height:100%' /></button>"));
-            if self.game_stats {
-                out.push_str(&format!("<panel id='game-stats-overlay' class='game-stats'><text id='game-stats-text' class='mono' text='{}' /></panel>",game_stats_text(self.game_fps,self.game_size)));
-            }
-            if self.game_captured {
-                out.push_str("<panel id='game-capture' class='game-hint'><text id='game-capture-text' text='Playing · Esc releases the keyboard and mouse' /></panel>");
-            } else {
-                out.push_str("<panel id='game-capture' class='game-hint'><text id='game-capture-text' text='Click the view to play' /></panel>");
-            }
+        } else if !self.game_players.is_empty() {
+            self.game_tiles(out);
         } else if playing && self.game_preview.is_some() {
             self.preview_frame(out, "The view Play is starting with");
             self.starting_hint(out);
@@ -126,7 +132,7 @@ impl Shell {
                 "gamepad-2",
                 "Game view",
                 if in_view {
-                    "Press Play (F5) to run the scene here. Host and Dedicated modes add a client selector."
+                    "Press Play (F5) to run the scene here. Host and Dedicated modes show every client together."
                 } else {
                     "Play opens a separate player window (Preferences > Viewport > Play in the Game view)."
                 },
@@ -163,6 +169,19 @@ impl Shell {
             .find("game-surface")
             .map(|i| ui.nodes[i].rect)
             .filter(|r| r.w > 1. && r.h > 1.)?;
+        let (columns, rows) = play_controls::grid_shape(self.game_players.len().max(1));
+        let r = Box2 {
+            x: r.x,
+            y: r.y,
+            w: ((r.w - (columns - 1) as f32 * 6.) / columns as f32).max(1.),
+            h: ((r.h - (rows - 1) as f32 * 6.) / rows as f32
+                - if self.game_players.is_empty() {
+                    0.
+                } else {
+                    24.
+                })
+            .max(1.),
+        };
         let ratio = ASPECTS
             .iter()
             .find(|a| a.0 == self.game_aspect)
@@ -204,6 +223,8 @@ pub(crate) struct StartProgress {
     pub tenths: u64,
     /// Stop was pressed; the start is being cancelled.
     pub stopping: bool,
+    /// Replacing a previous world rather than starting a new one.
+    pub restarting: bool,
 }
 impl StartProgress {
     /// From a `play.status` world row that is starting or stopping.
@@ -215,6 +236,16 @@ impl StartProgress {
             total: progress["total"].as_u64().unwrap_or(0),
             tenths: (progress["elapsedMs"].as_f64().unwrap_or(0.) / 100.) as u64,
             stopping: row["status"] == "stopping",
+            restarting: row["restart"] == true,
+        }
+    }
+    pub(super) fn title(&self) -> &'static str {
+        if self.stopping {
+            "Stopping Play…"
+        } else if self.restarting {
+            "Restarting Play…"
+        } else {
+            "Starting Play…"
         }
     }
     /// What the phase is doing, for people.
@@ -250,6 +281,7 @@ impl Shell {
             .map(StartProgress::from_status);
         self.game_start_failed = state == "failed";
         self.game_running = state == "running";
+        self.game_commands_status = shown.and_then(command_refresh_hint);
         self.game_fault = shown.and_then(|w| {
             if self.game_start_failed {
                 return Some(
@@ -280,12 +312,7 @@ impl Shell {
     /// toolbar's.
     fn starting_hint(&self, out: &mut String) {
         let start = self.game_start.as_ref();
-        let stopping = start.is_some_and(|s| s.stopping);
-        let title = if stopping {
-            "Stopping Play…"
-        } else {
-            "Starting Play…"
-        };
+        let title = start.map_or("Starting Play…", StartProgress::title);
         let detail = start
             .filter(|s| !s.stopping)
             .map(StartProgress::label)
@@ -317,10 +344,11 @@ impl Shell {
             );
             return;
         };
-        let (title, detail) = if start.stopping {
-            ("Stopping Play…", String::new())
+        let title = start.title();
+        let detail = if start.stopping {
+            String::new()
         } else {
-            ("Starting Play…", start.label())
+            start.label()
         };
         let seconds = format!("{:.1} s", start.tenths as f64 / 10.);
         out.push_str(&format!("<panel id='game-starting' class='empty'>{}<text id='game-starting-title' class='empty-title' text='{title}' /><text id='game-starting-phase' class='empty-hint' style='white-space:nowrap' text='{}' />",icons::icon_in("game-starting","gamepad-2","icon-lg"),escape(&detail)));
@@ -354,6 +382,7 @@ impl Shell {
         };
         if self.current.is_some()
             || before.stopping != now.stopping
+            || before.restarting != now.restarting
             || (before.total > 0) != (now.total > 0)
         {
             return Ok(false);
@@ -372,6 +401,7 @@ impl Shell {
             now.label()
         };
         let texts = [
+            ("game-starting-title", now.title().to_owned()),
             ("game-starting-phase", detail),
             (
                 "game-starting-count",
@@ -395,6 +425,17 @@ impl Shell {
         }
         self.ui.forget_part("body-game");
         Ok(true)
+    }
+}
+
+/// Keep the last published C# commands usable while a fresh catalog is pending.
+pub(super) fn command_refresh_hint(row: &Value) -> Option<&'static str> {
+    if row["commandsRefreshing"] == true {
+        Some("Refreshing C# commands…")
+    } else if row["commandsStale"] == true {
+        Some("C# command refresh failed; showing the last good list. See Console.")
+    } else {
+        None
     }
 }
 

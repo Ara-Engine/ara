@@ -72,7 +72,72 @@ pub struct Mapper {
     bindings: BTreeMap<String, i32>,
 }
 
+/// One frame's navigation intent. Movement is held; look is consumed exactly once.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct Navigation {
+    pub movement: [f32; 3],
+    pub look: [f32; 2],
+    pub fast: bool,
+}
+
 impl Mapper {
+    /// Route physical input to either gameplay or the transient editor camera.
+    /// Ejecting explicitly releases previously held gameplay actions, so the actor
+    /// cannot keep walking while its view is being inspected.
+    pub(crate) fn for_view(
+        &mut self,
+        player: PlayerId,
+        spectator: bool,
+    ) -> (Vec<Injection>, Option<Navigation>) {
+        if !spectator {
+            return (self.injections(player), None);
+        }
+        let held = |action, default| self.keys.contains(&self.key(action, default));
+        let axis =
+            |positive, negative| f32::from(u8::from(positive)) - f32::from(u8::from(negative));
+        let fast = held("Sprint", LEFT_SHIFT);
+        let navigation = Navigation {
+            movement: [
+                axis(
+                    held("Right", D) || self.keys.contains(&RIGHT),
+                    held("Left", A) || self.keys.contains(&LEFT),
+                ),
+                axis(self.keys.contains(&8), self.keys.contains(&20)), // E/Q elevation.
+                axis(
+                    held("Forward", W) || self.keys.contains(&UP),
+                    held("Backward", S) || self.keys.contains(&DOWN),
+                ),
+            ],
+            look: std::mem::take(&mut self.look),
+            fast,
+        };
+        self.jump = false;
+        self.inventory = false;
+        let mut releases = Vec::new();
+        if self.sent_move != [0.; 2] {
+            self.sent_move = [0.; 2];
+            releases.push(Injection {
+                player,
+                action: MOVE.into(),
+                value: ActionValue::Axis2([0.; 2]),
+                hold_ticks: HELD,
+            });
+        }
+        for (action, sent) in [
+            (SPRINT, &mut self.sent_sprint),
+            (INTERACT, &mut self.sent_interact),
+        ] {
+            if std::mem::take(sent) {
+                releases.push(Injection {
+                    player,
+                    action: action.into(),
+                    value: ActionValue::Button(false),
+                    hold_ticks: HELD,
+                });
+            }
+        }
+        (releases, Some(navigation))
+    }
     /// Changes a physical key binding; actions and network/replay values remain stable.
     pub(crate) fn bind(&mut self, action: &str, scancode: i32) {
         self.apply(DeviceEvent::FocusLost);
@@ -107,8 +172,10 @@ impl Mapper {
             DeviceEvent::MouseButton { .. } => {}
             DeviceEvent::MouseMotion { dx, dy } => {
                 if self.orbit && dx.is_finite() && dy.is_finite() {
-                    self.look[0] += dx * 0.15;
-                    self.look[1] += dy * 0.1;
+                    self.look[0] =
+                        (self.look[0] + dx.clamp(-2400., 2400.) * 0.15).clamp(-360., 360.);
+                    self.look[1] =
+                        (self.look[1] + dy.clamp(-3600., 3600.) * 0.1).clamp(-360., 360.);
                 }
             }
             DeviceEvent::FocusLost => {
@@ -202,6 +269,54 @@ mod tests {
 
     fn key(scancode: i32, down: bool) -> DeviceEvent {
         DeviceEvent::Key { scancode, down }
+    }
+
+    #[test]
+    fn spectator_input_releases_gameplay_then_resumes_held_bindings_without_leaking_look() {
+        let mut mapper = Mapper::default();
+        mapper.bind("Forward", 9);
+        mapper.apply(key(9, true));
+        mapper.apply(key(LEFT_SHIFT, true));
+        assert_eq!(mapper.injections(PlayerId(1)).len(), 2);
+        mapper.apply(DeviceEvent::MouseButton {
+            button: RIGHT_BUTTON,
+            down: true,
+        });
+        mapper.apply(DeviceEvent::MouseMotion { dx: 10., dy: -5. });
+        mapper.apply(key(8, true));
+        mapper.apply(key(SPACE, true));
+        let (release, view) = mapper.for_view(PlayerId(1), true);
+        assert_eq!(
+            actions(&release),
+            vec![
+                (MOVE.into(), ActionValue::Axis2([0.; 2])),
+                (SPRINT.into(), ActionValue::Button(false))
+            ]
+        );
+        assert_eq!(
+            view,
+            Some(Navigation {
+                movement: [0., 1., 1.],
+                look: [1.5, -0.5],
+                fast: true
+            })
+        );
+        let (release, view) = mapper.for_view(PlayerId(1), true);
+        assert!(release.is_empty());
+        assert_eq!(view.unwrap().look, [0.; 2]);
+        let (gameplay, view) = mapper.for_view(PlayerId(1), false);
+        assert!(view.is_none());
+        assert_eq!(
+            actions(&gameplay),
+            vec![
+                (MOVE.into(), ActionValue::Axis2([0., 1.])),
+                (SPRINT.into(), ActionValue::Button(true)),
+                (INTERACT.into(), ActionValue::Button(true))
+            ]
+        );
+        mapper.apply(DeviceEvent::FocusLost);
+        let (_, view) = mapper.for_view(PlayerId(1), true);
+        assert_eq!(view, Some(Navigation::default()));
     }
 
     #[test]

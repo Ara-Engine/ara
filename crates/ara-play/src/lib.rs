@@ -10,12 +10,16 @@
 //! - A crashing player writes one [`CRASH_PREFIX`] line ([`CrashReport`]) to stderr.
 #![warn(missing_docs)]
 
+mod editor_control;
 mod game_ui;
 mod imports;
 pub mod link;
+mod process;
 pub mod shm;
+pub use editor_control::{Control, Controlled, View, ViewCamera};
 pub use game_ui::{GameUi, UiBinding, UiMusic, UiSound};
 pub use imports::{ImportState, Stall};
+pub use process::ProcessMode;
 
 use ara_doc::{AssetId, Document, Record, RecordId, Workspace};
 use serde::{Deserialize, Serialize};
@@ -65,6 +69,10 @@ pub mod method {
     pub const READ: &str = "play.read";
     /// Live edit applied at the next tick, acked after it ([`crate::Patch`]).
     pub const PATCH: &str = "play.patch";
+    /// Set an editor-only view of the live world, or return to its gameplay camera.
+    pub const VIEW: &str = "play.view";
+    /// Transfer one input owner's controllable actor at an authoritative tick boundary.
+    pub const CONTROL: &str = "play.control";
     /// State hash and optionally a labelled image ([`crate::CaptureParams`]).
     pub const CAPTURE: &str = "play.capture";
     /// Replace watched paths sampled by step/until ([`crate::WatchParams`]).

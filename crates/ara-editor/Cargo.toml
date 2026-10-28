@@ -21,7 +21,6 @@ ara-texture-gpu = { path = "../ara-texture-gpu" }
 ara-crash = { path = "../ara-crash" }
 ara-asset = { path = "../ara-asset" }
 ara-asset-host = { path = "../ara-asset-host" }
-ara-update = { path = "../ara-update" }
 ara-asset-format = { path = "../ara-asset-format" }
 ara-importers = { path = "../ara-importers" }
 ara-graph = { path = "../ara-graph" }
@@ -63,6 +62,7 @@ bevy_ecs.workspace = true
 ara-ui = { path = "../ara-ui" }
 ara-ui-render = { path = "../ara-ui-render" }
 ara-ui-text = { path = "../ara-ui-text" }
+ara-update = { path = "../ara-update" }
 anyhow = { workspace = true }
 notify = "8.2"
 bytemuck = { workspace = true }
@@ -76,6 +76,9 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 sdl3-sys.workspace = true
 accesskit = { workspace = true, features = ["serde"] }
+
+[dev-dependencies]
+ara-ui-test = { path = "../ara-ui-test" }
 
 [target.'cfg(windows)'.dependencies]
 accesskit_windows = "0.35"

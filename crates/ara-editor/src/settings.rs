@@ -1,9 +1,9 @@
 //! Typed project settings and user preferences. Every edit is an undoable op.
 //!
 //! One definition table drives the Settings window, its search, `editor.settings`
-//! over MCP and validation. Edits commit to a private op store (with per-author
-//! undo), then persist: user scope to the preferences file chosen at open,
-//! project scope to `ara.project.json` (`name`/`main` plus a `settings` object).
+//! over MCP and validation. A private op store retains per-author settings undo.
+//! Project changes commit through the Host's authority and file worker; user
+//! preferences use the background writer chosen at open.
 use ara_doc::{AssetId, Document, Edit, RecordId, Workspace};
 use ara_ops::{Author, Store, TxnMeta};
 use ara_schema::{FieldPath, Schema, SchemaDb};
@@ -11,13 +11,16 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 
+mod project_commit;
+mod project_live;
+
 /// Where a setting is stored and who shares it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Scope {
     /// Preferences for this person, on every project.
     User,
-    /// Shared by everyone who opens the project (`ara.project.json`).
+    /// Shared project policy (`settings/project.json`); name/main remain in the marker.
     Project,
 }
 /// The control a setting uses and the values it accepts.
@@ -205,6 +208,33 @@ pub const DEFS: &[Def] = &[
         Lit::B(true),
     ),
     def(
+        "viewport.bounds",
+        User,
+        "Viewport",
+        "Mesh bounds",
+        "World bounds from current native mesh instances, including imported geometry.",
+        Kind::Toggle,
+        Lit::B(false),
+    ),
+    def(
+        "viewport.colliders",
+        User,
+        "Viewport",
+        "Collider shapes",
+        "Authored primitive collider shapes; unavailable cooked shapes are identified.",
+        Kind::Toggle,
+        Lit::B(false),
+    ),
+    def(
+        "viewport.stats",
+        User,
+        "Viewport",
+        "Scene statistics",
+        "Last completed CPU and renderer samples, with unavailable measurements identified.",
+        Kind::Toggle,
+        Lit::B(false),
+    ),
+    def(
         "viewport.gizmoSize",
         User,
         "Viewport",
@@ -233,6 +263,38 @@ pub const DEFS: &[Def] = &[
         Lit::N(4.),
     ),
     def(
+        "viewport.surfaceSnap",
+        User,
+        "Viewport",
+        "Surface snapping",
+        "Move selected geometry onto the actual mesh under the pointer.",
+        Kind::Toggle,
+        Lit::B(false),
+    ),
+    def(
+        "viewport.vertexSnap",
+        User,
+        "Viewport",
+        "Vertex snapping",
+        "Snap a selected mesh vertex to a target vertex. Hold V temporarily while editing the Scene.",
+        Kind::Toggle,
+        Lit::B(false),
+    ),
+    def(
+        "viewport.surfaceOffset",
+        User,
+        "Viewport",
+        "Surface offset",
+        "Distance from the target surface along its geometric normal.",
+        Kind::Number {
+            min: -1000.,
+            max: 1000.,
+            step: 0.01,
+            unit: "m",
+        },
+        Lit::N(0.),
+    ),
+    def(
         "input.keymap",
         User,
         "Keyboard shortcuts",
@@ -252,6 +314,15 @@ pub const DEFS: &[Def] = &[
         "Keyboard shortcuts",
         "Custom shortcuts",
         "Per-command bindings that replace the preset's.",
+        Kind::Map,
+        Lit::Empty,
+    ),
+    def(
+        "hierarchy.filters",
+        User,
+        "Hierarchy",
+        "Saved hierarchy filters",
+        "Named name, ID and component queries, managed from the Hierarchy toolbar.",
         Kind::Map,
         Lit::Empty,
     ),
@@ -299,6 +370,15 @@ pub const DEFS: &[Def] = &[
         "General",
         "Main scene",
         "Scene opened at startup and played by default (project path).",
+        Kind::Text,
+        Lit::S(""),
+    ),
+    def(
+        "build.profile",
+        Project,
+        "Build & export",
+        "Build profile",
+        "Selected export profile. Empty uses the default profile, or the first indexed profile when no default exists.",
         Kind::Text,
         Lit::S(""),
     ),
@@ -352,6 +432,27 @@ pub const DEFS: &[Def] = &[
         "Simulation steps per second. Changing it changes determinism hashes.",
         Kind::Choice(&[("30", "30 Hz"), ("60", "60 Hz"), ("120", "120 Hz")]),
         Lit::S("60"),
+    ),
+    def(
+        "play.processMode",
+        Project,
+        "Networking & Play",
+        "Play processes",
+        "Run independent player worlds in one process or a separate process per player (D19).",
+        Kind::Choice(&[
+            ("separate", "Separate process per player"),
+            ("shared", "Shared process, independent worlds"),
+        ]),
+        Lit::S("separate"),
+    ),
+    def(
+        "play.networkProfiles",
+        Project,
+        "Networking & Play",
+        "Client network profiles",
+        "Choose per-client network conditions in Game Play options.",
+        Kind::Map,
+        Lit::Empty,
     ),
     def(
         "play.startPaused",
@@ -421,11 +522,16 @@ struct EditorSettings {
 pub struct Settings {
     store: Store,
     doc: AssetId,
-    project_path: PathBuf,
     /// Non-default user values.
     pub user: Map<String, Value>,
     /// Non-default project values.
     pub project: Map<String, Value>,
+    /// Last validated Host policy, separate from private settings history.
+    observed_project: Map<String, Value>,
+    /// Content revision consumed by the live projection; idle ticks do no work.
+    observed_host_revision: Option<u64>,
+    /// Exact Host commit of each private project edit and its local inverses.
+    project_host_commits: std::collections::BTreeMap<ara_ops::TxnId, project_commit::HostCommit>,
     failures: Vec<String>,
     /// Writes the preferences file off the UI thread; `None` keeps them in memory.
     user_writer: Option<crate::persist::BackgroundWriter<Value>>,
@@ -446,18 +552,24 @@ impl Settings {
             .ok()
             .and_then(|t| serde_json::from_str::<Value>(&t).ok())
             .unwrap_or(Value::Null);
-        let mut project = manifest["settings"]
-            .as_object()
-            .cloned()
+        let mut project = ara_host::project_policy::read(root, "settings")
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?
+            .and_then(|settings| settings.as_object().cloned())
             .unwrap_or_default();
         for (key, field) in [("project.name", "name"), ("project.mainScene", "main")] {
+            project.remove(key);
             if let Some(v) = manifest[field].as_str() {
                 project.insert(key.into(), v.into());
             }
         }
-        // Players read `rendering.quality` from the manifest's own `rendering` object.
-        if let Some(v) = manifest["rendering"]["quality"].as_str() {
-            project.insert("rendering.quality".into(), v.into());
+        // The runtime uses this same per-section canonical/legacy policy reader.
+        if let Some(rendering) = ara_host::project_policy::read(root, "rendering")
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?
+        {
+            project.remove("rendering.quality");
+            if let Some(quality) = rendering.get("quality").and_then(Value::as_str) {
+                project.insert("rendering.quality".into(), quality.into());
+            }
         }
         // Before presets: Fidelity meant the project's default, Raster meant Low.
         match user.get("viewport.quality").and_then(Value::as_str) {
@@ -497,8 +609,10 @@ impl Settings {
         Ok(Self {
             store: Store::new(db, ws),
             doc,
-            project_path,
             user,
+            observed_project: project.clone(),
+            observed_host_revision: None,
+            project_host_commits: Default::default(),
             project,
             failures: Vec::new(),
             user_writer,
@@ -530,7 +644,8 @@ impl Settings {
             Project => &self.project,
         }
     }
-    /// Set (`Some`) or reset (`None`) one setting as an attributed, undoable op.
+    /// Edit the private settings history. Project authoring additionally requires
+    /// [`Self::set_with_host`]; this read model never writes project files.
     pub fn set(
         &mut self,
         key: &str,
@@ -538,23 +653,15 @@ impl Settings {
         author: Author,
     ) -> Result<String, Vec<ara_diag::Diagnostic>> {
         let d = def_of(key).ok_or_else(|| vec![crate::invalid(format!("no setting `{key}`"))])?;
-        let mut values = self.scope_values(d.scope).clone();
-        let label = match value {
+        let (value, label) = match value {
             Some(v) => {
                 valid(d, &v).map_err(|e| vec![crate::invalid(e)])?;
-                if v == d.default.value() {
-                    values.remove(key);
-                } else {
-                    values.insert(key.into(), v);
-                }
-                format!("Set {}", d.label)
+                let value = (!ara_json::json_eq(&v, &d.default.value())).then_some(v);
+                (value, format!("Set {}", d.label))
             }
-            None => {
-                values.remove(key);
-                format!("Reset {}", d.label)
-            }
+            None => (None, format!("Reset {}", d.label)),
         };
-        if &values == self.scope_values(d.scope) {
+        if same_override(value.as_ref(), self.scope_values(d.scope).get(key)) {
             return Ok(label);
         }
         let mut meta = TxnMeta::by(author);
@@ -564,10 +671,8 @@ impl Settings {
             doc: self.doc.clone(),
             id: RecordId::parse(if d.scope == User { USER } else { PROJECT })
                 .map_err(|e| vec![crate::invalid(e)])?,
-            path: "EditorSettings.values"
-                .parse::<FieldPath>()
-                .map_err(|e| vec![crate::invalid(e)])?,
-            value: Some(Value::Object(values)),
+            path: FieldPath::field("EditorSettings").child("values").key(key),
+            value,
         };
         self.store.transact(meta, [edit])?;
         self.reload(Some(d.scope));
@@ -580,6 +685,7 @@ impl Settings {
         redo: bool,
     ) -> Result<String, Vec<ara_diag::Diagnostic>> {
         let label = self.next_label(author, redo).unwrap_or_default();
+        self.check_history_values(author, redo)?;
         if redo {
             self.store.redo_last(author)?;
         } else {
@@ -588,15 +694,16 @@ impl Settings {
         self.reload(None);
         Ok(label)
     }
-    /// Label of the edit Undo (or Redo) would revert.
+    /// Original action title for Undo/Redo, following typed inverse transactions.
     pub fn next_label(&self, author: &Author, redo: bool) -> Option<String> {
         let txn = if redo {
-            let undo = self.store.next_redo(author)?;
-            self.store.txn(undo.reverts.as_ref()?)?
+            self.store.next_redo(author)?
         } else {
             self.store.next_undo(author)?
         };
-        txn.label.clone()
+        crate::transaction_label::original(&self.store, txn)?
+            .label
+            .clone()
     }
     fn reload(&mut self, changed: Option<Scope>) {
         let read = |id: &str| {
@@ -613,14 +720,10 @@ impl Settings {
         let user = read(USER);
         let project = read(PROJECT);
         let user_changed = user != self.user;
-        let project_changed = project != self.project;
         self.user = user;
         self.project = project;
         if user_changed || changed == Some(User) {
             self.persist_user();
-        }
-        if project_changed || changed == Some(Project) {
-            self.persist_project();
         }
     }
     /// Write failures since the last call (the editor service logs them).
@@ -638,61 +741,27 @@ impl Settings {
             writer.save(Value::Object(self.user.clone()));
         }
     }
-    fn persist_project(&mut self) {
-        let mut manifest = std::fs::read_to_string(&self.project_path)
-            .ok()
-            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-            .filter(Value::is_object)
-            .unwrap_or_else(|| json!({}));
-        let mut settings = self.project.clone();
-        for (key, field) in [("project.name", "name"), ("project.mainScene", "main")] {
-            match settings.remove(key) {
-                Some(v) => manifest[field] = v,
-                None => {
-                    if let Some(m) = manifest.as_object_mut() {
-                        m.remove(field);
-                    }
-                }
-            }
-        }
-        // `rendering.quality` lives in the manifest's `rendering` object (other
-        // rendering fields stay); the default (auto) is written by omission.
-        let quality = settings.remove("rendering.quality");
-        if let Some(m) = manifest.as_object_mut() {
-            let mut rendering = m
-                .remove("rendering")
-                .and_then(|r| r.as_object().cloned())
-                .unwrap_or_default();
-            match quality {
-                Some(v) => {
-                    rendering.insert("quality".into(), v);
-                }
-                None => {
-                    rendering.remove("quality");
-                }
-            }
-            if !rendering.is_empty() {
-                m.insert("rendering".into(), Value::Object(rendering));
-            }
-        }
-        if let Some(m) = manifest.as_object_mut() {
-            if settings.is_empty() {
-                m.remove("settings");
-            } else {
-                m.insert("settings".into(), Value::Object(settings));
-            }
-        }
-        if let Err(e) = write_atomic(&self.project_path, &manifest) {
-            self.failures.push(format!(
-                "Project settings were not saved to {}: {e}",
-                self.project_path.display()
-            ));
-        }
+}
+
+/// Setting numbers retain the same meaning across integer/float JSON spellings.
+fn same_override(left: Option<&Value>, right: Option<&Value>) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) => ara_json::json_eq(left, right),
+        (None, None) => true,
+        _ => false,
     }
 }
+/// Canonical fixture writer; production policy persistence belongs to the Host.
+#[cfg(test)]
 pub(crate) fn write_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
     let temp = path.with_extension("json.tmp");
-    std::fs::write(&temp, ara_json::to_canonical_string(value))?;
+    std::fs::write(
+        &temp,
+        ara_json::to_canonical_string(&ara_json::sort_keys(value)),
+    )?;
     std::fs::rename(temp, path)
 }
 /// Validate a value against its definition.
@@ -799,8 +868,120 @@ fn os_config_dir() -> Option<PathBuf> {
 }
 
 #[cfg(test)]
+#[path = "settings/live_tests.rs"]
+mod live_tests;
+
+#[cfg(test)]
+#[path = "settings/history_live_tests.rs"]
+mod history_live_tests;
+
+#[cfg(test)]
+#[path = "settings/commit_live_tests.rs"]
+mod commit_live_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    struct Project(PathBuf);
+    impl Project {
+        fn new(marker: Value, policy: Option<Value>) -> Self {
+            let mut fixture_marker = json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION});
+            for (key, value) in marker.as_object().expect("fixture marker object") {
+                if key != "layoutVersion" {
+                    fixture_marker[key] = value.clone();
+                }
+            }
+            let parent = std::path::absolute(crate::test_target())
+                .expect("absolute test target")
+                .join("editor-project-policy");
+            std::fs::create_dir_all(&parent).expect("test parent");
+            let root = parent.join(format!(
+                "{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            std::fs::create_dir(&root).expect("fresh project");
+            let project = Self(root);
+            project.write("ara.project.json", &fixture_marker);
+            if let Some(policy) = policy {
+                project.write(ara_host::project_policy::PREFERENCES, &policy);
+            }
+            project
+        }
+        fn write(&self, path: &str, value: &Value) {
+            write_atomic(&self.0.join(path), value).expect("fixture JSON");
+        }
+        fn read(&self, path: &str) -> Value {
+            ara_json::parse(&std::fs::read_to_string(self.0.join(path)).expect("read fixture"))
+                .expect("fixture JSON")
+        }
+        fn open(&self) -> Settings {
+            Settings::open(&self.0, None).expect("settings")
+        }
+        fn authority(&self, user: Option<PathBuf>) -> crate::Editor {
+            let scene = ara_host::project::authored_root(&self.0).join("levels/main.scene");
+            std::fs::create_dir_all(scene.parent().expect("fixture parent"))
+                .expect("fixture directory");
+            std::fs::write(
+                scene,
+                ara_json::to_canonical_string(
+                    &json!({"$schema":"ara://schema/scene/1","id":"sc_settingsproof","records":{}}),
+                ),
+            )
+            .expect("fixture scene");
+            crate::Editor::open_config(
+                &self.0,
+                user,
+                ara_host::HostConfig {
+                    watch_every: std::time::Duration::ZERO,
+                    ..Default::default()
+                },
+            )
+            .expect("settings authority")
+        }
+    }
+    fn set(editor: &mut crate::Editor, key: &str, value: Option<Value>) {
+        editor
+            .action(
+                "editor.settings.set",
+                match value {
+                    Some(value) => json!({"key":key,"value":value}),
+                    None => json!({"key":key,"reset":true}),
+                },
+            )
+            .expect("typed setting");
+        editor.host.flush();
+        editor.tick();
+        assert!(
+            !editor.host.unsaved(),
+            "The authority must persist the setting"
+        );
+    }
+    fn undo(editor: &mut crate::Editor, redo: bool) {
+        editor
+            .action("editor.settings.undo", json!({"redo":redo}))
+            .expect("settings history");
+        editor.host.flush();
+        editor.tick();
+        assert!(
+            !editor.host.unsaved(),
+            "The authority must persist the inverse"
+        );
+    }
+    impl Drop for Project {
+        fn drop(&mut self) {
+            assert!(
+                self.0.starts_with(
+                    std::path::absolute(crate::test_target())
+                        .expect("test target")
+                        .join("editor-project-policy")
+                )
+            );
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
     #[test]
     fn tests_never_resolve_the_os_profile() {
         let profile = PathBuf::from("C:/Users/owner/AppData/Roaming/Ara");
@@ -822,43 +1003,254 @@ mod tests {
     }
     #[test]
     fn edits_validate_persist_and_undo_per_author() {
-        let root = std::env::temp_dir().join(format!("ara-settings-{}", std::process::id()));
-        std::fs::create_dir_all(&root).expect("temp root");
-        std::fs::write(
-            root.join("ara.project.json"),
-            r#"{"layoutVersion":4,"main":"levels/main.scene","name":"Outpost"}"#,
-        )
-        .expect("manifest");
+        let project = Project::new(json!({"main":"levels/main.scene","name":"Outpost"}), None);
+        let root = &project.0;
         let user = root.join("user.json");
-        let mut s = Settings::open(&root, Some(user.clone())).expect("open");
-        assert_eq!(s.value("project.name"), json!("Outpost"));
+        let mut s = project.authority(Some(user.clone()));
+        assert_eq!(s.state.settings["project.name"], json!("Outpost"));
         assert!(
-            s.set("appearance.theme", Some(json!("blue")), Author::Human)
-                .is_err()
+            s.action(
+                "editor.settings.set",
+                json!({"key":"appearance.theme","value":"blue"})
+            )
+            .is_err()
         );
-        s.set("appearance.theme", Some(json!("light")), Author::Human)
-            .expect("set");
-        s.set("play.tickHz", Some(json!("120")), Author::Human)
-            .expect("set");
-        assert!(s.modified("appearance.theme"));
+        set(&mut s, "appearance.theme", Some(json!("light")));
+        set(&mut s, "play.tickHz", Some(json!("120")));
+        let definitions = s
+            .action("editor.settings", json!({}))
+            .expect("settings projection");
+        assert!(
+            definitions["settings"]
+                .as_array()
+                .expect("settings definitions")
+                .iter()
+                .any(|definition| definition["key"] == "appearance.theme"
+                    && definition["modified"] == true)
+        );
         let manifest: Value = serde_json::from_str(
             &std::fs::read_to_string(root.join("ara.project.json")).expect("read"),
         )
         .expect("json");
-        assert_eq!(manifest["settings"]["play.tickHz"], "120");
+        let preferences = project.read(ara_host::project_policy::PREFERENCES);
+        assert_eq!(preferences["settings"]["play.tickHz"], "120");
+        assert!(manifest.get("settings").is_none());
         assert_eq!(manifest["main"], "levels/main.scene");
         assert_eq!(
-            s.next_label(&Author::Human, false).as_deref(),
+            s.state.settings_undo.as_deref(),
             Some("Set Fixed tick rate")
         );
-        s.undo(&Author::Human, false).expect("undo");
-        assert_eq!(s.value("play.tickHz"), json!("60"));
-        s.undo(&Author::Human, true).expect("redo");
-        assert_eq!(s.value("play.tickHz"), json!("120"));
+        undo(&mut s, false);
+        assert_eq!(s.state.settings["play.tickHz"], json!("60"));
+        undo(&mut s, true);
+        assert_eq!(s.state.settings["play.tickHz"], json!("120"));
         // Closing flushes background preference saves before a new editor reads them.
         drop(s);
-        let reopened = Settings::open(&root, Some(user)).expect("reopen");
+        let reopened = Settings::open(root, Some(user)).expect("reopen");
         assert_eq!(reopened.value("appearance.theme"), json!("light"));
-        let _ = std::fs::remove_dir_all(root);
+        drop(reopened);
+    }
+
+    #[test]
+    fn optional_empty_policy_and_omitted_sections_use_the_public_legacy_fallback_without_writes() {
+        let marker = json!({"name":"Outpost","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,
+            "settings":{"play.tickHz":"120","build.profile":"legacy-profile"},"rendering":{"quality":"high"},"ui":{"main":"ui/legacy.ui"}});
+        for policy in [
+            None,
+            Some(json!({})),
+            Some(json!({"ui":{"main":"ui/canonical.ui"}})),
+        ] {
+            let project = Project::new(marker.clone(), policy.clone());
+            let settings = project.open();
+            assert_eq!(settings.value("project.name"), json!("Outpost"));
+            assert_eq!(
+                settings.value("project.mainScene"),
+                json!("levels/main.scene")
+            );
+            assert_eq!(settings.value("play.tickHz"), json!("120"));
+            assert_eq!(settings.value("build.profile"), json!("legacy-profile"));
+            assert_eq!(settings.value("rendering.quality"), json!("high"));
+            assert_eq!(project.read("ara.project.json"), marker);
+            if let Some(policy) = policy {
+                assert_eq!(project.read(ara_host::project_policy::PREFERENCES), policy);
+            } else {
+                assert!(
+                    !project
+                        .0
+                        .join(ara_host::project_policy::PREFERENCES)
+                        .exists()
+                );
+            }
+            assert!(!project.0.join(ara_doc::AUTHORING_ROOT).exists());
+            assert!(!project.0.join(".ara").exists());
+        }
+        // The reader's precedence is per top-level key; an explicit section or
+        // null does not inherit individual members of the legacy section.
+        let project = Project::new(marker, Some(json!({"settings":{},"rendering":null})));
+        let settings = project.open();
+        assert_eq!(settings.value("play.tickHz"), json!("60"));
+        assert_eq!(settings.value("build.profile"), json!(""));
+        assert_eq!(settings.value("rendering.quality"), json!("auto"));
+    }
+
+    #[test]
+    fn project_save_and_undo_preserve_unknown_policy_and_unmodified_latest_disk_settings() {
+        let marker = json!({"id":"project-identity","name":"Outpost","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"engine":"preview4",
+            "settings":{"play.tickHz":"30"},"rendering":{"quality":"epic"},"ui":{"main":"legacy.ui"},"input":{"legacy":true},"physics":{"gravity":[0,-1,0]},"look":{"legacy":true}});
+        let initial = json!({"settings":{"play.tickHz":"120","build.profile":"original-profile","plugin.option":{"enabled":true}},
+            "rendering":{"quality":"high","extension":{"toneMapper":"custom"}},"ui":{"main":"ui/main.ui","unknown":[1,2,3]},
+            "input":null,"physics":{"gravity":[0,-9.81,0],"custom":true},"look":{"camera":"custom"},"plugin":{"keep":"unchanged"}});
+        let project = Project::new(marker, Some(initial.clone()));
+        let mut settings = project.authority(None);
+        let mut latest = initial;
+        latest["settings"]["build.profile"] = json!("agent-selected-profile");
+        latest["settings"]["agent.option"] = json!({"preserve":true});
+        latest["ui"]["newFromAgent"] = json!("keep");
+        project.write(ara_host::project_policy::PREFERENCES, &latest);
+        settings.tick(); // The real Host watcher accepts the genuine disk edit.
+        set(&mut settings, "play.tickHz", Some(json!("30")));
+        let mut expected = latest.clone();
+        expected["settings"]["play.tickHz"] = json!("30");
+        assert_eq!(
+            project.read(ara_host::project_policy::PREFERENCES),
+            expected
+        );
+        assert_eq!(
+            project.read("ara.project.json"),
+            json!({"id":"project-identity","name":"Outpost","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"engine":"preview4"})
+        );
+        undo(&mut settings, false);
+        assert_eq!(project.read(ara_host::project_policy::PREFERENCES), latest);
+        undo(&mut settings, true);
+        assert_eq!(
+            project.read(ara_host::project_policy::PREFERENCES),
+            expected
+        );
+        set(&mut settings, "rendering.quality", Some(json!("medium")));
+        expected["rendering"]["quality"] = json!("medium");
+        assert_eq!(
+            project.read(ara_host::project_policy::PREFERENCES),
+            expected
+        );
+        undo(&mut settings, false);
+        expected["rendering"]["quality"] = json!("high");
+        assert_eq!(
+            project.read(ara_host::project_policy::PREFERENCES),
+            expected
+        );
+        assert!(!settings.host.unsaved());
+        let reopened = project.open();
+        assert_eq!(
+            reopened.value("build.profile"),
+            json!("agent-selected-profile")
+        );
+    }
+
+    #[test]
+    fn default_resets_keep_explicit_barriers_and_migrate_legacy_policy_intact() {
+        let marker = json!({"name":"Outpost","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"settings":{"play.tickHz":"120"},
+            "rendering":{"quality":"high"},"input":{"actions":{"Jump":"Space"}},"physics":{"gravity":[0,-9.81,0]},"look":{"sensitivity":0.8},"ui":{"main":"ui/main.ui"}});
+        let project = Project::new(marker.clone(), Some(json!({})));
+        let mut settings = project.authority(None);
+        let authored_root_existed = project.0.join(ara_doc::AUTHORING_ROOT).exists();
+        set(&mut settings, "play.tickHz", None);
+        set(&mut settings, "rendering.quality", None);
+        let policy = project.read(ara_host::project_policy::PREFERENCES);
+        assert_eq!(policy["settings"], json!({}));
+        assert_eq!(policy["rendering"], json!({}));
+        for section in ["input", "physics", "look", "ui"] {
+            assert_eq!(policy[section], marker[section]);
+        }
+        assert_eq!(
+            project.read("ara.project.json"),
+            json!({"name":"Outpost","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION})
+        );
+        // A leftover/reintroduced legacy marker is the state after a failed
+        // cleanup; an empty canonical section must not resurrect its old value.
+        project.write("ara.project.json", &marker);
+        let reopened = project.open();
+        assert_eq!(reopened.value("play.tickHz"), json!("60"));
+        assert_eq!(reopened.value("rendering.quality"), json!("auto"));
+        assert_eq!(
+            ara_host::project_policy::read(&project.0, "rendering").expect("policy"),
+            Some(json!({}))
+        );
+        assert!(!settings.host.unsaved());
+        assert_eq!(
+            project.0.join(ara_doc::AUTHORING_ROOT).exists(),
+            authored_root_existed,
+            "Settings must not create or remove the authored root opened by the editor"
+        );
+        assert!(
+            project
+                .0
+                .join(ara_host::project_policy::PREFERENCES)
+                .is_file()
+        );
+        assert!(
+            !project
+                .0
+                .join(ara_doc::AUTHORING_ROOT)
+                .join(ara_host::project_policy::PREFERENCES)
+                .exists(),
+            "Project policy stays at the project root, outside authored content"
+        );
+    }
+
+    #[test]
+    fn marker_identity_edits_do_not_accept_canonical_identity_aliases_or_erase_metadata() {
+        let marker = json!({"id":"identity","name":"Outpost","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"extension":{"owner":"plugin"}});
+        let policy = json!({"settings":{"project.name":"Ignored","project.mainScene":"ignored.scene"},"ui":null,"plugin":{"keep":1}});
+        let project = Project::new(marker.clone(), Some(policy.clone()));
+        let mut settings = project.authority(None);
+        assert_eq!(settings.state.settings["project.name"], json!("Outpost"));
+        assert_eq!(
+            settings.state.settings["project.mainScene"],
+            json!("levels/main.scene")
+        );
+        set(&mut settings, "project.name", Some(json!("Renamed")));
+        let mut expected = marker.clone();
+        expected["name"] = json!("Renamed");
+        assert_eq!(project.read("ara.project.json"), expected);
+        assert_eq!(project.read(ara_host::project_policy::PREFERENCES), policy);
+        undo(&mut settings, false);
+        assert_eq!(project.read("ara.project.json"), marker);
+        assert_eq!(project.read(ara_host::project_policy::PREFERENCES), policy);
+    }
+
+    #[test]
+    fn malformed_policy_after_open_is_reported_without_overwriting_it_or_cleaning_the_marker() {
+        let marker = json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Outpost","main":"levels/main.scene","settings":{"play.tickHz":"120"},"physics":{"custom":true}});
+        let project = Project::new(marker.clone(), Some(json!({})));
+        let mut editor = project.authority(None);
+        let path = project.0.join(ara_host::project_policy::PREFERENCES);
+        std::fs::write(&path, "{broken").expect("malformed external edit");
+        editor.tick(); // Synchronously observe the invalid file through the real watcher.
+        let revision = editor.host.store().revision();
+        let before = editor.state.settings.clone();
+        let undo = editor.state.settings_undo.clone();
+        let error = editor
+            .action(
+                "editor.settings.set",
+                json!({"key":"play.tickHz","value":"30"}),
+            )
+            .expect_err("A diverged policy must reject the complete settings mutation");
+        assert!(
+            error.0.data.as_ref().expect("diagnostics")["diagnostics"]
+                .as_array()
+                .expect("diagnostic list")
+                .iter()
+                .any(|diagnostic| diagnostic["code"] == json!(ara_diag::codes::EXTERNAL_CONFLICT))
+        );
+        assert_eq!(editor.host.store().revision(), revision);
+        assert_eq!(editor.state.settings, before);
+        assert_eq!(editor.state.settings_undo, undo);
+        editor.host.flush();
+        assert_eq!(
+            std::fs::read_to_string(&path).expect("unchanged policy"),
+            "{broken"
+        );
+        assert_eq!(project.read("ara.project.json"), marker);
+        assert!(Settings::open(&project.0, None).is_err());
     }
 }

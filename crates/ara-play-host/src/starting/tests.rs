@@ -37,12 +37,14 @@ fn status_reports_start_progress_and_stop_never_joins_pending_initialization() {
             pending: Pending {
                 id: "play:1".into(),
                 scene: "sc_pending".into(),
-                number: 1,
                 began: Instant::now(),
-                request: serde_json::from_value(json!({"session":"test","background":true}))
-                    .unwrap(),
-                workspace: ara_doc::Workspace::default(),
-                revision: 0,
+                preparation: Preparation::Start {
+                    number: 1,
+                    request: serde_json::from_value(json!({"session":"test","background":true}))
+                        .unwrap(),
+                    workspace: ara_doc::Workspace::default(),
+                    revision: 0,
+                },
                 cancelled: false,
             },
         })
@@ -51,6 +53,8 @@ fn status_reports_start_progress_and_stop_never_joins_pending_initialization() {
     service.starter = Some(Active {
         id: "play:1".into(),
         scene: "sc_pending".into(),
+        restarting: false,
+        internal_restart: false,
         worker,
     });
     let began = Instant::now();

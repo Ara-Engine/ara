@@ -718,7 +718,7 @@ namespace Ara.Hosting
         /// <summary>Must equal the host's <c>ABI_VERSION</c>.</summary>
         public const uint Version = 4;
         /// <summary>Hash of every ABI layout and the engine components this file was generated from.</summary>
-        public const ulong LayoutHash = 0xCD216A904B254ACEUL;
+        public const ulong LayoutHash = 0xF6A5DFBE0BDB03F7UL;
 
         /// <summary>Checks that the C# layouts agree with the generated sizes; returns an error or null.</summary>
         public static string? VerifySizes()

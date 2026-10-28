@@ -31,6 +31,7 @@ impl From<RpcError> for EditorError {
 
 /// One editor process owns the project lock, authority, navigation and agent activity.
 pub struct Editor {
+    pub(crate) interaction: crate::interaction::Interaction,
     asset_updates: Receiver<()>,
     /// Published model generations retained across document and transform edits.
     pub(crate) models: crate::world::gltf::ModelCache,
@@ -51,6 +52,8 @@ pub struct Editor {
     pub(crate) captures: Receiver<CaptureTask>,
     /// GPU job results returned to the capture service.
     pub(crate) completed: mpsc::Sender<CaptureCompletion>,
+    /// Session-owned derived probe jobs bridged to the render-boundary owner.
+    pub(crate) probe_captures: crate::probe_capture::Bridge,
     updates: Receiver<EditorState>,
     controls: Receiver<Control>,
     pub(crate) command_schemas: BTreeMap<String, Value>,
@@ -99,6 +102,15 @@ impl Editor {
         root: &Path,
         user_settings: Option<std::path::PathBuf>,
     ) -> anyhow::Result<Self> {
+        Self::open_config(root, user_settings, HostConfig::default())
+    }
+    /// Internal construction seam for deterministic authority/file-watch fixtures.
+    /// Public entry points retain the default Host persistence and watch policy.
+    pub(crate) fn open_config(
+        root: &Path,
+        user_settings: Option<std::path::PathBuf>,
+        host_config: HostConfig,
+    ) -> anyhow::Result<Self> {
         // One schema world: the editor validates exactly what the player runs.
         let mut project =
             ara_play_host::open_project(root).map_err(|d| anyhow::anyhow!(d.to_string()))?;
@@ -119,24 +131,12 @@ impl Editor {
         if let Some(d) = project.db.verify().into_iter().find(|d| d.is_error()) {
             return Err(anyhow::anyhow!(d.to_string()));
         }
-        let mut host = Host::open(project, HostConfig::default())
-            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        let mut host =
+            Host::open(project, host_config).map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        crate::asset_service::register(&mut host).map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let (asset_changed, asset_updates) = mpsc::channel();
         host.register(Box::new(crate::asset_tools::AssetService::new(
             asset_changed,
-        )))
-        .map_err(|d| anyhow::anyhow!(d.to_string()))?;
-        let worker = ara_asset::ProcessWorker::new(
-            ara_play_host::PlayConfig::for_project(root).import_worker,
-        )
-        .with_memo(Some(&root.join(".ara/cache")));
-        host.register(Box::new(ara_asset_host::AssetService::new(
-            worker,
-            std::sync::Arc::new(|path, required| {
-                ara_update::check_space(path, required)
-                    .map(|_| ())
-                    .map_err(|error| ara_asset::Error::Invalid(error.to_string()))
-            }),
         )))
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         host.register(Box::new(crate::authoring::AuthoringService))
@@ -174,6 +174,7 @@ impl Editor {
         let mut state = EditorState {
             camera: cameras.saved.get(&doc).copied().unwrap_or_default(),
             scene_cameras: cameras.saved.clone(),
+            camera_bookmarks: cameras.bookmarks.clone(),
             doc,
             ..Default::default()
         };
@@ -182,13 +183,18 @@ impl Editor {
         let state = navigation.state.clone();
         let (changes, updates) = mpsc::channel();
         let (control_send, controls) = mpsc::channel();
+        let interaction = crate::interaction::Interaction::default();
         host.register(Box::new(EditorService {
             navigation,
             settings,
             changes,
             controls: control_send,
             resolver: Default::default(),
-            extensions: crate::extensions::Extensions::new(root)
+            bounds: crate::world::bounds::ModelBounds::new(root)?,
+            bounds_key: None,
+            pending_frames: Default::default(),
+            frame_aspect: 16. / 9.,
+            extensions: crate::extensions::Extensions::new(root, interaction.clone())
                 .map_err(|d| anyhow::anyhow!(d.to_string()))?,
         }))
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
@@ -204,6 +210,13 @@ impl Editor {
         let (completed, results) = mpsc::channel();
         host.register(Box::new(CaptureService::new(tasks, results)))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        let (probes, probe_captures) = crate::probe_capture::channel();
+        host.register(Box::new(probes))
+            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        host.register(Box::new(
+            crate::shell::reachability::ValidationService::default(),
+        ))
+        .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let session = host
             .call(
                 ConnId::LOCAL,
@@ -227,6 +240,7 @@ impl Editor {
         )
         .map_err(EditorError::from)?;
         let mut editor = Self {
+            interaction,
             asset_updates,
             models: crate::world::gltf::ModelCache::new(root)?,
             host,
@@ -238,6 +252,7 @@ impl Editor {
             profile_baseline: None,
             captures,
             completed,
+            probe_captures,
             updates,
             controls,
             command_schemas,
@@ -263,10 +278,29 @@ impl Editor {
         Ok(editor)
     }
     /// Push native human activity into the non-disruption boundary.
-    pub fn input_active(&mut self) {}
+    pub fn input_active(&mut self) {
+        self.interaction.note();
+    }
     /// A reflected editor action, using the same validation as an external client.
     pub fn action(&mut self, method: &str, mut params: Value) -> Result<Value, EditorError> {
-        params["session"] = self.session.clone().into();
+        // Native command adapters can outlive a field or receive invalid input.
+        // Reject scalars/arrays before object indexing, which would otherwise panic.
+        if params.is_null() {
+            params = json!({});
+        }
+        let object = params.as_object_mut().ok_or_else(|| {
+            EditorError(RpcError::from_diagnostics(vec![crate::invalid(
+                "Editor action parameters must be an object",
+            )]))
+        })?;
+        object.insert("session".into(), self.session.clone().into());
+        let stopping_current = method == "play.stop"
+            && self.play_world.as_deref().is_some_and(|world| {
+                object
+                    .get("world")
+                    .and_then(Value::as_str)
+                    .is_none_or(|target| target == world)
+            });
         let result = self.call_for(ConnId::LOCAL, method, params)?;
         if method == "editor.play" {
             // Multi-player Play (palette): the service resolved the `play.start` params.
@@ -279,8 +313,9 @@ impl Editor {
             && let Some(world) = result["world"].as_str()
         {
             self.play_world = Some(world.to_owned());
-        } else if method == "play.stop" {
+        } else if stopping_current {
             self.play_world = None;
+            self.action("editor.view", json!({"play":"stopped"}))?;
         }
         Ok(result)
     }
@@ -481,7 +516,9 @@ impl Editor {
     /// later surfaces as a failed import instead.
     pub fn report_missing_sources(&mut self, view: &DocumentView) {
         let root = self.host.root().to_owned();
-        for (path, missing) in view.missing_sources(&root, &self.sources_checked) {
+        for (path, missing) in
+            view.missing_sources(&root, self.host.store().workspace(), &self.sources_checked)
+        {
             self.sources_checked.insert(path.clone());
             if let Some(entity) = missing {
                 self.report(
@@ -494,16 +531,22 @@ impl Editor {
             }
         }
     }
-    /// Read-only current edit-world adapter.
+    /// Whether the active scene is loaded. Its identity and camera remain selected
+    /// while Undo or an external deletion makes it temporarily unavailable.
+    pub fn document_available(&self) -> bool {
+        crate::world::document_available(self.host.store(), &self.state.doc)
+    }
+    /// Read-only current edit-world adapter, empty while its document is unavailable.
     pub fn view(&self) -> anyhow::Result<DocumentView> {
-        let view = DocumentView::new(self.host.store(), &self.state.doc).map_err(|d| {
-            anyhow::anyhow!(
-                d.iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            )
-        })?;
+        let view =
+            DocumentView::for_presentation(self.host.store(), &self.state.doc).map_err(|d| {
+                anyhow::anyhow!(
+                    d.iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )
+            })?;
         Ok(view)
     }
     /// Start a spatial gesture at the current revision.
@@ -684,3 +727,7 @@ impl Endpoint for Editor {
         self.call_for(ConnId::LOCAL, method, params)
     }
 }
+
+#[cfg(test)]
+#[path = "editor/availability_tests.rs"]
+mod availability_tests;

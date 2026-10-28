@@ -22,6 +22,7 @@ mod landscape_tests;
 mod material;
 mod placeholders;
 mod presentation;
+pub mod probes;
 pub use placeholders::{ModelPlaceholders, PENDING_MODEL_COLOR};
 pub use presentation::{PresentationImage, QualityChoice, QualityPreset, RenderOptions};
 mod raster;

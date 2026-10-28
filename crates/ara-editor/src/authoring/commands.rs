@@ -1,4 +1,5 @@
 //! Domain edits lower to shared graph/animation ops; no widget writes a document.
+mod resource;
 use ara_cmd::{Command, EditCtx, Registry};
 use ara_diag::Diagnostic;
 use ara_graph::Graph;
@@ -279,6 +280,7 @@ impl Command for ModuleSet {
 }
 pub(super) fn register(registry: &mut Registry, db: &mut SchemaDb) {
     registry
+        .command::<resource::Create>(db)
         .command::<Initialize>(db)
         .command::<MaterialAdd>(db)
         .command::<AnimationSet>(db)

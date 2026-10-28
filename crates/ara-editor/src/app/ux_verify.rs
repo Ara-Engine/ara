@@ -425,7 +425,8 @@ impl UxVerification {
         match setup {
             Setup::Menu(index, sub) => {
                 shell.open_bar(index, false);
-                if let (Some(sub), Some(menu)) = (sub, shell.menu.as_mut()) {
+                let title = sub.and_then(|sub| shell.menu_submenu_title(editor, 0, sub));
+                if let (Some(sub), Some(menu)) = (title, shell.menu.as_mut()) {
                     menu.open.push(sub);
                 }
                 shell.rebuild(editor)?;

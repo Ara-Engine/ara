@@ -154,6 +154,11 @@ pub fn allowed(file: &str, function: &str, layout: Layout) -> bool {
     }
     matches!(
         (file, function),
+        // Editor compatibility inputs stay scoped to these exact assertions.
+        ("crates/ara-editor/src/settings/history_live_tests.rs", "workspace")
+            | ("crates/ara-editor/src/shell/menu/prefab_source_tests.rs", "legacy_projects_are_rejected_without_mutating_prefab_menu_fixtures")
+            | ("crates/ara-editor/src/app/panels_verify/fixture_tests.rs", "panel_fixtures_reject_legacy_projects_without_writing")
+            |
         // Open-time rejection, old policy parsing, and explicit migration inputs.
         (
             "crates/ara-asset/src/source.rs",

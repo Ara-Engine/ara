@@ -4,13 +4,20 @@
 //! ("surfaces"). Panel code always works on `self.ui`; [`Shell::enter`] swaps a
 //! floating surface in and [`Shell::leave`] swaps it back, so panels need not
 //! know which OS window hosts them.
+pub(crate) mod asset_import;
+mod asset_ops;
 mod assets;
+mod assets_favourites;
 mod axis;
 pub(crate) mod build;
+mod build_options;
+mod choices;
 mod chrome;
+pub(crate) mod collection_adapter;
 mod color;
 pub mod commands;
 mod compound;
+mod confirm;
 mod cursors;
 mod dialog;
 mod dock_drag;
@@ -20,16 +27,21 @@ mod imports;
 mod input;
 mod keyboard;
 mod menu;
+mod monkey_support;
 mod motion;
 mod notices;
 mod ops;
 mod polish;
+#[cfg(test)]
+mod quality_tests;
 pub(crate) mod scripts;
 mod scroll;
 mod scrub;
+mod selection;
 mod settings_panel;
 mod testing;
 mod titlebar;
+pub(crate) mod toolkit_verify;
 pub(crate) use drag::Drag;
 pub use testing::MenuRow;
 mod add_component;
@@ -37,31 +49,43 @@ mod agents_panel;
 mod animation_panel;
 mod assets_panel;
 mod assets_tree;
+mod file_drag;
 mod game_panel;
 mod graph_annotations;
 mod graph_input;
 mod graph_panel;
 mod hierarchy;
+mod hierarchy_actions;
+mod hierarchy_filters;
+mod history_panel;
 mod import_panel;
 #[cfg(test)]
 mod inspector_capture;
 mod inspector_fields;
 mod inspector_panel;
 mod inspector_sections;
+mod lighting;
 mod live_styles;
 mod log_panels;
 mod material_panel;
 mod memo;
 mod names;
+mod probes;
+mod project_actions;
 mod scene_panel;
 pub(crate) use animation_panel::LiveChange;
 pub(crate) use log_panels::LogView;
 mod material_inspector;
 pub mod overlay;
 mod palette;
+mod panel_boundary;
+mod pilot;
+pub(crate) use panel_boundary::ProbeFailure;
 mod panels;
+pub(crate) mod play_controls;
 pub mod prefab_ops;
 mod profiler_panel;
+pub(crate) mod reachability;
 mod vfx_panel;
 use crate::{Editor, inspector::Field};
 use ara_ui::{
@@ -87,13 +111,32 @@ pub struct Surface {
     pub ui: Ui,
     /// The window's own focus and capture.
     pub input: InputState,
+    native_input: ara_ui::native_input::Router,
     /// Pointer in this window's logical pixels.
     pub pointer: [f32; 2],
     /// The window's open popovers (menus, pickers, the palette): dismissal and focus return.
     pub popovers: ara_ui::popover::Popovers,
 }
+/// Geometry-dependent commands consumed by the native viewport owner.
+pub(crate) enum ViewportRequest {
+    /// Apply one surface placement to this still-current selection in its Scene host.
+    DropToSurface { doc: String, selection: Vec<String> },
+}
 /// Native shell and its retained widget state; no authoring document is mirrored here.
 pub struct Shell {
+    hierarchy_filters: hierarchy_filters::View,
+    reachability: reachability::State,
+    history_view: history_panel::View,
+    asset_import: asset_import::State,
+    asset_ops: asset_ops::State,
+    assets_favourites: assets_favourites::View,
+    build_options: build_options::State,
+    file_drag: file_drag::State,
+    pub(crate) import_picker_folder: Option<String>,
+    panel_probe: Option<panel_boundary::Probe>,
+    pub(crate) viewport_request: Option<ViewportRequest>,
+    pub(crate) play_controls: play_controls::State,
+    pub(crate) toolkit_verify: Option<toolkit_verify::Host>,
     styles: live_styles::LiveStyles,
     /// Native runtime tree and renderer-neutral display list of the current surface.
     pub ui: Ui,
@@ -101,6 +144,7 @@ pub struct Shell {
     pub text: TextSystem,
     /// Native focus, capture and keyboard navigation of the current surface.
     pub input: InputState,
+    native_input: ara_ui::native_input::Router,
     /// Floating windows; the current one (if any) is swapped into `ui`.
     pub floats: Vec<Surface>,
     current: Option<String>,
@@ -115,6 +159,13 @@ pub struct Shell {
     /// Current tree scroll offset, independent of the finite widget pool.
     pub hierarchy_offset: f32,
     pub(crate) bindings: BTreeMap<u64, Binding>,
+    choice_controls: choices::Controls,
+    choice_input_dirty: bool,
+    collections: BTreeMap<String, collection_adapter::View>,
+    compound_values: BTreeMap<String, collection_adapter::Values>,
+    hierarchy_selection: ara_ui::selection::Selection<u64>,
+    asset_selection: ara_ui::selection::Selection<u64>,
+    asset_selection_path: Option<String>,
     hierarchy: VirtualList,
     hierarchy_entities: BTreeMap<u64, String>,
     hierarchy_tints: BTreeMap<u64, &'static str>,
@@ -149,6 +200,7 @@ pub struct Shell {
     game_camera: Option<((String, u64, u64), Option<crate::state::Camera>)>,
     /// The shown Play world's fault (`play.status`), shown instead of the game.
     pub(crate) game_fault: Option<String>,
+    pub(crate) game_commands_status: Option<&'static str>,
     /// The shown Play world is still starting (`play.status`): its progress.
     pub(crate) game_start: Option<game_panel::StartProgress>,
     /// `game_fault` is a start that failed, not a fault while running.
@@ -243,6 +295,7 @@ pub struct Shell {
     bodies: BTreeMap<String, String>,
     pub(crate) palette_command: Option<String>,
     pub(crate) palette_params: BTreeMap<String, Value>,
+    palette_form: palette::ParameterState,
     palette_active: usize,
     pub(crate) pick_field: Option<String>,
     pub(crate) rename: bool,
@@ -250,6 +303,13 @@ pub struct Shell {
     asset_rename: Option<scripts::Rename>,
     script_job: Option<(String, std::time::Instant)>,
     script_modules: scripts::ModuleList,
+    ide_request: Option<scripts::IdeRequest>,
+    compile_problems: log_panels::CompilationView,
+    lighting: lighting::View,
+    probe_ui: probes::State,
+    project_request: Option<project_actions::LaunchRequest>,
+    pilot: pilot::Pilot,
+    pub(crate) viewport_diagnostics: overlay::diagnostics::Diagnostics,
     pub(crate) drag: Option<Drag>,
     scrub: Option<scrub::Scrub>,
     motion: motion::Motion,
@@ -261,8 +321,13 @@ pub struct Shell {
     color_picker: Option<color::ColorPicker>,
     /// The picker's slider units, kept between openings.
     color_mode: color::Mode,
-    modal_open: bool,
-    canvas_modal_open: bool,
+    modal_root: Option<&'static str>,
+    modal_return_focus: Option<u64>,
+    confirmations: ara_ui::dialogs::Dialogs,
+    pending_dialogs: Vec<confirm::Pending>,
+    pub(crate) confirmation_bypass: bool,
+    quit_approved: bool,
+    dialog_error: Option<String>,
     inspector_sections: inspector_sections::Sections,
     component_clipboard: Option<(String, Value)>,
     hierarchy_style: BTreeMap<u64, polish::RowStyle>,
@@ -280,6 +345,11 @@ pub struct Shell {
     /// The (document, store revision, workspace generation) `resolved` last answered.
     resolved_key: Option<(String, u64, u64)>,
     tooltip_text: Option<String>,
+    tooltip_target: Option<(u64, String)>,
+    tooltip_delay: ara_ui::popover::HoverDelay,
+    tooltip_clock: std::time::Instant,
+    panel_failures: BTreeMap<String, panel_boundary::Failure>,
+    panel_compilation: panel_boundary::Compilation,
     field_request: Option<String>,
     /// Each graph page's canvas (`graph_panel::GRAPH_PAGES`).
     graphs: BTreeMap<&'static str, graph_panel::GraphCanvas>,
@@ -321,7 +391,7 @@ pub struct Shell {
     pending_clipboard: Option<String>,
     recent_commands: Vec<String>,
     /// Command waiting for a new shortcut on the Keyboard Shortcuts page.
-    pub(crate) recording: Option<&'static str>,
+    pub(crate) recording: Option<String>,
     key_search: bool,
     label_width: f32,
     keymap: commands::keys::Keymap,
@@ -329,8 +399,11 @@ pub struct Shell {
     keymap_revision: u64,
     /// The settings `keymap` was built from (`input.keymap`, `input.shortcuts`).
     keymap_settings: (Option<Value>, Option<Value>),
+    keymap_catalog: [u8; 32],
+    interaction: crate::interaction::Interaction,
     /// Live tab drag target, painted as a lit region with an action label.
     pub(crate) drop_preview: Option<dock_drag::DropPreview>,
+    marquee: Option<(Option<String>, Box2)>,
     /// The desktop pointer (points) cross-window tab drags follow; `None` reads the
     /// OS. Verification routes set it to drive those drags with synthetic events.
     pub(crate) desktop_pointer: Option<[f32; 2]>,
@@ -368,6 +441,8 @@ pub(crate) enum Binding {
     Search(String),
     Palette(String),
     PaletteParam(String),
+    PaletteBack,
+    PaletteUnset(String),
     PaletteRun,
     Select(String),
     Asset(assets::Asset),
@@ -375,7 +450,6 @@ pub(crate) enum Binding {
     AssetRenameValue,
     ResourceContent(String, Vec<Value>, String),
     ImportField(String, String),
-    ImportChoice(String, String, Value),
     ResourceText(String, String),
     ResourceApply,
     PreviewShape(bool),
@@ -409,17 +483,20 @@ pub(crate) enum Binding {
         max: Option<f64>,
     },
     Diagnostic(ara_diag::Diagnostic),
-    MenuBar(usize),
-    MenuSub(usize, usize),
+    MenuBar(String),
+    MenuSub(usize, String),
     MenuFilter,
     /// The Add Component dropdown's search field.
     AddComponentFilter,
     ContextMenu(commands::menus::Context, commands::Target),
-    EnumMenu(String, Vec<String>),
+    Collection(collection_adapter::Action),
+    Play(play_controls::Action),
+    AssetFile(asset_ops::Action),
+    PanelRetry(String),
     Setting(String),
     SettingChoice(String, Value),
-    ShortcutRecord(&'static str),
-    ShortcutReset(&'static str),
+    ShortcutRecord(String),
+    ShortcutReset(String),
     KeySearch,
     DialogText,
     DialogAction(&'static str),
@@ -442,10 +519,24 @@ impl Shell {
         let text = text_system()?;
         let ui = Ui::editor("<ui id='editor' />", include_str!("editor.css"), size)?;
         let mut shell = Self {
+            reachability: Default::default(),
+            history_view: Default::default(),
+            asset_import: Default::default(),
+            asset_ops: Default::default(),
+            assets_favourites: Default::default(),
+            build_options: Default::default(),
+            hierarchy_filters: Default::default(),
+            file_drag: Default::default(),
+            import_picker_folder: None,
+            viewport_request: None,
+            panel_probe: None,
+            play_controls: Default::default(),
+            toolkit_verify: None,
             styles: live_styles::LiveStyles::new()?,
             ui,
             text,
             input: InputState::default(),
+            native_input: Default::default(),
             floats: Vec::new(),
             current: None,
             native_maximized: false,
@@ -454,6 +545,13 @@ impl Shell {
             modifiers: [false; 3],
             hierarchy_offset: 0.,
             bindings: BTreeMap::new(),
+            choice_controls: Default::default(),
+            choice_input_dirty: false,
+            collections: BTreeMap::new(),
+            compound_values: BTreeMap::new(),
+            hierarchy_selection: Default::default(),
+            asset_selection: Default::default(),
+            asset_selection_path: None,
             hierarchy: VirtualList { items: Vec::new() },
             hierarchy_entities: BTreeMap::new(),
             hierarchy_tints: BTreeMap::new(),
@@ -486,6 +584,7 @@ impl Shell {
             game_camera: None,
             game_stats: true,
             game_fault: None,
+            game_commands_status: None,
             game_start: None,
             game_start_failed: false,
             game_running: false,
@@ -501,7 +600,11 @@ impl Shell {
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,
             hierarchy_surface: None,
-            browser: assets::Browser::new(&editor.host.root().join(ara_doc::AUTHORING_ROOT)),
+            browser: assets::Browser::new(
+                editor.host.root(),
+                editor.host.store().schema(),
+                editor.host.store().workspace().reference_root(),
+            ),
             imports: imports::Imports::new(editor.host.root()),
             asset_rows: names::AssetRows::default(),
             name_fit: names::NameFit::default(),
@@ -530,6 +633,7 @@ impl Shell {
             bodies: BTreeMap::new(),
             palette_command: None,
             palette_params: BTreeMap::new(),
+            palette_form: Default::default(),
             palette_active: 0,
             pick_field: None,
             rename: false,
@@ -537,6 +641,13 @@ impl Shell {
             asset_rename: None,
             script_job: None,
             script_modules: Default::default(),
+            ide_request: None,
+            compile_problems: Default::default(),
+            lighting: Default::default(),
+            probe_ui: Default::default(),
+            project_request: None,
+            pilot: Default::default(),
+            viewport_diagnostics: Default::default(),
             drag: None,
             scrub: None,
             motion: Default::default(),
@@ -545,8 +656,13 @@ impl Shell {
             add_component: None,
             color_picker: None,
             color_mode: Default::default(),
-            modal_open: false,
-            canvas_modal_open: false,
+            modal_root: None,
+            modal_return_focus: None,
+            confirmations: ara_ui::dialogs::Dialogs::new("editor-confirm"),
+            pending_dialogs: Vec::new(),
+            confirmation_bypass: false,
+            quit_approved: false,
+            dialog_error: None,
             inspector_sections: inspector_sections::Sections::open(editor.host.root()),
             component_clipboard: None,
             hierarchy_style: BTreeMap::new(),
@@ -558,6 +674,11 @@ impl Shell {
             import_settings: Default::default(),
             resolved_key: None,
             tooltip_text: None,
+            tooltip_target: None,
+            tooltip_delay: Default::default(),
+            tooltip_clock: std::time::Instant::now(),
+            panel_failures: BTreeMap::new(),
+            panel_compilation: Default::default(),
             field_request: None,
             canvas_display: Default::default(),
             graphs: BTreeMap::new(),
@@ -594,7 +715,10 @@ impl Shell {
             keymap: commands::keymap(&editor.state, &editor.extensions),
             keymap_revision: 0,
             keymap_settings: keymap_settings(&editor.state),
+            keymap_catalog: keymap_catalog(&editor.extensions),
+            interaction: editor.interaction.clone(),
             drop_preview: None,
+            marquee: None,
             desktop_pointer: None,
             main_rect: [0, 0, size[0] as i32, size[1] as i32],
         };
@@ -613,6 +737,7 @@ impl Shell {
         let surface = &mut self.floats[index];
         std::mem::swap(&mut self.ui, &mut surface.ui);
         std::mem::swap(&mut self.input, &mut surface.input);
+        std::mem::swap(&mut self.native_input, &mut surface.native_input);
         std::mem::swap(&mut self.pointer, &mut surface.pointer);
         std::mem::swap(&mut self.popovers, &mut surface.popovers);
         self.current = Some(id.to_owned());
@@ -626,6 +751,7 @@ impl Shell {
         if let Some(surface) = self.floats.iter_mut().find(|s| s.id == id) {
             std::mem::swap(&mut self.ui, &mut surface.ui);
             std::mem::swap(&mut self.input, &mut surface.input);
+            std::mem::swap(&mut self.native_input, &mut surface.native_input);
             std::mem::swap(&mut self.pointer, &mut surface.pointer);
             std::mem::swap(&mut self.popovers, &mut surface.popovers);
         }
@@ -662,7 +788,7 @@ impl Shell {
         let store = editor.host.store();
         let resolved = self
             .resolver
-            .resolve(store, &editor.state.doc)
+            .presentation(store, &editor.state.doc)
             .map_err(|d| format!("{d:?}"))?;
         self.resolved_key = Some((
             editor.state.doc.clone(),
@@ -714,7 +840,21 @@ impl Shell {
     /// revisions (an action that rebuilt in dispatch changed them); true if it rebuilt.
     pub fn rebuild_if_stale(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
         let compiled = self.poll_script_job(editor)?;
-        if !compiled && self.built == (editor.panels_revision, editor.host.store().revision()) {
+        let modules_changed = self.poll_script_modules(editor)?;
+        let probes_changed = self.poll_probes(editor)?;
+        let play_changed = match self.poll_play_job(editor) {
+            Ok(changed) => changed,
+            Err(error) => {
+                editor.report_failure(&*error);
+                true
+            }
+        };
+        if !compiled
+            && !modules_changed
+            && !probes_changed
+            && !play_changed
+            && self.built == (editor.panels_revision, editor.host.store().revision())
+        {
             return Ok(false);
         }
         self.rebuild(editor)?;
@@ -728,13 +868,24 @@ impl Shell {
         self.rebuild(editor)
     }
     fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.poll_compile_problems(editor)?;
+        self.poll_probes(editor)?;
         self.built = (editor.panels_revision, editor.host.store().revision());
-        // The keymap follows two settings; rebuilding it took ~0.1 ms per rebuild.
+        // Async catalog reloads can make saved extension overrides reachable.
         let settings = keymap_settings(&editor.state);
-        if settings != self.keymap_settings {
+        let catalog = keymap_catalog(&editor.extensions);
+        if settings != self.keymap_settings || catalog != self.keymap_catalog {
             self.keymap = commands::keymap(&editor.state, &editor.extensions);
             self.keymap_settings = settings;
+            self.keymap_catalog = catalog;
             self.keymap_revision += 1;
+            if self
+                .recording
+                .as_deref()
+                .is_some_and(|id| commands::lookup(&editor.extensions, id).is_none())
+            {
+                self.recording = None;
+            }
         }
         self.reduce_motion = editor.state.reduce_motion;
         self.version += 1;
@@ -758,6 +909,7 @@ impl Shell {
                     id: window.id.clone(),
                     ui: Ui::editor("<ui id='float' />", include_str!("editor.css"), size)?,
                     input: InputState::default(),
+                    native_input: Default::default(),
                     pointer: [0.; 2],
                     popovers: Default::default(),
                 });
@@ -779,6 +931,17 @@ impl Shell {
     /// geometry, so pointer and geometry code finds nodes through this.
     pub(crate) fn shown_node(&self, id: &str) -> Option<usize> {
         self.ui.find(id).filter(|i| self.ui.shown(*i))
+    }
+    /// Pointer use makes Alt part of a chord rather than a menubar tap.
+    pub(crate) fn note_pointer_chord(&mut self) {
+        self.alt_tap = false;
+    }
+    /// End pointer capture on every native surface while retaining modal scopes.
+    pub(crate) fn cancel_pointer_capture(&mut self) {
+        self.input.cancel_interaction(&mut self.ui);
+        for surface in &mut self.floats {
+            surface.input.cancel_interaction(&mut surface.ui);
+        }
     }
     fn stylesheet(&self, editor: &Editor) -> String {
         let mut css = self
@@ -803,6 +966,15 @@ impl Shell {
             self.styles
                 .css("editor-titlebar.css", include_str!("editor-titlebar.css")),
         );
+        css.push_str(ara_ui::dialogs::CSS);
+        css.push_str(ara_ui::select::CSS);
+        css.push_str(history_panel::CSS);
+        css.push_str(lighting::CSS);
+        css.push_str(probes::CSS);
+        css.push_str(palette::FORM_CSS);
+        if self.toolkit_verify.is_some() {
+            css.push_str(toolkit_verify::CSS);
+        }
         css
     }
     /// Reconcile markup into the current surface (nodes whose ID survives keep their
@@ -818,9 +990,6 @@ impl Shell {
         result
     }
     fn mount_markup(&mut self, editor: &mut Editor, markup: &str) -> ara_ui::Result<()> {
-        self.ui
-            .set_theme_tokens(self.styles.tokens(editor.state.light));
-        self.ui.set_stylesheet(&self.stylesheet(editor))?;
         let reconciling = std::time::Instant::now();
         // Area headers and tab bodies are parts: an unchanged one keeps its retained
         // subtree, virtual rows included.
@@ -851,6 +1020,8 @@ impl Shell {
             }
         }
         self.tooltip_text = None;
+        self.tooltip_target = None;
+        self.tooltip_delay.reset();
         let framing = std::time::Instant::now();
         self.stats.work += ui.frame(&mut self.text)?;
         self.stats.frame_ms += framing.elapsed().as_secs_f64() * 1000.;
@@ -931,6 +1102,7 @@ impl Shell {
         if bind_assets {
             self.bind_asset_rows();
         }
+        self.asset_selection_order(editor);
         // Row decorations set attributes only; the caller's frame lays out and paints
         // once (no geometry is read until then, apart from pre-existing nodes).
         self.decorate_hierarchy();
@@ -939,11 +1111,6 @@ impl Shell {
         {
             // Name cells leave room for the painted type icon (`polish`); the detail
             // column is muted. The selected asset's row is highlighted.
-            let selected = editor
-                .state
-                .asset_path
-                .as_deref()
-                .map(ara_ui::source::stable_id);
             let style = |column: usize, selected: bool| match column {
                 0 => format!(
                     "height:{row}px;width:{}px;padding:2px;padding-left:30px;overflow:hidden;font-size:12px",
@@ -965,7 +1132,8 @@ impl Shell {
                     .id
                     .rsplit_once("key-")
                     .and_then(|(_, s)| s.parse::<u64>().ok());
-                let class = if key.is_some() && key == selected {
+                let class = if key.is_some_and(|key| self.asset_selection.selected().contains(&key))
+                {
                     "virtual-row row-selected"
                 } else {
                     "virtual-row"
@@ -996,6 +1164,7 @@ impl Shell {
         editor: &mut Editor,
         window: &ara_ui::docking::Floating,
     ) -> ara_ui::Result<()> {
+        self.prepare_panel_validation(editor)?;
         self.parts.clear();
         self.hidden_bodies.clear();
         let mut markup = String::from(
@@ -1012,11 +1181,16 @@ impl Shell {
         self.color_picker_markup(editor, &mut markup);
         self.add_component_markup(editor, &mut markup)?;
         self.overlays(editor, &mut markup)?;
+        self.build_options_markup(editor, &mut markup);
+        self.choice_overlays(&mut markup);
         self.asset_rename_markup(&mut markup);
+        self.asset_file_name_markup(&mut markup);
         markup.push_str(POPUP_TAIL);
         markup.push_str("</ui>");
         self.mount(editor, &markup)?;
         self.stats.work += self.ui.frame(&mut self.text)?;
+        self.sync_choice_controls()?;
+        self.position_asset_file_name()?;
         if self.frame_new_graphs(editor)? {
             self.stats.work += self.ui.frame(&mut self.text)?;
         }
@@ -1027,6 +1201,15 @@ impl Shell {
         editor: &mut Editor,
         allow_asset_reflow: bool,
     ) -> ara_ui::Result<()> {
+        // Popover mounting focuses the palette's search field. Remember its
+        // caller before mounting, so replacement dialogs restore that caller.
+        if self.modal_root.is_none()
+            && self.modal_return_focus.is_none()
+            && (self.modal_active() || editor.state.palette || editor.state.canvas_add)
+        {
+            self.modal_return_focus = self.input.focused();
+        }
+        self.prepare_panel_validation(editor)?;
         self.parts.clear();
         self.hidden_bodies.clear();
         let mut markup = String::from("<ui id='editor'>");
@@ -1066,12 +1249,18 @@ impl Shell {
         self.color_picker_markup(editor, &mut markup);
         self.add_component_markup(editor, &mut markup)?;
         self.overlays(editor, &mut markup)?;
+        self.build_options_markup(editor, &mut markup);
+        self.choice_overlays(&mut markup);
         if editor.state.palette {
             self.palette(editor, &mut markup)?;
         }
         if let Some(dialog) = self.dialog.take() {
             self.dialog_markup(&dialog, &mut markup);
             self.dialog = Some(dialog);
+        }
+        markup.push_str(&self.confirmations.markup(self.ui.size));
+        if let Some(host) = &self.toolkit_verify {
+            markup.push_str(&host.markup(self.ui.size));
         }
         if self.rename
             && let Some(id) = editor.state.selection.first()
@@ -1089,6 +1278,7 @@ impl Shell {
             markup.push_str(&format!("<field id='entity-rename-value' style='position:absolute;left:0px;top:0px;width:180px;height:22px' text='{}' label='Entity name' action='Dispatch' />",escape(name)));
         }
         self.asset_rename_markup(&mut markup);
+        self.asset_file_name_markup(&mut markup);
         markup.push_str(POPUP_TAIL);
         markup.push_str("</ui>");
         self.mount(editor, &markup)?;
@@ -1116,15 +1306,7 @@ impl Shell {
                 }
             }
         }
-        if let (Some(cube), Some(rect)) = (self.ui.find("view-cube"), self.viewport()) {
-            let r = self.ui.nodes[cube].rect;
-            let offset = [rect.x + rect.w - axis::SIZE - 12. - r.x, rect.y + 12. - r.y];
-            // Only a moved cube repaints: marking it every rebuild repainted the whole UI.
-            if self.ui.nodes[cube].paint_offset != offset {
-                self.ui.nodes[cube].paint_offset = offset;
-                self.ui.nodes[cube].dirty.paint = true;
-            }
-        }
+        self.position_axis();
         self.stats.work += self.ui.frame(&mut self.text)?;
         if self.frame_new_graphs(editor)? {
             self.stats.work += self.ui.frame(&mut self.text)?;
@@ -1140,62 +1322,27 @@ impl Shell {
             // One measured reflow handles first-open, splitter and monitor-size changes.
             return self.rebuild_main(editor, false);
         }
-        let canvas_modal = editor.state.canvas_add
-            && !editor.state.palette
-            && self.ui.find("node-palette").is_some();
-        if !canvas_modal && self.canvas_modal_open {
-            self.input.pop(&mut self.ui);
+        if !self.modal_active() {
+            self.sync_choice_controls()?;
         }
-        let modal = editor.state.palette || self.dialog.is_some();
-        if modal && !self.modal_open {
-            self.panel_opened = (!self.reduce_motion).then(std::time::Instant::now);
-            let (root, field) = if editor.state.palette {
-                ("palette", Some("palette-search"))
-            } else {
-                ("dialog", self.dialog.as_ref().and_then(Dialog::field))
-            };
-            self.input.push(
-                &mut self.ui,
-                ara_ui::source::stable_id(root),
-                field.map(ara_ui::source::stable_id),
-                true,
-            )?;
+        self.sync_modal_scopes(editor)?;
+        self.sync_palette_form()?;
+        self.position_asset_file_name()?;
+        if let Some(host) = &mut self.toolkit_verify {
+            host.sync(&mut self.ui, &mut self.input)?;
         }
-        if !modal && self.modal_open {
-            self.input.pop(&mut self.ui);
-        }
-        self.modal_open = modal;
-        if canvas_modal && !self.canvas_modal_open {
-            self.panel_opened = (!self.reduce_motion).then(std::time::Instant::now);
-            self.input.push(
-                &mut self.ui,
-                ara_ui::source::stable_id("node-palette"),
-                Some(ara_ui::source::stable_id("search-nodes")),
-                true,
-            )?;
-        }
-        self.canvas_modal_open = canvas_modal;
-        if editor.state.palette {
-            let _ = self
-                .input
-                .focus(&mut self.ui, ara_ui::source::stable_id("palette-search"));
-        } else if let Some(field) = self.dialog.as_ref().and_then(Dialog::field) {
-            let _ = self
-                .input
-                .focus(&mut self.ui, ara_ui::source::stable_id(field));
-        } else if self.menu.is_some()
+        if self.modal_root.is_none()
+            && !self.confirmations.is_open()
+            && self.menu.is_some()
             && let Some(_) = self.ui.find("menu-filter")
         {
             let _ = self
                 .input
                 .focus(&mut self.ui, ara_ui::source::stable_id("menu-filter"));
         }
-        if canvas_modal {
-            let _ = self
-                .input
-                .focus(&mut self.ui, ara_ui::source::stable_id("search-nodes"));
-        }
         if self.rename
+            && self.modal_root.is_none()
+            && !self.confirmations.is_open()
             && let Some(i) = self.ui.find("entity-rename-value")
         {
             if let Some(row) = editor.state.selection.first().and_then(|e| {
@@ -1209,10 +1356,10 @@ impl Shell {
                 self.ui.nodes[i].dirty.paint = true;
                 self.stats.work += self.ui.frame(&mut self.text)?;
             }
-            self.input.focus(
+            self.input.focus_if_available(
                 &mut self.ui,
                 ara_ui::source::stable_id("entity-rename-value"),
-            )?;
+            );
         }
         self.after_mount(editor)
     }
@@ -1259,6 +1406,8 @@ impl Shell {
     }
     /// Run after every mount: decorations, a pending Inspector field reveal, motion.
     fn after_mount(&mut self, editor: &Editor) -> ara_ui::Result<()> {
+        self.position_axis();
+        self.stats.work += self.ui.frame(&mut self.text)?;
         self.position_asset_rename()?;
         if let Some(grid) = self.shown_node("asset-grid") {
             let width = self.ui.nodes[grid].rect.w;
@@ -1266,21 +1415,29 @@ impl Shell {
                 .set_virtual_extent(grid, [width, self.asset_grid_extent])?;
             self.ui.scroll_to(grid, [0., self.asset_offset])?;
         }
+        self.reveal_collection_appends(editor)?;
         self.paint_decorations();
         if self.field_request != editor.state.focus_field
             && self.shown_node("inspector-scroll").is_some()
         {
-            if let Some(path) = editor.state.focus_field.as_deref() {
-                self.reveal_field(path)?;
+            let revealed = if let Some(path) = editor.state.focus_field.as_deref() {
+                self.reveal_field(path)?
+            } else {
+                true
+            };
+            if revealed {
+                self.field_request = editor.state.focus_field.clone();
             }
-            self.field_request = editor.state.focus_field.clone();
         }
         self.motion
             .apply(&mut self.ui.display, true, self.reduce_motion);
         Ok(())
     }
     /// Scrolls the inspector to the field at `path` (`Transform.position.x`) and focuses it.
-    pub(crate) fn reveal_field(&mut self, path: &str) -> ara_ui::Result<()> {
+    pub(crate) fn reveal_field(&mut self, path: &str) -> ara_ui::Result<bool> {
+        if self.modal_active() || self.choice_open() || self.menu.is_some() {
+            return Ok(false);
+        }
         let (path, axis) = path
             .rsplit_once('.')
             .and_then(|(base, axis)| {
@@ -1296,7 +1453,7 @@ impl Shell {
             .find(&format!("field-{id}"))
             .or_else(|| self.ui.find(&format!("component-{id}")))
         else {
-            return Ok(());
+            return Ok(false);
         };
         if let Some(scroll) = self.ui.find("inspector-scroll") {
             // Rects are on screen (already scrolled); `scroll_to` takes the absolute
@@ -1315,9 +1472,9 @@ impl Shell {
             .or_else(|| self.ui.find(&format!("edit-{id}-{}", axis.unwrap_or(0))))
         {
             let key = ara_ui::source::stable_id(&self.ui.nodes[field].element.id);
-            self.input.focus(&mut self.ui, key)?;
+            return Ok(self.input.focus_if_available(&mut self.ui, key));
         }
-        Ok(())
+        Ok(self.ui.shown(row))
     }
     /// Complete decorative transitions before deterministic review captures.
     pub fn settle_transitions(&mut self) {
@@ -1344,8 +1501,10 @@ impl Shell {
     /// Run retained style/layout/paint work for the current surface; unchanged frames
     /// return zero work counters.
     pub fn frame(&mut self) -> ara_ui::Result<ara_ui::Work> {
+        self.advance_tooltip()?;
         self.sync_scroll_views()?;
         self.sync_tab_ghost()?;
+        self.sync_file_drag()?;
         if let Some(start) = self.panel_opened {
             let p = (start.elapsed().as_secs_f32() / 0.14).clamp(0., 1.);
             if let Some(i) = self
@@ -1361,6 +1520,10 @@ impl Shell {
             }
         }
         let mut work = self.ui.frame(&mut self.text)?;
+        if self.fit_game_frames()? {
+            work.layout_passes += 1;
+            work.paint_nodes = work.paint_nodes.max(1);
+        }
         self.stats.work += work;
         if work.paint_nodes > 0 {
             self.paint_decorations();
@@ -1502,18 +1665,55 @@ impl Shell {
         }
         Ok(changed)
     }
-    /// Current scene image rectangle in the main window; also the picking boundary.
+    /// Visible scene rectangle in the current native surface; also the picking boundary.
     pub fn viewport(&self) -> Option<Box2> {
-        if self.current.is_some() {
-            return None;
-        }
         self.ui
             .find("viewport-image")
+            .filter(|index| self.ui.shown(*index))
             .map(|i| self.ui.nodes[i].rect)
+            .filter(|rect| {
+                [rect.x, rect.y, rect.w, rect.h]
+                    .into_iter()
+                    .all(f32::is_finite)
+                    && rect.w > 1.
+                    && rect.h > 1.
+            })
+    }
+    /// The one visible Scene view's native owner and logical rectangle, independent of the current surface.
+    pub(crate) fn scene_host(&self) -> Option<(Option<&str>, Box2)> {
+        if let Some(rect) = self.viewport() {
+            return Some((self.current.as_deref(), rect));
+        }
+        self.floats.iter().find_map(|surface| {
+            let index = surface
+                .ui
+                .find("viewport-image")
+                .filter(|index| surface.ui.shown(*index))?;
+            let rect = surface.ui.nodes[index].rect;
+            if ![rect.x, rect.y, rect.w, rect.h]
+                .into_iter()
+                .all(f32::is_finite)
+                || rect.w <= 1.
+                || rect.h <= 1.
+            {
+                return None;
+            }
+            // enter() parks the main tree in the selected floating slot.
+            let host = if self.current.as_deref() == Some(surface.id.as_str()) {
+                None
+            } else {
+                Some(surface.id.as_str())
+            };
+            Some((host, rect))
+        })
     }
     /// Compact agent layout report; glyph shaping internals stay out of capture jobs.
     pub fn layout_report(&self) -> Value {
-        json!({"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
+        json!({"projectLaunch":self.project_launch_request(),"pilot":self.pilot_report(),"viewportDiagnostics":self.viewport_diagnostics.report(),"nativeFileDrag":self.file_drag_report(),"assetImports":self.asset_import_report(),"assetOperations":self.asset_operation_report(),"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
+    }
+    /// Cached authoring prefix; empty identifies a still-readable legacy project.
+    pub(crate) fn asset_reference_root(&self) -> &str {
+        self.browser.reference_root()
     }
     /// Visible asset payload centre for scripted drags through the production drop route.
     pub fn asset_point(&self, path: &str) -> Option<[f32; 2]> {
@@ -1694,10 +1894,10 @@ impl Shell {
     /// Set a floating surface's logical size after its OS window opened or resized
     /// (`Ui::resize`: the next frame lays the surface out at that size).
     pub fn resize_surface(&mut self, id: &str, size: [f32; 2]) -> ara_ui::Result<()> {
-        if let Some(surface) = self.floats.iter_mut().find(|s| s.id == id) {
-            surface.ui.resize(size)?;
-        } else if self.current.as_deref() == Some(id) {
+        if self.current.as_deref() == Some(id) {
             self.ui.resize(size)?;
+        } else if let Some(surface) = self.floats.iter_mut().find(|s| s.id == id) {
+            surface.ui.resize(size)?;
         }
         Ok(())
     }
@@ -1712,4 +1912,16 @@ fn keymap_settings(state: &crate::state::EditorState) -> (Option<Value>, Option<
         state.settings.get("input.keymap").cloned(),
         state.settings.get("input.shortcuts").cloned(),
     )
+}
+
+/// Borrow catalog strings so checking reloads does not clone command metadata.
+fn keymap_catalog(catalog: &crate::extensions::Catalog) -> [u8; 32] {
+    let mut hash = blake3::Hasher::new();
+    for value in std::iter::once(catalog.generation.as_deref().unwrap_or(""))
+        .chain(catalog.commands.iter().map(|command| command.id.as_str()))
+    {
+        hash.update(&(value.len() as u64).to_le_bytes());
+        hash.update(value.as_bytes());
+    }
+    *hash.finalize().as_bytes()
 }

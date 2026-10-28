@@ -126,6 +126,14 @@ pub(super) fn apply(c: &mut Computed, k: &str, v: &str) -> Result<()> {
                 _ => return Err("flex-direction must be row or column".into()),
             }
         }
+        "flex-wrap" => {
+            c.layout.flex_wrap = match v {
+                "nowrap" => FlexWrap::NoWrap,
+                "wrap" => FlexWrap::Wrap,
+                "wrap-reverse" => FlexWrap::WrapReverse,
+                _ => return Err("flex-wrap must be nowrap, wrap or wrap-reverse".into()),
+            }
+        }
         "grid-template-columns" => {
             c.layout.grid_template_columns = v
                 .split_whitespace()

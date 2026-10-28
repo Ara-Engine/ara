@@ -5,6 +5,7 @@ mod cursor;
 #[cfg(not(target_os = "macos"))]
 mod output;
 mod present;
+pub mod text;
 mod window;
 pub use chrome::WindowChrome;
 pub use cursor::SystemCursor;

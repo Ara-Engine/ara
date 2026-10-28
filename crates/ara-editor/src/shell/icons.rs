@@ -1,4 +1,4 @@
-//! Pinned Lucide assets, rasterized white once per device scale; `tint` images
+//! Pinned Lucide assets and simple workspace glyphs, rasterized once per device scale; `tint` images
 //! take their element's text color, so themes never re-rasterize icons.
 use ara_ui::source::stable_id;
 use ara_ui_render::gpu::{Image, Renderer};
@@ -73,9 +73,11 @@ pub(crate) fn install(renderer: &mut Renderer, dpi: f32) -> ara_ui::Result<()> {
     renderer.set_raster_scale(dpi)?;
     Ok(())
 }
-/// The Ara app icon (`assets/brand/ara-icon.svg`, 64-unit view box).
-const BRAND: &str = include_str!("../../../../assets/brand/ara-icon.svg");
+/// The engine's small-size icon, authored for compact native chrome (64-unit view box).
+const BRAND: &str = include_str!("../../../../assets/brand/icons/engine/ara-engine-small.svg");
 const ASSETS: &[(&str, &str)] = &[
+    ("star", include_str!("../../assets/icons/star.svg")),
+    ("bookmark", include_str!("../../assets/icons/bookmark.svg")),
     ("activity", include_str!("../../assets/icons/activity.svg")),
     (
         "arrow-right",

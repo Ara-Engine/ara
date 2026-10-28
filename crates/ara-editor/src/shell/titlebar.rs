@@ -3,7 +3,7 @@ use super::commands::{Target, menus::MENUS};
 use super::*;
 #[derive(Hash)]
 struct TitlebarState {
-    open: Option<usize>,
+    open: Option<String>,
     mnemonics: bool,
     project: String,
     scene: String,
@@ -15,6 +15,7 @@ struct TitlebarState {
     mode_label: String,
     maximized: bool,
     extra_menus: Vec<String>,
+    generation: Option<String>,
 }
 impl Shell {
     /// Memoized caption markup; the same command registry drives menus, keys and MCP.
@@ -44,7 +45,8 @@ impl Shell {
                 .skip(MENUS.len())
                 .map(str::to_owned)
                 .collect(),
-            open: self.menu.as_ref().and_then(|m| m.bar()),
+            open: self.menu.as_ref().and_then(|m| m.bar()).map(str::to_owned),
+            generation: editor.extensions.generation.clone(),
             mnemonics: self.mnemonics,
             project: project_name(editor),
             scene,
@@ -74,11 +76,13 @@ impl Shell {
     fn titlebar_markup(&mut self, s: &TitlebarState, out: &mut String) {
         self.bind_command("brand", "help.about", Target::None);
         out.push_str("<panel id='menubar' class='menubar' label='Title bar'><panel id='titlebar-left' class='titlebar-side'><button id='brand' class='brand' label='About Ara' description='About Ara' action='Dispatch'><image id='brand-logo' class='brand-logo' src='brand-logo' /></button><panel id='menu-titles' class='titlebar-menus'>");
-        for (i, menu) in MENUS.iter().enumerate() {
-            let id = format!("menu-title-{i}");
-            self.bindings
-                .insert(ara_ui::source::stable_id(&id), Binding::MenuBar(i));
-            out.push_str(&format!("<button id='{id}' class='menu-title{}' label='{} menu' description='Alt+{}' action='Dispatch'><text id='{id}-text' text='{}' />",if s.open == Some(i) { " menu-title-open" } else { "" },menu.title,menu.mnemonic,menu.title));
+        for menu in MENUS {
+            let id = menu::bar_id(menu.title, s.generation.as_deref());
+            self.bindings.insert(
+                ara_ui::source::stable_id(&id),
+                Binding::MenuBar(menu.title.into()),
+            );
+            out.push_str(&format!("<button id='{id}' class='menu-title{}' label='{} menu' description='Alt+{}' action='Dispatch'><text id='{id}-text' text='{}' />",if s.open.as_deref() == Some(menu.title) { " menu-title-open" } else { "" },menu.title,menu.mnemonic,menu.title));
             if s.mnemonics {
                 let width = match menu.mnemonic {
                     'W' => 10.,
@@ -89,13 +93,14 @@ impl Shell {
             }
             out.push_str("</button>");
         }
-        for (index, title) in s.extra_menus.iter().enumerate() {
-            let index = index + MENUS.len();
-            let id = format!("menu-title-{index}");
-            self.bindings
-                .insert(ara_ui::source::stable_id(&id), Binding::MenuBar(index));
+        for title in &s.extra_menus {
+            let id = menu::bar_id(title, s.generation.as_deref());
+            self.bindings.insert(
+                ara_ui::source::stable_id(&id),
+                Binding::MenuBar(title.clone()),
+            );
             out.push_str(&format!("<button id='{id}' class='menu-title{}' label='{} menu' action='Dispatch'><text id='{id}-text' text='{}' /></button>",
-                if s.open == Some(index) { " menu-title-open" } else { "" }, escape(title), escape(title)));
+                if s.open.as_deref() == Some(title.as_str()) { " menu-title-open" } else { "" }, escape(title), escape(title)));
         }
         out.push_str("</panel></panel><panel id='titlebar-center' class='titlebar-center'>");
         self.titlebar_play(s, out);

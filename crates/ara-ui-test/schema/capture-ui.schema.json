@@ -526,7 +526,7 @@
       "properties": {
         "code": {
           "type": "string",
-          "description": "Stable code ARA4100..ARA4106.",
+          "description": "Catalog code, including ARA4005 identity collisions and ARA4100..ARA4106 inspection findings.",
           "default": ""
         },
         "node": {
