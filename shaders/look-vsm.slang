@@ -48,18 +48,22 @@ float vsmLastTent(Look l,int2 p){
 // sun, last frame's tent `tent`) samples, and the neighbours within the projection's
 // reach of a page's edge: the normal offset's lateral shift plus, at its level, the
 // tent and its gather, and one level coarser the blocker window (2.5 texels).
+// One level's marks: level `k`'s page under `light` and the neighbours within `reach`
+// texels of its edges; NO_MARK past the clipmap.
+uint4 vsmLevelMarks(Look l,float3 light,uint k,float reach){
+    if(k>=VSM_LEVELS)return NO_MARK;
+    float2 q=light.xy/vsmStep(l,k);int2 page=int2(floor(q));
+    float2 local=(q-float2(page))*VSM_PAGE;
+    int2 d=int2(local.x<reach?-1:local.x>VSM_PAGE-reach?1:0,local.y<reach?-1:local.y>VSM_PAGE-reach?1:0);
+    return uint4(vsmIndex(k,page),d.x!=0?vsmIndex(k,page+int2(d.x,0)):NO_MARK,
+        d.y!=0?vsmIndex(k,page+int2(0,d.y)):NO_MARK,all(d!=0)?vsmIndex(k,page+d):NO_MARK);
+}
 VsmMarks vsmRequest(Frame f,Look l,float3 world,float3 light,float nl,float tent){
     uint level=vsmLevel(f,l,world,light);float shift=shadowOffset(nl)*sqrt(saturate(1-nl*nl));
-    VsmMarks m;m.levels[0]=NO_MARK;m.levels[1]=NO_MARK;
-    [unroll]for(uint i=0;i<2;i++){
-        uint k=level+i;if(k>=VSM_LEVELS)break;
-        float2 q=light.xy/vsmStep(l,k);int2 page=int2(floor(q));
-        float reach=i==0?shift+tent+1:shift*0.5+2.5;
-        float2 local=(q-float2(page))*VSM_PAGE;
-        int2 d=int2(local.x<reach?-1:local.x>VSM_PAGE-reach?1:0,local.y<reach?-1:local.y>VSM_PAGE-reach?1:0);
-        m.levels[i]=uint4(vsmIndex(k,page),d.x!=0?vsmIndex(k,page+int2(d.x,0)):NO_MARK,
-            d.y!=0?vsmIndex(k,page+int2(0,d.y)):NO_MARK,all(d!=0)?vsmIndex(k,page+d):NO_MARK);
-    }
+    // Constant indices only: a runtime-indexed local array spills to memory (and has
+    // hung the NVIDIA driver).
+    VsmMarks m;m.levels[0]=vsmLevelMarks(l,light,level,shift+tent+1);
+    m.levels[1]=vsmLevelMarks(l,light,level+1,shift*0.5+2.5);
     return m;
 }
 
