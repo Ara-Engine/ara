@@ -1,0 +1,32 @@
+{
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae",
+  "stages": [
+    {
+      "dxil": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/tsr_luma_instability/tsrLumaInstabilityMain.dxil",
+      "dxil_hash": "fa43c25aee9103c521d2c4d638388bf28a0876c03eb224bb03a293c7f7271792",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/tsr_luma_instability/tsrLumaInstabilityMain.metallib",
+        "metallib_hash": "19eabd6fddad0c31989930620b3ca211b6aeb89899489261afb0efdbef9a8063",
+        "reflection": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/tsr_luma_instability/tsrLumaInstabilityMain.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
+      "source_entry": "tsrLumaInstabilityMain",
+      "spirv": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/tsr_luma_instability/tsrLumaInstabilityMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "9b65a2ec7acd222d74dbbfab9169c70d47e09f991108bb22d24c5f1f91d299e6",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

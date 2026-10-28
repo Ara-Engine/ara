@@ -37,16 +37,13 @@ impl Loading {
         Self::with_device(GpuDevice::new_raster(extensions, cache.join("loading"))?)
     }
 
+    /// The game device enables hardware ray queries where the GPU has them (D29:
+    /// High/Epic's hybrid path and the opt-in fidelity renderer share it).
     pub(crate) fn for_game(
         extensions: &[std::ffi::CString],
         cache: &Path,
-        ray_tracing: bool,
     ) -> Result<(Self, GpuDevice, bool)> {
-        let mut game = if ray_tracing {
-            GpuDevice::new(extensions, cache)?
-        } else {
-            GpuDevice::new_raster(extensions, cache)?
-        };
+        let mut game = GpuDevice::new(extensions, cache)?;
         // SAFETY: No work has been submitted. The caller pauses loading queue
         // access during worker preparation when the adapter has only one queue.
         let loading = unsafe { game.split_loading(cache.join("loading"))? };

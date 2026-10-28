@@ -36,7 +36,8 @@ No authoritative gameplay or authoring state lives here.
 - `presets`: `QualityPreset` (Low/Medium/High/Epic), `QualityChoice` (`--quality`),
   `Capabilities::of`, `Plan::resolve(choice, caps, display, RenderOptions)` →
   `RenderPath::Raster(RasterPlan)` (D27 default: every preset, every GPU;
-  `raster_quality()` budgets; `raster_scale()` render size, upscaled by TAAU) or, with `RenderOptions::ray_tracing` on an RT device,
+  `raster_quality()` budgets; `raster_scale()` render size, upscaled by TAAU; D29: High/Epic keep
+  `quality.ray_queries` only on RT devices, `RasterPlan::hybrid`) or, with `RenderOptions::ray_tracing` on an RT device,
   `Fidelity(FidelityPlan)` for Medium and above. `FidelityPlan::settings` at
   creation, `configure` after new/resize/content swap. D26 RT tiers: Medium 0.4,
   High 0.5, Epic 2/3 transport scale.
@@ -72,7 +73,7 @@ filter without luminance rejection on rough surfaces. Checkerboard transport mus
 repair invalid history before temporal resolve. Reference targets stay RGBA32F.
 Exposure is applied once after reconstruction; grading (white balance, contrast,
 saturation, vignette) follows it in scene-linear, then the tone mapper (AcesFit,
-PbrNeutral, Filmic) and the LUT. `post_process` replays the last frame (TAA kept). Capture is explicit; ordinary
+PbrNeutral, Filmic, AgX with Blender's looks: `colour::agx`, fitted to Blender 5.1) and the LUT. `post_process` replays the last frame (TAA kept). Capture is explicit; ordinary
 frames never read back image data. GPU pipelines only consume cooked artifacts.
 Every bindless input is declared to the graph, including masked textures.
 After merging shader changes, recook the merged source tree: neither parent's

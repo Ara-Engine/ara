@@ -10,7 +10,7 @@ use std::{collections::BTreeMap, sync::Arc};
 mod material;
 mod selection;
 mod uv;
-pub use material::ModelMaterial;
+pub use material::{ModelMaterial, ModelVolume};
 pub use selection::{ModelNode, ModelSelection};
 pub use uv::TextureTransform;
 #[cfg(test)]

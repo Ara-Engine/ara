@@ -15,6 +15,7 @@ mod environment;
 pub(in crate::renderer) mod pipelines;
 mod prepared;
 pub use prepared::{NativeContent, NativeSeed};
+pub(in crate::renderer) mod rays;
 #[cfg(test)]
 mod tests;
 mod updates;
@@ -39,6 +40,10 @@ struct InstanceRow {
     previous: Mat4,
     normal: [[f32; 4]; 3],
 }
+
+/// Blended casters narrower than this angle from the camera (radians, by bounds
+/// diagonal) cast no translucent sun shadow: a few pixels at most.
+const TRANSLUCENT_MIN_ANGLE: f32 = 0.004;
 
 pub(super) struct Native {
     pool: GeometryGpu,
@@ -66,6 +71,9 @@ pub(super) struct Native {
     upload: TextureStats,
     material_dirty: bool,
     update_gpu_ms: f64,
+    /// Advances whenever a blended caster moves, deforms or changes material, or a
+    /// material becomes or stops being blended: the translucent sun map's cache key.
+    translucent_revision: u64,
 }
 
 impl Renderer {
@@ -373,6 +381,56 @@ impl Renderer {
             .iter()
             .copied()
             .reduce(|[lo, hi], [a, b]| [lo.min(a), hi.max(b)])
+    }
+
+    /// World bounds of the blended casters whose shadows can show
+    /// (`look::translucent`): within `range` metres of the camera at `camera` and
+    /// subtending at least `TRANSLUCENT_MIN_ANGLE` from it; and the blended casters'
+    /// change revision. `None` without any such caster. The bounds change only when
+    /// casters enter or leave that set or move, so the map's fit holds while the
+    /// camera moves.
+    pub(crate) fn native_translucent_casters(
+        &self,
+        camera: Vec3,
+        range: f32,
+    ) -> Option<([Vec3; 2], u64)> {
+        let native = self.native.as_ref()?;
+        native
+            .groups
+            .groups
+            .iter()
+            .filter(|group| group.translucent)
+            .flat_map(|group| &group.instances)
+            .map(|&i| native.bounds[i])
+            .filter(|&[lo, hi]| {
+                let distance = (camera.clamp(lo, hi) - camera).length();
+                distance <= range && (hi - lo).length() >= distance * TRANSLUCENT_MIN_ANGLE
+            })
+            .reduce(|[lo, hi], [a, b]| [lo.min(a), hi.max(b)])
+            .map(|bounds| (bounds, native.translucent_revision))
+    }
+
+    /// Culls the blended casters seen from the sun through the translucent sun map's
+    /// `matrix` into native pass `culling::TRANSLUCENT_PASS`.
+    pub(crate) fn cull_native_translucent(&mut self, matrix: Mat4) -> Result<()> {
+        let view = culling::View::shadow(
+            matrix,
+            crate::look::translucent::RESOLUTION,
+            self.look.quality.min_pixels,
+        );
+        let native = self
+            .native
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Native raster content required"))?;
+        native.culling.opaque(
+            &mut self.gpu,
+            native.visible,
+            &native.groups,
+            &native.bounds,
+            culling::TRANSLUCENT_PASS,
+            view,
+            &mut native.changes.work,
+        )
     }
 
     /// Cull the landforms of a heightfield capture (look::horizon) into reserved
@@ -810,6 +868,7 @@ impl Native {
             upload,
             material_dirty: true,
             update_gpu_ms: 0.,
+            translucent_revision: 0,
         };
         Ok(result)
     }
@@ -840,6 +899,22 @@ impl Native {
         self.record_with(recorder, root, pass, pipeline);
     }
 
+    /// Records the translucent sun casters (`look::translucent`): their nearest depth
+    /// through the shadow PSO, or (`transmittance`) their films' opacity.
+    pub(super) fn record_translucent(
+        &self,
+        recorder: &mut Recorder,
+        root: RootConstants,
+        transmittance: bool,
+    ) {
+        let pipeline = if transmittance {
+            self.pipelines.translucent
+        } else {
+            self.pipelines.shadow
+        };
+        self.record_with(recorder, root, culling::TRANSLUCENT_PASS, pipeline);
+    }
+
     /// Records the camera's opaque and forward draws (passes 4 and 5) again through
     /// the wire PSO: the wireframe view modes' edge mask.
     pub(super) fn record_wire(&self, recorder: &mut Recorder, root: RootConstants) {
@@ -848,15 +923,67 @@ impl Native {
         }
     }
 
-    /// Records the forward draws (pass 5): through the lit PSO (colour, ids and
-    /// motion) unless the frame's debug view reads the G-buffer they blend into.
-    pub(super) fn record_forward(&self, recorder: &mut Recorder, root: RootConstants, lit: bool) {
-        let pipeline = if lit {
-            self.pipelines.forward_lit
-        } else {
-            self.pipelines.forward
+    /// Records the sorted forward draws (pass 5). Lit frames write colour, ids and
+    /// motion only (nothing reads the G-buffer after them) and switch to the
+    /// refractive PSOs for transmissive draws (`Culling::refract`); `high` selects
+    /// the High/Epic tier's, and `traced` (hybrid frames: rt.rs `refract`) replaces
+    /// its refractive PSO. Blended draws draw back faces, then front faces. Debug
+    /// views blend every draw into the G-buffer they display through the full
+    /// forward PSO.
+    pub(super) fn record_forward(
+        &self,
+        recorder: &mut Recorder,
+        root: RootConstants,
+        lit: bool,
+        high: bool,
+        traced: Option<Pipeline>,
+    ) {
+        let p = &self.pipelines;
+        // One pass over both sides, the back- and front-face passes of double-sided
+        // blended volumes (none in the debug views), and the refractive pass.
+        let (both, sides, refract) = match (lit, high) {
+            (false, _) => (p.forward, None, p.forward),
+            (true, false) => (
+                p.forward_lit,
+                Some([p.forward_lit_back, p.forward_lit_front]),
+                p.refract,
+            ),
+            (true, true) => (
+                p.forward_high,
+                Some([p.forward_high_back, p.forward_high_front]),
+                traced.unwrap_or(p.refract_high),
+            ),
         };
-        self.record_with(recorder, root, 5, pipeline);
+        let mut bound = None;
+        let kinds = self.culling.refract.iter().zip(&self.culling.two_pass);
+        for (batch, (&refractive, &two_pass)) in self.culling.draws[5].iter().zip(kinds) {
+            let passes = match (refractive, two_pass, sides) {
+                (true, _, _) => [Some(refract), None],
+                (false, true, Some([back, front])) => [Some(back), Some(front)],
+                _ => [Some(both), None],
+            };
+            for pipeline in passes.into_iter().flatten() {
+                if bound != Some(pipeline) {
+                    recorder.push(Command::Pipeline(pipeline));
+                    bound = Some(pipeline);
+                }
+                self.record_batch(recorder, root, batch, pipeline);
+            }
+        }
+    }
+
+    /// The render-pixel rect (x0, y0, x1, y1) this frame's refractive forward draws
+    /// sample the copied opaque scene in (`look::refract`); `None` without any.
+    pub(super) fn refraction_rect(&self, size: [u32; 2]) -> Option<[u32; 4]> {
+        let [x0, y0, x1, y1] = self.culling.refract_rect?;
+        let [w, h] = size.map(|v| v as f32);
+        let rect = [
+            (x0 * w).floor() as u32,
+            (y0 * h).floor() as u32,
+            ((x1 * w).ceil() as u32).min(size[0]),
+            ((y1 * h).ceil() as u32).min(size[1]),
+        ];
+        (rect[2] > rect[0] && rect[3] > rect[1]).then_some(rect)
     }
 
     /// Records the G-buffer draws (pass 4) through the PSO for the preset's
@@ -901,19 +1028,29 @@ impl Native {
         ara_gpu::cpu_scope!("RasterNative.record");
         recorder.push(Command::Pipeline(pipeline));
         for batch in &self.culling.draws[pass] {
-            if batch.count == 0 {
-                continue;
-            }
-            let mut constants = root;
-            constants.words[1] = self.material_index;
-            constants.words[2] = self.instance_index;
-            constants.words[3] = batch.first;
-            constants.words[5] = self.pool.table_index().unwrap_or(0);
-            constants.words[6] = self.textures.binding().map_or(0, |b| b.buffer_index);
-            constants.words[7] = self.visible_index;
-            recorder.push(Command::Constants(constants));
-            recorder.push(self.draw(batch, pipeline));
+            self.record_batch(recorder, root, batch, pipeline);
         }
+    }
+
+    fn record_batch(
+        &self,
+        recorder: &mut Recorder,
+        root: RootConstants,
+        batch: &batches::Batch,
+        pipeline: Pipeline,
+    ) {
+        if batch.count == 0 {
+            return;
+        }
+        let mut constants = root;
+        constants.words[1] = self.material_index;
+        constants.words[2] = self.instance_index;
+        constants.words[3] = batch.first;
+        constants.words[5] = self.pool.table_index().unwrap_or(0);
+        constants.words[6] = self.textures.binding().map_or(0, |b| b.buffer_index);
+        constants.words[7] = self.visible_index;
+        recorder.push(Command::Constants(constants));
+        recorder.push(self.draw(batch, pipeline));
     }
 
     /// Records page `page` of the last `cull_native_shadow_pages` with the shadow

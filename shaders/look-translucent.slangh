@@ -1,0 +1,23 @@
+// Sun light through blended (alpha-film) casters (look/translucent.rs). High/Epic
+// frames with such casters draw them from the sun into a map fitted to their bounds:
+// the nearest film's depth (D32, reversed like the cascades) and the product of
+// (1 - opacity) over every film (R16F, cleared to one), so the two sides of a closed
+// film pass (1 - a)^2, as a path tracer's alpha shadows do. Only the High tier's
+// shading and the virtual page projection include this (compile-time `high`).
+// Include after raster.slangh and look.slangh.
+// refractInfo[0].w: the map's frame record, whose shadows[0] (byte 192) is the light
+// matrix; zero: no map. refractParams[1]: x the transmittance (low 16 bits) and depth
+// (high 16 bits) sampled indices, y the depth bias (a couple of centimetres), z texels
+// per side.
+float translucentSun(Look l,float3 world){
+    uint record=l.refractInfo[0].w;if(record==0)return 1;
+    float4x4 m=buffers[NonUniformResourceIndex(record)].Load<float4x4>(192);
+    float4 h=mul(m,float4(world,1));float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
+    if(any(uv<=0)||any(uv>=1))return 1;
+    uint maps=asuint(l.refractParams[1].x);float res=l.refractParams[1].z;
+    // Behind the nearest film (smaller reversed depth), bilinear over the gathered 2x2:
+    // w top-left, z top-right, x bottom-left, y bottom-right.
+    float4 behind=step(q.z+l.refractParams[1].y,textures[NonUniformResourceIndex(maps>>16)].GatherRed(samplers[2],uv));
+    float2 t=frac(uv*res-0.5);float under=lerp(lerp(behind.w,behind.z,t.x),lerp(behind.x,behind.y,t.x),t.y);
+    return lerp(1,historyTex(maps&0xffff,uv).r,under);
+}

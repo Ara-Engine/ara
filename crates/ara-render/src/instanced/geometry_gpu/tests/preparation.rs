@@ -26,7 +26,7 @@ fn worker_prepared_geometry_reuses_static_sources_and_adopts_current_skin_bytes(
         let seed = pool.preparation_seed();
         let scene = fixture();
         let worker = std::thread::spawn(move || {
-            GeometryPreparation::new(scene.validated()?, 4096, Some(&seed))
+            GeometryPreparation::new(scene.validated()?, 4096, Some(&seed), false)
         });
         let mut rejected = worker.join().expect("CPU geometry worker")?;
         wait(&mut gpu, &mut rejected)?;
@@ -48,7 +48,7 @@ fn worker_prepared_geometry_reuses_static_sources_and_adopts_current_skin_bytes(
         let mut added = fixture().geometry.remove(0);
         added.key = [7; 32];
         scene.geometry.push(added);
-        let plan = GeometryPreparation::new(scene.validated()?, 4096, Some(&seed))?;
+        let plan = GeometryPreparation::new(scene.validated()?, 4096, Some(&seed), false)?;
         Ok((scene, plan))
     });
     let (scene, mut plan) = worker.join().expect("CPU geometry worker")?;
@@ -100,7 +100,7 @@ fn measure_worker_prepared_geometry_publication() -> Result<()> {
             let mut prepared = None;
             if asynchronous {
                 let worker = std::thread::spawn(move || -> Result<_> {
-                    let plan = GeometryPreparation::new(scene.validated()?, 1 << 30, None)?;
+                    let plan = GeometryPreparation::new(scene.validated()?, 1 << 30, None, false)?;
                     Ok((scene, plan))
                 });
                 while !worker.is_finished() {

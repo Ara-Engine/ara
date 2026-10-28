@@ -99,6 +99,27 @@ float3 filmic(float3 colour){
     v=(v*(v+0.0245786)-0.000090537)/(v*(0.983729*v+0.4329510)+0.238081);
     return saturate(float3(dot(float3(1.60475,-0.53108,-0.07367),v),dot(float3(-0.10208,1.10813,-0.00605),v),dot(float3(-0.00327,-0.07276,1.07602),v)));
 }
+// AgX as Blender 5.1 forms it (colour.rs `agx`; the raster copy is look.slangh
+// agxCurve, keep the three in sync): `look` 0 base, 1 Punchy, 2 Medium High Contrast,
+// the looks applied per channel in Blender's AgX Log space, then the fitted inset, a
+// two-segment hyperbolic sigmoid over -10..+6.5 stops pivoting at 18% grey, the outset
+// and the 2.4 display power back to linear Rec.709.
+float3 agx(float3 c,uint look){
+    if(look!=0){
+        float3 v=max(float3(dot(float3(0.544814746,0.373787398,0.081397855),c),dot(float3(0.140416948,0.754137555,0.105445497),c),dot(float3(0.088810420,0.178871756,0.732317824),c)),1e-10);
+        float3 l=(log2(v)+12.47393)/25;
+        if(look==2)l=(l-0.4)*1.2+0.4;
+        else{l=saturate(l);float3 d=min(l-0.4,0);l=lerp(0.367932255+d*(0.576921404+d*(-13.071582562+d*(-68.043428823+d*(-110.187104976+d*-47.912392721)))),pow(l,1.0912),step(0.4,l));}
+        v=exp2(l*25-12.47393);
+        c=float3(dot(float3(2.114473395,-1.027378470,-0.087094925),v),dot(float3(-0.370504268,1.552926184,-0.182421916),v),dot(float3(-0.165931398,-0.254715528,1.420646926),v));
+    }
+    float3 v=max(float3(dot(float3(0.586284653,0.320481389,0.093233958),c),dot(float3(0.115577053,0.766820846,0.117602100),c),dot(float3(0.090460175,0.189264504,0.720275322),c)),1e-10);
+    float3 l=saturate((log2(v)+12.47393)/16.5);
+    float3 above=step(0.606060606,l),scale=lerp(0.563481689,0.723107701,above),power=lerp(1.522003776,1.489164645,above);
+    float3 t=2.380159557*abs(l-0.606060606)/scale,s=0.489437090+sign(l-0.606060606)*scale*t*pow(1+pow(t,power),-1/power);
+    s=pow(max(float3(dot(float3(0.977084882,0.019273491,0.003641627),s),dot(float3(0.017531670,1.012742383,-0.030274053),s),dot(float3(0.012019836,0.012047557,0.975932607),s)),0),2.4);
+    return saturate(float3(dot(float3(1.807087207,-0.635807619,-0.171279588),s),dot(float3(-0.224544003,1.237837193,-0.013293189),s),dot(float3(-0.184566066,-0.281406333,1.465972400),s)));
+}
 // Scene-linear grading after exposure (colour.rs Grading::apply): white balance,
 // power contrast about 18% grey, saturation, then the screen-space vignette.
 float3 grade(Frame f,float3 c,float2 uv){
@@ -120,6 +141,6 @@ void postMain(uint3 tid:SV_DispatchThreadID){
         else {float distance=depth==0?4000.:length(pixel(f,WORLD+f.control.x,p).xyz-f.camera.xyz);float3 trans;float3 fog=sampleFroxel(f,uv,distance,trans);c=c*trans+fog;}
     }else {float transmittance=exp(-f.post.w*(depth>0?depth:500));c=c*transmittance+sky(f,direction)*(1-transmittance);}
     float exposure=buffers[NonUniformResourceIndex(f.control.y)].Load<float>(0);c=grade(f,max(c*exposure,0),uv);
-    // 0: Narkowicz's ACES fit (an SDR fit, not a full ACES transform), 1: PBR Neutral, 2: filmic.
-    c=f.display.x==1?neutral(c):f.display.x==2?filmic(c):saturate((c*(2.51*c+0.03))/(c*(2.43*c+0.59)+0.14));c=srgb(grading(f,c));store(f,POST,p,float4(c,1));
+    // 0: Narkowicz's ACES fit (an SDR fit, not a full ACES transform), 1: PBR Neutral, 2: filmic, 3..5: AgX.
+    c=f.display.x>=3?agx(c,f.display.x-3):f.display.x==1?neutral(c):f.display.x==2?filmic(c):saturate((c*(2.51*c+0.03))/(c*(2.43*c+0.59)+0.14));c=srgb(grading(f,c));store(f,POST,p,float4(c,1));
 }

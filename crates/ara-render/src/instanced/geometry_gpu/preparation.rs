@@ -18,6 +18,8 @@ pub(crate) struct GeometryPreparation {
     layout: Vec<GeometryLayout>,
     resident: Option<Buffer>,
     buffers: Buffers,
+    /// The pool's buffers are acceleration-structure inputs (an RT device's seed).
+    ray_inputs: bool,
 }
 
 impl GeometryGpu {
@@ -36,11 +38,14 @@ pub(crate) fn storage_limit(gpu: &GpuDevice) -> u64 {
 }
 
 impl GeometryPreparation {
-    /// Called on the content worker with an immutable checked scene.
+    /// Called on the content worker with an immutable checked scene. `ray_inputs`
+    /// (devices with ray queries only) allocates vertex/index buffers as
+    /// acceleration-structure build inputs for the hybrid ray queries.
     pub(crate) fn new(
         scene: super::super::ValidatedScene<'_>,
         limit: u64,
         previous: Option<&GeometrySeed>,
+        ray_inputs: bool,
     ) -> Result<Self> {
         let scene = scene.scene();
         let mut packed = pack::Packed::new_reusing(scene, limit, previous)?;
@@ -61,8 +66,16 @@ impl GeometryPreparation {
             .collect();
         let mut buffers = Buffers::default();
         if !packed.lods.is_empty() {
-            // Indexed native draws bind the pool as their index buffer.
-            let storage = vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::INDEX_BUFFER;
+            // Indexed native draws bind the pool as their index buffer; RT devices
+            // also build acceleration structures straight from it.
+            let storage = vk::BufferUsageFlags::STORAGE_BUFFER
+                | vk::BufferUsageFlags::INDEX_BUFFER
+                | if ray_inputs {
+                    vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+                        | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR
+                } else {
+                    vk::BufferUsageFlags::empty()
+                };
             buffers.add(
                 STATIC,
                 packed.static_size,
@@ -98,6 +111,7 @@ impl GeometryPreparation {
             layout,
             resident: previous.and_then(|old| old.static_pool),
             buffers,
+            ray_inputs,
         })
     }
 
@@ -118,6 +132,7 @@ impl GeometryPreparation {
             layout,
             resident,
             mut buffers,
+            ray_inputs,
         } = self;
         if !buffers.ready {
             buffers.destroy(gpu)?;
@@ -128,6 +143,7 @@ impl GeometryPreparation {
             gpu,
             packed,
             false,
+            ray_inputs,
             resident,
             &mut allocated,
             Some(&mut buffers),

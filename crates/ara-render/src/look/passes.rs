@@ -42,6 +42,16 @@ pub(crate) enum LookPass {
     /// Reflection colour pyramid level (1..4) from the previous history.
     SsrPyramid(u32),
     SsrTrace,
+    /// Measures the ambient light at each reflection capture against its bake
+    /// (`look::captures`): `masks` marks bakes that landed since the last one (low
+    /// half) and baselines it clears (high half); `copy` first copies the changed
+    /// records into the frame buffer.
+    CaptureRefit {
+        masks: u32,
+        copy: bool,
+    },
+    /// Lists the captures each 16x16 render tile can need (`look::captures`).
+    CaptureTiles,
     /// The horizon's sun visibility (`look::horizon`).
     HorizonSun,
     /// The horizon's sky visibility (`look::horizon`).
@@ -296,23 +306,31 @@ impl LookGpu {
         vec![(id, LookPass::GiGather)]
     }
 
-    /// Ambient occlusion after the G-buffer: half-resolution GTAO, then a
-    /// depth-aware denoise. `reads` must cover depth, normals and the frame.
+    /// Ambient occlusion after the G-buffer: half-resolution GTAO, or on the High/Epic
+    /// tier the visibility bitmask with near-field bounce (`bitmask_ao`), then a
+    /// depth-aware denoise. `reads` must cover depth, normals, materials (cutouts) and
+    /// the frame; `reflected` when this frame built the reflection colour pyramid,
+    /// which the bitmask's bounce reads (declare these passes after it).
     pub(crate) fn ao_passes(
         &self,
         graph: &mut Graph,
         ids: &LookIds,
         reads: &[(ResourceId, Access)],
+        reflected: bool,
     ) -> Vec<(PassId, LookPass)> {
         if self.quality.ambient_occlusion.is_none() {
             return Vec::new();
         }
         let common = [(ids.frame, Access::ShaderRead)];
+        let bitmask = self.bitmask_ao();
         let trace = graph.pass(
-            "AO.GTAO",
+            if bitmask { "AO.Bitmask" } else { "AO.GTAO" },
             Queue::Graphics,
             [(ids.image(AO_TRACE), Access::Storage)]
                 .into_iter()
+                .chain((bitmask && reflected).then(|| (ids.image(SSR_PYRAMID), Access::ShaderRead)))
+                // The exposure key caps the bounce's radiance.
+                .chain(bitmask.then_some((ids.state, Access::ShaderRead)))
                 .chain(common)
                 .chain(reads.iter().copied()),
         );
@@ -559,8 +577,24 @@ impl LookGpu {
                 }),
             ),
             LookPass::Motion(n) => (p.motion, n, groups(size.map(|v| v.div_ceil(16)))),
-            LookPass::AoTrace => (p.ao_trace, 0, groups(size.map(|v| v.div_ceil(2)))),
-            LookPass::AoDenoise => (p.ao_denoise, 0, groups(size.map(|v| v.div_ceil(2)))),
+            LookPass::AoTrace => (
+                if self.bitmask_ao() {
+                    p.ao_bitmask
+                } else {
+                    p.ao_trace
+                },
+                0,
+                groups(size.map(|v| v.div_ceil(2))),
+            ),
+            LookPass::AoDenoise => (
+                if self.bitmask_ao() {
+                    p.ao_bitmask_denoise
+                } else {
+                    p.ao_denoise
+                },
+                0,
+                groups(size.map(|v| v.div_ceil(2))),
+            ),
             LookPass::GiGather => (p.gi_gather, 0, groups(size.map(|v| v.div_ceil(2)))),
             LookPass::SsrPyramid(level) => (
                 p.ssr_pyramid,
@@ -568,6 +602,13 @@ impl LookGpu {
                 groups(size.map(|v| (v >> level).max(1))),
             ),
             LookPass::SsrTrace => (p.ssr_trace, 0, groups(size.map(|v| v.div_ceil(2)))),
+            // One thread per capture and axis (look::captures::MAX_CAPTURES x 6).
+            LookPass::CaptureRefit { masks, .. } => (p.capture_refit, masks, [1, 1, 1]),
+            LookPass::CaptureTiles => (
+                p.capture_tiles,
+                0,
+                [size[0].div_ceil(16), size[1].div_ceil(16), 1],
+            ),
             // With virtual shadow maps, hits compare against their pages first.
             LookPass::GiRelight => (
                 if self.vsm.is_some() {
@@ -598,9 +639,20 @@ impl LookGpu {
             LookPass::VsmProject => (p.vsm_project, 0, groups(size)),
             LookPass::GiClear | LookPass::GiScatter(_) => return,
         };
+        // Root word 3: the relight's record copy.
+        let copy = matches!(pass, LookPass::CaptureRefit { copy: true, .. });
         recorder.push(Command::Pipeline(pipeline));
         recorder.push(Command::Constants(RootConstants {
-            words: [frame_index, input, argument, 0, 0, 0, 0, u32::from(exposed)],
+            words: [
+                frame_index,
+                input,
+                argument,
+                u32::from(copy),
+                0,
+                0,
+                0,
+                u32::from(exposed),
+            ],
         }));
         recorder.push(Command::Dispatch(dispatch));
     }

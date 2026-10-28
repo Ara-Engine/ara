@@ -560,7 +560,8 @@ mod tests {
             let renderer = presenter.renderer().context("warmed embedded renderer")?;
             let rt = renderer.gpu().info().ray_tracing;
             if !options.ray_tracing {
-                assert!(!rt, "default embedding must open a raster-only device");
+                // D29: the default device keeps optional ray tracing for the hybrid
+                // High/Epic raster path; it still renders native raster geometry.
                 assert!(
                     renderer.is_native(),
                     "default embedding must use native raster geometry"

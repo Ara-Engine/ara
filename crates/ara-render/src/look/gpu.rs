@@ -22,7 +22,8 @@ pub(crate) const GI_DIFFUSE: usize = 10;
 pub(crate) const GI_SPECULAR: usize = 11;
 pub(crate) const SSR_PYRAMID: usize = 12;
 pub(crate) const SSR_TRACE: usize = 13;
-/// Projected virtual shadow page visibility (`look::vsm`), R16F at render size.
+/// Projected virtual shadow page visibility (`look::vsm`) and the soft filter's
+/// half-width (next frame's marking reach), RG16F at render size.
 pub(crate) const VSM_MASK: usize = 14;
 /// Depth of field (`look::lens`): half-resolution colour and signed radius, the
 /// half-resolution gather, and the render-size composite the temporal resolve reads.
@@ -33,6 +34,9 @@ pub(crate) const DOF_COMPOSITE: usize = 17;
 pub(crate) const MOTION_TILES: usize = 18;
 pub(crate) const MOTION_NEIGHBOURS: usize = 19;
 const IMAGES: usize = 20;
+/// Depth of a visibility-bitmask sample (`LookGpu::bitmask_ao`) behind its front, as
+/// a share of the AO radius: thinner foreground hides less of what lies behind it.
+const BITMASK_THICKNESS: f32 = 0.4;
 /// The largest colour lookup table: 32 steps per channel.
 pub(crate) const LUT_SIZE: u32 = 32;
 /// The exposure state (four floats), then the metering histogram's 256 counts
@@ -79,14 +83,26 @@ pub(crate) struct Pipelines {
     pub gi_scatter: Pipeline,
     pub ao_trace: Pipeline,
     pub ao_denoise: Pipeline,
+    /// The High/Epic tier's visibility-bitmask occlusion and bounce (`bitmask_ao`).
+    pub ao_bitmask: Pipeline,
+    pub ao_bitmask_denoise: Pipeline,
     pub gi_gather: Pipeline,
     pub ssr_pyramid: Pipeline,
     pub ssr_trace: Pipeline,
+    /// Reflection capture bake (face projection, scratch mips, GGX prefilter) and
+    /// the per-frame relight (`look::captures`, look-captures.slang).
+    pub capture_face: Pipeline,
+    pub capture_mip: Pipeline,
+    pub capture_prefilter: Pipeline,
+    pub capture_refit: Pipeline,
+    pub capture_tiles: Pipeline,
     pub horizon_sun: Pipeline,
     pub horizon_sky: Pipeline,
     pub vsm_mark: Pipeline,
     pub vsm_project: Pipeline,
     pub gi_relight_vsm: Pipeline,
+    /// The refraction copy and its blurred levels (`look::refract`).
+    pub refract: Pipeline,
 }
 
 /// What the sky LUTs (`aerosols`) and the sky IBL (sun and sky) were computed for.
@@ -158,6 +174,12 @@ pub(crate) struct LookGpu {
     /// Probe records uploaded for the next frame's `GI.Scatter`: staging, count,
     /// and whether they are a pool's finer lattices only (readiness ignores those).
     pub probe_writes: Vec<(super::gi::ProbeStaging, u32, bool)>,
+    /// The copied opaque scene transmissive forward draws refract (`look::refract`),
+    /// allocated by the first frame that draws one.
+    pub refract: Option<super::refract::Refraction>,
+    /// Sun shadows of blended casters (`look::translucent`), allocated by the first
+    /// High/Epic frame that has one.
+    pub translucent: Option<super::translucent::TranslucentSun>,
 }
 
 /// Graph identities of the look's persistent resources for one frame.
@@ -224,14 +246,22 @@ impl LookGpu {
             gi_scatter: load("look_gi_scatter")?,
             ao_trace: load("look_ao_trace")?,
             ao_denoise: load("look_ao_denoise")?,
+            ao_bitmask: load("look_ao_bitmask")?,
+            ao_bitmask_denoise: load("look_ao_bitmask_denoise")?,
             gi_gather: load("look_gi_gather")?,
             ssr_pyramid: load("look_ssr_pyramid")?,
             ssr_trace: load("look_ssr_trace")?,
+            capture_face: load("look_capture_face")?,
+            capture_mip: load("look_capture_mip")?,
+            capture_prefilter: load("look_capture_prefilter")?,
+            capture_refit: load("look_capture_refit")?,
+            capture_tiles: load("look_capture_tiles")?,
             horizon_sun: load("look_horizon_sun")?,
             horizon_sky: load("look_horizon_sky")?,
             vsm_mark: load("look_vsm_mark")?,
             vsm_project: load("look_vsm_project")?,
             gi_relight_vsm: load("look_gi_relight_vsm")?,
+            refract: load("look_refract")?,
         };
         let frame = gpu.create_buffer(
             std::mem::size_of::<LookFrame>() as u64,
@@ -291,6 +321,8 @@ impl LookGpu {
             vsm: None,
             probe_staging: Vec::new(),
             probe_writes: Vec::new(),
+            refract: None,
+            translucent: None,
         })
     }
 
@@ -378,7 +410,7 @@ impl LookGpu {
             }
             let [width, height] = extent(i, self.render, self.display);
             let format = if i == VSM_MASK {
-                vk::Format::R16_SFLOAT
+                vk::Format::R16G16_SFLOAT
             } else {
                 vk::Format::R16G16B16A16_SFLOAT
             };
@@ -412,6 +444,25 @@ impl LookGpu {
             self.storage[AO_TRACE],
             self.storage[AO_DENOISED],
         ]
+    }
+
+    /// Whether ambient occlusion runs as the High/Epic tier's visibility bitmask
+    /// (`look-ao.slang aoBitmaskMain`: occlusion plus near-field bounce in the AO
+    /// images, which only the tier's lighting variant reads) rather than GTAO.
+    pub(crate) fn bitmask_ao(&self) -> bool {
+        self.quality.high_tier && self.quality.ambient_occlusion.is_some()
+    }
+
+    /// Writes the bitmask pass's rows (`shadowParams[0]`, `shadowInfo[0]`) after the
+    /// AO and reflection rows: sample thickness from the AO radius, and whether last
+    /// frame's colour pyramid (built this frame with reflections) feeds the bounce.
+    pub(crate) fn ambient_rows(&self, frame: &mut LookFrame) {
+        if !self.bitmask_ao() {
+            return;
+        }
+        let bounce = frame.flags[1] & super::frame::REFLECTIONS != 0;
+        frame.shadow_params[0] = [BITMASK_THICKNESS * frame.ao[0], 1., 0., 0.];
+        frame.shadow_info[0] = [u32::from(bounce), 0, 0, 0];
     }
 
     /// Reflection rows: pyramid and trace (sampled), then (storage).

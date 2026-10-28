@@ -81,9 +81,15 @@ impl Table {
     }
 }
 
+/// Anisotropic filtering ceiling of the material sampler (wrap/wrap, index 0), as the
+/// Vulkan heap's `MATERIAL_ANISOTROPY`. Metal accepts 1 to 16.
+const MATERIAL_ANISOTROPY: objc2_foundation::NSUInteger = 16;
+
 /// The root signature's static samplers, matching the Vulkan immutable samplers:
 /// trilinear, unclamped LOD, with (U, V) addressing wrap/wrap, wrap/clamp and
-/// clamp/clamp; W always clamps.
+/// clamp/clamp; W always clamps. Only wrap/wrap, the material sampler that native
+/// material passes sample with explicit gradients, is anisotropic
+/// ([`MATERIAL_ANISOTROPY`]); the others are read at explicit LODs.
 fn static_samplers(
     device: &ProtocolObject<dyn MTLDevice>,
 ) -> Result<[Retained<ProtocolObject<dyn MTLSamplerState>>; abi::SAMPLERS as usize]> {
@@ -91,11 +97,12 @@ fn static_samplers(
         MTLSamplerAddressMode::Repeat,
         MTLSamplerAddressMode::ClampToEdge,
     );
-    let sampler = |u, v| {
+    let sampler = |u, v, anisotropy| {
         let descriptor = MTLSamplerDescriptor::new();
         descriptor.setMinFilter(MTLSamplerMinMagFilter::Linear);
         descriptor.setMagFilter(MTLSamplerMinMagFilter::Linear);
         descriptor.setMipFilter(MTLSamplerMipFilter::Linear);
+        descriptor.setMaxAnisotropy(anisotropy);
         descriptor.setLodMaxClamp(f32::MAX);
         descriptor.setSAddressMode(u);
         descriptor.setTAddressMode(v);
@@ -107,9 +114,9 @@ fn static_samplers(
             .ok_or_else(|| nil("static sampler"))
     };
     Ok([
-        sampler(wrap, wrap)?,
-        sampler(wrap, clamp)?,
-        sampler(clamp, clamp)?,
+        sampler(wrap, wrap, MATERIAL_ANISOTROPY)?,
+        sampler(wrap, clamp, 1)?,
+        sampler(clamp, clamp, 1)?,
     ])
 }
 

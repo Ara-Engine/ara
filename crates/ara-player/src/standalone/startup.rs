@@ -51,8 +51,7 @@ pub(super) fn load(
         window.disable_presentation();
     }
     let loading_started = Instant::now();
-    let (mut loading, game_gpu, parallel) =
-        device::Loading::for_game(&extensions, settings.cache, settings.options.ray_tracing)?;
+    let (mut loading, game_gpu, parallel) = device::Loading::for_game(&extensions, settings.cache)?;
     phases.insert("loading_device_ms", loading_started.elapsed().as_millis());
     phases.insert("device_ready_ms", began.elapsed().as_millis());
     let mut capture = std::env::var_os("ARA_LOADING_CAPTURE").map(PathBuf::from);

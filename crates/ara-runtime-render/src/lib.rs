@@ -7,6 +7,7 @@
 
 extern crate glam34 as glam;
 
+mod captures;
 mod composite;
 mod emitters;
 pub mod fidelity;
@@ -134,6 +135,11 @@ pub struct Presenter {
     environment: Option<fidelity::EnvironmentMap>,
     /// Host look override (`set_look_override`), replacing the frame's authored look.
     look_override: Option<ara_render_fidelity::environment::FrameEnvironment>,
+    /// Raster render scale per display axis replacing the preset's (`set_render_scale`).
+    render_scale: Option<f32>,
+    /// Hybrid ray queries on High/Epic where the device has them (`set_ray_queries`;
+    /// `ARA_RAY_QUERIES=0` at creation starts with them off, for A/B captures).
+    ray_queries: bool,
     /// The colour lookup table the baseline renderer holds (`apply_lut`).
     lut: Option<std::sync::Arc<ara_components::post::ColorLut>>,
     /// Raster frames return once submitted (`set_frames_in_flight`).
@@ -234,6 +240,8 @@ impl Presenter {
             options: ara_render_fidelity::presets::RenderOptions::default(),
             environment: None,
             look_override: None,
+            render_scale: None,
+            ray_queries: std::env::var_os("ARA_RAY_QUERIES").is_none_or(|v| v != "0"),
             lut: None,
             frames_in_flight: false,
             in_flight: std::collections::VecDeque::new(),

@@ -8,6 +8,7 @@ pub mod convert;
 pub mod look;
 pub mod reference;
 pub mod render;
+mod study;
 pub mod world;
 
 use crate::{build::tool, lock::Lock};

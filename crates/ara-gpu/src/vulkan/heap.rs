@@ -16,6 +16,33 @@ pub struct DescriptorUsage {
     pub acceleration_structures: usize,
 }
 
+/// Anisotropic filtering ceiling of the material sampler (`samplers[0]`, wrap/wrap).
+/// Native material passes sample it with explicit gradients (`SampleGrad`); its
+/// explicit-LOD readers (RT hits, GI material fetches, mip tails) filter through it too,
+/// where NVIDIA blends over the first half of each LOD step only (up to half a mip softer
+/// than trilinear). The Metal backend's matching sampler uses the same value.
+const MATERIAL_ANISOTROPY: f32 = 16.0;
+
+/// The material sampler's `maxAnisotropy`: [`MATERIAL_ANISOTROPY`] clamped to the
+/// device limit, or 1.0 (isotropic) where `samplerAnisotropy` is unsupported, which is
+/// exactly when `context/create.rs` leaves the feature disabled.
+fn material_anisotropy(gpu: &Context) -> f32 {
+    // SAFETY: the instance and physical device outlive `gpu`; both are read-only queries.
+    let (features, limits) = unsafe {
+        (
+            gpu.instance.get_physical_device_features(gpu.physical),
+            gpu.instance
+                .get_physical_device_properties(gpu.physical)
+                .limits,
+        )
+    };
+    if features.sampler_anisotropy == 0 {
+        1.0
+    } else {
+        MATERIAL_ANISOTROPY.min(limits.max_sampler_anisotropy)
+    }
+}
+
 pub(super) struct Heap {
     pub layout: vk::PipelineLayout,
     pub set: vk::DescriptorSet,
@@ -123,7 +150,11 @@ impl Heap {
                 )
                 .map_err(anyhow::Error::from)?[0];
             let mut samplers = [vk::Sampler::null(); 3];
+            let material = material_anisotropy(gpu);
             for (index, sampler) in samplers.iter_mut().enumerate() {
+                // Only the material sampler (index 0) is anisotropic; the environment
+                // and temporal samplers stay trilinear.
+                let anisotropy = if index == 0 { material } else { 1.0 };
                 *sampler = gpu
                     .device
                     .create_sampler(
@@ -131,6 +162,8 @@ impl Heap {
                             .mag_filter(vk::Filter::LINEAR)
                             .min_filter(vk::Filter::LINEAR)
                             .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                            .anisotropy_enable(anisotropy > 1.0)
+                            .max_anisotropy(anisotropy)
                             .max_lod(vk::LOD_CLAMP_NONE)
                             .address_mode_u(if index == 2 {
                                 vk::SamplerAddressMode::CLAMP_TO_EDGE

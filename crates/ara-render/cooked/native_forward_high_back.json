@@ -1,0 +1,52 @@
+{
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae",
+  "stages": [
+    {
+      "dxil": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/native_forward_high_back/nativeForwardHighBackFragment.dxil",
+      "dxil_hash": "87080e3980fef8da9ae7a0247c60dc93e979996f7c62b896452d2d4fcba47a16",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/native_forward_high_back/nativeForwardHighBackFragment.metallib",
+        "metallib_hash": "7be036dd83d104e5189086fadfd4eeb6b2d31571eea09b533a0a73cd33f463b3",
+        "reflection": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/native_forward_high_back/nativeForwardHighBackFragment.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
+      "source_entry": "nativeForwardHighBackFragment",
+      "spirv": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/native_forward_high_back/nativeForwardHighBackFragment.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "c4731399ab069f95eb8665a4996c68f19ec67825300a402b691aea50d3f3d23e",
+      "stage": "fragment"
+    },
+    {
+      "dxil": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/native_forward_high_back/nativeForwardVertex.dxil",
+      "dxil_hash": "6f2a74444ca0c5bf6703bf38f1d62a817776e6cb570e410bf3419142e44926a9",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/native_forward_high_back/nativeForwardVertex.metallib",
+        "metallib_hash": "950c16603b91f11cda0b20d39199a9c15b36299bbd90f642d00fe8d73d137e45",
+        "reflection": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/native_forward_high_back/nativeForwardVertex.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
+      "source_entry": "nativeForwardVertex",
+      "spirv": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/native_forward_high_back/nativeForwardVertex.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "20b969245fbaea404e8933e3bbff9ad8817be3a72fb234f45afb8c1a753431b3",
+      "stage": "vertex"
+    }
+  ],
+  "state": {
+    "blend": true,
+    "color_formats": [
+      97,
+      100,
+      83
+    ],
+    "depth_format": 126,
+    "depth_test": true,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

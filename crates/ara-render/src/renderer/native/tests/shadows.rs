@@ -120,7 +120,8 @@ fn local_shadow_slots_keep_faces_independent_cache_casters_and_record_depth() ->
         renderer.cull_native_shadow_pass(0, matrices[0])?,
         renderer.cull_native_shadow_pass(1, matrices[1])?,
     ];
-    assert_eq!(passes, [7, 8]);
+    // Local shadow passes follow the base passes, in slot order.
+    assert_eq!(passes, [culling::BASE_PASSES, culling::BASE_PASSES + 1]);
     assert_eq!(selected(&renderer, passes[0]), [0, 1]);
     assert_eq!(selected(&renderer, passes[1]), [3]);
     let cache_tests = renderer.native_frame_work().unwrap().cull_tests;

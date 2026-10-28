@@ -80,6 +80,19 @@ pub struct LightView {
     pub cone: [f32; 2],
 }
 
+/// An authored reflection capture with its entity's world pose (interpolated).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CaptureView {
+    /// The authored capture.
+    pub capture: ara_components::render::ReflectionCapture,
+    /// World position of the entity.
+    pub translation: [f32; 3],
+    /// World rotation of the entity (quaternion xyzw).
+    pub rotation: [f32; 4],
+    /// World scale of the entity (scales the boxes and offsets).
+    pub scale: [f32; 3],
+}
+
 /// A GPU particle effect to composite at an entity.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EffectView {
@@ -178,6 +191,9 @@ pub struct RenderFrame {
     pub sun: Option<([f32; 3], [f32; 3])>,
     /// Local lights in stable order.
     pub lights: Vec<LightView>,
+    /// Authored reflection captures in stable order (renderers place their own
+    /// when there are none).
+    pub reflection_captures: Vec<CaptureView>,
     /// Draws in stable order.
     pub draws: Vec<Draw>,
     /// Flat skinning palettes (model space, skin joint order).
@@ -203,6 +219,7 @@ impl RenderFrame {
         self.look.luts.clear();
         self.sun = None;
         self.lights.clear();
+        self.reflection_captures.clear();
         self.draws.clear();
         self.palettes.clear();
         self.effects.clear();
@@ -273,6 +290,14 @@ impl RenderFrame {
             }
             if let Some(light) = entity.get::<Light>() {
                 self.light(light, &pose);
+            }
+            if let Some(capture) = entity.get::<ara_components::render::ReflectionCapture>() {
+                self.reflection_captures.push(CaptureView {
+                    capture: *capture,
+                    translation: pose.translation.to_array(),
+                    rotation: pose.rotation.to_array(),
+                    scale: pose.scale.to_array(),
+                });
             }
             if let (Some(tile), Some(terrain)) = (
                 entity.get::<crate::terrain::TerrainChunk>(),

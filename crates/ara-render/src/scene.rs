@@ -11,6 +11,10 @@ pub const EMISSIVE_DECODE_SRGB: u32 = 1 << 26;
 /// `Material.flags[1]`: unpublished model bounds. Blended loading bounds draw
 /// short screen-space corner marks; opaque missing/broken bounds stay solid.
 pub const MODEL_BOUNDS: u32 = 1 << 27;
+/// `Material.flags[1]`: glTF `doubleSided`. The native G-buffer lights a back face's
+/// own side (its normal reversed, as glTF requires); single-sided materials keep
+/// their normals.
+pub const DOUBLE_SIDED: u32 = 1 << 28;
 
 /// Interleaved position/normal/UV/tangent vertex ABI, 48 bytes.
 #[repr(C)]
@@ -38,7 +42,8 @@ pub struct Material {
     /// Scene texture indices: base color (sRGB), normal, metallic/roughness (G/B), emissive (sRGB).
     pub textures: [u32; 4],
     /// Word 0: alpha mode (opaque/mask/blend). Word 1: layer/AO bits 0..24 and
-    /// decode-after-sampling bits 25/26 and unpublished model bounds bit 27.
+    /// decode-after-sampling bits 25/26, unpublished model bounds bit 27 and
+    /// double-sided bit 28.
     /// Word 3 is reserved for the fidelity tag.
     pub flags: [u32; 4],
 }

@@ -184,7 +184,8 @@ impl Scene {
             ensure!(
                 extra.terrain_layers <= 4
                     && extra.reconstruct_normal_basis <= 1
-                    && extra.reserved == [0; 2]
+                    // A finite thickness half (Volume::pack); every IOR and RGB9E5 code is valid.
+                    && (extra.volume[0] & 0xffff) < 0x7c00
                     && (0.0..=1.0).contains(&extra.occlusion_strength)
                     && (0.0..=1.0).contains(&extra.transmission_factor),
                 "invalid native material extensions"

@@ -108,3 +108,39 @@ licence notices. The generated inventory is `samples/THIRD_PARTY_ASSETS.md`.
 - Existing Poly Haven compound props, materials and industrial doors, and the
   OpenGameArt ambience/music remain attributed individually in the asset lock and
   `samples/THIRD_PARTY_ASSETS.md` under their recorded permissive licences.
+
+## AMD FidelityFX SDK v1.1.4: FSR 3.1.4 temporal upscaler (Ara TSR)
+
+`shaders/tsr/ffx/` contains GPU headers from the
+[AMD FidelityFX SDK v1.1.4](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/tree/v1.1.4)
+(`sdk/include/FidelityFX/gpu`): `ffx_common_types.h`, `ffx_core.h`,
+`ffx_core_hlsl.h`, `ffx_core_gpu_common.h`, `ffx_core_gpu_common_half.h`,
+`ffx_core_portability.h`, `spd/ffx_spd.h`, `fsr1/ffx_fsr1.h` (RCAS) and the FSR 3.1.4
+upscaler's `fsr3upscaler/ffx_fsr3upscaler_*.h` pass headers. Ara's edits are marked
+`// Ara:` (include paths, loop unrolling, a register-resident sample-set lookup).
+`shaders/tsr/tsr.slangh` (the resource callbacks, derived from
+`ffx_fsr3upscaler_callbacks_hlsl.h`) and the pass files in `shaders/tsr/` (derived
+from `sdk/src/backends/dx12/shaders/fsr3upscaler/*_pass.hlsl`) carry the same notice;
+`crates/ara-render/src/tsr/` follows the host constant setup of
+`sdk/src/components/fsr3upscaler/ffx_fsr3upscaler.cpp`. Every copied or derived file
+retains the following MIT license:
+
+Copyright (C) 2024 Advanced Micro Devices, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files(the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and /or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions :
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

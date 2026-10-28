@@ -594,10 +594,11 @@ fn acquire(
             }
         );
     }
+    // The ray-traced bake runs only where ray queries are verified (not yet Metal).
     let traced = (!cpu)
         .then(|| GpuDevice::new(&[], cache.join("device")).ok())
         .flatten()
-        .filter(|gpu| gpu.info().ray_tracing);
+        .filter(ara_render_fidelity::presets::verified_ray_tracing);
     let surfaces = match traced {
         Some(mut gpu) => {
             // Only static rigid instances enter the ray-traced bake.

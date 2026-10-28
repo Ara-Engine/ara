@@ -12,7 +12,7 @@ fn no_present_renders_loading_and_game_without_a_swapchain() -> Result<()> {
         ara_platform::GameWindowMode::Borderless,
     )?;
     window.disable_presentation();
-    let (mut loading, gpu, _) = device::Loading::for_game(&extensions, &root, false)?;
+    let (mut loading, gpu, _) = device::Loading::for_game(&extensions, &root)?;
     assert!(window.present_loading(&mut loading, 0.5)?);
     assert!(loading.swapchain().is_none());
     let mut presenter = Presenter::with_device(size, root.join("game"), gpu);
@@ -41,7 +41,7 @@ fn loading_can_present_while_presenter_warmup_is_blocked_and_then_hands_off_its_
         .join("../../target/renderer-unification/loading-worker");
     let (mut window, extensions, size) =
         device::Windowed::open_unprepared("Loading test", [320, 180], true)?;
-    let (mut loading, gpu, parallel) = device::Loading::for_game(&extensions, &root, false)?;
+    let (mut loading, gpu, parallel) = device::Loading::for_game(&extensions, &root)?;
     let (started, wait_started) = std::sync::mpsc::channel();
     let (release, wait_release) = std::sync::mpsc::channel();
     let cache = root.join("game");

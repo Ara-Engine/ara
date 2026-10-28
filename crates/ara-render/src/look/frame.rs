@@ -110,6 +110,23 @@ pub(crate) struct LookFrame {
     pub motion: [f32; 4],
     /// Velocity tile and neighbourhood maxima (sampled), then (storage).
     pub motion_images: [u32; 4],
+    /// Reflection captures (`look::captures::Captures::write`); zero: none. Info
+    /// `[0]` records, count, atlas (sampled), relight state; `[1]` atlas texels.
+    /// Params are reserved.
+    pub capture_params: [[f32; 4]; 2],
+    pub capture_info: [[u32; 4]; 2],
+    /// Hybrid ray queries (High/Epic on RT devices); zero: raster only.
+    pub rt_params: [[f32; 4]; 2],
+    pub rt_info: [[u32; 4]; 2],
+    /// Screen-space and ray-traced refraction; zero: none.
+    pub refract_params: [[f32; 4]; 2],
+    pub refract_info: [[u32; 4]; 2],
+    /// Contact-hardening sun shadows and visibility-bitmask ambient light
+    /// (`LookGpu::ambient_rows`): `[0]` sample thickness (m) and bounce intensity;
+    /// info `[0]` bit 0 when last frame's colour pyramid feeds the bounce. The soft
+    /// shadows need no row (the sun's angular radius is `sun_lux[3]`).
+    pub shadow_params: [[f32; 4]; 2],
+    pub shadow_info: [[u32; 4]; 2],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -221,6 +238,14 @@ impl LookFrame {
             dof_output: [0; 4],
             motion: [0.; 4],
             motion_images: [0; 4],
+            capture_params: [[0.; 4]; 2],
+            capture_info: [[0; 4]; 2],
+            rt_params: [[0.; 4]; 2],
+            rt_info: [[0; 4]; 2],
+            refract_params: [[0.; 4]; 2],
+            refract_info: [[0; 4]; 2],
+            shadow_params: [[0.; 4]; 2],
+            shadow_info: [[0; 4]; 2],
         }
     }
 }

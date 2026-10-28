@@ -63,8 +63,13 @@ images and 128 storage buffers, clamped jointly to set/stage/pool limits (minimu
 `DeviceInfo` records both selected capacities. Binding 0 mirrors
 the first 128 slots for cached editor material previews only. All engine pipelines
 must be recooked; only `previewVertex`/`previewFragment` caches accept the old ABI.
-Binding 2 has three fixed trilinear samplers: material repeat, environment U
-repeat/V clamp, and temporal clamp, with native mip LODs enabled. Root constants are 32 bytes.
+Binding 2 has three fixed samplers: material repeat (up to 16x anisotropic where the
+device allows; native materials sample it with gradients), environment U repeat/V clamp
+and temporal clamp (both trilinear), with native mip LODs enabled. Anisotropy changes
+mip blending for every read through the material sampler, explicit LODs and gradients
+alike (NVIDIA blends over the first half of each LOD step only, reaching the coarser
+mip at .5): readers that need exact trilinear blend two levels themselves or use
+another sampler. Root constants are 32 bytes.
 Declare every resource reachable through root indices in the graph.
 
 Insertions allocate fresh slots. Resource retirement invalidates its CPU handle

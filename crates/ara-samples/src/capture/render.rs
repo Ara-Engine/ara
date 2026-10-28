@@ -32,6 +32,18 @@ mod timing;
 
 /// Display resolution of every capture.
 pub const DISPLAY: [u32; 2] = [2560, 1440];
+
+/// The capture display size: `DISPLAY`, or `ARA_CAPTURE_DISPLAY=<w>x<h>` (4K
+/// captures match the cross-engine benchmark's region FLIP).
+fn display() -> [u32; 2] {
+    std::env::var("ARA_CAPTURE_DISPLAY")
+        .ok()
+        .and_then(|v| {
+            let (w, h) = v.split_once('x')?;
+            Some([w.trim().parse().ok()?, h.trim().parse().ok()?])
+        })
+        .unwrap_or(DISPLAY)
+}
 /// Frames composited with VFX before a still.
 const VFX_FRAMES: u32 = 24;
 /// Frames rendered at the reference exposure before scoring.
@@ -255,7 +267,7 @@ fn run_inner(
         let plan = Plan::resolve(
             QualityChoice::Preset(preset),
             &capabilities,
-            DISPLAY,
+            display(),
             render_options,
         )?;
         match plan.path {
@@ -575,6 +587,13 @@ fn baseline(
     let created = std::time::Instant::now();
     let mut presenter = Presenter::new(size, Vec::new(), options.pipeline_cache);
     presenter.set_render_options(RenderOptions::default());
+    // `ARA_RENDER_SCALE=<0..1>` overrides the preset's raster render scale (timing and
+    // capture A/Bs of upscaler modes).
+    presenter.set_render_scale(
+        std::env::var("ARA_RENDER_SCALE")
+            .ok()
+            .and_then(|v| v.parse::<f32>().ok()),
+    );
     presenter.set_quality(QualityChoice::Preset(preset));
     // The same resolved look (scene components plus look-file overrides) as the
     // fidelity modes and references.
@@ -586,6 +605,12 @@ fn baseline(
     let cold = std::env::var_os("ARA_CAPTURE_COLD").is_some();
     if !cold {
         presenter.wait_probe_gi()?;
+        // Timings and shots need the full path: hybrid ray-query and live-effect PSOs
+        // compile off-thread while frames present (bounded, as the capture's own wait).
+        let started = std::time::Instant::now();
+        while presenter.readiness().pipelines_pending && started.elapsed().as_secs() < 120 {
+            presenter.present(frame)?;
+        }
     }
     let create_ms = created.elapsed().as_secs_f64() * 1000.;
     let mut timing = Value::Null;
@@ -642,6 +667,8 @@ fn baseline(
             );
             timing["pass_presence"] = guard.report();
         }
+        // `ARA_CAPTURE_STUDY` captures the upscaler study's frames (capture/study.rs).
+        super::study::run(&mut presenter, frame, shot, options, size)?;
         // `ARA_CAPTURE_LIVE=N` saves every fourth of N live frames as Play shows
         // them (TAA, jitter and half-resolution history running, no capture
         // reset); with `ARA_CAPTURE_MOTION` the camera walks while it turns.

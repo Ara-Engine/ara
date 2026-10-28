@@ -3,6 +3,8 @@
 #include "look-gi.slangh"
 #include "look-horizon.slangh"
 #include "look-vsm.slangh"
+#include "look-captures.slangh"
+#include "look-translucent.slangh"
 // Cascaded sun shadows (renderer/frame.rs): f.look.y texels per cascade side in a
 // 2x2 D32 atlas, f.look.z active cascades, far distances in f.splits.
 uint cascadeIndex(Frame f,float3 world){float d=dot(world-f.camera.xyz,f.forward.xyz);return d<f.splits.x?0:d<f.splits.y?1:d<f.splits.z?2:3;}
@@ -109,19 +111,120 @@ float visibility(Frame f,Look l,float3 world,float3 normal,float pages=-1){
     float v=pages>=0?pages:mapVisibility(f,l,world,normal);
     return v>0?min(v,horizonSun(l,world)):0;
 }
-float3 fresnel(float cosine,float3 f0){return f0+(1-f0)*pow(1-saturate(cosine),5);}
-float3 brdf(Surface s,float3 v,float3 l) {
-    float3 h=normalize(v+l);float nl=saturate(dot(s.normal,l));float nv=max(dot(s.normal,v),0.001);float nh=saturate(dot(s.normal,h));float vh=saturate(dot(v,h));
-    float a=s.roughness*s.roughness;float a2=a*a;float d=a2/(PI*pow(nh*nh*(a2-1)+1,2));
-    float k=pow(s.roughness+1,2)/8;float g=nv/(nv*(1-k)+k)*nl/(nl*(1-k)+k);
-    float3 F=fresnel(vh,lerp(float3(0.04),s.albedo,s.metal));
-    return ((1-F)*(1-s.metal)*(1-s.transmission)*s.albedo/PI+d*g*F/max(4*nv*nl,0.001))*nl;
+// Schlick's Fresnel. Cycles' metals use the F82-tint model (Hoffman 2023, "Generalization
+// of Adobe's Fresnel Model"): Schlick minus b cos (1 - cos)^6, b = Schlick(1/7) (1 - tint)
+// 7 / (6/7)^6, so F at cos 1/7 is Schlick times the tint. No content or material carries a
+// tint (white: b = 0, exactly Schlick); a tint subtracts that term here and b/126 in meanFresnel.
+float3 fresnel(float cosine,float3 f0){float m=1-saturate(cosine),m2=m*m;return f0+(1-f0)*(m2*m2*m);}
+// Hemispherical average of fresnel, 2 int F(mu) mu dmu.
+float3 meanFresnel(float3 f0){return f0+(1-f0)/21;}
+// Ara's GGX lobe (alpha `a` = roughness^2, height-correlated Smith masking as in Cycles):
+// the energy its single scattering loses towards a viewer with masking `g` = G1(v),
+// K = 1/E - 1 for Kulla and Conty 2017's directional albedo E. A polynomial fit to offline
+// quadrature (rows: powers of g, high to low; columns: 1, a, a^2, a^3): E within 0.44% for
+// n.v >= 0.01 (3.5% below, at silhouettes).
+float specularLoss(float g,float a){
+    float4 p=float4(1,a,a*a,a*a*a);
+    float k=dot(p,float4(-26.992674,24.19879,23.560875,-17.80212));
+    k=k*g+dot(p,float4(80.678413,-102.840874,-0.156378,15.487353));
+    k=k*g+dot(p,float4(-93.803902,161.34404,-96.72551,34.476097));
+    k=k*g+dot(p,float4(52.955402,-118.814537,120.470482,-54.776974));
+    k=k*g+dot(p,float4(-14.62627,41.991596,-56.709965,28.578594));
+    k=k*g+dot(p,float4(1.845784,-6.130684,11.342569,-5.297616));
+    return max(k*g+dot(p,float4(-0.052449,0.206786,-0.347631,0.213451)),0);
+}
+// The same lobe's mean Schlick weight s = <(1 - v.h)^5>, so its albedo with Fresnel is
+// E (f0 + (1 - f0) s): the split sum's scale E (1 - s) and bias E s (Karis 2013). Fit as
+// s = (1 - m)^5, m a polynomial (matrices: powers of roughness `r`, high to low; rows 1, g,
+// g^2; columns 1, nv, nv^2): a dielectric's albedo within 1%.
+float fresnelWeight(float g,float nv,float r){
+    float3 u=float3(1,nv,nv*nv),w=float3(1,g,g*g);
+    float m=dot(w,mul(float3x3(-0.312138,2.704782,1.929146,-2.604868,4.766642,-16.716455,2.793438,-8.240801,15.790338),u));
+    m=m*r+dot(w,mul(float3x3(0.830226,-8.764472,-0.782407,-1.695137,2.157336,25.210638,0.881528,6.947778,-25.12462),u));
+    m=m*r+dot(w,mul(float3x3(-0.057622,14.697845,-6.248118,0.16941,-15.589355,-0.322813,-0.113,1.872354,6.617512),u));
+    float t=1-saturate(m),t2=t*t;return t2*t2*t;
+}
+// The lobe's hemispherical average albedo E_avg = 2 int E(mu) mu dmu (Kulla and Conty
+// 2017) at roughness `r`, within 0.2%.
+float averageAlbedo(float r){return 0.996096+r*(0.041679+r*(0.105196+r*(-1.868613+r*1.135544)));}
+// Kulla and Conty 2017's multiple-scattering Fresnel F_avg E_avg / (1 - F_avg (1 - E_avg)):
+// the share of the energy single scattering loses that leaves after bouncing between
+// microfacets. Darker channels lose more of it, which saturates rough gold and copper.
+float3 multipleFresnel(float3 mean,float eavg){return mean*eavg/(1-mean*(1-eavg));}
+// A surface's lobes towards the viewer (specularLobes), computed once per pixel and read
+// by brdf for every light and by ibl.
+struct Lobes{
+    float3 f0;     // Fresnel at normal incidence.
+    float3 scale;  // Multiple-scattering scale of the specular lobe, 1 + F_ms (1/E - 1).
+    float3 albedo; // Directional albedo of the scaled specular lobe, E (f0 + (1 - f0) s) scale.
+    float3 diffuse;// Lambert reflectance over PI under the dielectric layer, times 1 - that layer's albedo.
+    float nv,a2,lv;// clamp(n.v, 0.001, 1); alpha^2; sqrt(nv^2 (1 - a2) + a2), v's Smith term.
+};
+// Energy-compensated GGX as Cycles' Principled BSDF v2 evaluates it: single scattering
+// times 1 + F_ms (1/E - 1) for the view direction (Kulla and Conty 2017's albedos, applied
+// as Turquin 2019's scale), so a white rough lobe reflects all it receives and coloured
+// metals keep their multiple-bounce saturation. The Lambert base lies under a dielectric
+// (f0 0.04) layer and receives what that layer, with its own multiple scattering, does
+// not reflect towards the viewer: 1 - (0.04 E + 0.96 E s)(1 + F_ms(0.04) (1/E - 1)), the
+// same for every light and the environment, so a white rough dielectric reflects all it
+// receives. (Attenuating by a layer estimate instead, Cycles' f0 + (1 - f0) s or
+// f0 + (1 - f0) E s, loses up to 7% or 3% of it at grazing angles, and both matched the
+// Cycles references worse in every region.)
+Lobes specularLobes(Surface s,float3 v){
+    Lobes o;o.nv=clamp(dot(s.normal,v),0.001,1);float a=s.roughness*s.roughness;o.a2=a*a;
+    o.lv=sqrt(o.nv*o.nv*(1-o.a2)+o.a2);float g=2*o.nv/(o.nv+o.lv);
+    float k=specularLoss(g,a),e=1/(1+k),bias=e*fresnelWeight(g,o.nv,s.roughness),eavg=averageAlbedo(s.roughness);
+    o.f0=lerp(float3(0.04),s.albedo,s.metal);o.scale=1+multipleFresnel(meanFresnel(o.f0),eavg)*k;
+    o.albedo=(o.f0*e+(1-o.f0)*bias)*o.scale;
+    float layer=(0.04*e+0.96*bias)*(1+multipleFresnel(meanFresnel(float3(0.04)),eavg).x*k);
+    o.diffuse=s.albedo*(1-s.metal)*(1-s.transmission)*(1-layer)/PI;
+    return o;
+}
+// Direct light reflected towards `v` from direction `l` (per unit illuminance) by
+// specularLobes' `o`: GGX D, the height-correlated Smith visibility G2 / (4 n.v n.l)
+// (Heitz 2014, as Cycles) and Schlick Fresnel, scaled for multiple scattering, over the
+// Lambert base.
+float3 brdf(Surface s,float3 v,float3 l,Lobes o){
+    float3 h=normalize(v+l);float nl=saturate(dot(s.normal,l)),nh=saturate(dot(s.normal,h)),vh=saturate(dot(v,h));
+    float t=nh*nh*(o.a2-1)+1,d=o.a2/(PI*t*t),visibility=0.5/(nl*o.lv+o.nv*sqrt(nl*nl*(1-o.a2)+o.a2));
+    return (o.diffuse+d*visibility*fresnel(vh,o.f0)*o.scale)*nl;
+}
+// brdf for a single light.
+float3 brdf(Surface s,float3 v,float3 l){return brdf(s,v,l,specularLobes(s,v));}
+// Material occlusion policy: whether the frame computes dynamic occlusion for ambient
+// light, screen-space occlusion (the look's AO at a non-zero power: Medium's GTAO,
+// High/Epic's visibility bitmask) together with the probes' visibility. Then the
+// material's occlusion map no longer scales ambient light: it would count occlusion
+// twice, and Cycles and the path tracer ignore glTF occlusion. Otherwise (Low, or a
+// scene that turns AO or GI off) the map is the fallback, applied to indirect light as
+// glTF specifies. Deferred lighting folds it into Surface::ao; ibl applies it to
+// forward surfaces and ray hits.
+bool dynamicOcclusion(Look l){return (l.flags.y&LOOK_AMBIENT_OCCLUSION)!=0 && l.ao.w>0 && giEnabled(l);}
+// The High/Epic tier's screen-space ambient light at full-resolution pixel `p`
+// (look-ao.slang aoBitmaskMain): the denoised half-resolution visibility (returned,
+// with the volume intensity's power) and one-bounce irradiance from geometry within
+// the radius (`bounce`), upsampled with depth-similar weights; where no neighbour
+// shares the pixel's depth (silhouettes), the nearest in depth stands in.
+float screenAmbient(Frame f,Look l,int2 p,out float3 bounce){
+    bounce=0;if((l.flags.y&LOOK_AMBIENT_OCCLUSION)==0)return 1;
+    int2 half=int2((f.extent.xy+1)/2);float2 h=(float2(p)+0.5)*0.5-0.5;int2 b=int2(floor(h));float2 t=h-float2(b);
+    float depth=pixel(f.extra.x,p).x;float4 sum=0,nearest=float4(0,0,0,1);float total=0,best=1e30;
+    for(uint k=0;k<4;k++){
+        int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float dz=abs(pixel(f.extra.x,q*2).x/max(depth,1e-7)-1);
+        float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-dz*50);float4 a=pixel(l.aoImages.y,q);
+        sum+=a*w;total+=w;if(dz<best){best=dz;nearest=a;}
+    }
+    float4 a=total>1e-3?sum/total:nearest;bounce=a.rgb;
+    return l.ao.w==1?a.a:pow(saturate(a.a),l.ao.w);
 }
 // Screen-space ambient visibility at full-resolution pixel `p` (camera distance
 // `distance`): a depth-aware bilinear upsample of the denoised half-resolution GTAO.
 // Where no neighbour shares the pixel's depth (silhouettes), the nearest in depth
-// stands in rather than a blend of the other side's surfaces.
-float screenOcclusion(Frame f,Look l,int2 p,float distance){
+// stands in rather than a blend of the other side's surfaces. `high` (the High/Epic
+// variant, compile-time): one, as ibl reads that tier's screen-space ambient light
+// itself (screenAmbient), once.
+float screenOcclusion(Frame f,Look l,int2 p,float distance,bool high=false){
+    if(high)return 1;
     if((l.flags.y&LOOK_AMBIENT_OCCLUSION)==0)return 1;
     int2 half=int2((f.extent.xy+1)/2);float2 h=(float2(p)+0.5)*0.5-0.5;int2 b=int2(floor(h));float2 t=h-float2(b);
     float sum=0,total=0,best=1e30,nearest=1;
@@ -158,6 +261,11 @@ float gatheredLobes(Frame f,Look l,int2 p,float distance,out float3 diffuse,out 
     if(total<=1e-3){diffuse=nearestD.rgb;specular=nearestS.rgb;return nearestS.w;}
     diffuse/=total;specular/=total;return coverage/total;
 }
+// The hybrid path's reflections at full-resolution pixel `p` (renderer::rt,
+// look-rt.slang rtFilterMain): ray-traced reflections composited over screen-space
+// ones, rgb and a confidence like screenReflection. Read only by the `rays` PSO
+// variant (lighting_high_rt), never behind a runtime test.
+float4 rtReflection(Look l,int2 p){return pixel(l.rtInfo[1].z,p);}
 // Screen-space reflection at full-resolution pixel `p`: rgb radiance, a confidence
 // (zero without a hit). Upsampled from half resolution with depth-similar weights.
 float4 screenReflection(Frame f,Look l,int2 p){
@@ -172,21 +280,44 @@ float4 screenReflection(Frame f,Look l,int2 p){
     // Volume intensity (look.ssr.w) scales the hit confidence; probes fill the rest.
     float4 r=total>1e-3?sum/total:nearest;r.w*=l.ssr.w;return r;
 }
+// The direction probe and sky reflections are looked up along for a lobe of
+// perceptual `roughness` at normal `n`, viewed from `v`: GGX's dominant direction
+// (Lagarde and de Rousiers 2014), the mirror direction pulled towards the normal as
+// roughness grows. Along the mirror direction itself, a rough floor at a grazing view
+// averages the ground under the horizon and reflects too little sky.
+float3 specularDirection(float3 n,float3 v,float roughness){
+    float a=roughness*roughness,smooth=saturate(1-a);
+    return normalize(lerp(n,reflect(-v,n),smooth*(sqrt(smooth)+a)));
+}
 // Ambient light: the physical sky's IBL under a sky atmosphere, otherwise the
 // environment map's (32x16 irradiance, five-level 256x640 GGX prefilter strip for
 // roughness 0, .25, .5, .75, 1). Inside the probe volume, probe irradiance replaces
 // the sky's diffuse light and occludes its reflections by the ratio of probe to
 // sky irradiance facing the normal (sky visibility: a cosine lobe around the mirror
 // direction would count the ground below the horizon at grazing views); rough
-// reflections use the probes. Outside the volume, the heightfield's sky visibility
-// (look-horizon.slangh) occludes the sky's light instead.
-// `gathered` reads the half-resolution gather at pixel `p` (deferred lighting);
-// forward surfaces search the probes directly.
-float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) {
+// reflections blend towards the probes' irradiance lobe by GGX's alpha (roughness
+// squared): a cosine lobe stands in for a GGX lobe only as the lobe widens, and at
+// mid roughness it would average the ground into grazing reflections. Reflections
+// are looked up along specularDirection, the
+// lobe's dominant direction. Outside the volume, the heightfield's sky visibility
+// (look-horizon.slangh) occludes the sky's light instead. Reflected light takes the
+// compensated specular albedo of specularLobes' `o` (the split sum, scaled for multiple
+// scattering like direct light), diffuse light its Lambert base, and ambient occlusion
+// inter-reflects. `gathered` reads the half-resolution gather at pixel `p` (deferred
+// lighting); forward surfaces search the probes directly.
+// `high`: the High/Epic tier's PSO variant (Quality::high_tier; lighting_high and
+// native_forward_high). Always a compile-time constant at the entry point, so
+// tier-only code costs other presets nothing. Its deferred pixels take the
+// visibility-bitmask pass's occlusion and near-field bounce (screenAmbient).
+// `rays`: the hybrid High/Epic variant (lighting_high_rt, D29) reads ray-traced
+// reflections composited over screen-space ones (rtReflection) instead.
+float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false) {
+    // Material occlusion policy (dynamicOcclusion) for forward surfaces and ray hits,
+    // which have no screen-space occlusion of their own; deferred pixels arrive with it.
+    if(!gathered && dynamicOcclusion(l))s.ao=1;
     uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x,prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;
-    float nv=saturate(dot(s.normal,v));float3 f0=lerp(float3(0.04),s.albedo,s.metal);
-    float3 reflected=reflect(-v,s.normal);float2 uv=environmentUv(reflected);float level=s.roughness*4;float low=floor(level);float high=min(low+1,4);
-    float3 spec=lerp(envTex(prefilter,float2(uv.x,(uv.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(uv.x,(uv.y*127+0.5+high*128)/640)).rgb,frac(level));
+    float3 reflected=specularDirection(s.normal,v,s.roughness);float2 uv=environmentUv(reflected);float level=s.roughness*4;float low=floor(level);float upper=min(low+1,4);
+    float3 spec=lerp(envTex(prefilter,float2(uv.x,(uv.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(uv.x,(uv.y*127+0.5+upper*128)/640)).rgb,frac(level));
     float3 ambient=envTex(irradiance,environmentUv(s.normal)).rgb;
     float coverage=0;float3 diffuseGi=0,specularGi=0;
     [branch]if(giEnabled(l)){
@@ -201,25 +332,68 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered) 
     [branch]if(coverage>0){
         float occlusion=saturate(luminance(diffuseGi)/max(luminance(ambient),1e-4));
         ambient=lerp(ambientSky,diffuseGi,coverage);
-        spec=lerp(specSky,lerp(spec*occlusion,specularGi/PI,s.roughness),coverage);
+        spec=lerp(specSky,lerp(spec*occlusion,specularGi/PI,s.roughness*s.roughness),coverage);
     }else{ambient=ambientSky;spec=specSky;}
-    if(gathered){float4 r=screenReflection(f,l,p);spec=lerp(spec,r.rgb,r.a);}
-    // Analytic split-sum environment BRDF fit (Lazarov, Epic 2014). Its scale and
-    // bias already integrate Fresnel over the lobe, so they take F0: Fresnel at
-    // the view angle would make rough surfaces mirror-bright at grazing angles.
-    float4 r=s.roughness*float4(-1,-0.0275,-0.572,0.022)+float4(1,0.0425,1.04,-0.04);
-    float a004=min(r.x*r.x,exp2(-9.28*nv))*r.x+r.y;float2 ab=float2(-1.04,1.04)*a004+r.zw;
-    float3 specularAlbedo=f0*ab.x+ab.y;
-    // Diffuse keeps the energy the specular lobe does not reflect.
-    float3 diffuse=ambient*s.albedo*(1-s.metal)*(1-s.transmission)*(1-specularAlbedo)/PI*multiBounce(s.ao,s.albedo);
-    return diffuse+spec*specularAlbedo*specularOcclusion(nv,s.ao,s.roughness);
+    // High/Epic: local reflection captures (look-captures.slangh) replace probe and
+    // sky reflections where they cover; screen-space (or ray) reflections stay on
+    // top. SSR's confidence fades over 0.2..0.9 so its partial fringe at the hit/miss
+    // edge (which changes frame to frame) hands over smoothly, and pixels it covers
+    // fully skip the captures. Deferred pixels test only their tile's captures,
+    // forward surfaces every visible one. Debug modes (`ARA_CAPTURE_DEBUG`): `mirror`
+    // returns the captures alone along every mirror direction; `only` drops SSR
+    // where captures cover.
+    float4 r=0;
+    if(gathered)r=rays?rtReflection(l,p):screenReflection(f,l,p);
+    if(high){
+        uint debug=l.captureInfo[1].w;
+        [branch]if(r.a<0.999||debug!=0){
+            uint mask=gathered?captureTileMask(f,l,p):l.captureInfo[1].z;
+            float4 c=captureReflection(l,world,s.normal,v,(debug&CAPTURE_DEBUG_MIRROR)!=0?0:s.roughness,mask);
+            if((debug&CAPTURE_DEBUG_MIRROR)!=0)return c.rgb;
+            spec=lerp(spec,c.rgb,c.a);
+            // Under a capture, SSR's low-confidence fringe fades into it smoothly.
+            if(!rays&&(debug&CAPTURE_DEBUG_ONLY)==0)r.a=lerp(r.a,smoothstep(0.2,0.9,r.a),c.a);
+            if((debug&CAPTURE_DEBUG_ONLY)!=0)r.a*=1-c.a;
+        }
+    }
+    // Traced reflections (SSR, RT; `r`) carry their own visibility, so specular
+    // occlusion and the screen bounce fill darken only the probe/sky/capture fallback.
+    float3 incident,specular;
+    if(high&&gathered){
+        // Screen-space ambient light (look-ao.slang aoBitmaskMain; s.ao is the material's
+        // alone here, screenOcclusion): probe and sky light reach the visible sectors only
+        // and the one-bounce irradiance fills the hidden ones, so near-field bounce
+        // replaces, never adds to, what the probes carry there. The specular share screen
+        // occlusion hides reflects the bounce's mean radiance. Material occlusion beyond
+        // the screen's darkens both, with multi-bounce.
+        float3 bounce;float visible=screenAmbient(f,l,p,bounce),ao=min(s.ao,visible);
+        float so=specularOcclusion(o.nv,ao,s.roughness),screenSo=specularOcclusion(o.nv,visible,s.roughness);
+        incident=(ambient*visible+bounce)*multiBounce(min(1,ao/max(visible,1e-4)),s.albedo);
+        specular=lerp((spec*screenSo+bounce*((1-screenSo)/(PI*max(1-visible,0.05))))*multiBounce(min(1,so/max(screenSo,1e-4)),o.f0),r.rgb,r.a);
+    }else{
+        // Multi-bounce for both lobes (Jimenez et al. 2016; F0 for the specular): occluded
+        // cavities inter-reflect, so rough metals are not darkened twice (probe lobes
+        // already see their surroundings, then ambient occlusion again).
+        incident=ambient*multiBounce(s.ao,s.albedo);specular=lerp(spec*multiBounce(specularOcclusion(o.nv,s.ao,s.roughness),o.f0),r.rgb,gathered?r.a:0);
+    }
+    return incident*o.diffuse+specular*o.albedo;
+}
+// ibl with the surface's own specularLobes.
+float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false){
+    return ibl(f,l,s,specularLobes(s,v),world,v,p,gathered,high,rays);
 }
 // Linear HDR radiance leaving `world` towards the camera (before fog and exposure).
 // `gathered`: deferred G-buffer pixels read the half-resolution probe gather.
-float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered) {
-    float3 v=normalize(f.camera.xyz-world);float3 result=s.emissive+ibl(f,l,s,world,v,p,gathered);
+float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered,bool high=false,bool rays=false) {
+    float3 v=normalize(f.camera.xyz-world);Lobes o=specularLobes(s,v);float3 result=s.emissive+ibl(f,l,s,o,world,v,p,gathered,high,rays);
     // The sun lights front faces only (brdf ends in N.L): back faces skip its shadows.
-    if(dot(s.normal,f.sunDirection.xyz)>0)result+=brdf(s,v,f.sunDirection.xyz)*sunAt(f,l,world)*visibility(f,l,world,s.normal,gathered?vsmMask(l,p):-1);
+    // The High tier passes the sun through blended casters (look-translucent.slangh);
+    // virtual pages already hold it where they resolved this pixel.
+    if(dot(s.normal,f.sunDirection.xyz)>0){
+        float pages=gathered?vsmMask(l,p):-1,lit=visibility(f,l,world,s.normal,pages);
+        if(high && pages<0 && lit>0)lit*=translucentSun(l,world);
+        result+=brdf(s,v,f.sunDirection.xyz,o)*sunAt(f,l,world)*lit;
+    }
     uint tilesX=(f.extent.x+15)/16;uint tile=(uint(p.y)/16*tilesX+uint(p.x)/16)*TILE_STRIDE;
     uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);
     for(uint i=0;i<count;i++) {
@@ -233,17 +407,34 @@ float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered) {
         // field softens instead of peaking.
         float3 illuminance=light.colorLumens.rgb*(light.colorLumens.w/(4*PI*d2))*fade*spot;
         if(any(illuminance>0))illuminance*=localShadow(l,index,world,s.normal,light.positionRange.xyz);
-        result+=brdf(s,v,toLight)*illuminance;
+        result+=brdf(s,v,toLight,o)*illuminance;
     }
     return result;
+}
+// A forward fragment's premultiplied output (ONE, ONE_MINUS_SRC_ALPHA): radiance `c`
+// over `coverage`, stopping `stop` of what lies behind. Safe to blend: a non-finite
+// result contributes nothing (an upstream NaN or Inf would turn black and spread
+// through the temporal resolve), negative radiance is zero, and luminance is at most
+// FORWARD_PEAK times display white at the frame's exposure. Forward geometry is often
+// thinner than a pixel (rims, lenses, wires): a glint on the sample the jitter lands
+// on would otherwise outshine what the area-filtered pixel holds, flicker against the
+// history and bloom into a smear. `c` carries `exposure` (1: radiance; refraction
+// composes in the HDR target's pre-exposed space, look-refract.slangh refractExposure).
+static const float FORWARD_PEAK=64;
+float4 forwardOutput(Frame f,float3 c,float coverage,float stop,float exposure=1){
+    if(any(isnan(c))||any(isinf(c))||isnan(coverage)||isnan(stop))return 0;
+    c=max(c,0);float peak=FORWARD_PEAK*exposure/exposureScale(f,0),y=luminance(c);
+    return float4((y>peak?c*(peak/y):c)*saturate(coverage),saturate(stop));
 }
 // Premultiplied forward colour of a transparent or transmissive surface: alpha is
 // coverage times the share of light it stops; reflections keep full strength
 // over what it transmits (blending ONE, ONE_MINUS_SRC_ALPHA). `exposure`: the HDR
 // target's pre-exposure (hdrExposure; native draws load it per vertex).
-float4 forwardColour(Frame f,Look l,Surface s,float3 world,int2 p,float exposure){
+float4 forwardColour(Frame f,Look l,Surface s,float3 world,int2 p,float exposure,bool high=false){
     float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
-    return float4(min(applyFog(f,l,shade(f,l,s,world,p,false),world,uv)*exposure,60000)*s.alpha,s.alpha*(1-s.transmission));
+    // Clamped in radiance (forwardOutput), then pre-exposed like every HDR writer.
+    float4 o=forwardOutput(f,applyFog(f,l,shade(f,l,s,world,p,false,high),world,uv),s.alpha,s.alpha*(1-s.transmission));
+    return float4(min(o.rgb*exposure,60000),o.a);
 }
 // World-space view ray through pixel centre `p`.
 float3 viewRay(Frame f,float2 p){

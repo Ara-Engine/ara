@@ -25,6 +25,14 @@ pub enum ToneMapper {
     /// Hill's fitted ACES RRT+ODT in AP1, pre-scaled so 18% grey stays 18%: a soft
     /// toe and desaturating shoulder, close to Unreal's default filmic curve.
     Filmic = 2,
+    /// AgX, Troy Sobotka's image formation as Blender 5.1 ships it ([`agx`]): 16.5
+    /// stops into a log sigmoid that keeps 18% grey and bends bright, saturated light
+    /// towards white (Cycles' default view).
+    Agx = 3,
+    /// AgX with Blender's "Punchy" look: deeper shadows, more contrast.
+    AgxPunchy = 4,
+    /// AgX with Blender's "Medium High Contrast" look: contrast 1.2 about mid grey.
+    AgxMediumHighContrast = 5,
 }
 
 /// Scene-linear colour grading applied after exposure, before the tone mapper.
@@ -134,6 +142,125 @@ fn filmic(colour: Vec3) -> Vec3 {
     (output * fitted).clamp(Vec3::ZERO, Vec3::ONE)
 }
 
+/// Blender's AgX looks (`ToneMapper::AgxPunchy`, `AgxMediumHighContrast`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgxLook {
+    /// The plain image formation.
+    Base,
+    /// A shadow curve below mid grey's log value, then CDL power 1.0912.
+    Punchy,
+    /// Contrast 1.2 about mid grey in AgX Log.
+    MediumHighContrast,
+}
+
+/// Rows of a 3x3 matrix applied to a column colour.
+fn rows(m: [[f32; 3]; 3], c: Vec3) -> Vec3 {
+    Vec3::new(
+        Vec3::from(m[0]).dot(c),
+        Vec3::from(m[1]).dot(c),
+        Vec3::from(m[2]).dot(c),
+    )
+}
+
+/// AgX: linear Rec.709 after exposure to linear display Rec.709, as Blender 5.1's
+/// AgX view (EaryChow's formation of Troy Sobotka's AgX) with `look`. An independent
+/// analytic form fitted to Blender's own OCIO processor, within 0.5 (mean) and 2
+/// (p95) 8-bit display codes of it over 3.5k colours; the shaders (look.slangh
+/// `agxCurve`, shaders/post.slang `agx`) carry the same constants.
+///
+/// Looks apply per channel in Blender's AgX Log space (Rec.2020 through its inset
+/// matrix, log2 over 25 stops from 2^-10 * 0.18). The formation insets the colour,
+/// encodes log2 over -10..+6.5 stops around 18% grey, shapes it with a two-segment
+/// hyperbolic sigmoid (x / (1 + x^p)^(1/p) on each side of mid grey, slope 2.38),
+/// outsets, and decodes the Rec.1886 (2.4) code values back to Rec.709.
+pub fn agx(colour: Vec3, look: AgxLook) -> Vec3 {
+    let mut c = colour;
+    if look != AgxLook::Base {
+        let v = rows(
+            [
+                [0.544_814_75, 0.373_787_4, 0.081_397_86],
+                [0.140_416_95, 0.754_137_6, 0.105_445_5],
+                [0.088_810_42, 0.178_871_76, 0.732_317_8],
+            ],
+            c,
+        )
+        .max(Vec3::splat(1e-10));
+        let l = (Vec3::new(v.x.log2(), v.y.log2(), v.z.log2()) + Vec3::splat(12.47393)) / 25.;
+        let l = match look {
+            AgxLook::MediumHighContrast => (l - Vec3::splat(0.4)) * 1.2 + Vec3::splat(0.4),
+            _ => l
+                .clamp(Vec3::ZERO, Vec3::ONE)
+                .to_array()
+                .map(|x| {
+                    let d = (x - 0.4).min(0.);
+                    if x >= 0.4 {
+                        x.powf(1.0912)
+                    } else {
+                        0.367_932_25
+                            + d * (0.576_921_4
+                                + d * (-13.071_583
+                                    + d * (-68.043_43 + d * (-110.187_1 + d * -47.912_39))))
+                    }
+                })
+                .into(),
+        };
+        let v = (l * 25. - Vec3::splat(12.47393))
+            .to_array()
+            .map(f32::exp2)
+            .into();
+        c = rows(
+            [
+                [2.114_473_3, -1.027_378_5, -0.087_094_925],
+                [-0.370_504_27, 1.552_926_2, -0.182_421_92],
+                [-0.165_931_4, -0.254_715_53, 1.420_646_9],
+            ],
+            v,
+        );
+    }
+    let v = rows(
+        [
+            [0.586_284_65, 0.320_481_4, 0.093_233_96],
+            [0.115_577_05, 0.766_820_85, 0.117_602_1],
+            [0.090_460_18, 0.189_264_5, 0.720_275_3],
+        ],
+        c,
+    )
+    .max(Vec3::splat(1e-10));
+    // The sigmoid: pivot (10/16.5, 0.18^(1/2.4)), slope 2.38; toe and shoulder scales
+    // make it reach 0 and 1 at the ends.
+    let s = v.to_array().map(|x| {
+        let l = ((x.log2() + 12.47393) / 16.5).clamp(0., 1.);
+        let (scale, power) = if l >= 0.606_060_6 {
+            (0.723_107_7, 1.489_164_6)
+        } else {
+            (0.563_481_7, 1.522_003_8)
+        };
+        let t = 2.380_159_6 * (l - 0.606_060_6).abs() / scale;
+        0.489_437_1
+            + (l - 0.606_060_6).signum() * scale * t * (1. + t.powf(power)).powf(-1. / power)
+    });
+    let o = rows(
+        [
+            [0.977_084_9, 0.019_273_49, 0.003_641_627],
+            [0.017_531_67, 1.012_742_4, -0.030_274_053],
+            [0.012_019_836, 0.012_047_557, 0.975_932_6],
+        ],
+        s.into(),
+    )
+    .max(Vec3::ZERO)
+    .to_array()
+    .map(|x| x.powf(2.4));
+    rows(
+        [
+            [1.807_087_2, -0.635_807_6, -0.171_279_6],
+            [-0.224_544, 1.237_837_2, -0.013_293_189],
+            [-0.184_566_07, -0.281_406_33, 1.465_972_4],
+        ],
+        o.into(),
+    )
+    .clamp(Vec3::ZERO, Vec3::ONE)
+}
+
 /// Percentile-trimmed logarithmic luminance metering, with photographic EV limits.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AutoExposure {
@@ -167,6 +294,9 @@ pub fn tone_map(colour: Vec3, mapper: ToneMapper) -> Vec3 {
             / (colour * (colour * 2.43 + Vec3::splat(0.59)) + Vec3::splat(0.14)))
         .clamp(Vec3::ZERO, Vec3::ONE),
         ToneMapper::Filmic => filmic(colour),
+        ToneMapper::Agx => agx(colour, AgxLook::Base),
+        ToneMapper::AgxPunchy => agx(colour, AgxLook::Punchy),
+        ToneMapper::AgxMediumHighContrast => agx(colour, AgxLook::MediumHighContrast),
         ToneMapper::PbrNeutral => {
             let floor = colour.min_element();
             let offset = if floor < 0.08 {
@@ -215,6 +345,81 @@ mod tests {
             last = c.x;
         }
         assert!(tone_map(Vec3::splat(40.), ToneMapper::Filmic).x > 0.97);
+    }
+    /// Blender 5.1's AgX view (display sRGB codes from its OCIO processor) for
+    /// greys and colours, per look.
+    #[test]
+    fn agx_matches_blender() {
+        let srgb = |v: f32| {
+            if v <= 0.003_130_8 {
+                v * 12.92
+            } else {
+                1.055 * v.powf(1. / 2.4) - 0.055
+            }
+        };
+        let inputs = [
+            [0.18, 0.18, 0.18],
+            [1., 1., 1.],
+            [0.0225, 0.0225, 0.0225],
+            [0.6, 0.25, 0.08],
+            [0.05, 0.12, 0.4],
+            [4., 1.5, 0.3],
+        ];
+        let blender = [
+            (
+                ToneMapper::Agx,
+                [
+                    [0.4613, 0.4613, 0.4614],
+                    [0.771, 0.771, 0.771],
+                    [0.1357, 0.1357, 0.1358],
+                    [0.7187, 0.5177, 0.3429],
+                    [0.2363, 0.41, 0.6415],
+                    [0.9424, 0.8055, 0.702],
+                ],
+            ),
+            (
+                ToneMapper::AgxPunchy,
+                [
+                    [0.3463, 0.3463, 0.3463],
+                    [0.6923, 0.6923, 0.6924],
+                    [0.0496, 0.0496, 0.0496],
+                    [0.6103, 0.4033, 0.2173],
+                    [0.1187, 0.306, 0.5192],
+                    [0.9051, 0.7358, 0.6025],
+                ],
+            ),
+            (
+                ToneMapper::AgxMediumHighContrast,
+                [
+                    [0.4613, 0.4613, 0.4614],
+                    [0.8138, 0.8138, 0.8138],
+                    [0.1004, 0.1004, 0.1005],
+                    [0.7625, 0.524, 0.313],
+                    [0.1841, 0.3981, 0.6722],
+                    [0.9886, 0.8458, 0.7426],
+                ],
+            ),
+        ];
+        for (mapper, expected) in blender {
+            for (i, (input, want)) in inputs.iter().zip(expected).enumerate() {
+                let got = tone_map(Vec3::from(*input), mapper).to_array().map(srgb);
+                let error = (Vec3::from(got) - Vec3::from(want)).abs().max_element();
+                // In 8-bit codes: greys within 1.5; these saturated colours sit in the
+                // fit's tail (its p95 over 3.5k colours is two to four codes).
+                let limit = if i < 3 { 1.5 } else { 10. };
+                assert!(
+                    error * 255. < limit,
+                    "{mapper:?} {input:?}: {got:?} vs {want:?}"
+                );
+            }
+        }
+        // Monotonic on greys, black to white.
+        let mut last = 0.;
+        for i in 0..2000 {
+            let c = tone_map(Vec3::splat(i as f32 / 50.), ToneMapper::Agx);
+            assert!(c.is_finite() && c.x >= last - 1e-6 && c.max_element() <= 1.);
+            last = c.x;
+        }
     }
     #[test]
     fn grading_identity_and_white_balance() {

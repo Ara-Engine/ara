@@ -34,7 +34,10 @@ void ssrPyramidMain(uint3 tid:SV_DispatchThreadID){
 void ssrTraceMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);uint2 half=(f.extent.xy+1)/2;if(any(tid.xy>=half))return;
     int2 p=int2(tid.xy)*2;bool covered;float3 world=gbufferWorld(f,p,covered);float roughness=gbufferMaterial(f,p).x;float4 result=0;
-    if(covered && roughness<l.ssr.x){
+    // Hybrid frames' traced reflections own surfaces well below their cut
+    // (look-rt.slang rtFilterMain): no march there (rtInfo[1].w bit 0, look-rt.slangh).
+    bool traced=(l.rtInfo[1].w&1)!=0 && roughness<0.8*l.rtParams[0].x;
+    if(covered && roughness<l.ssr.x && !traced){
         float3 n=normalize(gbufferNormal(f,p)),v=normalize(world.xyz-f.camera.xyz),r=reflect(v,n);
         // Clip the ray in world space so it ends in front of the near plane
         // (camera.w), then march its screen-space projection. A segment reaching

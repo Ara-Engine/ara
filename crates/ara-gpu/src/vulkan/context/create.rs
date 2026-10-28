@@ -269,6 +269,9 @@ impl Gpu {
                 // when the producer is a mesh stage rather than geometry stage.
                 .geometry_shader(core_supported.geometry_shader != 0)
                 .texture_compression_bc(core_supported.texture_compression_bc != 0)
+                // Optional: the bindless material sampler filters anisotropically
+                // when the device allows it (heap.rs reads this feature back).
+                .sampler_anisotropy(core_supported.sampler_anisotropy != 0)
                 .shader_int64(buffer_int64_atomics)
                 .fragment_stores_and_atomics(true)
                 .vertex_pipeline_stores_and_atomics(true)
