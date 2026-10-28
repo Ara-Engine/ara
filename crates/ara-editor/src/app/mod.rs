@@ -840,6 +840,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     dirty |= changed;
                     // Typed text (IME commits) is input too.
                     if changed {
+                        editor.input_active();
                         last_input = Some(Instant::now());
                     }
                 }
@@ -2698,6 +2699,14 @@ fn game_input(event: &Event, editor: &mut Editor, shell: &mut Shell, dpi: f32) -
     use ara_play_host::embed::DeviceEvent;
     if !shell.game_captured {
         return None;
+    }
+    if matches!(
+        event,
+        Event::Key { pressed: true, .. }
+            | Event::MouseButton { pressed: true, .. }
+            | Event::MouseMotion { .. }
+    ) {
+        editor.input_active();
     }
     let release = |editor: &mut Editor, shell: &mut Shell| {
         shell.game_captured = false;
