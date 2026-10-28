@@ -261,3 +261,37 @@ fn content_project_refuses_undeclared_engine_before_launch_and_typed_choice_refr
         ara_host::project_layout::CURRENT_ENGINE_VERSION
     );
 }
+
+#[test]
+fn undeclared_engine_does_not_claim_legacy_root_layout_support() {
+    let mut fixture = Fixture::new();
+    let marker = fs::read(fixture.root.join("ara.project.json")).expect("before marker");
+    fixture
+        .hub
+        .call_for(
+            ConnId::LOCAL,
+            "hub.engine.register",
+            json!({"engine":EngineBuild {
+                version: ALPHA_VERSION.into(),
+                executable: std::env::current_exe().expect("undeclared executable"),
+                editor: None,
+            }}),
+        )
+        .expect("undeclared engine");
+    let error = fixture
+        .hub
+        .call_for(
+            ConnId::LOCAL,
+            "hub.catalog",
+            json!({"project":fixture.project}),
+        )
+        .expect_err("v3-only engines cannot claim legacy root layout support");
+    assert!(error.diagnostics().iter().any(|diagnostic| diagnostic.code == ara_diag::codes::PROJECT_MIGRATION_REQUIRED));
+    assert_eq!(
+        fs::read(fixture.root.join("ara.project.json")).expect("untouched marker"),
+        marker
+    );
+    assert!(fixture.root.join("levels/main.scene").is_file());
+    assert!(!fixture.root.join("content").exists());
+    assert!(!fixture.root.join(".ara").exists());
+}
