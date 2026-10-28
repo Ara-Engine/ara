@@ -296,26 +296,47 @@ impl Player {
             .find_map(|l| l.strip_prefix(CRASH_PREFIX))
             .and_then(|json| serde_json::from_str::<CrashReport>(json).ok());
         let code = status.code().map(|c| c as u32);
-        let kind = match (&report, code) {
-            (Some(r), _) if r.kind == "panic" => "player_panicked",
-            (Some(_), _) => "player_crashed",
-            (None, Some(0)) => "player_exited",
-            (None, Some(c)) if c >= 0xC000_0000 => "player_crashed",
-            _ => "player_exited",
-        };
+        let signal = exit_signal(status);
+        let kind = classify(report.as_ref(), code, signal);
         Some(json!({
             "code": kind,
-            "message": match &report {
-                Some(r) => format!("{kind}: {} at {}", r.message, r.location),
-                None => format!("{kind}: exit code {code:?}"),
+            "message": match (&report, signal) {
+                (Some(r), _) => format!("{kind}: {} at {}", r.message, r.location),
+                (None, Some(s)) => format!("{kind}: killed by signal {s}"),
+                (None, None) => format!("{kind}: exit code {code:?}"),
             },
             "exitCode": code.map(|c| format!("0x{c:08X}")),
+            "signal": signal,
             "cause": report,
             "lastTick": self.status.as_ref().map(|s| s.tick),
             "stderrTail": tail,
             "pid": self.hello.pid,
             "actions": [{"id": "restart", "title": "Restart play from the same snapshot"}],
         }))
+    }
+}
+
+/// The signal that ended a Unix process, which then has no exit code. Windows exits
+/// always carry a code (an NTSTATUS for an exception).
+fn exit_signal(status: std::process::ExitStatus) -> Option<i32> {
+    #[cfg(unix)]
+    return std::os::unix::process::ExitStatusExt::signal(&status);
+    #[cfg(not(unix))]
+    {
+        let _ = status;
+        None
+    }
+}
+
+/// Fault code for an ended player. Its crash report decides first; otherwise a Unix
+/// signal death (SIGSEGV, SIGABRT, ...) or a Windows NTSTATUS exception code is a
+/// crash, and anything else an exit.
+fn classify(report: Option<&CrashReport>, code: Option<u32>, signal: Option<i32>) -> &'static str {
+    match (report, code, signal) {
+        (Some(r), _, _) if r.kind == "panic" => "player_panicked",
+        (Some(_), _, _) | (None, _, Some(_)) => "player_crashed",
+        (None, Some(c), None) if c >= 0xC000_0000 => "player_crashed",
+        _ => "player_exited",
     }
 }
 
@@ -773,5 +794,30 @@ impl Pool {
         }
         // No refill here: the host tick refills after Play has started.
         Ok(taken)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_signal_death_is_a_crash() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+            // A raw wait status of 6 is "terminated by SIGABRT", what abort() leaves.
+            let aborted = std::process::ExitStatus::from_raw(6);
+            assert_eq!(aborted.code(), None);
+            assert_eq!(exit_signal(aborted), Some(6));
+            assert_eq!(
+                exit_signal(std::process::ExitStatus::from_raw(1 << 8)),
+                None
+            );
+        }
+        assert_eq!(classify(None, None, Some(6)), "player_crashed");
+        assert_eq!(classify(None, Some(0xC000_0005), None), "player_crashed");
+        assert_eq!(classify(None, Some(0), None), "player_exited");
+        assert_eq!(classify(None, Some(1), None), "player_exited");
     }
 }
