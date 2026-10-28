@@ -163,8 +163,10 @@ fn a_junction_introduced_after_preparation_cannot_redirect_restore() {
 
 #[test]
 fn prepared_inventory_revalidates_directory_membership_and_opaque_owner_metadata() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/file-history-tests")
+    let root = std::env::var_os("ARA_TEST_ROOT")
+        .or_else(|| std::env::var_os("CARGO_TARGET_DIR"))
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("file-history-tests"))
         .join(format!("prepared-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(root.join("media/empty")).expect("folder");
@@ -199,8 +201,10 @@ fn prepared_inventory_revalidates_directory_membership_and_opaque_owner_metadata
 
 #[test]
 fn snapshots_keep_binary_bytes_empty_folders_and_preflight_all_paths_before_restore() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/file-history-tests")
+    let root = std::env::var_os("ARA_TEST_ROOT")
+        .or_else(|| std::env::var_os("CARGO_TARGET_DIR"))
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::env::temp_dir().join("file-history-tests"))
         .join(format!("snapshots-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(root.join("media/empty")).expect("empty folder");
