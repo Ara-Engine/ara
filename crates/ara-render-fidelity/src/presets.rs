@@ -153,13 +153,13 @@ pub struct Capabilities {
 }
 
 /// Whether `gpu`'s ray queries are verified for Ara's ray-traced paths: the D29
-/// hybrid, the RT fidelity tier and the ray-traced probe-GI bake. Metal's are not
-/// yet (an M5 renders the RT gallery speckled, with blocky artifacts on lit
-/// surfaces), so macOS stays raster unless `ARA_METAL_RT=1` opts in to validate it.
+/// hybrid, the RT fidelity tier and the ray-traced probe-GI bake. Every RT device's
+/// are, Metal's included since the RIS reservoir fix (its RT gallery matches the
+/// Vulkan goldens); `ARA_METAL_RT=0` keeps a Mac on raster to compare against.
 pub fn verified_ray_tracing(gpu: &GpuDevice) -> bool {
     gpu.info().ray_tracing
-        && (!cfg!(target_os = "macos")
-            || std::env::var_os("ARA_METAL_RT").is_some_and(|value| value == "1"))
+        && !(cfg!(target_os = "macos")
+            && std::env::var_os("ARA_METAL_RT").is_some_and(|value| value == "0"))
 }
 
 impl Capabilities {
