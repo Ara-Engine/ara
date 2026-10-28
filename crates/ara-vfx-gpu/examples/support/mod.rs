@@ -7,20 +7,17 @@ use ara_render::{
 };
 use ara_render_fidelity::{
     FidelityView, FrameInput, ImageInput, Mode, PostSettings, Settings, Tier, Upscaler,
-    probes::BakedProbes,
+    presets::RT_FIDELITY_VERIFIED, probes::BakedProbes,
 };
 use ara_vfx::{Effect, Module};
 use ara_vfx_gpu::{GpuSystem, Lighting, ProbeLighting, SceneColor, SceneDepth, View};
 use glam::Vec3;
 use std::path::Path;
 
-/// Whether this backend's RT-tier fidelity is verified. Metal's is not yet: its
-/// hybrid passes are being ported, and on an M5 the RT gallery renders speckled with
-/// blocky emitter artifacts, so Metal goldens use Raster until that lands.
-const RT_FIDELITY: bool = cfg!(not(target_os = "macos"));
-
 /// The fidelity tier captures render the gallery with: RT where the device has ray
-/// queries and RT-tier fidelity is verified, Raster (unbaked probes) otherwise.
+/// queries and the backend's RT fidelity is verified
+/// (`ara_render_fidelity::presets::RT_FIDELITY_VERIFIED`), Raster (unbaked probes)
+/// otherwise.
 /// `ARA_VFX_GOLDEN_TIER=rt|raster` forces one, e.g. to record Raster baselines on an
 /// RT host or to check Metal's RT tier.
 pub fn golden_tier(gpu: &GpuDevice) -> Result<Tier> {
@@ -28,7 +25,7 @@ pub fn golden_tier(gpu: &GpuDevice) -> Result<Tier> {
         Ok("rt") => Ok(Tier::Rt),
         Ok("raster") => Ok(Tier::Raster),
         Ok(other) => anyhow::bail!("ARA_VFX_GOLDEN_TIER is rt or raster, not {other:?}"),
-        Err(_) if RT_FIDELITY && gpu.info().ray_tracing => Ok(Tier::Rt),
+        Err(_) if RT_FIDELITY_VERIFIED && gpu.info().ray_tracing => Ok(Tier::Rt),
         Err(_) => Ok(Tier::Raster),
     }
 }

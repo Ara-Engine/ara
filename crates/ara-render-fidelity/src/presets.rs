@@ -409,6 +409,12 @@ impl QualityPreset {
     }
 }
 
+/// Whether this backend's ray-traced fidelity renderer is verified correct. Metal's
+/// is not yet: on Apple GPUs its RT tier renders lit surfaces speckled with blocky
+/// bright artifacts, so a ray-tracing opt-in there takes the raster path
+/// ([`Plan::rt_fallback`], ARA6008) until it matches the Vulkan output.
+pub const RT_FIDELITY_VERIFIED: bool = cfg!(not(target_os = "macos"));
+
 /// A resolved preset for one view.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Plan {
@@ -418,13 +424,17 @@ pub struct Plan {
     pub requested: QualityPreset,
     /// Renderer and budgets.
     pub path: RenderPath,
+    /// Ray tracing was requested on a capable device whose RT fidelity is not
+    /// verified ([`RT_FIDELITY_VERIFIED`]): the path is raster, and hosts report
+    /// ARA6008 so the fallback is never silent.
+    pub rt_fallback: bool,
 }
 
 impl Plan {
     /// Resolves a choice for a device and display size. Every preset is raster
-    /// unless `options` opts in to ray tracing on a capable device; then Medium and
-    /// above use the fidelity renderer (Low stays raster). Raster runs every preset
-    /// on every device, so nothing is downgraded.
+    /// unless `options` opts in to ray tracing on a capable device with verified RT
+    /// fidelity; then Medium and above use the fidelity renderer (Low stays raster).
+    /// Raster runs every preset on every device, so nothing is downgraded.
     pub fn resolve(
         choice: QualityChoice,
         capabilities: &Capabilities,
@@ -434,7 +444,8 @@ impl Plan {
         if display_size.contains(&0) || display_size.iter().any(|v| *v > 8192) {
             bail!("Invalid display size {display_size:?}");
         }
-        let traced = options.ray_tracing && capabilities.ray_tracing;
+        let capable = options.ray_tracing && capabilities.ray_tracing;
+        let traced = capable && RT_FIDELITY_VERIFIED;
         let requested = match choice {
             QualityChoice::Auto if traced => QualityPreset::detect_ray_traced(capabilities),
             QualityChoice::Auto => QualityPreset::detect_raster(capabilities),
@@ -488,6 +499,7 @@ impl Plan {
             preset,
             requested,
             path,
+            rt_fallback: capable && !traced,
         })
     }
 }
@@ -564,20 +576,28 @@ mod tests {
         let choice = QualityChoice::Preset(QualityPreset::Epic);
         let epic = Plan::resolve(choice, &raster, display, traced).unwrap();
         assert_eq!(epic.preset, QualityPreset::Epic);
-        assert!(matches!(epic.path, RenderPath::Raster(_)));
+        assert!(matches!(epic.path, RenderPath::Raster(_)) && !epic.rt_fallback);
+        // An RT device runs the fidelity renderer where its RT tier is verified, and
+        // otherwise (Metal) reports the raster fallback instead of rendering it.
         for preset in QualityPreset::ALL {
             let plan = Plan::resolve(QualityChoice::Preset(preset), &RT, display, traced).unwrap();
+            assert_eq!(plan.rt_fallback, !RT_FIDELITY_VERIFIED);
             match plan.path {
                 RenderPath::Fidelity(f) => {
-                    assert_ne!(preset, QualityPreset::Low);
+                    assert!(RT_FIDELITY_VERIFIED && preset != QualityPreset::Low);
                     assert_eq!(f.upscaler, Upscaler::Taau);
                     f.settings(PostSettings::default()).validate().unwrap();
                 }
-                RenderPath::Raster(_) => assert_eq!(preset, QualityPreset::Low),
+                RenderPath::Raster(_) => {
+                    assert!(preset == QualityPreset::Low || !RT_FIDELITY_VERIFIED)
+                }
             }
         }
         let high = Plan::resolve(QualityChoice::Auto, &RT, display, traced).unwrap();
-        assert!(matches!(high.path, RenderPath::Fidelity(f) if f.render_size == [1280, 720]));
+        assert_eq!(
+            matches!(high.path, RenderPath::Fidelity(f) if f.render_size == [1280, 720]),
+            RT_FIDELITY_VERIFIED
+        );
         let auto = Plan::resolve(
             QualityChoice::Auto,
             &raster,

@@ -158,6 +158,20 @@ Fixes:
 - Point `ARA_METAL_SHADERCONVERTER` at `metal-shaderconverter` if it lives elsewhere.
 - Never commit cooked artifacts produced on a Mac; recook on the canonical host instead (docs/dev/macos.md).
 
+## ARA6008 GPU_RT_FIDELITY_FALLBACK: Ray-traced fidelity fell back to raster
+owner: ara-render-fidelity
+shown as: ARA_GPU_RT_FIDELITY_FALLBACK
+
+A warning from presentation: ray tracing was requested on a device with hardware ray queries, but this GPU backend's ray-traced fidelity renderer is not verified, so the view renders with the raster path instead. On Metal (Apple M3 and later) the RT tier renders lit surfaces speckled with blocky bright artifacts until it matches the Vulkan output.
+
+Causes:
+- The project or launch options turn ray tracing on, and the player or editor runs on macOS (`RT_FIDELITY_VERIFIED` is false for Metal).
+
+Fixes:
+- Nothing is required: raster is the default look (D27) and renders correctly on every device.
+- To see the ray-traced look, run the same project on Windows or Linux with an RT-capable GPU.
+- Engine developers: the Metal RT tier is re-enabled by `ara_render_fidelity::presets::RT_FIDELITY_VERIFIED` once the VFX RT goldens match on Metal (`ARA_VFX_GOLDEN_TIER=rt`).
+
 ## ARA6092 LAB_MAC_BATTERY: Mac lab job requires AC power
 owner: ara-dev
 shown as: ARA_LAB_MAC_BATTERY

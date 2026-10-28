@@ -237,6 +237,12 @@ impl Presenter {
                 "Ara presentation: {} (requested {}, {:?})",
                 plan.preset, plan.requested, plan.path
             );
+            if plan.rt_fallback {
+                eprintln!(
+                    "ARA6008: ray-traced fidelity is not verified on this GPU backend yet; {} renders with the raster path",
+                    plan.preset
+                );
+            }
         }
         match plan.path {
             RenderPath::Raster(raster) => {
