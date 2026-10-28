@@ -39,12 +39,12 @@ void probeSurfacesMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     uint backCount=0;for(uint j=0;j<64;j++)backCount+=backs[j];
     // Sixteen stratified rays inside this lane's texel: averaged surface data
     // smears small emitters over their texel instead of aliasing them away.
-    float3 albedo=0,emissive=0,normal=0;float meanHit=0,moment1=0,moment2=0;uint geometry=0;
+    float3 albedo=0,emissive=0,normal=0,centroid=0;float moment1=0,moment2=0;uint geometry=0;
     for(uint k=0;k<16;k++){
         float2 uv=(float2(lane%8,lane/8)+(float2(k%4,k/4)+0.5)/4)/8;float3 dir=octDecode(uv);
         Hit h;float t=RANGE;
         if(trace(f,origin,dir,RANGE,rng,h)){
-            Surface s=surface(f,h.id,h.primitive,h.bary);t=h.distance;geometry++;meanHit+=t;
+            Surface s=surface(f,h.id,h.primitive,h.bary);t=h.distance;geometry++;centroid+=dir*t;
             bool front=dot(s.geometricNormal,dir)<0 || s.transmission>0;
             if(front){if(dot(s.normal,-dir)<0)s.normal=-s.normal;albedo+=s.albedo*(1-s.metal);emissive+=s.emissive;normal+=s.normal;}
             else normal-=dir;
@@ -52,12 +52,18 @@ void probeSurfacesMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
         moment1+=t;moment2+=t*t;
     }
     float sky=1-geometry/16.;float g=max(float(geometry),1);
-    albedo/=g;emissive/=g;meanHit/=g;normal=length(normal)>0?normalize(normal):-octDecode((float2(lane%8,lane/8)+0.5)/8);
+    albedo/=g;emissive/=g;centroid/=g;normal=length(normal)>0?normalize(normal):-octDecode((float2(lane%8,lane/8)+0.5)/8);
+    // The centre ray's distance to the plane through the hits' centroid along their
+    // mean normal. Relighting (look-gi.slang giRelight) rebuilds one hit per texel on
+    // the centre ray; the hits' mean distance would land behind a surface seen at an
+    // angle (distance grows as 1/cos across the texel), where it shadows itself.
+    float3 axis=octDecode((float2(lane%8,lane/8)+0.5)/8);float facing=dot(normal,axis);
+    float hitDistance=facing<-0.05?clamp(dot(normal,centroid)/facing,0,RANGE):length(centroid);
     float2 n=octEncode(normal);
     uint4 packed=uint4(unorm8(albedo.r)|(unorm8(albedo.g)<<8)|(unorm8(albedo.b)<<16)|(unorm8(sky)<<24),
         uint(round(n.x*65535))|(uint(round(n.y*65535))<<16),
         halfBits(emissive.r)|(halfBits(emissive.g)<<16),
-        halfBits(emissive.b)|(halfBits(meanHit)<<16));
+        halfBits(emissive.b)|(halfBits(hitDistance)<<16));
     buffers[NonUniformResourceIndex(root.pass)].Store<uint4>((id*64+lane)*16,packed);
     buffers[NonUniformResourceIndex(root.arg)].Store<float4>((id*66+lane)*16,float4(moment1/16,moment2/16,0,0));
     if(lane==0){

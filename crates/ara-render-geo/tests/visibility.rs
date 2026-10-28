@@ -1,3 +1,5 @@
+mod support;
+
 use anyhow::{Result, ensure};
 use ara_geo::{Settings, cook, sample};
 use ara_gpu::GpuDevice;
@@ -96,6 +98,14 @@ fn hybrid_mesh_and_indirect_goldens_and_full_resolution_error() -> Result<()> {
         vertical_fov: 55.0f32.to_radians(),
     };
     let mut gpu = GpuDevice::new(&[], capture.join("gpu"))?;
+    // Atomic visibility needs 64-bit buffer atomics (Metal has none yet): skip with the
+    // reason `GeometryView` gives, like the product path.
+    if !gpu.info().buffer_int64_atomics {
+        eprintln!(
+            "skipped: ARA_GEO_CAPABILITY: shaderBufferInt64Atomics required for atomic visibility"
+        );
+        return Ok(());
+    }
     let mut mesh = GeometryView::new(
         &mut gpu,
         &geometry,
@@ -137,7 +147,7 @@ fn hybrid_mesh_and_indirect_goldens_and_full_resolution_error() -> Result<()> {
     }
     let expected = image::open(golden)?.to_rgba8();
     ensure!(
-        expected.as_raw() == &pixels,
+        support::matches_golden(&pixels, expected.as_raw()),
         "geometry golden differs; inspect captures before deliberate update"
     );
     draw(&mut gpu, &mut mesh, &camera, false, false)?;

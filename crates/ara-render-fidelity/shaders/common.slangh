@@ -281,6 +281,12 @@ uint2 gridPhase(Frame f){return gridPhaseOf(f.control.w);}
 int2 gridPointOf(Frame f,int2 p,uint2 grid){int2 phase=int2(grid);int2 q=max((p-phase)/2,int2(0))*2+phase;return min(q,int2(f.sizes.xy)-1-((int2(f.sizes.xy)-1-phase)&1));}
 int2 gridPoint(Frame f,int2 p){return gridPointOf(f,p,gridPhase(f));}
 float3 demodulation(Frame f,uint2 p){uint packed=uint(pixel(f,BASE,p).w);return pixel(f,WORLD+f.control.x,p).w==0?float3(1):max(float3(packed&255,(packed>>8)&255,(packed>>16)&255)/255.,float3(0.04));}
+// This frame's normal-incidence reflectance F0 at `p`, from the compact surface (35),
+// floored like `demodulation`. Reservoir specular and its histories stay F0-tinted, so
+// pixel-area accumulation integrates mixed materials; spatial reuse (lattice rebuild,
+// split a-trous) divides each neighbour's sample by its own F0 and restores the
+// receiving pixel's, so no neighbour's texture or metal tint bleeds into a pixel.
+float3 specularModulation(Frame f,uint2 p){float4 a=extraPixel(f,35,p);return max(lerp(float3(0.04),a.rgb,a.w),float3(0.04));}
 float3 cameraRay(Frame f,float2 pixelPosition){float2 uv=pixelPosition/float2(f.sizes.xy);float4 p=mul(f.inverseVp,float4(uv.x*2-1,1-uv.y*2,1,1));return normalize(p.xyz/p.w-f.camera.xyz);}
 #include "atmosphere.slangh"
 
