@@ -33,6 +33,34 @@ fn path(p: &Path) -> &str {
 }
 
 #[test]
+fn capabilities_report_layout_support_without_opening_a_project_or_profile() {
+    let root = scratch("capabilities");
+    let config = root.join("profile");
+    let crashes = root.join("crashes");
+    let output = Command::new(env!("CARGO_BIN_EXE_ara"))
+        .args(["--json", "capabilities"])
+        .current_dir(&root)
+        .env("ARA_CONFIG_DIR", &config)
+        .env("ARA_CRASH_DIR", &crashes)
+        .output()
+        .expect("capability query");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("capability JSON");
+    assert_eq!(value["projectLayouts"], serde_json::json!([4]));
+    assert_eq!(
+        value["engineVersion"],
+        ara_host::project_layout::CURRENT_ENGINE_VERSION
+    );
+    assert!(!root.join(".ara").exists());
+    assert!(!config.exists());
+    assert!(!crashes.exists());
+}
+
+#[test]
 fn sample_project_checks_clean_and_is_canonical() {
     let (code, out) = ara("project", &["check"]);
     assert_eq!(

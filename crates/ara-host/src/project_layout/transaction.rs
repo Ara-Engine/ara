@@ -166,7 +166,10 @@ pub fn migrate_project(
                 .take()
             {
                 progress(1.0, "Project migration saved");
-                return result;
+                return result.map(|mut value| {
+                    value["engineVersion"] = super::CURRENT_ENGINE_VERSION.into();
+                    value
+                });
             }
             std::thread::sleep(std::time::Duration::from_millis(5));
         }

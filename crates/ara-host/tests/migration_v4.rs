@@ -31,7 +31,7 @@ fn preview3() -> PathBuf {
     }
     fs::write(
         root.join("ara.project.json"),
-        r#"{"layoutVersion":3,"name":"Preview Three","main":"scenes/main.scene"}"#,
+        r#"{"layoutVersion":3,"name":"Preview Three","main":"scenes/main.scene","engineVersion":"legacy"}"#,
     )
     .expect("marker");
     fs::write(root.join("game/scenes/main.scene"),r#"{"$schema":"ara://schema/scene/1","id":"sc_main","records":{"e_instance":{"prefab":"@game/box.prefab#pf_box"}}}"#).expect("scene");
@@ -112,6 +112,17 @@ fn preview3_migration_is_readonly_until_consent_and_one_undo_restores_original_b
     )
     .expect("typed migration");
     assert_eq!(result["restartRequired"], true);
+    assert_eq!(
+        result["engineVersion"],
+        ara_host::project_layout::CURRENT_ENGINE_VERSION
+    );
+    let migrated_marker: Value =
+        serde_json::from_slice(&fs::read(root.join("ara.project.json")).expect("saved marker"))
+            .expect("marker JSON");
+    assert_eq!(
+        migrated_marker["engineVersion"],
+        ara_host::project_layout::CURRENT_ENGINE_VERSION
+    );
     assert!(!root.join("game").exists());
     let updated_guide = fs::read_to_string(root.join("AGENTS.md")).expect("updated guide");
     assert!(updated_guide.contains("`content/` holds every authored file"));
@@ -314,6 +325,64 @@ fn prior_attributed_history_is_retained_and_requires_undoing_migration_first() {
         text
     );
     assert!(Project::open(&root).is_err());
+}
+
+#[test]
+fn current_engine_pin_is_typed_saved_and_undoable_without_compiling_game_code() {
+    let root = scratch("current-engine");
+    fs::create_dir_all(root.join("content/scripts")).expect("source root");
+    fs::write(
+        root.join("ara.project.json"),
+        r#"{"layoutVersion":4,"name":"Engine pin","engineVersion":"legacy"}"#,
+    )
+    .expect("current-layout marker");
+    fs::write(
+        root.join("content/scripts/DoNotCompile.cs"),
+        "#error pinning must not compile user source",
+    )
+    .expect("source sentinel");
+    let pinned = ara_host::project_layout::pin_current_engine(&root).expect("typed pin");
+    assert_eq!(pinned["saved"], true);
+    assert_eq!(
+        pinned["engineVersion"],
+        ara_host::project_layout::CURRENT_ENGINE_VERSION
+    );
+    let marker: Value = serde_json::from_slice(
+        &fs::read(root.join("ara.project.json")).expect("physically saved marker"),
+    )
+    .expect("marker JSON");
+    assert_eq!(
+        marker["engineVersion"],
+        ara_host::project_layout::CURRENT_ENGINE_VERSION
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("content/scripts/DoNotCompile.cs")).expect("unchanged source"),
+        "#error pinning must not compile user source"
+    );
+    let mut host = Host::open(
+        Project::open(&root).expect("project"),
+        HostConfig::default(),
+    )
+    .expect("authority");
+    assert_eq!(host.store().history().len(), 1);
+    let session = host
+        .call(
+            ConnId::LOCAL,
+            "session.begin",
+            json!({"client":"test","author":"human"}),
+        )
+        .expect("session")["session"]
+        .clone();
+    let undo = host
+        .call(ConnId::LOCAL, "history.undo", json!({"session":session}))
+        .expect("undo engine pin");
+    await_job(&mut host, &session, undo);
+    host.flush();
+    drop(host);
+    let marker: Value =
+        serde_json::from_slice(&fs::read(root.join("ara.project.json")).expect("restored marker"))
+            .expect("marker JSON");
+    assert_eq!(marker["engineVersion"], "legacy");
 }
 
 #[test]

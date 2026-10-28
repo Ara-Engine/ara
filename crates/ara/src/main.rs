@@ -55,6 +55,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Report engine capabilities without opening a project or profile.
+    Capabilities,
     /// Check installed editor prerequisites without a project.
     Doctor,
     /// Local performance regression checks (no daemon or project required).
@@ -434,6 +436,14 @@ fn run(cli: Cli) -> Result<bool, Diagnostic> {
     let open = |files: &[PathBuf]| project::open(root_flag, files);
     let io = |msg: String| Diagnostic::error(codes::IO, msg);
     match cli.command {
+        Command::Capabilities => {
+            let capabilities = json!({
+                "engineVersion": ara_host::project_layout::CURRENT_ENGINE_VERSION,
+                "projectLayouts": [ara_doc::PROJECT_LAYOUT_VERSION]
+            });
+            print!("{}", ara_json::to_canonical_string(&capabilities));
+            Ok(true)
+        }
         Command::Doctor => Ok(commands::doctor::doctor(json)),
         Command::Profile {
             command:

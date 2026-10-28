@@ -286,8 +286,7 @@ fn relative(message: &str, root: &Path) -> String {
 
 /// The square master image for a source, from the content-addressed cache when the
 /// source, its import settings and its dependencies are unchanged. Paths are
-/// authored-root-relative. `None` while a
-/// model's import has not published.
+/// authored-root-relative. `None` while a model's import has not published.
 fn master(
     root: &Path,
     path: &str,
@@ -600,7 +599,7 @@ mod tests {
                 .display()
         );
         assert_eq!(
-            relative(&message, &root),
+            relative(&message, &root).replace('\\', "/"),
             format!(
                 "{}/models/box.gltf could not be read",
                 ara_doc::AUTHORING_ROOT

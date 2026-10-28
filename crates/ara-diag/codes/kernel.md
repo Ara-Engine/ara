@@ -1152,7 +1152,7 @@ Fixes:
 owner: ara-host
 
 The project uses the provisional preview-3 `game/` layout or an earlier layout
-with authored folders at its root. Opening is refused before C# discovery,
+with authored folders at its root. Opening with the current engine is refused before C# discovery,
 imports, Play or export so an old project cannot silently lose content.
 
 Causes:
@@ -1162,3 +1162,18 @@ Fixes:
 - Preview with `ara project migrate --dry-run`, then explicitly run `ara project migrate`.
 - Open in the Hub or editor and review the migration preview, then choose Migrate.
 - Choose Cancel to leave the project untouched and closed.
+
+## ARA1915 PROJECT_ENGINE_LAYOUT_UNSUPPORTED: Pinned engine cannot open this layout
+owner: ara-hub-service
+
+The project uses the `content/` layout but its pinned engine does not declare
+support for project layout 4. The Hub refuses to launch that engine.
+
+Causes:
+- An older engine is pinned to a migrated or preview-4 project.
+- The executable has no valid capability declaration; undeclared engines support v3 only.
+
+Fixes:
+- Choose Use current engine in the Hub, or install the current engine when offered.
+- Cancel to keep the project closed and its pin unchanged.
+- A v3 project may continue using its old engine until explicitly migrated; migration pins the current capable engine.

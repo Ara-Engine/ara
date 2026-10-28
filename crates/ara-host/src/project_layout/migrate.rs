@@ -288,6 +288,7 @@ impl Migration {
                 }
                 if source == migration.root.join(crate::project::MARKER) {
                     value["layoutVersion"] = Value::from(super::VERSION);
+                    value["engineVersion"] = Value::from(super::CURRENT_ENGINE_VERSION);
                     if let Some(fields) = value.as_object_mut() {
                         for key in super::POLICY_KEYS {
                             fields.remove(*key);

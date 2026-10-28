@@ -10,6 +10,8 @@ pub use transaction::{
 };
 mod check;
 pub use check::require_current_layout;
+mod pin;
+pub use pin::pin_current_engine;
 
 pub use crate::project_policy::{PREFERENCES, PREFERENCES_ID, policy};
 pub use ara_doc::AUTHORING_ROOT;
@@ -36,6 +38,8 @@ pub(crate) const POLICY_KEYS: &[&str] = &[
 pub const BUILDS: &str = "builds";
 /// The current on-disk layout version in `ara.project.json`.
 pub const VERSION: u64 = ara_doc::PROJECT_LAYOUT_VERSION;
+/// Version of the current engine performing project migration or an explicit pin change.
+pub const CURRENT_ENGINE_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Instructions installed at the project root for humans and coding agents.
 pub const AGENT_GUIDE: &str = include_str!("project_layout/agents.md");
 
