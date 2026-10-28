@@ -99,7 +99,7 @@ fn live_datagram_counters_belong_to_the_same_proxy_and_empty_shape_is_preserved(
     }
     let actual = host.stats();
     assert_eq!(actual.links[0].up_stats.packets, 1);
-    assert_eq!(actual.links[0].up_stats.bytes, payload.len() as u64);
+    assert_eq!(actual.links[0].up_stats.offered_bytes, payload.len() as u64);
     assert_eq!(actual.links[1].up_stats.packets, 0);
     assert_eq!(actual.up_bytes, actual.links[0].up_stats.delivered_bytes);
     assert_eq!(actual.tick, 0, "Inspection did not step gameplay");
