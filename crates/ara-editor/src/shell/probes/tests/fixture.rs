@@ -42,8 +42,8 @@ impl Fixture {
         let project = Project::new();
         let profile = project.0.join(".ara/test-profile");
         std::fs::create_dir_all(&profile).unwrap();
-        let mut editor = Editor::open_with(&project.0, Some(profile.join("editor-settings.json")))
-            .unwrap();
+        let mut editor =
+            Editor::open_with(&project.0, Some(profile.join("editor-settings.json"))).unwrap();
         editor
             .action(
                 "editor.layout.move",
