@@ -15,6 +15,9 @@ fn probe() -> Command {
     command
 }
 
+/// Vulkan platforms only: macOS renders through Metal, which has no driver
+/// manifest to point elsewhere.
+#[cfg(not(target_os = "macos"))]
 #[test]
 fn missing_vulkan_driver_has_a_doctor_hint() {
     let output = probe()

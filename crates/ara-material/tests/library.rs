@@ -5,6 +5,14 @@ use std::collections::BTreeMap;
 use ara_graph::Editor;
 use ara_material::*;
 
+/// Targets these tests compile. The Mac's slangc cannot load dxc for DXIL
+/// (docs/dev/macos.md: Windows is the canonical cook host).
+const TARGETS: &[ShaderTarget] = if cfg!(target_os = "macos") {
+    &[ShaderTarget::Spirv]
+} else {
+    &[ShaderTarget::Spirv, ShaderTarget::Dxil]
+};
+
 fn material(op: &str, types: &[Type], domain: Domain) -> Material {
     let mut m = Material {
         id: "gr_library".into(),
@@ -235,7 +243,7 @@ fn every_starter_node_roundtrips_and_compiles_both_targets() {
             Material::from_graph(&m.to_graph(Editor::default()).unwrap()).unwrap()
         );
         let generated = generate(&m, &Instance::default()).unwrap();
-        for target in [ShaderTarget::Spirv, ShaderTarget::Dxil] {
+        for &target in TARGETS {
             compiler
                 .compile(&generated, target)
                 .unwrap_or_else(|e| panic!("{}/{target:?}: {e}", builtin.name));
@@ -254,7 +262,7 @@ fn matrix_overloads_packing_and_all_domain_contracts() {
             assert_eq!(packed.rows[0], [1.0, 0.0, 0.0, 0.0]);
             assert_eq!(packed.rows[1], [0.0, 1.0, 0.0, 0.0]);
         }
-        for target in [ShaderTarget::Spirv, ShaderTarget::Dxil] {
+        for &target in TARGETS {
             compiler
                 .compile(&generate(&m, &Instance::default()).unwrap(), target)
                 .unwrap();
@@ -263,7 +271,7 @@ fn matrix_overloads_packing_and_all_domain_contracts() {
     for domain in Domain::ALL {
         let m = material("color", &[Type::Vec3], *domain);
         check(&m).unwrap();
-        for target in [ShaderTarget::Spirv, ShaderTarget::Dxil] {
+        for &target in TARGETS {
             compiler
                 .compile(&generate(&m, &Instance::default()).unwrap(), target)
                 .unwrap();
