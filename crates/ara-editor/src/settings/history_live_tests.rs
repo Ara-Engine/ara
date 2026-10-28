@@ -554,6 +554,15 @@ fn live_projection_obeys_empty_null_invalid_and_legacy_sections_without_writing_
     ];
     for (preferences, profile, tick_hz, quality) in cases {
         let workspace = workspace(preferences);
+        let before: std::collections::BTreeMap<_, _> = workspace
+            .docs()
+            .map(|(path, doc)| {
+                (
+                    path.to_owned(),
+                    ara_doc::write(doc, settings.store.schema()),
+                )
+            })
+            .collect();
         assert!(settings.reconcile_values(&workspace, &[]));
         assert!(
             !settings.reconcile_values(&workspace, &[]),
@@ -565,6 +574,19 @@ fn live_projection_obeys_empty_null_invalid_and_legacy_sections_without_writing_
         assert_eq!(settings.value("appearance.theme"), "light");
         assert_eq!(settings.value("project.name"), "Live settings");
         assert_eq!(settings.store.revision(), revision);
+        assert_eq!(
+            workspace
+                .docs()
+                .map(|(path, doc)| {
+                    (
+                        path.to_owned(),
+                        ara_doc::write(doc, settings.store.schema()),
+                    )
+                })
+                .collect::<std::collections::BTreeMap<_, _>>(),
+            before,
+            "Legacy policy projection must preserve every loaded marker/preferences document"
+        );
         for (path, before) in &files {
             assert_eq!(
                 &std::fs::read(project.0.join(path)).unwrap(),

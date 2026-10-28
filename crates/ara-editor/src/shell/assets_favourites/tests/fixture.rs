@@ -2,6 +2,14 @@ use super::*;
 use crate::shell::assets::scan_fixture::controlled;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+pub(super) fn storage(path: &str) -> String {
+    if path.is_empty() {
+        ara_doc::AUTHORING_ROOT.into()
+    } else {
+        format!("{}/{path}", ara_doc::AUTHORING_ROOT)
+    }
+}
+
 pub(super) struct Project(pub PathBuf);
 impl Project {
     pub fn new() -> ara_ui::Result<Self> {
@@ -13,14 +21,15 @@ impl Project {
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
-        std::fs::create_dir_all(root.join("game/levels"))?;
+        std::fs::create_dir_all(root.join(storage("levels")))?;
+        let scene_storage = storage("levels/main.scene");
         for (path, value) in [
             (
                 "ara.project.json",
-                json!({"name":"Asset bookmarks","layoutVersion":3,"main":"levels/main.scene"}),
+                json!({"name":"Asset bookmarks","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene"}),
             ),
             (
-                "game/levels/main.scene",
+                scene_storage.as_str(),
                 json!({"$schema":"ara://schema/scene/1","id":"sc_bookmarks","records":{"e_bookmarks":{"name":"Context","Transform":{}}}}),
             ),
         ] {
@@ -57,26 +66,35 @@ impl Fixture {
         editor.action("editor.view", json!({"maximized":"assets"}))?;
         editor.action(
             "editor.workspace",
-            json!({"folder":"game/Art","grid":false}),
+            json!({"folder":storage("Art"),"grid":false}),
         )?;
         let mut shell = Shell::new(&mut editor, size)?;
         shell.offscreen = true;
-        let (browser, mut worker) = controlled("game");
+        let (browser, mut worker) = controlled(ara_doc::AUTHORING_ROOT);
         shell.browser = browser;
-        let mut items = vec![assets::Asset::folder("game".into(), Some(String::new()))];
-        for folder in ["game/Art", "game/Art/Nested", "game/Artist"] {
+        let mut items = vec![assets::Asset::folder(
+            ara_doc::AUTHORING_ROOT.into(),
+            Some(String::new()),
+        )];
+        for folder in [storage("Art"), storage("Art/Nested"), storage("Artist")] {
             items.push(assets::Asset::folder(
-                folder.into(),
-                folder.strip_prefix("game/").map(str::to_owned),
+                folder.clone(),
+                folder
+                    .strip_prefix(ara_doc::AUTHORING_ROOT)
+                    .and_then(|tail| tail.strip_prefix('/'))
+                    .map(str::to_owned),
             ));
         }
         for path in [
-            "game/Art/a.prefab",
-            "game/Art/Nested/b.prefab",
-            "game/Artist/outside.prefab",
+            storage("Art/a.prefab"),
+            storage("Art/Nested/b.prefab"),
+            storage("Artist/outside.prefab"),
         ] {
-            let mut asset = assets::Asset::unindexed(path.into(), "prefab".into());
-            asset.authored_path = path.strip_prefix("game/").map(str::to_owned);
+            let mut asset = assets::Asset::unindexed(path.clone(), "prefab".into());
+            asset.authored_path = path
+                .strip_prefix(ara_doc::AUTHORING_ROOT)
+                .and_then(|tail| tail.strip_prefix('/'))
+                .map(str::to_owned);
             asset.document_kind = Some("prefab".into());
             items.push(asset);
         }

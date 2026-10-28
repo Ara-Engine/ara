@@ -6,7 +6,7 @@ use ara_ui::input::InputEvent;
 fn native_view_show_gizmo_and_orientation_rows_toggle_both_ways_and_update_checkmarks()
 -> ara_ui::Result<()> {
     for command in ["view.show.gizmos", "view.show.orientation"] {
-        let (mut editor, mut shell) = prefab_source_tests::open(true)?;
+        let (mut editor, mut shell) = prefab_source_tests::open()?;
         let mut clipboard = Clipboard::default();
         let before = (editor.state.hide_gizmos, editor.state.hide_orientation);
         let content_revision = editor.host.store().revision();
@@ -169,7 +169,7 @@ fn release(
 #[test]
 fn held_row_cannot_rebind_to_another_command_or_new_callback_generation() -> ara_ui::Result<()> {
     for next_generation in [None, Some("next")] {
-        let (mut editor, mut shell) = prefab_source_tests::open(true)?;
+        let (mut editor, mut shell) = prefab_source_tests::open()?;
         let mut clipboard = Clipboard::default();
         catalog(&mut editor, None, &[("Custom/Action", "view.show.grid")]);
         shell.open_bar_title("Custom", false);
@@ -223,7 +223,7 @@ fn held_row_cannot_rebind_to_another_command_or_new_callback_generation() -> ara
             "A second native click restores the original visibility"
         );
     }
-    let (mut editor, mut shell) = prefab_source_tests::open(true)?;
+    let (mut editor, mut shell) = prefab_source_tests::open()?;
     let mut clipboard = Clipboard::default();
     catalog(
         &mut editor,
@@ -257,7 +257,7 @@ fn held_row_cannot_rebind_to_another_command_or_new_callback_generation() -> ara
 #[test]
 fn unchanged_held_command_survives_sibling_removal_and_keyboard_focus_tracks_identity()
 -> ara_ui::Result<()> {
-    let (mut editor, mut shell) = prefab_source_tests::open(true)?;
+    let (mut editor, mut shell) = prefab_source_tests::open()?;
     let mut clipboard = Clipboard::default();
     catalog(
         &mut editor,
@@ -305,7 +305,7 @@ fn unchanged_held_command_survives_sibling_removal_and_keyboard_focus_tracks_ide
 
 #[test]
 fn top_level_capture_and_open_submenu_follow_names_instead_of_positions() -> ara_ui::Result<()> {
-    let (mut editor, mut shell) = prefab_source_tests::open(true)?;
+    let (mut editor, mut shell) = prefab_source_tests::open()?;
     let mut clipboard = Clipboard::default();
     catalog(
         &mut editor,
@@ -378,7 +378,7 @@ fn top_level_capture_and_open_submenu_follow_names_instead_of_positions() -> ara
 
 #[test]
 fn old_header_generation_and_changed_display_title_cancel_the_capture() -> ara_ui::Result<()> {
-    let (mut editor, mut shell) = prefab_source_tests::open(true)?;
+    let (mut editor, mut shell) = prefab_source_tests::open()?;
     let mut clipboard = Clipboard::default();
     catalog(
         &mut editor,
@@ -416,7 +416,7 @@ fn old_header_generation_and_changed_display_title_cancel_the_capture() -> ara_u
 #[test]
 fn held_context_command_cannot_copy_a_different_asset_after_browser_reorder() -> ara_ui::Result<()>
 {
-    let (mut editor, mut shell) = prefab_source_tests::open(true)?;
+    let (mut editor, mut shell) = prefab_source_tests::open()?;
     let mut clipboard = Clipboard::default();
     shell.browser.items = [("base", "pf_menubase"), ("outer", "pf_menuouter")]
         .into_iter()
@@ -467,7 +467,7 @@ fn held_context_command_cannot_copy_a_different_asset_after_browser_reorder() ->
 
 #[test]
 fn implicit_selection_target_change_cancels_held_entity_command() -> ara_ui::Result<()> {
-    let (mut editor, mut shell) = prefab_source_tests::open(true)?;
+    let (mut editor, mut shell) = prefab_source_tests::open()?;
     let mut clipboard = Clipboard::default();
     editor.action("editor.select", json!({"entities":["e_unrelated"]}))?;
     catalog(
@@ -490,7 +490,7 @@ fn implicit_selection_target_change_cancels_held_entity_command() -> ara_ui::Res
 #[test]
 fn single_segment_registration_uses_registered_title_and_deterministic_roots() -> ara_ui::Result<()>
 {
-    let (mut editor, mut shell) = prefab_source_tests::open(true)?;
+    let (mut editor, mut shell) = prefab_source_tests::open()?;
     catalog(
         &mut editor,
         None,

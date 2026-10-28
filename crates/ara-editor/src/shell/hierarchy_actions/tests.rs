@@ -15,12 +15,12 @@ fn open() -> Editor {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-    std::fs::create_dir_all(root.join("levels")).unwrap();
-    std::fs::create_dir_all(root.join("prefabs")).unwrap();
+    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
+    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("prefabs")).unwrap();
     for (path, value) in [
         (
             "ara.project.json",
-            json!({"name":"Hierarchy actions","main":"levels/main.scene"}),
+            json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Hierarchy actions","main":"levels/main.scene"}),
         ),
         (
             "levels/main.scene",
@@ -34,7 +34,17 @@ fn open() -> Editor {
             }}),
         ),
     ] {
-        std::fs::write(root.join(path), ara_json::to_canonical_string(&value)).unwrap();
+        std::fs::write(
+            root.join(
+                if path == "ara.project.json" || path.starts_with("settings/") {
+                    std::path::PathBuf::from(path)
+                } else {
+                    std::path::PathBuf::from(ara_doc::AUTHORING_ROOT).join(path)
+                },
+            ),
+            ara_json::to_canonical_string(&value),
+        )
+        .unwrap();
     }
     Editor::open_with(&root, Some(root.join(".ara/test-settings.json"))).unwrap()
 }

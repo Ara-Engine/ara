@@ -26,7 +26,7 @@ impl Project {
         std::fs::write(
             root.join("ara.project.json"),
             ara_json::to_canonical_string(
-                &json!({"name":"Floating split test","layoutVersion":3,"main":"levels/main.scene"}),
+                &json!({"name":"Floating split test","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene"}),
             ),
         )
         .unwrap();

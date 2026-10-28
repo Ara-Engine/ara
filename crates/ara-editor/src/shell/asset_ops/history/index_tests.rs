@@ -7,6 +7,10 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+fn storage(path: &str) -> String {
+    format!("{}/{path}", ara_doc::AUTHORING_ROOT)
+}
+
 struct Project(PathBuf);
 impl Project {
     fn new() -> ara_ui::Result<Self> {
@@ -18,23 +22,26 @@ impl Project {
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
-        std::fs::create_dir_all(root.join("game/levels"))?;
-        std::fs::create_dir_all(root.join("game/Art"))?;
+        std::fs::create_dir_all(root.join(storage("levels")))?;
+        std::fs::create_dir_all(root.join(storage("Art")))?;
+        let scene_storage = storage("levels/main.scene");
+        let a_storage = storage("Art/A.prefab");
+        let b_storage = storage("Art/B.prefab");
         for (path, value) in [
             (
                 "ara.project.json",
-                json!({"name":"Index barrier","layoutVersion":3,"main":"levels/main.scene"}),
+                json!({"name":"Index barrier","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene"}),
             ),
             (
-                "game/levels/main.scene",
+                scene_storage.as_str(),
                 json!({"$schema":"ara://schema/scene/1","id":"sc_indexbarrier","records":{"e_context":{"name":"Context","Transform":{}}}}),
             ),
             (
-                "game/Art/A.prefab",
+                a_storage.as_str(),
                 json!({"$schema":"ara://schema/prefab/1","id":"pf_indexa","records":{"e_originala":{"name":"A","Transform":{}}}}),
             ),
             (
-                "game/Art/B.prefab",
+                b_storage.as_str(),
                 json!({"$schema":"ara://schema/prefab/1","id":"pf_indexb","records":{"e_originalb":{"name":"B","Transform":{}}}}),
             ),
         ] {
@@ -62,14 +69,14 @@ impl ara_ui_text::Clipboard for Clip {
     }
 }
 fn rows(copied: bool) -> Vec<assets::Asset> {
-    let mut items = vec![assets::Asset::folder("game/Art".into(), Some("Art".into()))];
+    let mut items = vec![assets::Asset::folder(storage("Art"), Some("Art".into()))];
     for name in if copied {
         vec!["A", "B", "A Copy", "B Copy"]
     } else {
         vec!["A", "B"]
     } {
         let mut asset =
-            assets::Asset::unindexed(format!("game/Art/{name}.prefab"), "prefab".into());
+            assets::Asset::unindexed(storage(&format!("Art/{name}.prefab")), "prefab".into());
         asset.authored_path = Some(format!("Art/{name}.prefab"));
         asset.document_kind = Some("prefab".into());
         items.push(asset);
@@ -78,20 +85,26 @@ fn rows(copied: bool) -> Vec<assets::Asset> {
 }
 fn select(editor: &mut Editor, shell: &mut Shell, copied: bool) -> ara_ui::Result<Selection> {
     let paths = if copied {
-        ["game/Art/A Copy.prefab", "game/Art/B Copy.prefab"]
+        [storage("Art/A Copy.prefab"), storage("Art/B Copy.prefab")]
     } else {
-        ["game/Art/A.prefab", "game/Art/B.prefab"]
+        [storage("Art/A.prefab"), storage("Art/B.prefab")]
     };
-    let primary = if copied { paths[0] } else { paths[1] };
+    let primary = if copied {
+        paths[0].as_str()
+    } else {
+        paths[1].as_str()
+    };
     editor.action(
         "editor.workspace",
-        json!({"folder":"game/Art","asset":primary}),
+        json!({"folder":storage("Art"),"asset":primary}),
     )?;
     // Native file selection addresses the current folder's displayed model.
     // Install it before setting active focus, just as the browser does before
     // accepting a row click; scanner publications alone do not replace rows.
     shell.rebuild(editor)?;
-    shell.asset_selection.set_selected(paths.map(stable_id));
+    shell
+        .asset_selection
+        .set_selected(paths.iter().map(|path| stable_id(path)));
     shell.asset_selection.focus(stable_id(primary));
     shell.asset_selection_path = Some(primary.into());
     Ok(Selection::read(shell, editor))
@@ -136,7 +149,7 @@ fn fixture() -> ara_ui::Result<Fixture> {
     editor.action("editor.select", json!({"entities":["e_context"]}))?;
     editor.action("editor.layout.show", json!({"panel":"assets"}))?;
     let mut shell = Shell::new(&mut editor, [1440., 900.])?;
-    let (browser, mut worker) = controlled("game");
+    let (browser, mut worker) = controlled(ara_doc::AUTHORING_ROOT);
     shell.browser = browser;
     let generation = worker.start();
     worker.publish(generation, rows(false))?;
@@ -458,7 +471,7 @@ fn fresh_job_snapshot_does_not_replace_a_later_human_selection() -> ara_ui::Resu
         .browser
         .items
         .iter()
-        .find(|asset| asset.path == "game/Art/A.prefab")
+        .find(|asset| asset.path == storage("Art/A.prefab"))
         .cloned()
         .ok_or("Source asset missing")?;
     f.shell.select_asset_item(&mut f.editor, &asset)?;

@@ -17,8 +17,8 @@ pub(in crate::app) fn prepare(options: &super::super::Options) -> ara_ui::Result
     }
     let marker: Value =
         serde_json::from_str(&std::fs::read_to_string(project.join("ara.project.json"))?)?;
-    if marker["layoutVersion"] != 3 {
-        return Err("Hierarchy fixture expects the freshly created layout-3 authored root".into());
+    if marker["layoutVersion"] != ara_doc::PROJECT_LAYOUT_VERSION {
+        return Err("Hierarchy fixture expects the freshly created current authored root".into());
     }
     let path = project
         .join(ara_doc::AUTHORING_ROOT)

@@ -21,7 +21,7 @@ impl Project {
         for (path, value) in [
             (
                 PathBuf::from("ara.project.json"),
-                json!({"layoutVersion":3,"name":"Resource identity","main":"levels/main.scene"}),
+                json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Resource identity","main":"levels/main.scene"}),
             ),
             (
                 PathBuf::from(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),

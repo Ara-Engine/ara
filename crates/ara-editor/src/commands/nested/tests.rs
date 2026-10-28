@@ -19,7 +19,7 @@ impl Project {
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
-        std::fs::create_dir_all(root.join("levels")).unwrap();
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
         let list: Vec<_> = (0..160).map(|index| format!("item{index}")).collect();
         let map: serde_json::Map<String, Value> = (0..160)
             .map(|index| (format!("k{index:03}"), json!(index)))
@@ -27,7 +27,7 @@ impl Project {
         for (path, value) in [
             (
                 "ara.project.json",
-                json!({"name":"Collection edits","main":"levels/main.scene"}),
+                json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Collection edits","main":"levels/main.scene"}),
             ),
             (
                 "levels/main.scene",
@@ -37,7 +37,17 @@ impl Project {
                 }}),
             ),
         ] {
-            std::fs::write(root.join(path), ara_json::to_canonical_string(&value)).unwrap();
+            std::fs::write(
+                root.join(
+                    if path == "ara.project.json" || path.starts_with("settings/") {
+                        std::path::PathBuf::from(path)
+                    } else {
+                        std::path::PathBuf::from(ara_doc::AUTHORING_ROOT).join(path)
+                    },
+                ),
+                ara_json::to_canonical_string(&value),
+            )
+            .unwrap();
         }
         Self(root)
     }

@@ -184,7 +184,10 @@ fn run_sweep(project: &Project, capture: &mut impl FnMut(&mut Shell, &str)) -> S
             }
         }
         editor
-            .action("editor.workspace", json!({"asset":"textures/quality.png"}))
+            .action(
+                "editor.workspace",
+                json!({"asset":format!("{}/textures/quality.png",ara_doc::AUTHORING_ROOT)}),
+            )
             .unwrap();
         show(&mut editor, &mut shell, "inspector");
         sweep.context(

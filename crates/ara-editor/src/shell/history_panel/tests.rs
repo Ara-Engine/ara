@@ -15,18 +15,28 @@ impl Project {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir_all(root.join("levels")).unwrap();
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
         for (path, value) in [
             (
                 "ara.project.json",
-                json!({"name":"History panel","main":"levels/main.scene"}),
+                json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"History panel","main":"levels/main.scene"}),
             ),
             (
                 "levels/main.scene",
                 json!({"$schema":"ara://schema/scene/1","id":"sc_history01","records":{}}),
             ),
         ] {
-            std::fs::write(root.join(path), ara_json::to_canonical_string(&value)).unwrap();
+            std::fs::write(
+                root.join(
+                    if path == "ara.project.json" || path.starts_with("settings/") {
+                        std::path::PathBuf::from(path)
+                    } else {
+                        std::path::PathBuf::from(ara_doc::AUTHORING_ROOT).join(path)
+                    },
+                ),
+                ara_json::to_canonical_string(&value),
+            )
+            .unwrap();
         }
         Self(root)
     }

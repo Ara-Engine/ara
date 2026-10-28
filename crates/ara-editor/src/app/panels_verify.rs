@@ -29,6 +29,10 @@ pub(super) struct Verification {
 }
 
 pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
+    if root.join("ara.project.json").exists() {
+        ara_host::project_layout::require_current_layout(root)
+            .map_err(|diagnostic| diagnostic.to_string())?;
+    }
     if !root.join("ara.project.json").exists() {
         let content = root.join(ara_doc::AUTHORING_ROOT);
         std::fs::create_dir_all(content.join("levels"))?;

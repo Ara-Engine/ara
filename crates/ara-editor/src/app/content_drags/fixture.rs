@@ -27,7 +27,7 @@ pub(in crate::app) fn fixture(options: &mut Options) -> ara_ui::Result<()> {
     for (path, value) in [
         (
             "ara.project.json",
-            json!({"name":"Editor behaviours","main":"levels/main.scene","layoutVersion":3}),
+            json!({"name":"Editor behaviours","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
         ),
         (
             "levels/main.scene",

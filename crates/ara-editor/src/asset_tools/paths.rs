@@ -114,16 +114,13 @@ mod tests {
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
-        for (name, modern, media) in [
-            ("modern", true, "assets/rock.glb"),
-            ("modern-nested-game", true, "game/assets/rock.glb"),
-            ("legacy-game-folder", false, "game/assets/rock.glb"),
+        for (name, media) in [
+            ("current", "assets/rock.glb"),
+            ("current-nested-game", "game/assets/rock.glb"),
         ] {
             let root = base.join(name);
             let mut workspace = Workspace::default();
-            if modern {
-                workspace.set_reference_root(ara_doc::AUTHORING_ROOT);
-            }
+            workspace.set_reference_root(ara_doc::AUTHORING_ROOT);
             let storage = workspace.storage_path(media);
             let physical = root.join(&storage);
             std::fs::create_dir_all(
@@ -131,11 +128,7 @@ mod tests {
                     .parent()
                     .ok_or("Source fixture parent is missing")?,
             )?;
-            let marker = if modern {
-                serde_json::json!({"layoutVersion":3})
-            } else {
-                serde_json::json!({})
-            };
+            let marker = serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION});
             std::fs::write(
                 root.join("ara.project.json"),
                 ara_json::to_canonical_string(&marker),
@@ -144,7 +137,7 @@ mod tests {
             let logical = source(&workspace, &storage)?;
             assert_eq!(logical, media);
             // SourceAsset.path is relative to the root already selected by the
-            // import pipeline. Preserve a genuine nested/legacy `game` folder.
+            // import pipeline. Preserve a genuine nested `game` folder.
             let input = ara_host::project::authored_root(&root).join(logical);
             assert_eq!(dunce::canonicalize(input)?, dunce::canonicalize(&physical)?);
         }

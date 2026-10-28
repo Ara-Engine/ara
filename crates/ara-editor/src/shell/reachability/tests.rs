@@ -34,7 +34,7 @@ impl Fixture {
         std::fs::create_dir(&root).unwrap();
         let content = root.join(ara_doc::AUTHORING_ROOT);
         std::fs::create_dir_all(content.join("levels")).unwrap();
-        std::fs::write(root.join("ara.project.json"),ara_json::to_canonical_string(&json!({"name":"Validation job tests","layoutVersion":3,"main":"levels/main.scene"}))).unwrap();
+        std::fs::write(root.join("ara.project.json"),ara_json::to_canonical_string(&json!({"name":"Validation job tests","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene"}))).unwrap();
         let records=(0..count).map(|index| {
             let record=if invalid {json!({"name":"Invalid validation source","Transform":{"position":"wrong-type"},"FollowCamera":{"target":"e_missing0000"}})}
                 else {json!({"name":"Validation source","Transform":{}})};

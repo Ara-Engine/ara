@@ -21,7 +21,7 @@ impl Project {
         std::fs::write(
             root.join("ara.project.json"),
             ara_json::to_canonical_string(
-                &json!({"layoutVersion":3,"name":"Callback ownership","main":"levels/first.scene"}),
+                &json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Callback ownership","main":"levels/first.scene"}),
             ),
         )
         .unwrap();

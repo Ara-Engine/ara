@@ -2,6 +2,10 @@
 use super::*;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+fn storage(path: &str) -> String {
+    format!("{}/{path}", ara_doc::AUTHORING_ROOT)
+}
+
 struct Project(PathBuf);
 impl Drop for Project {
     fn drop(&mut self) {
@@ -26,18 +30,20 @@ fn compact_capture_tracks_typed_changes_without_replacing_full_snapshot_assertio
                 NEXT.fetch_add(1, Ordering::Relaxed)
             )),
     );
-    std::fs::create_dir_all(project.0.join("game/levels"))?;
+    std::fs::create_dir_all(project.0.join(storage("levels")))?;
+    let main_storage = storage("levels/main.scene");
+    let untouched_storage = storage("levels/untouched.scene");
     for (path, value) in [
         (
             "ara.project.json",
-            json!({"name":"Capture documents","layoutVersion":3,"main":"levels/main.scene"}),
+            json!({"name":"Capture documents","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene"}),
         ),
         (
-            "game/levels/main.scene",
+            main_storage.as_str(),
             json!({"$schema":"ara://schema/scene/1","id":"sc_capturemain","records":{"e_capturemain":{"name":"Main","Transform":{}}}}),
         ),
         (
-            "game/levels/untouched.scene",
+            untouched_storage.as_str(),
             json!({"$schema":"ara://schema/scene/1","id":"sc_captureuntouched","records":{"e_captureuntouched":{"name":"Untouched مرحبا ".repeat(2048),"Transform":{}}}}),
         ),
     ] {
@@ -87,16 +93,16 @@ fn compact_capture_tracks_typed_changes_without_replacing_full_snapshot_assertio
         "Full semantic assertions still see the typed change"
     );
     assert_ne!(
-        next["game/levels/main.scene"]["blake3"],
-        captured["game/levels/main.scene"]["blake3"]
+        next[&storage("levels/main.scene")]["blake3"],
+        captured[&storage("levels/main.scene")]["blake3"]
     );
     assert_eq!(
-        next["game/levels/untouched.scene"],
-        captured["game/levels/untouched.scene"]
+        next[&storage("levels/untouched.scene")],
+        captured[&storage("levels/untouched.scene")]
     );
     assert_eq!(
-        after["game/levels/untouched.scene"],
-        before["game/levels/untouched.scene"]
+        after[&storage("levels/untouched.scene")],
+        before[&storage("levels/untouched.scene")]
     );
     assert_eq!(next["ara.project.json"], captured["ara.project.json"]);
     Ok(())

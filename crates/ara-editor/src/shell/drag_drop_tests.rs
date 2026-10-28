@@ -295,12 +295,12 @@ fn open() -> (Editor, Shell) {
         std::process::id(),
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
-    std::fs::create_dir_all(root.join("levels")).unwrap();
-    std::fs::create_dir_all(root.join("assets")).unwrap();
+    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
+    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("assets")).unwrap();
     for (path, value) in [
         (
             "ara.project.json",
-            json!({"name":"Drag gestures","main":"levels/main.scene"}),
+            json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Drag gestures","main":"levels/main.scene"}),
         ),
         (
             "levels/main.scene",
@@ -311,7 +311,15 @@ fn open() -> (Editor, Shell) {
             json!({"$schema":"ara://schema/prefab/1","id":"pf_drag0001","records":{"e_prefab01":{"name":"Box","Transform":{},"MeshRenderer":{}}}}),
         ),
     ] {
-        std::fs::write(root.join(path), ara_json::to_canonical_string(&value)).unwrap();
+        std::fs::write(
+            root.join(if path == "ara.project.json" {
+                std::path::PathBuf::from(path)
+            } else {
+                std::path::PathBuf::from(ara_doc::AUTHORING_ROOT).join(path)
+            }),
+            ara_json::to_canonical_string(&value),
+        )
+        .unwrap();
     }
     let mut editor = Editor::open(&root).unwrap();
     editor
@@ -407,7 +415,7 @@ fn begin_asset(shell: &mut Shell, clip: &mut Clipboard) {
         .bindings
         .iter()
         .find_map(|(id, binding)| {
-            if !matches!(binding, Binding::Asset(asset) if asset.path == "assets/box.prefab") {
+            if !matches!(binding, Binding::Asset(asset) if asset.path == format!("{}/assets/box.prefab",ara_doc::AUTHORING_ROOT)) {
                 return None;
             }
             let i = shell.ui.by_id(*id)?;

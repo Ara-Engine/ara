@@ -859,9 +859,12 @@ mod tests {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     struct Project(PathBuf);
     impl Project {
-        fn new(mut marker: Value, policy: Option<Value>) -> Self {
-            if marker.get("layoutVersion").is_none() {
-                marker["layoutVersion"] = json!(ara_doc::PROJECT_LAYOUT_VERSION);
+        fn new(marker: Value, policy: Option<Value>) -> Self {
+            let mut fixture_marker = json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION});
+            for (key, value) in marker.as_object().expect("fixture marker object") {
+                if key != "layoutVersion" {
+                    fixture_marker[key] = value.clone();
+                }
             }
             let parent = std::path::absolute(crate::test_target())
                 .expect("absolute test target")
@@ -874,7 +877,7 @@ mod tests {
             ));
             std::fs::create_dir(&root).expect("fresh project");
             let project = Self(root);
-            project.write("ara.project.json", &marker);
+            project.write("ara.project.json", &fixture_marker);
             if let Some(policy) = policy {
                 project.write(ara_host::project_policy::PREFERENCES, &policy);
             }

@@ -121,7 +121,7 @@ fn click_intent(shell: &mut Shell, id: &str) -> ara_ui::Result<()> {
 #[test]
 fn entity_context_menu_reveals_the_complete_prefab_row_with_wheel_and_keyboard()
 -> ara_ui::Result<()> {
-    let (mut editor, mut shell) = prefab_source_tests::open(true)?;
+    let (mut editor, mut shell) = prefab_source_tests::open()?;
     editor.action("editor.select", json!({"entities":["e_unrelated"]}))?;
     editor.action(
         "editor.layout.move",
@@ -188,7 +188,7 @@ fn entity_context_menu_reveals_the_complete_prefab_row_with_wheel_and_keyboard()
 #[test]
 fn long_registered_menu_last_row_scrolls_at_one_and_two_x_logical_viewports() -> ara_ui::Result<()>
 {
-    let (mut editor, mut shell) = prefab_source_tests::open(true)?;
+    let (mut editor, mut shell) = prefab_source_tests::open()?;
     editor.extensions = crate::extensions::Catalog {
         menus: (0..36)
             .map(|index| crate::extensions::Menu {
