@@ -197,8 +197,8 @@ fn conflicts_resolve_and_fixes_apply_without_hand_editing() {
     let merge = fixtures().join("merge");
     let root = scratch("resolve");
     fs::write(root.join("ara.project.json"), "{ \"name\": \"r\" }\n").expect("marker");
-    fs::create_dir_all(root.join("levels")).expect("levels");
-    let conf = root.join("levels/conf.scene");
+    fs::create_dir_all(root.join("content/levels")).expect("levels");
+    let conf = root.join("content/levels/conf.scene");
     let input = |n: &str| merge.join(n).to_string_lossy().into_owned();
     let (code, _) = ara_at(
         &root,

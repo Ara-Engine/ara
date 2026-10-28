@@ -55,8 +55,8 @@ fn offline_file_preparation_finishes_before_the_cli_exits_including_undo_and_red
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).expect("scratch");
     assert_eq!(ara_in(&root, &["init"]).0, 0);
-    fs::create_dir_all(root.join("scripts/Game")).expect("scripts");
-    fs::write(root.join("scripts/Game/Door.cs"), "before\n").expect("source");
+    fs::create_dir_all(root.join("content/scripts/Game")).expect("scripts");
+    fs::write(root.join("content/scripts/Game/Door.cs"), "before\n").expect("source");
     let args = r#"{"path":"scripts/Game/Door.cs","baseHash":"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb","text":"after\n"}"#;
     let (code, stdout, stderr) = ara_in(&root, &["do", "source.replace", "--args", args, "--json"]);
     assert_eq!(code, 0, "{stdout}{stderr}");
@@ -65,14 +65,14 @@ fn offline_file_preparation_finishes_before_the_cli_exits_including_undo_and_red
         "CLI must return the final transaction: {stdout}"
     );
     assert_eq!(
-        fs::read_to_string(root.join("scripts/Game/Door.cs")).expect("replaced"),
+        fs::read_to_string(root.join("content/scripts/Game/Door.cs")).expect("replaced"),
         "after\n"
     );
     for (command, text) in [("undo", "before\n"), ("redo", "after\n")] {
         let (code, stdout, stderr) = ara_in(&root, &[command, "--json"]);
         assert_eq!(code, 0, "{stdout}{stderr}");
         assert_eq!(
-            fs::read_to_string(root.join("scripts/Game/Door.cs")).expect("file"),
+            fs::read_to_string(root.join("content/scripts/Game/Door.cs")).expect("file"),
             text
         );
     }
@@ -411,7 +411,7 @@ fn docs_llms_writes_versioned_pages() {
         env!("CARGO_PKG_VERSION")
     )));
     assert!(llms.contains("[Command `entity.create`](commands/entity.create.md)"));
-    let transform = fs::read_to_string(docs.join("types/Transform.md")).expect("type page");
+    let transform = fs::read_to_string(docs.join("content/types/Transform.md")).expect("type page");
     assert!(transform.contains("| `rotation` | `vec3` |") && transform.contains("deg"));
     assert!(docs.join("methods/cmd.apply.md").exists());
     assert!(
@@ -636,7 +636,7 @@ fn an_mcp_agent_edits_through_the_daemon_and_reverts_its_turn() {
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/project"),
         &root,
     );
-    let scene = root.join("levels/arena.scene");
+    let scene = root.join("content/levels/arena.scene");
     let original = fs::read_to_string(&scene).expect("scene");
 
     let daemon = Proc(

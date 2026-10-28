@@ -13,7 +13,7 @@ fn why_resolves_authored_scene_sources_and_preserves_project_policy_storage_path
     fs::create_dir_all(root.join("settings")).expect("project policy");
     fs::write(
         root.join("ara.project.json"),
-        r#"{"name":"Why paths","layoutVersion":3,"main":"scenes/main.scene"}"#,
+        r#"{"name":"Why paths","layoutVersion":4,"main":"scenes/main.scene"}"#,
     )
     .expect("marker");
     let source =
