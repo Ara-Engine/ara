@@ -86,6 +86,15 @@ pub(super) struct Views {
     pub(super) captures: crate::look::captures::Captures,
     /// The square camera captures bake their faces through (`captures.rs`).
     capture_view: Option<ViewState>,
+    /// Explicit captures' published images by key, restored into a new or
+    /// re-ordered atlas (`captures.rs`).
+    capture_images: std::collections::BTreeMap<u64, crate::look::captures::CaptureImage>,
+    /// Atlas readbacks of published explicit captures, in flight.
+    capture_readbacks: Vec<captures::CaptureReadback>,
+    /// Images read back since the host last took them.
+    capture_landed: Vec<crate::look::captures::CaptureImage>,
+    /// Explicit captures to read back again (`Renderer::reread_reflection_capture`).
+    capture_rereads: Vec<u64>,
 }
 impl Default for Views {
     fn default() -> Self {
@@ -101,6 +110,10 @@ impl Default for Views {
             preparing: None,
             captures: Default::default(),
             capture_view: None,
+            capture_images: Default::default(),
+            capture_readbacks: Vec::new(),
+            capture_landed: Vec::new(),
+            capture_rereads: Vec::new(),
         }
     }
 }

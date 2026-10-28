@@ -481,16 +481,16 @@ pub struct Plan {
     pub rt_fallback: bool,
 }
 
-/// High/Epic local reflection captures (512-texel tiles, `captures` at most). They
-/// stay off by default until their bakes pass the Showcase region-FLIP gate;
-/// `ARA_REFLECTION_CAPTURES=1` opts in for look development and A/B captures.
+/// High/Epic local reflection captures (512-texel tiles, `captures` at most). Authored
+/// reflection probes always bake; automatic placement over scenes without probes stays
+/// off until its bakes pass the Showcase region-FLIP gate (`ARA_REFLECTION_CAPTURES=1`
+/// opts in for look development and A/B captures).
 fn reflection_captures(captures: u32) -> Option<ReflectionCaptures> {
-    std::env::var_os("ARA_REFLECTION_CAPTURES")
-        .is_some_and(|v| v == "1")
-        .then_some(ReflectionCaptures {
-            resolution: 512,
-            captures,
-        })
+    Some(ReflectionCaptures {
+        resolution: 512,
+        captures,
+        automatic: std::env::var_os("ARA_REFLECTION_CAPTURES").is_some_and(|v| v == "1"),
+    })
 }
 
 impl Plan {

@@ -468,6 +468,11 @@ impl Player {
             }
             // Acoustics and voice updates read the simulation only (physics is not
             // stepping between ticks): a worker runs them while the GPU frame presents.
+            if let (Some(presenter), Some((doc, cache))) =
+                (&mut self.presenter, world.probe_scene())
+            {
+                presenter.set_probe_scene(doc, cache);
+            }
             let listener = world::listener(&self.frame);
             let simulation = world.runtime.world();
             let (presented, audio) = std::thread::scope(|scope| {

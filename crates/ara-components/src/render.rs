@@ -117,8 +117,9 @@ impl Default for HeightFog {
 /// and scales the box. Captures are derived runtime data (a recapture job; cached
 /// under `.ara/cache/probes`), never authored edits: a change to these settings, the
 /// geometry, materials, lighting or environment marks the capture stale, and the last
-/// valid capture stays in use until its replacement is published. Without any probe,
-/// the renderer places captures over the scene's content automatically.
+/// valid capture stays in use until its replacement is published. Authored probes
+/// always capture at High and Epic; a scene without any gets automatic captures over
+/// its content only with the look-development opt-in `ARA_REFLECTION_CAPTURES=1`.
 #[derive(Debug, Clone, Copy, PartialEq, Component, Schema, Serialize, Deserialize)]
 #[ara(component, module = "render")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]

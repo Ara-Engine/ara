@@ -120,6 +120,15 @@ impl RasterView {
     pub fn probes_mut(&mut self) -> &mut crate::probes::ProbeCaptures {
         &mut self.probes
     }
+    /// Retires this view's probe work without rendering it again (its scene was
+    /// replaced): see `ProbeCaptures::retire`. Bounded, no waits; call each owner tick
+    /// after cancelling the view's jobs until it returns false.
+    pub fn poll_probe_retirement(
+        &mut self,
+        renderer: &mut ara_render::Renderer,
+    ) -> anyhow::Result<bool> {
+        Ok(self.probes.retire(renderer))
+    }
     /// Enable/disable probe acquisition. Preset budgets govern relighting; the
     /// renderer keeps sky ambient until the asynchronous surface cache arrives.
     pub fn set_probe_gi(&mut self, enabled: bool) {
@@ -130,13 +139,14 @@ impl RasterView {
         self.pending_gi = enabled;
     }
 
-    /// Keep progressive editor views polling until acquired probe surfaces arrive
-    /// and moved instances settle back into them.
+    /// Keep progressive editor views polling until acquired probe surfaces arrive,
+    /// moved instances settle back into them and reflection-probe captures finish.
     pub fn needs_frame(&self) -> bool {
         self.emitter_search.is_busy()
             || self.fades.is_active()
             || self.probe_gi_pending()
             || self.effects.is_pending()
+            || self.probes.is_busy()
     }
 
     /// GI acquisition/delivery only; emitters and model fades have their own work.
@@ -481,15 +491,16 @@ impl RasterView {
             crate::apply_lut(renderer, frame, &look, &mut self.lut)?;
             // Reflection captures: authored, else placed over this generation's content.
             if let Some(prepared) = &self.prepared {
-                let limit = plan
+                let (limit, automatic) = plan
                     .quality
                     .reflection_captures
-                    .map_or(0, |r| r.captures as usize);
-                let specs = self.captures.specs(frame, &prepared.scene, self.key, limit);
+                    .map_or((0, false), |r| (r.captures as usize, r.automatic));
+                let specs = self
+                    .captures
+                    .specs(frame, &prepared.scene, self.key, limit, automatic);
                 renderer.set_reflection_captures(&specs)?;
             }
-            self.probes
-                .observe(renderer.capabilities(), frame, self.key);
+            self.probes.tick(renderer, frame, self.key);
             self.adopt_emitters(false)?;
             let prepared = self.prepared.as_mut().context("native raster content")?;
             if snapshot_changed {

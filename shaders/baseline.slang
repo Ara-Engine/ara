@@ -44,13 +44,16 @@ struct FullscreenVarying {float4 clip:SV_Position;};
 [shader("vertex")]
 FullscreenVarying fullscreenVertex(uint id:SV_VertexID){FullscreenVarying o;float2 uv=float2((id<<1)&2,id&2);o.clip=float4(uv*2-1,0,1);return o;}
 // Deferred lighting; `high` selects the High/Epic tier's code at compile time,
-// `rays` the hybrid path's ray-traced reflections (renderer::rt, D29).
-float4 lighting(FullscreenVarying v,bool high,bool rays=false){
+// `rays` the hybrid path's ray-traced reflections (renderer::rt, D29), `gi` the
+// gi_diffuse view: the diffuse indirect light shading samples (ibl's diffuse share),
+// without direct light, emission, specular reflection, fog or the background.
+float4 lighting(FullscreenVarying v,bool high,bool rays=false,bool gi=false){
     Frame f=frame();Look l=look(f);int2 p=int2(v.clip.xy);float2 uv=(float2(p)+0.5)/float2(f.extent.xy);bool covered;float3 world=gbufferWorld(f,p,covered);
-    if(!covered)return float4(exposeHdr(f,l,background(f,l,viewRay(f,float2(p)+0.5),uv)),1);
+    if(!covered)return float4(gi?0:exposeHdr(f,l,background(f,l,viewRay(f,float2(p)+0.5),uv)),1);
     Surface s;float4 a=gbufferAlbedo(f,p);float2 m=gbufferMaterial(f,p);s.albedo=a.rgb;s.alpha=1;s.transmission=0;
     // The material's occlusion map only where the frame has no dynamic occlusion (dynamicOcclusion).
     s.ao=min(dynamicOcclusion(l)?1:a.a,screenOcclusion(f,l,p,length(world-f.camera.xyz),high));s.normal=gbufferNormal(f,p);s.roughness=m.x;s.metal=m.y;s.emissive=gbufferEmissive(f,p);
+    if(gi){float3 v=normalize(f.camera.xyz-world);return float4(exposeHdr(f,l,ibl(f,l,s,specularLobes(s,v),world,v,p,true,high,rays,true)),1);}
     return float4(exposeHdr(f,l,applyFog(f,l,shade(f,l,s,world,p,true,high,rays),world,uv)),1);
 }
 [shader("fragment")]
@@ -60,6 +63,11 @@ float4 lightingHighFragment(FullscreenVarying v):SV_Target0 {return lighting(v,t
 // High/Epic with ray-traced reflections (only bound on frames that trace them).
 [shader("fragment")]
 float4 lightingHighRtFragment(FullscreenVarying v):SV_Target0 {return lighting(v,true,true);}
+// The gi_diffuse view (ViewMode::GiDiffuse), per tier.
+[shader("fragment")]
+float4 lightingGiFragment(FullscreenVarying v):SV_Target0 {return lighting(v,false,false,true);}
+[shader("fragment")]
+float4 lightingHighGiFragment(FullscreenVarying v):SV_Target0 {return lighting(v,true,false,true);}
 struct ForwardOut {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 emissive:SV_Target5;};
 [shader("fragment")]
 ForwardOut forwardFragment(Varying v){Frame f=frame();Surface s=surface(v);ForwardOut o;Look l=look(f);o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),hdrExposure(f,l));o.id=float(root.entity);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);return o;}
@@ -177,6 +185,13 @@ void taaMain(uint3 t:SV_DispatchThreadID){
     images[NonUniformResourceIndex(f.post.z)][p]=float4(min(result*exposure,65000),depth);
 }
 float3 displayCurve(Frame f,float3 x){uint curve=uint(f.forward.w);return curve>=3?agxCurve(x,curve-3):curve==1?neutralCurve(x):curve==2?filmicCurve(x):tonemap(x);}
+// The overdraw view's fixed heat legend (ViewMode::Overdraw), sRGB stops: 0 black,
+// 1 blue, 2 green, 4 yellow, 8 orange (#FF7F00), 16 or more red; log2-interpolated.
+float3 overdrawHeat(float count){
+    if(count<0.5)return 0;
+    float t=clamp(log2(count),0,4);float3 blue=float3(0,0,1),green=float3(0,1,0),yellow=float3(1,1,0),orange=float3(1,0.2122,0),red=float3(1,0,0);
+    return t<1?lerp(blue,green,t):t<2?lerp(green,yellow,t-1):t<3?lerp(yellow,orange,t-2):lerp(orange,red,t-3);
+}
 [shader("compute")]
 [numthreads(8,8,1)]
 void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);float3 color=pixel(root.materials,p).rgb;
@@ -190,6 +205,11 @@ void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.ext
     else if(f.temporal.z==7)color=gbufferDepth(g,r)>0?float3(0.055):float3(0.025);
     else if(f.temporal.z==6){bool covered;float3 w=gbufferWorld(g,r,covered);uint c=cascadeIndex(f,w);color=!covered?float3(0):(c==0?float3(0.85,0.2,0.1):c==1?float3(0.2,0.8,0.25):c==2?float3(0.2,0.35,0.9):float3(0.8,0.3,0.8))*visibility(f,look(f),w,gbufferNormal(g,r));}
     if(f.temporal.z==0)color=displayCurve(f,max(color,0)*f.sunColorExposure.w);
+    // gi_diffuse: the resolved lighting_gi output, already exposed like Lit (the HDR
+    // target holds pre-exposed radiance); shown without a curve.
+    else if(f.temporal.z==9)color=max(color,0);
+    // overdraw: root word 1 is the render-size fragment count (`Overdraw.Count`).
+    else if(f.temporal.z==10)color=overdrawHeat(pixel(root.materials,r).x);
     images[NonUniformResourceIndex(f.post.w)][p]=float4(srgb(saturate(color)),1);
 }
 // Wireframe view modes: the wire mask (root word 1, render size, nativeWireFragment)

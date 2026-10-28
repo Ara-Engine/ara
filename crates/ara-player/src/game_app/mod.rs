@@ -397,6 +397,9 @@ impl App {
         }
         if let Some(window) = &mut self.window {
             if let Some(world) = &self.world {
+                if let Some((doc, cache)) = world.probe_scene() {
+                    self.presenter.set_probe_scene(doc, cache);
+                }
                 window.present(&mut self.presenter, &self.frame, || {
                     world.fidelity_content(&self.frame)
                 })?;

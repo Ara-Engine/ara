@@ -44,7 +44,8 @@ const HISTORY0: usize = 7;
 const HISTORY1: usize = 8;
 const OUTPUT: usize = 9;
 const MOTION: usize = 10;
-/// Wireframe view modes' edge mask (R8, render size; `ViewMode::wire`).
+/// Wireframe view modes' edge mask, or the overdraw view's fragment count (R16F,
+/// render size; `ViewMode::wire`, `ViewMode::Overdraw`).
 const WIRE: usize = 11;
 const TARGET_COUNT: usize = 12;
 
@@ -81,6 +82,9 @@ struct Pipelines {
     lighting: Pipeline,
     /// Deferred lighting with the High/Epic tier's code (`Quality::high_tier`).
     lighting_high: Pipeline,
+    /// The gi_diffuse view's deferred lighting, per tier (`ViewMode::GiDiffuse`).
+    lighting_gi: Pipeline,
+    lighting_high_gi: Pipeline,
     forward: Pipeline,
     taa: Pipeline,
     tonemap: Pipeline,
@@ -254,6 +258,8 @@ impl Renderer {
             tile: load("tile")?,
             lighting: load("lighting")?,
             lighting_high: load("lighting_high")?,
+            lighting_gi: load("lighting_gi")?,
+            lighting_high_gi: load("lighting_high_gi")?,
             forward: load("forward")?,
             taa: load("taa")?,
             tonemap: load("tonemap")?,
@@ -721,7 +727,8 @@ impl Renderer {
                 .collect()
         };
         let hash = self.scene_hash();
-        Capture::from_render(
+        let overdraw = self.read_overdraw()?;
+        let mut capture = Capture::from_render(
             rgba,
             ids,
             request,
@@ -732,7 +739,9 @@ impl Renderer {
                 timings: &self.last_timings,
                 shaders: &self.shader_metadata,
             },
-        )
+        )?;
+        capture.metadata.overdraw = overdraw;
+        Ok(capture)
     }
     /// Row-major index of the render pixel under display pixel `pixel`.
     fn render_pixel(&self, pixel: [u32; 2]) -> usize {

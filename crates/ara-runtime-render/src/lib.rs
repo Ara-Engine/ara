@@ -128,6 +128,9 @@ pub struct Presenter {
     warned_budget: bool,
     /// Background probe GI acquisition for raster content (`set_probe_gi`).
     probe_gi: bool,
+    /// The scene document and project cache that reflection-probe captures bind to
+    /// (`set_probe_scene`).
+    probe_scene: Option<(String, PathBuf)>,
     /// GPU pass timestamps on the presentation device (`set_pass_timing`).
     pass_timing: bool,
     /// Renderer selection (`set_render_options`).
@@ -237,6 +240,7 @@ impl Presenter {
             output: None,
             warned_budget: false,
             probe_gi: true,
+            probe_scene: None,
             pass_timing: true,
             options: ara_render_fidelity::presets::RenderOptions::default(),
             environment: None,

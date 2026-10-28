@@ -1,0 +1,50 @@
+{
+  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
+  "stages": [
+    {
+      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/native_overdraw/nativeOverdrawFragment.dxil",
+      "dxil_hash": "968a169d45ca7df0f5a5233aa8757c901a8cc131ff6407f052a4930166266838",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/native_overdraw/nativeOverdrawFragment.metallib",
+        "metallib_hash": "c75678f37398f566f2bdf12374fb496ff8f34f1aa811cf726a79048d93b548ca",
+        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/native_overdraw/nativeOverdrawFragment.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
+      "source_entry": "nativeOverdrawFragment",
+      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/native_overdraw/nativeOverdrawFragment.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "3672e90697d2258db09576aa790f7b3931f7d92b018539f8b5a88b5ce51d7183",
+      "stage": "fragment"
+    },
+    {
+      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/native_overdraw/nativeOverdrawVertex.dxil",
+      "dxil_hash": "570e02f0b3e3a6ee5f81c4d0f40ca3d8a5525dfc394b1f14fe73a834c4850b73",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/native_overdraw/nativeOverdrawVertex.metallib",
+        "metallib_hash": "a12ff1947d05e2fc9e1e414c793d26ace02398583b9f6b1bdfefd42f96f0ce25",
+        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/native_overdraw/nativeOverdrawVertex.metal.json",
+        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+      },
+      "source_entry": "nativeOverdrawVertex",
+      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/native_overdraw/nativeOverdrawVertex.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "b0bb0c527f22f0a5a0926c26a3a634b653a38e409322749e0b463690df861244",
+      "stage": "vertex"
+    }
+  ],
+  "state": {
+    "blend": true,
+    "color_formats": [
+      76
+    ],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

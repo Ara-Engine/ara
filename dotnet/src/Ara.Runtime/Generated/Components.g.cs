@@ -3166,7 +3166,7 @@ public partial struct PrimitiveMaterialOverride
 }
 
 /// <summary>
-/// An authored reflection probe (High and Epic): the renderer captures the lit scene around the entity into a six-face map, and smooth surfaces inside its box of influence reflect it, so mirrors and metals show the room around them, including what is off screen. The entity's Transform places the capture origin and orients and scales the box. Captures are derived runtime data (a recapture job; cached under <c>.ara/cache/probes</c>), never authored edits: a change to these settings, the geometry, materials, lighting or environment marks the capture stale, and the last valid capture stays in use until its replacement is published. Without any probe, the renderer places captures over the scene's content automatically.
+/// An authored reflection probe (High and Epic): the renderer captures the lit scene around the entity into a six-face map, and smooth surfaces inside its box of influence reflect it, so mirrors and metals show the room around them, including what is off screen. The entity's Transform places the capture origin and orients and scales the box. Captures are derived runtime data (a recapture job; cached under <c>.ara/cache/probes</c>), never authored edits: a change to these settings, the geometry, materials, lighting or environment marks the capture stale, and the last valid capture stays in use until its replacement is published. Authored probes always capture at High and Epic; a scene without any gets automatic captures over its content only with the look-development opt-in <c>ARA_REFLECTION_CAPTURES=1</c>.
 /// </summary>
 [StructLayout(LayoutKind.Explicit, Size = 68)]
 [EngineComponent("ReflectionProbe", Module = "render")]

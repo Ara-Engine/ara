@@ -9,7 +9,8 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 
 - `Graph`: declared accesses, stable topological ordering, barriers, explicit queue release/acquire pairs, timeline dependencies, transient images. Compilation indexes resource uses once; declaration-order versions and queue handoffs stay deterministic. `discard` (the G-buffer) ends a resource's last use undefined, so tile-based GPUs skip storing it.
 - `Renderer::new`, `render`, `render_view` (live debug view mode; `Wireframe`/`LitWireframe` draw native triangle edges, unjittered, into
-  the `WIRE` mask and composite them after post), `resize`, `capture`, `set_color_lut` (a 32³ host buffer): cooked Vulkan rendering; read-only
+  the `WIRE` mask (R16F) and composite them after post; `GiDiffuse` binds `lighting(_high)_gi`, ibl's diffuse share alone, opaque only;
+  `Overdraw` redraws passes 4 and 5 without depth test, adding one per kept fragment into `WIRE`, legend in `tonemapMain`, `Capture` metadata `overdraw` stats), `resize`, `capture`, `set_color_lut` (a 32³ host buffer): cooked Vulkan rendering; read-only
   `gpu()` access for diagnostics/native presentation. Unchanged display resizes retain TAAU targets/history. `resize_upscaled(render, display)` is TAAU:
   scene passes, feature color/depth and IDs at `render_size()`; history, output, captures and picks at `size()`.
 - `prewarm_view_quality` caches one camera on the startup worker; `create_view` claims it. `preallocate_view` reserves exact render/display targets, constants and retained pairs on the allocation worker; `submit_secondary` draws. Independent motion,
@@ -81,7 +82,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   heightfield horizon (`look::horizon`: distant landforms' sun shadow, min'd into `visibility`, and sky visibility
   outside the probe volume), and sun virtual shadow maps (`look::vsm`, High/Epic: clipmap pages that pixels mark in `VSM.Mark`, read back once their frame
   completes, cached in world space, drawn under a per-frame budget; `VSM.Project` resolves them, contact-hardening (PCSS for the sun disc), into a mask lighting reads, GI relight
-  has its own pipeline, and no other shader inlines page lookups, which would cost every preset registers; moved casters re-dirty pages). Look images are allocated lazily; probe GI is gathered at half resolution. Reflection captures (`look::captures`; `set_reflection_captures`, `auto_place`): faces bake through a square deferred view (a face or the prefilter per live frame, all at once in captures, only once probe GI settles), relit per frame by an ambient ratio, read by High/Epic `ibl` under SSR. Hybrid ray queries (D29, `renderer::rt`, `Quality::ray_queries`; `new_hybrid` devices): High/Epic on RT GPUs trace one deterministic reflection ray per pixel below the roughness cut against a TLAS over native content (LOD 0 BLAS per entry, fresh TLAS on change, skin BLASes amortised), cone-blurred and composited over SSR for `lighting_high_rt`; `shaders/look-rt.slangh` is the reusable trace/surface/shade API.
+  has its own pipeline, and no other shader inlines page lookups, which would cost every preset registers; moved casters re-dirty pages). Look images are allocated lazily; probe GI is gathered at half resolution. Reflection captures (`look::captures`; `set_reflection_captures`, `auto_place`): faces bake through a square deferred view (a face or the prefilter per live frame, all at once in captures, only once probe GI settles), relit per frame by an ambient ratio, read by High/Epic `ibl` under SSR. Authored probes (explicit specs) bake only on request (`request_reflection_capture`, `cancel_reflection_capture`, `reflection_capture_status`), read back without waits (`take_reflection_capture_images`; `reread_reflection_capture` reads a published column again) and restore through `load_reflection_capture`; `reflection_capture_inputs` hashes their scene inputs portably. Automatic placement needs `ReflectionCaptures::automatic` (`ARA_REFLECTION_CAPTURES=1`). `capabilities()` / `view_mode_unavailable` report what can render, with reasons. Hybrid ray queries (D29, `renderer::rt`, `Quality::ray_queries`; `new_hybrid` devices): High/Epic on RT GPUs trace one deterministic reflection ray per pixel below the roughness cut against a TLAS over native content (LOD 0 BLAS per entry, fresh TLAS on change, skin BLASes amortised), cone-blurred and composited over SSR for `lighting_high_rt`; `shaders/look-rt.slangh` is the reusable trace/surface/shade API.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
   an externally composited HDR frame (landscape, particles) with the same look post; TAA reprojects with native motion
   (Frame.look.w). HDR is RGBA16F, pre-exposed (`hdr_exposure`, look.slangh `exposeHdr`): writers multiply, readers divide.
@@ -137,8 +138,7 @@ by `ara-sdl3-src`; there is no SDL setup script, native directory or runtime DLL
 
 Per-crate gates: `cargo check -p ara-render`, `cargo test -p ara-render`, `cargo clippy -p ara-render --all-targets -- -D warnings`, `cargo fmt -p ara-render -- --check`.
 GPU goldens require this device/driver baseline with tolerance 1-SSIM <= 0.005.
-They also check repeated deterministic captures, all 14 visible entities/picking,
-and odd-resolution bounds framing. Update only deliberately with process-local
+They also check repeated deterministic captures, all 14 visible entities/picking, and odd-resolution bounds framing. Update only deliberately with process-local
 `ARA_UPDATE_GOLDENS=1 cargo test -p ara-render --test golden` (PowerShell: set the
 environment variable before the command). Normal checks never update goldens.
 
