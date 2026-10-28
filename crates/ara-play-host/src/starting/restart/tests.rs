@@ -192,7 +192,7 @@ impl Fixture {
         Player {
             incarnation: format!("restart-test-{name}-{pid}"),
             child: child.into(),
-            link: Link::accept(stream).unwrap(),
+            link: ara_play::link::Pump::owner(Link::accept(stream).unwrap()).unwrap(),
             hello: ara_play::Hello {
                 token: "restart-test".into(),
                 protocol: ara_play::PROTOCOL.into(),
@@ -206,6 +206,7 @@ impl Fixture {
             status: None,
             grace: Instant::now() + Duration::from_secs(10),
             events: Vec::new(),
+            profiling: Vec::new(),
             embed: Vec::new(),
             replies: Default::default(),
         }

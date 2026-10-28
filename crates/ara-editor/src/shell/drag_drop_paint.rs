@@ -40,28 +40,12 @@ impl Shell {
         if let Some(text) = self.ui.find("drop-label-text") {
             self.ui.set_text(text, label)?;
         }
-        let node = &mut self.ui.nodes[i];
-        let viewport = Box2 {
-            x: 0.,
-            y: 0.,
-            w: self.ui.size[0],
-            h: self.ui.size[1],
+        let avoid = match drag.session.feedback() {
+            Some(Feedback::Accept { indicator, .. }) => Some(indicator.rect()),
+            Some(Feedback::Reject { indicator, .. }) => indicator.map(|value| value.rect()),
+            None => None,
         };
-        if let Some(rect) = kit::ghost_rect(
-            self.pointer,
-            [node.rect.w.max(140.), node.rect.h.max(28.)],
-            viewport,
-        ) {
-            let offset = [
-                rect.x - (node.rect.x - node.paint_offset[0]),
-                rect.y - (node.rect.y - node.paint_offset[1]),
-            ];
-            if node.paint_offset != offset {
-                node.paint_offset = offset;
-                node.dirty.paint = true;
-            }
-        }
-        Ok(())
+        self.ui.place_feedback(i, self.pointer, avoid)
     }
     pub(in crate::shell) fn paint_content_drag(&mut self) {
         let Some(Drag::Content(drag)) = &self.drag else {

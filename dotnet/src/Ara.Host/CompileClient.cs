@@ -23,6 +23,7 @@ internal sealed class CompileClient : IDisposable
     internal readonly string DiagnosticInstance = Guid.NewGuid().ToString("N");
     /// <summary>Ordered connection replacement within the owning loader.</summary>
     internal readonly ulong DiagnosticBinding;
+    internal bool Connected => !_closing && !_server.HasExited;
 
     /// <summary>Starts the server at <paramref name="serverDll"/> and connects to it.</summary>
     internal CompileClient(string serverDll, DevModuleLoader loader, ulong diagnosticBinding)
@@ -57,12 +58,16 @@ internal sealed class CompileClient : IDisposable
     }
 
     /// <summary>Asks the server to compile and watch a module folder (after the modules it references).</summary>
-    internal void Watch(uint slot, string name, string dir, bool hot, IReadOnlyCollection<string> references, string profile, bool watch) =>
+    internal void Watch(uint slot, string name, string dir, bool hot, IReadOnlyCollection<string> references, string profile, bool watch,
+        bool initial = true, uint generation = 0) =>
         Protocol.Send(_pipe, MessageKind.Watch, new Protocol.Writer()
             .U32(slot).Str(name).Str(dir).Bool(hot)
             .Strs([typeof(ScriptRuntime).Assembly.Location])
-            .Strs(references).Str(profile).Bool(watch)
+            .Strs(references).Str(profile).Bool(watch).Bool(initial).U32(generation)
             .ToArray());
+
+    internal void Recover(ulong ticket) =>
+        Protocol.Send(_pipe, MessageKind.Recover, new Protocol.Writer().U64(ticket).ToArray());
 
     /// <summary>Asks for a compile of changed files; agent edits are coalesced and run behind human ones.</summary>
     internal void Change(uint slot, IReadOnlyCollection<string> paths, uint origin)
@@ -119,6 +124,9 @@ internal sealed class CompileClient : IDisposable
                     case MessageKind.Diagnostics:
                         _loader.OnDiagnostics(this, r);
                         break;
+                    case MessageKind.RecoveryFinished:
+                        _loader.CompleteRecovery(r.U64(), r.Str(), r.Strs());
+                        break;
                     case MessageKind.Restart:
                         _loader.OnRestart(r);
                         break;
@@ -130,13 +138,17 @@ internal sealed class CompileClient : IDisposable
         }
         catch (Exception e)
         {
-            if (!_closing) Diag.Report(AraCodes.CompileServer, "error", $"compile server connection failed: {e.Message}");
+            if (!_closing) Diag.ReportException(AraCodes.CompileServer, "error", $"compile server connection failed: {e.Message}", e);
         }
         finally
         {
             Host.CompileState(false);
         }
-        if (!_closing) Diag.Report(AraCodes.CompileServer, "error", "the compile server exited; hot reload is off until the host restarts");
+        if (!_closing)
+        {
+            Diag.Report(AraCodes.CompileServer, "error", "the compile server exited; hot reload is off until the host restarts");
+            _loader.RecoveryDisconnected(this);
+        }
     }
 
     /// <summary>Stops the server and the reader thread.</summary>

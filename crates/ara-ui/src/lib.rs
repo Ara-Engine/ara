@@ -1,4 +1,8 @@
 //! Ara's retained native UI runtime, shared by editor, screen and world surfaces.
+//!
+//! Root-child `<feedback>` uses [`Ui::place_feedback`] for measured, passive drag
+//! status. Inline `<banner>` keeps status prose at its intrinsic wrapped height;
+//! its host owns the rail width and scrolling. Both inherit typography into text children.
 #![warn(missing_docs)]
 pub mod accessibility;
 pub mod binding;
@@ -9,6 +13,7 @@ pub mod dialogs;
 pub mod docking;
 pub mod drag_drop;
 mod emit;
+mod feedback;
 mod focus;
 pub mod input;
 pub mod layers;

@@ -348,6 +348,9 @@ impl EditorService {
                 probe_cancel_blocker: Some(
                     "Capture cancellation requires the owning editor window",
                 ),
+                script_recovery_blocker: Some(
+                    "C# reload availability is reported by the active editor window",
+                ),
                 // The window's build job is not visible here; the project's state is.
                 build: crate::shell::commands::BuildState {
                     running: false,

@@ -440,6 +440,34 @@ fn documents_register_validate_and_round_trip() {
     assert_eq!(errors.len(), 2, "{errors:?}");
 }
 
+/// Golden analyses are rendered on Windows; other platforms' math libraries round the
+/// last bits differently, so floats match within 1e-3 relative (1e-4 absolute near zero,
+/// where sample-count fractions move by a sample or two) and the hash of the rendered
+/// bytes (`wavBlake3`) is skipped: same-platform determinism is asserted exactly above.
+/// Structure, other strings and integers match exactly.
+fn same_analysis(actual: &serde_json::Value, expected: &serde_json::Value) -> bool {
+    use serde_json::Value;
+    match (actual, expected) {
+        (Value::Number(a), Value::Number(b)) if a.is_f64() || b.is_f64() => {
+            match (a.as_f64(), b.as_f64()) {
+                (Some(a), Some(b)) => (a - b).abs() <= 1e-3 * a.abs().max(b.abs()) + 1e-4,
+                _ => false,
+            }
+        }
+        (Value::Array(a), Value::Array(b)) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| same_analysis(a, b))
+        }
+        (Value::Object(a), Value::Object(b)) => {
+            a.len() == b.len()
+                && a.iter().all(|(k, v)| {
+                    b.get(k)
+                        .is_some_and(|w| k == "wavBlake3" || same_analysis(v, w))
+                })
+        }
+        _ => actual == expected,
+    }
+}
+
 #[test]
 fn golden_music_session() {
     let session = || {
@@ -508,7 +536,10 @@ fn golden_music_session() {
     }
     let expected = std::fs::read_to_string(path).unwrap();
     assert!(
-        json.trim_end() == expected.trim_end(),
+        same_analysis(
+            &ara_json::parse(&json).unwrap(),
+            &ara_json::parse(&expected).unwrap()
+        ),
         "run with ARA_UPDATE_GOLDENS=1 after intended changes"
     );
     assert!(json.contains("\"segment\": \"battle\""));

@@ -105,7 +105,7 @@ impl Shell {
             backend::message(&job.status, &job.plan.labels)
         };
         let cancel = backend::can_cancel(&job.status) && !job.cancel_requested;
-        out.push_str(&format!("<panel id='asset-operation' class='asset-job'><panel id='asset-operation-title-row' class='row' style='gap:6px;min-width:0px;flex-shrink:0'><text id='asset-operation-title' class='caption asset-job-title' text='{}{}' />",escape(&job.plan.title),if pending{format!(" · {:.0}%",progress*100.)}else{String::new()}));
+        out.push_str(&format!("<banner id='asset-operation' class='asset-job'><panel id='asset-operation-title-row' class='row' style='gap:6px;min-width:0px;flex-shrink:0'><text id='asset-operation-title' class='caption asset-job-title' text='{}{}' />",escape(&job.plan.title),if pending{format!(" · {:.0}%",progress*100.)}else{String::new()}));
         if pending {
             self.bind_command(
                 "asset-operation-cancel",
@@ -121,7 +121,7 @@ impl Shell {
             );
             out.push_str("<button id='asset-operation-dismiss' class='ghost icon-button' label='Dismiss asset result' action='Dispatch'><text id='asset-operation-dismiss-label' text='×' /></button>");
         }
-        out.push_str(&format!("</panel><text id='asset-operation-message' class='caption asset-job-message' text='{}' /></panel>",escape(&message)));
+        out.push_str(&format!("</panel><text id='asset-operation-message' class='caption asset-job-message' text='{}' /></banner>",escape(&message)));
     }
     pub(crate) fn asset_operation_report(&self) -> Value {
         json!({"busy":self.asset_ops.busy(),"followingHistory":self.asset_ops.history.pending(),"renaming":self.asset_ops.rename.as_ref().map(|rename|json!({"path":rename.asset.path,"authoredPath":rename.asset.authored_path,"name":rename.name,"error":rename.error})),"job":self.asset_ops.job.as_ref().map(|job|json!({"id":job.id,"status":job.status,"labels":job.plan.labels,"followingIndex":job.following,"cancelRequested":job.cancel_requested,"preservedSelection":job.selection.paths})),"prompt":self.asset_ops.prompt.is_some(),"confirmation":self.asset_ops.confirmation.is_some()})

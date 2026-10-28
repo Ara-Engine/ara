@@ -1,8 +1,5 @@
 use super::*;
-use ara_ui::{
-    paint::{Box2, Draw},
-    source::stable_id,
-};
+use ara_ui::{paint::Draw, source::stable_id};
 impl Shell {
     pub(super) fn invalidate_file_drag(&mut self) {
         if let Some(root) = self.ui.nodes.first_mut() {
@@ -59,23 +56,12 @@ impl Shell {
         }
         self.tooltip_text = None;
         let at = session.pointer().local;
-        let node = &mut self.ui.nodes[index];
-        let viewport = Box2 {
-            x: 0.,
-            y: 0.,
-            w: self.ui.size[0],
-            h: self.ui.size[1],
+        let avoid = match session.feedback() {
+            Some(Feedback::Accept { indicator, .. }) => Some(indicator.rect()),
+            Some(Feedback::Reject { indicator, .. }) => indicator.map(|value| value.rect()),
+            None => None,
         };
-        if let Some(rect) =
-            kit::ghost_rect(at, [node.rect.w.max(140.), node.rect.h.max(28.)], viewport)
-        {
-            node.paint_offset = [
-                rect.x - (node.rect.x - node.paint_offset[0]),
-                rect.y - (node.rect.y - node.paint_offset[1]),
-            ];
-            node.dirty.paint = true;
-        }
-        Ok(())
+        self.ui.place_feedback(index, at, avoid)
     }
     pub(in crate::shell) fn paint_file_drag(&mut self) {
         let Some(session) = &self.file_drag.session else {

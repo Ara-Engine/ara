@@ -488,6 +488,7 @@ impl ImportCheck {
                 self.output.join(format!("{name}.layout.json")),
                 ara_json::to_canonical_string(&shell.layout_report()),
             )?;
+            shell.audit_feedback_capture(&self.output, &name)?;
             self.cleanup_capture_pending = false;
             self.cleanup_controls_captured = true;
             if let Some(result) = self.results.last_mut() {
@@ -647,6 +648,7 @@ impl ImportCheck {
             self.output.join(format!("{name}.layout.json")),
             ara_json::to_canonical_string(&shell.layout_report()),
         )?;
+        shell.audit_feedback_capture(&self.output, &name)?;
         self.trace.push(json!({"stage":stage,"selection":fixture::selection(editor,shell),"imports":shell.asset_import_report(),"fileDrag":shell.file_drag_report(),"revision":editor.host.store().revision()}));
         Ok(())
     }

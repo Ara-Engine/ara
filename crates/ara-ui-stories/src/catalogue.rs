@@ -24,6 +24,8 @@ pub fn catalogue() -> Vec<Story> {
             // A popover is placed beside its anchor (a root child, after layout).
             "popover" => "<button id='anchor' text='loc:example' action='game.open'/><popover id='sample' test-id='subject' class='card' anchor='anchor' placement='bottom-start'><text id='example' text='loc:inventory'/><button id='child-action' text='loc:resume' action='game.resume'/></popover>".into(),
             "tooltip" => "<button id='anchor' text='loc:resume' action='game.resume'/><tooltip id='sample' test-id='subject' class='card' anchor='anchor' placement='bottom-start'><text id='example' text='loc:example'/></tooltip>".into(),
+            "feedback" => "<feedback id='sample' test-id='subject' class='card' style='left:24px;top:64px;font-size:13px'><text id='example' text='loc:dragFeedback'/></feedback>".into(),
+            "banner" => "<banner id='sample' test-id='subject' class='card' style='font-size:13px'><text id='example' text='loc:importResult'/></banner>".into(),
             _ => format!("<{tag} id='sample' test-id='subject'><text id='example' text='loc:example'/><button id='child-action' text='loc:resume' action='game.resume'/></{tag}>"),
         };
         let mut story = make(&format!("widget-{tag}"), tag, &body);
@@ -210,6 +212,16 @@ fn locales() -> Vec<Locale> {
         ("health", "Health", "الصحة"),
         ("objective", "Reach the outpost", "الوصول إلى الموقع"),
         ("interact", "Interact", "تفاعل"),
+        (
+            "dragFeedback",
+            "An entity cannot be moved inside itself or its descendants",
+            "لا يمكن نقل عنصر إلى نفسه أو إلى أحد العناصر التابعة له",
+        ),
+        (
+            "importResult",
+            "Import complete · 2 created · 0 replaced · 0 skipped · 0 renamed",
+            "اكتمل الاستيراد · أُنشئ 2 · استُبدل 0 · تم تخطي 0 · أُعيدت تسمية 0",
+        ),
     ];
     let en: BTreeMap<String, String> = pairs
         .iter()

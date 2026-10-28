@@ -498,6 +498,12 @@ impl MetalDevice {
         let pass = MTL4RenderPassDescriptor::new();
         pass.setRenderTargetWidth(size[0] as usize);
         pass.setRenderTargetHeight(size[1] as usize);
+        // A pass without attachments (fragments that only write buffers, such as the
+        // geometry renderer's atomic shadow-depth raster) takes its sample count here.
+        if colors.is_empty() && depth.is_none() {
+            // SAFETY: One sample is a count every Metal device supports.
+            unsafe { pass.setDefaultRasterSampleCount(1) };
+        }
         let ops = rec
             .scopes
             .next()

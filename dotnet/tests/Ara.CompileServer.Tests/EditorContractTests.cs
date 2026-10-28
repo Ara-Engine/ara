@@ -47,6 +47,10 @@ public sealed class EditorContractTests
         Assert.True(session.Run(new(root, "content")).Accepted);
         var failed = session.Run(new(root, "content", "invoke", "tools.bad"));
         Assert.Equal("ARA0912", failed.Diagnostics[0]["code"]?.ToString());
+        var exception = failed.Diagnostics[0]["data"]!["exception"]!;
+        Assert.Equal("System.InvalidOperationException", exception["type"]?.ToString());
+        Assert.Contains(exception["frames"]!.AsArray(), frame => frame!["method"]!.ToString().Contains("Tools", StringComparison.Ordinal));
+        Assert.True(exception["frames"]!.AsArray().Any(frame => frame!["file"] is { } file && Path.GetFullPath(file.ToString()) == Path.GetFullPath(source) && frame["line"]!.GetValue<uint>() > 0), exception.ToJsonString());
         Assert.Empty(failed.Authoring);
         Assert.False(failed.Commands.Single(c => c.Id == "tools.bad").Enabled);
         Assert.Contains("callback failed", failed.Commands.Single(c => c.Id == "tools.bad").DisabledReason);

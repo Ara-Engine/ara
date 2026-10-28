@@ -120,6 +120,16 @@ impl Encoder {
                         unavailable("codec stage must live under its immutable cook key")
                     })?
                     .to_owned();
+                if let Some(metal) = &mut stage.metal {
+                    for path in [&mut metal.metallib, &mut metal.reflection] {
+                        *path = path
+                            .strip_prefix(&prefix)
+                            .ok_or_else(|| {
+                                unavailable("codec stage must live under its immutable cook key")
+                            })?
+                            .to_owned();
+                    }
+                }
             }
             // This directory contains immutable stage artifacts, no mutable
             // pipeline manifests. Development hot reload cannot retarget an
@@ -214,6 +224,13 @@ impl BlockEncoder for Encoder {
             if !gpu.info().buffer_int64_atomics {
                 return Err(unavailable(
                     "integer BC6H/BC7 shaders require shaderInt64 on this device",
+                ));
+            }
+            // BC4/BC5/BC7 match the integer oracles on Metal, but the BC6H search
+            // kernels use about 48.5 KiB of threadgroup memory and Metal allows 32 KiB.
+            if cfg!(target_os = "macos") {
+                return Err(unavailable(
+                    "BC6H kernels need more threadgroup memory than Metal's 32 KiB",
                 ));
             }
             state.dot = self.allow_dot && gpu.info().packed_integer_dot_accelerated;

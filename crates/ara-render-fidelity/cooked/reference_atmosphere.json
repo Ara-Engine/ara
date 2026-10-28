@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835",
+  "key": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927",
   "stages": [
     {
-      "dxil": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835/reference_atmosphere/referenceAtmosphereMain.dxil",
+      "dxil": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927/reference_atmosphere/referenceAtmosphereMain.dxil",
       "dxil_hash": "deb63d9915e08d4ebb8ffef989782cafd2963c0060c84b00fffb1eefecd7b4ff",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835/reference_atmosphere/referenceAtmosphereMain.metallib",
+        "metallib": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927/reference_atmosphere/referenceAtmosphereMain.metallib",
         "metallib_hash": "93dc42259ea237e9cb31cccaa39e404b8527f07c154ab7969ffd5f39d839bfe7",
-        "reflection": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835/reference_atmosphere/referenceAtmosphereMain.metal.json",
+        "reflection": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927/reference_atmosphere/referenceAtmosphereMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "referenceAtmosphereMain",
-      "spirv": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835/reference_atmosphere/referenceAtmosphereMain.spv",
+      "spirv": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927/reference_atmosphere/referenceAtmosphereMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "eddbfd21855369b37d11484f9013d7603f4d3f399a7d767a9dea2c11e74738d2",
       "stage": "compute"

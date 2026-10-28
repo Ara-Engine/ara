@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 
 namespace Ara.Hosting;
@@ -41,25 +40,17 @@ public static class Diag
     }
 
     /// <summary>
-    /// Reports a fault in user code: the exception type, message and the first source
-    /// location of the stack (when PDBs are loaded), with the "disabled until next reload" note.
+    /// Reports a fault on one row, including its bounded managed stack/inner tree
+    /// and available PDB locations, with the "disabled until next reload" note.
     /// </summary>
-    internal static void Fault(string code, string what, Exception e)
+    internal static void Fault(string code, string what, Exception e, string? module = null)
     {
-        string? file = null;
-        int line = 0, column = 0;
-        try
-        {
-            foreach (var frame in new StackTrace(e, fNeedFileInfo: true).GetFrames())
-            {
-                if (frame.GetFileName() is { } f)
-                {
-                    (file, line, column) = (f, frame.GetFileLineNumber(), frame.GetFileColumnNumber());
-                    break;
-                }
-            }
-        }
-        catch { /* best effort */ }
-        Report(code, "error", $"{what} threw {e.GetType().Name}: {e.Message} (disabled until the next reload)", file, line, column);
+        ReportException(code, "error", $"{what} threw {e.GetType().Name}: {e.Message} (disabled until the next reload)", e, module);
+    }
+
+    internal static void ReportException(string code, string severity, string message, Exception error, string? module = null)
+    {
+        try { Host.Diagnostic(ExceptionDetails.Attach(ToJson(code, severity, message), error, module)); }
+        catch { /* reporting must never throw across the boundary */ }
     }
 }

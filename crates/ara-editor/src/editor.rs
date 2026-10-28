@@ -73,6 +73,8 @@ pub struct Editor {
     pub activity: crate::activity::Activity,
     /// Embedded Play surfaces for the Game view (taken from the play service).
     pub(crate) play_surfaces: Option<ara_play_host::embed::Surfaces>,
+    /// Owned nonblocking C# recovery channel; results remain scoped to their Play incarnation.
+    pub(crate) script_recovery: ara_play_host::ScriptRecoveryHandle,
     /// The Play world this window started (`play:3`).
     pub(crate) play_world: Option<String>,
     /// The Game view's size in physical pixels: the size embedded Play starts at.
@@ -204,6 +206,7 @@ impl Editor {
         let mut play = ara_play_host::PlayService::new(root, play).with_headless_run();
         // The Game view shows embedded players through shared GPU surfaces (D19).
         let play_surfaces = Some(play.surfaces());
+        let script_recovery = play.script_recovery();
         host.register(Box::new(play))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let (tasks, captures) = mpsc::channel();
@@ -265,6 +268,7 @@ impl Editor {
             extensions: Default::default(),
             activity,
             play_surfaces,
+            script_recovery,
             play_world: None,
             game_size: [1280, 720],
             game_scale: 1.,

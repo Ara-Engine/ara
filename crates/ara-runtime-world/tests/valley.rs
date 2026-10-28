@@ -481,6 +481,8 @@ impl Noise {
 }
 
 /// Fire crackle (1 s loop), a calm pad and a drum stem (one 120 BPM bar each).
+/// Synthesized with `libm`, not the platform's math library, so the canonical demo
+/// audio is byte-identical on every platform.
 fn sounds() -> Vec<(&'static str, &'static str, Vec<u8>)> {
     let rate = 24_000.0;
     let tau = std::f32::consts::TAU;
@@ -493,7 +495,7 @@ fn sounds() -> Vec<(&'static str, &'static str, Vec<u8>)> {
             } else {
                 0.0
             };
-            let rumble = (i as f32 / rate * 70.0 * tau).sin() * 0.05;
+            let rumble = libm::sinf(i as f32 / rate * 70.0 * tau) * 0.05;
             hiss + pop + rumble
         })
         .collect();
@@ -502,9 +504,9 @@ fn sounds() -> Vec<(&'static str, &'static str, Vec<u8>)> {
             let t = i as f32 / rate;
             let chord = [220.0, 277.18, 329.63, 440.0]
                 .iter()
-                .map(|f| (t * f * tau).sin())
+                .map(|f| libm::sinf(t * f * tau))
                 .sum::<f32>();
-            chord * 0.08 * (0.8 + 0.2 * (t * 0.5 * tau).sin())
+            chord * 0.08 * (0.8 + 0.2 * libm::sinf(t * 0.5 * tau))
         })
         .collect();
     let mut noise = Noise(0x1234_5678);
@@ -512,10 +514,10 @@ fn sounds() -> Vec<(&'static str, &'static str, Vec<u8>)> {
         .map(|i| {
             let t = i as f32 / rate;
             let beat = t % 0.5;
-            let kick =
-                (beat * (60.0 + 90.0 * (-beat * 30.0).exp()) * tau).sin() * (-beat * 9.0).exp();
+            let kick = libm::sinf(beat * (60.0 + 90.0 * libm::expf(-beat * 30.0)) * tau)
+                * libm::expf(-beat * 9.0);
             let off = (t + 0.25) % 0.5;
-            let hat = noise.next() * (-off * 60.0).exp() * 0.25;
+            let hat = noise.next() * libm::expf(-off * 60.0) * 0.25;
             (kick * 0.6 + hat) * 0.8
         })
         .collect();

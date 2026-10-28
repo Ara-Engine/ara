@@ -11,7 +11,7 @@ use std::{
 };
 use tungstenite::{Message as Frame, WebSocket};
 mod pump;
-pub use pump::Pump;
+pub use pump::{Notifications, Pump};
 
 /// A decoded JSON-RPC message.
 #[derive(Debug, Clone, PartialEq)]
@@ -168,7 +168,11 @@ impl Link {
     }
 
     fn send(&mut self, message: &Value) -> Result<(), LinkError> {
-        match self.ws.send(Frame::text(message.to_string())) {
+        self.send_text(message.to_string())
+    }
+
+    fn send_text(&mut self, message: String) -> Result<(), LinkError> {
+        match self.ws.send(Frame::text(message)) {
             Ok(()) => Ok(()),
             Err(tungstenite::Error::Io(e)) if e.kind() == ErrorKind::WouldBlock => Ok(()),
             Err(e) => Err(io(e)),

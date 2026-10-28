@@ -183,6 +183,7 @@ impl InputState {
             .filter(|id| {
                 ui.by_id(*id).is_some_and(|i| {
                     self.in_scope(ui, i)
+                        && ui.accepts_input(i)
                         && !ui.nodes[i].state.disabled
                         && matches!(
                             ui.nodes[i].element.tag.as_str(),
@@ -202,7 +203,9 @@ impl InputState {
                 ui.paint_order
                     .iter()
                     .copied()
-                    .find(|i| self.in_scope(ui, *i) && is_focusable(&ui.nodes[*i]))
+                    .find(|i| {
+                        self.in_scope(ui, *i) && ui.accepts_input(*i) && is_focusable(&ui.nodes[*i])
+                    })
                     .map(|i| stable_id(&ui.nodes[i].element.id))
             });
         self.focus_to(ui, initial);
@@ -232,7 +235,11 @@ impl InputState {
                     ui.paint_order
                         .iter()
                         .copied()
-                        .find(|i| self.in_scope(ui, *i) && is_focusable(&ui.nodes[*i]))
+                        .find(|i| {
+                            self.in_scope(ui, *i)
+                                && ui.accepts_input(*i)
+                                && is_focusable(&ui.nodes[*i])
+                        })
                         .map(|i| stable_id(&ui.nodes[i].element.id))
                 })
         };

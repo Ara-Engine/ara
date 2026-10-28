@@ -389,6 +389,7 @@ impl ContentDrags {
                 self.output.join(format!("{prefix}.layout.json")),
                 ara_json::to_canonical_string(&shell.layout_report()),
             )?;
+            shell.audit_feedback_capture(&self.output, &prefix)?;
             for float in &floats.windows {
                 gpu.select_target(float.key);
                 gpu.pixels()?

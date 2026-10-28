@@ -140,7 +140,12 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
     let world = agent.play("start", json!({"seed": 7}));
     let boot_ms = start.elapsed().as_secs_f64() * 1000.0;
     let id = world["world"].clone();
-    assert_eq!(world["transport"], json!("shm"));
+    // Shared-memory sections are Windows-only (`ara_play::shm`); elsewhere the
+    // snapshot travels inline.
+    assert_eq!(
+        world["transport"],
+        json!(if cfg!(windows) { "shm" } else { "inline" })
+    );
     assert!(
         boot_ms < 1000.0,
         "Play → first tick from the pool took {boot_ms:.1} ms"

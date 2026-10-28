@@ -1478,7 +1478,8 @@ fn build() -> Vec<Spec> {
         later("tools.terrain", "Terrain Tools", "", "", "Terrain sculpting and painting tools are not built yet."),
         later("tools.ui_designer", "UI Designer", "", "", "The UI designer over ara-ui-document ops is not built yet."),
         cmd("tools.cs.solution", "Open Scripts in IDE", "file-code", "", "Discover modules in the background, then choose which one to open in the configured IDE.", |s, e, _|s.open_script_solution(e)).when(|_| Avail::Ready),
-        later("tools.cs.reload", "Reload Scripts", "refresh-cw", "Ctrl+R", "C# reloads automatically when sources change; a manual trigger is not exposed yet."),
+        cmd("tools.cs.reload", "Reload Scripts", "refresh-cw", "Ctrl+R", "Reload the current Play world's C# modules without restarting; inspect each player's authoritative result.", |s,e,_|s.reload_scripts(e))
+            .when(|c|c.script_recovery_blocker.map_or(Avail::Ready,|reason|Avail::Blocked(reason.into()))),
         cmd("window.agents", "Agents Panel", "bot", "Alt+6", "Agent activity and undo per turn.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "agents"}))).when(|c| panel_open(c, "agents")),
         cmd("agents.view", "View What the Agent Sees", "eye", "", "Jump once to the agent's scene, selection and camera; your view stays yours afterwards.", |_, e, t| {
             let Target::Text(agent) = t else { return Err("choose an agent".into()) };

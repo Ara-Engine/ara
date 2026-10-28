@@ -558,6 +558,7 @@ impl Shell {
         }
         self.search(out, "problems", editor);
         out.push_str("</panel>");
+        self.script_recovery_markup(editor, out);
         let notice = compilation.notice();
         if let Some(notice) = &notice {
             out.push_str(&format!("<text id='problems-compile-status' class='caption wrap-text' style='flex-shrink:0;padding:6px' text='{}' />",escape(notice)));

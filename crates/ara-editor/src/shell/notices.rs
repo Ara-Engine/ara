@@ -34,7 +34,7 @@ impl Shell {
                 NoticeKind::Overwrite => ("triangle-alert", "warning"),
             };
             out.push_str(&format!(
-                "<panel id='{id}' class='notice'>{}<text id='{id}-text' class='notice-text' text='{}' />",
+                "<banner id='{id}' class='notice'>{}<text id='{id}-text' class='notice-text' text='{}' />",
                 icons::icon_in(&id, icon, tint),
                 escape(&notice.text)
             ));
@@ -49,7 +49,7 @@ impl Shell {
                 "notice.dismiss",
                 Target::Text(notice.id.to_string()),
             );
-            out.push_str(&format!("<button id='{id}-close' class='ghost icon-button' label='Dismiss' description='Dismiss' action='Dispatch'>{}</button></panel>",icons::icon(&format!("{id}-close"),"x")));
+            out.push_str(&format!("<button id='{id}-close' class='ghost icon-button' label='Dismiss' description='Dismiss' action='Dispatch'>{}</button></banner>",icons::icon(&format!("{id}-close"),"x")));
         }
         out.push_str("</panel>");
     }
