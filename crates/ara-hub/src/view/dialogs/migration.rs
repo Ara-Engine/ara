@@ -51,6 +51,7 @@ pub(super) fn body(p: &mut Page, hub: &Hub, project: &str) {
                         "Project settings and the authored-content root are updated.",
                     );
                 }
+                p.markup.push_str("</panel></scroll>");
                 let rewrites = plan
                     .operations
                     .iter()
@@ -62,7 +63,6 @@ pub(super) fn body(p: &mut Page, hub: &Hub, project: &str) {
                         &format!("References and settings are updated in {rewrites} files."),
                     );
                 }
-                p.markup.push_str("</panel></scroll>");
                 p.panel("migration-preview", |p| {
                     p.text("label", "AFTER MIGRATION");
                     p.markup.push_str("<scroll id='migration-preview-scroll' class='migration-preview-scroll'><panel id='migration-tree' class='migration-tree'>");

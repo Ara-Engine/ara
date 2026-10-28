@@ -292,6 +292,17 @@ impl DialogWindow {
                 ara_ui::theme::EditorTheme::Dark
             })?;
             ui.frame(&mut text)?;
+            let mut input = InputState::default();
+            let mut layers = LayerStack::default();
+            layers.open(
+                &mut ui,
+                &mut input,
+                stable_id("project-migration"),
+                LayerKind::Modal,
+                [0., 0.],
+                state.cancellable().then(|| stable_id("migration-cancel")),
+            )?;
+            ui.frame(&mut text)?;
             renderer.render(
                 &mut adapter,
                 &ui.display,
