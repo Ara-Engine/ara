@@ -658,9 +658,7 @@ pub fn show_panel(
                     .map(|n| format!("window-{n}"))
                     .find(|id| dock.floating().iter().all(|f| &f.id != id))
                     .unwrap_or_default();
-                // A closed panel floats from nowhere: open it, then tear it off.
-                move_panel(dock, panel, "view")?;
-                dock.float(panel, &id, rect.unwrap_or([160, 120, w, h]))?;
+                dock.open_floating(panel, &id, rect.unwrap_or([160, 120, w, h]))?;
             }
             None => move_panel(dock, panel, home(panel))?,
         }
@@ -1072,6 +1070,27 @@ mod render_quality_text {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn showing_floating_tools_preserves_the_main_views_active_tab() -> ara_ui::Result<()> {
+        for active in ["scene", "game"] {
+            for panel in ["settings", "material", "vfx", "animation", "profiler"] {
+                let mut dock = default_dock()?;
+                dock.activate(active)?;
+                let main = dock.root().clone();
+                show_panel(&mut dock, panel, None)?;
+                assert_eq!(dock.root(), &main, "Opening {panel} must preserve {active}");
+                assert_eq!(dock.floating().len(), 1);
+                assert!(
+                    matches!(&dock.floating()[0].root, DockNode::Area { tabs, active: 0, .. } if tabs == &[panel])
+                );
+                show_panel(&mut dock, panel, None)?;
+                assert_eq!(dock.root(), &main);
+                assert_eq!(dock.floating().len(), 1);
+            }
+        }
+        Ok(())
+    }
 
     #[test]
     fn quality_is_derived_from_the_override_the_project_and_the_gpu() {

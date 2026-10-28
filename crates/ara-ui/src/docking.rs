@@ -157,6 +157,23 @@ impl DockLayout {
     pub fn floating(&self) -> &[Floating] {
         &self.floating
     }
+    /// Open an absent panel directly in its own window, preserving existing tabs
+    /// and their active selections. Invalid or duplicate identities leave the layout unchanged.
+    pub fn open_floating(&mut self, panel: &str, id: &str, rect: [i32; 4]) -> Result<()> {
+        let mut floating = self.floating.clone();
+        floating.push(Floating {
+            id: id.into(),
+            rect,
+            root: DockNode::Area {
+                id: format!("{id}-area"),
+                tabs: vec![panel.into()],
+                active: 0,
+            },
+        });
+        validate_all(&self.root, &floating)?;
+        self.floating = floating;
+        Ok(())
+    }
     /// Tear `panel` off into a new floating window `id` at `rect`.
     pub fn float(&mut self, panel: &str, id: &str, rect: [i32; 4]) -> Result<()> {
         let (mut root, mut floating) = (self.root.clone(), self.floating.clone());
@@ -547,6 +564,36 @@ mod tests {
             tabs: tabs.iter().map(|t| t.to_string()).collect(),
             active: 0,
         }
+    }
+    #[test]
+    fn opening_a_floating_panel_preserves_existing_views_and_rejects_duplicates_atomically()
+    -> Result<()> {
+        for active in [0, 1] {
+            let mut root = area("view", &["scene", "game"]);
+            if let DockNode::Area {
+                active: selected, ..
+            } = &mut root
+            {
+                *selected = active;
+            }
+            let mut dock = DockLayout::new(root.clone())?;
+            dock.open_floating("settings", "w1", [10, 20, 960, 640])?;
+            assert_eq!(dock.root(), &root);
+            let before = dock.serialize()?;
+            for (panel, window, size) in [
+                ("settings", "w2", [0, 0, 100, 100]),
+                ("profiler", "w1", [0, 0, 100, 100]),
+                ("profiler", "w2", [0, 0, 0, 100]),
+            ] {
+                assert!(dock.open_floating(panel, window, size).is_err());
+                assert_eq!(dock.serialize()?, before);
+            }
+            let mut restored = DockLayout::new(area("empty", &[]))?;
+            restored.restore(&before)?;
+            assert_eq!(restored.root(), &root);
+            assert_eq!(restored.floating(), dock.floating());
+        }
+        Ok(())
     }
     #[test]
     fn panels_float_redock_and_round_trip() -> Result<()> {
