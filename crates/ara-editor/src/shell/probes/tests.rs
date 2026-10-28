@@ -156,6 +156,17 @@ fn coalesced_requests_cancel_every_own_subscription_and_keep_other_session_work_
         .cancel_probe_capture(&mut f.editor, &commands::Target::Entity(entity.clone()))
         .unwrap();
     let own: Vec<_> = tasks.iter().filter(|(job, _)| job != &other_job).collect();
+    // This test's fake owner must consume the same private cancellation mailbox
+    // that the application polls on its next frame. A Host acknowledgement alone
+    // does not mean the renderer owner has observed the intent yet.
+    let mut cancelled = Vec::new();
+    while let Some(request) = f.editor.probe_captures.try_recv() {
+        if let Request::Cancel { job, .. } = request {
+            cancelled.push(job);
+        }
+    }
+    assert_eq!(cancelled.len(), own.len());
+    assert!(!cancelled.contains(&other_job));
     for (job, _) in &own {
         assert_eq!(
             f.editor.action("jobs.status", json!({"job":job})).unwrap()["status"],
