@@ -1594,7 +1594,7 @@ fn camera_menu_and_toolbar_field_set_the_scene_field_of_view() {
     shell.commit_fields(&mut editor).unwrap();
     assert_eq!(editor.state.camera.fov_y_degrees, 47.5);
     let field = shell.ui.find("view-fov").unwrap();
-    assert_eq!(shell.ui.nodes[field].text.as_ref().unwrap().value, "47.5°");
+    assert_eq!(shell.ui.nodes[field].text.as_ref().unwrap().value, "47.5");
 
     // Align needs a Camera entity.
     editor

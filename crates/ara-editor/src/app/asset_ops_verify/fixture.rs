@@ -91,11 +91,16 @@ impl Fixture {
             .map(|path| json!({"cmd":"folder.create","args":{"path":path,"parents":true}}))
             .collect();
         let reply=editor.action("cmd.apply",json!({"doc":"ara.project.json","commands":commands,"why":"Create isolated native asset-operation fixture folders"}))?;
+        // The folder-duplicate cancellation story needs substantial valid file
+        // work, not an audio decode exceeding the importer's resident budget.
+        // Reuse the import story's bytes as an opaque source outside authoring.
+        let large = output.join("native-import-input/native-cancel.bin");
+        std::fs::copy(output.join("native-import-input/native-cancel.wav"), &large)?;
         Ok(Self {
             folders: accepted(&reply)?,
             populated: false,
             cancel_job: None,
-            large: output.join("native-import-input/native-cancel.wav"),
+            large,
             ready: BTreeSet::new(),
         })
     }
@@ -119,7 +124,7 @@ impl Fixture {
         if act == Act::CancelPreparation {
             if self.cancel_job.is_none() {
                 if !self.large.is_file() {
-                    return Err("The prior native import story's shared large WAV fixture is missing; cancellation remains unverified".into());
+                    return Err("The large opaque source fixture is missing; cancellation remains unverified".into());
                 }
                 let reply=editor.action("cmd.apply",json!({"doc":"ara.project.json","why":"Prepare the authored source for native asset-job cancellation","commands":[{"cmd":"asset.import","args":{"sources":[self.large],"destination":format!("{ROOT}/Cancel/Folder"),"conflict":"rename"}}]}))?;
                 self.cancel_job = Some(accepted(&reply)?);

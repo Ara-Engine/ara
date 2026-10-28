@@ -866,6 +866,7 @@ impl Shell {
     }
     fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
         self.poll_compile_problems(editor)?;
+        self.poll_probes(editor)?;
         self.built = (editor.panels_revision, editor.host.store().revision());
         // Async catalog reloads can make saved extension overrides reachable.
         let settings = keymap_settings(&editor.state);
