@@ -254,6 +254,7 @@ impl Shell {
     /// progress at a chosen moment), then rebuilds.
     pub fn show_play_row_for_test(&mut self, editor: &mut Editor, row: Value) {
         self.game_start = Some(super::game_panel::StartProgress::from_status(&row));
+        self.game_commands_status = super::game_panel::command_refresh_hint(&row);
         let _ = self.rebuild(editor);
     }
     /// Reads the next `play.status` row as the window does on its cadence: progress

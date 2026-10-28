@@ -196,6 +196,7 @@ pub struct Shell {
     game_camera: Option<((String, u64, u64), Option<crate::state::Camera>)>,
     /// The shown Play world's fault (`play.status`), shown instead of the game.
     pub(crate) game_fault: Option<String>,
+    pub(crate) game_commands_status: Option<&'static str>,
     /// The shown Play world is still starting (`play.status`): its progress.
     pub(crate) game_start: Option<game_panel::StartProgress>,
     /// `game_fault` is a start that failed, not a fault while running.
@@ -572,6 +573,7 @@ impl Shell {
             game_camera: None,
             game_stats: true,
             game_fault: None,
+            game_commands_status: None,
             game_start: None,
             game_start_failed: false,
             game_running: false,

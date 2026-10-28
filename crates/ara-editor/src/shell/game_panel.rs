@@ -74,6 +74,9 @@ impl Shell {
         );
         out.push_str("</panel>");
         self.play_controls_markup(editor, out);
+        if let Some(status) = self.game_commands_status {
+            out.push_str(&format!("<text id='game-command-refresh' class='caption' style='padding:4px 10px;flex-shrink:0' text='{}' />", escape(status)));
+        }
         out.push_str("<panel id='game-surface' class='game-surface'>");
         if let Some(fault) = self.game_fault.clone() {
             let text = format!("{fault} · Details and fixes are in the Console.");
@@ -278,6 +281,7 @@ impl Shell {
             .map(StartProgress::from_status);
         self.game_start_failed = state == "failed";
         self.game_running = state == "running";
+        self.game_commands_status = shown.and_then(command_refresh_hint);
         self.game_fault = shown.and_then(|w| {
             if self.game_start_failed {
                 return Some(
@@ -417,6 +421,17 @@ impl Shell {
         }
         self.ui.forget_part("body-game");
         Ok(true)
+    }
+}
+
+/// Keep the last published C# commands usable while a fresh catalog is pending.
+pub(super) fn command_refresh_hint(row: &Value) -> Option<&'static str> {
+    if row["commandsRefreshing"] == true {
+        Some("Refreshing C# commands…")
+    } else if row["commandsStale"] == true {
+        Some("C# command refresh failed; showing the last good list. See Console.")
+    } else {
+        None
     }
 }
 

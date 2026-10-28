@@ -121,11 +121,12 @@ fn play_starts_in_the_background_and_shows_its_progress() {
     );
     shell.show_play_row_for_test(
         &mut editor,
-        json!({"status":"starting","restart":true,"progress":{"phase":"pool","elapsedMs":3500}}),
+        json!({"status":"starting","restart":true,"commandsRefreshing":true,"progress":{"phase":"pool","elapsedMs":3500}}),
     );
     for id in ["game-starting-title", "status-play-text"] {
         assert_eq!(text(&shell, id).as_deref(), Some("Restarting Play…"));
     }
+    assert_eq!(text(&shell, "game-command-refresh").as_deref(), Some("Refreshing C# commands…"));
     assert!(shell.move_play_row_for_test(
         json!({"status":"starting","restart":true,"progress":{"phase":"pool","elapsedMs":3700}})
     ));
