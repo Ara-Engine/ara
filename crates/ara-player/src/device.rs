@@ -90,7 +90,7 @@ impl Windowed {
     }
     /// Updates startup status without changing the presentation surface or inputs.
     pub(crate) fn title(&self, text: &str) -> Result<()> {
-        self.window.set_title(&format!("Ara | {text}"))
+        self.window.set_title(text)
     }
 
     /// Loading presentations are not game-frame timing samples.

@@ -17,6 +17,15 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Cmd {
+    /// Check an installed player, matching PDB and complete cooked resources without exporting.
+    Preflight {
+        #[arg(long)]
+        player: PathBuf,
+        #[arg(long)]
+        engine: PathBuf,
+        #[arg(long)]
+        symbols: Option<PathBuf>,
+    },
     /// Bundles a prebuilt real player and current cooked cohorts for hash pinning.
     RuntimeTemplate {
         #[arg(long)]
@@ -137,6 +146,21 @@ fn main() -> ExitCode {
 }
 fn run() -> Result<bool> {
     match Cli::parse().command {
+        Cmd::Preflight {
+            player,
+            engine,
+            symbols,
+        } => match ara_export::preflight::runtime(&player, &engine, symbols.as_deref()) {
+            Ok(cohort) => {
+                println!("{}", serde_json::to_string(&cohort)?);
+                Ok(true)
+            }
+            Err(error) => {
+                let diagnostic = ara_export::preflight::diagnostic(&engine, &format!("{error:#}"));
+                println!("{}", serde_json::to_string(&diagnostic)?);
+                Ok(false)
+            }
+        },
         Cmd::RuntimeTemplate {
             player,
             engine,
@@ -205,13 +229,19 @@ fn run() -> Result<bool> {
         } => {
             let preset_path = if preset.is_file() {
                 preset
+            } else if project.join(&preset).is_file() {
+                project.join(preset)
             } else {
-                project
-                    .join("presets")
-                    .join(format!("{}.export.json", preset.to_string_lossy()))
+                let filename = format!("{}.export.json", preset.to_string_lossy());
+                let current = project.join("settings/builds").join(&filename);
+                if current.is_file() {
+                    current
+                } else {
+                    project.join("presets").join(filename)
+                }
             };
             let preset = ExportPreset::from_text(&std::fs::read_to_string(preset_path)?)?;
-            let cache = cache.unwrap_or_else(|| project.join(".sn/export-cache"));
+            let cache = cache.unwrap_or_else(|| project.join(".ara/export-cache"));
             let request = ExportRequest {
                 project,
                 preset,

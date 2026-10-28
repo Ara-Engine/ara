@@ -77,14 +77,22 @@ pub(crate) fn run_desktop(command: &mut Command, log: &Path, timeout: Duration) 
 
 /// Executes desktop verification: 30 seconds for conformance, 120 for a real
 /// renderer's cold driver setup. Launch/capture time is reported separately.
-pub fn desktop(dist: &Path) -> Result<VerifyReport> {
-    let launch: Value = serde_json::from_slice(&std::fs::read(dist.join("ara-launch.json"))?)?;
+pub fn desktop(dist: &Path, executable: &Path, report: &Path) -> Result<VerifyReport> {
+    let launch: Value = serde_json::from_slice(&std::fs::read(dist.join("data/ara-launch.json"))?)?;
     let runtime = launch.get("contract").and_then(Value::as_str) == Some("ara.player.runtime/1");
-    let log = dist.join("verify.log");
+    std::fs::create_dir_all(report)?;
+    let log = report.join("verify.log");
+    let mut command = Command::new(executable);
+    command
+        .arg("--headless")
+        .current_dir(report)
+        .env("ARA_CONFIG_DIR", report.join("profile"))
+        .env("ARA_CRASH_DIR", report.join("crashes"));
+    if runtime {
+        command.arg("--capture").arg(report.join("verify.png"));
+    }
     let output = run_desktop(
-        Command::new(dist.join(tools::executable("ara-player")))
-            .arg("--headless")
-            .current_dir(dist),
+        &mut command,
         &log,
         Duration::from_secs(if runtime { 120 } else { 30 }),
     )?;
@@ -100,10 +108,10 @@ pub fn desktop(dist: &Path) -> Result<VerifyReport> {
         .and_then(Value::as_str)
         .map(|path| {
             Path::new(path)
-                .strip_prefix(dist)
+                .strip_prefix(report.parent().unwrap_or(report))
                 .unwrap_or(Path::new(path))
                 .to_string_lossy()
-                .into_owned()
+                .replace('\\', "/")
         });
     let (perf, unavailable) = if runtime {
         ensure!(
@@ -121,7 +129,7 @@ pub fn desktop(dist: &Path) -> Result<VerifyReport> {
         method: "desktop_smoke".into(),
         passed: true,
         runtime_executed: true,
-        logs: "verify.log".into(),
+        logs: "report/verify.log".into(),
         screenshot,
         perf,
         evidence: result,
@@ -130,7 +138,7 @@ pub fn desktop(dist: &Path) -> Result<VerifyReport> {
 }
 
 /// Audits all exported ELF images against glibc 2.31 without starting WSL.
-pub fn linux(dist: &Path) -> Result<VerifyReport> {
+pub fn linux(dist: &Path, report: &Path) -> Result<VerifyReport> {
     fn walk(path: &Path, evidence: &mut Vec<Value>) -> Result<()> {
         for entry in std::fs::read_dir(path)? {
             let path = entry?.path();
@@ -169,14 +177,15 @@ pub fn linux(dist: &Path) -> Result<VerifyReport> {
         !evidence.is_empty(),
         "ARA-EXP-LNX-105: no ELF files exported"
     );
-    tools::write_json(&dist.join("verify.log"), &evidence)?;
-    Ok(VerifyReport {method:"static_elf".into(),passed:true,runtime_executed:false,logs:"verify.log".into(),screenshot:None,perf:Value::Null,evidence:json!(evidence),unavailable:vec!["Linux smoke launch was not requested; static ELF architecture, load segments and glibc requirements verified without starting WSL".into()]})
+    tools::write_json(&report.join("verify.log"), &evidence)?;
+    Ok(VerifyReport {method:"static_elf".into(),passed:true,runtime_executed:false,logs:"report/verify.log".into(),screenshot:None,perf:Value::Null,evidence:json!(evidence),unavailable:vec!["Linux smoke launch was not requested; static ELF architecture, load segments and glibc requirements verified without starting WSL".into()]})
 }
 
 /// Validates both Android packages and optionally installs on an explicitly
 /// selected device. An emulator is never started by the exporter.
 pub fn android(
     dist: &Path,
+    report: &Path,
     preset: &ExportPreset,
     t: &Toolchain,
     serial: Option<&str>,
@@ -186,8 +195,8 @@ pub fn android(
     crate::android::validate_package(&dist.join("game.aab"), true)?;
     let Some(serial) = serial else {
         let evidence = json!({"abis":["arm64-v8a","x86_64"],"elf_alignment":16384,"zip_alignment":16384,"apk_signature":"verified","aab_signature":"verified","target_api":preset.target_api});
-        tools::write_json(&dist.join("verify.log"), &evidence)?;
-        return Ok(VerifyReport {method:"android_structure".into(),passed:true,runtime_executed:false,logs:"verify.log".into(),screenshot:None,perf:Value::Null,evidence,unavailable:vec!["ARA-EXP-AND-009: no device requested; pass --device SERIAL (and --allow-emulator for an existing emulator)".into()]});
+        tools::write_json(&report.join("verify.log"), &evidence)?;
+        return Ok(VerifyReport {method:"android_structure".into(),passed:true,runtime_executed:false,logs:"report/verify.log".into(),screenshot:None,perf:Value::Null,evidence,unavailable:vec!["ARA-EXP-AND-009: no device requested; pass --device SERIAL (and --allow-emulator for an existing emulator)".into()]});
     };
     ensure!(
         !serial.starts_with("emulator-") || allow_emulator,
@@ -204,7 +213,7 @@ pub fn android(
     let exec = |args: &[&str], name: &str| {
         tools::run(
             Command::new(&program).args(["-s", serial]).args(args),
-            &dist.join(name),
+            &report.join(name),
             Duration::from_secs(30),
         )
     };
@@ -212,7 +221,7 @@ pub fn android(
         Command::new(&program)
             .args(["-s", serial, "install", "-r", "-t", "--no-incremental"])
             .arg(dist.join("game.apk")),
-        &dist.join("install.log"),
+        &report.join("install.log"),
         Duration::from_secs(60),
     )?;
     // Do not clear the user's global logcat ring; select this launch's process instead.
@@ -262,10 +271,10 @@ pub fn android(
         );
         std::thread::sleep(Duration::from_millis(200));
     };
-    std::fs::write(dist.join("verify.log"), &output)?;
+    std::fs::write(report.join("verify.log"), &output)?;
     let result = runtime_result(&output)?;
     let screenshot = adb.screenshot(serial)?;
-    std::fs::write(dist.join("screenshot.png"), screenshot)?;
+    std::fs::write(report.join("screenshot.png"), screenshot)?;
     exec(
         &["shell", "am", "force-stop", &preset.package],
         "force-stop.log",
@@ -274,8 +283,8 @@ pub fn android(
         method: "android_device".into(),
         passed: true,
         runtime_executed: true,
-        logs: "verify.log".into(),
-        screenshot: Some("screenshot.png".into()),
+        logs: "report/verify.log".into(),
+        screenshot: Some("report/screenshot.png".into()),
         perf: result.get("tick").cloned().unwrap_or(Value::Null),
         evidence: result,
         unavailable: vec![],

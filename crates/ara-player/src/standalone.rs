@@ -17,10 +17,10 @@ mod tests;
 pub(super) struct Options {
     #[command(flatten)]
     perf: perf::PerfOptions,
-    /// Export folder containing ara-launch.json (defaults to the executable folder).
+    /// Export folder or its data folder (defaults to the executable's sibling data).
     #[arg(long)]
     pub(crate) root: Option<PathBuf>,
-    /// Run the authored world and capture it without opening a window.
+    /// Run the authored world without opening a window; --capture requests an image.
     #[arg(long)]
     pub(crate) headless: bool,
     /// Run continuous presentation on a hidden Vulkan window; perf mode implies this.
@@ -32,7 +32,7 @@ pub(super) struct Options {
     /// Diagnose rendering without swapchain acquisition or presentation; always hidden.
     #[arg(long, requires = "perf_output", conflicts_with = "headless")]
     no_present: bool,
-    /// Write a capture after --ticks (headless defaults to verify.png).
+    /// Write a capture after --ticks; omitted means no diagnostic files are written.
     #[arg(long)]
     capture: Option<PathBuf>,
     /// Fixed ticks to simulate before a standalone headless capture.
@@ -52,6 +52,7 @@ pub(super) struct Options {
 #[derive(Deserialize)]
 struct Launch {
     contract: String,
+    name: Option<String>,
     pack: String,
     encryption_key_env: Option<String>,
 }
@@ -94,7 +95,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     phases.insert("bootstrap_ms", began.elapsed().as_millis());
     let root = args.standalone.root.as_ref().map_or_else(
         || ara_gpu::cooked::install_root().context("player install folder"),
-        |root| Ok(root.to_owned()),
+        |root| Ok(ara_gpu::cooked::player_data_root(root)),
     )?;
     let launch: Launch = serde_json::from_slice(&std::fs::read(root.join("ara-launch.json"))?)?;
     ensure!(
@@ -154,7 +155,11 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             Arc::clone(&scene),
             source,
             startup::Settings {
-                name: &args.name,
+                name: launch
+                    .name
+                    .as_deref()
+                    .filter(|name| !name.trim().is_empty())
+                    .unwrap_or(&args.name),
                 size,
                 cache: &args.gpu_cache,
                 quality,
@@ -364,10 +369,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
         window.shutdown(&*presenter)?;
         perf.finish()?;
     }
-    let capture = args
-        .standalone
-        .capture
-        .or_else(|| args.standalone.headless.then(|| root.join("verify.png")));
+    let capture = args.standalone.capture;
     let result = if let Some(path) = capture {
         Some(world.capture(
             &ara_play::CaptureParams {
