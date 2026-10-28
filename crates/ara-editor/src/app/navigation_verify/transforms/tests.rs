@@ -1,4 +1,5 @@
 //! Independent expectation math must distinguish the modes the native stories exercise.
+#![allow(clippy::unwrap_used)] // Tests assert independent transform-oracle fixture results.
 use super::*;
 
 fn worlds() -> std::collections::BTreeMap<String, Mat4> {
@@ -66,4 +67,3 @@ fn precision_expectation_uses_quarter_metre_increments_and_cancel_still_has_prev
         assert!(!close(before[id], cancelled_preview[id]));
     }
 }
-#![allow(clippy::unwrap_used)] // Tests assert independent transform-oracle fixture results.
