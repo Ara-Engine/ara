@@ -180,19 +180,29 @@ impl Drop for VisualLease {
     }
 }
 pub(crate) fn visual(timeout: u64) -> Result<VisualLease> {
+    visual_cancellable(timeout, || false)
+}
+/// Cancel an owned visual request without disturbing a foreign timing ticket.
+pub(crate) fn visual_cancellable(
+    timeout: u64,
+    cancelled: impl Fn() -> bool,
+) -> Result<VisualLease> {
     let local = std::env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from))
         .unwrap_or_else(std::env::temp_dir);
-    visual_at(&local, timeout)
+    visual_at(&local, timeout, cancelled)
 }
-fn visual_at(local: &Path, timeout: u64) -> Result<VisualLease> {
+fn visual_at(local: &Path, timeout: u64, cancelled: impl Fn() -> bool) -> Result<VisualLease> {
     let directory = local.join("ara/gpu-queue");
     fs::create_dir_all(&directory)?;
     let queue = open(&directory.join("queue.lock"))?;
     let gpu = open(&local.join("ara/gpu.lock"))?;
     let deadline = Instant::now() + Duration::from_secs(timeout);
     loop {
+        if cancelled() {
+            bail!("visual GPU admission cancelled");
+        }
         transaction(&queue, deadline)?;
         let admitted = (|| -> Result<bool> {
             let mut waiting = false;
@@ -341,8 +351,8 @@ mod visual_tests {
                     .unwrap()
                     .as_nanos()
             ));
-        let first = visual_at(&root, 1).unwrap();
-        let second = visual_at(&root, 1).unwrap();
+        let first = visual_at(&root, 1, || false).unwrap();
+        let second = visual_at(&root, 1, || false).unwrap();
         // Model a descriptor inherited by an unrelated fork before exec.
         #[cfg(unix)]
         let inherited = first._file.try_clone().unwrap();
@@ -359,7 +369,7 @@ mod visual_tests {
             Instant::now() + Duration::from_secs(1),
         )
         .unwrap();
-        assert!(visual_at(&root, 0).is_err());
+        assert!(visual_at(&root, 0, || false).is_err());
         drop(ticket);
         drop(first);
         assert!(matches!(
@@ -370,5 +380,42 @@ mod visual_tests {
         assert!(gpu.try_lock().is_ok());
         #[cfg(unix)]
         drop(inherited);
+    }
+
+    #[test]
+    fn cancelled_visual_admission_preserves_the_foreign_timing_ticket() -> Result<()> {
+        let parent =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-dev/visual-tests");
+        fs::create_dir_all(&parent)?;
+        let root = tempfile::tempdir_in(parent)?;
+        let visual = visual_at(root.path(), 1, || false)?;
+        let directory = root.path().join("ara/gpu-queue");
+        let mut queue = open(&directory.join("queue.lock"))?;
+        let ticket = allocate(
+            &directory,
+            &mut queue,
+            Instant::now() + Duration::from_secs(1),
+        )?;
+        drop(visual);
+        let polls = std::cell::Cell::new(0);
+        let result = visual_at(root.path(), 60, || {
+            polls.set(polls.get() + 1);
+            polls.get() > 1
+        });
+        assert!(
+            result
+                .err()
+                .context("cancelled admission")?
+                .to_string()
+                .contains("cancelled")
+        );
+        assert_eq!(polls.get(), 2);
+        assert!(matches!(
+            open(&ticket.path)?.try_lock(),
+            Err(std::fs::TryLockError::WouldBlock)
+        ));
+        drop(ticket);
+        assert!(visual_at(root.path(), 0, || false).is_ok());
+        Ok(())
     }
 }

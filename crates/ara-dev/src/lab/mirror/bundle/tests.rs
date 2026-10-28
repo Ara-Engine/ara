@@ -30,8 +30,10 @@ fn a_streamed_packet_stages_data_and_control_before_publishing_any_shader() -> R
             .context("durable record")?,
         record
     );
-    let request =
-        super::super::super::session::read(&inbox.join("request.json")).context("request")?;
+    // `lab rpc` reads one NDJSON frame, not an entire pretty-printed document.
+    let frame = fs::read_to_string(inbox.join("request.json"))?;
+    let request: Value = serde_json::from_str(frame.lines().next().context("request frame")?)?;
+    assert_eq!(frame.lines().count(), 1);
     assert_eq!(request["tool"], "_lab_import");
     assert_eq!(request["arguments"], record);
     import(&peer, &record)?;
