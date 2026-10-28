@@ -46,7 +46,9 @@ impl ScriptCheck {
                 || fallback["attempted"] != false
                 || fallback["outcome"] != "suppressed")
         {
-            return Err("Native compiler Go attempted its fallback despite offscreen policy".into());
+            return Err(
+                "Native compiler Go attempted its fallback despite offscreen policy".into(),
+            );
         }
         Ok(request)
     }
