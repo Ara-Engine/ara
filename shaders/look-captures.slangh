@@ -9,10 +9,10 @@
 //   frame buffer (device-local; below)
 //   captureInfo[1]: xy atlas texels, z this frame's visible baked captures (bit per
 //   record, in blending order), w debug modes (CAPTURE_DEBUG_*; `ARA_CAPTURE_DEBUG`)
-// The frame buffer, rewritten every frame before lighting: per capture a copy of
-// its record, its relight ratio and its baseline (`captureRefitMain`), then one
-// capture mask per 16x16 render tile (`captureTilesMain`), so a pixel tests only
-// the captures that reach its tile.
+// The frame buffer, before lighting: per capture a copy of its record (rewritten
+// when the records change), its relight ratio and its baseline (every frame,
+// `captureRefitMain`), then one capture mask per 16x16 render tile (every frame,
+// `captureTilesMain`), so a pixel tests only the captures that reach its tile.
 // Shading reads them only in the High/Epic tier's PSOs (`ibl`'s `high`).
 static const uint CAPTURE_LEVELS=5,CAPTURE_RECORD=128,CAPTURE_SLOT=160,CAPTURE_MAX=16;
 static const uint CAPTURE_TILES=CAPTURE_MAX*CAPTURE_SLOT,CAPTURE_TILE_CAPACITY=512*512;
@@ -44,10 +44,12 @@ float captureInfluence(CaptureCull c,float3 world,out float3 local){
     float3 inside=c.influence.xyz-abs(local);
     return saturate(min(inside.x,min(inside.y,inside.z))/max(c.influence.w,1e-3));
 }
-// The captures that can reach render pixel `p` (deferred lighting): its tile's mask.
+// The captures that can reach render pixel `p` (deferred lighting): its tile's mask,
+// none to load when no capture is visible (captures off, or none in view).
 uint captureTileMask(Frame f,Look l,int2 p){
-    uint tile=uint(p.y)/16*((f.extent.x+15)/16)+uint(p.x)/16;
-    return tile<CAPTURE_TILE_CAPACITY?buffers[NonUniformResourceIndex(l.captureInfo[0].w)].Load(CAPTURE_TILES+tile*4):l.captureInfo[1].z;
+    uint visible=l.captureInfo[1].z,tile=uint(p.y)/16*((f.extent.x+15)/16)+uint(p.x)/16;
+    if(visible==0||tile>=CAPTURE_TILE_CAPACITY)return visible;
+    return buffers[NonUniformResourceIndex(l.captureInfo[0].w)].Load(CAPTURE_TILES+tile*4);
 }
 // First row of roughness level `k`'s bordered tile in a column whose level 0 has
 // `n` interior texels (levels halve; each tile has a one-texel border).

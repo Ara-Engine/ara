@@ -515,8 +515,9 @@ struct CaptureGpu {
     atlas_state: State,
     records: Buffer,
     records_index: u32,
-    /// Device-local, rewritten every frame before lighting (look-captures.slangh):
-    /// record copies, relight state and the per-tile capture masks.
+    /// Device-local, persistent (look-captures.slangh): record copies (rewritten
+    /// when the records change), relight state and the per-tile capture masks
+    /// (every frame before lighting).
     frame: Buffer,
     frame_index: u32,
     frame_access: Access,
@@ -598,6 +599,9 @@ pub(crate) struct Captures {
     rebaseline: u32,
     /// Records whose baseline the next relight clears (a new atlas, a moved capture).
     reset: u32,
+    /// Records changed since the frame buffer's copy: the next relight copies them
+    /// (`copy_records`).
+    copy: bool,
     cooldown: u32,
     waited: u32,
     /// Bake frames are rendering: their shading must not read the captures.
@@ -794,6 +798,7 @@ impl Captures {
                 .copy_from_slice(&record.record([x, 0], n));
         }
         gpu.upload_queued(state.records, &bytes)?;
+        self.copy = true;
         Ok(())
     }
 
@@ -834,6 +839,12 @@ impl Captures {
         (self.rebaseline & 0xffff) | (self.reset & 0xffff) << 16
     }
 
+    /// Whether this frame's relight first copies the records into the frame buffer
+    /// (they changed since its last copy; the copies persist).
+    pub(crate) fn copy_records(&self) -> bool {
+        self.copy
+    }
+
     /// Imports what shading reads, when it reads captures this frame.
     pub(crate) fn import(&self, graph: &mut Graph, enabled: bool) -> Option<CaptureIds> {
         let gpu = self.gpu.as_ref().filter(|_| self.active(enabled))?;
@@ -856,6 +867,7 @@ impl Captures {
             gpu.frame_access = final_states[ids.frame.0].access;
             self.rebaseline = 0;
             self.reset = 0;
+            self.copy = false;
         }
     }
 

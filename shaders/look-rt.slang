@@ -175,20 +175,32 @@ float4 rtRoughAt(Frame f,uint image,int2 p){
 void rtFilterMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);if(any(tid.xy>=f.extent.xy))return;int2 p=int2(tid.xy);
     float4 c=pixel(root.materials,p);float3 sum=c.rgb;float total=1;
-    bool covered;float3 world=gbufferWorld(f,p,covered);float distance=length(world-f.camera.xyz);float roughness=gbufferMaterial(f,p).x;
+    float depth=gbufferDepth(f,p);
+    // worldAtDepth's homogeneous point, kept to step along the axis (below).
+    float2 uv=(float2(p)+0.5)/float2(f.extent.xy);float4 h=mul(f.inverseVp,float4(uv.x*2-1,1-uv.y*2,depth,1));
+    float3 world=h.xyz/h.w;float distance=length(world-f.camera.xyz);float roughness=gbufferMaterial(f,p).x;
     float lobe=rtSigma(l,roughness,distance,c.a),sigma=min(lobe,l.rtParams[0].w);
     [branch]if(sigma>0.3){
         float3 n=gbufferNormal(f,p);
         float tolerance=0.01+0.02*distance,reach=0.05+0.1*c.a;float step=max(sigma*0.5,1);
         int2 axis=root.entity==0?int2(1,0):int2(0,1);
+        // A tap's homogeneous point is this one's plus the inverse view-projection's
+        // columns per pixel along the axis and per unit of depth: no full transform.
+        float4 alongAxis=mul(f.inverseVp,root.entity==0?float4(2/float(f.extent.x),0,0,0):float4(0,-2/float(f.extent.y),0,0));
+        float4 alongDepth=mul(f.inverseVp,float4(0,0,1,0));
+        // One exponent for the Gaussian, the tangent-plane distance and the hit-distance
+        // similarity; the normal similarity's 16th power by squaring.
+        float gaussian=0.5/(sigma*sigma),planar=1/tolerance,similar=1/reach;
         for(int k=-4;k<=4;k++){
             if(k==0)continue;
             float offset=round(float(k)*step);int2 q=p+axis*int(offset);
             if(any(q<0)||any(q>=int2(f.extent.xy)))continue;
             float4 t=pixel(root.materials,q);if(t.a<0)continue;
-            bool tapCovered;float3 tapWorld=gbufferWorld(f,q,tapCovered);if(!tapCovered)continue;
-            float plane=abs(dot(n,tapWorld-world));
-            float w=exp(-0.5*offset*offset/(sigma*sigma))*exp(-plane/tolerance-abs(t.a-c.a)/reach)*pow(saturate(dot(n,gbufferNormal(f,q))),16);
+            float tapDepth=gbufferDepth(f,q);if(tapDepth<=0)continue;
+            float4 tap=h+alongAxis*offset+alongDepth*(tapDepth-depth);
+            float plane=abs(dot(n,tap.xyz/tap.w-world));
+            float facing=saturate(dot(n,gbufferNormal(f,q)));facing*=facing;facing*=facing;facing*=facing;facing*=facing;
+            float w=exp(-offset*offset*gaussian-plane*planar-abs(t.a-c.a)*similar)*facing;
             sum+=t.rgb*w;total+=w;
         }
     }

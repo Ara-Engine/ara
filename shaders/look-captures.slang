@@ -3,8 +3,8 @@
 // and projected into the atlas's scratch column (`captureFaceMain`), box-reduced
 // into a radiance mip chain (`captureMipMain`), then GGX-prefiltered with filtered
 // importance sampling into the capture's own column (`capturePrefilterMain`).
-// Every frame `captureRefitMain` copies the records into the device-local frame
-// buffer and measures the ambient light at each capture point, and
+// Every frame `captureRefitMain` measures the ambient light at each capture point
+// (copying the records into the device-local frame buffer when they changed), and
 // `captureTilesMain` lists the captures each 16x16 render tile can need.
 // Columns hold five bordered octahedral tiles (look-captures.slangh captureLevelY).
 #include "raster.slangh"
@@ -101,30 +101,38 @@ void capturePrefilterMain(uint3 tid:SV_DispatchThreadID){
     }
     captureAtlas()[uint2(root.sample,captureLevelY(n0,k))+tid.xy]=float4(result,1);
 }
-// Per capture (one thread each): copies its record from host memory into the frame
-// buffer, then measures the ambient irradiance at its capture point (the mean over
-// the six axes of what `ibl` would use: probe GI where the volume covers, else the
-// sky's). Root word 2: bit i (low half) marks a fresh bake, whose baseline becomes
-// this measurement; bit 16+i clears a baseline (a new atlas or a moved capture).
-// Shading multiplies the capture by the current-to-baseline ratio times its
-// multiplier (zero until a baseline exists).
-[shader("compute")][numthreads(16,1,1)]
+// Relights each capture against its bake: the ambient irradiance at its capture
+// point (the mean over the six axes of what `ibl` would use: probe GI where the
+// volume covers, else the sky's), one thread per capture and axis so the six
+// lookups run side by side. Root word 2: bit i (low half) marks a fresh bake, whose
+// baseline becomes this measurement; bit 16+i clears a baseline (a new atlas or a
+// moved capture). Root word 3 nonzero: the records changed (look/captures.rs
+// `copy_records`), so each capture's first thread copies its record from host
+// memory into the frame buffer first; the copies persist. Shading multiplies the
+// capture by the current-to-baseline ratio times its multiplier (zero until a
+// baseline exists).
+groupshared float3 captureAxes[CAPTURE_MAX*6];
+[shader("compute")][numthreads(96,1,1)] // CAPTURE_MAX captures x 6 axes
 void captureRefitMain(uint3 tid:SV_DispatchThreadID){
-    Frame f=frame();Look l=look(f);uint i=tid.x;if(i>=l.captureInfo[0].y)return;
+    Frame f=frame();Look l=look(f);uint i=tid.x/6,k=tid.x%6;bool live=i<l.captureInfo[0].y;
     uint records=l.captureInfo[0].x,target=l.captureInfo[0].w,slot=i*CAPTURE_SLOT;
-    for(uint k=0;k<CAPTURE_RECORD;k+=16)
-        buffers[NonUniformResourceIndex(target)].Store<uint4>(slot+k,buffers[NonUniformResourceIndex(records)].Load<uint4>(i*CAPTURE_RECORD+k));
-    CaptureShade c=buffers[NonUniformResourceIndex(records)].Load<CaptureShade>(i*CAPTURE_RECORD+64);
-    float3 p=c.origin.xyz,current=0;
-    uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x;
-    float sky=horizonSky(l,p);
-    for(uint k=0;k<6;k++){
+    if(live){
+        if(k==0&&root.entity!=0)
+            for(uint b=0;b<CAPTURE_RECORD;b+=16)
+                buffers[NonUniformResourceIndex(target)].Store<uint4>(slot+b,buffers[NonUniformResourceIndex(records)].Load<uint4>(i*CAPTURE_RECORD+b));
+        float3 p=buffers[NonUniformResourceIndex(records)].Load<CaptureShade>(i*CAPTURE_RECORD+64).origin.xyz;
+        uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x;
         float3 n=float3(k==0?1.:k==1?-1.:0.,k==2?1.:k==3?-1.:0.,k==4?1.:k==5?-1.:0.);
-        float3 ambient=envTex(irradiance,environmentUv(n)).rgb*sky,gi=0,unused;float coverage=0;
+        float3 ambient=envTex(irradiance,environmentUv(n)).rgb*horizonSky(l,p),gi=0,unused;float coverage=0;
         if(giEnabled(l))coverage=giPoolLobes(l,l.giImages.y,p,n,n,float3(0,0,0),false,gi,unused)*giWeight(l);
-        current+=lerp(ambient,gi,coverage);
+        captureAxes[tid.x]=lerp(ambient,gi,coverage);
     }
+    GroupMemoryBarrierWithGroupSync();
+    if(!live||k!=0)return;
+    float3 current=0;
+    for(uint a=0;a<6;a++)current+=captureAxes[tid.x+a];
     current/=6;
+    CaptureShade c=buffers[NonUniformResourceIndex(records)].Load<CaptureShade>(i*CAPTURE_RECORD+64);
     float4 baked=((root.material>>(16+i))&1)!=0?float4(0,0,0,0):buffers[NonUniformResourceIndex(target)].Load<float4>(slot+CAPTURE_RECORD+16);
     if(((root.material>>i)&1)!=0)baked=float4(current,1);
     buffers[NonUniformResourceIndex(target)].Store<float4>(slot+CAPTURE_RECORD+16,baked);
