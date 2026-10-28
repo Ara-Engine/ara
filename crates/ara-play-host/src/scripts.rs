@@ -158,6 +158,12 @@ impl PlayService {
                                     d,
                                 ) {
                                     Ok(d) => {
+                                        self.script_recovery.observe(
+                                            id,
+                                            index,
+                                            &player.incarnation,
+                                            &d,
+                                        );
                                         *diagnostic = serde_json::to_value(&d)
                                             .expect("diagnostics serialize to JSON");
                                         cx.log(d);

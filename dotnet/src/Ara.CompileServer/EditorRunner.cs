@@ -79,7 +79,9 @@ internal static class EditorRunner
             catch (Exception error)
             {
                 if (request.Operation == "invoke" && request.Command is { } command) _registry?.Disable(command, error.GetBaseException().Message);
-                return Result([.. inventory?.Diagnostics ?? [], ProjectInventory.Error(request.Operation == "invoke" ? "ARA0912" : "ARA0920", error.GetBaseException().Message)], inventory: inventory);
+                var diagnostic = ProjectInventory.Error(request.Operation == "invoke" ? "ARA0912" : "ARA0920", error.GetBaseException().Message);
+                diagnostic = (JsonObject)JsonNode.Parse(Ara.Hosting.ExceptionDetails.Attach(System.Text.Encoding.UTF8.GetBytes(diagnostic.ToJsonString()), error))!;
+                return Result([.. inventory?.Diagnostics ?? [], diagnostic], inventory: inventory);
             }
         }
 
@@ -97,13 +99,16 @@ internal static class EditorRunner
     sealed class Extensions(Dictionary<string, string> paths) : AssemblyLoadContext(isCollectible: true)
     {
         readonly Dictionary<string, byte[]> _assemblies = paths.ToDictionary(p => p.Key, p => File.ReadAllBytes(p.Value), StringComparer.OrdinalIgnoreCase);
+        readonly Dictionary<string, byte[]> _symbols = paths.Where(p => File.Exists(Path.ChangeExtension(p.Value, ".pdb")))
+            .ToDictionary(p => p.Key, p => File.ReadAllBytes(Path.ChangeExtension(p.Value, ".pdb")), StringComparer.OrdinalIgnoreCase);
         protected override Assembly? Load(AssemblyName name)
         {
             if (name.Name == typeof(EditorRegistry).Assembly.GetName().Name) return typeof(EditorRegistry).Assembly;
             if (name.Name == typeof(Behaviour).Assembly.GetName().Name) return typeof(Behaviour).Assembly;
             if (name.Name is null || !_assemblies.TryGetValue(name.Name, out var bytes)) return null;
             using var pe = new MemoryStream(bytes, writable: false);
-            return LoadFromStream(pe);
+            using var pdb = _symbols.TryGetValue(name.Name, out var symbols) ? new MemoryStream(symbols, writable: false) : null;
+            return pdb is null ? LoadFromStream(pe) : LoadFromStream(pe, pdb);
         }
     }
 }

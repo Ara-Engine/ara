@@ -19,7 +19,12 @@ pub mod pool;
 mod published;
 mod rendering;
 pub use published::{ImportProgress, PublishedAssets, PublishedGeneration, PublishedSnapshot};
+mod script_recovery;
 mod scripts;
+pub use script_recovery::{
+    ScriptRecoveryHandle, ScriptRecoveryOutcome, ScriptRecoveryPlayerResult, ScriptRecoveryRequest,
+    ScriptRecoveryStatus, ScriptRecoveryTicket,
+};
 mod source_fixes;
 pub use source_fixes::{SourceFixParams, SourceFixService};
 mod spec;
@@ -186,6 +191,7 @@ pub struct PlayService {
     headless_capture: bool,
     source_writes: scripts::SourceWrites,
     script_diagnostics: scripts::DiagnosticSources,
+    script_recovery: script_recovery::Controller,
 }
 
 impl PlayService {
@@ -222,6 +228,7 @@ impl PlayService {
             headless_capture: false,
             source_writes: scripts::SourceWrites::default(),
             script_diagnostics: scripts::DiagnosticSources::default(),
+            script_recovery: script_recovery::Controller::default(),
         }
     }
 
@@ -230,6 +237,11 @@ impl PlayService {
         self.headless_automation = true;
         self.headless_capture = true;
         self
+    }
+
+    /// Native editor control for explicit recovery of a scoped live Play incarnation.
+    pub fn script_recovery(&self) -> ScriptRecoveryHandle {
+        self.script_recovery.handle(&self.root)
     }
 
     /// Enable headless execution while the native editor supplies its own capture
@@ -1425,6 +1437,12 @@ impl Service for PlayService {
                 Err(problems) => problems.into_iter().for_each(|d| cx.log(d)),
             }
         }
+        self.script_recovery.tick(
+            &mut self.worlds,
+            &mut self.script_diagnostics,
+            &self.root,
+            &mut |diagnostic| cx.log(diagnostic),
+        );
         let playing = !self.worlds.is_empty();
         let allow = self
             .worlds

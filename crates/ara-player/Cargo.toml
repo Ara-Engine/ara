@@ -44,6 +44,7 @@ ara-runtime-world = { path = "../ara-runtime-world" }
 ara-schema.workspace = true
 ara-runtime-render = { path = "../ara-runtime-render" }
 ara-runtime-script = { path = "../ara-runtime-script" }
+ara-script = { path = "../ara-script" }
 ara-sim = { path = "../ara-sim" }
 ara-doc.workspace = true
 ara-editor-gpu = { path = "../ara-editor-gpu" }

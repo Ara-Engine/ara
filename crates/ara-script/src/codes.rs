@@ -64,6 +64,8 @@ codes! {
     BAD_DESCRIPTOR = 933,
     /// A component in a C# query uses sparse-set storage; C# systems need table storage.
     SPARSE_COMPONENT = 934,
+    /// An explicit script recovery activated fresh code, failed, or had nothing to reload.
+    RECOVERY_RESULT = 935,
     /// No command with this name is registered by a C# module.
     UNKNOWN_COMMAND = 950,
     /// Command params do not match the command's params type.

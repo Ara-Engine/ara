@@ -556,7 +556,8 @@ impl Player {
                 )?;
             }
         }
-        if let Some(world) = &self.world {
+        if let Some(world) = &mut self.world {
+            ara_runtime_script::poll_recovery(world.runtime.play_mut().session_mut().world_mut());
             for event in world.events() {
                 self.link.notify(ara_play::EVENT, &event)?;
             }
@@ -719,6 +720,41 @@ impl Player {
     /// Owner notifications: slot releases, raw input and asynchronous resizes of
     /// embedded players. Bad params are logged; there is no one to answer.
     fn notification(&mut self, method: &str, params: Value) -> Result<()> {
+        if method == "player.private.scriptRecovery" {
+            let Some(ticket) = params["ticket"].as_u64().filter(|ticket| *ticket > 0) else {
+                return Ok(());
+            };
+            let outcome = match self.world.as_mut() {
+                None => Some("refused"),
+                Some(world) if world.commands().is_null() => Some("unchanged"),
+                Some(world) => (!ara_runtime_script::request_recovery(
+                    world.runtime.play_mut().session_mut().world_mut(),
+                    ticket,
+                ))
+                .then_some("failed"),
+            };
+            if let Some(outcome) = outcome {
+                let diagnostic = ara_diag::Diagnostic::new(
+                    if outcome == "unchanged" {
+                        ara_diag::Severity::Info
+                    } else {
+                        ara_diag::Severity::Error
+                    },
+                    ara_script::codes::RECOVERY_RESULT,
+                    format!("Script recovery {outcome}"),
+                )
+                .data(
+                    json!({"recovery":{"schema":1,"ticket":ticket,"outcome":outcome,"modules":[]}}),
+                );
+                self.link.notify(
+                    ara_play::EVENT,
+                    &ara_play::Event::Diagnostic {
+                        diagnostic: serde_json::to_value(diagnostic)?,
+                    },
+                )?;
+            }
+            return Ok(());
+        }
         if method == method::IMPORTS {
             let state: ara_play::ImportState = serde_json::from_value(params)?;
             if let Some(world) = &mut self.world {

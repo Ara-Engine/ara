@@ -147,6 +147,25 @@ fn two_worlds_keep_callbacks_components_faults_and_undo_separate() {
         )
         .expect_err("first-only fault");
     assert_eq!(fault.code, codes::COMMAND_FAULT);
+    assert_eq!(
+        fault.data.as_ref().expect("fault owner")["module"],
+        "Ara.TestModule"
+    );
+    let exception = &fault.data.as_ref().expect("managed fault metadata")["exception"];
+    assert_eq!(exception["schema"], 1);
+    assert_eq!(exception["type"], "System.InvalidOperationException");
+    assert!(
+        exception["frames"]
+            .as_array()
+            .is_some_and(|frames| !frames.is_empty())
+    );
+    assert!(
+        fault
+            .location
+            .file
+            .as_deref()
+            .is_some_and(|file| file.ends_with("Probes.cs"))
+    );
     assert_eq!(first.diag(ara_script::abi::DIAG_FAULTS), 1);
     assert_eq!(second.diag(ara_script::abi::DIAG_FAULTS), 0);
     std::thread::scope(|scope| {

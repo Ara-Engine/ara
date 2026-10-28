@@ -8,7 +8,7 @@
 use core::ffi::c_void;
 use std::collections::BTreeSet;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicPtr, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU64, Ordering};
 use std::thread::ThreadId;
 use std::time::Instant;
 
@@ -53,6 +53,7 @@ pub(crate) struct Scope<'w> {
 pub(crate) struct HostCtx {
     pub start: Instant,
     pub diagnostics: Mutex<Vec<Diagnostic>>,
+    pub diagnostics_pending: AtomicBool,
     pub reloads: Mutex<Vec<ReloadReport>>,
     pub log: LogSink,
     pub scope: AtomicPtr<Scope<'static>>,
@@ -69,6 +70,7 @@ impl HostCtx {
         HostCtx {
             start: Instant::now(),
             diagnostics: Mutex::new(Vec::new()),
+            diagnostics_pending: AtomicBool::new(false),
             reloads: Mutex::new(Vec::new()),
             log,
             scope: AtomicPtr::new(std::ptr::null_mut()),
@@ -80,7 +82,20 @@ impl HostCtx {
     pub fn report(&self, d: Diagnostic) {
         if let Ok(mut v) = self.diagnostics.lock() {
             v.push(d);
+            self.diagnostics_pending.store(true, Ordering::Release);
         }
+    }
+
+    /// Drains under the queue lock so a concurrent publisher cannot lose its wake-up.
+    pub fn take_diagnostics(&self) -> Vec<Diagnostic> {
+        self.diagnostics
+            .lock()
+            .map(|mut rows| {
+                let taken = std::mem::take(&mut *rows);
+                self.diagnostics_pending.store(false, Ordering::Release);
+                taken
+            })
+            .unwrap_or_default()
     }
 
     /// How many diagnostics are queued (a mark for [`HostCtx::take_since`]).
@@ -97,6 +112,8 @@ impl HostCtx {
         let start = start.min(all.len());
         let (taken, kept): (Vec<_>, Vec<_>) = all.drain(start..).partition(|d| d.code == code);
         all.extend(kept);
+        self.diagnostics_pending
+            .store(!all.is_empty(), Ordering::Release);
         taken
     }
 
@@ -583,5 +600,26 @@ unsafe extern "C" fn host_animation_bool(
         controls
             .animation
             .push((entity, name.to_owned(), value != 0));
+    }
+}
+
+#[cfg(test)]
+mod diagnostics_tests {
+    use super::*;
+
+    #[test]
+    fn command_fault_extraction_keeps_the_pending_hint_for_other_rows() {
+        let context = HostCtx::new(Box::new(|_, _| {}));
+        assert!(!context.diagnostics_pending.load(Ordering::Acquire));
+        context.report(Diagnostic::error(codes::SYSTEM_FAULT, "system fault"));
+        context.report(Diagnostic::error(codes::COMMAND_FAULT, "command fault"));
+        assert_eq!(context.take_since(0, codes::COMMAND_FAULT).len(), 1);
+        assert!(context.diagnostics_pending.load(Ordering::Acquire));
+        assert_eq!(context.take_diagnostics()[0].code, codes::SYSTEM_FAULT);
+        assert!(!context.diagnostics_pending.load(Ordering::Acquire));
+        context.report(Diagnostic::info(codes::RECOVERY_RESULT, "reloaded"));
+        assert!(context.diagnostics_pending.load(Ordering::Acquire));
+        assert_eq!(context.take_diagnostics().len(), 1);
+        assert!(!context.diagnostics_pending.load(Ordering::Acquire));
     }
 }
