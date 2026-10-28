@@ -27,6 +27,19 @@ impl Project {
             ),
         )
         .unwrap();
+        // The import lifecycle validates existing source media before creating sidecars.
+        let authored = root.join(ara_doc::AUTHORING_ROOT);
+        for name in ["a.png", "b.png"] {
+            image::RgbaImage::from_pixel(2, 2, image::Rgba([128, 128, 255, 255]))
+                .save(authored.join(name))
+                .unwrap();
+        }
+        std::fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../ara-player/demo/content/audio/drums.wav"),
+            authored.join("other.wav"),
+        )
+        .unwrap();
         Self(root)
     }
     fn open(&self) -> Editor {

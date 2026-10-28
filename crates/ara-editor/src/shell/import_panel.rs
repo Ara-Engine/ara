@@ -83,7 +83,7 @@ impl Shell {
             ));
         }
         out.push_str("</panel></panel>");
-        if let Some((doc, record, source)) = imported {
+        if let Some((doc, record, _source)) = imported {
             let settings: ara_asset::ImportSettings =
                 serde_json::from_value(Value::Object(record.clone()))?;
             out.push_str("<panel id='import-settings-header' class='component-header'><text id='import-settings-title' class='component-title' style='padding-left:8px' text='Import settings' /></panel>");
