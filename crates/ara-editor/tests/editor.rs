@@ -1054,6 +1054,15 @@ fn material_values_and_animation_layout_share_undo_and_survive_reopen() {
     let layout_path = format!(".ara/editor/animation-{animation}.graph");
     assert!(editor.host.store().workspace().find(&layout_path).is_some());
     editor.host.flush();
+    assert!(project.0.join(&layout_path).is_file());
+    assert!(
+        !project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join(&layout_path)
+            .exists()
+    );
+    editor.host.flush();
     drop(shell);
     drop(editor);
     let reopened = project.open();

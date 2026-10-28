@@ -205,7 +205,7 @@ fn native_file(
         && prefix[..count]
             .iter()
             .find(|byte| !byte.is_ascii_whitespace())
-            != Some(&b'{')
+            .is_some_and(|byte| *byte != b'{')
     {
         return Ok(None);
     }
