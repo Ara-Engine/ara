@@ -175,7 +175,7 @@ impl Shell {
             if orthographic {
                 out.push_str(&format!("<field id='view-fov' class='number viewport-fov' min='0.01' max='1000000' step='0.1' text='{}' label='Orthographic height' description='Visible vertical span in metres; drag the field grip to zoom' action='Dispatch' />",editor.state.camera.orthographic_height));
             } else {
-                out.push_str(&format!("<field id='view-fov' class='number viewport-fov' min='10' max='120' step='1' text='{}' label='Field of view' description='Vertical field of view in degrees (10–120)' action='Dispatch' />",editor.state.camera.fov_label()));
+                out.push_str(&format!("<field id='view-fov' class='number viewport-fov' min='10' max='120' step='1' text='{}' label='Field of view' description='Vertical field of view in degrees (10–120)' action='Dispatch' />",editor.state.camera.fov_y_degrees));
             }
             self.viewport_menu(
                 out,
