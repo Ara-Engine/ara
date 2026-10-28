@@ -61,8 +61,12 @@ impl Shell {
                     .rsplit_once('.')
                     .map_or(rename.name.len(), |(stem, _)| stem.len())
             };
-            self.input
-                .focus(&mut self.ui, ara_ui::source::stable_id("asset-file-name"))?;
+            if !self
+                .input
+                .focus_if_available(&mut self.ui, ara_ui::source::stable_id("asset-file-name"))
+            {
+                return Ok(());
+            }
             self.ui.edit(
                 field,
                 ara_ui_text::EditEvent::Select {

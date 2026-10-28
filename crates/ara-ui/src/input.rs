@@ -6,6 +6,8 @@ use crate::{Result, Ui, runtime::is_focusable, source::stable_id};
 use ara_ui_text::{Clipboard, EditEvent};
 pub(crate) mod numeric;
 #[cfg(test)]
+mod restore_tests;
+#[cfg(test)]
 mod scope_tests;
 mod scroll;
 use numeric::NumericDrag;
@@ -264,6 +266,21 @@ impl InputState {
             ui.scroll_into_view(i)?;
         }
         Ok(())
+    }
+    /// Restore retained focus only when the control is mounted, enabled, visible
+    /// in its clip and inside the active scope. An unavailable target leaves all
+    /// focus, capture and scope state unchanged; the host retains its intent and
+    /// retries after mounting/revealing it. Unlike explicit [`Self::focus`], this
+    /// does not scroll background content or turn deferred restoration into an error.
+    pub fn focus_if_available(&mut self, ui: &mut Ui, id: u64) -> bool {
+        if ui
+            .by_id(id)
+            .is_none_or(|index| !self.can_focus(ui, index) || !is_focusable(&ui.nodes[index]))
+        {
+            return false;
+        }
+        self.focus_to(ui, Some(id));
+        true
     }
     fn focus_to(&mut self, ui: &mut Ui, id: Option<u64>) {
         if self.focus != id {

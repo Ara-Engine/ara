@@ -45,8 +45,8 @@ impl Fixture {
             "layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Probe job bridge","main":"levels/main.scene"
         }))).unwrap();
         for (path, id) in [
-            ("main.scene", "sc_probe_jobs"),
-            ("other.scene", "sc_other_jobs"),
+            ("main.scene", "sc_probejobs"),
+            ("other.scene", "sc_otherjobs"),
         ] {
             std::fs::write(
                 root.join(ara_doc::AUTHORING_ROOT).join("levels").join(path),
@@ -109,7 +109,7 @@ impl Fixture {
         self.queue_for(&session, entity)
     }
     pub fn queue_for(&mut self, session: &str, entity: &str) -> Task {
-        let receipt = self.call("render.probe.recapture", json!({"session":session,"doc":"sc_probe_jobs","entities":[entity],"why":"Derived CPU bridge verification"}));
+        let receipt = self.call("render.probe.recapture", json!({"session":session,"doc":"sc_probejobs","entities":[entity],"why":"Derived CPU bridge verification"}));
         assert_eq!(receipt["ops"], json!([]));
         assert!(receipt["txn"].is_null());
         match self.bridge.try_recv().expect("queued owner request") {
@@ -183,7 +183,7 @@ impl Fixture {
         let task = Task {
             job: String::new(),
             session: self.session.clone(),
-            doc: "sc_probe_jobs".into(),
+            doc: "sc_probejobs".into(),
             entity: "e_probe".into(),
             source_revision: self.host.store().revision(),
         };

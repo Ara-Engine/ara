@@ -700,13 +700,17 @@ impl Shell {
         if self.confirmations.is_open() || self.dialog.is_some() || self.choice_open() {
             return Ok(());
         }
-        if let Some(id) = self.palette_form.focus.take()
+        if let Some(id) = self.palette_form.focus.clone()
             && let Some(index) = self.shown_node(&id)
         {
             self.ui.scroll_into_view(index)?;
             self.ui.frame(&mut self.text)?;
-            self.input
-                .focus(&mut self.ui, ara_ui::source::stable_id(&id))?;
+            if self
+                .input
+                .focus_if_available(&mut self.ui, ara_ui::source::stable_id(&id))
+            {
+                self.palette_form.focus = None;
+            }
         }
         Ok(())
     }

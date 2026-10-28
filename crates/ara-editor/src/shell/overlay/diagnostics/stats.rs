@@ -106,7 +106,11 @@ impl Stats {
             let inset = if w < 100. { 4. } else { 12. };
             let width = (w - inset * 2.).clamp(8., 236.);
             let height = (h - top - 8.).max(8.);
-            out.push_str(&format!("<scroll id='scene-diagnostic-stats' style='position:absolute;right:{inset}px;top:{top}px;width:{width}px;max-width:98%;height:auto;max-height:{height}px;flex-basis:auto;min-height:0px;padding:8px;gap:4px;background:var(--popover);border-color:var(--border);border-width:1px;border-radius:6px'><text id='scene-diagnostic-stats-title' class='caption' style='white-space:normal;flex-shrink:0' text='Last completed samples' />"));
+            // Anchor to the same measured Scene extent used by projection. A
+            // right inset on an intrinsically sized host can resolve against a
+            // zero-width containing block and place the HUD outside the Scene.
+            let left = (w - inset - width).max(0.);
+            out.push_str(&format!("<scroll id='scene-diagnostic-stats' style='position:absolute;left:{left}px;top:{top}px;width:{width}px;min-width:0px;height:auto;max-height:{height}px;flex-basis:auto;min-height:0px;padding:8px;gap:4px;background:var(--popover);border-color:var(--border);border-width:1px;border-radius:6px'><text id='scene-diagnostic-stats-title' class='caption' style='white-space:normal;flex-shrink:0' text='Last completed samples' />"));
             if self.sample.is_none() {
                 out.push_str("<text id='scene-diagnostic-stats-pending' class='caption' text='Statistics unavailable until sampled' />");
             } else {

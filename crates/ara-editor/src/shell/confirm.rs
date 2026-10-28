@@ -442,9 +442,9 @@ impl Shell {
             && !self.confirmations.is_open()
             && let Some(focus) = self.modal_return_focus.take()
         {
-            // The old control may have been deleted/hidden while a prompt was
-            // open; a failed restore keeps the input stack's valid fallback.
-            let _ = self.input.focus(&mut self.ui, focus);
+            // This one-shot return keeps the scope's valid fallback if the old
+            // target disappeared. Editable rename/field intents retry separately.
+            self.input.focus_if_available(&mut self.ui, focus);
         }
         Ok(())
     }

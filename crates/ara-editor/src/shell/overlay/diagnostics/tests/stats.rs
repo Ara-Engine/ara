@@ -34,15 +34,22 @@ fn sampler_is_lazy_at_four_hz_and_unknown_metrics_never_turn_into_zero() {
         &mut markup,
     );
     let mut text = ara_ui_text::TextSystem::bundled().unwrap();
-    let mut ui =
-        ara_ui::Ui::editor(&format!("<ui id='root'>{markup}</ui>"), "", [180., 120.]).unwrap();
+    let mut ui = ara_ui::Ui::editor(
+        &format!("<ui id='root' style='width:100%;height:100%'>{markup}</ui>"),
+        "",
+        [180., 120.],
+    )
+    .unwrap();
     ui.frame(&mut text).unwrap();
     let panel = &ui.nodes[ui.find("scene-diagnostic-stats").unwrap()];
     assert!(
         panel.rect.x >= 0.
             && panel.rect.y >= 0.
             && panel.rect.x + panel.rect.w <= 180.1
-            && panel.rect.y + panel.rect.h <= 120.1
+            && panel.rect.y + panel.rect.h <= 120.1,
+        "HUD {:?}, host {:?}",
+        panel.rect,
+        ui.nodes[0].rect
     );
     let values = ui
         .nodes
@@ -63,6 +70,21 @@ fn sampler_is_lazy_at_four_hz_and_unknown_metrics_never_turn_into_zero() {
         values
             .iter()
             .any(|value| value.contains("Native instances: 0"))
+    );
+    let panel = ui.find("scene-diagnostic-stats").unwrap();
+    assert!(
+        ui.scroll_extent(panel).unwrap()[1] > ui.nodes[panel].rect.h,
+        "the short Scene must exercise real overflow, not remove or shrink metrics"
+    );
+    ui.scroll_to(panel, [0., f32::MAX]).unwrap();
+    ui.frame(&mut text).unwrap();
+    let last = &ui.nodes[ui.find("scene-diagnostic-stat-5").unwrap()];
+    let visible = last.rect.intersection(last.clip);
+    assert!(
+        visible.h >= last.rect.h - 0.5,
+        "last metric remains reachable: {:?}, clip {:?}",
+        last.rect,
+        last.clip
     );
 }
 
@@ -90,7 +112,7 @@ fn nonfinite_timing_samples_are_explicitly_unknown_and_cooked_shapes_have_visibl
         Some([400., 300.]),
         &mut markup,
     );
-    let elements = ara_ui::source::compile(&format!("<ui>{markup}</ui>")).unwrap();
+    let elements = ara_ui::source::compile(&format!("<ui id='root'>{markup}</ui>")).unwrap();
     assert!(elements.iter().any(|element| {
         element
             .attrs

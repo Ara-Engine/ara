@@ -196,7 +196,7 @@ fn source_mismatch_fails_located_receipt_but_keeps_owner_tracked_until_finished(
     f.host.tick();
     let failed = f.job(&task.job);
     assert_eq!(failed["status"], "failed");
-    assert_eq!(failed["diagnostics"][0]["location"]["doc"], "sc_probe_jobs");
+    assert_eq!(failed["diagnostics"][0]["location"]["doc"], "sc_probejobs");
     assert!(matches!(f.bridge.try_recv(), Some(Request::Cancel { job, .. }) if job == task.job));
     assert!(f.bridge.busy());
     assert!(
@@ -260,7 +260,7 @@ fn full_snapshot_cache_is_scene_scoped_and_since_empty_does_not_erase_last_good_
             .is_empty()
     );
     assert_eq!(f.query(None, None)["probes"].as_array().unwrap().len(), 1);
-    let other = f.query(Some("sc_other_jobs"), None);
+    let other = f.query(Some("sc_otherjobs"), None);
     assert_eq!(other["capabilities"]["reflectionProbes"], false);
     assert!(other["probes"].as_array().unwrap().is_empty());
     assert_eq!(f.query(None, None)["probes"].as_array().unwrap().len(), 1);
@@ -287,9 +287,9 @@ fn owner_backpressure_and_scene_close_cannot_report_false_retirement() {
     let mut f = Fixture::new();
     let task = f.queue("e_probe");
     f.started(&task, 51);
-    f.bridge.cancel_scene("sc_other_jobs");
+    f.bridge.cancel_scene("sc_otherjobs");
     assert!(!f.bridge.cancel_requested(&task.job));
-    f.bridge.cancel_scene("sc_probe_jobs");
+    f.bridge.cancel_scene("sc_probejobs");
     assert!(f.bridge.cancel_requested(&task.job));
     assert!(matches!(f.bridge.try_recv(), Some(Request::Cancel { .. })));
     for version in 1..=super::CHANNEL_CAPACITY as u64 {

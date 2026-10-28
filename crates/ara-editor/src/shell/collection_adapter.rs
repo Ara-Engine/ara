@@ -426,6 +426,11 @@ impl Shell {
                 view.reveal = None;
             }
         }
+        // A local Add can finish mounting after another surface has opened a
+        // decision. Preserve its reveal intent without scrolling/focusing behind it.
+        if self.modal_active() || self.choice_open() || self.menu.is_some() {
+            return Ok(());
+        }
         let pending: Vec<_> = self
             .collections
             .iter()
@@ -434,9 +439,6 @@ impl Shell {
             .collect();
         for id in pending {
             let Some(container) = self.shown_node(&id) else {
-                if let Some(view) = self.collections.get_mut(&id) {
-                    view.reveal = None;
-                }
                 continue;
             };
             let view = &self.collections[&id];
@@ -452,10 +454,6 @@ impl Shell {
                 continue;
             };
             self.ui.scroll_to(container, [0., target])?;
-            self.collections
-                .get_mut(&id)
-                .expect("pending collection exists")
-                .reveal = None;
             let Some(detail) = self.shown_node(&format!("{id}-detail")) else {
                 continue;
             };
@@ -481,8 +479,14 @@ impl Shell {
                 self.ui.scroll_into_view(editable)?;
                 self.stats.work += self.ui.frame(&mut self.text)?;
                 let focus = ara_ui::source::stable_id(&self.ui.nodes[editable].element.id);
-                self.input.focus(&mut self.ui, focus)?;
+                if !self.input.focus_if_available(&mut self.ui, focus) {
+                    continue;
+                }
             }
+            self.collections
+                .get_mut(&id)
+                .expect("pending collection exists")
+                .reveal = None;
         }
         Ok(())
     }

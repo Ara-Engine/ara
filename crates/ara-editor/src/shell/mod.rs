@@ -1346,10 +1346,10 @@ impl Shell {
                 self.ui.nodes[i].dirty.paint = true;
                 self.stats.work += self.ui.frame(&mut self.text)?;
             }
-            self.input.focus(
+            self.input.focus_if_available(
                 &mut self.ui,
                 ara_ui::source::stable_id("entity-rename-value"),
-            )?;
+            );
         }
         self.after_mount(editor)
     }
@@ -1410,17 +1410,24 @@ impl Shell {
         if self.field_request != editor.state.focus_field
             && self.shown_node("inspector-scroll").is_some()
         {
-            if let Some(path) = editor.state.focus_field.as_deref() {
-                self.reveal_field(path)?;
+            let revealed = if let Some(path) = editor.state.focus_field.as_deref() {
+                self.reveal_field(path)?
+            } else {
+                true
+            };
+            if revealed {
+                self.field_request = editor.state.focus_field.clone();
             }
-            self.field_request = editor.state.focus_field.clone();
         }
         self.motion
             .apply(&mut self.ui.display, true, self.reduce_motion);
         Ok(())
     }
     /// Scrolls the inspector to the field at `path` (`Transform.position.x`) and focuses it.
-    pub(crate) fn reveal_field(&mut self, path: &str) -> ara_ui::Result<()> {
+    pub(crate) fn reveal_field(&mut self, path: &str) -> ara_ui::Result<bool> {
+        if self.modal_active() || self.choice_open() || self.menu.is_some() {
+            return Ok(false);
+        }
         let (path, axis) = path
             .rsplit_once('.')
             .and_then(|(base, axis)| {
@@ -1436,7 +1443,7 @@ impl Shell {
             .find(&format!("field-{id}"))
             .or_else(|| self.ui.find(&format!("component-{id}")))
         else {
-            return Ok(());
+            return Ok(false);
         };
         if let Some(scroll) = self.ui.find("inspector-scroll") {
             // Rects are on screen (already scrolled); `scroll_to` takes the absolute
@@ -1455,9 +1462,9 @@ impl Shell {
             .or_else(|| self.ui.find(&format!("edit-{id}-{}", axis.unwrap_or(0))))
         {
             let key = ara_ui::source::stable_id(&self.ui.nodes[field].element.id);
-            self.input.focus(&mut self.ui, key)?;
+            return Ok(self.input.focus_if_available(&mut self.ui, key));
         }
-        Ok(())
+        Ok(self.ui.shown(row))
     }
     /// Complete decorative transitions before deterministic review captures.
     pub fn settle_transitions(&mut self) {

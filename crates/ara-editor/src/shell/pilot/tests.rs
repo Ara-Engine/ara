@@ -108,7 +108,7 @@ fn agent(editor: &mut Editor) -> String {
         .to_owned()
 }
 fn agent_set(editor: &mut Editor, session: &str, entity: &str, path: &str, value: Value) {
-    Endpoint::call(&mut editor.host,"cmd.apply",json!({"session":session,"doc":editor.state.doc,"commands":[{"cmd":"property.set","args":{"entity":entity,"path":path,"value":value}}]})).unwrap();
+    Endpoint::call(&mut editor.host,"cmd.apply",json!({"session":session,"doc":editor.state.doc,"why":"Pilot ownership test: agent changes the captured property","commands":[{"cmd":"property.set","args":{"entity":entity,"path":path,"value":value}}]})).unwrap();
     editor.sync();
 }
 

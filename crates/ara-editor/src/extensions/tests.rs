@@ -228,7 +228,7 @@ fn accepted_callback_publishes_informational_rows_and_warnings_without_failing_t
         .call(
             ConnId::LOCAL,
             "logs",
-            json!({"session":human,"severity":"info","group":false}),
+            json!({"session":human,"severity":"info","group":false,"limit":100}),
         )
         .unwrap();
     for message in [

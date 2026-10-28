@@ -10,6 +10,9 @@ pub(super) use module_discovery::ModuleList;
 #[path = "scripts/ide.rs"]
 mod ide;
 pub(crate) use ide::IdeRequest;
+#[cfg(test)]
+#[path = "scripts/focus_tests.rs"]
+mod focus_tests;
 
 struct NoClipboard;
 impl ara_ui_text::Clipboard for NoClipboard {
@@ -169,8 +172,7 @@ impl Shell {
                 self.ui.nodes[field].dirty.paint = true;
             }
             let id = ara_ui::source::stable_id("asset-rename-value");
-            if self.input.focused() != Some(id) {
-                self.input.focus(&mut self.ui, id)?;
+            if self.input.focused() != Some(id) && self.input.focus_if_available(&mut self.ui, id) {
                 self.ui
                     .edit(field, ara_ui_text::EditEvent::SelectAll, &mut NoClipboard)?;
             }
