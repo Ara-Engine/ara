@@ -138,6 +138,7 @@ pub(super) struct AssetOpsCheck {
     drag_preview: Value,
     index_preview: Value,
     pointer: [f32; 2],
+    virtual_pointer: input::pointer::Pointer,
     source: [f32; 2],
     destination: [f32; 2],
     initialized: bool,
@@ -176,6 +177,7 @@ impl AssetOpsCheck {
             drag_preview: Value::Null,
             index_preview: Value::Null,
             pointer: [0.; 2],
+            virtual_pointer: Default::default(),
             source: [0.; 2],
             destination: [0.; 2],
             initialized: false,
@@ -206,6 +208,7 @@ impl AssetOpsCheck {
         events: &mut Vec<(u32, Event)>,
     ) -> ara_ui::Result<()> {
         if self.finished() {
+            self.clear_virtual_pointer(shell);
             return if self.failures().is_empty() {
                 Ok(())
             } else {
@@ -254,7 +257,7 @@ impl AssetOpsCheck {
             {
                 let _ = editor.action("jobs.cancel", json!({"job":job}));
             }
-            self.advance();
+            self.advance(shell);
             self.recovering = report["busy"] == true;
             self.failed_frame = true;
             self.write()?;
@@ -271,7 +274,12 @@ impl AssetOpsCheck {
         self.waiting = true;
         Ok(())
     }
-    fn advance(&mut self) {
+    fn clear_virtual_pointer(&mut self, shell: &mut Shell) {
+        self.virtual_pointer.reset();
+        shell.desktop_pointer = None;
+    }
+    fn advance(&mut self, shell: &mut Shell) {
+        self.clear_virtual_pointer(shell);
         self.index += 1;
         self.age = 0;
         self.waiting = false;

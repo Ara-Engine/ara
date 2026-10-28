@@ -2,7 +2,7 @@
 use super::*;
 use crate::shell::Binding;
 mod cleanup;
-mod pointer;
+pub(super) mod pointer;
 pub(super) fn tap(window: &Window, key: i32, events: &mut Vec<(u32, Event)>) {
     for pressed in [true, false] {
         events.push((
@@ -178,6 +178,12 @@ impl AssetOpsCheck {
         scale: f32,
         events: &mut Vec<(u32, Event)>,
     ) -> ara_ui::Result<()> {
+        if self.age == 0 && !self.initialized {
+            self.virtual_pointer.reset();
+        }
+        // Restore before preview/release observations as well as dispatch. Other
+        // frame owners may have changed Shell's shared native pointer meanwhile.
+        shell.desktop_pointer = self.virtual_pointer.desktop();
         let initial = events.len();
         let result = self.input_stage(act, editor, shell, window, scale, events);
         if result.is_ok()
@@ -185,16 +191,17 @@ impl AssetOpsCheck {
                 .iter()
                 .any(|(_, event)| matches!(event, Event::MouseMotion { .. }))
             && let Some(mapping) =
-                pointer::map(window.id(), window.rect()?, scale, &events[initial..])?
+                self.virtual_pointer
+                    .map(window.id(), window.rect()?, scale, &events[initial..])?
         {
             // The same virtual desktop mapping as the native monkey adapter:
             // SDL client points plus this event window's desktop-point origin.
-            shell.desktop_pointer = Some(mapping.desktop);
             self.trace.push(json!({"stage":"native-pointer-mapping","age":self.age,
                 "window":window.id(),"windowRect":mapping.window_rect,"pointsToLogical":scale,
                 "nativePosition":mapping.native,"logicalPosition":mapping.logical,"desktopPointer":mapping.desktop,
                 "sourceSelection":self.selection,"sourceSelectionPaths":self.selection_paths}));
         }
+        shell.desktop_pointer = self.virtual_pointer.desktop();
         result
     }
 
@@ -212,7 +219,6 @@ impl AssetOpsCheck {
         if self.age == 0 {
             if !self.initialized {
                 shell.leave();
-                shell.desktop_pointer = None;
                 shell.menu = None;
                 shell.dialog = None;
                 editor.action("editor.layout.reset", json!({}))?;

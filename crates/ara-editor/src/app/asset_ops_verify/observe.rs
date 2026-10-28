@@ -251,7 +251,7 @@ impl AssetOpsCheck {
     pub fn end(
         &mut self,
         editor: &Editor,
-        shell: &Shell,
+        shell: &mut Shell,
         gpu: &mut NativeUi,
     ) -> ara_ui::Result<()> {
         if std::mem::take(&mut self.failed_frame) || self.finished() || self.waiting {
@@ -411,7 +411,7 @@ impl AssetOpsCheck {
         let redo_ok = !act.undo() || self.committed.as_ref() == Some(&after);
         let ok = content_ok && transactions_ok && undo_ok && redo_ok;
         self.results.push(json!({"journey":act.label(),"ok":ok,"checks":{"content":content_ok,"transactions":transactions_ok,"undoRestoredExactSnapshot":undo_ok,"redoRestoredExactSnapshot":redo_ok,"contentPredicates":content_checks},"transactions":transactions,"expectedTransactions":expected_transactions,"beforeRevision":self.before_revision,"afterRevision":editor.host.store().revision(),"before":self.before,"after":after,"terminal":self.terminal,"selectionBefore":self.selection,"selectionBeforePaths":self.selection_paths,"selectionCommitted":self.committed_selection,"selectionUndo":self.undo_selection,"selectionRedo":self.redo_selection,"laterHumanSelection":self.unrelated_selection,"selectionAfter":fixture::selection(editor,shell),"dragPreview":self.drag_preview,"cancelablePreparation":self.cancel_observed,"indexProjection":self.index_preview,"trace":self.trace,"events":self.events}));
-        self.advance();
+        self.advance(shell);
         self.write()?;
         if !ok {
             return Err(format!(
