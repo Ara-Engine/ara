@@ -225,6 +225,9 @@ impl Host {
         self.dialogs.suspend(ui, input);
         self.select.key(ui, input, Key::Escape)?;
         if self.scope {
+            if let Some(index) = ui.find("kit-host") {
+                ui.set_visible(index, false)?;
+            }
             input.remove_scope(ui, stable_id("kit-host"));
             self.scope = false;
         }
@@ -287,6 +290,54 @@ mod tests {
         ui.frame(text)?;
         host.sync(ui, input)?;
         ui.frame(text)?;
+        Ok(())
+    }
+    #[test]
+    fn toolkit_host_removal_restores_unscoped_editor_focus_and_keeps_an_unfocused_editor_unfocused()
+    -> ara_ui::Result<()> {
+        let base = "<button id='outside' text='First editor button' /><field id='editor-draft' text='Keep this draft' />";
+        let mut text = TextSystem::bundled()?;
+        for focused in [true, false] {
+            let mut host = Host::new();
+            let mut ui = Ui::editor(
+                &format!("<ui id='root'>{base}</ui>"),
+                &format!(
+                    "{EDITOR_CSS}{CSS}{}{}",
+                    ara_ui::dialogs::CSS,
+                    ara_ui::select::CSS
+                ),
+                [1440., 900.],
+            )?;
+            ui.frame(&mut text)?;
+            let mut input = InputState::default();
+            if focused {
+                input.focus(&mut ui, stable_id("editor-draft"))?;
+            }
+            let expected = input.focused();
+            host.open_note();
+            ui.reconcile(&format!(
+                "<ui id='root'>{base}{}</ui>",
+                host.markup(ui.size)
+            ))?;
+            ui.frame(&mut text)?;
+            host.sync(&mut ui, &mut input)?;
+            ui.frame(&mut text)?;
+            assert!(host.dialog_id(&ui, DialogKind::Note).is_some());
+            assert_ne!(input.focused(), expected);
+            host.close(&mut ui, &mut input)?;
+            ui.reconcile(&format!("<ui id='root'>{base}</ui>"))?;
+            ui.frame(&mut text)?;
+            assert!(ui.find("kit-host").is_none());
+            assert_eq!(
+                input.focused(),
+                expected,
+                "Removing the proof host must preserve the editor's exact original focus"
+            );
+            let field = ui.widgets.get(&stable_id("editor-draft"));
+            assert!(
+                matches!(field, Some(ara_ui::widgets::Widget::Input(field)) if field.value() == "Keep this draft")
+            );
+        }
         Ok(())
     }
     #[test]

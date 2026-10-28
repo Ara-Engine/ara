@@ -356,7 +356,19 @@ fn recorded_same_value_policy_ops_override_local_values_only_from_the_effective_
         "the round trip must contain actual mutations"
     );
     ticks(&mut editor);
-    assert_eq!(editor.state.settings["build.profile"], "initial");
+    assert_eq!(
+        editor.state.settings["build.profile"],
+        "initial",
+        "Round-trip policy reconciliation failed: {}",
+        {
+            let transactions:Vec<_>=editor.host.store().since(revision).iter().map(|transaction|json!({"txn":transaction.id,"base":transaction.base,"revision":transaction.result,"author":transaction.author,"why":transaction.why,"label":transaction.label,"ops":transaction.ops})).collect();
+            let disk = std::fs::read_to_string(project.0.join(PREFERENCES))
+                .map_err(|error| error.to_string());
+            ara_json::to_canonical_string(
+                &json!({"canonicalEffectiveProfile":policy(editor.host.store().workspace(),"settings").and_then(|settings|settings.get("build.profile")),"preferencesPath":project.0.join(PREFERENCES),"preferencesDisk":disk,"beforeRoundtripRevision":revision,"currentHostRevision":editor.host.store().revision(),"pendingSave":editor.host.unsaved(),"postRoundtripTransactions":transactions}),
+            )
+        }
+    );
     let revision = editor.host.store().revision();
     ticks(&mut editor);
     assert_eq!(editor.host.store().revision(), revision);

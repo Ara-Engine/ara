@@ -104,6 +104,7 @@ pub(super) struct InputCheck {
     before: Value,
     stacked_focus: Option<u64>,
     initial_focus: Option<u64>,
+    initial_focus_name: Option<String>,
     native_events: usize,
     frame_ms: Vec<f64>,
     intermediate: Vec<Value>,
@@ -123,6 +124,7 @@ impl InputCheck {
             before: Value::Null,
             stacked_focus: None,
             initial_focus: None,
+            initial_focus_name: None,
             native_events: 0,
             frame_ms: Vec::new(),
             intermediate: Vec::new(),
@@ -185,6 +187,10 @@ impl InputCheck {
             self.revision = editor.host.store().revision();
             self.camera = editor.state.camera;
             self.initial_focus = shell.input.focused();
+            self.initial_focus_name = self
+                .initial_focus
+                .and_then(|id| shell.ui.by_id(id))
+                .map(|index| shell.ui.nodes[index].element.id.clone());
             shell.toolkit_verify = Some(Host::new());
             shell.rebuild(editor)?;
         }
@@ -297,6 +303,20 @@ impl InputCheck {
             self.stacked_focus,
             self.initial_focus,
         );
+        if matches!(act, Act::Cleanup)
+            && let Some(check) = checks
+                .iter_mut()
+                .find(|check| check["check"] == "original editor focus is restored")
+        {
+            check["expectedStableId"] = json!(self.initial_focus);
+            check["expectedId"] = json!(self.initial_focus_name);
+            check["actualStableId"] = json!(shell.input.focused());
+            check["actualId"] = state["focus"].clone();
+            check["expectedTarget"] = self.initial_focus.and_then(|id| shell.ui.by_id(id)).map_or(Value::Null, |index| {
+                let node = &shell.ui.nodes[index];
+                json!({"id":node.element.id,"shown":shell.ui.shown(index),"disabled":node.state.disabled,"rect":node.rect,"clip":node.clip})
+            });
+        }
         checks.append(&mut self.intermediate);
         checks.push(json!({"check":"document revision unchanged","ok":editor.host.store().revision()==self.revision}));
         checks.push(json!({"check":"camera unchanged behind toolkit scopes","ok":editor.state.camera==self.camera}));
@@ -333,7 +353,7 @@ impl InputCheck {
         std::fs::write(
             self.output.join("native-input.json"),
             ara_json::to_canonical_string(
-                &json!({"route":"raw SDL -> Window::poll_tagged -> production editor route -> native_input::Router -> shared Select/Dialogs/InputState","clipboard":"isolated in-memory; OS clipboard service unverified by this journey","ime":"injected preedit/commit; OS candidate-window integration unverified","nativeEvents":self.native_events,"completed":self.finished(),"passed":self.results.iter().filter(|r|r["ok"]==true).count(),"failed":self.failures().len(),"journeys":self.results,"frames":self.trace}),
+                &json!({"route":"raw SDL -> Window::poll_tagged -> production editor route -> native_input::Router -> shared Select/Dialogs/InputState","clipboard":"isolated in-memory; OS clipboard service unverified by this journey","ime":"injected preedit/commit; OS candidate-window integration unverified","initialFocus":{"stableId":self.initial_focus,"id":self.initial_focus_name},"nativeEvents":self.native_events,"completed":self.finished(),"passed":self.results.iter().filter(|r|r["ok"]==true).count(),"failed":self.failures().len(),"journeys":self.results,"frames":self.trace}),
             ),
         )?;
         Ok(())
