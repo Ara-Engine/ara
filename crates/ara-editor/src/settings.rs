@@ -1193,7 +1193,7 @@ mod tests {
 
     #[test]
     fn malformed_policy_after_open_is_reported_without_overwriting_it_or_cleaning_the_marker() {
-        let marker = json!({"name":"Outpost","main":"levels/main.scene","settings":{"play.tickHz":"120"},"physics":{"custom":true}});
+        let marker = json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Outpost","main":"levels/main.scene","settings":{"play.tickHz":"120"},"physics":{"custom":true}});
         let project = Project::new(marker.clone(), Some(json!({})));
         let mut editor = project.authority(None);
         let path = project.0.join(ara_host::project_policy::PREFERENCES);

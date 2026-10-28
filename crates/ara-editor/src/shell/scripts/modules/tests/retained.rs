@@ -125,7 +125,13 @@ fn module_paths_use_real_searchable_select_in_narrow_modal_and_escape_restores_f
         click(&mut shell, &mut editor, "script-module-choice");
         let search = "choice-script-module-choice-search";
         visible(&shell, search);
-        assert_eq!(shell.input.focused(), Some(stable_id(search)));
+        assert_eq!(
+            shell.input.focused(),
+            Some(stable_id(search)),
+            "A Select opened inside a Dialog must own a popup scope above the dialog; modal={:?}, focus graph={}",
+            shell.modal_root,
+            shell.input.focus_graph(&shell.ui),
+        );
         shell.native_text("11-long", &mut NoClipboard).unwrap();
         shell.dispatch(&mut editor).unwrap();
         shell.rebuild(&mut editor).unwrap();
@@ -142,9 +148,12 @@ fn module_paths_use_real_searchable_select_in_narrow_modal_and_escape_restores_f
         shell.frame().unwrap();
         let Some(Dialog::ScriptModules { selected, .. }) = &shell.dialog else { panic!("choosing does not open the IDE") };
         assert!(selected.as_deref().unwrap().contains("11-long"));
+        assert_eq!(shell.input.focused(), Some(stable_id("script-module-choice")));
         click(&mut shell, &mut editor, "script-module-choice");
+        assert_eq!(shell.input.focused(), Some(stable_id(search)));
         shell.key(&mut editor, 41, true, &mut NoClipboard).unwrap();
         assert!(shell.dialog.is_some(), "first Escape closes only the Select");
+        assert_eq!(shell.input.focused(), Some(stable_id("script-module-choice")));
         shell.key(&mut editor, 41, true, &mut NoClipboard).unwrap();
         shell.frame().unwrap();
         assert!(shell.dialog.is_none());

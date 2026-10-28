@@ -405,9 +405,9 @@ fn show_asset(editor: &mut Editor, shell: &mut Shell) {
         .action("editor.layout.show", json!({"panel":"assets"}))
         .unwrap();
     editor
-        .action("editor.workspace", json!({"folder":"assets"}))
+        .action("editor.workspace", json!({"folder":format!("{}/assets",ara_doc::AUTHORING_ROOT)}))
         .unwrap();
-    shell.browser.insert_path("assets/box.prefab", "prefab");
+    shell.browser.insert_path(&format!("{}/assets/box.prefab",ara_doc::AUTHORING_ROOT), "prefab");
     shell.rebuild(editor).unwrap();
 }
 fn begin_asset(shell: &mut Shell, clip: &mut Clipboard) {

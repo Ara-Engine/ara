@@ -412,7 +412,7 @@ impl Shell {
                 self.modal_return_focus = self.input.focused();
             }
             self.confirmations.suspend(&mut self.ui, &mut self.input);
-            if self.modal_root == Some("build-options") {
+            if matches!(self.modal_root, Some("build-options" | "dialog")) {
                 // Closing/replacing the form also removes a now-unmounted Select
                 // scope before the replacement modal receives keyboard focus.
                 self.sync_choice_controls()?;
@@ -432,8 +432,8 @@ impl Shell {
             }
             self.modal_root = root;
         }
-        if root == Some("build-options") {
-            // The form owns the base scope; its Select sits above it and shared
+        if matches!(root, Some("build-options" | "dialog")) {
+            // The modal owns the base scope; its Select sits above it and shared
             // confirmation/output prompts are synchronized last, at the top.
             self.sync_choice_controls()?;
         }

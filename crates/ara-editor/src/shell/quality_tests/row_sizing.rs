@@ -34,9 +34,10 @@ fn check_rows(
     minimum: f32,
 ) -> Value {
     let css = shell.stylesheet(editor);
-    let control_index = shell
-        .shown_node(control)
-        .expect("real Inspector/import enum control");
+    let control_index = shell.shown_node(control).unwrap_or_else(|| {
+        let dropdowns: Vec<_> = shell.ui.nodes.iter().filter(|node| node.element.tag == "dropdown").map(|node|node.element.id.as_str()).collect();
+        panic!("Missing real Inspector/import enum control {control}; doc={}, selection={:?}, dropdowns={dropdowns:?}",editor.state.doc,editor.state.selection)
+    });
     assert_eq!(shell.ui.nodes[control_index].element.tag, "dropdown");
     // Model a localized caption update through the real retained binding seam;
     // the valid stored enum and its typed callback remain unchanged.
@@ -120,7 +121,7 @@ fn narrow_inspector_and_import_selects_fit_auto_rows_without_expanding_numeric_d
             minimum,
         );
         editor
-            .action("editor.workspace", json!({"asset":"textures/quality.png"}))
+            .action("editor.workspace", json!({"asset":format!("{}/textures/quality.png",ara_doc::AUTHORING_ROOT)}))
             .unwrap();
         editor
             .action("editor.focus", json!({"panel":"inspector"}))
