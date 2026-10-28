@@ -46,7 +46,10 @@ pub(crate) enum LookPass {
     /// (`look::captures`): `masks` marks bakes that landed since the last one (low
     /// half) and baselines it clears (high half); `copy` first copies the changed
     /// records into the frame buffer.
-    CaptureRefit { masks: u32, copy: bool },
+    CaptureRefit {
+        masks: u32,
+        copy: bool,
+    },
     /// Lists the captures each 16x16 render tile can need (`look::captures`).
     CaptureTiles,
     /// The horizon's sun visibility (`look::horizon`).
