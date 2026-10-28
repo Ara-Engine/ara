@@ -90,6 +90,16 @@ internal sealed class ModuleSession
 
     /// <summary>The committed state (null until the first successful build).</summary>
     internal ModuleState? State => _state;
+    internal uint InitialGeneration;
+    internal bool MatchesCurrent(Outcome outcome, ICompileContext context) =>
+        outcome.Next is { } next && MatchesInventory() && MatchesInputs(next, context);
+
+    bool MatchesInventory()
+    {
+        if (_project is not { } project) return true;
+        var current = project.Scan();
+        return current.Diagnostics.Length == 0 && Graph(current) == _graph;
+    }
 
     /// <summary>Adopts an outcome's next state (a delta, image, relink or trivia-only change).</summary>
     internal void Commit(Outcome o)
@@ -180,6 +190,7 @@ internal sealed class ModuleSession
         if (CheckInventory(p) is { } invalid) return invalid;
         var trees = ImmutableDictionary.CreateBuilder<string, SyntaxTree>(ModuleState.Paths);
         var texts = ImmutableDictionary.CreateBuilder<string, string>(ModuleState.Paths);
+        _disk.Clear();
         foreach (var path in SourceFiles())
         {
             var full = ProjectInventory.ProjectPath(path);
@@ -188,7 +199,7 @@ internal sealed class ModuleSession
             texts[full] = text;
             trees[full] = ModuleCompiler.Parse(full, text);
         }
-        var hot = _startHot && ctx.Enc;
+        var hot = (_state?.Hot ?? _startHot) && ctx.Enc;
         var (refs, surfaces) = Dependencies(ctx);
         var user = _compiler.Create([.. trees.Values, _usings], hot, refs.Values);
         var start = new ModuleState(user, user, ImmutableDictionary<string, SourceText>.Empty, trees.ToImmutable(), texts.ToImmutable(),
@@ -466,7 +477,7 @@ internal sealed class ModuleSession
                 Final = final,
                 Generated = generated,
                 Baseline = start.Hot ? ModuleCompiler.Baseline(final, image) : null,
-                Generation = kind == AbiConst.ReloadInitial ? 0 : (_state?.Generation ?? 0) + 1,
+                Generation = kind == AbiConst.ReloadInitial ? InitialGeneration : (_state?.Generation ?? 0) + 1,
                 Surface = surface || ctx.HasDependents(this) ? ModuleCompiler.Surface(final) : null,
                 DepSurfaces = Dependencies(ctx).Surfaces,
             },

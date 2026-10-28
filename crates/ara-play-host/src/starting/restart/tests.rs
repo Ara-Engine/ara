@@ -192,7 +192,7 @@ impl Fixture {
         Player {
             incarnation: format!("restart-test-{name}-{pid}"),
             child: child.into(),
-            link: Link::accept(stream).unwrap(),
+            link: ara_play::link::Pump::owner(Link::accept(stream).unwrap()).expect("owner IO"),
             hello: ara_play::Hello {
                 token: "restart-test".into(),
                 protocol: ara_play::PROTOCOL.into(),
@@ -208,6 +208,7 @@ impl Fixture {
             events: Vec::new(),
             embed: Vec::new(),
             replies: Default::default(),
+            profiling: Vec::new(),
         }
     }
     fn service(&self, held: bool, internal: bool) -> PlayService {

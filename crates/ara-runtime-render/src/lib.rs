@@ -150,6 +150,10 @@ pub struct Presenter {
     frames_in_flight: bool,
     /// Submitted raster frames not yet waited, oldest first (at most two).
     in_flight: std::collections::VecDeque<raster::Submitted>,
+    /// Private recorder identity for the next submission, independent of simulation.
+    profile_next: Option<u64>,
+    /// Timestamp samples paired with their actual submitting CPU frame.
+    profile_completed: std::collections::VecDeque<(u64, Vec<ara_gpu::commands::PassTiming>)>,
 }
 
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
@@ -250,6 +254,8 @@ impl Presenter {
             lut: None,
             frames_in_flight: false,
             in_flight: std::collections::VecDeque::new(),
+            profile_next: None,
+            profile_completed: std::collections::VecDeque::new(),
         }
     }
 

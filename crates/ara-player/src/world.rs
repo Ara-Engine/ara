@@ -534,18 +534,30 @@ impl World {
     }
 
     /// `play.compile`: claims sources as an agent edit in their modules.
-    pub fn compile(&self, compile: &ara_play::Compile) -> Value {
+    pub fn compile(
+        &self,
+        compile: &ara_play::Compile,
+        claim: Option<&ara_script::SourceClaim>,
+    ) -> Value {
         let Some((settings, _)) = &self.scripts else {
             return json!({"claimed": false});
         };
         let mut claimed = false;
         for path in compile.paths.iter().map(PathBuf::from) {
             if let Some((module, _)) = ara_runtime_script::module_of(settings, &path) {
-                claimed |= ara_runtime_script::request_compile(
-                    self.runtime.world(),
-                    &module,
-                    std::slice::from_ref(&path),
-                );
+                claimed |= match claim {
+                    Some(claim) => ara_runtime_script::source_claim(
+                        self.runtime.world(),
+                        &module,
+                        std::slice::from_ref(&path),
+                        claim,
+                    ),
+                    None => ara_runtime_script::request_compile(
+                        self.runtime.world(),
+                        &module,
+                        std::slice::from_ref(&path),
+                    ),
+                };
             }
         }
         json!({"claimed": claimed})

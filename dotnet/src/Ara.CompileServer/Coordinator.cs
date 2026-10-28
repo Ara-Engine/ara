@@ -30,10 +30,9 @@ internal sealed class Coordinator : ICompileContext, IDisposable
 {
     /// <summary>Agent edits to a module are coalesced until it has been quiet this long.</summary>
     internal TimeSpan AgentQuiet = TimeSpan.FromMilliseconds(150);
-    /// <summary>How long watcher events on a path an agent claimed count as agent edits.</summary>
-    static readonly long ClaimTicks = 2 * Stopwatch.Frequency;
+    readonly Func<long> _clock;
 
-    enum WorkKind { Initial, Change, Heat, Rebuild }
+    enum WorkKind { Initial, Change, Heat, Rebuild, Recover }
 
     sealed class Work(WorkKind kind, uint slot, uint origin, long tEvent)
     {
@@ -45,6 +44,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         internal readonly HashSet<string> Paths = new(ModuleState.Paths);
         internal bool Hot;
         internal Escalation Escalation;
+        internal ulong Recovery;
     }
 
     readonly IMessageSink _out;
@@ -55,7 +55,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     readonly Dictionary<string, ModuleSession> _byName = new(StringComparer.Ordinal);
     readonly LinkedList<Work> _human = new();
     readonly Dictionary<uint, Work> _agent = [];
-    readonly Dictionary<string, long> _claims = new(ModuleState.Paths);
+    readonly SourceClaims _claims = new();
     readonly Dictionary<string, Guid> _references = new(ModuleState.Paths);
     readonly List<FileSystemWatcher> _referenceWatchers = [];
     readonly AutoResetEvent _wake = new(false);
@@ -77,8 +77,9 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     /// <inheritdoc/>
     public EncCapabilities Caps { get; private set; } = EncCapabilities.BodiesOnly;
 
-    internal Coordinator(IMessageSink output, IAnalysis? analysis)
+    internal Coordinator(IMessageSink output, IAnalysis? analysis, Func<long>? clock = null)
     {
+        _clock = clock ?? Stopwatch.GetTimestamp;
         _out = output;
         _analysis = analysis;
         _watcher = new ModuleWatcher(OnWatcher);
@@ -98,7 +99,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     /// folder. A reference to a module that is not watched yet is refused with a diagnostic.
     /// </summary>
     internal void Watch(uint slot, string name, string dir, bool hot, IReadOnlyList<string> assemblies,
-        IReadOnlyList<string> references, string profile, bool watch)
+        IReadOnlyList<string> references, string profile, bool watch, bool initial = true, uint generation = 0)
     {
         lock (_lock)
         {
@@ -110,44 +111,68 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                     $"module `{name}` references {string.Join(", ", missing.Select(m => $"`{m}`"))}, which the compile server does not have; modules load after the modules they reference, and references cannot form a cycle")], 0, AbiConst.OriginHuman, supplied: attempt);
                 return;
             }
-            var m = new ModuleSession(slot, name, dir, hot, assemblies, references, profile, _analysis);
+            var m = new ModuleSession(slot, name, dir, hot, assemblies, references, profile, _analysis) { InitialGeneration = generation };
             _modules.Add(m);
             _bySlot[slot] = m;
             _byName[name] = m;
             if (watch) _watcher.Watch(slot, m.WatchDirectory);
             foreach (var a in assemblies) WatchReference(a);
-            _human.AddLast(new Work(WorkKind.Initial, slot, AbiConst.OriginHuman, 0));
+            if (initial) _human.AddLast(new Work(WorkKind.Initial, slot, AbiConst.OriginHuman, 0));
         }
         _wake.Set();
     }
 
-    /// <summary>
-    /// Files of a module changed (or are about to). Agent changes also claim their paths, so
-    /// the watcher's events for them count as agent edits.
-    /// </summary>
-    internal void Change(uint slot, IReadOnlyCollection<string> paths, uint origin, long tEvent)
+    /// <summary>Explicit recovery always validates current inputs and emits one atomic fresh-image swap.</summary>
+    internal void Recover(ulong ticket)
     {
-        if (origin == AbiConst.OriginAgent)
+        lock (_lock) _human.AddLast(new Work(WorkKind.Recover, 0, AbiConst.OriginHuman, Stopwatch.GetTimestamp()) { Recovery = ticket });
+        _wake.Set();
+    }
+
+    /// <summary>
+    /// Compile changed bytes, or register/retire a source.replace version before/after materialization.
+    /// </summary>
+    internal void Change(uint slot, IReadOnlyCollection<string> paths, uint origin, long tEvent, SourceClaim? claim = null)
+    {
+        var canonical = paths.Select(ProjectInventory.ProjectPath).ToArray();
+        if (origin == AbiConst.OriginAgent && claim is not null)
         {
-            var until = Stopwatch.GetTimestamp() + ClaimTicks;
+            var completed = new List<string>();
+            foreach (var path in canonical)
+            {
+                var hash = claim.Phase == "materialized" ? SourceClaims.Hash(path) : null;
+                lock (_lock) if (_claims.Update(path, claim, hash)) completed.Add(path);
+            }
+            if (completed.Count == 0) return;
+            canonical = completed.ToArray();
+        }
+        else if (origin == AbiConst.OriginAgent)
+        {
+            var current = canonical.Select(path => (Path: path, Hash: SourceClaims.Hash(path))).ToArray();
             lock (_lock)
-                foreach (var p in paths) _claims[ProjectInventory.ProjectPath(p)] = until;
+                foreach (var (path, hash) in current) _claims.Current(path, hash);
         }
         var w = new Work(WorkKind.Change, slot, origin, tEvent);
-        w.Paths.UnionWith(paths.Select(ProjectInventory.ProjectPath));
+        w.Paths.UnionWith(canonical);
         Enqueue(w);
     }
 
-    void OnWatcher(uint slot, IReadOnlyCollection<string> paths, long tEvent)
+    internal void OnWatcher(uint slot, IReadOnlyCollection<string> paths, long tEvent)
     {
         uint origin;
+        var canonical = paths.Select(ProjectInventory.ProjectPath).ToArray();
+        var current = canonical.Where(path => ModuleWatcher.IsSourceInput(path) && !Directory.Exists(path))
+            .Select(path => (Path: path, Hash: SourceClaims.Hash(path))).ToArray();
         lock (_lock)
         {
-            var now = Stopwatch.GetTimestamp();
-            origin = paths.Any(p => _claims.TryGetValue(p, out var until) && until > now) ? AbiConst.OriginAgent : AbiConst.OriginHuman;
+            // Evaluate every path, including a human overwrite that invalidates an old echo.
+            var matches = current.Select(p => _claims.Matches(p.Path, p.Hash)).ToArray();
+            origin = matches.Length > 0 && matches.All(match => match) ? AbiConst.OriginAgent : AbiConst.OriginHuman;
         }
         var w = new Work(WorkKind.Change, slot, origin, tEvent);
-        w.Paths.UnionWith(paths);
+        // Keep directory changes for module/editor-boundary validation, without
+        // letting their metadata echoes change the authorship of source bytes.
+        w.Paths.UnionWith(canonical);
         Enqueue(w);
     }
 
@@ -162,6 +187,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     {
         lock (_lock)
         {
+            w.LastRequest = _clock();
             if (w.Kind == WorkKind.Change && w.Origin == AbiConst.OriginAgent)
             {
                 var queuedHuman = _human.FirstOrDefault(h => h.Kind == WorkKind.Change && h.Slot == w.Slot);
@@ -169,7 +195,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 else if (_agent.TryGetValue(w.Slot, out var a))
                 {
                     a.Paths.UnionWith(w.Paths);
-                    a.LastRequest = Stopwatch.GetTimestamp();
+                    a.LastRequest = _clock();
                 }
                 else _agent[w.Slot] = w;
             }
@@ -194,13 +220,16 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     internal bool WaitIdle(TimeSpan timeout)
     {
         var sw = Stopwatch.StartNew();
-        while (sw.Elapsed < timeout)
+        lock (_lock)
         {
-            lock (_lock)
+            while (true)
+            {
                 if (_human.Count == 0 && _agent.Count == 0 && !_busy) return true;
-            Thread.Sleep(5);
+                var remaining = timeout - sw.Elapsed;
+                if (remaining <= TimeSpan.Zero) return false;
+                Monitor.Wait(_lock, remaining);
+            }
         }
-        return false;
     }
 
     void Loop()
@@ -222,7 +251,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 }
                 else if (_agent.Count > 0)
                 {
-                    var now = Stopwatch.GetTimestamp();
+                    var now = _clock();
                     var ready = _agent.Values.Where(a => now - a.LastRequest >= quiet).MinBy(a => a.TEvent);
                     if (ready is not null)
                     {
@@ -261,6 +290,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 if (_bySlot.TryGetValue(w.Slot, out var failed))
                     SendDiagnostics(failed.Slot, failed.Dir, [], [(AraCodes.CompileServer, "error", e.Message)], 0, w.Origin, validated: false);
                 Log(2, $"module {w.Slot}: {e}");
+                if (w.Recovery != 0) RecoveryFinished(w.Recovery, "failed");
             }
             finally
             {
@@ -269,6 +299,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 {
                     _busy = false;
                     _agentRun = null;
+                    Monitor.PulseAll(_lock);
                 }
                 CompileState(false);
                 Priority(null);
@@ -292,6 +323,12 @@ internal sealed class Coordinator : ICompileContext, IDisposable
 
     void Run(Work w, CancellationToken ct)
     {
+        if (w.Kind == WorkKind.Recover)
+        {
+            CompileState(true);
+            RecoverAll(w.Recovery, ct);
+            return;
+        }
         if (!_bySlot.TryGetValue(w.Slot, out var m)) return;
         if (w.Kind == WorkKind.Heat && m.State is { } current && current.Hot == (w.Hot && Enc)) return;
         Begin(m.Slot, m.Name, m.Profile);
@@ -320,6 +357,49 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 Handle(Evaluated(m.Full(w.Escalation, null, this, ct), ct), w.Origin, ct);
                 break;
         }
+    }
+
+    void RecoveryFinished(ulong ticket, string outcome) =>
+        _out.Send(MessageKind.RecoveryFinished, new Protocol.Writer().U64(ticket).Str(outcome).Strs(_modules.Select(m => m.Name).ToArray()).ToArray());
+
+    void RecoverAll(ulong ticket, CancellationToken cancellation)
+    {
+        if (_modules.Count == 0) { RecoveryFinished(ticket, "unchanged"); return; }
+        _cascade = [];
+        var outcomes = new List<Outcome>();
+        try
+        {
+            foreach (var module in _modules)
+            {
+                Begin(module.Slot, module.Name, module.Profile);
+                var outcome = module.Initial(this, cancellation);
+                outcomes.Add(outcome);
+                if (_restartSent || outcome.Kind != OutcomeKind.Image)
+                {
+                    outcome.Extra.Add((AraCodes.RestartRequired, "error", "Script recovery cannot activate this module graph or changed engine bindings. Stop Play and reopen the project; no restart was performed."));
+                    foreach (var pending in outcomes)
+                        SendDiagnostics(pending.Module.Slot, pending.Module.Dir, pending.Problems,
+                            [.. pending.Extra, (AraCodes.LoadFailed, "error", "Script recovery failed; all modules retain their last good code and fault state.")], 0, AbiConst.OriginHuman, validated: false);
+                    RecoveryFinished(ticket, "failed");
+                    return;
+                }
+                _cascade[module] = outcome;
+            }
+            cancellation.ThrowIfCancellationRequested();
+            if (_restartSent || outcomes.Any(o => !o.Module.MatchesCurrent(o, this)))
+            {
+                foreach (var pending in outcomes)
+                    SendDiagnostics(pending.Module.Slot, pending.Module.Dir, pending.Problems,
+                        [(AraCodes.LoadFailed, "error", "Script inputs changed during recovery; retry. Nothing was activated.")], 0, AbiConst.OriginHuman, validated: false);
+                RecoveryFinished(ticket, "failed");
+                return;
+            }
+            foreach (var outcome in outcomes) outcome.Module.Commit(outcome);
+            foreach (var outcome in outcomes)
+                SendDiagnostics(outcome.Module.Slot, outcome.Module.Dir, outcome.Problems, outcome.Extra, 0, AbiConst.OriginHuman, validated: true);
+            SendReload(outcomes, AbiConst.OriginHuman, ticket);
+        }
+        finally { _cascade = null; }
     }
 
     static Outcome Evaluated(Outcome outcome, CancellationToken cancellation)
@@ -423,7 +503,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     /// <inheritdoc/>
     public bool HasDependents(ModuleSession module) => _modules.Any(m => m.References.Contains(module.Name));
 
-    void SendReload(List<Outcome> outcomes, uint origin)
+    void SendReload(List<Outcome> outcomes, uint origin, ulong recovery = 0)
     {
         var w = new Protocol.Writer().Now().U32((uint)outcomes.Count);
         foreach (var o in outcomes)
@@ -432,6 +512,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             w.U32(o.Module.Slot).U32(s.Generation).Bool(s.Hot).U32(o.ReloadKind).U32((uint)o.Escalation).U32(origin)
                 .Timing(o.Timing.ToTiming()).Bytes(o.Image?.Pe ?? []).Bytes(o.Image?.Pdb ?? []);
         }
+        w.U64(recovery);
         _out.Send(MessageKind.Reload, w.ToArray());
         foreach (var o in outcomes)
             Log(0, $"module `{o.Module.Name}` generation {o.Next!.Generation} ({Kind(o)}, {(Escalation)o.Escalation}): {o.Timing}" +

@@ -188,6 +188,12 @@ impl ScriptHost {
         if rc != RUN_OK {
             self.restore(world, &journal);
             cmdbuf::discard(world, &buf.ops);
+            let module = self
+                .registry
+                .modules
+                .get(&(decl.id >> 16))
+                .map(|module| module.name.as_str())
+                .expect("the command was resolved from a loaded module");
             let reason =
                 String::from_utf8_lossy(&call.reason[..(call.reason_len as usize).min(64)])
                     .into_owned();
@@ -204,17 +210,17 @@ impl ScriptHost {
                     format!(
                         "`{name}` is disabled after an earlier fault; it runs again after the next reload"
                     ),
-                ),
+                ).data(json!({"module":module})),
                 _ => {
                     // Only this call's fault; other diagnostics stay queued for their owner.
                     let detail = self
                         .ctx
                         .take_since(reported, codes::COMMAND_FAULT)
                         .into_iter()
-                        .map(|d| d.message)
-                        .collect::<Vec<_>>()
-                        .join("; ");
-                    Diagnostic::error(codes::COMMAND_FAULT, format!("`{name}` failed: {detail}"))
+                        .next();
+                    detail.unwrap_or_else(|| {
+                        Diagnostic::error(codes::COMMAND_FAULT, format!("`{name}` failed")).data(json!({"module":module}))
+                    })
                 }
             });
         }

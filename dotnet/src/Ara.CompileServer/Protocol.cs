@@ -19,6 +19,8 @@ public enum MessageKind : byte
     Shutdown = 5,
     /// <summary>Host → server: files of a module changed (or are about to); compile them with this origin.</summary>
     Change = 6,
+    /// <summary>Host → server: validate and rebuild the complete loaded graph atomically for explicit recovery.</summary>
+    Recover = 7,
     /// <summary>Server → host: a compile started (1) or finished (0).</summary>
     CompileState = 10,
     /// <summary>
@@ -31,6 +33,8 @@ public enum MessageKind : byte
     Delta = 12,
     /// <summary>Server → host: diagnostics (ara-diag JSON array); errors mean the edit did not apply.</summary>
     Diagnostics = 13,
+    /// <summary>Server → host: terminal recovery without an image (failed or no modules).</summary>
+    RecoveryFinished = 17,
     /// <summary>Server → host: a log line.</summary>
     Log = 14,
     /// <summary>Server → host: the change cannot be applied in this process (L4); the last good code keeps running.</summary>
@@ -140,6 +144,8 @@ public static class Protocol
     public sealed class Reader(byte[] data)
     {
         int _at;
+        /// <summary>Unconsumed payload bytes (additive private request metadata).</summary>
+        public int Remaining => data.Length - _at;
 
         /// <summary>A 32-bit unsigned integer.</summary>
         public uint U32() { var v = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(_at)); _at += 4; return v; }

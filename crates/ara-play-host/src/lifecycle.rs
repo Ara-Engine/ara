@@ -182,7 +182,7 @@ mod tests {
         let player = Player {
             incarnation: "stop-test-player".into(),
             child: child.into(),
-            link: Link::accept(stream)?,
+            link: ara_play::link::Pump::owner(Link::accept(stream)?)?,
             hello: ara_play::Hello {
                 token: "test".into(),
                 protocol: ara_play::PROTOCOL.into(),
@@ -197,6 +197,7 @@ mod tests {
             grace: Instant::now() + Duration::from_secs(10),
             events: Vec::new(),
             embed: Vec::new(),
+            profiling: Vec::new(),
             replies: Default::default(),
         };
         let mut service = PlayService::new(&root, PlayConfig::for_project(&root));

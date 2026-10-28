@@ -147,7 +147,7 @@ pub(crate) fn spawn(
             players.push(Player {
                 incarnation: ara_doc::IdGen::from_entropy().asset_id("ps").to_string(),
                 child: handles.pop().ok_or("Shared player handles exhausted")?,
-                link,
+                link: ara_play::link::Pump::owner(link).map_err(|error| error.to_string())?,
                 hello,
                 log: log.clone(),
                 seen: Instant::now(),
@@ -156,6 +156,7 @@ pub(crate) fn spawn(
                 events: Vec::new(),
                 embed: Vec::new(),
                 replies: Default::default(),
+                profiling: Vec::new(),
             });
         }
         players.sort_by_key(|p| {

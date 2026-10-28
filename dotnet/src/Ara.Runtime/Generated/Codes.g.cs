@@ -101,6 +101,10 @@ public static class AraCodes
     /// </summary>
     public const string SparseComponent = "ARA0934";
     /// <summary>
+    /// An explicit script recovery activated fresh code, failed, or had nothing to reload.
+    /// </summary>
+    public const string RecoveryResult = "ARA0935";
+    /// <summary>
     /// No command with this name is registered by a C# module.
     /// </summary>
     public const string UnknownCommand = "ARA0950";

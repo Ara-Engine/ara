@@ -103,11 +103,17 @@ while (Protocol.Receive(pipe) is { } msg)
             break;
         case MessageKind.Watch:
             var (slot, name, dir, hot, refs, modules, profile, watch) = (r.U32(), r.Str(), r.Str(), r.Bool(), r.Strs(), r.Strs(), r.Str(), r.Bool());
-            coordinator.Watch(slot, name, dir, hot, refs, modules, profile, watch);
+            var initial = r.Remaining == 0 || r.Bool();
+            var generation = r.Remaining == 0 ? 0 : r.U32();
+            coordinator.Watch(slot, name, dir, hot, refs, modules, profile, watch, initial, generation);
             break;
         case MessageKind.Change:
             var (changeSlot, paths, origin) = (r.U32(), r.Strs(), r.U32());
-            coordinator.Change(changeSlot, paths, origin, Stopwatch.GetTimestamp());
+            var claim = r.Remaining == 0 ? null : SourceClaims.Parse(r.Str());
+            coordinator.Change(changeSlot, paths, origin, Stopwatch.GetTimestamp(), claim);
+            break;
+        case MessageKind.Recover:
+            coordinator.Recover(r.U64());
             break;
         case MessageKind.SetHeat:
             var (heatSlot, makeHot) = (r.U32(), r.Bool());

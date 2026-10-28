@@ -154,6 +154,8 @@ impl ScriptPlugin {
 struct Scripts {
     host: ScriptHost,
     events: Sender<ScriptEvent>,
+    recovery: Option<u64>,
+    recovery_specs: Vec<ModuleSpec>,
 }
 
 // SAFETY: `Scripts` is private to this crate and no system declares `Res<Scripts>`:
@@ -283,6 +285,16 @@ impl RuntimePlugin for ScriptPlugin {
         world.insert_resource(Scripts {
             host,
             events: self.events.clone(),
+            recovery: None,
+            recovery_specs: match &self.config {
+                ScriptHostConfig::Development(settings) => settings
+                    .modules
+                    .iter()
+                    .map(|dir| ModuleSpec::from_dir(dir))
+                    .collect::<std::result::Result<Vec<_>, _>>()
+                    .map_err(|diagnostic| failed(vec![diagnostic]))?,
+                ScriptHostConfig::NativeAot { .. } => Vec::new(),
+            },
         });
         // Document values projected during setup exist from tick 0.
         world.resource_scope::<Scripts, _>(|world, scripts| apply_writes(&scripts, world));
@@ -314,11 +326,16 @@ impl RuntimePlugin for ScriptPlugin {
             let diagnostics = scripts.host.take_diagnostics();
             for report in boundary.reports {
                 if report.kind == ara_script::abi::RELOAD_L4 {
-                    let _ = scripts.events.send(ScriptEvent::RestartRequired);
+                    let _ = scripts
+                        .events
+                        .send(restart_event(scripts.recovery.is_some()));
                 }
                 let _ = scripts.events.send(ScriptEvent::Reload(report));
             }
             for d in diagnostics {
+                if recovery_completed(&d, scripts.recovery) {
+                    scripts.recovery = None;
+                }
                 let _ = scripts.events.send(ScriptEvent::Diagnostic(d));
             }
         });
@@ -510,7 +527,13 @@ fn run_command(world: &mut World, name: &str, params: &Value, tick: u64) -> Resu
         let record = scripts
             .host
             .execute_command(world, name, &params, None)
-            .map_err(|d| RuntimeError(d.to_string()))?;
+            .map_err(|diagnostic| {
+                let message = diagnostic.to_string();
+                // A command consumes its synchronous fault row from the managed host;
+                // publish that original row too, before the request becomes a text error.
+                let _ = scripts.events.send(ScriptEvent::Diagnostic(diagnostic));
+                RuntimeError(message)
+            })?;
         identify_spawns(&scripts, world, &prefix);
         Ok(scripts.host.describe(&record))
     })
@@ -712,12 +735,103 @@ pub fn catalog(world: &World) -> Value {
         .map_or(Value::Null, |s| s.host.command_catalog())
 }
 
-/// Claims `paths` of `module` as an agent edit before the agent writes them (D20:
-/// coalesced, compiled behind human edits). False when hot reload is off.
+/// Compile current source bytes as an agent edit (D20: coalesced behind human work).
+/// Use `source_claim` for a revision that will materialize asynchronously.
+/// False when hot reload is off.
 pub fn request_compile(world: &World, module: &str, paths: &[PathBuf]) -> bool {
     world
         .get_resource::<Scripts>()
         .is_some_and(|s| s.host.request_compile(module, paths, EditOrigin::Agent))
+}
+
+/// Forward a private source job's exact prepared/materialized/cancelled revision.
+pub fn source_claim(
+    world: &World,
+    module: &str,
+    paths: &[PathBuf],
+    claim: &ara_script::SourceClaim,
+) -> bool {
+    world
+        .get_resource::<Scripts>()
+        .is_some_and(|scripts| scripts.host.source_claim(module, paths, claim))
+}
+
+/// Queue an engine-private recovery without advancing simulation or waiting for compilation.
+/// False means no reloadable host accepted the request; the caller reports the failure.
+pub fn request_recovery(world: &mut World, ticket: u64) -> bool {
+    let Some(mut scripts) = world.get_resource_mut::<Scripts>() else {
+        return false;
+    };
+    if scripts.recovery.is_some() {
+        return false;
+    }
+    if !scripts.host.request_recovery(ticket) {
+        return false;
+    }
+    scripts.recovery = Some(ticket);
+    true
+}
+
+/// Applies prepared recovery work at a boundary even while Play is paused. Never steps
+/// simulation, performs discovery or waits for the compiler/CLR preparation worker.
+/// Queued diagnostics also flow while paused, without applying an ordinary reload.
+pub fn poll_recovery(world: &mut World) {
+    let Some(scripts) = world.get_resource::<Scripts>() else {
+        return;
+    };
+    if scripts.recovery.is_none() {
+        if scripts.host.has_diagnostics() {
+            for diagnostic in scripts.host.take_diagnostics() {
+                let _ = scripts.events.send(ScriptEvent::Diagnostic(diagnostic));
+            }
+        }
+        return;
+    }
+    world.resource_scope::<Scripts, _>(|world, mut scripts| {
+        let boundary = scripts.host.tick_boundary(world);
+        if boundary.reloaded {
+            let _ = scripts.events.send(ScriptEvent::Types(types_files(
+                &scripts.recovery_specs,
+                &scripts.host,
+            )));
+        }
+        for report in boundary.reports {
+            if report.kind == ara_script::abi::RELOAD_L4 {
+                let _ = scripts
+                    .events
+                    .send(restart_event(scripts.recovery.is_some()));
+            }
+            let _ = scripts.events.send(ScriptEvent::Reload(report));
+        }
+        for diagnostic in scripts.host.take_diagnostics() {
+            if recovery_completed(&diagnostic, scripts.recovery) {
+                scripts.recovery = None;
+            }
+            let _ = scripts.events.send(ScriptEvent::Diagnostic(diagnostic));
+        }
+    });
+}
+
+fn recovery_completed(diagnostic: &Diagnostic, ticket: Option<u64>) -> bool {
+    diagnostic.code == ara_script::codes::RECOVERY_RESULT
+        && ticket.is_some_and(|ticket| {
+            diagnostic
+                .data
+                .as_ref()
+                .and_then(|data| data["recovery"]["ticket"].as_u64())
+                == Some(ticket)
+        })
+}
+
+fn restart_event(recovering: bool) -> ScriptEvent {
+    if recovering {
+        ScriptEvent::Diagnostic(Diagnostic::error(
+            ara_script::codes::RESTART_REQUIRED,
+            "Explicit script recovery cannot replace changed engine/module bindings; stop Play and reopen explicitly. No restart was performed.",
+        ))
+    } else {
+        ScriptEvent::RestartRequired
+    }
 }
 
 /// The module whose folder contains `path` (`(name, folder)`), among `settings.modules`.
@@ -733,4 +847,19 @@ pub fn module_of(settings: &ScriptSettings, path: &std::path::Path) -> Option<(S
                 .then_some((module.name, dir.clone()))
         })
         .max_by_key(|(_, dir)| dir.components().count())
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::*;
+
+    #[test]
+    fn explicit_recovery_reports_stale_bindings_without_requesting_a_play_restart() {
+        let ScriptEvent::Diagnostic(diagnostic) = restart_event(true) else {
+            panic!("recovery must not request restart");
+        };
+        assert_eq!(diagnostic.code, ara_script::codes::RESTART_REQUIRED);
+        assert!(diagnostic.message.contains("No restart was performed"));
+        assert!(matches!(restart_event(false), ScriptEvent::RestartRequired));
+    }
 }
