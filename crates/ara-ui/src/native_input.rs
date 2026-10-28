@@ -136,6 +136,26 @@ impl Router {
             }
             return Ok(false);
         }
+        // A host-accepted field has no local draft history. Yield empty Undo/Redo
+        // to the host's typed history instead of swallowing a valid editor chord.
+        // Composition retains ownership even with no local snapshots.
+        if primary
+            && matches!(scancode, 28 | 29)
+            && self.composition.is_none()
+            && let Some(Widget::Input(text)) = field.and_then(|index| {
+                ui.widgets
+                    .get(&crate::source::stable_id(&ui.nodes[index].element.id))
+            })
+        {
+            let redo = scancode == 28 || modifiers.shift;
+            if if redo {
+                !text.can_redo()
+            } else {
+                !text.can_undo()
+            } {
+                return Ok(false);
+            }
+        }
         let event = match scancode {
             43 if input.focused().is_some() => Some(InputEvent::Tab {
                 reverse: modifiers.shift,
