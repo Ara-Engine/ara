@@ -433,9 +433,9 @@ impl ScriptHost {
         Ok(())
     }
 
-    /// Asks the compile server to compile `paths` of `module` now (they changed, or are
-    /// about to). Agent edits are coalesced and compiled behind human ones; file-watcher
-    /// events on paths an agent claimed this way count as agent edits. Never blocks: the
+    /// Asks the compile server to compile current `paths` of `module`. Agent edits
+    /// are coalesced and compiled behind human ones. Use `source_claim` with the
+    /// expected revision before asynchronous source materialization. Never blocks: the
     /// outcome arrives as a staged reload (or diagnostics) at a later tick boundary.
     /// Returns false if no compile server runs or the module is unknown.
     pub fn request_compile(&self, module: &str, paths: &[PathBuf], origin: EditOrigin) -> bool {

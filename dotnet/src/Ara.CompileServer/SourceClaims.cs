@@ -20,7 +20,7 @@ internal sealed class SourceClaims
     {
         var claim = JsonSerializer.Deserialize<SourceClaim>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
             ?? throw new ArgumentException("Missing source claim");
-        if (claim.Edit.Length is 0 or > 256 || claim.Hash.Length != 64 || !claim.Hash.All(Uri.IsHexDigit)
+        if (string.IsNullOrEmpty(claim.Edit) || claim.Edit.Length > 256 || claim.Hash is null || claim.Hash.Length != 64 || !claim.Hash.All(Uri.IsHexDigit)
             || claim.Phase is not ("preparing" or "materialized" or "cancelled"))
             throw new ArgumentException("Invalid source claim edit, SHA-256 or phase");
         return claim with { Hash = claim.Hash.ToLowerInvariant() };

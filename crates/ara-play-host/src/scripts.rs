@@ -104,8 +104,8 @@ impl PlayService {
     }
 
     /// `script.write`: an agent writes a C# source. Every running world's players
-    /// claim the path as an agent edit first (coalesced, compiled behind human edits),
-    /// then the file is written; the reload applies at a tick boundary.
+    /// claim the expected byte revision first, then retire that job's claim after
+    /// materialization/cancellation; the reload applies at a tick boundary.
     fn claim_source(
         &mut self,
         path: &Path,
