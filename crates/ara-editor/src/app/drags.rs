@@ -6,6 +6,7 @@ use ara_ui::{
     paint::Box2,
 };
 mod scene;
+mod rapid;
 
 #[derive(Clone, Copy, Debug)]
 enum Zone {
@@ -29,6 +30,7 @@ enum Act {
     },
     Cancel(&'static str),
     Scene(scene::Act),
+    Rapid(rapid::Act),
 }
 const SETTLE: u32 = 12;
 const SPLIT_DRAG: f32 = 48.;
@@ -45,6 +47,7 @@ pub(super) struct DragCheck {
     failed: bool,
     results: Vec<Value>,
     scene: scene::Check,
+    rapid: rapid::Check,
 }
 fn scene_action(act: &Act) -> bool {
     matches!(
@@ -174,6 +177,11 @@ impl DragCheck {
             ]);
         }
         acts.push(Act::Scale(1.));
+        for scale in [1.,1.25] {
+            for panel in ["settings","inspector"] {
+                acts.push(Act::Rapid(rapid::Act {panel,scale}));
+            }
+        }
         Self {
             output: output.into(),
             acts,
@@ -186,6 +194,7 @@ impl DragCheck {
             failed: false,
             results: Vec::new(),
             scene: scene::Check::default(),
+            rapid: rapid::Check::default(),
         }
     }
     pub fn finished(&self) -> bool {
@@ -212,6 +221,7 @@ impl DragCheck {
             return Ok(());
         };
         if let Err(error) = self.input(&act, editor, shell, window, floats, scale, events) {
+            if matches!(act,Act::Rapid(_)) {self.rapid.restore(editor,shell)?;}
             shell.leave();
             events.retain(|(_, e)| !matches!(e, Event::MouseButton { .. }));
             events.push((0, Event::FocusLost));
@@ -225,7 +235,7 @@ impl DragCheck {
             ));
             shell.desktop_pointer = None;
             self.results
-                .push(json!({"drag": format!("{act:?}"), "capturePrefix":format!("dock-{:02}",self.index), "ok": false, "error": error.to_string()}));
+                .push(json!({"drag": format!("{act:?}"), "capturePrefix":format!("dock-{:02}",self.index), "ok": false, "error": error.to_string(),"rapid":if matches!(act,Act::Rapid(_)){self.rapid.report()}else {Value::Null}}));
             self.advance();
             self.failed = true;
         }
@@ -320,6 +330,9 @@ impl DragCheck {
         scale: f32,
         events: &mut Vec<(u32, Event)>,
     ) -> ara_ui::Result<()> {
+        if let Act::Rapid(act)=act {
+            return self.rapid.inject(*act,self.index,self.age,editor,shell,window,floats,events,&self.output);
+        }
         let main = window.rect()?;
         if self.age == 0 && scene_action(act) {
             shell.leave();
@@ -465,6 +478,9 @@ impl DragCheck {
         let Some(act) = self.acts.get(self.index).cloned() else {
             return Ok(());
         };
+        if let Act::Rapid(act)=&act {
+            self.rapid.end(*act,self.index,self.age,editor,shell,gpu,floats,&self.output)?;
+        }
         if [0, 5, 6 + SETTLE].contains(&self.age) {
             std::fs::create_dir_all(&self.output)?;
             let stage = match self.age {
@@ -541,6 +557,7 @@ impl DragCheck {
                 }
             }
             Act::Scene(_) => true,
+            Act::Rapid(_) => self.rapid.ok(),
         };
         let scene = if scene_action(&act) {
             let scene_act = if let Act::Scene(scene_act) = &act {
@@ -555,7 +572,7 @@ impl DragCheck {
             None
         };
         self.results.push(json!({"drag":format!("{act:?}"),"capturePrefix":format!("dock-{:02}",self.index),"ok":ok,"trace":self.trace,
-            "layout":editor.state.layout,"floating":editor.state.floating,"scale":windows::ui_scale(editor),"scene":scene}));
+            "layout":editor.state.layout,"floating":editor.state.floating,"scale":windows::ui_scale(editor),"scene":scene,"rapid":if matches!(act,Act::Rapid(_)){self.rapid.report()}else {Value::Null}}));
         self.advance();
         Ok(())
     }
@@ -569,7 +586,7 @@ impl DragCheck {
         std::fs::create_dir_all(&self.output)?;
         std::fs::write(
             self.output.join("drags.json"),
-            ara_json::to_canonical_string(&json!({"drags":self.results})),
+            ara_json::to_canonical_string(&json!({"drags":self.results,"expectedCases":self.acts.len(),"originalCases":self.acts.iter().filter(|act|!matches!(act,Act::Rapid(_))).count(),"rapidCases":self.acts.iter().filter(|act|matches!(act,Act::Rapid(_))).count()})),
         )?;
         Ok(())
     }
