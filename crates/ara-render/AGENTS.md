@@ -93,8 +93,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 
 The Vulkan SDK is required for cooking, not runtime. Cooked SPIR-V/DXIL and their reflection are committed under
 `cooked/`; no shader compiler is linked at runtime. Use `../../shaders/pipelines.json`; changing the binding ABI requires a full cook.
-The renderer rejects mixed source cohorts. Byte-address frame/material/light
-records and 48-byte vertex records must match Slang's column-major ABI.
+The renderer rejects mixed source cohorts. Byte-address frame/material/light records and 48-byte vertex records must match Slang's column-major ABI.
 
 Shaders: `raster.slangh` is the shared ABI (bindings, Frame, Surface; Frame.look.x is the look record, look.w the
 native motion texture, sizes/upscale the TAAU sizes, jitter offset and mip footprint; resolve and post use a
@@ -109,6 +108,7 @@ The G-buffer is compact: RGBA8 sRGB albedo + AO, RG16 octahedral normal, RGBA8
 roughness/metal/AO occluder (zero for cutouts), B10G11R11 emissive, R32 ID and
 RG16F motion; positions are rebuilt from depth. Shaders read and write it only through raster.slangh's
 `gbuffer*` helpers, so the formats change there and in `Renderer::targets` together.
+Material AO (glTF occlusion maps) scales ambient light only without screen AO + probe GI (Low, or either off): `dynamicOcclusion`.
 Local light lists are tiled 16x16 (`scene::MAX_LOCAL_LIGHTS` 256 per scene, the
 first `TILE_LIGHTS` 128 per tile); `look::local` shadows the brightest few in view
 (cube or spot faces, one cached D32 atlas). Spot lumens are point-equivalent, as in
