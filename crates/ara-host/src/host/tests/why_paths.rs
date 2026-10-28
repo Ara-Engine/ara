@@ -56,10 +56,17 @@ fn why_resolves_authored_scene_sources_and_preserves_project_policy_storage_path
         "settings/project.json",
         Document::new("project", AssetId::parse("pj_policy01").expect("policy id")),
     );
+    let marker = project
+        .read_document(
+            &fs::read_to_string(root.join("ara.project.json")).expect("marker"),
+            "ara.project.json",
+        )
+        .doc
+        .expect("current project marker");
+    workspace.insert_project_document("ara.project.json", marker);
     let db = project.db.clone();
     let mut host = Host::open(project, HostConfig::default()).expect("host");
-    // Layout loading remains the layout owner's change. Inject the exact workspace
-    // that its published contract specifies, without changing default project loading.
+    // Inject a complete current-layout workspace to isolate the path contracts.
     host.st.store = Store::new(db, workspace);
     {
         let facts = crate::why::HostFacts::new(&host.st, None);

@@ -203,12 +203,12 @@ fn collisions_and_live_authorities_leave_authored_files_intact() {
     let root = scratch("collision");
     fs::write(root.join("ara.project.json"), "{}").expect("marker");
     fs::create_dir_all(root.join("levels")).expect("old content");
-    fs::create_dir_all(root.join("game/levels")).expect("collision");
+    fs::create_dir_all(root.join("content/levels")).expect("collision");
     fs::write(root.join("levels/main.scene"), "legacy").expect("source");
     fs::write(root.join("content/levels/main.scene"), "current").expect("target");
     assert!(Migration::plan(&root, None).is_err());
     fs::remove_file(root.join("content/levels/main.scene")).expect("remove collision file");
-    fs::remove_dir(root.join("game/levels")).expect("empty collision");
+    fs::remove_dir(root.join("content/levels")).expect("empty collision");
     fs::create_dir_all(root.join(".ara")).expect("state");
     let lock = fs::File::create(root.join(".ara/lock")).expect("lock");
     lock.try_lock().expect("authority");

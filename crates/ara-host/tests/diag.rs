@@ -86,11 +86,11 @@ fn logs_are_grouped_budgeted_and_attributed() {
     );
     let text = r["text"].as_str().expect("text");
     assert!(
-        text.starts_with("2 errors Â· 0 warnings Â· 0 info (3 occurrences)"),
+        text.starts_with("2 errors · 0 warnings · 0 info (3 occurrences)"),
         "{text}"
     );
     assert!(
-        text.contains("error ARA1204") && text.contains("Ã—3 [entity:e_nope01"),
+        text.contains("error ARA1204") && text.contains("×3 [entity:e_nope01"),
         "{text}"
     );
     assert!(text.contains("explain: ara why ARA1204"), "{text}");
