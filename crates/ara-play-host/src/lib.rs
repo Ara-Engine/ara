@@ -6,8 +6,11 @@
 #![warn(missing_docs)]
 
 pub mod assets;
+pub mod editor_control;
 pub mod embed;
 mod game_ui;
+/// Shared-process player ownership, with atomic status polling and one child reaper.
+pub mod group;
 mod headless;
 mod keep;
 mod lifecycle;
@@ -40,7 +43,8 @@ pub use scripts::{ScriptPaths, modules as script_modules};
 use ara_diag::{Code, Diagnostic, FixAction};
 use ara_host::{Cx, Method, Service, parse};
 use ara_play::{
-    Joined, LinkConditions, NetStart, PlayScene, Role, SnapshotRef, Start, method, shm::Section,
+    Joined, LinkConditions, NetStart, PlayScene, ProcessMode, Role, SnapshotRef, Start, method,
+    shm::Section,
 };
 use ara_proto::Scope;
 use ara_schema::SchemaDb;
@@ -142,6 +146,7 @@ struct World {
     snapshot: Vec<u8>,
     section: Option<Section>,
     window: bool,
+    process_mode: ProcessMode,
     /// Embedded worlds: the surface size every rendering player started with.
     embed: Option<embed::EmbedParams>,
     /// Embedded players' current surfaces (handles owned by this process), by player.
@@ -191,10 +196,13 @@ pub struct PlayService {
     channel: Option<embed::Channel>,
     /// Warm a bounded headless graphics view only for an attached Game surface.
     graphics_prewarm: bool,
+    /// Explicit editor reads/patches/Keep requests waiting for nonblocking player replies.
+    editor_jobs: BTreeMap<String, editor_control::Pending>,
     /// The daemon owns headless tools; editors retain their render-boundary capture service.
     headless_automation: bool,
     headless_capture: bool,
     source_writes: scripts::SourceWrites,
+    catalog_refresh: scripts::CatalogRefresh,
     script_diagnostics: scripts::DiagnosticSources,
     script_recovery: script_recovery::Controller,
     profiling: profiling::Controller,
@@ -230,9 +238,11 @@ impl PlayService {
             next: 0,
             channel: None,
             graphics_prewarm: false,
+            editor_jobs: BTreeMap::new(),
             headless_automation: false,
             headless_capture: false,
             source_writes: scripts::SourceWrites::default(),
+            catalog_refresh: scripts::CatalogRefresh::default(),
             script_diagnostics: scripts::DiagnosticSources::default(),
             script_recovery: script_recovery::Controller::default(),
             profiling: profiling::Controller::default(),
@@ -542,6 +552,17 @@ impl PlayService {
         params: Value,
         target: Option<usize>,
     ) -> Result<Value, Vec<Diagnostic>> {
+        self.call_on_checked(id, method, params, target, None)
+    }
+
+    fn call_on_checked(
+        &mut self,
+        id: &str,
+        method: &str,
+        params: Value,
+        target: Option<usize>,
+        progress: Option<&starting::Reporter>,
+    ) -> Result<Value, Vec<Diagnostic>> {
         let world = self.world(id)?;
         if target.is_some_and(|t| t >= world.players.len()) {
             return Err(fail(
@@ -555,7 +576,9 @@ impl PlayService {
             if target.is_some_and(|t| t != index) {
                 continue;
             }
-            match player.call(method, &params, Duration::from_secs(120)) {
+            match player.call_checked(method, &params, Duration::from_secs(120), || {
+                starting::check(progress)
+            }) {
                 Ok(Ok(value)) => {
                     if index == answer {
                         first = Some(value);
@@ -685,6 +708,7 @@ impl PlayService {
         &mut self,
         roles: &[Role],
         window: bool,
+        process_mode: ProcessMode,
         embed: Option<&embed::EmbedParams>,
         snapshot: &SnapshotRef,
         start_paused: bool,
@@ -707,16 +731,25 @@ impl PlayService {
         let headless = roles.len() - windowed;
         let imports = self.assets()?.import_state();
         let pool = self.pool()?;
-        let mut windows = pool
-            .take_checked(windowed, true, Duration::from_secs(30), || {
+        let mut windows = if process_mode == ProcessMode::Shared {
+            Vec::new()
+        } else {
+            pool.take_checked(windowed, true, Duration::from_secs(30), || {
                 starting::check(progress)
             })
-            .map_err(|e| fail(codes::PLAY, e))?;
-        let mut heads = pool
-            .take_checked(headless, false, Duration::from_secs(30), || {
+            .map_err(|e| fail(codes::PLAY, e))?
+        };
+        let mut heads = if process_mode == ProcessMode::Shared {
+            pool.take_shared_checked(roles.len(), Duration::from_secs(60), || {
                 starting::check(progress)
             })
-            .map_err(|e| fail(codes::PLAY, e))?;
+            .map_err(|e| fail(codes::PLAY, e))?
+        } else {
+            pool.take_checked(headless, false, Duration::from_secs(30), || {
+                starting::check(progress)
+            })
+            .map_err(|e| fail(codes::PLAY, e))?
+        };
         let mut players: Vec<(Role, Player)> = Vec::new();
         let mut started = Vec::new();
         let mut surfaces = Vec::new();
@@ -873,6 +906,13 @@ impl PlayService {
                 "`embed` shows players inside the editor; leave `window` unset",
             ));
         }
+        let process_mode = p.process_mode.unwrap_or_default();
+        if process_mode == ProcessMode::Shared && p.window == Some(true) {
+            return Err(fail(
+                codes::REQUEST,
+                "Shared Play renders each client in its editor Game view; use separate processes for native SDL windows",
+            ));
+        }
         let conditions = p
             .conditions
             .unwrap_or_default()
@@ -919,6 +959,7 @@ impl PlayService {
         let (players, started, surfaces) = self.launch(
             &roles,
             window,
+            process_mode,
             p.embed.as_ref(),
             &snapshot,
             start_paused,
@@ -932,6 +973,7 @@ impl PlayService {
             "world": id, "scene": scene, "snapshotBytes":bytes.len(),
             "transport":if matches!(snapshot, SnapshotRef::Shm { .. }) {"shm"} else {"inline"},
             "prepareMs":encode_ms,"bootMs":boot_ms,"players":started,
+            "processMode":process_mode,
         });
         self.worlds.insert(
             id.clone(),
@@ -941,6 +983,7 @@ impl PlayService {
                 snapshot: bytes.clone(),
                 section,
                 window,
+                process_mode,
                 embed: p.embed,
                 surfaces,
                 start_paused,
@@ -964,10 +1007,22 @@ impl PlayService {
     /// Restarts a world in fresh players from its start snapshot, or from `resume`
     /// (a portable snapshot of a later tick: C# L4 restarts keep the game state).
     fn restart(&mut self, id: &str, resume: Option<&str>) -> Result<Value, Vec<Diagnostic>> {
-        let world = self
+        self.restart_checked(id, resume, None)
+    }
+
+    fn restart_checked(
+        &mut self,
+        id: &str,
+        resume: Option<&str>,
+        progress: Option<&starting::Reporter>,
+    ) -> Result<Value, Vec<Diagnostic>> {
+        starting::report(progress, "restarting", 0, 1)?;
+        let mut world = self
             .worlds
             .remove(id)
             .ok_or_else(|| fail(codes::UNKNOWN_WORLD, format!("no play world `{id}`")))?;
+        self.catalog_refresh.invalidate(id, &mut world);
+        self.start_failures.remove(id);
         let roles: Vec<Role> = world.players.iter().map(|(r, _)| *r).collect();
         let snapshot = match &world.section {
             Some(_) => SnapshotRef::Shm {
@@ -989,6 +1044,7 @@ impl PlayService {
             snapshot: bytes,
             section,
             window,
+            process_mode,
             embed,
             start_paused,
             hot_reload,
@@ -1004,12 +1060,13 @@ impl PlayService {
         let (players, started, surfaces) = self.launch(
             &roles,
             window,
+            process_mode,
             embed.as_ref(),
             &snapshot,
             start_paused,
             resume,
             &conditions,
-            None,
+            progress,
         )?;
         let boot_ms = began.elapsed().as_secs_f64() * 1000.0;
         self.worlds.insert(
@@ -1020,6 +1077,7 @@ impl PlayService {
                 snapshot: bytes,
                 section,
                 window,
+                process_mode,
                 embed,
                 surfaces,
                 start_paused,
@@ -1034,22 +1092,23 @@ impl PlayService {
             },
         );
         self.announce(id);
-        Ok(json!({"world": id, "bootMs": boot_ms, "players": started}))
+        Ok(json!({"world": id, "bootMs": boot_ms, "players": started,"processMode":process_mode}))
     }
 
     fn stop(&mut self, id: &str) -> Result<Value, Vec<Diagnostic>> {
         ara_gpu::cpu_scope!("Play.stop_service");
         if let Some(result) = self.cancel_start(id) {
-            return Ok(result);
+            return result;
         }
         if !self.worlds.contains_key(id) {
             return Err(fail(codes::UNKNOWN_WORLD, format!("no play world `{id}`")));
         }
         let (task, sender) = lifecycle::Retiring::new(id)?;
-        let world = self
+        let mut world = self
             .worlds
             .remove(id)
             .expect("validated world remains owned by this service call");
+        self.catalog_refresh.invalidate(id, &mut world);
         if let Err(error) = sender.send(world) {
             self.worlds.insert(id.to_owned(), error.0);
             return Err(fail(
@@ -1075,9 +1134,14 @@ impl PlayService {
             .iter()
             .map(|(id, w)| json!({
                 "world": id,
-                "status": "running",
+                "status": if self.start_failures.contains_key(id) { "failed" } else { "running" },
+                "restartFailure": self.start_failures.get(id),
+                "commandsRefreshing": self.catalog_refresh.refreshing(id),
+                "commandsStale": self.catalog_refresh.stale(id),
+                "commandRefresh": self.catalog_refresh.status(id),
                 "scene": w.scene,
                 "window": w.window,
+                "processMode": w.process_mode,
                 "hotReload": w.hot_reload,
                 "streamingAssets": w.streaming_assets,
                 "startup": w.startup,
@@ -1111,6 +1175,7 @@ impl PlayService {
                     scene: p.scene.clone(),
                     background: None,
                     mode: None,
+                    process_mode: None,
                     clients: None,
                     window: Some(false),
                     embed: None,
@@ -1214,12 +1279,14 @@ impl Service for PlayService {
             play(Method::new::<PlayInspectParams>(db, "play.inspect", "Read an entity's runtime components.").read_only(), "inspect"),
             play(Method::new::<PlayReadParams>(db, "play.read", "Read entity.Component.field values at the current tick.").read_only(), "read"),
             play(Method::new::<PlayPatchParams>(db, "play.patch", "Live-edit authored values; applied at the next tick boundary and acknowledged after it."), "patch"),
+            play(Method::new::<PlayViewParams>(db,"play.view","Set this player's spectator camera without editing authored cameras; returns a nonblocking Host job."),"view"),
+            play(Method::new::<PlayControlParams>(db,"play.control","Possess or eject a controllable actor through typed ops at one authority boundary; returns a Host job."),"control"),
             play(Method::new::<PlayCaptureParams>(db, "play.capture", "State hash and, with a path, a labelled capture (numbered marks + legend)."), "capture"),
             play(Method::new::<PlayWatchParams>(db, "play.watch", "Sample entity.Component.field paths during step/until."), "watch"),
             play(Method::new::<WorldParams>(db, "play.record", "Start recording a replay (initial checkpoint + per-tick hashes)."), "record"),
             play(Method::new::<PlayFileParams>(db, "play.recording", "Finish the recording and write the replay file."), "saveReplay"),
             play(Method::new::<PlayFileParams>(db, "play.replay", "Verify a replay file tick by tick in this world."), "replay"),
-            play(Method::new::<WorldParams>(db, "play.diff", "Field-level differences between play and the start documents.").read_only(), "diff"),
+            play(Method::new::<PlayDiffParams>(db, "play.diff", "Read runtime differences and exact-field Keep eligibility against current authoring; background:true returns a nonblocking read-only job.").read_only(), "diff"),
             play(Method::new::<PlayKeepParams>(db, "play.keep", "Keep play changes: one typed-command transaction on the scene (driven values skipped unless asked)."), "keep"),
             play(Method::new::<PlayRestartParams>(db, "play.restart", "Restart a (faulted) world in fresh players from the same snapshot, or from the current tick with keepState."), "restart"),
             play(Method::new::<PlayCrashParams>(db, "play.debug.crash", "Test fault isolation: make the player panic, raise an access violation or hang.").destructive(), "crash"),
@@ -1249,6 +1316,15 @@ impl Service for PlayService {
         params: Value,
     ) -> Result<Value, Vec<Diagnostic>> {
         let latest = self.latest().unwrap_or_default();
+        if (params["background"] == true
+            && matches!(
+                method,
+                "play.inspect" | "play.read" | "play.patch" | "play.keep" | "play.diff"
+            ))
+            || matches!(method, "play.view" | "play.control")
+        {
+            return self.start_editor_job(cx, method, params);
+        }
         let world_of = |params: &Value| {
             params["world"]
                 .as_str()
@@ -1293,7 +1369,9 @@ impl Service for PlayService {
             "play.restart" => {
                 let p: PlayRestartParams = parse(params)?;
                 let id = p.world.unwrap_or_else(|| latest.clone());
-                if p.keep_state.unwrap_or(false) {
+                if p.background.unwrap_or(false) {
+                    self.restart_background(&id, p.keep_state.unwrap_or(false), false)
+                } else if p.keep_state.unwrap_or(false) {
                     self.resume(&id)
                 } else {
                     self.restart(&id, None)
@@ -1311,6 +1389,15 @@ impl Service for PlayService {
             "play.keep" => {
                 let p: PlayKeepParams = parse(params)?;
                 self.keep(cx, p)
+            }
+            "play.diff" => {
+                let p: PlayDiffParams = parse(params)?;
+                let world = p
+                    .world
+                    .or_else(|| self.latest())
+                    .ok_or_else(|| fail(codes::UNKNOWN_WORLD, "No Play world is running"))?;
+                let diff = self.call(&world, method::DIFF, json!({}), false)?;
+                self.diff_for_keep(cx, &world, p.entities.as_deref(), diff)
             }
             "script.write" => {
                 let p: ScriptWriteParams = parse(params)?;
@@ -1342,6 +1429,7 @@ impl Service for PlayService {
                 if let Some(map) = forward.as_object_mut() {
                     map.remove("session");
                     map.remove("world");
+                    map.remove("background");
                     only = map
                         .remove("player")
                         .and_then(|p| p.as_u64())
@@ -1349,7 +1437,8 @@ impl Service for PlayService {
                 }
                 let (target, broadcast) = match method {
                     "play.pause" | "play.resume" | "play.timescale" | "play.input"
-                    | "play.patch" | "play.step" => (method, true),
+                    | "play.step" => (method, true),
+                    "play.patch" => (method, false),
                     "play.inspect" | "play.read" | "play.capture" | "play.watch" | "play.until"
                     | "play.record" | "play.recording" | "play.replay" | "play.diff"
                     | "play.debug.crash" | "play.commands" | "play.captureAudio" => (method, false),
@@ -1419,6 +1508,7 @@ impl Service for PlayService {
                 cx.publish_commands("play", &Value::Null);
             }
         }
+        self.poll_editor_jobs(cx);
         for problem in self.pump_embed() {
             cx.log(problem);
         }
@@ -1441,10 +1531,10 @@ impl Service for PlayService {
             );
         }
         for id in self.drain_events(cx) {
-            match self.resume(&id) {
+            match self.restart_background(&id, true, true) {
                 Ok(_) => cx.log(Diagnostic::info(
                     codes::PLAY,
-                    format!("{id}: engine bindings changed; restarted from the current tick"),
+                    format!("{id}: engine bindings changed; restarting from the current tick in the background"),
                 )),
                 Err(problems) => problems.into_iter().for_each(|d| cx.log(d)),
             }
@@ -1461,6 +1551,7 @@ impl Service for PlayService {
             &self.root,
             &mut |diagnostic| cx.log(diagnostic),
         );
+        self.poll_catalog_refresh(cx);
         let playing = !self.worlds.is_empty();
         let allow = self
             .worlds

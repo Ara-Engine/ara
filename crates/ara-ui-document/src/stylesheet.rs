@@ -39,6 +39,7 @@ pub const TYPES: &[&str] = TAGS;
 pub const PROPERTIES: &[&str] = &[
     "display",
     "flex-direction",
+    "flex-wrap",
     "flex-grow",
     "flex-shrink",
     "flex-basis",

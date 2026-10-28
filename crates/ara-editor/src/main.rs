@@ -39,8 +39,48 @@ fn main() -> ara_ui::Result<()> {
             "--verify-panels" => options.verify_panels = true,
             "--verify-ux" => options.verify_ux = true,
             "--verify-docking" => options.verify_docking = true,
+            "--verify-behaviours" => {
+                options.verify_behaviours = true;
+                options.behaviour_asset_ops = true;
+            }
+            "--verify-behaviours-core" => {
+                options.verify_behaviours = true;
+                options.behaviour_asset_ops = false;
+            }
             "--verify-assets" => options.verify_assets = true,
             "--verify-journey" => options.verify_journey = true,
+            "--verify-monkey" => options.verify_monkey = true,
+            "--monkey-replay" => {
+                options.monkey_replay = Some(PathBuf::from(
+                    args.next().ok_or("--monkey-replay needs a journal path")?,
+                ));
+                options.verify_monkey = true;
+            }
+            "--monkey-seed" => {
+                options.monkey_seed = args
+                    .next()
+                    .ok_or("--monkey-seed needs an integer")?
+                    .parse()?;
+            }
+            "--monkey-seconds" => {
+                options.monkey_seconds = args
+                    .next()
+                    .ok_or("--monkey-seconds needs a number")?
+                    .parse()?;
+                if options.monkey_seconds == 0 {
+                    return Err("--monkey-seconds must be positive".into());
+                }
+            }
+            "--monkey-steps" => {
+                let steps = args
+                    .next()
+                    .ok_or("--monkey-steps needs a number")?
+                    .parse()?;
+                if steps == 0 {
+                    return Err("--monkey-steps must be positive".into());
+                }
+                options.monkey_steps = Some(steps);
+            }
             "--verify-first-hour" => options.verify_first_hour = true,
             "--verify-scene-quality" => options.verify_scene_quality = true,
             "--verify-loading" => options.verify_loading = true,
@@ -90,6 +130,9 @@ fn main() -> ara_ui::Result<()> {
 --verify-assets proves right-click Create, C# inline rename, real compilation and entity attachment, with offscreen captures.
 --verify-loading runs the loading window offscreen on the project and captures its milestones and every state.
 --verify-docking runs native tab insertion, reorder, split, detach, reattach and Escape routes at UI scales 1 and 1.25, capturing every gesture.
+--verify-behaviours drives content drag/drop, references, component ordering and OS import through the offscreen native loop, capturing before/preview/after states and writing behaviours.json.
+--verify-behaviours-core runs the independent editor UI, selection, hierarchy, camera, prefab and Play stories; it records that extended import/asset lifecycle acceptance is excluded. The full --verify-behaviours route still requires those checks.
+--verify-monkey runs deterministic randomized editor input and command edge cases offscreen; --monkey-seed N selects a replay, --monkey-seconds N sets the soak budget (default 1800), --monkey-steps N limits actions. Writes monkey.json and a durable action journal.
 --verify-responsiveness measures clicks, typing, drags, a Scene orbit, Play and startup through the window loop; --settle-imports before|after waits for imports before or after the interactions.
 --verify-unpresentable holds the window unable to show (minimized or occluded) and checks the loop presents nothing, stays responsive and resumes presenting."
                 );

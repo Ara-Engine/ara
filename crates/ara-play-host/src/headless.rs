@@ -97,6 +97,7 @@ impl PlayService {
                 scene,
                 background: None,
                 mode: None,
+                process_mode: None,
                 clients: None,
                 window: Some(false),
                 embed: None,

@@ -1,9 +1,9 @@
 //! Reflection captures for the raster renderer (`ara_render::look::captures`): the
-//! frame's authored `ReflectionCapture` components in world space, or, without any,
-//! automatic placement over the published content (computed once per generation).
+//! frame's enabled authored `ReflectionProbe` components in world space, or, without
+//! any, automatic placement over the published content (computed once per generation).
 use ara_render::instanced::Scene;
 use ara_render::look::captures::{CaptureSpec, auto_place};
-use ara_runtime::extract::{CaptureView, RenderFrame};
+use ara_runtime::extract::{ProbeView, RenderFrame};
 use glam30::{Quat, Vec3};
 
 /// Automatic placements of one content generation (`RasterView`).
@@ -27,8 +27,13 @@ impl Placement {
         if limit == 0 {
             return Vec::new();
         }
-        if !frame.reflection_captures.is_empty() {
-            return frame.reflection_captures.iter().map(authored).collect();
+        if !frame.reflection_probes.is_empty() {
+            return frame
+                .reflection_probes
+                .iter()
+                .filter(|v| v.probe.enabled && v.probe.invalid().is_none())
+                .map(authored)
+                .collect();
         }
         if self.key != Some((key, limit)) {
             self.automatic = auto_place(scene, limit);
@@ -38,13 +43,14 @@ impl Placement {
     }
 }
 
-/// An authored capture in world space: the entity's scale stretches its boxes and
-/// offsets; a projection box with any zero extent uses the influence box.
-fn authored(view: &CaptureView) -> CaptureSpec {
-    let c = &view.capture;
+/// An authored probe in world space: the entity's scale stretches its boxes and
+/// offsets (half sizes of the authored full `bounds`); a projection box with any zero
+/// size uses the box of influence.
+pub(crate) fn authored(view: &ProbeView) -> CaptureSpec {
+    let c = &view.probe;
     let scale = Vec3::from_array(view.scale).abs().max(Vec3::splat(1e-4));
-    let extents = (Vec3::from_array(c.extents) * scale).max(Vec3::splat(0.01));
-    let projection = Vec3::from_array(c.projection_extents) * scale;
+    let extents = (Vec3::from_array(c.bounds) * 0.5 * scale).max(Vec3::splat(0.005));
+    let projection = Vec3::from_array(c.projection_bounds) * 0.5 * scale;
     let rotation = Quat::from_array(view.rotation);
     CaptureSpec {
         position: Vec3::from_array(view.translation),
@@ -54,7 +60,7 @@ fn authored(view: &CaptureView) -> CaptureSpec {
             Quat::IDENTITY
         },
         influence: extents,
-        blend: c.blend.max(0.),
+        blend: c.blend_distance.max(0.),
         projection_centre: Vec3::from_array(c.projection_offset) * scale,
         projection: if projection.min_element() > 0. {
             projection
@@ -63,7 +69,7 @@ fn authored(view: &CaptureView) -> CaptureSpec {
         },
         capture_offset: Vec3::from_array(c.capture_offset) * scale,
         priority: c.priority,
-        resolution: c.resolution.texels(),
+        resolution: c.capture_resolution,
         intensity: c.intensity.max(0.),
     }
 }
@@ -71,15 +77,17 @@ fn authored(view: &CaptureView) -> CaptureSpec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ara_components::render::{CaptureResolution, ReflectionCapture};
+    use ara_components::render::ReflectionProbe;
 
     #[test]
-    fn authored_captures_follow_their_entity_and_default_the_projection_box() {
-        let view = CaptureView {
-            capture: ReflectionCapture {
-                extents: [2., 1., 3.],
+    fn authored_probes_follow_their_entity_and_default_the_projection_box() {
+        let view = ProbeView {
+            address: "probe".into(),
+            entity: 7,
+            probe: ReflectionProbe {
+                bounds: [4., 2., 6.],
                 capture_offset: [0., 0.5, 0.],
-                resolution: CaptureResolution::High,
+                capture_resolution: 512,
                 ..Default::default()
             },
             translation: [1., 2., 3.],

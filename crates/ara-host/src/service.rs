@@ -309,6 +309,12 @@ impl Cx<'_> {
         &self.st.store
     }
 
+    /// Whether the Host has observed disk divergence for this document ID.
+    /// Services check this before committing dependent policy migrations; no I/O occurs.
+    pub fn document_diverged(&self, id: &str) -> bool {
+        self.st.files.diverged.contains_key(id)
+    }
+
     /// The command, query and job registry.
     pub fn registry(&self) -> &Registry {
         &self.st.registry
@@ -452,9 +458,45 @@ impl Cx<'_> {
         self.st.jobs.get(job)
     }
 
+    /// Set a running job's cancellation gate without changing progress or message.
+    /// Unknown, finished and unchanged jobs are ignored. Services must keep this
+    /// false once cancellation can no longer prevent their irreversible work.
+    /// An actual change publishes the existing `jobs` notification.
+    pub fn set_job_cancellable(&mut self, job: &str, cancellable: bool) {
+        if let Some(record) = self.st.jobs.set_cancellable(job, cancellable) {
+            let record = serde_json::json!(record);
+            self.st.notify(Topic::Jobs, record);
+        }
+    }
+
+    /// Cancel a cancellable running job using the existing jobs table policy.
+    /// Returns false for unknown, finished, already cancelled or noncancellable
+    /// jobs, without notifying. A successful change publishes its job record.
+    pub fn cancel_job(&mut self, job: &str) -> bool {
+        if !self.st.jobs.cancel(job) {
+            return false;
+        }
+        let record = self
+            .st
+            .jobs
+            .get(job)
+            .expect("cancel keeps the job record owned");
+        let record = serde_json::json!(record);
+        self.st.notify(Topic::Jobs, record);
+        true
+    }
+
     /// Result of materializing a file-bearing transaction at this revision. None
     /// means its worker has not acknowledged it yet; no disk work occurs here.
     pub fn materialization_result(&self, revision: u64) -> Option<&Result<(), Diagnostic>> {
         self.st.file_jobs.materialized.get(&revision)
     }
 }
+
+#[cfg(test)]
+#[path = "service/divergence_tests.rs"]
+mod divergence_tests;
+
+#[cfg(test)]
+#[path = "service/job_control_tests.rs"]
+mod job_control_tests;

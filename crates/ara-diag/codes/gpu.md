@@ -158,6 +158,20 @@ Fixes:
 - Point `ARA_METAL_SHADERCONVERTER` at `metal-shaderconverter` if it lives elsewhere.
 - Never commit cooked artifacts produced on a Mac; recook on the canonical host instead (docs/dev/macos.md).
 
+## ARA6008 GPU_RT_FALLBACK: Ray tracing fell back to raster
+owner: ara-render-fidelity
+shown as: ARA_GPU_RT_FALLBACK
+
+A warning from presentation: the project or launch options turned ray tracing on, but the GPU has no verified hardware ray queries, so the view renders the requested preset with the raster path. The raster path is complete and correct on every device; only the ray-traced fidelity renderer is skipped.
+
+Causes:
+- The GPU or its driver lacks hardware ray queries (Vulkan `VK_KHR_ray_query`; on Macs, Apple M3 or later: M1 and M2 trace in software).
+- On macOS, `ARA_METAL_RT=0` keeps the Mac on raster (an engine-developer comparison switch).
+
+Fixes:
+- Nothing is required: raster is the default look (D27).
+- To see the ray-traced look, run on a GPU with hardware ray tracing, and unset `ARA_METAL_RT` on a Mac.
+
 ## ARA6092 LAB_MAC_BATTERY: Mac lab job requires AC power
 owner: ara-dev
 shown as: ARA_LAB_MAC_BATTERY

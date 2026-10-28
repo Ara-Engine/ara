@@ -5,6 +5,10 @@ pub use crate::focus::{directional, focus_graph, next_tab, tab_order};
 use crate::{Result, Ui, runtime::is_focusable, source::stable_id};
 use ara_ui_text::{Clipboard, EditEvent};
 pub(crate) mod numeric;
+#[cfg(test)]
+mod restore_tests;
+#[cfg(test)]
+mod scope_tests;
 mod scroll;
 use numeric::NumericDrag;
 use scroll::ScrollDrag;
@@ -68,6 +72,9 @@ struct Scope {
 #[derive(Default)]
 pub struct InputState {
     scopes: Vec<Scope>,
+    // The first scope can open over an unscoped editor/game surface. Keep its
+    // original focus, including an intentional None, until the last scope closes.
+    unscoped_focus: Option<Option<u64>>,
     focus: Option<u64>,
     hover: Option<u64>,
     capture: Option<u64>,
@@ -158,6 +165,9 @@ impl InputState {
         if ui.by_id(root).is_none() {
             return Err("ARA4045: input scope root not found".into());
         }
+        if self.scopes.is_empty() {
+            self.unscoped_focus = Some(self.focus);
+        }
         self.cancel_numeric(ui);
         if let Some(s) = self.scopes.last_mut() {
             s.focus = self.focus;
@@ -173,6 +183,7 @@ impl InputState {
             .filter(|id| {
                 ui.by_id(*id).is_some_and(|i| {
                     self.in_scope(ui, i)
+                        && ui.accepts_input(i)
                         && !ui.nodes[i].state.disabled
                         && matches!(
                             ui.nodes[i].element.tag.as_str(),
@@ -192,30 +203,46 @@ impl InputState {
                 ui.paint_order
                     .iter()
                     .copied()
-                    .find(|i| self.in_scope(ui, *i) && is_focusable(&ui.nodes[*i]))
+                    .find(|i| {
+                        self.in_scope(ui, *i) && ui.accepts_input(*i) && is_focusable(&ui.nodes[*i])
+                    })
                     .map(|i| stable_id(&ui.nodes[i].element.id))
             });
         self.focus_to(ui, initial);
         Ok(())
     }
     /// Pop a screen/modal and restore surviving focus, falling back within its parent scope.
+    /// Closing the last scope preserves an originally unfocused unscoped surface.
     pub fn pop(&mut self, ui: &mut Ui) -> Option<u64> {
         self.cancel_numeric(ui);
         self.scopes.pop();
         self.capture = None;
         self.scroll_drag = None;
-        let restored = self
-            .scopes
-            .last()
-            .and_then(|s| s.focus)
-            .filter(|id| ui.by_id(*id).is_some_and(|i| self.can_focus(ui, i)))
-            .or_else(|| {
-                ui.paint_order
-                    .iter()
-                    .copied()
-                    .find(|i| self.in_scope(ui, *i) && is_focusable(&ui.nodes[*i]))
-                    .map(|i| stable_id(&ui.nodes[i].element.id))
-            });
+        let unscoped = if self.scopes.is_empty() {
+            self.unscoped_focus.take()
+        } else {
+            None
+        };
+        let restored = if unscoped == Some(None) {
+            None
+        } else {
+            self.scopes
+                .last()
+                .and_then(|s| s.focus)
+                .or(unscoped.flatten())
+                .filter(|id| ui.by_id(*id).is_some_and(|i| self.can_focus(ui, i)))
+                .or_else(|| {
+                    ui.paint_order
+                        .iter()
+                        .copied()
+                        .find(|i| {
+                            self.in_scope(ui, *i)
+                                && ui.accepts_input(*i)
+                                && is_focusable(&ui.nodes[*i])
+                        })
+                        .map(|i| stable_id(&ui.nodes[i].element.id))
+                })
+        };
         self.focus_to(ui, restored);
         restored
     }
@@ -246,6 +273,21 @@ impl InputState {
             ui.scroll_into_view(i)?;
         }
         Ok(())
+    }
+    /// Restore retained focus only when the control is mounted, enabled, visible
+    /// in its clip and inside the active scope. An unavailable target leaves all
+    /// focus, capture and scope state unchanged; the host retains its intent and
+    /// retries after mounting/revealing it. Unlike explicit [`Self::focus`], this
+    /// does not scroll background content or turn deferred restoration into an error.
+    pub fn focus_if_available(&mut self, ui: &mut Ui, id: u64) -> bool {
+        if ui
+            .by_id(id)
+            .is_none_or(|index| !self.can_focus(ui, index) || !is_focusable(&ui.nodes[index]))
+        {
+            return false;
+        }
+        self.focus_to(ui, Some(id));
+        true
     }
     fn focus_to(&mut self, ui: &mut Ui, id: Option<u64>) {
         if self.focus != id {

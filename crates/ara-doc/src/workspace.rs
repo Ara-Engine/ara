@@ -87,8 +87,11 @@ impl Workspace {
                         format!("unknown document kind `{kind}`"),
                     )
                 })?;
+                let root_preferences = kind == "project"
+                    && doc.as_str() == "pj_preferences"
+                    && path == "settings/project.json";
                 if doc.prefix() != desc.id_prefix
-                    || !path.ends_with(&format!(".{}", desc.extension))
+                    || (!root_preferences && !path.ends_with(&format!(".{}", desc.extension)))
                 {
                     return Err(Diagnostic::error(
                         codes::INVALID_PARAMS,

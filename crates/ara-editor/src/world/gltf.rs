@@ -441,8 +441,8 @@ mod tests {
 
     #[test]
     fn cache_observes_a_publisher_attached_after_placeholder_extraction() -> anyhow::Result<()> {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/ara-editor/model-publication")
+        let root = crate::test_target()
+            .join("ara-editor/model-publication")
             .join(std::process::id().to_string());
         std::fs::create_dir_all(&root)?;
         let mut cache = ModelCache::new(&root)?;

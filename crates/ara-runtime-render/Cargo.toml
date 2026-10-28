@@ -21,6 +21,7 @@ ara-foliage = { path = "../ara-foliage" }
 ara-render-fidelity = { path = "../ara-render-fidelity" }
 ara-gpu = { path = "../ara-gpu" }
 ara-landscape = { path = "../ara-landscape" }
+ara-diag = { path = "../ara-diag" }
 ara-render = { path = "../ara-render" }
 ara-render2d = { path = "../ara-render2d" }
 ara-runtime = { path = "../ara-runtime" }

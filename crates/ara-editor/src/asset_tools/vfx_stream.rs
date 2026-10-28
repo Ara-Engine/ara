@@ -3,7 +3,12 @@
 //! tick 0 and single steps while paused. Each frame carries the GPU counters.
 use std::{
     path::Path,
-    sync::mpsc::{self, Receiver, Sender},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc::{self, Receiver, Sender},
+    },
+    thread::JoinHandle,
     time::{Duration, Instant},
 };
 
@@ -34,8 +39,10 @@ pub(crate) struct Frame {
 }
 
 pub(crate) struct VfxStream {
-    send: Sender<Request>,
-    receive: Receiver<Result<Frame, String>>,
+    send: Option<Sender<Request>>,
+    receive: Option<Receiver<Result<Frame, String>>>,
+    stopping: Arc<AtomicBool>,
+    worker: Option<JoinHandle<()>>,
     identity: Option<String>,
     playing: bool,
     rate: u32,
@@ -45,7 +52,9 @@ impl VfxStream {
         let root = root.to_owned();
         let (send, requests) = mpsc::channel::<Request>();
         let (frames, receive) = mpsc::sync_channel(2);
-        std::thread::spawn(move || {
+        let stopping = Arc::new(AtomicBool::new(false));
+        let stop = Arc::clone(&stopping);
+        let worker = std::thread::spawn(move || {
             let mut gpu = None::<ara_gpu::GpuDevice>;
             let mut system = None::<ara_vfx_gpu::GpuSystem>;
             let mut effect = None::<ara_vfx::Effect>;
@@ -55,6 +64,9 @@ impl VfxStream {
             let mut view = ara_vfx_gpu::View::default();
             let budget = Duration::from_secs_f64(1. / f64::from(FPS));
             loop {
+                if stop.load(Ordering::Acquire) {
+                    break;
+                }
                 let start = Instant::now();
                 let request = if playing {
                     match requests.recv_timeout(budget) {
@@ -68,6 +80,11 @@ impl VfxStream {
                         Err(_) => break,
                     }
                 };
+                // Disconnection wakes an idle worker; a queued request must not
+                // start new preview work once its owner is shutting down.
+                if stop.load(Ordering::Acquire) {
+                    break;
+                }
                 let mut step = 0;
                 if let Some(request) = request {
                     playing = request.playing;
@@ -119,6 +136,9 @@ impl VfxStream {
                         }
                     }
                 }
+                if stop.load(Ordering::Acquire) {
+                    break;
+                }
                 if let (Some(device), Some(system), Some(effect)) = (&mut gpu, &mut system, &effect)
                 {
                     let rendered = (|| -> anyhow::Result<Frame> {
@@ -168,8 +188,10 @@ impl VfxStream {
             }
         });
         Self {
-            send,
-            receive,
+            send: Some(send),
+            receive: Some(receive),
+            stopping,
+            worker: Some(worker),
             identity: None,
             playing: false,
             rate: 100,
@@ -182,12 +204,14 @@ impl VfxStream {
             self.identity = identity;
             self.playing = playing;
             self.rate = rate;
-            let _ = self.send.send(Request {
-                effect: Some(effect),
-                playing,
-                rate,
-                ..Request::default()
-            });
+            if let Some(send) = &self.send {
+                let _ = send.send(Request {
+                    effect: Some(effect),
+                    playing,
+                    rate,
+                    ..Request::default()
+                });
+            }
         } else if self.playing != playing || self.rate != rate {
             self.playing = playing;
             self.rate = rate;
@@ -209,15 +233,37 @@ impl VfxStream {
         }
     }
     fn transport(&mut self, restart: bool, step: u32) {
-        let _ = self.send.send(Request {
-            effect: None,
-            playing: self.playing,
-            rate: self.rate,
-            restart,
-            step,
-        });
+        if let Some(send) = &self.send {
+            let _ = send.send(Request {
+                effect: None,
+                playing: self.playing,
+                rate: self.rate,
+                restart,
+                step,
+            });
+        }
     }
     pub fn poll(&mut self) -> impl Iterator<Item = Result<Frame, String>> + '_ {
-        self.receive.try_iter().take(2)
+        self.receive
+            .as_ref()
+            .into_iter()
+            .flat_map(|receive| receive.try_iter())
+            .take(2)
     }
 }
+
+impl Drop for VfxStream {
+    fn drop(&mut self) {
+        self.stopping.store(true, Ordering::Release);
+        drop(self.send.take());
+        drop(self.receive.take());
+        // The worker retires its system and destroys its device before the owner
+        // and process can tear down native libraries used by that work.
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;

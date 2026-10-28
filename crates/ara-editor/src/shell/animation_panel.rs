@@ -14,6 +14,16 @@ const SIDE: f32 = 240.;
 /// How often the page reads the running animator during Play.
 const LIVE_EVERY: std::time::Duration = std::time::Duration::from_millis(100);
 
+/// An absent initializer is a recoverable document state. Non-null source still
+/// goes through the strict controller decoder, including malformed source errors.
+fn controller_present(document: &ara_doc::Document) -> bool {
+    document.records().values().any(|record| {
+        record
+            .get("controller")
+            .is_some_and(|source| !source.is_null())
+    })
+}
+
 /// The running animator the Animation page follows during Play: the first scene
 /// entity (the selected one first) whose `Animator.controller` is the open controller,
 /// read through `play.read <entity>.AnimatorState`.
@@ -38,6 +48,18 @@ pub(crate) enum LiveChange {
 }
 
 impl Shell {
+    fn animation_unavailable(&mut self, out: &mut String, id: &str) {
+        let redo = format!("{id}-redo");
+        self.empty(
+            out,
+            id,
+            "person-standing",
+            "Controller unavailable",
+            "This animation document has no controller source. Redo its initialization, restore the source, or open another controller.",
+            &[(redo.as_str(), "Redo", "edit.redo")],
+        );
+    }
+
     pub(super) fn animation_panel(
         &mut self,
         editor: &Editor,
@@ -49,7 +71,11 @@ impl Shell {
             .as_deref()
             .and_then(|d| editor.host.store().workspace().path_of(d));
         super::graph_panel::tool_crumbs(out, "animation", path);
-        if resource.is_some() {
+        if resource
+            .as_deref()
+            .and_then(|doc| editor.host.store().workspace().doc(doc))
+            .is_some_and(controller_present)
+        {
             out.push_str("<panel id='animation-view-sep' class='toolbar-sep' /><panel id='animation-view' class='segment'>");
             for (id, label, blends) in [
                 ("animation-states", "States", false),
@@ -125,6 +151,10 @@ impl Shell {
             .workspace()
             .doc(&doc)
             .ok_or("controller missing")?;
+        if !controller_present(document) {
+            self.animation_unavailable(out, "animation-unavailable");
+            return Ok(());
+        }
         let (_, controller) = crate::authoring::animation::controller(document)?;
         let path = crate::authoring::animation::layout_path(&doc);
         let layout = editor
@@ -568,14 +598,17 @@ impl Shell {
         let Some(doc) = self.resource_for(editor, "animation") else {
             return Ok(());
         };
-        let (record, controller) = crate::authoring::animation::controller(
-            editor
-                .host
-                .store()
-                .workspace()
-                .doc(&doc)
-                .ok_or("controller missing")?,
-        )?;
+        let document = editor
+            .host
+            .store()
+            .workspace()
+            .doc(&doc)
+            .ok_or("controller missing")?;
+        if !controller_present(document) {
+            self.animation_unavailable(out, "animation-inspector-unavailable");
+            return Ok(());
+        }
+        let (record, controller) = crate::authoring::animation::controller(document)?;
         let width = self
             .ui
             .find("animation-inspector")
@@ -707,7 +740,7 @@ impl Shell {
                 } else {
                     section(out, "animation-pose", &format!("Pose · {key}"));
                 }
-                self.pose_operation(out, &doc, &record, &controller, key, value.kind);
+                self.pose_operation(out, &doc, &record, key, value.kind, label);
                 if value.kind == NodeKind::Clip {
                     self.anim_field(out, &doc, &item, "clip", "Clip", &json!(value.clip), label);
                 } else {
@@ -780,47 +813,75 @@ impl Shell {
         Ok(())
     }
 
-    /// The pose operation as a segment; each choice replaces the controller through
-    /// the typed controller command.
+    /// Stored pose operations use the shared searchable Select, including long labels.
     fn pose_operation(
         &mut self,
         out: &mut String,
         doc: &str,
         record: &str,
-        controller: &ControllerData,
         key: &str,
         current: NodeKind,
+        label: f32,
     ) {
-        // Six choices need the full width: the segment sits on its own row.
-        out.push_str("<panel id='animation-operation-row' class='prop-row' style='padding-left:12px'><panel id='animation-operation' class='segment' style='flex-grow:1;flex-basis:0px'>");
-        for (kind, short, name) in [
-            (NodeKind::Clip, "Clip", "Play one clip"),
-            (NodeKind::Blend1d, "1D", "1D blend on one parameter"),
-            (NodeKind::Directional2d, "2D", "2D directional blend"),
-            (
-                NodeKind::Additive,
-                "Add",
-                "Additive: overlay the second input",
-            ),
-            (NodeKind::Layer, "Layer", "Layer through a joint mask"),
-            (NodeKind::MotionMatching, "Match", "Motion matching"),
-        ] {
-            let id = format!("animation-operation-{short}");
-            let mut changed = controller.clone();
-            if let Some(node) = changed.nodes.get_mut(key) {
-                node.kind = kind;
-            }
-            self.bindings.insert(
-                ara_ui::source::stable_id(&id),
-                Binding::ResourceContent(
-                    doc.into(),
-                    vec![json!({"cmd":"editor.animation.controller.set","args":{"record":record,"controller":changed}})],
-                    "Change pose operation".into(),
-                ),
-            );
-            out.push_str(&format!("<button id='{id}' class='segment-button{}' style='flex-grow:1;flex-basis:0px' label='{name}' description='{name}' action='Dispatch'><text id='{id}-label' text='{short}' /></button>",if kind==current{" selected"}else{""}));
-        }
+        out.push_str(&format!("<panel id='animation-operation-row' class='prop-row' name='enum' style='height:auto;min-height:24px'><panel id='animation-operation-label-cell' class='prop-label' style='width:{label}px'><text id='animation-operation-label' text='Operation' /></panel><panel id='animation-operation-value' class='prop-value'>"));
+        self.choice_button(
+            "animation-operation",
+            "Pose operation",
+            choices::Select {
+                destination: choices::Destination::AnimationOperation {
+                    doc: doc.into(),
+                    record: record.into(),
+                    key: key.into(),
+                },
+                options: [
+                    (NodeKind::Clip, "Play one clip"),
+                    (NodeKind::Blend1d, "1D blend on one parameter"),
+                    (NodeKind::Directional2d, "2D directional blend"),
+                    (NodeKind::Additive, "Additive: overlay the second input"),
+                    (NodeKind::Layer, "Layer through a joint mask"),
+                    (NodeKind::MotionMatching, "Motion matching"),
+                ]
+                .into_iter()
+                .map(|(kind, name)| (json!(kind), name.into()))
+                .collect(),
+                current: json!(current),
+            },
+            out,
+        );
         out.push_str("</panel></panel>");
+    }
+
+    /// Apply only the picked operation to the latest controller, retaining any
+    /// background edits made while its dropdown was open.
+    pub(super) fn choose_pose_operation(
+        &mut self,
+        editor: &mut Editor,
+        doc: &str,
+        record: &str,
+        key: &str,
+        value: Value,
+    ) -> ara_ui::Result<()> {
+        let kind: NodeKind = serde_json::from_value(value)?;
+        let (actual, mut controller) = crate::authoring::animation::controller(
+            editor
+                .host
+                .store()
+                .workspace()
+                .doc(doc)
+                .ok_or("The animation document is no longer loaded")?,
+        )?;
+        if actual != record {
+            return Err("The animation controller changed while choosing its operation".into());
+        }
+        let node = controller
+            .nodes
+            .get_mut(key)
+            .ok_or("The pose node was removed while choosing its operation")?;
+        if node.kind == kind {
+            return Ok(());
+        }
+        node.kind = kind;
+        self.save_controller(editor, doc, record, controller, "Change pose operation")
     }
 
     /// A time property, typed and shown in seconds, with frames at the controller's

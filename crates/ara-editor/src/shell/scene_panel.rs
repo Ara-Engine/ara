@@ -13,17 +13,18 @@ impl Shell {
                 .unwrap_or(self.ui.size[0] * 0.55);
             let compact = width < 780.;
             let narrow = width < 1000.;
-            out.push_str("<panel id='scene-tools' class='viewport-tools'><panel id='scene-edit-tools' class='viewport-cluster'><panel id='transform-segment' class='viewport-segment'>");
+            out.push_str("<panel id='scene-tools' class='viewport-tools'><panel id='scene-edit-tools' class='viewport-cluster'>");
             let tool = editor.state.tool;
             let gizmos = !editor.state.hide_gizmos;
+            self.bind_command("tool-select", "view.tool.select", Target::None);
+            let select_keys = self
+                .keymap
+                .chords("view.tool.select")
+                .first()
+                .map(|chord| chord.text())
+                .unwrap_or_default();
+            out.push_str(&format!("<button id='tool-select' class='viewport-button{}' label='Select' description='Select · {select_keys}' action='Dispatch'>{}</button><panel id='tool-select-separator' class='viewport-divider' /><panel id='transform-segment' class='viewport-segment' name='mode'>",if gizmos {""}else{" viewport-button-on"},icons::icon_in("tool-select","mouse-pointer","viewport-icon")));
             for (id, command, icon, label, on) in [
-                (
-                    "tool-select",
-                    "view.tool.select",
-                    "mouse-pointer",
-                    "Select",
-                    !gizmos,
-                ),
                 (
                     "tool-Translate",
                     "view.tool.move",
@@ -142,12 +143,40 @@ impl Shell {
                 "view-camera",
                 Context::Camera,
                 "video",
-                if narrow { "" } else { "Perspective" },
-                "Camera views, field of view and speed",
+                if narrow {
+                    ""
+                } else if editor.state.camera.projection
+                    == crate::state::CameraProjection::Orthographic
+                {
+                    "Orthographic"
+                } else {
+                    "Perspective"
+                },
+                "Camera views, projection, lens, bookmarks and speed",
             );
+            let orthographic =
+                editor.state.camera.projection == crate::state::CameraProjection::Orthographic;
+            self.bind_command("view-projection", "view.camera.perspective", Target::None);
+            out.push_str(&format!("<button id='view-projection' class='viewport-button{}' label='Toggle orthographic projection' description='{} projection; click to switch · Num5' action='Dispatch'>{}</button>",if orthographic {" viewport-button-on"} else {""},if orthographic {"Orthographic"} else {"Perspective"},icons::icon_in("view-projection","box","viewport-icon")));
+            self.bind_command(
+                "view-bookmark-save",
+                "view.camera.bookmark.save",
+                Target::None,
+            );
+            self.bind_command("view-bookmarks", "view.camera.bookmarks", Target::None);
+            for (id, icon, label) in [
+                ("view-bookmark-save", "save", "Save camera bookmark"),
+                ("view-bookmarks", "camera", "Recall camera bookmark"),
+            ] {
+                out.push_str(&format!("<button id='{id}' class='viewport-button' label='{label}' description='{label}' action='Dispatch'>{}</button>",icons::icon_in(id,icon,"viewport-icon")));
+            }
             self.bindings
                 .insert(ara_ui::source::stable_id("view-fov"), Binding::CameraFov);
-            out.push_str(&format!("<field id='view-fov' class='number viewport-fov' text='{}' label='Field of view' description='Vertical field of view in degrees (10–120)' action='Dispatch' />",editor.state.camera.fov_label()));
+            if orthographic {
+                out.push_str(&format!("<field id='view-fov' class='number viewport-fov' min='0.01' max='1000000' step='0.1' text='{}' label='Orthographic height' description='Visible vertical span in metres; drag the field grip to zoom' action='Dispatch' />",editor.state.camera.orthographic_height));
+            } else {
+                out.push_str(&format!("<field id='view-fov' class='number viewport-fov' min='10' max='120' step='1' text='{}' label='Field of view' description='Vertical field of view in degrees (10–120)' action='Dispatch' />",editor.state.camera.fov_y_degrees));
+            }
             self.viewport_menu(
                 out,
                 "view-speed",
@@ -199,6 +228,14 @@ impl Shell {
         }
         self.notices_markup(editor, out);
         self.loading_markup(editor, out);
+        if !editor.state.hide_overlays
+            && !editor.state.game_view
+            && let Some(target) = self.pilot_target()
+        {
+            out.push_str(&format!("<panel id='scene-pilot' style='position:absolute;left:12px;top:46px;max-width:92%;padding:6px;gap:4px;background:var(--popover);border-radius:4px'><text id='scene-pilot-target' class='caption' style='white-space:normal' text='Piloting {}' /><button id='scene-unpilot' class='viewport-button' label='Stop piloting' text='Stop piloting' description='Keep the last completed Camera move and return to Scene navigation' action='Dispatch' /></panel>",escape(target)));
+            self.bind_command("scene-unpilot", "view.camera.pilot", Target::None);
+        }
+        self.viewport_diagnostics.stats_markup(&editor.state, out);
         out.push_str("<panel id='gizmo-readout' class='readout' style='left:0px;top:0px'><text id='gizmo-readout-text' class='mono' text='' /></panel></panel>");
     }
 

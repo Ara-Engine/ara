@@ -866,6 +866,7 @@ dependencies = [
  "ara-texture-gpu",
  "ara-ui",
  "ara-ui-render",
+ "ara-ui-test",
  "ara-ui-text",
  "ara-update",
  "ara-vfx",
@@ -1586,6 +1587,7 @@ name = "ara-play-host"
 version = "0.0.1-alpha"
 dependencies = [
  "ara-asset",
+ "ara-cmd",
  "ara-diag",
  "ara-doc",
  "ara-gpu",
@@ -1901,6 +1903,7 @@ dependencies = [
  "ara-asset",
  "ara-asset-format",
  "ara-components",
+ "ara-diag",
  "ara-doc",
  "ara-foliage",
  "ara-gpu",
@@ -1971,6 +1974,7 @@ dependencies = [
  "ara-terrain",
  "ara-world",
  "glam 0.34.1",
+ "libm",
  "serde_json",
 ]
 

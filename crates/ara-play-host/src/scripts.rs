@@ -9,8 +9,10 @@ use ara_host::Cx;
 use ara_play::{Event, ScriptScene, method};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
+mod catalog_refresh;
 mod diagnostics;
 mod write;
+pub(crate) use catalog_refresh::CatalogRefresh;
 pub(crate) use diagnostics::DiagnosticSources;
 pub(crate) use write::SourceWrites;
 
@@ -112,7 +114,7 @@ impl PlayService {
                 let result = self.call(
                     &id,
                     method::COMPILE,
-                    json!({"paths": [path.to_string_lossy()]}),
+                    json!({"paths": [claim_path(path).to_string_lossy()]}),
                     true,
                 )?;
                 claimed += usize::from(result["claimed"].as_bool().unwrap_or(false));
@@ -200,7 +202,15 @@ impl PlayService {
         }
         // Reloads may add, change or remove C# commands.
         for id in reloaded {
-            self.publish_commands(cx, &id);
+            // The replacement worker fetches the new catalog after an L4 restart.
+            if restarts.contains(&id) {
+                continue;
+            }
+            if let Err(problems) = self.queue_catalog_refresh(&id) {
+                for problem in problems {
+                    cx.log(problem)
+                }
+            }
         }
         restarts
     }
@@ -228,6 +238,50 @@ impl PlayService {
             .ok_or_else(|| fail(codes::PLAY, "player returned no snapshot"))?
             .to_owned();
         self.restart(id, Some(&bytes))
+    }
+}
+
+/// The path an agent claim names: canonical, like the module inventory's folders,
+/// because the compile server matches watcher events against it. Under an aliased
+/// root (macOS's `/var` is `/private/var`, so every temp project) the raw path never
+/// matched and agent edits counted as human ones. A file not written yet resolves
+/// through its folder.
+fn claim_path(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path)
+        .ok()
+        .or_else(|| {
+            let canonical = std::fs::canonicalize(path.parent()?).ok()?;
+            Some(canonical.join(path.file_name()?))
+        })
+        .unwrap_or_else(|| path.to_owned())
+}
+
+#[cfg(all(test, unix))]
+#[allow(clippy::unwrap_used)]
+mod claim_tests {
+    use super::*;
+
+    #[test]
+    fn claims_name_canonical_paths_through_an_aliased_root() {
+        let base = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-play-host/claim-path")
+            .join(std::process::id().to_string());
+        let module = base.join("real/Gameplay");
+        std::fs::create_dir_all(&module).unwrap();
+        std::fs::write(module.join("Vitals.cs"), "").unwrap();
+        let alias = base.join("alias");
+        std::os::unix::fs::symlink(base.join("real"), &alias).unwrap();
+        let canonical = std::fs::canonicalize(&module).unwrap();
+        assert_eq!(
+            claim_path(&alias.join("Gameplay/Vitals.cs")),
+            canonical.join("Vitals.cs")
+        );
+        assert_eq!(
+            claim_path(&alias.join("Gameplay/New.cs")),
+            canonical.join("New.cs"),
+            "a file not written yet resolves through its folder"
+        );
+        std::fs::remove_dir_all(base).unwrap();
     }
 }
 

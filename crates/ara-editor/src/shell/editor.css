@@ -77,7 +77,8 @@ text { flex-shrink:0; white-space:nowrap; color:inherit; }
 .empty-hint { font-size:12px; color:var(--muted-foreground); white-space:normal; max-width:360px; }
 .empty-actions { flex-direction:row; gap:6px; }
 .drop-zone { position:absolute; background:var(--selection-surface); border-width:2px; border-color:var(--primary); border-radius:var(--radius-md); }
-.drop-label { position:absolute; height:24px; padding-left:8px; padding-right:8px; align-items:center; justify-content:center; background:var(--primary); color:var(--primary-foreground); border-radius:var(--radius-sm); font-size:12px; }
+.drop-label { padding:6px; padding-left:8px; padding-right:8px; background:var(--raised); color:var(--foreground); border-radius:var(--radius-sm); border-width:1px; border-color:var(--primary); font-size:12px; }
+.drop-label-copy { white-space:normal; min-width:0px; font-size:12px; color:inherit; }
 
 .row { flex-direction:row; align-items:center; gap:6px; min-height:22px; }
 .field-row { gap:4px; flex-shrink:0; }
@@ -143,8 +144,8 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .axis-w { color:var(--muted-foreground); }
 .overlay { position:absolute; left:0px; top:0px; width:100%; height:100%; background:var(--background); }
 
-.menu { padding:4px; gap:0px; background:var(--menu-surface); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-md); }
-.menu-item { height:auto; min-height:26px; flex-shrink:0; justify-content:start; gap:8px; padding-left:6px; padding-right:6px; background:transparent; border-width:0px; border-radius:4px; color:var(--foreground); font-size:13px; }
+.menu { padding:4px; padding-right:16px; gap:0px; background:var(--menu-surface); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-md); }
+.menu-item { height:auto; min-height:26px; flex-shrink:0; justify-content:start; gap:8px; padding:3px; padding-left:6px; padding-right:6px; background:transparent; border-width:0px; border-radius:4px; color:var(--foreground); font-size:13px; }
 .menu-item:hover { background:var(--hover-surface); }
 .menu-item:disabled { color:var(--muted-foreground); background:transparent; }
 .menu-active { background:var(--selection-surface); color:var(--selection-foreground); }
@@ -181,7 +182,7 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .agent-card { padding:8px; gap:4px; background:var(--background); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-md); }
 .asset-list { padding:4px; gap:0px; }
 
-.prop-row { height:24px; flex-shrink:0; flex-direction:row; align-items:center; gap:0px; padding-right:4px; }
+.prop-row { height:auto; min-height:24px; flex-shrink:0; flex-direction:row; align-items:center; gap:0px; padding-right:4px; }
 .prop-row:hover { background:var(--raised); }
 .prop-label { flex-shrink:0; height:24px; flex-direction:row; align-items:center; padding-left:12px; padding-right:6px; overflow:hidden; font-size:12px; color:var(--muted-foreground); }
 .prop-value { flex-grow:1; flex-basis:0px; flex-direction:row; align-items:center; gap:4px; min-width:0px; }
@@ -209,6 +210,12 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .viewport-bar { height:28px; flex-shrink:0; flex-direction:row; align-items:center; gap:4px; padding-left:4px; padding-right:4px; background:var(--panel-header); }
 .readout { position:absolute; height:22px; padding-left:8px; padding-right:8px; align-items:center; justify-content:center; background:var(--menu-surface); border-width:1px; border-color:var(--separator-strong); border-radius:var(--radius-sm); font-size:12px; }
 
+.asset-jobs-scroll { height:auto; max-height:180px; min-height:56px; flex-basis:auto; flex-shrink:1; padding-right:12px; }
+.asset-jobs { flex-direction:column; gap:6px; min-width:0px; flex-shrink:0; }
+.asset-job-title { flex-grow:1; flex-basis:0px; min-width:0px; white-space:normal; max-height:44px; overflow:hidden; }
+.asset-job-message { white-space:normal; min-width:0px; flex-shrink:0; }
+/* A compact 64px asset card and its 8px leading gap remain usable beside job status. */
+.asset-browser-content { flex-direction:row; flex-grow:1; flex-basis:0px; min-height:72px; }
 .asset-card { flex-direction:column; align-items:center; justify-content:start; padding:6px; gap:6px; background:transparent; border-width:1px; border-color:transparent; border-radius:var(--radius-md); overflow:hidden; }
 .asset-card-side { flex-direction:row; align-items:center; padding:8px; gap:8px; }
 .asset-card:hover { background:var(--raised); }
@@ -254,7 +261,8 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .on-selection-muted { color:var(--selection-muted-foreground); }
 /* D24 notices over the Scene view and the following chip. */
 .notice-stack { position:absolute; left:12px; bottom:12px; width:380px; gap:6px; }
-.notice { flex-direction:row; align-items:center; gap:8px; min-height:34px; padding-left:10px; padding-right:4px; border-radius:var(--radius-md); background:var(--menu-surface); border-width:1px; border-color:var(--separator-strong); }
+.notice { flex-direction:row; align-items:center; gap:8px; min-height:34px; padding-left:10px; padding-right:4px; border-radius:var(--radius-md); background:var(--menu-surface); border-width:1px; border-color:var(--separator-strong); font-size:13px; }
+.asset-job { height:auto; flex-direction:column; align-items:stretch; gap:4px; padding:6px; min-width:0px; flex-shrink:0; font-size:12px; }
 .notice-text { flex-grow:1; flex-shrink:1; flex-basis:0px; min-width:0px; overflow:hidden; white-space:normal; padding-top:6px; padding-bottom:6px; font-size:12px; color:var(--foreground); }
 .notice-action { height:22px; padding-left:8px; padding-right:8px; border-width:0px; border-radius:var(--radius-sm); background:var(--raised); color:var(--foreground); font-size:12px; }
 .notice-action:hover { background:var(--hover-surface); }

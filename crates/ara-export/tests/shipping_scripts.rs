@@ -36,7 +36,10 @@ fn runtime(scene: &PlayScene) -> ara_runtime::Result<Runtime> {
 
 #[test]
 fn exported_nativeaot_behaviour_runs_without_sources_and_rejects_stale_bindings() {
-    let target = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/shipping-scripts");
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target"))
+        .join("shipping-scripts");
     std::fs::create_dir_all(&target).unwrap();
     let scratch = tempfile::tempdir_in(&target).unwrap();
     let project = scratch.path().join("author");

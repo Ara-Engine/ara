@@ -103,10 +103,15 @@ impl Computed {
         }
         // Placed by `Ui::frame` (`popover`); a block keeps its rows at natural height
         // when the popover is clamped and scrolls.
-        let popover = matches!(tag, "popover" | "tooltip");
+        let popover = matches!(tag, "popover" | "tooltip" | "feedback");
         if popover {
             layout.display = Display::Block;
             layout.position = Position::Absolute;
+        }
+        // Inline status prose takes its natural height instead of shrinking to
+        // a neighboring control's fixed chrome height. Hosts own the rail width.
+        if tag == "banner" {
+            layout.flex_shrink = 0.0;
         }
         Self {
             layout,
@@ -438,6 +443,63 @@ mod tests {
             taffy::Dimension::length(0.)
         );
         assert!(Sheet::parse("panel { flex-basis:-1px; }").is_err());
+        Ok(())
+    }
+    #[test]
+    fn wrapping_native_action_rows_keep_every_button_reachable_after_resize() -> Result<()> {
+        struct Clipboard;
+        impl ara_ui_text::Clipboard for Clipboard {
+            fn read(&mut self) -> ara_ui_text::Result<String> {
+                Ok(String::new())
+            }
+            fn write(&mut self, _: &str) -> ara_ui_text::Result<()> {
+                Ok(())
+            }
+        }
+        assert!(Sheet::parse("panel { flex-wrap:invalid; }").is_err());
+        let mut text = ara_ui_text::TextSystem::bundled()?;
+        for wrap in ["wrap", "wrap-reverse"] {
+            let mut ui = crate::Ui::parse(
+                "<ui id='root'><panel id='actions'><button id='cancel' text='Cancel' action='Cancel' /><button id='keep' text='Keep' action='Keep' /></panel></ui>",
+                &format!(
+                    "ui {{width:100%;height:100%}} #actions {{width:100%;height:auto;flex-shrink:0;flex-direction:row;flex-wrap:{wrap};gap:6px}} button {{width:100px;height:24px;flex-shrink:0}}"
+                ),
+                [140., 160.],
+            )?;
+            ui.frame(&mut text)?;
+            let actions = ui.find("actions").expect("mounted action row");
+            let cancel = ui.find("cancel").expect("mounted Cancel button");
+            let keep = ui.find("keep").expect("mounted Keep button");
+            let bounds = ui.nodes[actions].rect;
+            let first = ui.nodes[cancel].rect;
+            let second = ui.nodes[keep].rect;
+            assert!((bounds.h - 54.).abs() < 0.5, "{wrap}: {bounds:?}");
+            assert!((first.y - second.y).abs() >= 29.5);
+            for rect in [first, second] {
+                assert!(rect.x >= bounds.x && rect.x + rect.w <= bounds.x + bounds.w);
+                assert!(rect.y >= bounds.y && rect.y + rect.h <= bounds.y + bounds.h);
+            }
+            let mut input = crate::input::InputState::default();
+            input.push(&mut ui, crate::source::stable_id("root"), None, false)?;
+            let point = [second.x + second.w * 0.5, second.y + second.h * 0.5];
+            let mut clipboard = Clipboard;
+            input.event(
+                &mut ui,
+                crate::input::InputEvent::PointerDown(point),
+                &mut clipboard,
+            )?;
+            input.event(
+                &mut ui,
+                crate::input::InputEvent::PointerUp(point),
+                &mut clipboard,
+            )?;
+            assert!(ui.drain_actions().any(|action| action.name == "Keep"));
+            ui.resize([300., 160.])?;
+            ui.frame(&mut text)?;
+            assert!((ui.nodes[cancel].rect.y - ui.nodes[keep].rect.y).abs() < 0.5);
+            assert!((ui.nodes[actions].rect.h - 24.).abs() < 0.5);
+            assert_eq!(ui.frame(&mut text)?, crate::Work::default());
+        }
         Ok(())
     }
     #[test]

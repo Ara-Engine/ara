@@ -68,6 +68,9 @@ impl Windowed {
     pub(crate) fn raw_events(&mut self) -> Result<Vec<Event>> {
         self.window.poll()
     }
+    pub(crate) fn ui_text_input(&self, enabled: bool) -> Result<()> {
+        self.window.set_text_input(enabled)
+    }
     pub(crate) fn window_size(&self) -> Result<[u32; 2]> {
         self.window.size()
     }
@@ -144,6 +147,21 @@ impl Windowed {
     /// Drains window events into `player`'s action injections for the next tick.
     /// Returns true when the user closed the window (Esc or the close button).
     pub fn events(&mut self, player: PlayerId) -> Result<(bool, Vec<Injection>)> {
+        let quit = self.poll_input()?;
+        Ok((quit, self.input.injections(player)))
+    }
+
+    pub(crate) fn view_events(
+        &mut self,
+        player: PlayerId,
+        spectator: bool,
+    ) -> Result<(bool, Vec<Injection>, Option<crate::input::Navigation>)> {
+        let quit = self.poll_input()?;
+        let (inputs, navigation) = self.input.for_view(player, spectator);
+        Ok((quit, inputs, navigation))
+    }
+
+    fn poll_input(&mut self) -> Result<bool> {
         let mut quit = false;
         for event in self.window.poll()? {
             match event {
@@ -161,6 +179,7 @@ impl Windowed {
                     scancode,
                     down: pressed,
                 }),
+                Event::FocusLost => self.input.apply(DeviceEvent::FocusLost),
                 Event::MouseButton { button, pressed } => {
                     self.input.apply(DeviceEvent::MouseButton {
                         button,
@@ -174,7 +193,7 @@ impl Windowed {
                 _ => {}
             }
         }
-        Ok((quit, self.input.injections(player)))
+        Ok(quit)
     }
 
     /// Renders and presents one extracted frame, recreating the swapchain on resize.

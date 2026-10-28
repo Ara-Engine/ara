@@ -7,6 +7,10 @@ pub(super) fn logical_event(event: Event, pixel_density: f32, dpi: f32) -> Event
             position: position.map(|v| v * scale),
             delta: delta.map(|v| v * scale),
         },
+        Event::FileDrop { path, position } => Event::FileDrop {
+            path,
+            position: position.map(|value| value * scale),
+        },
         other => other,
     }
 }

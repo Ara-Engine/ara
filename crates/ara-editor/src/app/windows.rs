@@ -1,14 +1,17 @@
-//! Floating OS windows for torn-off panels (D23): one SDL window, swapchain and
-//! UI target each, on the shared device. The layout owns them; this module keeps
+//! Floating OS windows for torn-off panels (D23): one SDL window and UI target
+//! each, plus presentation for visible hosts, on the shared device. The layout
+//! owns them; this module keeps
 //! the OS windows in step with it, routes their input through the shell's
 //! surfaces, tracks cross-window tab drags and persists moved window rects.
 use super::*;
+mod recovery;
 
 /// One floating panel window.
 pub(super) struct Float {
     pub id: String,
     pub window: Window,
-    pub present: Present,
+    /// Hidden offscreen hosts render to their UI target without presentation.
+    pub present: Option<Present>,
     pub sdl: u32,
     /// `NativeUi` render-target key; the main window is 0.
     pub key: u32,
@@ -27,25 +30,74 @@ pub(super) struct Floats {
     next_key: u32,
     light: Option<bool>,
 }
+/// The one native window displaying the retained Scene view.
+#[derive(Clone, Copy)]
+pub(super) struct SceneHost<'a> {
+    /// Floating window identity; `None` denotes the main window.
+    pub surface: Option<&'a str>,
+    /// Image and picking rectangle in the host's logical coordinates.
+    pub viewport: ara_ui::paint::Box2,
+    /// Native UI target sharing the Scene's registered image.
+    pub target: u32,
+    /// Physical pixels per logical pixel on the owning display.
+    pub dpi: f32,
+}
+
+/// Resolve the Scene's owning UI to its native target and display scale.
+/// The returned identity borrows the native windows, so the shell can be entered
+/// mutably while rendering overlays or forwarding input without copying an ID.
+pub(super) fn resolve_scene_host<'a>(
+    editor: &Editor,
+    shell: &Shell,
+    floats: &'a Floats,
+    main_dpi: f32,
+) -> Option<SceneHost<'a>> {
+    let (surface, viewport) = shell.scene_host()?;
+    match surface {
+        None => Some(SceneHost {
+            surface: None,
+            viewport,
+            target: 0,
+            dpi: main_dpi,
+        }),
+        Some(id) => {
+            let float = floats.windows.iter().find(|float| float.id == id)?;
+            if float.window.size().ok()?.contains(&0) {
+                return None;
+            }
+            Some(SceneHost {
+                surface: Some(float.id.as_str()),
+                viewport,
+                target: float.key,
+                dpi: float.window.display_scale().max(0.25) * ui_scale(editor),
+            })
+        }
+    }
+}
+
 /// Keep a rectangle reachable: if it does not overlap any display, centre it on `fallback`.
 pub(super) fn recover(rect: [i32; 4], displays: &[[i32; 4]], fallback: [i32; 4]) -> [i32; 4] {
+    let wide = rect.map(i64::from);
     let visible = displays.iter().any(|d| {
-        let overlap_x = (rect[0] + rect[2]).min(d[0] + d[2]) - rect[0].max(d[0]);
-        let overlap_y = (rect[1] + rect[3]).min(d[1] + d[3]) - rect[1].max(d[1]);
+        let d = d.map(i64::from);
+        let overlap_x = (wide[0] + wide[2]).min(d[0] + d[2]) - wide[0].max(d[0]);
+        let overlap_y = (wide[1] + wide[3]).min(d[1] + d[3]) - wide[1].max(d[1]);
         // At least a grabbable strip of the title bar must be on screen.
         overlap_x >= 64 && overlap_y >= 24
     });
     if visible || displays.is_empty() {
         return rect;
     }
-    let w = rect[2].min(fallback[2]);
-    let h = rect[3].min(fallback[3]);
+    let fallback = fallback.map(i64::from);
+    let w = wide[2].min(fallback[2]);
+    let h = wide[3].min(fallback[3]);
     [
         fallback[0] + (fallback[2] - w) / 2,
         fallback[1] + (fallback[3] - h) / 3,
         w,
         h,
     ]
+    .map(|value| value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32)
 }
 impl Floats {
     /// Create, restyle and destroy OS windows to match the layout's floating list.
@@ -67,10 +119,15 @@ impl Floats {
             .collect();
         for index in closing {
             let mut float = self.windows.remove(index);
-            // SAFETY: Wait for presentation before destroying its swapchain and surface.
-            unsafe {
-                renderer.gpu().wait_idle()?;
-                gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), &mut float.present);
+            if let Some(present) = float.present.as_mut() {
+                // SAFETY: Wait for presentation before destroying its swapchain and surface.
+                unsafe {
+                    renderer.gpu().wait_idle()?;
+                    gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), present);
+                }
+            } else {
+                // Offscreen targets have UI submissions, but no native presentation to retire.
+                gpu.wait_previous()?;
             }
             gpu.release_target(float.key);
             changed = true;
@@ -89,19 +146,30 @@ impl Floats {
                 )?;
             }
             let title = format!("{} · Ara", panel_titles(&spec.root));
-            let window = if self.hidden {
-                Window::floating_hidden(&title, rect, main)?
+            let created = if self.hidden {
+                Window::floating_hidden(&title, rect, main)
             } else {
-                Window::floating(&title, rect, main)?
+                Window::floating(&title, rect, main)
+            };
+            let window = match created {
+                Ok(window) => window,
+                Err(error) => {
+                    recovery::redock(editor, shell, spec, error.as_ref())?;
+                    changed = true;
+                    continue;
+                }
             };
             // Native icons are cosmetic; Wayland may not support them.
             let _ = window.set_icon_png(include_bytes!(
                 "../../../../assets/brand/icons/engine/ara-engine-64.png"
             ));
             crate::native::frame::style(window.raw(), editor.state.light);
-            // SAFETY: The shared device and the new window outlive this presentation.
-            let present =
-                unsafe { gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &window)? };
+            let present = if self.hidden {
+                None
+            } else {
+                // SAFETY: The shared device and the new window outlive this presentation.
+                Some(unsafe { gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &window)? })
+            };
             self.next_key += 1;
             let physical = window.size()?;
             let scale = window.display_scale().max(0.25) * ui_scale(editor);
@@ -174,9 +242,11 @@ impl Floats {
     /// Destroy every window's presentation after the device is idle.
     pub fn destroy(&mut self, renderer: &Renderer, gpu: &NativeUi) {
         for float in &mut self.windows {
-            // SAFETY: Called after device idle, before the windows are dropped.
-            unsafe {
-                gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), &mut float.present);
+            if let Some(present) = float.present.as_mut() {
+                // SAFETY: Called after device idle, before the windows are dropped.
+                unsafe {
+                    gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), present);
+                }
             }
         }
         self.windows.clear();
@@ -218,6 +288,16 @@ fn panel_titles(node: &ara_ui::docking::DockNode) -> String {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn extreme_saved_positions_recover_without_overflowing_desktop_arithmetic() {
+        let displays = [[0, 0, 1920, 1040]];
+        let main = [100, 100, 1440, 900];
+        for point in [i32::MIN, i32::MAX] {
+            let rect = super::recover([point, point, i32::MAX, i32::MAX], &displays, main);
+            assert!(rect[0] >= main[0] && rect[1] >= main[1]);
+            assert!(rect[2] <= main[2] && rect[3] <= main[3]);
+        }
+    }
     #[test]
     fn off_screen_windows_return_to_the_main_window() {
         let displays = [[0, 0, 1920, 1040]];

@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 ara-importers = { path = "../ara-importers" }
 ara-asset = { path = "../ara-asset" }
+ara-cmd.workspace = true
 ara-diag.workspace = true
 ara-doc.workspace = true
 ara-gpu = { path = "../ara-gpu" }

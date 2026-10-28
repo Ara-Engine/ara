@@ -1,6 +1,6 @@
 //! Dock drop zones and their transient preview; mutations use the layout protocol.
 use super::*;
-use ara_ui::{input::InputEvent, paint::Draw, source::stable_id};
+use ara_ui::{paint::Draw, source::stable_id};
 
 /// Where a dragged tab would land; tab indices count the remaining destination tabs.
 #[derive(Clone, Debug, PartialEq)]
@@ -183,7 +183,8 @@ impl Shell {
         };
         if self.drop_preview.is_none()
             && *surface == self.current
-            && (self.pointer[0] - start[0]).hypot(self.pointer[1] - start[1]) < 6.
+            && (self.pointer[0] - start[0]).hypot(self.pointer[1] - start[1])
+                < ara_ui::drag_drop::DRAG_THRESHOLD
         {
             return false;
         }
@@ -240,15 +241,9 @@ impl Shell {
     /// Release capture in the source window too, even when the drop closes it.
     pub(crate) fn release_tab_capture(
         &mut self,
-        clipboard: &mut dyn ara_ui_text::Clipboard,
+        _clipboard: &mut dyn ara_ui_text::Clipboard,
     ) -> ara_ui::Result<()> {
-        self.input
-            .event(&mut self.ui, InputEvent::Cancel, clipboard)?;
-        for surface in &mut self.floats {
-            surface
-                .input
-                .event(&mut surface.ui, InputEvent::Cancel, clipboard)?;
-        }
+        self.cancel_pointer_capture();
         self.invalidate_dock_drag();
         Ok(())
     }
@@ -302,13 +297,12 @@ impl Shell {
                 )?;
             }
             DropTarget::Float => {
-                if panel == "scene" {
-                    return Err(
-                        "The Scene viewport stays in the main window; float tool panels and graphs"
-                            .into(),
-                    );
-                }
-                let rect = rect.unwrap_or_else(|| self.float_rect([420, 560]));
+                let size = if panel == "scene" {
+                    [960, 640]
+                } else {
+                    [420, 560]
+                };
+                let rect = rect.unwrap_or_else(|| self.float_rect(size));
                 editor.action(
                     "editor.layout.move",
                     json!({"panel": panel, "slot": "float", "rect": rect}),
@@ -331,6 +325,9 @@ impl Shell {
 
     /// Keep the dragged tab's label next to the pointer on the destination surface.
     pub(super) fn sync_tab_ghost(&mut self) -> ara_ui::Result<()> {
+        if self.content_pending() {
+            return self.sync_content_ghost();
+        }
         let Some(i) = self.ui.find("drop-label") else {
             return Ok(());
         };
@@ -351,41 +348,16 @@ impl Shell {
                 let title = panels::title(panel);
                 self.ui.set_text(t, title)?;
             }
-            if let Some(icon) = self.ui.find("drop-label-icon")
-                && let Some(Drag::Tab { panel, .. }) = &self.drag
-            {
-                let name = panels::panel_icon(panel);
-                let node = &mut self.ui.nodes[icon];
-                if node
-                    .element
-                    .attrs
-                    .get("src")
-                    .and_then(|s| s.strip_prefix("icon-"))
-                    != Some(name)
-                {
-                    node.element
-                        .attrs
-                        .insert("src".into(), format!("icon-{name}"));
-                    node.dirty.paint = true;
-                }
-            }
-            let node = &mut self.ui.nodes[i];
-            let x = (self.pointer[0] + 14.).clamp(0., (self.ui.size[0] - 140.).max(0.));
-            let y = (self.pointer[1] + 18.).clamp(0., (self.ui.size[1] - 28.).max(0.));
-            let offset = [
-                x - (node.rect.x - node.paint_offset[0]),
-                y - (node.rect.y - node.paint_offset[1]),
-            ];
-            if offset != node.paint_offset {
-                node.paint_offset = offset;
-                node.dirty.paint = true;
-            }
+            self.ui.place_feedback(i, self.pointer, None)?;
         }
         Ok(())
     }
 
     /// Carets and split rectangles sit above panel contents and below popups.
     pub(super) fn paint_drop_preview(&mut self) {
+        self.paint_marquee();
+        self.paint_content_drag();
+        self.paint_file_drag();
         let Some(preview) = self
             .drop_preview
             .as_ref()
@@ -444,6 +416,9 @@ impl Shell {
     }
 }
 
+#[cfg(test)]
+#[path = "scene_detach_tests.rs"]
+mod scene_detach_tests;
 #[cfg(test)]
 #[path = "dock_drag_tests.rs"]
 mod tests;

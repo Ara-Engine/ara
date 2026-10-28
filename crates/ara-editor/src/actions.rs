@@ -10,8 +10,11 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::sync::mpsc::Sender;
 
+mod camera_bookmarks;
 mod extensions;
+mod framing;
 mod params;
+pub(crate) use framing::PendingFrame;
 use params::*;
 
 pub(crate) struct EditorService {
@@ -21,6 +24,14 @@ pub(crate) struct EditorService {
     pub controls: Sender<Control>,
     /// The scenes' resolution kept current across edits, for selection and framing.
     pub resolver: crate::world::SceneResolver,
+    /// Worker-prepared local bounds; navigation never reads cooked payloads on the UI thread.
+    pub bounds: crate::world::bounds::ModelBounds,
+    /// Store/publication/document-set identity last tracked by the bounds worker.
+    pub bounds_key: Option<(u64, u64, u64)>,
+    /// One explicit pending Frame per caller, cancelled if that caller navigates meanwhile.
+    pub pending_frames: std::collections::BTreeMap<String, PendingFrame>,
+    /// Last human Scene viewport aspect ratio; protocol callers may override it per Frame.
+    pub frame_aspect: f32,
     pub extensions: crate::extensions::Extensions,
 }
 pub(crate) enum Control {
@@ -117,8 +128,10 @@ impl Service for EditorService {
             Method::new::<EditorCamera>(
                 db,
                 "editor.camera",
-                "Read or set the Scene view camera: orbit pose and vertical field of view, or look through a scene Camera entity (`entity`). Returns `camera`.",
+                "Read or set the Scene camera: orbit pose, perspective/orthographic projection and lens, or look through a scene Camera entity. Returns `camera`.",
             ),
+            Method::new::<EditorCameraBookmark>(db,"editor.camera.bookmark",
+                "List, save, recall or delete named per-scene camera views through attributed navigation ops; agent recall leaves the human's view alone."),
             Method::new::<EditorSceneOpen>(
                 db,
                 "editor.scene.open",
@@ -186,7 +199,7 @@ impl Service for EditorService {
             Method::new::<EditorSettingsSet>(
                 db,
                 "editor.settings.set",
-                "Set or reset a setting as an undoable, attributed edit; project scope writes ara.project.json.",
+                "Set or reset a setting as an undoable, attributed edit; project policy enters Host history and persistence.",
             ),
             Method::new::<EditorSettingsUndo>(
                 db,
@@ -248,6 +261,7 @@ impl Service for EditorService {
             .collect()
     }
     fn call(&mut self, cx: &mut Cx<'_>, method: &str, params: Value) -> R {
+        self.reconcile_project_settings(cx);
         let result = self.dispatch(cx, method, params);
         self.report_layout_notice(cx);
         // Preferences and layouts that could not be written are warnings on the bus,
@@ -264,10 +278,20 @@ impl Service for EditorService {
     }
     fn tick(&mut self, cx: &mut Cx<'_>) {
         self.tick_extensions(cx);
+        self.reconcile_project_settings(cx);
         self.report_layout_notice(cx);
+        self.poll_bounds(cx);
     }
 }
 impl EditorService {
+    /// Publish canonical project policy without navigating or producing a new op.
+    fn reconcile_project_settings(&mut self, cx: &Cx<'_>) {
+        if self.settings.reconcile_project(cx.store()) {
+            sync_settings(&mut self.navigation.state, &self.settings);
+            let _ = self.changes.send(self.navigation.state.clone());
+        }
+    }
+
     /// A migration is informational and must be visible even before the first UI command.
     fn report_layout_notice(&mut self, cx: &mut Cx<'_>) {
         if self.navigation.take_layout_notice() {
@@ -317,6 +341,13 @@ impl EditorService {
                 assets_show_all: false,
                 game: (true, "free", false),
                 starting: false,
+                pilot: false,
+                probe_capture_blocker: Some(
+                    "Probe availability is reported by the active editor window",
+                ),
+                probe_cancel_blocker: Some(
+                    "Capture cancellation requires the owning editor window",
+                ),
                 // The window's build job is not visible here; the project's state is.
                 build: crate::shell::commands::BuildState {
                     running: false,
@@ -401,7 +432,11 @@ impl EditorService {
         let separate = agent.is_some()
             && matches!(
                 method,
-                "editor.select" | "editor.camera" | "editor.frame" | "editor.scene.open"
+                "editor.select"
+                    | "editor.camera"
+                    | "editor.camera.bookmark"
+                    | "editor.frame"
+                    | "editor.scene.open"
             );
         let human = separate.then(|| (state.doc.clone(), state.selection.clone(), state.camera));
         if separate
@@ -412,6 +447,8 @@ impl EditorService {
             state.selection = presence.selection.clone();
             state.camera = presence.camera;
         }
+        let mut framing_pending = false;
+        let mut bookmark_result = None;
         match method {
             "editor.canvas" => {
                 let p: EditorCanvas = parse(params)?;
@@ -436,11 +473,121 @@ impl EditorService {
             }
             "editor.workspace" => {
                 let p: EditorWorkspace = parse(params)?;
+                let open_assets = p.open_favourite.is_some() || p.open_search.is_some();
+                if let Some(query) = p.asset_query {
+                    if query.chars().count() > 4096 {
+                        return Err(vec![crate::invalid(
+                            "Use an Assets query up to 4096 characters",
+                        )]);
+                    }
+                    state.searches.insert("assets".into(), query);
+                }
+                if let Some(folder_only) = p.folder_only {
+                    state.asset_search_folder_only = folder_only;
+                }
                 if let Some(path) = p.asset {
                     state.asset_path = (!path.is_empty()).then_some(path);
                 }
                 if let Some(folder) = p.folder {
                     state.asset_folder = folder;
+                }
+                if let Some(path) = p.favourite {
+                    let folder = p.favourite_folder.unwrap_or(false);
+                    if !crate::state::valid_asset_bookmark_path(&path, folder) {
+                        return Err(vec![crate::invalid(
+                            "Choose a project-relative storage path for the favourite",
+                        )]);
+                    }
+                    let enabled = p
+                        .favourite_enabled
+                        .unwrap_or_else(|| !state.asset_favourites.contains_key(&path));
+                    if enabled {
+                        state.asset_favourites.insert(
+                            path,
+                            if folder {
+                                crate::state::AssetFavouriteKind::Folder
+                            } else {
+                                crate::state::AssetFavouriteKind::Asset
+                            },
+                        );
+                    } else {
+                        state.asset_favourites.remove(&path);
+                    }
+                }
+                if let Some(name) = p.save_search {
+                    let name = name.trim();
+                    if !crate::state::valid_asset_search_name(name) {
+                        return Err(vec![crate::invalid(
+                            "Use a saved search name from 1 to 80 characters",
+                        )]);
+                    }
+                    let search = p
+                        .saved_search
+                        .unwrap_or_else(|| crate::state::SavedAssetSearch {
+                            query: state.searches.get("assets").cloned().unwrap_or_default(),
+                            folder: state.asset_folder.clone(),
+                            folder_only: state.asset_search_folder_only,
+                        });
+                    if !crate::state::valid_asset_bookmark_path(&search.folder, true)
+                        || search.query.chars().count() > 4096
+                    {
+                        return Err(vec![crate::invalid(
+                            "Choose a project-relative search folder and a query up to 4096 characters",
+                        )]);
+                    }
+                    state.asset_saved_searches.insert(name.to_owned(), search);
+                } else if p.saved_search.is_some() {
+                    return Err(vec![crate::invalid(
+                        "Pair an explicit savedSearch with its saveSearch name",
+                    )]);
+                }
+                if let Some(name) = p.remove_search
+                    && state.asset_saved_searches.remove(&name).is_none()
+                {
+                    return Err(vec![crate::invalid(
+                        "That saved Assets search no longer exists",
+                    )]);
+                }
+                if let Some(path) = p.open_favourite {
+                    let kind =
+                        state.asset_favourites.get(&path).copied().ok_or_else(|| {
+                            vec![crate::invalid("That favourite no longer exists")]
+                        })?;
+                    state.searches.insert("assets".into(), String::new());
+                    match kind {
+                        crate::state::AssetFavouriteKind::Folder => {
+                            state.asset_folder = path;
+                            state.asset_path = None;
+                        }
+                        crate::state::AssetFavouriteKind::Asset => {
+                            state.asset_folder = path
+                                .rsplit_once('/')
+                                .map_or("", |(folder, _)| folder)
+                                .into();
+                            state.asset_path = Some(path);
+                        }
+                    }
+                }
+                if let Some(name) = p.open_search {
+                    let search = state.asset_saved_searches.get(&name).ok_or_else(|| {
+                        vec![crate::invalid("That saved Assets search no longer exists")]
+                    })?;
+                    state.asset_folder = search.folder.clone();
+                    state.asset_search_folder_only = search.folder_only;
+                    state.searches.insert("assets".into(), search.query.clone());
+                }
+                if open_assets {
+                    let mut dock = state.dock().map_err(ui_error)?;
+                    crate::state::show_panel(&mut dock, "assets", None).map_err(ui_error)?;
+                    state.set_dock(&dock);
+                    state.focus = "assets".into();
+                    if state
+                        .maximized
+                        .as_deref()
+                        .is_some_and(|panel| panel != "assets")
+                    {
+                        state.maximized = None;
+                    }
                 }
                 if let Some(width) = p.sidebar_width {
                     state.asset_sidebar_width = width.clamp(96., 480.);
@@ -539,12 +686,12 @@ impl EditorService {
                             .ok_or_else(|| vec![crate::invalid("give a value, or reset: true")])?,
                     )
                 };
-                self.settings.set(&p.key, value, author(cx))?;
+                self.settings.set_with_host(cx, &p.key, value)?;
                 sync_settings(&mut state, &self.settings);
             }
             "editor.settings.undo" => {
                 let p: EditorSettingsUndo = parse(params)?;
-                self.settings.undo(&author(cx), p.redo.unwrap_or(false))?;
+                self.settings.undo_with_host(cx, p.redo.unwrap_or(false))?;
                 sync_settings(&mut state, &self.settings);
             }
             "editor.settings.view" => {
@@ -656,20 +803,39 @@ impl EditorService {
                     }
                     "editor.layout.close" => {
                         if p.panel == "scene" {
-                            return Err(vec![crate::invalid("the Scene view cannot be closed")]);
+                            fn contains(node: &DockNode, panel: &str) -> bool {
+                                match node {
+                                    DockNode::Area { tabs, .. } => {
+                                        tabs.iter().any(|tab| tab == panel)
+                                    }
+                                    DockNode::Split { first, second, .. } => {
+                                        contains(first, panel) || contains(second, panel)
+                                    }
+                                }
+                            }
+                            if !dock
+                                .floating()
+                                .iter()
+                                .any(|window| contains(&window.root, "scene"))
+                            {
+                                return Err(vec![crate::invalid(
+                                    "the main Scene view cannot be closed",
+                                )]);
+                            }
+                            crate::state::move_panel(&mut dock, "scene", "view")
+                                .map_err(ui_error)?;
+                            dock.expand_panel("scene");
+                            dock.activate("scene").map_err(ui_error)?;
+                            state.focus = "scene".into();
+                        } else {
+                            dock.close(&p.panel).map_err(ui_error)?;
                         }
-                        dock.close(&p.panel).map_err(ui_error)?;
                         if state.maximized.as_deref() == Some(p.panel.as_str()) {
                             state.maximized = None;
                         }
                     }
                     _ => match p.slot.as_deref() {
                         Some("float") => {
-                            if p.panel == "scene" {
-                                return Err(vec![crate::invalid(
-                                    "the Scene viewport stays in the main window",
-                                )]);
-                            }
                             dock_float(
                                 &mut dock,
                                 &p.panel,
@@ -739,7 +905,15 @@ impl EditorService {
                         .find(&doc)
                         .ok_or_else(|| vec![crate::invalid("document not found")])?
                         .to_string();
-                    open_scene(&mut state, cx, &mut self.resolver, d, agent.is_none())?;
+                    open_scene(
+                        &mut state,
+                        cx,
+                        &mut self.resolver,
+                        &self.bounds,
+                        self.frame_aspect,
+                        d,
+                        agent.is_none(),
+                    )?;
                 }
                 let resolved = self.resolver.resolve(cx.store(), &state.doc)?;
                 for entity in &p.entities {
@@ -769,16 +943,25 @@ impl EditorService {
             "editor.camera" => {
                 let p: EditorCamera = parse(params)?;
                 let numbers = p.target.into_iter().flatten().chain(
-                    [p.yaw, p.pitch, p.distance, p.fov_y_degrees]
-                        .into_iter()
-                        .flatten(),
+                    [
+                        p.yaw,
+                        p.pitch,
+                        p.distance,
+                        p.fov_y_degrees,
+                        p.orthographic_height,
+                    ]
+                    .into_iter()
+                    .flatten(),
                 );
-                if numbers.clone().any(|x| !x.is_finite()) || p.distance.is_some_and(|d| d <= 0.) {
+                if numbers.clone().any(|x| !x.is_finite())
+                    || p.distance.is_some_and(|d| d <= 0.)
+                    || p.orthographic_height.is_some_and(|height| height <= 0.)
+                {
                     return Err(vec![crate::invalid(
-                        "camera values must be finite; distance must be positive",
+                        "camera values must be finite; distance and orthographic height must be positive",
                     )]);
                 }
-                if p.entity.is_none() && numbers.count() == 0 {
+                if p.entity.is_none() && p.projection.is_none() && numbers.count() == 0 {
                     return Ok(json!({"camera": state.camera}));
                 }
                 let camera = &mut state.camera;
@@ -803,15 +986,75 @@ impl EditorService {
                 if let Some(fov) = p.fov_y_degrees {
                     camera.set_fov(fov);
                 }
+                if let Some(projection) = p.projection {
+                    camera.set_projection(projection);
+                }
+                if let Some(height) = p.orthographic_height {
+                    camera.orthographic_height = height.clamp(0.01, 1_000_000.);
+                }
+                if !camera.is_valid() {
+                    return Err(vec![crate::invalid(
+                        "Camera pose cannot produce a finite, nonzero view",
+                    )]);
+                }
+            }
+            "editor.camera.bookmark" => {
+                let p: EditorCameraBookmark = parse(params)?;
+                let read = matches!(p.action, CameraBookmarkAction::List);
+                let result = camera_bookmarks::run(&mut state, cx, p, agent.is_none())?;
+                if read {
+                    return Ok(result);
+                }
+                bookmark_result = Some(result);
             }
             "editor.frame" => {
                 let p: EditorFrame = parse(params)?;
-                if p.opening == Some(true) {
-                    let resolved = self.resolver.resolve(cx.store(), &state.doc)?;
-                    let transforms = crate::world::world_transforms(&resolved);
-                    state.camera = crate::view_camera::opening(&resolved, &transforms);
+                let aspect = p.aspect.unwrap_or(self.frame_aspect);
+                if !aspect.is_finite() || !(0.001..=1000.).contains(&aspect) {
+                    return Err(vec![crate::invalid(
+                        "Frame aspect ratio must be finite and positive",
+                    )]);
+                }
+                if agent.is_none() {
+                    self.frame_aspect = aspect;
+                }
+                let all = p.all.unwrap_or(false);
+                let opening = p.opening.unwrap_or(false);
+                let resolved = self.resolver.resolve(cx.store(), &state.doc)?;
+                self.bounds.track(&resolved, cx.store().workspace());
+                let selection = if all || opening {
+                    &[][..]
                 } else {
-                    frame(&mut state, cx, &mut self.resolver)?;
+                    &state.selection
+                };
+                let transforms = crate::world::world_transforms(&resolved);
+                let has_gameplay =
+                    opening && crate::view_camera::gameplay(&resolved, &transforms).is_some();
+                if !has_gameplay && !self.bounds.settled(&resolved, selection) {
+                    self.pending_frames.insert(
+                        p.session,
+                        PendingFrame::new(&state, opening, all, aspect, agent.is_some()),
+                    );
+                    framing_pending = true;
+                } else {
+                    self.pending_frames.remove(&p.session);
+                    if opening {
+                        state.camera = crate::view_camera::opening_with_models(
+                            &resolved,
+                            &transforms,
+                            &self.bounds,
+                            aspect,
+                        );
+                    } else {
+                        frame(
+                            &mut state,
+                            cx,
+                            &mut self.resolver,
+                            &self.bounds,
+                            aspect,
+                            all,
+                        )?;
+                    }
                 }
             }
             "editor.scene.open" => {
@@ -835,7 +1078,28 @@ impl EditorService {
                         p.scene
                     ))]);
                 }
-                open_scene(&mut state, cx, &mut self.resolver, id, agent.is_none())?;
+                let first = state.doc != id && !state.scene_cameras.contains_key(&id);
+                let resolved = self.resolver.resolve(cx.store(), &id)?;
+                self.bounds.track(&resolved, cx.store().workspace());
+                open_scene(
+                    &mut state,
+                    cx,
+                    &mut self.resolver,
+                    &self.bounds,
+                    self.frame_aspect,
+                    id,
+                    agent.is_none(),
+                )?;
+                let transforms = crate::world::world_transforms(&resolved);
+                if first
+                    && crate::view_camera::gameplay(&resolved, &transforms).is_none()
+                    && !self.bounds.settled(&resolved, &[])
+                {
+                    self.pending_frames.insert(
+                        p.session,
+                        PendingFrame::new(&state, true, true, self.frame_aspect, agent.is_some()),
+                    );
+                }
             }
             "editor.theme" => {
                 let p: EditorTheme = parse(params)?;
@@ -856,10 +1120,17 @@ impl EditorService {
             }
             "editor.layout" => {
                 let p: EditorLayout = parse(params)?;
+                if p.window.is_some() && p.ratio.is_none() {
+                    return Err(vec![crate::invalid("window requires a splitter ratio")]);
+                }
                 let mut dock = state.dock().map_err(ui_error)?;
                 if let Some(ratio) = p.ratio {
-                    dock.resize_split(p.path.as_deref().unwrap_or(&[]), ratio)
-                        .map_err(ui_error)?;
+                    dock.resize_split_in(
+                        p.window.as_deref(),
+                        p.path.as_deref().unwrap_or(&[]),
+                        ratio,
+                    )
+                    .map_err(ui_error)?;
                 } else if let Some(panel) = p.panel {
                     state.focus = panel.clone();
                     if let Some(area) = p.area {
@@ -976,6 +1247,13 @@ impl EditorService {
         if method == "editor.camera" {
             result["camera"] = json!(viewed);
         }
+        if let Some(bookmark) = bookmark_result {
+            result["bookmark"] = bookmark;
+            result["camera"] = json!(viewed);
+        }
+        if method == "editor.frame" {
+            result["framingPending"] = json!(framing_pending);
+        }
         self.changes
             .send(self.navigation.state.clone())
             .map_err(|_| vec![crate::invalid("editor window has closed")])?;
@@ -1050,13 +1328,19 @@ fn frame(
     state: &mut EditorState,
     cx: &mut Cx,
     resolver: &mut crate::world::SceneResolver,
+    models: &crate::world::bounds::ModelBounds,
+    aspect: f32,
+    all: bool,
 ) -> Result<(), Vec<Diagnostic>> {
     let resolved = resolver.resolve(cx.store(), &state.doc)?;
     let transforms = crate::world::world_transforms(&resolved);
-    if let Some(bounds) =
-        crate::view_camera::framing_bounds(&resolved, &transforms, &state.selection)
-    {
-        crate::view_camera::fit(&mut state.camera, bounds);
+    if let Some(bounds) = crate::view_camera::framing_bounds_with_models(
+        &resolved,
+        &transforms,
+        if all { &[] } else { &state.selection },
+        models,
+    ) {
+        crate::view_camera::fit_aspect(&mut state.camera, bounds, aspect);
     }
     Ok(())
 }
@@ -1094,6 +1378,8 @@ fn open_scene(
     state: &mut EditorState,
     cx: &mut Cx,
     resolver: &mut crate::world::SceneResolver,
+    models: &crate::world::bounds::ModelBounds,
+    aspect: f32,
     doc: String,
     human: bool,
 ) -> Result<(), Vec<Diagnostic>> {
@@ -1106,7 +1392,8 @@ fn open_scene(
             None => {
                 let resolved = resolver.resolve(cx.store(), &doc)?;
                 let transforms = crate::world::world_transforms(&resolved);
-                state.camera = crate::view_camera::opening(&resolved, &transforms);
+                state.camera =
+                    crate::view_camera::opening_with_models(&resolved, &transforms, models, aspect);
             }
         }
     }

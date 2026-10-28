@@ -120,6 +120,16 @@ impl Encoder {
                         unavailable("codec stage must live under its immutable cook key")
                     })?
                     .to_owned();
+                if let Some(metal) = &mut stage.metal {
+                    for path in [&mut metal.metallib, &mut metal.reflection] {
+                        *path = path
+                            .strip_prefix(&prefix)
+                            .ok_or_else(|| {
+                                unavailable("codec stage must live under its immutable cook key")
+                            })?
+                            .to_owned();
+                    }
+                }
             }
             // This directory contains immutable stage artifacts, no mutable
             // pipeline manifests. Development hot reload cannot retarget an

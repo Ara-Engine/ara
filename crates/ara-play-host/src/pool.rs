@@ -28,7 +28,7 @@ pub struct Player {
     /// Opaque lifetime, independent of PID reuse or reconnect timing.
     pub(crate) incarnation: String,
     /// Owned child; killed on drop.
-    pub child: Child,
+    pub child: crate::group::ChildHandle,
     /// Live link.
     pub link: Pump,
     /// Its hello (pid, window, init time, UDP address).
@@ -47,6 +47,77 @@ pub struct Player {
     pub embed: Vec<crate::embed::Notice>,
     /// Bounded private profiling replies, decoded away from the host tick.
     pub(crate) profiling: Vec<Value>,
+    /// Bounded nonblocking service requests; replies survive ordinary heartbeat polling.
+    pub(crate) replies: Replies,
+}
+
+#[derive(Default)]
+pub(crate) struct Replies(std::collections::BTreeMap<u64, Option<Result<Value, Value>>>);
+impl Replies {
+    fn reserve(&mut self, id: u64) -> bool {
+        if self.0.len() >= 64 {
+            return false;
+        }
+        self.0.insert(id, None);
+        true
+    }
+    fn observe(&mut self, message: &Message) {
+        if let Message::Response { id, result } = message
+            && let Some(id) = id.as_u64()
+            && let Some(reply) = self.0.get_mut(&id)
+        {
+            *reply = Some(result.clone());
+        }
+    }
+    fn take(&mut self, id: u64) -> Option<Result<Value, Value>> {
+        let reply = self.0.get_mut(&id)?.take()?;
+        self.0.remove(&id);
+        Some(reply)
+    }
+}
+
+#[cfg(test)]
+mod reply_tests {
+    use super::*;
+    #[test]
+    fn out_of_order_job_replies_survive_polling_and_are_taken_once() {
+        let mut replies = Replies::default();
+        assert!(replies.reserve(1));
+        assert!(replies.reserve(2));
+        replies.observe(&Message::Response {
+            id: json!(2),
+            result: Ok(json!({"tick":42})),
+        });
+        replies.observe(&Message::Response {
+            id: json!(99),
+            result: Ok(json!("unsolicited")),
+        });
+        assert!(replies.take(1).is_none());
+        assert_eq!(replies.take(2), Some(Ok(json!({"tick":42}))));
+        assert!(replies.take(2).is_none());
+        assert_eq!(replies.0.len(), 1);
+        replies.observe(&Message::Response {
+            id: json!(1),
+            result: Err(json!({"message":"rejected"})),
+        });
+        assert_eq!(replies.take(1), Some(Err(json!({"message":"rejected"}))));
+        assert!(replies.0.is_empty());
+    }
+    #[test]
+    fn mailbox_is_bounded_and_canceled_requests_cannot_reappear() {
+        let mut replies = Replies::default();
+        for id in 0..64 {
+            assert!(replies.reserve(id));
+        }
+        assert!(!replies.reserve(64));
+        replies.0.remove(&12);
+        replies.observe(&Message::Response {
+            id: json!(12),
+            result: Ok(Value::Null),
+        });
+        assert_eq!(replies.0.len(), 63);
+        assert!(replies.reserve(64));
+    }
 }
 
 impl Drop for Player {
@@ -76,6 +147,7 @@ impl Player {
     /// Handles a non-response message (heartbeats); anything arriving counts as alive.
     pub fn observe(&mut self, message: &Message) {
         self.seen = Instant::now();
+        self.replies.observe(message);
         if let Message::Notification { method, params } = message {
             if method == STATUS {
                 self.status = serde_json::from_value(params.clone()).ok();
@@ -116,6 +188,40 @@ impl Player {
         timeout: Duration,
     ) -> Result<Result<Value, Value>, Value> {
         self.call_checked(method, params, timeout, || Ok(()))
+    }
+
+    /// Queue a request without waiting for its player tick or response. `check`
+    /// keeps its bounded reply alive alongside heartbeats and embedded frame notices.
+    pub(crate) fn request(&mut self, method: &str, params: &Value) -> Result<u64, Value> {
+        if self.replies.0.len() >= 64 {
+            return Err(error(
+                -32000,
+                "too many pending player requests",
+                Value::Null,
+            ));
+        }
+        let id = self
+            .link
+            .request(method, params)
+            .map_err(|problem| error(-32000, problem.to_string(), Value::Null))?;
+        if !self.replies.reserve(id) {
+            return Err(error(
+                -32000,
+                "too many pending player requests",
+                Value::Null,
+            ));
+        }
+        if let Err(problem) = self.link.flush() {
+            self.replies.0.remove(&id);
+            return Err(error(-32000, problem.to_string(), Value::Null));
+        }
+        Ok(id)
+    }
+    pub(crate) fn response(&mut self, id: u64) -> Option<Result<Value, Value>> {
+        self.replies.take(id)
+    }
+    pub(crate) fn forget_request(&mut self, id: u64) {
+        self.replies.0.remove(&id);
     }
 
     /// Startup-only cancellable wait. Ordinary calls retain their synchronous contract.
@@ -178,7 +284,7 @@ impl Player {
 
     /// Drains heartbeats; returns a fault if the player died or hung.
     pub fn check(&mut self) -> Option<Value> {
-        loop {
+        for _ in 0..256 {
             match self.link.poll() {
                 Ok(Some(message)) => self.observe_owned(message),
                 Ok(None) => break,
@@ -206,26 +312,47 @@ impl Player {
             .find_map(|l| l.strip_prefix(CRASH_PREFIX))
             .and_then(|json| serde_json::from_str::<CrashReport>(json).ok());
         let code = status.code().map(|c| c as u32);
-        let kind = match (&report, code) {
-            (Some(r), _) if r.kind == "panic" => "player_panicked",
-            (Some(_), _) => "player_crashed",
-            (None, Some(0)) => "player_exited",
-            (None, Some(c)) if c >= 0xC000_0000 => "player_crashed",
-            _ => "player_exited",
-        };
+        let signal = exit_signal(status);
+        let kind = classify(report.as_ref(), code, signal);
         Some(json!({
             "code": kind,
-            "message": match &report {
-                Some(r) => format!("{kind}: {} at {}", r.message, r.location),
-                None => format!("{kind}: exit code {code:?}"),
+            "message": match (&report, signal) {
+                (Some(r), _) => format!("{kind}: {} at {}", r.message, r.location),
+                (None, Some(s)) => format!("{kind}: killed by signal {s}"),
+                (None, None) => format!("{kind}: exit code {code:?}"),
             },
             "exitCode": code.map(|c| format!("0x{c:08X}")),
+            "signal": signal,
             "cause": report,
             "lastTick": self.status.as_ref().map(|s| s.tick),
             "stderrTail": tail,
             "pid": self.hello.pid,
             "actions": [{"id": "restart", "title": "Restart play from the same snapshot"}],
         }))
+    }
+}
+
+/// The signal that ended a Unix process, which then has no exit code. Windows exits
+/// always carry a code (an NTSTATUS for an exception).
+fn exit_signal(status: std::process::ExitStatus) -> Option<i32> {
+    #[cfg(unix)]
+    return std::os::unix::process::ExitStatusExt::signal(&status);
+    #[cfg(not(unix))]
+    {
+        let _ = status;
+        None
+    }
+}
+
+/// Fault code for an ended player. Its crash report decides first; otherwise a Unix
+/// signal death (SIGSEGV, SIGABRT, ...) or a Windows NTSTATUS exception code is a
+/// crash, and anything else an exit.
+fn classify(report: Option<&CrashReport>, code: Option<u32>, signal: Option<i32>) -> &'static str {
+    match (report, code, signal) {
+        (Some(r), _, _) if r.kind == "panic" => "player_panicked",
+        (Some(_), _, _) | (None, _, Some(_)) => "player_crashed",
+        (None, Some(c), None) if c >= 0xC000_0000 => "player_crashed",
+        _ => "player_exited",
     }
 }
 
@@ -306,6 +433,42 @@ pub struct Pool {
 }
 
 impl Pool {
+    #[cfg(test)]
+    pub(crate) fn with_idle(
+        config: PoolConfig,
+        token: String,
+        idle: Vec<Player>,
+    ) -> std::io::Result<Self> {
+        let mut pool = Self::new(config, token)?;
+        pool.idle = idle;
+        Ok(pool)
+    }
+    /// Launch independently owned headless/embedded player worlds in one process.
+    /// Each has a separate authenticated link, runtime, inputs and shared GPU surface.
+    pub fn take_shared(&mut self, count: usize, timeout: Duration) -> Result<Vec<Player>, String> {
+        self.take_shared_checked(count, timeout, || Ok(()))
+    }
+    pub(crate) fn take_shared_checked(
+        &mut self,
+        count: usize,
+        timeout: Duration,
+        check: impl FnMut() -> Result<(), &'static str>,
+    ) -> Result<Vec<Player>, String> {
+        self.next += 1;
+        let request = crate::group::Request {
+            name: format!("shared{}", self.next),
+            count,
+            timeout,
+        };
+        crate::group::spawn(
+            &self.config,
+            &self.token,
+            self.scripts.as_ref(),
+            self.rendering,
+            request,
+            check,
+        )
+    }
     /// Binds the live-link listener on 127.0.0.1 and starts filling the pool.
     pub fn new(config: PoolConfig, token: String) -> std::io::Result<Self> {
         Self::with_scripts(config, token, None)
@@ -592,7 +755,7 @@ impl Pool {
         };
         Ok(Player {
             incarnation: ara_doc::IdGen::from_entropy().asset_id("ps").to_string(),
-            child: spawn.child,
+            child: spawn.child.into(),
             link,
             hello,
             log: spawn.log,
@@ -602,6 +765,7 @@ impl Pool {
             events: Vec::new(),
             embed: Vec::new(),
             profiling: Vec::new(),
+            replies: Default::default(),
         })
     }
 
@@ -655,5 +819,30 @@ impl Pool {
         }
         // No refill here: the host tick refills after Play has started.
         Ok(taken)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_signal_death_is_a_crash() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+            // A raw wait status of 6 is "terminated by SIGABRT", what abort() leaves.
+            let aborted = std::process::ExitStatus::from_raw(6);
+            assert_eq!(aborted.code(), None);
+            assert_eq!(exit_signal(aborted), Some(6));
+            assert_eq!(
+                exit_signal(std::process::ExitStatus::from_raw(1 << 8)),
+                None
+            );
+        }
+        assert_eq!(classify(None, None, Some(6)), "player_crashed");
+        assert_eq!(classify(None, Some(0xC000_0005), None), "player_crashed");
+        assert_eq!(classify(None, Some(0), None), "player_exited");
+        assert_eq!(classify(None, Some(1), None), "player_exited");
     }
 }

@@ -13,8 +13,47 @@ pub(crate) enum Dialog {
     },
     /// Name a layout to save under `.ara/layouts`.
     SaveLayout { name: String },
+    /// Read-only background inventory, followed by an explicit module/IDE choice.
+    ScriptModules {
+        paths: Vec<String>,
+        selected: Option<String>,
+        pending: bool,
+        error: Option<String>,
+    },
 }
 impl Dialog {
+    /// Review an external tool fix without starting a process while a project is pinned.
+    pub fn cli_fix(title: &str, args: &[String]) -> Self {
+        fn quote(arg: &str) -> String {
+            if arg
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || "._-/".contains(c))
+                && !arg.is_empty()
+            {
+                arg.to_owned()
+            } else if cfg!(windows) {
+                format!("'{}'", arg.replace('\'', "''"))
+            } else {
+                format!("'{}'", arg.replace('\'', "'\\''"))
+            }
+        }
+        let repair = matches!(args, [hub, repair, _] if hub == "hub" && repair == "repair");
+        Self::Info {
+            title: title.to_owned(),
+            lines: if repair {
+                vec!["Save your work and close this pinned project before repairing its engine installation.".into(), "Copy this command, close the project, then run it in a terminal. Repair verifies the signed engine package and waits for the Hub service job.".into()]
+            } else {
+                vec!["Review and copy this command, then run it in a terminal.".into()]
+            },
+            code: Some(
+                std::iter::once("ara".to_owned())
+                    .chain(args.iter().map(|arg| quote(arg)))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            ),
+        }
+    }
+
     pub fn about() -> Self {
         Self::Info {
             title: "About Ara".into(),
@@ -84,16 +123,26 @@ impl Dialog {
     }
     /// The text field that takes focus, if any.
     pub fn field(&self) -> Option<&'static str> {
-        matches!(self, Self::SaveLayout { .. }).then_some("dialog-field")
+        match self {
+            Self::SaveLayout { .. } => Some("dialog-field"),
+            Self::ScriptModules { paths, .. } if !paths.is_empty() => Some("script-module-choice"),
+            Self::ScriptModules { .. } => Some("dialog-cancel"),
+            Self::Info { .. } => None,
+        }
     }
 }
 impl Shell {
     pub(super) fn dialog_markup(&mut self, dialog: &Dialog, out: &mut String) {
         let [w, h] = self.ui.size;
+        let width = ara_ui::popover::MAX_WIDTH.min((w - 16.).max(1.));
+        let height = (h - 16.).max(1.);
+        let action = match dialog {
+            Dialog::SaveLayout { .. } => "dialog-save",
+            Dialog::ScriptModules { .. } => "dialog-script-open",
+            Dialog::Info { .. } => "dialog-close",
+        };
         out.push_str(&format!(
-            "<panel id='dialog' class='dialog' style='left:{}px;top:{}px'>",
-            ((w - 520.) * 0.5).max(8.),
-            (h * 0.22).max(8.)
+            "<modal id='dialog' class='kit-dialog-layer' default-action='{action}' style='position:absolute;left:0px;top:0px;width:{w}px;height:{h}px;align-items:center;justify-content:center'><panel id='dialog-backdrop' class='kit-dialog-backdrop' style='position:absolute;left:0px;top:0px;width:{w}px;height:{h}px;background:var(--overlay)' /><panel id='dialog-body' class='dialog' style='position:relative;width:{width}px;max-height:{height}px;overflow:hidden'>"
         ));
         match dialog {
             Dialog::Info { title, lines, code } => {
@@ -101,6 +150,7 @@ impl Shell {
                     "<text id='dialog-title' class='title' text='{}' />",
                     escape(title)
                 ));
+                out.push_str("<scroll id='dialog-content' style='min-height:0px;flex-shrink:1'>");
                 for (n, line) in lines.iter().enumerate() {
                     out.push_str(&format!(
                         "<text id='dialog-line-{n}' class='dialog-text' text='{}' />",
@@ -113,6 +163,7 @@ impl Shell {
                         escape(code)
                     ));
                 }
+                out.push_str("</scroll>");
                 out.push_str("<panel id='dialog-actions' class='row' style='justify-content:end'>");
                 if code.is_some() {
                     out.push_str(&self.bind_button(
@@ -151,8 +202,71 @@ impl Shell {
                 ));
                 out.push_str("</panel>");
             }
+            Dialog::ScriptModules {
+                paths,
+                selected,
+                pending,
+                error,
+            } => {
+                out.push_str("<text id='dialog-title' class='title' style='white-space:normal;flex-shrink:0' text='Open Scripts in IDE' /><scroll id='script-module-content' style='flex-basis:auto;flex-shrink:1;min-height:0px;min-width:0px'>");
+                let note = if *pending {
+                    "Discovering C# modules in the background. You can cancel this chooser; discovery will finish without opening an IDE."
+                } else if paths.is_empty() && error.is_none() {
+                    "This project has no usable C# module. Use Assets > Create > C# Script, then refresh this list."
+                } else {
+                    "Choose a module path, then select Open. Discovery does not change project documents."
+                };
+                out.push_str(&format!("<text id='script-module-status' class='dialog-text' style='flex-shrink:0' text='{}' />", escape(note)));
+                if let Some(error) = error {
+                    out.push_str(&format!("<text id='script-module-error' class='dialog-text' style='flex-shrink:0' text='{}' /><text id='script-module-last-good' class='dialog-text' style='flex-shrink:0' text='The last good module list is retained. Refresh to retry, or inspect Problems for details.' />", escape(error)));
+                }
+                if !paths.is_empty() {
+                    out.push_str("<panel id='script-module-control' style='min-width:0px;flex-shrink:0'><text id='script-module-label' class='dialog-text' text='C# module' />");
+                    self.choice_button(
+                        "script-module-choice",
+                        "C# module path",
+                        choices::Select {
+                            destination: choices::Destination::ScriptModule,
+                            options: paths
+                                .iter()
+                                .map(|path| (Value::String(path.clone()), path.clone()))
+                                .collect(),
+                            current: selected
+                                .as_ref()
+                                .map_or(Value::Null, |path| Value::String(path.clone())),
+                        },
+                        out,
+                    );
+                    out.push_str("</panel>");
+                }
+                out.push_str("</scroll><panel id='dialog-actions' class='row' style='justify-content:end;flex-wrap:wrap;flex-shrink:0'>");
+                out.push_str(&self.bind_button(
+                    "dialog-script-refresh",
+                    "Refresh",
+                    Binding::DialogAction("script-refresh"),
+                    "",
+                ));
+                out.push_str(&self.bind_button(
+                    "dialog-cancel",
+                    "Cancel",
+                    Binding::DialogAction("close"),
+                    "",
+                ));
+                let button = self.bind_button(
+                    "dialog-script-open",
+                    "Open",
+                    Binding::DialogAction("script-open"),
+                    "primary",
+                );
+                if *pending || selected.is_none() {
+                    out.push_str(&button.replacen("<button ", "<button disabled='true' ", 1));
+                } else {
+                    out.push_str(&button);
+                }
+                out.push_str("</panel>");
+            }
         }
-        out.push_str("</panel>");
+        out.push_str("</panel></modal>");
     }
     /// Run a dialog button.
     pub(super) fn dialog_action(
@@ -161,6 +275,13 @@ impl Shell {
         action: &str,
     ) -> ara_ui::Result<()> {
         match (action, self.dialog.clone()) {
+            ("script-open", Some(Dialog::ScriptModules { .. })) => {
+                self.confirm_script_module(editor)?;
+            }
+            ("script-refresh", Some(Dialog::ScriptModules { .. })) => {
+                self.refresh_script_modules(editor)?;
+            }
+            (_, Some(Dialog::ScriptModules { .. })) => self.cancel_script_module_intent(),
             (
                 "copy",
                 Some(Dialog::Info {

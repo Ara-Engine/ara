@@ -24,11 +24,19 @@ groupshared float3 tile[36];
 void storeTile(Look l,uint id,uint lane){
     int2 p=int2(lane%8,lane/8)-1;images[NonUniformResourceIndex(l.giImages.z)][giTile(l,id,6)+p]=float4(tile[octIndex(p,6)],1);
 }
+// Width in metres of the sun shadow texel that tests `world`: its virtual shadow
+// level's, else its cascade's.
+float shadowTexel(Frame f,Look l,float3 world){
+    if(l.vsm.y!=0)return vsmStep(l,vsmLevel(f,l,world,vsmLight(l,world)))/VSM_PAGE;
+    uint c=min(cascadeIndex(f,world),max(f.look.z,1u)-1);return 2/(length(frameShadow(c)[0].xyz)*float(f.look.y));
+}
 // One workgroup per relit probe, one lane per cache texel: this frame's window
 // (giUpdate.xy), then last frame's (giCounts.yz). The atlas written now held every
 // probe two frames ago, so only last frame's window is stale in it: those groups copy
 // it forward, skipping probes this frame relights. Inactive probes stay black. `pages`
-// (a literal per entry point) shadows hits with virtual shadow pages first.
+// (a literal per entry point) shadows hits with virtual shadow pages first. A texel's
+// hit stands for its whole footprint: its sun test sits eight shadow texels off it
+// along its normal, so the surface does not shadow itself.
 void giRelight(uint3 group,uint lane,bool pages){
     Frame f=frame();Look l=look(f);uint cursor=l.giUpdate.x,window=l.giUpdate.y,read=l.giImages.x;
     if(group.x>=window){
@@ -48,8 +56,8 @@ void giRelight(uint3 group,uint lane,bool pages){
     float3 emissive=float3(halfToFloat(t.z&65535),halfToFloat(t.z>>16),halfToFloat(t.w&65535));float distance=halfToFloat(t.w>>16);
     float3 dir=octDecode((float2(lane%8,lane/8)+0.5)/8),origin=giProbePosition(l,id)+meta.xyz,light=0;
     if(sky<1){
-        float3 hit=origin+dir*distance,sun=f.sunDirection.xyz;
-        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*visibility(f,l,hit,normal,pages?vsmVisibility(f,l,hit,normal,true):-1)+localIrradiance(f,l,hit,normal);
+        float3 hit=origin+dir*distance,sun=f.sunDirection.xyz,lifted=hit+normal*(8*shadowTexel(f,l,hit));
+        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*visibility(f,l,lifted,normal,pages?vsmVisibility(f,l,lifted,normal,true):-1)+localIrradiance(f,l,hit,normal);
         // Last frame's probes close the loop: multiple bounces converge over frames.
         irradiance+=giIrradiance(l,read,hit,normal);
         light=(1-sky)*(emissive+albedo/PI*irradiance);

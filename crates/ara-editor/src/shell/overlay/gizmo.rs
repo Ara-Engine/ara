@@ -9,6 +9,9 @@ pub(super) fn draw_handles(
     color: &impl Fn(&str, f32) -> ara_ui::Result<[f32; 4]>,
     draw_centre: bool,
 ) -> ara_ui::Result<()> {
+    if !Vec2::from(handles.origin).is_finite() {
+        return Ok(());
+    }
     let halo = [0., 0., 0., 0.6];
     let hover = color("warning-foreground", 1.)?;
     let tints = [
@@ -55,7 +58,11 @@ pub(super) fn draw_handles(
         _ => [None, None],
     };
     for axis in constrained.into_iter().flatten() {
-        let d = handles.screen_dir(axis) * 2000.;
+        let direction = handles.screen_dir(axis);
+        if !direction.is_finite() || direction == Vec2::ZERO {
+            continue;
+        }
+        let d = direction * 2000.;
         let mut line = tints[axis];
         line[3] = 0.5;
         overlays.push(Overlay::Line {
@@ -112,7 +119,7 @@ pub(super) fn draw_handles(
         let width = if lit(handle) { 1.5 } else { 1. };
         let end = Vec2::from(handles.ends[axis]);
         let dir = handles.screen_dir(axis);
-        if dir == Vec2::ZERO || o.distance(end) < 8. {
+        if !end.is_finite() || !dir.is_finite() || dir == Vec2::ZERO || o.distance(end) < 8. {
             continue; // Axes nearly parallel to the view fade out entirely.
         }
         if handles.tool == Tool::Scale {

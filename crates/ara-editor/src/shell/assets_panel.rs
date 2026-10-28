@@ -6,6 +6,8 @@
 //! and the full file name in the tooltip. Files come in by drag and drop or the
 //! context menu's Import.
 use super::*;
+#[path = "assets_panel/types.rs"]
+mod types;
 impl Shell {
     /// A digest of everything [`assets_panel`](Self::assets_panel) reads: the files,
     /// the folder, search, view mode and selection, density, thumbnails, import progress,
@@ -19,16 +21,25 @@ impl Shell {
         };
         let content = (extent("assets-content"), extent("asset-grid"));
         memo::digest((
-            self.browser.revision,
+            (
+                self.browser.revision,
+                self.asset_ops.revision,
+                self.asset_import.revision,
+            ),
             (
                 &editor.state.asset_folder,
                 editor.state.asset_sidebar_width.to_bits(),
                 &editor.state.asset_expanded_folders,
+                &editor.state.asset_favourites,
+                &editor.state.asset_saved_searches,
+                editor.state.asset_search_folder_only,
+                self.assets_favourites.revision,
             ),
             editor.state.searches.get("assets"),
             editor.state.asset_grid,
             (
                 &editor.state.asset_path,
+                self.asset_selection.selected(),
                 self.asset_rename.as_ref().map(|r| &r.path),
             ),
             editor.state.comfortable(),
@@ -41,6 +52,9 @@ impl Shell {
         ))
     }
     pub(super) fn assets_panel(&mut self, editor: &Editor, out: &mut String) {
+        // Capture history against the previous entries, but repair active focus
+        // only after this publication replaces the displayed row model below.
+        self.observe_asset_history(editor);
         // Folder column and breadcrumb hide in narrow docks (see `narrow`).
         out.push_str("<panel id='asset-toolbar' class='toolbar'>");
         self.bindings.insert(
@@ -94,40 +108,33 @@ impl Shell {
             let on = editor.state.asset_grid == grid;
             out.push_str(&format!("<button id='{id}' class='{} icon-button' label='{label}' description='{label} view' action='Dispatch'>{}</button>",if on{"selected"}else{"ghost"},if on{icons::icon_in(id,icon,"on-selection")}else{icons::icon(id,icon)}));
         }
+        self.bind_command("assets-refresh", "assets.refresh", commands::Target::None);
+        self.asset_favourites_toolbar(editor, out);
+        out.push_str(&format!("<button id='assets-refresh' class='ghost icon-button' label='Refresh Assets' description='Refresh the semantic browser index; retry a failed or pending index scan' action='Dispatch'>{}</button>", icons::icon("assets-refresh", "refresh-cw")));
         let side = if narrow {
             0.
         } else {
             editor.state.asset_sidebar_width.min(content * 0.6).max(96.)
         };
         out.push_str("</panel>");
-        if !narrow {
-            let current = editor
-                .state
-                .searches
-                .get("assets")
-                .cloned()
-                .unwrap_or_default();
-            out.push_str("<panel id='asset-types' class='type-chips'>");
-            self.bindings.insert(
-                ara_ui::source::stable_id("asset-type-all"),
-                Binding::Protocol("editor.search", json!({"panel":"assets","query":""})),
-            );
-            let any = TYPE_CHIPS
-                .iter()
-                .any(|(_, t)| current.contains(&format!("type:{t}")));
-            out.push_str(&format!("<button id='asset-type-all' class='type-chip{}' label='All types' action='Dispatch'><text id='asset-type-all-label' text='All' /></button>",if any{""}else{" selected"}));
-            for (label, kind) in TYPE_CHIPS {
-                let id = format!("asset-type-{kind}");
-                let on = current.contains(&format!("type:{kind}"));
-                self.bindings.insert(
-                    ara_ui::source::stable_id(&id),
-                    Binding::Protocol("editor.search", json!({"panel":"assets","query": if on { String::new() } else { format!("type:{kind}") }})),
-                );
-                out.push_str(&format!("<button id='{id}' class='type-chip{}' label='{label}' description='Show only {}' action='Dispatch'><text id='{id}-label' text='{label}' /></button>",if on{" selected"}else{""},label.to_lowercase()));
-            }
-            out.push_str("</panel>");
+        // Every background result shares one viewport; independent status strips
+        // must not consume the drawer's asset rows as jobs accumulate.
+        let mut jobs = String::new();
+        self.asset_operations_markup(&mut jobs);
+        self.asset_import_markup(&mut jobs);
+        if let Some(problem) = &self.browser.error {
+            jobs.push_str(&format!(
+                "<text id='assets-index-error' class='caption asset-job-message' text='{} · Use Refresh Assets in the toolbar to retry.' />",
+                escape(problem)
+            ));
         }
-        out.push_str("<panel id='assets-content' style='flex-direction:row;flex-grow:1;flex-basis:0px;min-height:0px'>");
+        if !jobs.is_empty() {
+            out.push_str("<scroll id='asset-jobs-scroll' class='asset-jobs-scroll'><panel id='asset-jobs' class='asset-jobs'>");
+            out.push_str(&jobs);
+            out.push_str("</panel></scroll>");
+        }
+        self.asset_types_markup(editor, out);
+        out.push_str("<panel id='assets-content' class='asset-browser-content'>");
         if side > 0. {
             self.asset_tree(editor, out, side / (content - side - 5.).max(1.));
         }
@@ -137,7 +144,8 @@ impl Shell {
             .get("assets")
             .map(String::as_str)
             .unwrap_or("");
-        // The current folder's subfolders, then its files; a search looks everywhere.
+        // Ordinary browsing lists direct children; queries can search the project
+        // or the current folder subtree according to the explicit scope toggle.
         let in_folder = |path: &str| {
             let rest = if editor.state.asset_folder.is_empty() {
                 Some(path)
@@ -169,13 +177,18 @@ impl Shell {
                     path = path.rsplit_once('/').map_or("", |(p, _)| p);
                 }
             }
-            items.extend(subfolders.into_iter().map(|path| assets::Asset {
-                path,
-                reference: None,
-                kind: "folder".into(),
-                domain: None,
-                uses: Vec::new(),
-                stamp: 0,
+            items.extend(subfolders.into_iter().map(|path| {
+                self.browser
+                    .items
+                    .iter()
+                    .find(|asset| asset.path == path && asset.kind == "folder")
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        assets::Asset::folder(
+                            path.clone(),
+                            self.browser.authored_folder(&path).ok(),
+                        )
+                    })
             }));
         }
         items.extend(
@@ -186,7 +199,12 @@ impl Shell {
                     a.kind != "folder"
                         && (self.assets_show_all || !is_noise(a))
                         && matches_query(a, query)
-                        && (searching || in_folder(&a.path))
+                        && assets_favourites::in_scope(
+                            &a.path,
+                            &editor.state.asset_folder,
+                            searching,
+                            editor.state.asset_search_folder_only,
+                        )
                 })
                 .cloned(),
         );
@@ -208,6 +226,7 @@ impl Shell {
             self.asset_rows.items.push((key, name, detail));
             self.asset_entries.insert(key, asset.clone());
         }
+        self.asset_selection_order(editor);
         if items.is_empty() {
             self.empty(
                 out,
@@ -277,7 +296,10 @@ impl Shell {
         // Short drawers put the name beside a smaller thumbnail.
         let compact = height < TILE[1] + 16.;
         let ([card_width, card_height], thumbnail) = if compact {
-            (SIDE_TILE, 48.)
+            // Keep one complete target between the grid's top/bottom gutters
+            // when a readable status rail reduces the browser's remaining room.
+            let height = (height - GAP * 2.).clamp(40., SIDE_TILE[1]);
+            ([SIDE_TILE[0], height], (height - 16.).min(48.))
         } else {
             (TILE, 64.)
         };
@@ -289,8 +311,12 @@ impl Shell {
         // both sides instead of piling up on the right.
         let left = ((available - columns as f32 * column_step + GAP) * 0.5).max(GAP);
         self.asset_grid_extent = items.len().div_ceil(columns) as f32 * row_step;
-        if let Some(rename) = &self.asset_rename
-            && let Some(at) = items.iter().position(|asset| asset.path == rename.path)
+        if let Some(path) = self
+            .asset_rename
+            .as_ref()
+            .map(|rename| rename.path.as_str())
+            .or_else(|| self.asset_ops.rename_path())
+            && let Some(at) = items.iter().position(|asset| asset.path == path)
         {
             let top = (at / columns) as f32 * row_step;
             if top < self.asset_offset || top + card_height > self.asset_offset + height {
@@ -322,13 +348,12 @@ impl Shell {
             let id = format!("asset-card-{n}");
             self.bindings.insert(
                 ara_ui::source::stable_id(&id),
-                if asset.kind == "folder" {
-                    Binding::Protocol("editor.workspace", json!({"folder": asset.path}))
-                } else {
-                    Binding::Asset(asset.clone())
-                },
+                Binding::Asset(asset.clone()),
             );
-            let selected = editor.state.asset_path.as_deref() == Some(&asset.path);
+            let selected = self
+                .asset_selection
+                .selected()
+                .contains(&ara_ui::source::stable_id(&asset.path));
             let file = names::file_name(&asset.path);
             // Importing or failed: the tooltip's note, the badge's icon, tint and reason.
             let import = self.imports.of(asset).map(|import| match import {
@@ -360,7 +385,17 @@ impl Shell {
             }
             let lines = self
                 .name_fit
-                .lines(&mut self.text, names::stem(file), caption, 11., 2)
+                .lines(
+                    &mut self.text,
+                    names::stem(file),
+                    caption,
+                    11.,
+                    if compact && card_height < SIDE_TILE[1] {
+                        1
+                    } else {
+                        2
+                    },
+                )
                 .to_vec();
             out.push_str(&format!(
                 "<panel id='{id}-label' class='{}'>",
@@ -389,7 +424,12 @@ impl Shell {
         self.asset_footer(out, items.len(), editor);
     }
     fn asset_footer(&mut self, out: &mut String, count: usize, editor: &Editor) {
-        out.push_str(&format!("<panel id='assets-footer' class='footer'><text id='assets-count' text='{count} item{}{}' /></panel>",if count==1{""}else{"s"},if editor.state.asset_path.is_some(){" · 1 selected"}else{""}));
+        let selected = self
+            .asset_selection
+            .selected()
+            .len()
+            .max(usize::from(editor.state.asset_path.is_some()));
+        out.push_str(&format!("<panel id='assets-footer' class='footer'><text id='assets-count' text='{count} item{}{}' /></panel>",if count==1{""}else{"s"},if selected>0 {format!(" · {selected} selected")}else{String::new()}));
     }
     /// The asset's thumbnail, or its type icon on a quiet square until one exists (or
     /// when it has none); true when the thumbnail image is shown.
@@ -475,9 +515,12 @@ pub(super) fn asset_icon(asset: &assets::Asset) -> &'static str {
         _ => "file",
     }
 }
-/// Files that are not assets: glTF buffers, notes, project and IDE files. Hidden
-/// unless Assets > Show All Files is on.
+/// Authored support files hide by default. Semantic documents and project-setting
+/// entries remain reachable regardless of their storage extension.
 pub(super) fn is_noise(asset: &assets::Asset) -> bool {
+    if asset.document_kind.is_some() || asset.authored_path.is_none() {
+        return false;
+    }
     matches!(
         asset.kind.as_str(),
         "bin"
@@ -500,17 +543,6 @@ pub(super) fn is_noise(asset: &assets::Asset) -> bool {
 const TILE: [f32; 2] = [96., 116.];
 const SIDE_TILE: [f32; 2] = [184., 64.];
 const GAP: f32 = 8.;
-/// The type chips above the asset grid: label and the `type:` query each sets.
-pub(super) const TYPE_CHIPS: &[(&str, &str)] = &[
-    ("Models", "mesh"),
-    ("Textures", "texture"),
-    ("Materials", "material"),
-    ("Prefabs", "prefab"),
-    ("Scenes", "scene"),
-    ("Audio", "audio"),
-    ("Scripts", "script"),
-    ("VFX", "vfx"),
-];
 fn matches_query(asset: &assets::Asset, query: &str) -> bool {
     query.split_whitespace().all(|term| {
         if let Some(kind) = term.strip_prefix("type:") {
@@ -545,11 +577,7 @@ impl Shell {
             let Some(asset) = self.asset_entries.get(&key) else {
                 continue;
             };
-            let binding = if asset.kind == "folder" {
-                Binding::Protocol("editor.workspace", json!({"folder": asset.path}))
-            } else {
-                Binding::Asset(asset.clone())
-            };
+            let binding = Binding::Asset(asset.clone());
             self.bindings.insert(view.identity(key), binding);
         }
     }

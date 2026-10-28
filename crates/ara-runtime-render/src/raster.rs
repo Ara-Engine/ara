@@ -62,9 +62,16 @@ pub struct RasterView {
     placeholder_changes: ara_render::instanced::Changes,
     /// Reflection captures: authored, or placed over the current generation.
     captures: crate::captures::Placement,
+    /// Reflection-probe capture jobs and their retained state (`crate::probes`).
+    probes: crate::probes::ProbeCaptures,
 }
 
 impl RasterView {
+    /// Borrow the currently prepared native scene for host picking and surface snapping.
+    /// Geometry remains owned by this view and must not be retained across publication.
+    pub fn scene(&self) -> Option<&ara_render::instanced::Scene> {
+        self.prepared.as_ref().map(|prepared| &prepared.scene)
+    }
     /// A rejected preparation discards its CPU snapshot. Interactive callers
     /// must reconstruct it on their content worker, keeping last-good GPU data.
     pub fn has_prepared_content(&self) -> bool {
@@ -100,9 +107,19 @@ impl RasterView {
             fades: Default::default(),
             placeholder_changes: Default::default(),
             captures: Default::default(),
+            probes: Default::default(),
         }
     }
 
+    /// This view's reflection-probe capture jobs (`render.probes.query`).
+    pub fn probes(&self) -> &crate::probes::ProbeCaptures {
+        &self.probes
+    }
+    /// This view's reflection-probe capture jobs (`render.probe.recapture` and
+    /// `render.probe.cancel`); bind the scene first (`ProbeCaptures::set_scene`).
+    pub fn probes_mut(&mut self) -> &mut crate::probes::ProbeCaptures {
+        &mut self.probes
+    }
     /// Enable/disable probe acquisition. Preset budgets govern relighting; the
     /// renderer keeps sky ambient until the asynchronous surface cache arrives.
     pub fn set_probe_gi(&mut self, enabled: bool) {
@@ -471,6 +488,8 @@ impl RasterView {
                 let specs = self.captures.specs(frame, &prepared.scene, self.key, limit);
                 renderer.set_reflection_captures(&specs)?;
             }
+            self.probes
+                .observe(renderer.capabilities(), frame, self.key);
             self.adopt_emitters(false)?;
             let prepared = self.prepared.as_mut().context("native raster content")?;
             if snapshot_changed {

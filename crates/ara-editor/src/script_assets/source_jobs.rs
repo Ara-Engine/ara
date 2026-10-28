@@ -205,7 +205,20 @@ impl ScriptService {
                         job: compile,
                         mut metadata,
                     } => {
-                        let Some(result) = child(cx, &compile)? else {
+                        let completed = match child(cx, &compile) {
+                            Err(diagnostics)
+                                if cx
+                                    .job_record(&compile)
+                                    .is_some_and(|record| record.status == JobStatus::Failed) =>
+                            {
+                                // The compiler poll already published this ordered batch.
+                                // Parent failure forwarding must not increment its log counts.
+                                cx.finish_job(&job, Err(diagnostics));
+                                return Ok(None);
+                            }
+                            result => result?,
+                        };
+                        let Some(result) = completed else {
                             return Ok(Some(Stage::Compiling {
                                 job: compile,
                                 metadata,

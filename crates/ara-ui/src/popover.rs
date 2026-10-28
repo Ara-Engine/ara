@@ -257,7 +257,10 @@ impl Ui {
         for position in 0..self.nodes[0].element.children.len() {
             let index = self.nodes[0].element.children[position];
             let node = &mut self.nodes[index];
-            if !matches!(node.element.tag.as_str(), "popover" | "tooltip") {
+            if !matches!(
+                node.element.tag.as_str(),
+                "popover" | "tooltip" | "feedback"
+            ) {
                 continue;
             }
             let mut style = node.computed.layout.clone();
@@ -270,17 +273,37 @@ impl Ui {
                 .width
                 .resolve_to_option(self.size[0], |_, _| 0.0)
                 .unwrap_or(MAX_WIDTH);
-            let max = existing_max.min(available).max(0.0);
+            let feedback = node.element.tag == "feedback";
+            let max = existing_max
+                .min(available)
+                .min(if feedback { MAX_WIDTH } else { f32::MAX })
+                .max(0.0);
+            if feedback {
+                // Drag status is measured from current copy, never an inherited
+                // fixed chrome width/height from a host's old label stylesheet.
+                style.size = taffy::Size {
+                    width: taffy::Dimension::auto(),
+                    height: taffy::Dimension::auto(),
+                };
+                style.flex_shrink = 0.0;
+                style.max_size.height =
+                    taffy::LengthPercentageAuto::length((self.size[1] - 2.0 * MARGIN).max(0.0));
+            }
             style.max_size.width = taffy::LengthPercentageAuto::length(max);
-            style.min_size.width = taffy::LengthPercentageAuto::length(
+            style.min_size.width = taffy::LengthPercentageAuto::length(if feedback {
+                crate::feedback::MIN_WIDTH.min(max)
+            } else {
                 style
                     .min_size
                     .width
                     .resolve_to_option(self.size[0], |_, _| 0.0)
                     .unwrap_or(MIN_WIDTH)
-                    .min(max),
-            );
+                    .min(max)
+            });
             let key = stable_id(&node.element.id);
+            if feedback {
+                self.placed.remove(&key);
+            }
             if self
                 .placed
                 .get(&key)
@@ -304,10 +327,13 @@ impl Ui {
         self.transient_nodes()
             .filter(|i| self.nodes[*i].element.tag == "popover")
     }
-    /// Shown popovers and tooltips, including non-interactive hover hints, in paint order.
+    /// Shown popovers, tooltips and non-interactive drag feedback, in paint order.
     pub fn transient_nodes(&self) -> impl Iterator<Item = usize> + '_ {
         self.nodes[0].element.children.iter().copied().filter(|i| {
-            matches!(self.nodes[*i].element.tag.as_str(), "popover" | "tooltip") && self.shown(*i)
+            matches!(
+                self.nodes[*i].element.tag.as_str(),
+                "popover" | "tooltip" | "feedback"
+            ) && self.shown(*i)
         })
     }
     /// Place every shown popover against its anchor's painted rect; true when one
@@ -321,9 +347,14 @@ impl Ui {
             .map(|i| stable_id(&self.nodes[*i].element.id))
             .collect();
         self.placed.retain(|id, _| open.contains(id));
+        self.feedback.retain(|id, _| open.contains(id));
         let mut moved = false;
         for i in popovers {
             let element = &self.nodes[i].element;
+            let id = stable_id(&element.id);
+            if element.tag == "feedback" {
+                continue;
+            }
             let anchor = match (element.attrs.get("anchor"), element.attrs.get("at")) {
                 (Some(id), _) => match self.find(id).filter(|a| self.shown(*a)) {
                     Some(a) => self.nodes[a].rect,
@@ -360,7 +391,6 @@ impl Ui {
             if !offset.is_finite() {
                 return Err("ARA4046: popover offset must be finite".into());
             }
-            let id = stable_id(&self.nodes[i].element.id);
             // A horizontal clamp changed the text's measurement width. If its
             // anchor moves (including scroll), remeasure without that old clamp
             // before choosing the new side/size, so it can grow back into room.

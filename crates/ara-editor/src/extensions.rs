@@ -60,9 +60,11 @@ pub(crate) struct Pending {
     pub doc: String,
     pub revision: u64,
     pub command: String,
+    pub navigation: crate::interaction::NavigationOwner,
 }
 
 pub(crate) struct Extensions {
+    pub interaction: crate::interaction::Interaction,
     pub catalog: Catalog,
     pub pending: BTreeMap<String, Pending>,
     pub completed: mpsc::Receiver<Completion>,
@@ -72,7 +74,10 @@ pub(crate) struct Extensions {
 }
 
 impl Extensions {
-    pub fn new(root: &Path) -> Result<Self, Diagnostic> {
+    pub fn new(
+        root: &Path,
+        interaction: crate::interaction::Interaction,
+    ) -> Result<Self, Diagnostic> {
         let root = root.to_owned();
         let (requests, incoming) = mpsc::channel();
         let (send, completed) = mpsc::channel();
@@ -188,6 +193,7 @@ impl Extensions {
             })
             .map_err(failure)?;
         Ok(Self {
+            interaction,
             catalog: Catalog::default(),
             pending: BTreeMap::new(),
             completed,
@@ -236,3 +242,7 @@ fn invoke(
 fn failure(error: impl std::fmt::Display) -> Diagnostic {
     Diagnostic::error(ara_script::codes::COMPILE_SERVER, error.to_string())
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests;

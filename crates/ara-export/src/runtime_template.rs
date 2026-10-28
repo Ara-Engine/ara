@@ -179,8 +179,14 @@ fn mach_o(player: &Path) -> Result<bool> {
     ))
 }
 
+/// Cooked files the runtime reads beside pipeline manifests: `ara-vfx-gpu` checks
+/// each effect's content hash (`<effect>/effect.json`) and samples the particle
+/// atlas (`atlas.rgba`). Every other non-manifest file is offline cook state.
+const RUNTIME_FILES: &[&str] = &["effect.json", "atlas.rgba"];
+
 /// Adds runtime artifacts named by manifests: SPIR-V/DXIL, or Metal libraries and
-/// their required converter reflection. Slang reflection is an offline cook cache.
+/// their required converter reflection, plus [`RUNTIME_FILES`]. Slang reflection
+/// is an offline cook cache.
 fn resources(
     root: &Path,
     directory: &Path,
@@ -202,6 +208,15 @@ fn resources(
             }
             continue;
         }
+        let relative = path
+            .strip_prefix(root)?
+            .to_string_lossy()
+            .replace('\\', "/");
+        if RUNTIME_FILES.contains(&name.as_str()) {
+            ara_pack::validate_path(&relative)?;
+            files.insert(format!("{prefix}/{relative}"), path.to_owned());
+            continue;
+        }
         if path.extension().is_none_or(|extension| extension != "json") {
             continue;
         }
@@ -214,10 +229,6 @@ fn resources(
             "empty cooked pipeline {}",
             path.display()
         );
-        let relative = path
-            .strip_prefix(root)?
-            .to_string_lossy()
-            .replace('\\', "/");
         ara_pack::validate_path(&relative)?;
         files.insert(format!("{prefix}/{relative}"), path.to_owned());
         manifests += 1;
@@ -339,6 +350,10 @@ mod tests {
             )
             .unwrap();
         }
+        let effect = scratch.path().join("crates/ara-vfx-gpu/cooked/campfire");
+        std::fs::create_dir_all(&effect).unwrap();
+        std::fs::write(effect.join("effect.json"), "{\"hash\":\"cooked\"}").unwrap();
+        std::fs::write(effect.join("../atlas.rgba"), b"particle atlas").unwrap();
         let first = scratch.path().join("first.zip");
         let second = scratch.path().join("second.zip");
         build_runtime_template(&player, scratch.path(), &first).unwrap();
@@ -374,6 +389,14 @@ mod tests {
                     .by_name(&format!("resources/ara-render/{file}"))
                     .is_err(),
                 "offline {file} must stay outside the runtime payload"
+            );
+        }
+        // The VFX runtime checks each effect's cooked hash and samples the atlas.
+        for file in ["campfire/effect.json", "atlas.rgba"] {
+            assert!(
+                archive
+                    .by_name(&format!("resources/ara-vfx-gpu/{file}"))
+                    .is_ok()
             );
         }
         let unpacked = scratch.path().join("game");

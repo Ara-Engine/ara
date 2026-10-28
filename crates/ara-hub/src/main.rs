@@ -10,11 +10,16 @@ Ara Hub: projects, templates, engine installs and agent setup.
 --size WxH       window size in physical pixels (default 1440x900)
 --dpi SCALE      fixed UI scale instead of the display's
 --config-dir DIR user Hub registry (default %APPDATA%\Ara or ARA_CONFIG_DIR)
---ara PATH       the ara CLI that runs the Hub service (default: beside ara-hub)";
+--ara PATH       the ara CLI that runs the Hub service (default: beside ara-hub)
+--new-project    open the existing New project form";
 
 fn options() -> Result<Option<Options>, String> {
+    options_from(std::env::args().skip(1))
+}
+
+fn options_from(arguments: impl Iterator<Item = String>) -> Result<Option<Options>, String> {
     let mut options = Options::default();
-    let mut args = std::env::args().skip(1);
+    let mut args = arguments;
     let value = |args: &mut dyn Iterator<Item = String>, flag: &str| {
         args.next().ok_or_else(|| format!("{flag} needs a value"))
     };
@@ -49,6 +54,7 @@ fn options() -> Result<Option<Options>, String> {
             "--capture" => options.capture = Some(PathBuf::from(value(&mut args, &arg)?)),
             "--config-dir" => options.config = Some(PathBuf::from(value(&mut args, &arg)?)),
             "--ara" => options.ara = Some(PathBuf::from(value(&mut args, &arg)?)),
+            "--new-project" => options.new_project = true,
             "--size" => {
                 let size = value(&mut args, &arg)?;
                 let (w, h) = size.split_once('x').ok_or("--size needs WxH")?;
@@ -123,8 +129,35 @@ fn main() -> std::process::ExitCode {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_project_flag_routes_without_changing_the_service_or_profile() {
+        let options = options_from(
+            [
+                "--new-project",
+                "--config-dir",
+                "profile with spaces",
+                "--ara",
+                "engine/ara.exe",
+            ]
+            .into_iter()
+            .map(str::to_owned),
+        )
+        .unwrap()
+        .unwrap();
+        assert!(options.new_project);
+        assert_eq!(options.config, Some(PathBuf::from("profile with spaces")));
+        assert_eq!(options.ara, Some(PathBuf::from("engine/ara.exe")));
+        assert!(
+            !options_from(std::iter::empty())
+                .unwrap()
+                .unwrap()
+                .new_project
+        );
+    }
 
     #[test]
     fn automation_never_uses_desktop_error_dialogs() {

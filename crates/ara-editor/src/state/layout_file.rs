@@ -1,5 +1,5 @@
 //! Versioned editor layout files; old arrangements reset once to the new baseline.
-use super::{EditorState, default_dock};
+use super::{AssetFavouriteKind, EditorState, SavedAssetSearch, default_dock};
 use ara_ui::docking::DockLayout;
 use serde_json::json;
 
@@ -32,7 +32,39 @@ pub(crate) fn serialize(state: &EditorState) -> anyhow::Result<String> {
     Ok(ara_json::to_canonical_string(
         &json!({"version": VERSION, "layout": layout, "assets": {
             "sidebarWidth": state.asset_sidebar_width,
-            "expandedFolders": state.asset_expanded_folders
+            "expandedFolders": state.asset_expanded_folders,
+            "favourites": state.asset_favourites,
+            "savedSearches": state.asset_saved_searches,
+            "searchFolderOnly": state.asset_search_folder_only
         }}),
     ))
+}
+
+/// Optional bookmark fields extend layout version 2 without resetting old layouts.
+pub(super) fn restore_asset_bookmarks(saved: &serde_json::Value, state: &mut EditorState) {
+    if let Some(favourites) = saved["assets"]["favourites"].as_object() {
+        state.asset_favourites = favourites
+            .iter()
+            .filter_map(|(path, kind)| {
+                let kind: AssetFavouriteKind = serde_json::from_value(kind.clone()).ok()?;
+                super::valid_asset_bookmark_path(path, kind == AssetFavouriteKind::Folder)
+                    .then(|| (path.clone(), kind))
+            })
+            .collect();
+    }
+    if let Some(searches) = saved["assets"]["savedSearches"].as_object() {
+        state.asset_saved_searches = searches
+            .iter()
+            .filter_map(|(name, value)| {
+                let search: SavedAssetSearch = serde_json::from_value(value.clone()).ok()?;
+                (super::valid_asset_search_name(name)
+                    && super::valid_asset_bookmark_path(&search.folder, true)
+                    && search.query.chars().count() <= 4096)
+                    .then(|| (name.clone(), search))
+            })
+            .collect();
+    }
+    if let Some(folder_only) = saved["assets"]["searchFolderOnly"].as_bool() {
+        state.asset_search_folder_only = folder_only;
+    }
 }

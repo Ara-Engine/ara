@@ -96,10 +96,43 @@ fn has_entity(c: &Ctx) -> Avail {
         Avail::Blocked("Select an entity first".into())
     }
 }
+/// Reflect the clicked object or selected set without allocating in menu checks.
+fn hierarchy_flag(c: &Ctx, locked: bool) -> Avail {
+    let flags = if locked {
+        &c.state.locked
+    } else {
+        &c.state.hidden
+    };
+    if let Target::Entity(entity) = c.target
+        && !c.state.selection.contains(entity)
+    {
+        Avail::Checked(flags.contains(entity))
+    } else if c.state.selection.is_empty() {
+        has_entity(c)
+    } else {
+        Avail::Checked(
+            c.state
+                .selection
+                .iter()
+                .all(|entity| flags.contains(entity)),
+        )
+    }
+}
 fn has_asset(c: &Ctx) -> Avail {
     match (c.target, &c.state.asset_path) {
         (Target::Asset(_) | Target::Folder(_), _) | (_, Some(_)) => Avail::Ready,
         _ => Avail::Blocked("Select an asset in the Assets panel first".into()),
+    }
+}
+fn asset_context(state: &crate::state::EditorState, target: &Target) -> bool {
+    matches!(target, Target::Asset(_) | Target::Folder(_))
+        || matches!(target, Target::None) && state.focus == "assets"
+}
+fn has_selection(c: &Ctx) -> Avail {
+    if asset_context(c.state, c.target) {
+        has_asset(c)
+    } else {
+        has_entity(c)
     }
 }
 fn scene_doc(c: &Ctx) -> Avail {
@@ -167,11 +200,8 @@ fn field_overridden(c: &Ctx) -> Avail {
 }
 fn prefab_source(c: &Ctx) -> Avail {
     match c.target.entity(c.state) {
-        Some(entity)
-            if entity.contains('/')
-                || crate::shell::prefab_ops::instance(c.store, &c.state.doc, entity).is_some() =>
-        {
-            Avail::Blocked("Already a prefab instance; unpack it first".into())
+        Some(entity) if entity.contains('/') => {
+            Avail::Blocked("Select the instance root to create an inherited prefab variant".into())
         }
         Some(_) => Avail::Ready,
         None => Avail::Blocked("Select the entity to turn into a prefab".into()),
@@ -354,7 +384,12 @@ fn resolved(e: &Editor) -> ara_ui::Result<ara_doc::prefab::Resolved> {
 fn select(e: &mut Editor, entities: Vec<String>) -> R {
     act(e, "editor.select", json!({"entities": entities}))
 }
-fn play(e: &mut Editor, method: &str, params: Value) -> R {
+fn play(e: &mut Editor, method: &str, mut params: Value) -> R {
+    if method != "play.start"
+        && let Some(world) = &e.play_world
+    {
+        params["world"] = json!(world);
+    }
     act(e, method, params)
 }
 fn play_params(e: &Editor) -> Value {
@@ -364,16 +399,39 @@ fn play_params(e: &Editor) -> Value {
     let mut params = json!({
         "window": true,
         "mode": mode,
+        "processMode": text("play.processMode"),
         "tickHz": text("play.tickHz").parse::<u32>().unwrap_or(60),
         "startPaused": s.get("play.startPaused").and_then(Value::as_bool).unwrap_or(false),
         "seed": s.get("play.seed").and_then(Value::as_f64).unwrap_or(0.) as u64,
         "hotReload": s.get("play.hotReload").and_then(Value::as_bool).unwrap_or(true),
     });
     if mode != "local" {
-        params["clients"] =
-            json!(s.get("play.clients").and_then(Value::as_f64).unwrap_or(1.) as u32);
+        let clients = s.get("play.clients").and_then(Value::as_f64).unwrap_or(1.) as u32;
+        params["clients"] = json!(clients);
+        params["conditions"] = json!(crate::shell::play_controls::conditions(s, clients));
     }
     params
+}
+fn simulate(s: &mut Shell, e: &mut Editor) -> R {
+    if e.state.playing.is_some() {
+        return s.control_play(e, None, false);
+    }
+    if s.game_start.is_some() {
+        return Err("Play is still starting".into());
+    }
+    let mut params = play_params(e);
+    let resume = params["startPaused"] != true;
+    params["startPaused"] = json!(true);
+    params["scene"] = json!(e.state.doc);
+    params["background"] = json!(true);
+    e.embed_play(&mut params);
+    if !params["embed"].is_object() {
+        return Err("Enable Play in the Game view to use Simulate".into());
+    }
+    act(e, "editor.layout.show", json!({"panel":"game"}))?;
+    play(e, "play.start", params)?;
+    s.queue_simulate(e, resume)?;
+    view(e, json!({"play":"paused"}))
 }
 fn undo_label(c: &Ctx, redo: bool) -> String {
     let verb = if redo { "Redo" } else { "Undo" };
@@ -386,14 +444,12 @@ fn undo_label(c: &Ctx, redo: bool) -> String {
     } else {
         let author = ara_ops::Author::Human;
         let txn = if redo {
-            c.store
-                .next_redo(&author)
-                .and_then(|u| u.reverts.as_ref())
-                .and_then(|id| c.store.txn(id))
+            c.store.next_redo(&author)
         } else {
             c.store.next_undo(&author)
         };
-        txn.and_then(|t| t.why.clone().or_else(|| t.label.clone()))
+        txn.and_then(|txn| crate::transaction_label::original(c.store, txn))
+            .and_then(|txn| txn.why.clone().or_else(|| txn.label.clone()))
     };
     match label {
         // Long agent reasons are cut so the item's shortcut stays in the menu.
@@ -492,10 +548,10 @@ fn build() -> Vec<Spec> {
     ]);
     // File
     c.extend([
-        cmd("file.new_scene", "New Scene…", "file", "Ctrl+N", "Create an empty scene under levels/ and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_scene(e)}),
-        later("file.new_project", "New Project…", "folder", "", "Create projects with `ara init <dir>`; the in-editor project wizard comes with the launcher."),
+        cmd("file.new_scene", "New Scene…", "file", "Ctrl+N", "Create an empty scene in the selected authored folder and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_scene(e)}),
+        cmd("file.new_project", "New Project…", "folder", "", "Open Ara Hub's project creation wizard, preserving this editor.", |s,e,_|s.open_project_hub(e,true)),
         cmd("file.open", "Open Scene…", "clapperboard", "Ctrl+O", "Pick a scene to open (recent first), or type to find any scene or asset.", |s, e, _| s.open_palette(e, "#")),
-        later("file.open_project", "Open Project…", "folder", "", "One editor process owns one project; start `ara-editor <project>` for another."),
+        cmd("file.open_project", "Open Project…", "folder", "", "Open Projects in Ara Hub; its existing open and migration workflow preserves this editor.", |s,e,_|s.open_project_hub(e,false)),
         cmd("file.open_scene", "Open Scene", "clapperboard", "", "Open a scene document in the Scene view.", |_, e, t| {
             let Target::Doc(doc) = t else { return Err("choose a scene".into()) };
             act(e, "editor.scene.open", json!({"scene": doc}))?;
@@ -513,15 +569,28 @@ fn build() -> Vec<Spec> {
             Ok(())
         }),
         later("file.revert", "Revert to Saved", "undo-2", "", "Use Undo or `ara revert`; reloading from disk needs a host revert-to-file command."),
-        cmd("assets.import", "Import…", "plus", "Ctrl+Shift+I", "Copy files into the current asset folder and import them.", |s, _, _| {
+        cmd("assets.import", "Import…", "plus", "Ctrl+Shift+I", "Import external files into an authored folder through a cancellable background transaction.", |s, e, t| {
+            let folder = match t {
+                Target::Folder(path) => path.clone(),
+                Target::Asset(path) => path.rsplit_once('/').map_or(String::new(), |(parent, _)| parent.to_owned()),
+                _ => e.state.asset_folder.clone(),
+            };
+            s.browser.authored_folder(&folder)?;
+            s.import_picker_folder = Some(folder);
             s.window_request = Some(super::super::WindowRequest::Import);
             Ok(())
         }),
         later("file.export_selection", "Export Selection…", "file", "", "Selection export lands with ara-export presets in the editor."),
-        later("build.profiles", "Build Profiles…", "package", "", "Export presets run from `ara export`; the in-editor Build window is not built yet."),
-        cmd("build.profile.create", "Create Build Profile", "file-plus", "", "Write the default Windows profile (presets/windows.export.json): the real game runtime in a plain folder.", |s, e, _| s.create_build_profile(e).map(drop))
-            .when(|c| if c.build.profile { Avail::Blocked("The project already has a build profile in presets/".into()) } else { Avail::Ready }),
-        cmd("build.current", "Build Current Profile", "package", "Ctrl+Shift+B", "Export the game with the project's first profile (creating presets/windows.export.json when there is none) into builds/; progress shows in the status bar, problems in Problems.", |s, e, _| s.build_current(e)).when(|c| match &c.build {
+        cmd("build.profiles", "Build Profiles…", "package", "", "Choose an indexed build profile and its output folder.", |s, e, _| s.open_build_options(e)),
+        cmd("build.options.close", "Close Build Options", "x", "", "Close the build profile form.", |s, e, _| s.close_build_options(e)),
+        cmd("build.destination", "Build to Folder…", "folder", "", "Choose a fresh output folder for the selected build profile.", |s, e, _| s.prompt_build_destination(e)),
+        cmd("build.profile.select", "Select Build Profile", "package", "", "Select a profile by name from the cached project index.", |s, e, t| {
+            let Target::Text(profile) = t else { return Err("Choose an indexed build profile".into()) };
+            s.select_build_profile(e, profile)
+        }),
+        cmd("build.profile.create", "Create Build Profile", "file-plus", "", "Create settings/builds/windows.export.json through one undoable background transaction.", |s, e, _| s.create_build_profile(e).map(drop))
+            .when(|c| if c.build.profile { Avail::Blocked("The project already has a build profile in settings/builds or legacy presets".into()) } else { Avail::Ready }),
+        cmd("build.current", "Build Current Profile", "package", "Ctrl+Shift+B", "Build the selected settings/builds profile into a fresh builds/ envelope; progress appears in the status bar.", |s, e, _| s.build_selected(e)).when(|c| match &c.build {
             BuildState { running: true, .. } => Avail::Blocked("A build is running; see the status bar".into()),
             _ => Avail::Ready,
         }),
@@ -541,21 +610,32 @@ fn build() -> Vec<Spec> {
             act(e, "editor.layout.close", json!({"panel": panel}))
         }),
         later("file.close_project", "Close Project", "x", "", "One editor process owns one project; close the window to close it."),
-        cmd("file.exit", "Exit", "x", "Alt+F4", "Close the editor; documents are saved first.", |s, e, _| {
-            e.host.flush();
+        cmd("file.exit", "Exit", "x", "Alt+F4", "Close the editor; documents are saved first.", |s, _, _| {
             s.window_request = Some(super::super::WindowRequest::Quit);
             Ok(())
         }),
     ]);
     // Edit
     c.extend([
-        cmd("edit.undo", "Undo", "undo-2", "Ctrl+Z", "Undo your last change in the focused context.", |_, e, _| {
+        cmd("edit.undo", "Undo", "undo-2", "Ctrl+Z", "Undo your last change in the focused context.", |s, e, _| {
+            s.drag = None;
+            s.drop_preview = None;
+            s.finish_scrub(e, true)?;
+            e.finish_gesture(true)?;
             if e.state.focus == "settings" { act(e, "editor.settings.undo", json!({})) } else { act(e, "history.undo", json!({})) }
         }).when(|c| can_undo(c, false)).labelled(|c| undo_label(c, false)),
-        cmd("edit.redo", "Redo", "redo-2", "Ctrl+Y / Ctrl+Shift+Z", "Redo your last undone change.", |_, e, _| {
+        cmd("edit.redo", "Redo", "redo-2", "Ctrl+Y / Ctrl+Shift+Z", "Redo your last undone change.", |s, e, _| {
+            s.drag = None;
+            s.drop_preview = None;
+            s.finish_scrub(e, true)?;
+            e.finish_gesture(true)?;
             if e.state.focus == "settings" { act(e, "editor.settings.undo", json!({"redo": true})) } else { act(e, "history.redo", json!({})) }
         }).when(|c| can_undo(c, true)).labelled(|c| undo_label(c, true)),
-        later("edit.history", "History…", "clock", "Ctrl+H", "The History panel (typed command stack) arrives with the Phase 2 tool rebuilds; `ara history` lists it now."),
+        cmd("edit.history", "History…", "clock", "Ctrl+H", "Inspect attributed transactions and use the current author's Undo and Redo stack.", |_,e,_|focus(e,"history")),
+        cmd("history.inspect", "Inspect Transaction", "search", "", "Inspect the selected transaction without changing authored content.", |s,e,t|s.inspect_history(e,match t {Target::Text(id)=>id,_=>""})),
+        cmd("history.copy", "Copy Full Transaction", "copy", "", "Copy the complete canonical transaction and all of its operations.", |s,e,t|s.copy_history_transaction(e,match t {Target::Text(id)=>id,_=>""})),
+        cmd("history.older", "Older Transactions", "chevron-left", "", "Read older matching transactions in the bounded History list.", |s,e,_|s.page_history(e,true)),
+        cmd("history.newer", "Newer Transactions", "chevron-right", "", "Read newer matching transactions in the bounded History list.", |s,e,_|s.page_history(e,false)),
         cmd("edit.cut", "Cut", "scissors", "Ctrl+X", "Copy the selected entities, then delete them.", |s, e, t| {
             s.copy_entities(e, t)?;
             let entities = t.entities(&e.state);
@@ -568,21 +648,25 @@ fn build() -> Vec<Spec> {
             let parent = t.entity(&e.state).map(str::to_owned);
             s.paste_entities(e, parent)
         }).when(|c| if !c.clipboard_entities { Avail::Blocked("Copy an entity first".into()) } else { has_entity(c) }),
-        cmd("edit.duplicate", "Duplicate", "copy", "Ctrl+D", "Duplicate the selected entity subtree.", |_, e, t| {
-            let commands = t.entities(&e.state).iter().map(|entity| json!({"cmd": "editor.entity.duplicate", "args": {"entity": entity}})).collect();
-            apply(e, commands, "Duplicate")
-        }).when(has_entity),
-        cmd("edit.delete", "Delete", "trash", "Del", "Delete the selected entities.", |_, e, t| {
+        cmd("edit.duplicate", "Duplicate", "copy", "Ctrl+D", "Duplicate selected entities or authored files in one undoable transaction.", |s, e, t| {
+            if asset_context(&e.state, t) { return s.duplicate_asset_files(e, t); }
+            let result=e.apply(vec![json!({"cmd":"editor.entities.duplicate","args":{"entities":t.entities(&e.state)}})],"Duplicate selection",None)?;
+            if let Some(roots)=result["outputs"][0]["roots"].as_array() {act(e,"editor.select",json!({"entities":roots}))?;}
+            Ok(())
+        }).when(has_selection),
+        cmd("edit.delete", "Delete", "trash", "Del", "Delete selected entities or safely delete authored files.", |s, e, t| {
+            if asset_context(&e.state, t) { return s.request_delete_asset_files(e, t); }
             let entities = t.entities(&e.state);
             apply(e, vec![json!({"cmd": "entity.delete", "args": {"entities": entities}})], "Delete selection")
-        }).when(has_entity),
+        }).when(has_selection),
         cmd("edit.rename", "Rename", "pencil", "F2", "Rename the selected entity inline.", |s, e, t| {
+            if asset_context(&e.state, t) { return s.begin_asset_file_rename(e, t); }
             if let Target::Entity(id) = t && !e.state.selection.contains(id) {
                 select(e, vec![id.clone()])?;
             }
             s.rename = true;
             Ok(())
-        }).when(has_entity),
+        }).when(has_selection),
         cmd("edit.copy_reference", "Copy Reference", "link", "Ctrl+Shift+C", "Copy `@path#id` for the selected entity.", |s, e, t| {
             let entity = t.entity(&e.state).ok_or("select an entity")?.to_owned();
             s.copy_text(reference(e, &entity));
@@ -653,8 +737,8 @@ fn build() -> Vec<Spec> {
             params[key] = json!(value);
             act(e, "editor.tool", params)
         }),
-        later("snap.surface", "Surface Snap", "magnet", "", "Surface snapping needs scene raycasts from ara-physics queries in the editor."),
-        later("snap.vertex", "Vertex Snap (hold V)", "magnet", "", "Vertex snapping needs mesh vertex queries from ara-asset in the editor."),
+        cmd("snap.surface", "Surface Snap", "magnet", "", "Snap translated geometry onto the actual surface under the pointer.",|_,e,_|toggle(e,"viewport.surfaceSnap")).when(|c|flag(c,"viewport.surfaceSnap")),
+        cmd("snap.vertex", "Vertex Snap (hold V)", "magnet", "", "Snap source and target mesh vertices; hold V temporarily in the Scene.",|_,e,_|toggle(e,"viewport.vertexSnap")).when(|c|flag(c,"viewport.vertexSnap")),
         cmd("snap.settings", "Snap Settings…", "settings-2", "", "Open snap and viewport preferences.", |s, e, _| s.open_settings(e, "user", "Viewport")),
         cmd("transform.reset_position", "Reset Position", "", "", "Reset position to the default or prefab value.", |_, e, t| transform_reset(e, t, "position")).when(has_entity),
         cmd("transform.reset_rotation", "Reset Rotation", "", "", "Reset rotation to the default or prefab value.", |_, e, t| transform_reset(e, t, "rotation")).when(has_entity),
@@ -665,26 +749,31 @@ fn build() -> Vec<Spec> {
             let commands = crate::inspector::edit_commands(&t.entities(&e.state), "Transform.position", &json!([p.x, p.y, p.z]));
             apply(e, commands, "Move to view")
         }).when(has_entity),
-        later("edit.transform.drop", "Drop to Floor", "", "End", "Dropping to the floor needs physics raycasts in the editor."),
+        cmd("edit.transform.drop", "Drop to Surface", "", "End", "Drop selected geometry onto real mesh support below it in one undoable action.",|s,e,_| {
+            if e.state.selection.is_empty() {return Err("Select geometry before dropping it to a surface".into());}
+            s.viewport_request=Some(super::super::ViewportRequest::DropToSurface {doc:e.state.doc.clone(),selection:e.state.selection.clone()});
+            Ok(())
+        }).when(has_entity),
         cmd("edit.preferences", "Preferences…", "settings-2", "Ctrl+,", "Open your editor preferences.", |s, e, _| s.open_settings(e, "user", "")),
         cmd("edit.project_settings", "Project Settings…", "settings-2", "Ctrl+Alt+,", "Open settings shared by the project.", |s, e, _| s.open_settings(e, "project", "")),
         cmd("edit.shortcuts", "Keyboard Shortcuts…", "command", "Ctrl+Alt+K", "Search, rebind and choose keymap presets.", |s, e, _| s.open_settings(e, "user", "Keyboard shortcuts")),
-        cmd("edit.hide", "Hide", "eye-off", "H", "Hide the entity in the viewport only.", |_, e, t| {
-            let entity = t.entity(&e.state).ok_or("select an entity")?.to_owned();
-            let hidden = e.state.hidden.contains(&entity);
-            act(e, "editor.visibility", json!({"entity": entity, "enabled": !hidden}))
-        }).when(|c| match c.target.entity(c.state) { Some(id) => Avail::Checked(c.state.hidden.contains(id)), None => has_entity(c) }),
+        cmd("edit.hide", "Hide Selection", "eye-off", "H", "Toggle viewport visibility for the clicked or selected entities.", |s, e, t| s.set_hierarchy_hidden(e,t,false,None)).when(|c|hierarchy_flag(c,false)),
+        cmd("edit.unhide_selected", "Show Selection", "eye", "", "Show exactly the clicked or selected entities.", |s,e,t|s.set_hierarchy_hidden(e,t,false,Some(false))).when(has_entity),
+        cmd("edit.hide_descendants", "Hide Selection and Descendants", "eye-off", "", "Hide the clicked or selected branches in the viewport.",|s,e,t|s.set_hierarchy_hidden(e,t,true,Some(true))).when(has_entity),
+        cmd("edit.unhide_descendants", "Show Selection and Descendants", "eye", "", "Show the clicked or selected branches in the viewport.",|s,e,t|s.set_hierarchy_hidden(e,t,true,Some(false))).when(has_entity),
         cmd("edit.unhide_all", "Show All", "eye", "Alt+H", "Show every hidden entity.", |_, e, _| {
             for entity in e.state.hidden.clone() {
                 act(e, "editor.visibility", json!({"entity": entity, "enabled": false}))?;
             }
             Ok(())
         }).when(|c| if c.state.hidden.is_empty() { Avail::Blocked("Nothing is hidden".into()) } else { Avail::Ready }),
-        cmd("edit.lock", "Lock", "lock", "", "Prevent picking the entity in the viewport.", |_, e, t| {
-            let entity = t.entity(&e.state).ok_or("select an entity")?.to_owned();
-            let locked = e.state.locked.contains(&entity);
-            act(e, "editor.lock", json!({"entity": entity, "enabled": !locked}))
-        }).when(|c| match c.target.entity(c.state) { Some(id) => Avail::Checked(c.state.locked.contains(id)), None => has_entity(c) }),
+        cmd("edit.lock", "Lock Selection", "lock", "", "Toggle picking protection for the clicked or selected entities.",|s,e,t|s.set_hierarchy_locked(e,t,false,None)).when(|c|hierarchy_flag(c,true)),
+        cmd("edit.lock_descendants", "Lock Selection and Descendants", "lock", "", "Protect the clicked or selected branches from viewport picking.",|s,e,t|s.set_hierarchy_locked(e,t,true,Some(true))).when(has_entity),
+        cmd("edit.unlock_descendants", "Unlock Selection and Descendants", "unlock", "", "Allow viewport picking of the clicked or selected branches.",|s,e,t|s.set_hierarchy_locked(e,t,true,Some(false))).when(has_entity),
+        cmd("hierarchy.reveal", "Reveal in Hierarchy", "list-tree", "", "Expand and reveal the clicked or selected entities while retaining selection.",|s,e,t|s.reveal_hierarchy_entities(e,t)).when(has_entity),
+        cmd("hierarchy.filter.save", "Save Hierarchy Search", "save", "", "Name the current hierarchy query and retain it in your preferences.",|s,e,t|s.save_hierarchy_filter(e,t)),
+        cmd("hierarchy.filter.apply", "Apply Saved Hierarchy Filter", "funnel", "", "Choose a saved hierarchy query.",|s,e,t|s.use_hierarchy_filter(e,t,false)),
+        cmd("hierarchy.filter.remove", "Delete Saved Hierarchy Filter", "trash", "", "Remove a saved hierarchy query from your preferences.",|s,e,t|s.use_hierarchy_filter(e,t,true)),
         cmd("prefab.open", "Open Prefab", "package-open", "", "Edit the prefab itself in the Scene view; every instance follows.", |_, e, t| {
             let entity = t.entity(&e.state).ok_or("select a prefab instance")?.to_owned();
             let found = crate::shell::prefab_ops::instance(e.host.store(), &e.state.doc, &entity).ok_or("not a prefab instance")?;
@@ -694,6 +783,7 @@ fn build() -> Vec<Spec> {
             let entity = t.entity(&e.state).ok_or("select a prefab instance")?.to_owned();
             s.apply_overrides(e, &entity, None)
         }).when(has_overrides),
+        cmd("prefab.apply_to","Apply Overrides to Source","save","","Apply overrides to a chosen nested prefab, variant or base in one transaction.",|s,e,t|s.apply_to_target(e,t)).when(has_entity),
         cmd("prefab.revert_all", "Revert All Overrides", "undo-2", "", "Drop this instance's overrides; it follows the prefab again.", |_, e, t| {
             let entity = t.entity(&e.state).ok_or("select a prefab instance")?.to_owned();
             apply(e, vec![json!({"cmd": "prefab.override.revert", "args": {"entity": entity}})], "Revert overrides")
@@ -719,8 +809,11 @@ fn build() -> Vec<Spec> {
     ]);
     // View
     c.extend([
-        later("view.camera.perspective", "Perspective / Orthographic", "camera", "Num5", "The renderer's camera is perspective-only; orthographic projection needs ara-render support."),
-        cmd("view.camera.default", "Default View", "video", "", "Return to the default three-quarter perspective.", |_, e, _| camera(e, 0.6, 0.4)),
+        cmd("view.camera.perspective", "Perspective / Orthographic", "camera", "Num5", "Toggle parallel projection while retaining the current framing.",|_,e,_| {
+            let projection=if e.state.camera.projection==crate::state::CameraProjection::Perspective {"orthographic"}else{"perspective"};
+            act(e,"editor.camera",json!({"projection":projection}))
+        }).when(|c|Avail::Checked(c.state.camera.projection==crate::state::CameraProjection::Orthographic)),
+        cmd("view.camera.default", "Default View", "video", "", "Return to the default three-quarter perspective.", |_, e, _| act(e,"editor.camera",json!({"yaw":0.6,"pitch":0.4,"projection":"perspective"}))),
         cmd("view.camera.fov", "Field of View…", "scan-eye", "", "Choose the Scene view's vertical field of view.", |s, _, _| { s.open_value_menu("fov"); Ok(()) })
             .labelled(|c| format!("Field of View ({})…", c.state.camera.fov_label())),
         cmd("view.camera.fov.set", "Set Field of View", "scan-eye", "", "Set the Scene view's vertical field of view: target `46` (degrees, 10–120).", |_, e, t| {
@@ -739,13 +832,10 @@ fn build() -> Vec<Spec> {
         cmd("view.camera.left", "Left", "", "Ctrl+Num3", "Look along +X.", |_, e, _| camera(e, -std::f32::consts::FRAC_PI_2, 0.)),
         cmd("view.camera.right", "Right", "", "Num3", "Look along −X.", |_, e, _| camera(e, std::f32::consts::FRAC_PI_2, 0.)),
         cmd("view.frame", "Frame Selected", "focus", "F", "Frame the selection, or the scene when nothing is selected.", |s, e, _| {
-            if s.graph_visible() { s.frame_graph(e) } else { act(e, "editor.frame", json!({})) }
+            if s.graph_visible() { s.frame_graph(e) } else { act(e, "editor.frame", json!({"aspect":s.viewport().map(|r|r.w/r.h)})) }
         }),
-        cmd("view.frame_all", "Frame All", "focus", "Home", "Frame every entity.", |_, e, _| {
-            let selection = e.state.selection.clone();
-            select(e, Vec::new())?;
-            act(e, "editor.frame", json!({}))?;
-            select(e, selection)
+        cmd("view.frame_all", "Frame All", "focus", "Home", "Frame every entity.", |s, e, _| {
+            act(e, "editor.frame", json!({"all":true,"aspect":s.viewport().map(|r|r.w/r.h)}))
         }),
         cmd("view.camera.speed_up", "Faster Camera", "gauge", "", "Double the fly speed.", |_, e, _| {
             let v = e.state.settings.get("viewport.cameraSpeed").and_then(Value::as_f64).unwrap_or(4.);
@@ -758,8 +848,11 @@ fn build() -> Vec<Spec> {
         cmd("view.camera.speed.slow", "Slow · 1 m/s", "", "", "Precise close-up camera movement.", |_, e, _| set(e,"viewport.cameraSpeed",json!(1.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 1.)),
         cmd("view.camera.speed.normal", "Normal · 4 m/s", "", "", "Default camera movement speed.", |_, e, _| set(e,"viewport.cameraSpeed",json!(4.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 4.)),
         cmd("view.camera.speed.fast", "Fast · 16 m/s", "", "", "Navigate large scenes quickly.", |_, e, _| set(e,"viewport.cameraSpeed",json!(16.))).when(|c| Avail::Checked(c.state.number("viewport.cameraSpeed",4.) == 16.)),
-        later("view.camera.bookmarks", "Bookmarks", "", "", "Camera bookmarks need a per-scene editor sidecar; they are not built yet."),
-        later("view.camera.pilot", "Pilot Selected Camera", "camera", "", "Piloting (moving the scene camera with the view) is not built yet; Align View to Selected Camera copies its pose and field of view."),
+        cmd("view.camera.bookmarks", "Camera Bookmarks…", "", "", "Recall a named camera view from this scene.",|s,e,_|s.choose_camera_bookmark(e,false)),
+        cmd("view.camera.bookmark.save", "Save Camera Bookmark…", "save", "", "Name and save this camera view in the scene.",|s,e,t|match t {Target::Text(name)=>act(e,"editor.camera.bookmark",json!({"action":"save","name":name})),_=>s.name_camera_bookmark(e)}),
+        cmd("view.camera.bookmark.recall", "Recall Camera Bookmark…", "camera", "", "Choose a named camera view in the scene.",|s,e,t|match t {Target::Text(name)=>act(e,"editor.camera.bookmark",json!({"action":"recall","name":name})),_=>s.choose_camera_bookmark(e,false)}),
+        cmd("view.camera.bookmark.delete", "Delete Camera Bookmark…", "trash", "", "Remove a saved view from this scene.",|s,e,t|match t {Target::Text(name)=>act(e,"editor.camera.bookmark",json!({"action":"delete","name":name})),_=>s.choose_camera_bookmark(e,true)}),
+        cmd("view.camera.pilot", "Pilot Selected Camera", "camera", "", "Move a selected perspective Camera with Scene navigation; each completed move is one undoable edit. Toggle again to stop.", |s,e,t|s.toggle_pilot(e,t)).when(|c|if c.pilot {Avail::Checked(true)} else {has_entity(c)}),
     ]);
     c.extend([
         cmd(
@@ -858,11 +951,11 @@ fn build() -> Vec<Spec> {
         later("view.mode.gi_debug", "GI Debug", "", "", "GI debug views live in ara-render-fidelity captures; live viewport output is not wired yet."),
         cmd("view.show.grid", "Grid", "grid-2x2", "", "Show the ground grid.", |_, e, _| toggle(e, "viewport.grid")).when(|c| flag(c, "viewport.grid")),
         cmd("view.show.outline", "Selection Outline", "", "", "Outline selected entities.", |_, e, _| toggle(e, "viewport.outline")).when(|c| flag(c, "viewport.outline")),
-        cmd("view.show.gizmos", "Transform Gizmo", "move-3d", "", "Show transform handles on the selection.", |_, e, _| view(e, json!({"gizmos": !e.state.hide_gizmos}))).when(|c| Avail::Checked(!c.state.hide_gizmos)),
-        cmd("view.show.orientation", "Orientation Widget", "globe", "", "Show the axis widget in the top-right corner.", |_, e, _| view(e, json!({"orientation": !e.state.hide_orientation}))).when(|c| Avail::Checked(!c.state.hide_orientation)),
-        later("view.show.bounds", "Bounds", "", "", "Bounds drawing needs mesh bounds from the extraction; it is not wired yet."),
-        later("view.show.colliders", "Colliders", "", "", "Collider shapes need an ara-physics debug-draw feed into the editor overlay."),
-        later("view.show.stats", "Stats Overlay", "gauge", "", "The viewport Stats overlay arrives with Profiler v2."),
+        cmd("view.show.gizmos", "Transform Gizmo", "move-3d", "", "Show transform handles on the selection.", |_, e, _| view(e, json!({"gizmos": e.state.hide_gizmos}))).when(|c| Avail::Checked(!c.state.hide_gizmos)),
+        cmd("view.show.orientation", "Orientation Widget", "globe", "", "Show the axis widget in the top-right corner.", |_, e, _| view(e, json!({"orientation": e.state.hide_orientation}))).when(|c| Avail::Checked(!c.state.hide_orientation)),
+        cmd("view.show.bounds", "Bounds", "box", "", "Show actual world bounds of current native meshes.", |_,e,_|toggle(e,"viewport.bounds")).when(|c|flag(c,"viewport.bounds")),
+        cmd("view.show.colliders", "Colliders", "box", "", "Show authored primitive collider shapes and identify unavailable cooked shapes.", |_,e,_|toggle(e,"viewport.colliders")).when(|c|flag(c,"viewport.colliders")),
+        cmd("view.show.stats", "Stats Overlay", "gauge", "", "Show last completed CPU and renderer samples.", |_,e,_|toggle(e,"viewport.stats")).when(|c|flag(c,"viewport.stats")),
         cmd("view.game", "Game View", "play", "G", "Hide every editor visual in the viewport.", |_, e, _| view(e, json!({"gameView": !e.state.game_view}))).when(|c| Avail::Checked(c.state.game_view)),
         cmd("view.hide_overlays", "Hide Overlays", "eye-off", "Shift+G", "Hide the viewport toolbar and widgets.", |_, e, _| view(e, json!({"hideOverlays": !e.state.hide_overlays}))).when(|c| Avail::Checked(c.state.hide_overlays)),
         cmd("view.fidelity", "Fidelity Rendering", "sun", "", "Switch between the project's quality (ray-traced Fidelity) and the Low raster preview.", |_, e, _| {
@@ -934,7 +1027,7 @@ fn build() -> Vec<Spec> {
     c.extend([
         cmd("create.empty", "Empty Entity", "layers", "Ctrl+Shift+N", "Create an entity with only a Transform.", |_, e, _| create(e, &Target::None, "Entity", json!({}), false)).when(scene_doc),
         cmd("create.empty_child", "Empty Child", "layers", "Alt+Shift+N", "Create an empty entity under the selection.", |_, e, t| create(e, t, "Entity", json!({}), true)).when(has_entity),
-        later("create.group", "Group Selection", "layers", "Ctrl+G", "Grouping needs an atomic reparent-under-new-parent command; reparent by dragging for now."),
+        cmd("create.group", "Group Selection", "layers", "Ctrl+G", "Create a parent for the selected roots in one undoable action, preserving world transforms.",|s,e,t|s.group_selection(e,t)).when(has_entity),
         cmd("create.at_cursor", "Create…", "plus", "Shift+A", "Search every Create command.", |s, e, _| s.open_palette(e, ">Create ")).when(scene_doc),
         cmd("create.cube", "Cube", "box", "", "Box mesh, 1 m.", |_, e, t| shape(e, t, "Cube", "box")).when(|c| with_components(c, &["MeshRenderer"])),
         cmd("create.sphere", "Sphere", "circle", "", "Sphere mesh, 1 m diameter.", |_, e, t| shape(e, t, "Sphere", "sphere")).when(|c| with_components(c, &["MeshRenderer"])),
@@ -946,15 +1039,29 @@ fn build() -> Vec<Spec> {
         cmd("create.light.point", "Point Light", "lightbulb", "", "Omnidirectional light.", |_, e, t| create(e, t, "Point light", json!({"Light": {"kind": "point"}}), matches!(t, Target::Entity(_)))).when(|c| with_components(c, &["Light"])),
         cmd("create.light.spot", "Spot Light", "lightbulb", "", "Cone light along −Z.", |_, e, t| create(e, t, "Spot light", json!({"Light": {"kind": "spot"}}), false)).when(|c| with_components(c, &["Light"])),
         cmd("create.light.sky", "Sky & Atmosphere", "sun", "", "Procedural sky and exposure.", |_, e, t| create(e, t, "Sky", json!({"Environment": {}}), false)).when(|c| with_components(c, &["Environment"])),
-        later("create.light.probe", "Reflection Probe", "", "", "Probes are automatic in the fidelity renderer; authored probes are not in the schema."),
+        cmd("create.light.probe", "Reflection Probe", "sun", "", "Create an authored reflection probe; renderer capabilities determine capture availability.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::Probe)).when(|c|with_components(c,&["ReflectionProbe"])),
+        cmd("create.probe", "Create Reflection Probe", "sun", "", "Create an authored reflection probe with schema defaults.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::Probe)).when(|c|with_components(c,&["ReflectionProbe"])),
         cmd("create.camera", "Camera", "camera", "", "Viewpoint along −Z.", |_, e, t| create(e, t, "Camera", json!({"Camera": {}}), false)).when(|c| with_components(c, &["Camera"])),
         cmd("create.vfx", "VFX System", "sparkles", "", "Entity that plays a VFX graph.", |_, e, t| create(e, t, "VFX", json!({"VisualEffect": {}}), false)).when(|c| with_components(c, &["VisualEffect"])),
         later("create.decal", "Decal", "", "", "Decals are not in the renderer schema yet."),
-        later("create.fog", "Fog Volume", "", "", "Fog volumes are not in the renderer schema yet."),
+        cmd("create.fog", "Height Fog", "sun", "", "Create global height fog; the first entity by identity supplies the scene fog.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::HeightFog)).when(|c|with_components(c,&["HeightFog"])),
+        cmd("create.post.global", "Global Post-process Volume", "sliders-horizontal", "", "Create scene-wide post-process overrides.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::Global)).when(|c|with_components(c,&["PostProcessVolume"])),
+        cmd("create.post.box", "Local Post-process Box", "box", "", "Create a box whose overrides blend near the camera.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::Box)).when(|c|with_components(c,&["PostProcessVolume"])),
+        cmd("create.post.sphere", "Local Post-process Sphere", "circle", "", "Create a sphere whose overrides blend near the camera.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::Sphere)).when(|c|with_components(c,&["PostProcessVolume"])),
+        cmd("window.lighting", "Lighting", "sun", "", "Inspect lights, sky, height fog and post-process volumes.", |s,e,_|s.open_lighting(e)),
+        cmd("lighting.inspect", "Inspect Lighting Selection", "sliders-horizontal", "", "Edit the selected lighting entity with schema controls.", |s,e,t|s.inspect_lighting(e,t)),
+        cmd("lighting.probe.recapture", "Recapture Reflection Probe", "refresh-cw", "", "Queue derived capture work for selected probes; authored documents are unchanged.", |s,e,t|s.recapture_probes(e,t)).when(|c|c.probe_capture_blocker.map_or(Avail::Ready, |reason|Avail::Blocked(reason.into()))),
+        cmd("lighting.probe.cancel", "Cancel Probe Capture", "x", "", "Request cancellation of this editor session's matching cancellable captures.", |s,e,t|s.cancel_probe_capture(e,t)).when(|c|c.probe_cancel_blocker.map_or(Avail::Ready, |reason|Avail::Blocked(reason.into()))),
+        cmd("lighting.probe.refresh", "Refresh Probe Status", "refresh-cw", "", "Read current renderer capabilities, capture status and receipts.", |s,e,_|s.refresh_probe_state(e)),
+        cmd("lighting.probe.copy", "Copy Probe State", "copy", "", "Copy the current probe snapshot and actual capture receipts.", |s,e,t|s.copy_probe_state(e,t)).when(has_entity),
+        cmd("lighting.page.next", "Next Lighting Page", "chevron-right", "", "Show the next matching lighting entities.", |s,e,_|s.page_lighting(e,true)),
+        cmd("lighting.page.previous", "Previous Lighting Page", "chevron-left", "", "Show the previous matching lighting entities.", |s,e,_|s.page_lighting(e,false)),
+        cmd("lighting.preset.manual", "Add Manual Exposure Override", "sun", "", "Append a manual EV100 exposure group in one undoable action.", |s,e,_|s.lighting_preset(e,super::super::lighting::Preset::ManualExposure)),
+        cmd("lighting.preset.interior", "Add Interior Look Overrides", "sun", "", "Append exposure, white balance and bloom groups in one undoable action.", |s,e,_|s.lighting_preset(e,super::super::lighting::Preset::Interior)),
         cmd("create.physics.body", "Rigid Body", "box", "", "Box with a dynamic body and collider.", |_, e, t| create(e, t, "Rigid body", json!({"MeshRenderer": {}, "RigidBody": {}, "Collider": {}}), false)).when(|c| with_components(c, &["RigidBody", "Collider", "MeshRenderer"])),
         cmd("create.physics.collider", "Collider", "box", "", "Static collision shape.", |_, e, t| create(e, t, "Collider", json!({"Collider": {}}), false)).when(|c| with_components(c, &["Collider"])),
         cmd("create.physics.character", "Character Controller", "user", "", "Kinematic character capsule.", |_, e, t| create(e, t, "Character", json!({"CharacterController": {}, "MeshRenderer": {"shape": "capsule", "size": [0.6, 1.8, 0.6]}}), false)).when(|c| with_components(c, &["CharacterController", "MeshRenderer"])),
-        later("create.physics.trigger", "Trigger Volume", "", "", "Trigger volumes need a sensor flag on Collider; it is not in the schema yet."),
+        cmd("create.physics.trigger", "Trigger Volume", "box", "", "Create a sensor volume using the reflected Collider component.", |_,e,t|create(e,t,"Trigger",json!({"Collider":{"sensor":true}}),false)).when(|c|with_components(c,&["Collider"])),
         cmd("create.audio.source", "Audio Source", "volume-2", "", "Positional sound emitter.", |_, e, t| create(e, t, "Audio source", json!({"AudioSource": {}}), false)).when(|c| with_components(c, &["AudioSource"])),
         cmd("create.audio.listener", "Listener", "ear", "", "Where the mix is heard from.", |_, e, t| create(e, t, "Listener", json!({"AudioListener": {}}), false)).when(|c| with_components(c, &["AudioListener"])),
         cmd("create.nav.volume", "Nav Mesh Surface", "map", "", "Bakes a navigation mesh.", |_, e, t| create(e, t, "Nav surface", json!({"NavMeshSurface": {}}), false)).when(|c| with_components(c, &["NavMeshSurface"])),
@@ -971,7 +1078,17 @@ fn build() -> Vec<Spec> {
     ]);
     // Assets
     c.extend([
-        cmd("assets.create.folder", "Folder", "folder", "", "Create a folder in the current asset folder.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_folder(e)}),
+        cmd("assets.favourite.toggle", "Favourite Asset or Folder", "star", "", "Toggle a project-local bookmark for this asset or folder.", |s,e,t|s.toggle_asset_favourite(e,t)).when(|c| {
+            let path=match c.target {Target::Asset(path)|Target::Folder(path)|Target::Text(path)=>path.as_str(),_=>c.state.asset_path.as_deref().unwrap_or(&c.state.asset_folder)};
+            Avail::Checked(c.state.asset_favourites.contains_key(path))
+        }),
+        cmd("assets.favourite.open", "Open Favourite…", "star", "", "Search saved asset and folder bookmarks.", |s,e,t|s.open_asset_favourite(e,t)).when(|c|if c.state.asset_favourites.is_empty(){Avail::Blocked("Favourite an asset or folder first".into())}else{Avail::Ready}),
+        cmd("assets.search.save", "Save Assets Search…", "bookmark", "", "Name the current query, type filters and folder scope.", |s,e,t|s.save_asset_search(e,t)),
+        cmd("assets.search.apply", "Open Saved Assets Search…", "search", "", "Choose a named query with its saved folder scope and type filters.", |s,e,t|s.use_asset_search(e,t,false)).when(|c|if c.state.asset_saved_searches.is_empty(){Avail::Blocked("Save an Assets search first".into())}else{Avail::Ready}),
+        cmd("assets.search.remove", "Remove Saved Assets Search…", "trash", "", "Remove a named query; Restore Removed Search reverses only that removal.", |s,e,t|s.use_asset_search(e,t,true)).when(|c|if c.state.asset_saved_searches.is_empty(){Avail::Blocked("There are no saved Assets searches".into())}else{Avail::Ready}),
+        cmd("assets.search.restore", "Restore Removed Assets Search", "undo-2", "", "Restore the last query removed during this editor session; current folder, query and content Undo stay intact.", |s,e,_|s.restore_asset_search(e)),
+        cmd("assets.search.scope", "Search Within Current Folder", "folder", "", "Limit a non-empty Assets query to the current folder and its descendants.", |s,e,t|s.set_asset_search_scope(e,t)).when(|c|Avail::Checked(c.state.asset_search_folder_only)),
+        cmd("assets.create.folder", "Folder", "folder", "", "Create an empty authored folder as one undoable transaction.", |s, e, t| s.create_asset_folder(e,t)),
         cmd("assets.create.scene", "Scene", "box", "", "Create an empty scene.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_scene(e)}),
         cmd("assets.create.material", "Material", "circle", "", "Create a material graph and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.create_resource(e, "material")}),
         cmd("assets.create.vfx", "VFX System", "sparkles", "", "Create a VFX graph and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.create_resource(e, "vfx")}),
@@ -986,6 +1103,7 @@ fn build() -> Vec<Spec> {
             act(e, "editor.asset.reimport", json!({"path": path}))
         }).when(has_asset),
         later("assets.reimport_changed", "Reimport All Changed", "refresh-cw", "", "Changed sources reimport automatically when the host sees them on disk."),
+        cmd("assets.refresh", "Refresh Assets", "refresh-cw", "", "Refresh the Assets view and retry file indexing.", |s, _, _| s.refresh_asset_browser()),
         cmd("assets.open", "Open", "external-link", "Enter", "Open the asset in its editor, or the folder.", |s, e, t| s.open_asset(e, t)).when(has_asset),
         cmd("assets.show", "Show in Assets", "folder", "Ctrl+B", "Reveal the selected entity's model, or the asset, in Assets.", |s, e, t| s.show_in_assets(e, t)),
         cmd("assets.reveal", "Show in Explorer", "folder", "", "Open the containing folder in the OS file manager.", |s, e, t| {
@@ -994,19 +1112,34 @@ fn build() -> Vec<Spec> {
         }),
         cmd("assets.copy_reference", "Copy Reference", "link", "", "Copy the asset's `@path#id`.", |s, e, t| {
             let path = s.asset_target(e, t).ok_or("select an asset")?;
-            let text = s.asset_reference(e, &path).unwrap_or_else(|| format!("@{path}"));
+            let text = match s.asset_reference(e, &path) {
+                Some(reference) => reference,
+                None => s.browser.items.iter().find(|asset| asset.path == path)
+                    .and_then(|asset| asset.authored_path.as_deref())
+                    .map(|logical| format!("@{logical}"))
+                    .ok_or("Select an authored asset to copy a reference")?,
+            };
             s.copy_text(text);
             Ok(())
         }).when(has_asset),
         cmd("assets.references", "Find References", "search", "", "Show what uses the asset and what it uses.", |s, e, t| {
-            let path = s.asset_target(e, t).ok_or("select an asset")?;
-            act(e, "editor.workspace", json!({"asset": path}))?;
-            focus(e, "inspector")
+            s.show_asset_references(e,t)
         }).when(has_asset),
-        later("assets.rename", "Rename", "pencil", "F2", "Asset renames must rewrite every `@path#id` reference; the typed move command is not built yet."),
-        later("assets.duplicate", "Duplicate", "copy", "", "Asset duplication needs new stable IDs from a typed asset.copy command."),
-        later("assets.delete", "Delete", "trash", "", "Deleting assets needs the reference-count warning from asset.delete; not built yet."),
-        later("assets.validate", "Validate Project", "circle-check", "", "Run `ara check` for now; the in-editor validation report arrives with Problems."),
+        cmd("assets.rename", "Rename", "pencil", "F2", "Rename an authored file or folder and update its references atomically.", |s,e,t|s.begin_asset_file_rename(e,t)).when(has_asset),
+        cmd("assets.move", "Move to Folder…", "folder", "", "Move selected authored files and folders together, preserving asset identities and references.", |s,e,t|s.request_move_asset_files(e,t)).when(has_asset),
+        cmd("assets.duplicate", "Duplicate", "copy", "", "Duplicate selected authored files and folders with fresh identities and remapped internal references.", |s,e,t|s.duplicate_asset_files(e,t)).when(has_asset),
+        cmd("assets.delete", "Delete", "trash", "", "Confirm safe deletion of selected authored files and folders; referenced files are protected.", |s,e,t|s.request_delete_asset_files(e,t)).when(has_asset),
+        cmd("assets.operation.cancel", "Cancel Asset Preparation", "x", "", "Cancel preparation before the authored transaction commits.", |s,e,_|s.cancel_asset_operation(e)),
+        cmd("assets.operation.dismiss", "Dismiss Asset Result", "x", "", "Dismiss the completed asset operation.", |s,_,_|{s.dismiss_asset_operation();Ok(())}),
+        cmd("assets.import.cancel", "Cancel Import Preparation", "x", "", "Cancel an import job before its commit boundary.", |s,e,t| {
+            let Target::Text(job)=t else {return Err("Choose an import job".into())};
+            s.asset_import_action(e, super::super::asset_import::Action::Cancel(job.clone()))
+        }),
+        cmd("assets.import.dismiss", "Dismiss Import Result", "x", "", "Dismiss a completed import job.", |s,e,t| {
+            let Target::Text(job)=t else {return Err("Choose an import job".into())};
+            s.asset_import_action(e, super::super::asset_import::Action::Dismiss(job.clone()))
+        }),
+        cmd("assets.validate", "Validate Loaded Authoring Documents", "circle-check", "", "Check loaded schema, structure, references and prefabs in a read-only background job; disk parse failures stay visible in Problems.", |s,e,_|s.validate_authoring(e)),
         cmd("assets.show_all", "Show All Files", "file", "", "List every file, including glTF buffers, notes and project files.", |s, _, _| {
             s.assets_show_all = !s.assets_show_all;
             Ok(())
@@ -1026,10 +1159,13 @@ fn build() -> Vec<Spec> {
             "play",
             "F5",
             "Play the scene with the project's play settings; resumes when paused.",
-            |_, e, _| {
+            |s, e, _| {
                 if e.state.playing == Some(false) {
                     play(e, "play.resume", json!({}))?;
                 } else {
+                    if s.log_view.clear_on_play {
+                        s.clear_console(e)?;
+                    }
                     let mut params = play_params(e);
                     params["scene"] = json!(e.state.doc);
                     // The reply is immediate; the Game view follows the start's progress.
@@ -1048,6 +1184,13 @@ fn build() -> Vec<Spec> {
                 "Resume".into()
             } else {
                 "Play".into()
+            }
+        })
+        .when(|c| {
+            if c.starting || c.state.playing == Some(true) {
+                Avail::Blocked("Play is already running or starting".into())
+            } else {
+                Avail::Ready
             }
         }),
         cmd(
@@ -1107,7 +1250,10 @@ fn build() -> Vec<Spec> {
             "rotate-ccw",
             "Ctrl+Shift+F5",
             "Restart the world from tick 0.",
-            |_, e, _| play(e, "play.restart", json!({})),
+            |s, e, _| {
+                s.reset_play_transients(e);
+                play(e, "play.restart", json!({"background":true}))
+            },
         )
         .when(|c| {
             if c.state.playing.is_some() {
@@ -1116,20 +1262,26 @@ fn build() -> Vec<Spec> {
                 Avail::Blocked("Nothing is playing".into())
             }
         }),
-        later(
+        cmd(
             "play.simulate",
             "Simulate",
             "play",
             "Alt+F5",
-            "Simulating without a player needs the in-editor Game view (D19 shared texture).",
+            "Run simulation through a spectator camera without possessing a player actor.",
+            |s,e,_|simulate(s,e),
         ),
-        later(
+        cmd(
             "play.eject",
-            "Eject / Possess",
+            "Eject",
             "",
             "F8",
-            "Eject needs the in-editor Game view (D19 shared texture).",
+            "Release the current actor and navigate through a spectator camera while simulation continues.",
+            |s,e,_|s.control_play(e,None,false),
         ),
+        cmd("play.possess","Possess Selected","user","","Give the controlled player the selected controllable actor and return to its gameplay camera.",|s,e,t|{
+            let entity=t.entity(&e.state).ok_or("Select a controllable entity first")?.to_owned();
+            s.control_play(e,Some(entity),false)
+        }),
         cmd(
             "play.mode.local",
             "Local",
@@ -1204,20 +1356,103 @@ fn build() -> Vec<Spec> {
             |_, e, _| toggle(e, "play.startPaused"),
         )
         .when(|c| flag(c, "play.startPaused")),
-        later(
+        cmd(
             "play.network_profile",
-            "Network Profile",
+            "Network Profiles…",
             "wifi",
             "",
-            "Per-client network conditions need ara-net link shaping exposed through play.start.",
+            "Configure per-client network conditions for the next Play start.",
+            |s, e, _| {
+                focus(e, "game")?;
+                s.play_controls.options = true;
+                Ok(())
+            },
+        ),
+        cmd(
+            "play.options",
+            "Play Options…",
+            "settings-2",
+            "",
+            "Configure mode, client count and per-client network conditions.",
+            |s, e, _| {
+                focus(e, "game")?;
+                s.toggle_play_options(e)
+            },
+        ),
+        cmd(
+            "play.inspect",
+            "Inspect Runtime Selection",
+            "search",
+            "",
+            "Read the selected entity from the controlled running player.",
+            |s, e, _| s.inspect_play_selection(e),
+        ),
+        cmd(
+            "play.runtime.patch",
+            "Apply Runtime Edits",
+            "check",
+            "",
+            "Apply pending runtime field edits to a local Play world.",
+            |s, e, _| s.commit_play_fields(e).map(|_| ()),
+        ),
+        cmd(
+            "play.runtime.discard",
+            "Discard Runtime Edits",
+            "undo-2",
+            "",
+            "Discard pending runtime field drafts.",
+            |s, e, _| s.discard_play_fields(e),
+        ),
+        cmd(
+            "play.keep",
+            "Keep Runtime Changes",
+            "save",
+            "",
+            "Choose exact eligible runtime fields to save in one undoable transaction.",
+            |s, e, _| s.keep_play_changes(e, false),
+        ),
+        cmd(
+            "play.keep.apply",
+            "Keep Selected Runtime Fields",
+            "check",
+            "",
+            "Save only the checked eligible fields in one undoable authoring transaction.",
+            |s, e, _| s.apply_keep_fields(e),
+        ),
+        cmd(
+            "play.keep.cancel",
+            "Cancel Runtime Field Selection",
+            "x",
+            "",
+            "Close the runtime field chooser.",
+            |s, e, _| s.cancel_keep_fields(e),
+        ),
+        cmd(
+            "play.keep.refresh",
+            "Refresh Runtime Changes",
+            "refresh-cw",
+            "",
+            "Read current runtime differences and recheck which fields can be saved.",
+            |s, e, _| s.refresh_keep_fields(e),
+        ),
+        cmd(
+            "play.keep_driven",
+            "Keep Including Driven Values",
+            "save",
+            "",
+            "Explicitly include simulation-driven values in the typed Keep transaction.",
+            |s, e, _| s.keep_play_changes(e, true),
         ),
         cmd(
             "play.review",
-            "Review Kept Changes…",
-            "bot",
+            "Kept Changes History…",
+            "clock",
             "",
-            "Open the review queue.",
-            |_, e, _| focus(e, "agents"),
+            "Inspect the attributed Keep transactions in History.",
+            |_, e, _| {
+                focus(e, "history")?;
+                act(e, "editor.search", json!({"panel":"history","query":"Keep"}))
+            },
         ),
         cmd(
             "play.settings",
@@ -1232,19 +1467,15 @@ fn build() -> Vec<Spec> {
     c.extend([
         cmd("window.profiler", "Profiler", "gauge", "Alt+8", "Record and compare editor frames.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "profiler"}))).when(|c| panel_open(c, "profiler")),
         later("tools.gpu_capture", "GPU Frame Capture", "camera", "", "GPU captures run through RenderDoc for now; the integrated capture viewer is not built."),
-        later("tools.why", "Diagnostics: Why?", "search", "", "Run `ara why` (MCP: ara_why); the in-editor Why panel arrives with Problems."),
-        later("tools.references", "Reference Viewer", "link", "", "The reference graph view arrives with Asset browser v2."),
+        cmd("tools.why", "Diagnostics: Why?", "search", "", "Explain a diagnostic, reference or entity using the project's diagnostic service.", |s,e,t|s.explain_problem(e,t)),
+        cmd("tools.references", "Reference Viewer", "link", "", "Inspect the real Uses and Used by links of an authored asset.", |s,e,t|s.show_asset_references(e,t)),
         later("tools.table", "Table View…", "grid-2x2", "", "Spreadsheet bulk editing is backlog item 26."),
         later("tools.localization", "Localization", "", "", "ara-l10n tables are edited as files; the editor panel is not built."),
         later("tools.input_actions", "Input Actions", "", "", "Input action maps are edited as files; the editor panel is not built."),
         later("tools.physics_debugger", "Physics Debugger", "", "", "Needs an ara-physics debug-draw feed into the editor."),
         later("tools.terrain", "Terrain Tools", "", "", "Terrain sculpting and painting tools are not built yet."),
         later("tools.ui_designer", "UI Designer", "", "", "The UI designer over ara-ui-document ops is not built yet."),
-        cmd("tools.cs.solution", "Open Scripts in IDE", "file-code", "", "Open the project's C# module in VS Code (or the OS default editor).", |s, e, _| {
-            let dir = s.script_modules(e).into_iter().next().ok_or("This project has no usable C# module; see Problems, or use Assets > Create > C# Script")?;
-            let path=dir.strip_prefix(e.host.root()).unwrap_or(&dir).to_string_lossy().replace('\\',"/");
-            s.open_script_ide(e,&path)
-        }).when(|_| Avail::Ready),
+        cmd("tools.cs.solution", "Open Scripts in IDE", "file-code", "", "Discover modules in the background, then choose which one to open in the configured IDE.", |s, e, _|s.open_script_solution(e)).when(|_| Avail::Ready),
         later("tools.cs.reload", "Reload Scripts", "refresh-cw", "Ctrl+R", "C# reloads automatically when sources change; a manual trigger is not exposed yet."),
         cmd("window.agents", "Agents Panel", "bot", "Alt+6", "Agent activity and undo per turn.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "agents"}))).when(|c| panel_open(c, "agents")),
         cmd("agents.view", "View What the Agent Sees", "eye", "", "Jump once to the agent's scene, selection and camera; your view stays yours afterwards.", |_, e, t| {
@@ -1610,14 +1841,24 @@ fn build() -> Vec<Spec> {
             "users",
             "",
             "Show and control this Play client in the Game view.",
-            |s, _, t| {
-                if let Target::Text(n) = t
-                    && let Ok(n) = n.parse()
-                {
-                    s.game_client = n;
-                    s.game_captured = false;
-                }
-                Ok(())
+            |s, e, t| {
+                let Target::Text(n) = t else {
+                    return Err("Choose a Play client".into());
+                };
+                s.focus_play_client(e, n.parse()?, false)
+            },
+        ),
+        cmd(
+            "game.capture_client",
+            "Control Play Client",
+            "gamepad-2",
+            "",
+            "Capture input for the chosen Play view; Esc releases it.",
+            |s, e, t| {
+                let Target::Text(n) = t else {
+                    return Err("Choose a Play client".into());
+                };
+                s.focus_play_client(e, n.parse()?, true)
             },
         ),
         cmd(
@@ -1664,25 +1905,32 @@ fn build() -> Vec<Spec> {
             "trash",
             "",
             "Hide the messages logged so far; new ones still appear.",
-            |s, e, _| {
-                let logs = e.action("logs", json!({"limit": 1}))?;
-                s.log_view.since = logs["cursor"].as_u64().unwrap_or(0);
-                s.console_open = None;
-                Ok(())
-            },
+            |s, e, _| s.clear_console(e),
         ),
         cmd(
             "console.collapse",
             "Collapse Repeated Messages",
             "layers",
             "",
-            "Show one row per code with its total count.",
+            "Group repeated messages with the same source location and origin.",
             |s, _, _| {
                 s.log_view.collapse = !s.log_view.collapse;
                 Ok(())
             },
         )
         .when(|c| Avail::Checked(c.logs.collapse)),
+        cmd(
+            "console.clear_on_play",
+            "Clear on Play",
+            "play",
+            "",
+            "Clear previous Console messages when Play starts.",
+            |s, _, _| {
+                s.log_view.clear_on_play = !s.log_view.clear_on_play;
+                Ok(())
+            },
+        )
+        .when(|c| Avail::Checked(c.logs.clear_on_play)),
         cmd(
             "console.errors",
             "Show Errors",
@@ -1789,12 +2037,13 @@ fn build() -> Vec<Spec> {
                 Ok(())
             },
         ),
-        later(
+        cmd(
             "window.history",
             "History",
             "clock",
             "Alt+7",
-            "The History panel arrives with the Phase 2 tool rebuilds.",
+            "Inspect the attributed content transaction log.",
+            |_, e, _| focus(e, "history"),
         ),
         cmd(
             "window.float",
@@ -1803,13 +2052,7 @@ fn build() -> Vec<Spec> {
             "",
             "Tear the panel off into its own OS window.",
             |s, e, t| move_panel(s, e, t, "float"),
-        )
-        .when(|c| match c.target {
-            Target::Panel(p) if p == "scene" => Avail::Blocked(
-                "The Scene viewport stays in the main window; float tool panels and graphs".into(),
-            ),
-            _ => Avail::Ready,
-        }),
+        ),
         cmd(
             "window.move.left",
             "Left",
@@ -2007,7 +2250,7 @@ fn build() -> Vec<Spec> {
             let Target::Text(text) = t else { return Err("expected Path=value".into()) };
             let (path, value) = text.split_once('=').ok_or("expected Path=value")?;
             let value: Value = serde_json::from_str(value)?;
-            let commands = s.field_commands(&e.state.selection, path, value)?;
+            let commands = s.field_commands(e,&e.state.selection, path, value)?;
             let field = path.split('#').next().unwrap_or(path);
             apply(e, commands, &format!("Set {field}"))
         }).when(has_entity),

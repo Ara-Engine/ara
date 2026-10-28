@@ -1,8 +1,9 @@
 //! Hierarchy: a virtual 22 px tree with type-tinted icons (prefab instances in the
 //! prefab tint), a strong selection fill, hover eye/lock toggles, a scene header, a
-//! type filter menu (it writes `t:Kind` into the search), a footer count and an
-//! empty state.
+//! component/name/ID queries with ancestor context, saved searches, a footer count
+//! and an empty state.
 use super::commands::{Target, menus::Context};
+use super::hierarchy_filters::{Projection, Query};
 use super::*;
 impl Shell {
     pub(super) fn hierarchy_panel(
@@ -21,13 +22,30 @@ impl Shell {
             .state
             .searches
             .get("hierarchy")
-            .is_some_and(|q| q.starts_with("t:"));
+            .is_some_and(|q| !q.trim().is_empty());
         self.bindings.insert(
             ara_ui::source::stable_id("hierarchy-filter"),
             Binding::ContextMenu(Context::HierarchyFilter, Target::None),
         );
         out.push_str(&format!("<button id='hierarchy-filter' class='{} icon-button' label='Filter by type' description='Show only lights, cameras, meshes, prefabs, audio or effects' action='Dispatch'>{}</button>",if filtered{"selected"}else{"ghost"},if filtered{icons::icon_in("hierarchy-filter","funnel","on-selection")}else{icons::icon("hierarchy-filter","funnel")}));
         out.push_str("</panel>");
+        self.hierarchy_saved_filters_markup(editor, out);
+        if !editor.document_available() {
+            self.hierarchy_key = None;
+            self.hierarchy.items.clear();
+            self.hierarchy_entities.clear();
+            self.hierarchy_style.clear();
+            self.entity_count = 0;
+            self.empty(
+                out,
+                "hierarchy-unavailable",
+                "file-question",
+                "Scene unavailable",
+                "This scene was removed or its creation was undone. Redo, restore the file, or open another scene. Its view is preserved.",
+                &[],
+            );
+            return Ok(());
+        }
         let resolved = self.resolved(editor)?;
         let changed = editor.agent_fields();
         let changed_entities: std::collections::BTreeSet<_> =
@@ -79,24 +97,22 @@ impl Shell {
             self.hierarchy.items.clear();
             self.hierarchy_style.clear();
             self.hierarchy_entities.clear();
+            let filter = Query::new(&query);
+            let filtering = filter.active();
+            let projection = filtering.then(|| Projection::new(&resolved, &filter));
+            let included = |id: &str| {
+                projection
+                    .as_ref()
+                    .is_none_or(|projection| projection.included.contains(id))
+            };
             while let Some((id, depth)) = stack.pop() {
                 let e = &resolved[id];
                 let kids = children.get(&Some(id.as_str())).map_or(0, Vec::len);
-                let collapsed = editor.state.collapsed.contains(id)
-                    || (kids >= LARGE_GROUP && !editor.state.expanded.contains(id));
+                let collapsed = !filtering
+                    && (editor.state.collapsed.contains(id)
+                        || (kids >= LARGE_GROUP && !editor.state.expanded.contains(id)));
                 let name = e.record.get("name").and_then(Value::as_str).unwrap_or(id);
-                let component_filter = query
-                    .strip_prefix("type:")
-                    .or_else(|| query.strip_prefix("t:"));
-                let matches = component_filter.map_or_else(
-                    || {
-                        query.is_empty()
-                            || name.to_lowercase().contains(&query)
-                            || id.contains(&query)
-                    },
-                    |kind| e.record.keys().any(|k| k.to_lowercase().contains(kind)),
-                );
-                if matches {
+                if included(id) {
                     let key = crate::world::render_id(id);
                     let (icon, tint) = if e.record.contains_key("prefab") {
                         ("package", "tint-prefab")
@@ -126,7 +142,9 @@ impl Shell {
                             changed: changed_entities.contains(id.as_str()),
                             icon,
                             tint,
-                            children: children.contains_key(&Some(id.as_str())),
+                            children: children
+                                .get(&Some(id.as_str()))
+                                .is_some_and(|kids| kids.iter().any(|id| included(id))),
                             collapsed,
                             locked: editor.state.locked.contains(id),
                             hidden: editor.state.hidden.contains(id),
@@ -135,9 +153,7 @@ impl Shell {
                     self.hierarchy.items.push((key, name.to_owned()));
                     self.hierarchy_entities.insert(key, id.clone());
                 }
-                if (!collapsed || !query.is_empty())
-                    && let Some(kids) = children.get(&Some(id.as_str()))
-                {
+                if !collapsed && let Some(kids) = children.get(&Some(id.as_str())) {
                     stack.extend(kids.iter().rev().map(|kid| (*kid, depth + 1)));
                 }
             }
@@ -160,7 +176,7 @@ impl Shell {
                 "hierarchy-none",
                 "search",
                 "No matching entities",
-                "Clear the filter, or search by component with t:Light.",
+                "Search name:\"Key light\", id:e_light or t:Light. Combine terms; matching rows retain their ancestors.",
                 &[],
             );
         } else {

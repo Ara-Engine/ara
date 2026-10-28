@@ -43,6 +43,11 @@ pub(super) fn shutdown(mut world: World) -> Value {
         if let Ok(Ok(result)) = player.call(method::STOP, &json!({}), Duration::from_secs(2)) {
             tick = result["tick"].clone();
         }
+        // Shared slots stop independently. Reaping their one process happens only
+        // after every slot received STOP, rather than waiting once per slot here.
+        if player.child.is_shared() {
+            continue;
+        }
         let start = Instant::now();
         while start.elapsed() < Duration::from_millis(500)
             && !matches!(player.child.try_wait(), Ok(Some(_)))
@@ -176,7 +181,7 @@ mod tests {
         };
         let player = Player {
             incarnation: "stop-test-player".into(),
-            child,
+            child: child.into(),
             link: ara_play::link::Pump::owner(Link::accept(stream)?)?,
             hello: ara_play::Hello {
                 token: "test".into(),
@@ -193,6 +198,7 @@ mod tests {
             events: Vec::new(),
             embed: Vec::new(),
             profiling: Vec::new(),
+            replies: Default::default(),
         };
         let mut service = PlayService::new(&root, PlayConfig::for_project(&root));
         service.worlds.insert(
@@ -203,6 +209,7 @@ mod tests {
                 snapshot: Vec::new(),
                 section: None,
                 window: false,
+                process_mode: ProcessMode::Separate,
                 embed: None,
                 surfaces: vec![None],
                 start_paused: false,

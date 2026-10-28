@@ -21,6 +21,22 @@ pub enum Event {
     Quit,
     /// Pixel extent changed; zero denotes minimization.
     Resize([u32; 2]),
+    /// Window focus left the application surface; release held keys and gestures.
+    FocusLost,
+    /// Committed UTF-8 from SDL's text/IME path; never synthesized from scancodes.
+    TextInput {
+        /// Owned committed text.
+        text: String,
+    },
+    /// Uncommitted IME text and its selection in Unicode-character offsets.
+    TextEditing {
+        /// Owned composition text; empty means composition was cancelled.
+        text: String,
+        /// First selected Unicode character, or -1 when unspecified.
+        start: i32,
+        /// Number of selected Unicode characters, or -1 when unspecified.
+        length: i32,
+    },
     /// Keyboard scancode, press/release and repeat state.
     Key {
         /// SDL physical key scancode.
@@ -46,6 +62,25 @@ pub enum Event {
     },
     /// Mouse wheel motion.
     Wheel([f32; 2]),
+    /// Begin one native file-drop batch. Files and completion may arrive in later polls.
+    /// SDL does not provide a valid pointer position on this event.
+    FileDropBegin,
+    /// Native drag position while files hover over an application window.
+    FileDropPosition {
+        /// Pointer position in window coordinates, converted by the host like mouse input.
+        position: [f32; 2],
+    },
+    /// Finish one native file-drop batch at its last tagged Position/FileDrop.
+    /// SDL's completion coordinates are global cached values, not a fresh position.
+    /// A batch without files represents a leave or cancelled native operation.
+    FileDropComplete,
+    /// An OS file released onto a native window. Import policy belongs to the host.
+    FileDrop {
+        /// Owned file-system path; SDL's temporary event string is copied during polling.
+        path: std::path::PathBuf,
+        /// Drop position in window coordinates, converted by the host like mouse input.
+        position: [f32; 2],
+    },
 }
 /// The Ara app icon (64 px PNG exported by `ara-brand` from `assets/brand/ara-icon.svg`).
 const ARA_ICON_PNG: &[u8] = include_bytes!("../../../assets/brand/png/ara-icon-64.png");
@@ -100,8 +135,9 @@ impl Window {
                     },
             );
             if handle.is_null() {
+                let cause = error();
                 SDL_QuitSubSystem(SDL_INIT_VIDEO);
-                anyhow::bail!("SDL window: {}", error());
+                anyhow::bail!("SDL window: {cause}");
             }
             let window = Self {
                 handle,
@@ -374,6 +410,8 @@ impl Window {
                     events.push((0, Event::Quit));
                 } else if ty == SDL_EVENT_WINDOW_CLOSE_REQUESTED.0 {
                     events.push((e.window.windowID.0, Event::Quit));
+                } else if ty == SDL_EVENT_WINDOW_FOCUS_LOST.0 {
+                    events.push((e.window.windowID.0, Event::FocusLost));
                 } else if ty == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED.0
                     || ty == SDL_EVENT_WINDOW_RESTORED.0
                     || ty == SDL_EVENT_WINDOW_MINIMIZED.0
@@ -396,6 +434,22 @@ impl Window {
                             repeat: e.key.repeat,
                         },
                     ));
+                } else if ty == SDL_EVENT_TEXT_INPUT.0 && !e.text.text.is_null() {
+                    events.push((
+                        e.text.windowID.0,
+                        Event::TextInput {
+                            text: CStr::from_ptr(e.text.text).to_string_lossy().into_owned(),
+                        },
+                    ));
+                } else if ty == SDL_EVENT_TEXT_EDITING.0 && !e.edit.text.is_null() {
+                    events.push((
+                        e.edit.windowID.0,
+                        Event::TextEditing {
+                            text: CStr::from_ptr(e.edit.text).to_string_lossy().into_owned(),
+                            start: e.edit.start,
+                            length: e.edit.length,
+                        },
+                    ));
                 } else if ty == SDL_EVENT_MOUSE_MOTION.0 {
                     events.push((
                         e.motion.windowID.0,
@@ -412,6 +466,30 @@ impl Window {
                             pressed: ty == SDL_EVENT_MOUSE_BUTTON_DOWN.0,
                         },
                     ));
+                } else if ty == SDL_EVENT_DROP_BEGIN.0 {
+                    events.push((e.drop.windowID.0, Event::FileDropBegin));
+                } else if ty == SDL_EVENT_DROP_POSITION.0 {
+                    events.push((
+                        e.drop.windowID.0,
+                        Event::FileDropPosition {
+                            position: [e.drop.x, e.drop.y],
+                        },
+                    ));
+                } else if ty == SDL_EVENT_DROP_COMPLETE.0 {
+                    events.push((e.drop.windowID.0, Event::FileDropComplete));
+                } else if ty == SDL_EVENT_DROP_FILE.0 && !e.drop.data.is_null() {
+                    // SDL3 owns temporary drop strings until the next event pump. Copy now;
+                    // unlike SDL2, freeing this pointer would double-free SDL's storage.
+                    let path = CStr::from_ptr(e.drop.data).to_string_lossy().into_owned();
+                    if !path.is_empty() {
+                        events.push((
+                            e.drop.windowID.0,
+                            Event::FileDrop {
+                                path: std::path::PathBuf::from(path),
+                                position: [e.drop.x, e.drop.y],
+                            },
+                        ));
+                    }
                 } else if ty == SDL_EVENT_MOUSE_WHEEL.0 {
                     let direction = if e.wheel.direction == sdl3_sys::mouse::SDL_MOUSEWHEEL_FLIPPED
                     {

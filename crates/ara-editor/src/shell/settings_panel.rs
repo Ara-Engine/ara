@@ -2,7 +2,7 @@
 //! Ctrl+Alt+,): search with per-category counts, a modified-only filter, a 2 px
 //! modified marker with ↺ reset, and the Keyboard Shortcuts page with presets.
 //! Every edit is an undoable `editor.settings.set`.
-use super::commands::{all, keys::Preset, menu_path};
+use super::commands::keys::Preset;
 use super::*;
 use crate::settings::{DEFS, Def, Kind, Scope, categories};
 
@@ -81,7 +81,9 @@ impl Shell {
                 .iter()
                 .filter(|d| matches(d) && (category.is_empty() || d.category == category))
             {
-                if matches!(d.kind, Kind::Map) {
+                if matches!(d.kind, Kind::Map)
+                    && !matches!(d.key, "play.networkProfiles" | "hierarchy.filters")
+                {
                     continue;
                 }
                 if heading != d.category {
@@ -143,23 +145,31 @@ impl Shell {
                 ));
             }
             Kind::Choice(options) => {
-                out.push_str(&format!("<panel id='set-{id}' class='segment'>"));
-                for (n, (option, label)) in options.iter().enumerate() {
-                    let button = format!("set-{id}-{n}");
-                    self.bindings.insert(
-                        ara_ui::source::stable_id(&button),
-                        Binding::SettingChoice(key.into(), json!(option)),
-                    );
-                    out.push_str(&format!("<button id='{button}' class='segment-button{}' label='{}' action='Dispatch'><text id='{button}-label' text='{}' /></button>",if value.as_str()==Some(option){" selected"}else{""},escape(label),escape(label)));
-                }
-                out.push_str("</panel>");
+                self.choice_button(
+                    &format!("set-{id}"),
+                    d.label,
+                    choices::Select {
+                        destination: choices::Destination::Setting(key.into()),
+                        options: options
+                            .iter()
+                            .map(|(value, label)| (json!(value), (*label).to_owned()))
+                            .collect(),
+                        current: value.clone(),
+                    },
+                    out,
+                );
             }
-            Kind::Number { unit, .. } => {
+            Kind::Number {
+                min,
+                max,
+                step,
+                unit,
+            } => {
                 self.bindings.insert(
                     ara_ui::source::stable_id(&format!("set-{id}")),
                     Binding::Setting(key.into()),
                 );
-                out.push_str(&format!("<field id='set-{id}' class='number' style='width:120px' text='{}' label='{}' description='Enter to apply' action='Dispatch' /><text id='set-{id}-unit' class='caption' text='{}' />",escape(&panels::display(&value)),escape(d.label),escape(unit)));
+                out.push_str(&format!("<field id='set-{id}' class='number' min='{min}' max='{max}' step='{step}' style='width:120px' text='{}' label='{}' description='Type and press Enter, or drag the grip to adjust' action='Dispatch' /><text id='set-{id}-unit' class='caption' text='{}' />",escape(&panels::display(&value)),escape(d.label),escape(unit)));
             }
             Kind::Colors { .. } => {
                 // Saved and edited from the colour picker; reset clears them.
@@ -173,6 +183,19 @@ impl Shell {
                     "<text id='set-{id}' class='caption' text='{}' />",
                     escape(&text)
                 ));
+            }
+            Kind::Map if key == "play.networkProfiles" => {
+                self.bind_command(&format!("set-{id}"), "play.options", commands::Target::None);
+                out.push_str(&format!("<button id='set-{id}' text='Play options…' label='Client network profiles' action='Dispatch' />"));
+            }
+            Kind::Map if key == "hierarchy.filters" => {
+                let count = value.as_object().map_or(0, serde_json::Map::len);
+                self.bind_command(
+                    &format!("set-{id}"),
+                    "hierarchy.filter.apply",
+                    commands::Target::None,
+                );
+                out.push_str(&format!("<text id='set-{id}-count' class='caption' text='{count} saved' /><button id='set-{id}' text='Manage saved filters…' label='Apply a saved hierarchy filter' description='Choose a named query; save and delete filters from the Hierarchy filter menu' action='Dispatch' />"));
             }
             Kind::Text | Kind::Map => {
                 self.bindings.insert(
@@ -200,17 +223,22 @@ impl Shell {
                 .and_then(Value::as_str)
                 .unwrap_or("ara"),
         );
-        out.push_str("<panel id='keymap-row' class='setting-head' style='padding:6px'><text id='keymap-label' class='setting-label' text='Keymap preset' /><panel id='keymap-presets' class='segment'>");
-        for p in Preset::ALL {
-            let id = format!("keymap-{}", p.name());
-            self.bindings.insert(
-                ara_ui::source::stable_id(&id),
-                Binding::SettingChoice("input.keymap".into(), json!(p.name())),
-            );
-            out.push_str(&format!("<button id='{id}' class='segment-button{}' label='{} keymap' action='Dispatch'><text id='{id}-label' text='{}' /></button>",if p==preset{" selected"}else{""},p.title(),p.title()));
-        }
+        out.push_str("<panel id='keymap-row' class='setting-head' style='padding:6px'><text id='keymap-label' class='setting-label' text='Keymap preset' />");
+        self.choice_button(
+            "keymap-presets",
+            "Keymap preset",
+            choices::Select {
+                destination: choices::Destination::Setting("input.keymap".into()),
+                options: Preset::ALL
+                    .iter()
+                    .map(|p| (json!(p.name()), p.title().to_owned()))
+                    .collect(),
+                current: json!(preset.name()),
+            },
+            out,
+        );
         out.push_str(
-            "</panel></panel><panel id='shortcut-tools' class='toolbar' style='padding-left:6px'>",
+            "</panel><panel id='shortcut-tools' class='toolbar' style='padding-left:6px'>",
         );
         self.search(out, "shortcuts", editor);
         self.bindings.insert(
@@ -228,14 +256,12 @@ impl Shell {
             .state
             .settings
             .get("input.shortcuts")
-            .and_then(Value::as_object)
-            .cloned()
-            .unwrap_or_default();
-        let keymap = self.keymap.clone();
+            .and_then(Value::as_object);
+        let keymap = &self.keymap;
         // Matching commands under one header per menu, in menu-bar order; commands
         // outside the menus come last. Rows keep only a deeper sub-path.
-        let mut groups: Vec<(String, Vec<(&commands::Spec, String)>)> = Vec::new();
-        for spec in all() {
+        let mut groups: Vec<(String, Vec<_>)> = Vec::new();
+        for spec in commands::entries(&editor.extensions) {
             if matches!(
                 spec.id,
                 "file.open_scene"
@@ -252,7 +278,7 @@ impl Shell {
                 .iter()
                 .map(|c| c.text().to_lowercase())
                 .collect::<Vec<_>>();
-            let path = menu_path(spec.id);
+            let path = commands::registered_menu_path(&editor.extensions, spec.id);
             if !query.is_empty()
                 && !format!("{} {} {}", spec.title, path, spec.id)
                     .to_lowercase()
@@ -278,17 +304,20 @@ impl Shell {
                 escape(&top.to_uppercase())
             ));
             for (spec, sub) in rows {
-                let id = spec.id.replace('.', "-");
+                let id = shortcut_row_id(spec.id, spec.builtin.is_some());
                 let chords = keymap.chords(spec.id);
                 out.push_str(&format!("<panel id='shortcut-{id}' class='shortcut-row' description='{}'><text id='shortcut-title-{id}' text='{}' /><text id='shortcut-path-{id}' class='caption' text='{}' /><panel id='shortcut-fill-{id}' class='fill' />",escape(spec.summary),escape(spec.title),escape(&sub)));
                 let conflicts = keymap.conflicts(spec.id);
-                if let Some(other) = conflicts.first().and_then(|c| commands::get(c)) {
+                if let Some(other) = conflicts
+                    .first()
+                    .and_then(|c| commands::lookup(&editor.extensions, c))
+                {
                     out.push_str(&format!(
                         "<text id='shortcut-conflict-{id}' class='conflict' text='Also {}' />",
                         escape(other.title)
                     ));
                 }
-                if self.recording == Some(spec.id) {
+                if self.recording.as_deref() == Some(spec.id) {
                     out.push_str(&format!("<text id='shortcut-recording-{id}' class='accent' text='Press keys… (Esc cancels)' />"));
                 } else if chords.is_empty() {
                     out.push_str(&format!(
@@ -303,13 +332,13 @@ impl Shell {
                 }
                 self.bindings.insert(
                     ara_ui::source::stable_id(&format!("rebind-{id}")),
-                    Binding::ShortcutRecord(spec.id),
+                    Binding::ShortcutRecord(spec.id.to_owned()),
                 );
                 out.push_str(&format!("<button id='rebind-{id}' class='ghost icon-button' label='Rebind {}' description='Press a new shortcut' action='Dispatch'>{}</button>",escape(spec.title),icons::icon(&format!("rebind-{id}"),"pencil")));
-                if overrides.contains_key(spec.id) {
+                if overrides.is_some_and(|map| map.contains_key(spec.id)) {
                     self.bindings.insert(
                         ara_ui::source::stable_id(&format!("unbind-{id}")),
-                        Binding::ShortcutReset(spec.id),
+                        Binding::ShortcutReset(spec.id.to_owned()),
                     );
                     out.push_str(&format!("<button id='unbind-{id}' class='ghost icon-button' label='Reset {}' description='Back to the preset binding' action='Dispatch'>{}</button>",escape(spec.title),icons::icon(&format!("unbind-{id}"),"undo-2")));
                 }
@@ -328,6 +357,17 @@ impl Shell {
         }
     }
 }
+fn shortcut_row_id(command: &str, builtin: bool) -> String {
+    if builtin {
+        command.replace('.', "-")
+    } else {
+        format!("extension-{:x}", ara_ui::source::stable_id(command))
+    }
+}
+
+#[cfg(test)]
+mod tests;
+
 fn default_of(d: &Def) -> Value {
     match d.default {
         crate::settings::Lit::B(v) => json!(v),

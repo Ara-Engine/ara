@@ -2,6 +2,7 @@
 //! navigation, asset targets and OS hand-offs (file manager, terminal, docs).
 use super::commands::Target;
 use super::*;
+pub(super) mod authored;
 
 /// Work only the window owner can do; the app loop drains it each frame.
 #[derive(Clone, Debug, PartialEq)]
@@ -30,10 +31,20 @@ impl Shell {
     ) -> ara_ui::Result<()> {
         let folder = match target {
             Target::Folder(p) => Some(p.as_str()),
+            Target::Asset(p)
+                if self
+                    .browser
+                    .items
+                    .iter()
+                    .any(|asset| asset.path == *p && asset.kind == "folder") =>
+            {
+                Some(p.as_str())
+            }
             Target::Asset(p) => Some(p.rsplit_once('/').map_or("", |(p, _)| p)),
             _ => None,
         };
         if let Some(folder) = folder {
+            self.browser.authored_folder_ref(folder)?;
             editor.action("editor.workspace", json!({"folder":folder}))?;
         }
         Ok(())
@@ -92,17 +103,21 @@ impl Shell {
         ]
     }
     pub(crate) fn new_scene(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
-        let root = editor.host.root().to_owned();
-        let path = (1..)
+        let folder = self
+            .browser
+            .authored_folder_ref(&editor.state.asset_folder)?;
+        let path = (1..=10_000)
             .map(|n| {
-                if editor.state.asset_folder.is_empty() {
+                if folder.is_empty() {
                     format!("untitled-{n}.scene")
                 } else {
-                    format!("{}/untitled-{n}.scene", editor.state.asset_folder)
+                    format!("{folder}/untitled-{n}.scene")
                 }
             })
-            .find(|p| !root.join(p).exists() && editor.host.store().workspace().find(p).is_none())
-            .unwrap_or_else(|| "levels/untitled.scene".into());
+            .find(|path| {
+                authored::available(&self.browser.files, editor.host.store().workspace(), path)
+            })
+            .ok_or("No unused scene name in this authored folder")?;
         let result = editor.action(
             "editor.resource.create",
             json!({"path": path, "domain": "scene"}),
@@ -113,24 +128,6 @@ impl Shell {
             .to_owned();
         editor.action("editor.scene.open", json!({"scene": doc}))?;
         editor.action("editor.focus", json!({"panel": "scene"}))?;
-        Ok(())
-    }
-    pub(crate) fn new_folder(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
-        let base = editor.state.asset_folder.clone();
-        let root = editor.host.root().to_owned();
-        let path = (1..)
-            .map(|n| {
-                if base.is_empty() {
-                    format!("New folder {n}")
-                } else {
-                    format!("{base}/New folder {n}")
-                }
-            })
-            .find(|p| !root.join(p).exists())
-            .unwrap_or_default();
-        editor.action("asset.folder.create", json!({"path":path}))?;
-        self.browser.insert_path(&path, "folder");
-        editor.action("editor.workspace", json!({"asset": path}))?;
         Ok(())
     }
     /// Entities' resolved records, ready to paste as new entities.
@@ -230,11 +227,27 @@ impl Shell {
             return Ok(());
         }
         let path = self.asset_target(editor, target).ok_or("select an asset")?;
+        if self
+            .browser
+            .items
+            .iter()
+            .any(|asset| asset.path == path && asset.kind == "folder")
+        {
+            editor.action("editor.workspace", json!({"folder":path}))?;
+            return Ok(());
+        }
         if path.ends_with(".cs") {
             return self.open_script_ide(editor, &path);
         }
         let workspace = editor.host.store().workspace();
-        if let Some(id) = workspace.find(&path).map(ToString::to_string)
+        let logical = self
+            .browser
+            .items
+            .iter()
+            .find(|asset| asset.path == path)
+            .and_then(|asset| asset.authored_path.as_deref())
+            .unwrap_or(&path);
+        if let Some(id) = workspace.find(logical).map(ToString::to_string)
             && let Some(doc) = workspace.doc(&id)
         {
             if doc.kind == "scene" {
@@ -257,7 +270,10 @@ impl Shell {
         target: &Target,
     ) -> ara_ui::Result<()> {
         let path = match target {
-            Target::Asset(p) => Some(p.clone()),
+            Target::Asset(p) | Target::Folder(p) => Some(p.clone()),
+            Target::None if editor.state.focus == "assets" || editor.state.selection.is_empty() => {
+                editor.state.asset_path.clone()
+            }
             _ => target.entity(&editor.state).and_then(|entity| {
                 let resolved =
                     crate::world::resolve(editor.host.store(), &editor.state.doc).ok()?;
@@ -266,9 +282,13 @@ impl Shell {
                     .record
                     .get("MeshRenderer")?
                     .get("model")?
-                    .as_str()?
-                    .to_owned();
-                Some(model.trim_start_matches('@').split('#').next()?.to_owned())
+                    .as_str()?;
+                authored::reference_storage(
+                    &self.browser.files,
+                    editor.host.store().workspace().index(),
+                    model,
+                )
+                .map(str::to_owned)
             }),
         }
         .ok_or("the selection has no asset")?;
@@ -277,8 +297,12 @@ impl Shell {
             .map(|(f, _)| f.to_owned())
             .unwrap_or_default();
         editor.action("editor.layout.show", json!({"panel": "assets"}))?;
+        editor.action("editor.search", json!({"panel":"assets","query":""}))?;
         editor.action("editor.workspace", json!({"folder": folder, "asset": path}))?;
-        Ok(())
+        editor.action("editor.focus", json!({"panel":"assets"}))?;
+        self.asset_grid_dirty = true;
+        self.rebuild(editor)?;
+        self.reveal_asset_selection(editor, ara_ui::source::stable_id(&path))
     }
     /// The active graph page's canvas is in the current surface.
     pub(crate) fn graph_visible(&self) -> bool {
@@ -336,6 +360,10 @@ impl Shell {
 }
 /// Open a path in the OS file manager.
 pub(crate) fn open_external(path: &std::path::Path) -> ara_ui::Result<()> {
+    std::fs::metadata(path)?;
+    if std::env::var_os("ARA_PLAY_OFFSCREEN").is_some_and(|value| value == "1") {
+        return Ok(());
+    }
     let program = if cfg!(windows) {
         "explorer"
     } else if cfg!(target_os = "macos") {
@@ -348,6 +376,12 @@ pub(crate) fn open_external(path: &std::path::Path) -> ara_ui::Result<()> {
 }
 /// Open a terminal at the project root.
 pub(crate) fn open_terminal(root: &std::path::Path) -> ara_ui::Result<()> {
+    if !root.is_dir() {
+        return Err("The terminal folder is no longer available".into());
+    }
+    if std::env::var_os("ARA_PLAY_OFFSCREEN").is_some_and(|value| value == "1") {
+        return Ok(());
+    }
     if cfg!(windows) {
         if std::process::Command::new("wt")
             .arg("-d")

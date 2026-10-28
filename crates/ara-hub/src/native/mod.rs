@@ -37,6 +37,8 @@ use std::{
 /// Command-line options of `ara-hub`.
 #[derive(Clone, Debug)]
 pub struct Options {
+    /// Start in the existing New project form; otherwise show Projects.
+    pub new_project: bool,
     /// Measure the live installed startup offscreen and write frames/timings here.
     pub startup_probe: Option<PathBuf>,
     /// Windowless, compile-time-only release rehearsal driver.
@@ -60,6 +62,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            new_project: false,
             startup_probe: None,
             #[cfg(feature = "rehearsal")]
             rehearse_update: None,
@@ -256,6 +259,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         load_prefs(&config)
     };
     let mut hub = Hub::new(prefs, home(), engines::installed(&exe_dir));
+    initial_view(&mut hub, &options);
     let docs = os::docs(&exe_dir);
     if let Some(directory) = options.capture.clone() {
         let mut offscreen = Offscreen::new(options.size, options.dpi.unwrap_or(1.))?;
@@ -368,6 +372,20 @@ fn interactive(
             match event {
                 Event::Quit => return Ok(()),
                 Event::Resize(_) => dirty = true,
+                Event::FocusLost => {
+                    app.input.cancel_interaction(&mut app.ui);
+                    for scancode in [225, 229, 224, 228, 226, 230] {
+                        let _ = input::recover(app.key(hub, scancode, false));
+                    }
+                    dirty = true;
+                }
+                // NativeInput's SDL watch delivers text/IME and folder drops once.
+                Event::TextInput { .. }
+                | Event::TextEditing { .. }
+                | Event::FileDropBegin
+                | Event::FileDropPosition { .. }
+                | Event::FileDropComplete
+                | Event::FileDrop { .. } => {}
                 Event::Key {
                     scancode, pressed, ..
                 } => {
@@ -561,6 +579,12 @@ fn err(error: Box<dyn std::error::Error>) -> anyhow::Error {
     anyhow::anyhow!("{error}")
 }
 
+fn initial_view(hub: &mut Hub, options: &Options) {
+    if options.new_project {
+        hub.intent(crate::model::Intent::Navigate(crate::model::View::Create));
+    }
+}
+
 /// Show a fatal startup error to someone who launched the Hub from the Start menu.
 pub fn fatal(message: &str) {
     let text = std::ffi::CString::new(message.replace('\0', " ")).unwrap_or_default();
@@ -572,5 +596,30 @@ pub fn fatal(message: &str) {
             text.as_ptr(),
             std::ptr::null_mut(),
         );
+    }
+}
+
+#[cfg(test)]
+mod project_route_tests {
+    use super::*;
+
+    #[test]
+    fn new_project_reuses_create_navigation_and_open_keeps_projects() {
+        let mut hub = Hub::new(Prefs::default(), PathBuf::from("projects"), None);
+        initial_view(&mut hub, &Options::default());
+        assert_eq!(hub.view, crate::model::View::Projects);
+        initial_view(
+            &mut hub,
+            &Options {
+                new_project: true,
+                ..Options::default()
+            },
+        );
+        assert_eq!(hub.view, crate::model::View::Create);
+        assert!(hub.projects.is_empty());
+        assert!(hub.take_calls().iter().all(|call| !matches!(
+            call,
+            crate::model::Call::Open { .. } | crate::model::Call::Create { dry_run: false, .. }
+        )));
     }
 }

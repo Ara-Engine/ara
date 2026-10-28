@@ -25,9 +25,11 @@ use std::{
     collections::BTreeMap,
     path::PathBuf,
     sync::{Arc, atomic::Ordering},
-    time::Instant,
+    time::{Duration, Instant},
 };
+mod editor_control;
 mod feedback;
+pub(crate) use editor_control::PendingControl;
 
 /// Ticks per uninterrupted chunk of an explicit step (~0.5 s of game time).
 const CHUNK: u32 = 30;
@@ -58,6 +60,12 @@ pub struct World<R = Play> {
     loading_models: crate::pending_models::PendingModels,
     /// Patches acknowledged after their tick.
     pub pending: Vec<PendingPatch>,
+    /// Possession requests acknowledge after typed ops and ownership adopt at their tick.
+    pub(crate) pending_controls: Vec<PendingControl>,
+    /// Transient typed navigation state, separate from every authored gameplay camera.
+    editor_view: ara_play_host::editor_control::ViewStore,
+    /// Presentation navigation clock; gameplay still advances only through its runtime.
+    navigation_remainder: Duration,
     /// C# modules and their host's event channel, when the scene runs any.
     scripts: Option<(ScriptSettings, std::sync::mpsc::Receiver<ScriptEvent>)>,
     /// The streamed world's cells, when the snapshot has a world.
@@ -86,6 +94,9 @@ impl<R> World<R> {
             packed: self.packed,
             loading_models: self.loading_models,
             pending: self.pending,
+            pending_controls: self.pending_controls,
+            editor_view: self.editor_view,
+            navigation_remainder: self.navigation_remainder,
             scripts: self.scripts,
             cells: self.cells,
         })
@@ -157,6 +168,7 @@ impl World {
             feedback::animation(ui, &mut self.runtime);
         }
         self.runtime.extract(frame);
+        self.apply_editor_view(frame);
         self.loading_models.style(&self.runtime, &self.pins, frame);
         if let Some(ui) = &self.ui {
             feedback::effects(ui, &self.runtime, frame);
@@ -329,6 +341,18 @@ impl World {
         for error in runtime.asset_errors() {
             eprintln!("{error}");
         }
+        let editor_view = ara_play_host::editor_control::ViewStore::new(runtime.schema()).map_err(
+            |problems| {
+                anyhow!(
+                    "{}",
+                    problems
+                        .iter()
+                        .map(|problem| problem.message.as_str())
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                )
+            },
+        )?;
         Ok((
             World {
                 ui: scene.ui.clone(),
@@ -341,6 +365,9 @@ impl World {
                 packed,
                 loading_models: Default::default(),
                 pending: Vec::new(),
+                pending_controls: Vec::new(),
+                editor_view,
+                navigation_remainder: Duration::ZERO,
                 scripts,
                 cells,
             },

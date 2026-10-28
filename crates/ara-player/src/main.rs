@@ -7,9 +7,11 @@
 extern crate glam34 as glam;
 mod crash;
 mod device;
+mod editor_control;
 mod embed;
 mod game_app;
 mod game_ui;
+mod group;
 #[cfg(all(test, windows))]
 mod icon_tests;
 mod input;
@@ -67,6 +69,9 @@ struct Args {
     /// Internal pool warm-up; only services with a Surfaces attachment request it.
     #[arg(long, hide = true)]
     prewarm_graphics: bool,
+    /// Internal owner mode: independently owned worlds inside this player process.
+    #[arg(long, hide = true)]
+    group_slots: Option<usize>,
     #[command(flatten)]
     standalone: standalone::Options,
 }
@@ -194,6 +199,9 @@ fn run(args: Args, launched: Instant) -> Result<()> {
     // Probes need no pack: they open their own hidden window on this main thread.
     if let Some(name) = &args.standalone.probe {
         return standalone::probes::run(name);
+    }
+    if let Some(count) = args.group_slots {
+        return group::run_group(args, launched, count);
     }
     if args.owner.is_none() {
         if args.game.game || game_app::has_menu(&args)? {
@@ -361,6 +369,7 @@ impl Player {
     fn frame(&mut self) -> Result<()> {
         ara_gpu::cpu_scope!("Player.frame");
         let profiling = self.profiling.frame_open();
+        self.acknowledge_controls()?;
         let warming_window = self.window.is_some() && !self.window_ready;
         if warming_window {
             busy(&mut self.link, "first window frame")?;
@@ -380,15 +389,22 @@ impl Player {
             let holding = !world.runtime.networked()
                 && self.embed.as_ref().is_some_and(embed::Embedded::entering);
             let input_scope = profiling.then(|| ara_profile::scope("player.input"));
-            let inputs = match (&mut self.window, &mut self.embed) {
+            let spectator = world.spectating();
+            let (inputs, navigation) = match (&mut self.window, &mut self.embed) {
                 (Some(window), _) => {
-                    let (quit, inputs) = window.events(world.runtime.player())?;
+                    let (quit, inputs, navigation) =
+                        window.view_events(world.runtime.player(), spectator)?;
                     self.stop |= quit;
-                    inputs
+                    (inputs, navigation)
                 }
-                (None, Some(embed)) if !holding => embed.input.injections(world.runtime.player()),
-                (None, _) => Vec::new(),
+                (None, Some(embed)) if !holding => {
+                    embed.input.for_view(world.runtime.player(), spectator)
+                }
+                (None, _) => (Vec::new(), None),
             };
+            if let Some(navigation) = navigation {
+                world.navigate(navigation, elapsed)?;
+            }
             if !inputs.is_empty()
                 && let Err(e) = world.runtime.input(0, inputs)
             {
@@ -654,6 +670,9 @@ impl Player {
         if method == method::PATCH {
             return self.patch(id, params);
         }
+        if method == method::CONTROL {
+            return self.control_request(id, params);
+        }
         let result = self.dispatch(&method, params);
         let reply = match result {
             Ok(value) => Ok(value),
@@ -678,9 +697,9 @@ impl Player {
         let outcome = (|| -> std::result::Result<Option<Value>, Failure> {
             let patch: ara_play::Patch = parse(params)?;
             let world = self.world.as_mut().ok_or_else(no_world)?;
-            world.runtime.local_only("play.patch")?;
+            world.runtime.authoritative_only("play.patch")?;
             let tick = world.patch(&patch)?;
-            if world.runtime.running() {
+            if world.runtime.networked() || world.runtime.running() {
                 world.pending.push(PendingPatch {
                     id: id.clone(),
                     tick,
@@ -932,6 +951,7 @@ impl Player {
             world.runtime.local_only(method)?;
         }
         let value = match method {
+            method::VIEW => world.set_editor_view(parse::<ara_play::View>(params)?)?,
             method::JOIN => {
                 let join: ara_play::Join = parse(params)?;
                 serde_json::to_value(world.runtime.join(join.index)?)?

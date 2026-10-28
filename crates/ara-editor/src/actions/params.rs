@@ -39,6 +39,26 @@ pub(super) struct EditorWorkspace {
     pub asset: Option<String>,
     /// Folder to browse.
     pub folder: Option<String>,
+    /// Exact Assets query, including type filter tokens; navigation only.
+    pub asset_query: Option<String>,
+    /// Search recursively within the current folder instead of the whole project.
+    pub folder_only: Option<bool>,
+    /// Toggle a favourite project-relative storage path, or set `favouriteEnabled`.
+    pub favourite: Option<String>,
+    /// Whether `favourite` is a folder; false denotes a file.
+    pub favourite_folder: Option<bool>,
+    /// Explicit favourite membership; absent toggles the existing membership.
+    pub favourite_enabled: Option<bool>,
+    /// Open a stored favourite without changing scene/entity selection.
+    pub open_favourite: Option<String>,
+    /// Save the current Assets query/folder/scope under this name.
+    pub save_search: Option<String>,
+    /// Explicit saved entry for a scoped Restore operation; paired with `saveSearch`.
+    pub saved_search: Option<crate::state::SavedAssetSearch>,
+    /// Apply this saved query/folder/scope in one navigation transaction.
+    pub open_search: Option<String>,
+    /// Remove this saved entry while preserving the active browser query.
+    pub remove_search: Option<String>,
     /// Folder sidebar width in logical pixels (96–480).
     pub sidebar_width: Option<f32>,
     /// Toggle the expansion of one project-relative folder.
@@ -95,10 +115,6 @@ pub(super) struct EditorReport {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct EditorSceneOpen {
     /// Live protocol session.
-    #[expect(
-        dead_code,
-        reason = "Host validates the session before service dispatch"
-    )]
     pub session: String,
     /// Project-relative scene path (`levels/hangar.scene`) or scene document ID.
     pub scene: String,
@@ -145,14 +161,14 @@ pub(super) struct EditorFocus {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct EditorFrame {
     /// Live protocol session.
-    #[expect(
-        dead_code,
-        reason = "Host validates the session before service dispatch"
-    )]
     pub session: String,
     /// Show the scene as it opens instead: its gameplay camera's view, else its
     /// content (terrain and ground excluded) from a three-quarter angle.
     pub opening: Option<bool>,
+    /// Width divided by height of the Scene viewport; omitted uses its last known aspect.
+    pub aspect: Option<f32>,
+    /// Frame every renderable object while preserving the current selection.
+    pub all: Option<bool>,
 }
 /// Parameters to read or change the Scene view camera. Omitted fields keep their
 /// values; with none given the call only reads the camera.
@@ -182,6 +198,39 @@ pub(super) struct EditorCamera {
     /// Vertical field of view, in degrees; clamped to 10–120.
     #[ara(unit=Degrees)]
     pub fov_y_degrees: Option<f32>,
+    /// Perspective or parallel orthographic projection.
+    pub projection: Option<crate::state::CameraProjection>,
+    /// Positive visible vertical span for orthographic projection, in metres.
+    #[ara(unit=Meters)]
+    pub orthographic_height: Option<f32>,
+}
+/// Operation on named scene camera views.
+#[derive(Clone, Copy, Schema, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) enum CameraBookmarkAction {
+    /// Read the chosen scene's named views without changing navigation.
+    List,
+    /// Save the caller's current view; an omitted name creates a unique View N.
+    Save,
+    /// Restore the named view for this caller, opening its scene if requested.
+    Recall,
+    /// Remove a named view without moving the camera.
+    Delete,
+}
+/// Read or edit per-scene named camera views through navigation ops.
+#[derive(Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct EditorCameraBookmark {
+    /// Live protocol session, validated by the host.
+    #[expect(dead_code, reason = "Host validates sessions before dispatch")]
+    pub session: String,
+    /// List, save, recall or delete a named camera view.
+    pub action: CameraBookmarkAction,
+    /// View name; save generates View N when omitted.
+    pub name: Option<String>,
+    /// Scene path or identity; omitted uses this caller's current scene.
+    pub scene: Option<String>,
 }
 /// Parameters for a theme switch.
 #[derive(Schema, Deserialize)]
@@ -244,6 +293,9 @@ pub(super) struct EditorLayout {
     pub before: Option<bool>,
     /// Path to a splitter: false means first, true means second.
     pub path: Option<Vec<bool>>,
+    /// Floating window identity for a splitter adjustment; absent targets the main window.
+    /// Requires `ratio`; panel moves and activation keep their existing area addressing.
+    pub window: Option<String>,
     /// Split fraction, constrained to 0.1 through 0.9.
     pub ratio: Option<f32>,
 }
