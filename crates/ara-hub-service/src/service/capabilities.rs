@@ -125,7 +125,8 @@ impl Hub {
         let layouts = self
             .capabilities
             .layouts(&engine.executable, &self.config.directory);
-        if ara_doc::detect_project_layout(&marker).is_current() {
+        let layout = ara_doc::detect_project_layout(&marker);
+        if layout.is_current() {
             if !layouts.contains(&4) {
                 return Err(Diagnostic::error(
                     codes::PROJECT_ENGINE_LAYOUT_UNSUPPORTED,
@@ -134,7 +135,10 @@ impl Hub {
                 .file(marker_path.to_string_lossy())
                 .into());
             }
-        } else if layouts.contains(&4) || !layouts.contains(&3) {
+        } else if layout != ara_doc::ProjectLayout::Preview3
+            || layouts.contains(&4)
+            || !layouts.contains(&3)
+        {
             ara_host::project_layout::require_current_layout(&project.path)?;
         }
         Ok(engine)

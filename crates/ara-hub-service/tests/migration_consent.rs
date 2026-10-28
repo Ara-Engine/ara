@@ -285,8 +285,14 @@ fn undeclared_engine_does_not_claim_legacy_root_layout_support() {
             "hub.catalog",
             json!({"project":fixture.project}),
         )
-        .expect_err("v3-only engines cannot claim legacy root layout support");
-    assert!(error.diagnostics().iter().any(|diagnostic| diagnostic.code == ara_diag::codes::PROJECT_MIGRATION_REQUIRED));
+        .err()
+        .expect("v3-only engines cannot claim legacy root layout support");
+    assert!(
+        error
+            .diagnostics()
+            .iter()
+            .any(|diagnostic| diagnostic.code == ara_diag::codes::PROJECT_MIGRATION_REQUIRED)
+    );
     assert_eq!(
         fs::read(fixture.root.join("ara.project.json")).expect("untouched marker"),
         marker
