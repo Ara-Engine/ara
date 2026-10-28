@@ -2,8 +2,16 @@ use ara_host::project::{AuthoredFile, AuthoredRole, AuthoredScope, authored_file
 use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
-    sync::mpsc::{self, Receiver},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+        mpsc::{self, Receiver},
+    },
 };
+#[cfg(test)]
+pub(in crate::shell) mod scan_fixture;
+#[cfg(test)]
+mod scan_tests;
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct Asset {
     /// Project-relative storage path: browser identity, selection and physical IO.
@@ -87,6 +95,9 @@ struct Snapshot {
     files: Vec<AuthoredFile>,
     items: Vec<Asset>,
 }
+/// A scan already started when an authority save completed cannot acknowledge it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct ScanBarrier(u64);
 pub(super) struct Browser {
     pub items: Vec<Asset>,
     /// Last successful semantic index, also used to resolve OS-drop destinations.
@@ -97,7 +108,9 @@ pub(super) struct Browser {
     pub revision: u64,
     pub error: Option<String>,
     pub(super) diagnostic: Option<ara_diag::Diagnostic>,
-    pending: Receiver<Result<Snapshot, ara_diag::Diagnostic>>,
+    pending: Receiver<(u64, Result<Snapshot, ara_diag::Diagnostic>)>,
+    scan_started: Arc<AtomicU64>,
+    scan_completed: u64,
     refresh: mpsc::SyncSender<()>,
     optimistic: std::collections::BTreeMap<String, Option<Asset>>,
 }
@@ -145,11 +158,16 @@ impl Browser {
         let schema = schema.clone();
         let (tx, pending) = mpsc::sync_channel(1);
         let (refresh, wake) = mpsc::sync_channel(1);
+        let scan_started = Arc::new(AtomicU64::new(0));
+        let worker_started = Arc::clone(&scan_started);
         std::thread::spawn(move || {
             let mut cache = std::collections::HashMap::new();
+            let mut generation = 0_u64;
             loop {
+                generation = generation.saturating_add(1);
+                worker_started.store(generation, Ordering::Release);
                 let snapshot = scan(&root, &schema, &mut cache);
-                if tx.send(snapshot).is_err() {
+                if tx.send((generation, snapshot)).is_err() {
                     break;
                 }
                 match wake.recv_timeout(std::time::Duration::from_secs(2)) {
@@ -166,6 +184,8 @@ impl Browser {
             error: None,
             diagnostic: None,
             pending,
+            scan_started,
+            scan_completed: 0,
             refresh,
             optimistic: Default::default(),
         }
@@ -174,11 +194,23 @@ impl Browser {
     pub(super) fn refresh(&self) {
         let _ = self.refresh.try_send(());
     }
+    /// Request a scan which starts after this call. Call only after the authority
+    /// has saved; a queued or currently running older scan must not satisfy it.
+    pub(super) fn refresh_after_current_scan(&self) -> ScanBarrier {
+        let barrier = ScanBarrier(self.scan_started.load(Ordering::Acquire));
+        self.refresh();
+        barrier
+    }
+    /// An equal-content successful scan still acknowledges a refresh barrier.
+    pub(super) fn completed_scan_after(&self, barrier: ScanBarrier) -> bool {
+        self.error.is_none() && self.scan_completed > barrier.0
+    }
     pub fn poll(&mut self) -> bool {
-        let result = match self.pending.try_recv() {
+        let (generation, result) = match self.pending.try_recv() {
             Ok(result) => result,
             Err(_) => return false,
         };
+        self.scan_completed = generation;
         let mut snapshot = match result {
             Ok(snapshot) => snapshot,
             Err(problem) => {
@@ -207,7 +239,8 @@ impl Browser {
             }
         });
         snapshot.items.sort_by(|a, b| a.path.cmp(&b.path));
-        let changed = self.items != snapshot.items || self.error.take().is_some();
+        let recovered = self.error.take().is_some();
+        let changed = self.items != snapshot.items || recovered;
         self.items = snapshot.items;
         self.files = snapshot.files;
         self.revision += u64::from(changed);
@@ -244,6 +277,12 @@ fn cached_authored_folder<'a>(
     Err("This folder is not in the current authored index".into())
 }
 impl super::Shell {
+    /// Retry the cached semantic projection without starting an authoring job.
+    pub(crate) fn refresh_asset_browser(&mut self) -> ara_ui::Result<()> {
+        self.browser.refresh();
+        self.asset_grid_dirty = true;
+        Ok(())
+    }
     /// The last successful semantic index is immutable during a UI/drop dispatch.
     pub(crate) fn asset_authored_files(&self) -> &[AuthoredFile] {
         &self.browser.files

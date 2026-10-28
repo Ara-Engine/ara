@@ -102,6 +102,8 @@ impl Shell {
             let on = editor.state.asset_grid == grid;
             out.push_str(&format!("<button id='{id}' class='{} icon-button' label='{label}' description='{label} view' action='Dispatch'>{}</button>",if on{"selected"}else{"ghost"},if on{icons::icon_in(id,icon,"on-selection")}else{icons::icon(id,icon)}));
         }
+        self.bind_command("assets-refresh", "assets.refresh", commands::Target::None);
+        out.push_str(&format!("<button id='assets-refresh' class='ghost icon-button' label='Refresh Assets' description='Refresh the semantic browser index; retry a failed or pending index scan' action='Dispatch'>{}</button>", icons::icon("assets-refresh", "refresh-cw")));
         let side = if narrow {
             0.
         } else {
@@ -115,7 +117,7 @@ impl Shell {
         self.asset_import_markup(&mut jobs);
         if let Some(problem) = &self.browser.error {
             jobs.push_str(&format!(
-                "<text id='assets-index-error' class='caption asset-job-message' text='{}' />",
+                "<text id='assets-index-error' class='caption asset-job-message' text='{} · Use Refresh Assets in the toolbar to retry.' />",
                 escape(problem)
             ));
         }

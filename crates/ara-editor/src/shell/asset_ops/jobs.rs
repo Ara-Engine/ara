@@ -153,6 +153,8 @@ impl Shell {
             plan,
             selection,
             following: false,
+            scan_barrier: None,
+            scan_wait_notice: false,
             cancel_requested: false,
         });
         self.asset_ops.revision += 1;
@@ -324,14 +326,27 @@ impl Shell {
                 || self.asset_ops.history.pending()
             {
                 job.following = false;
+                if self.status_note.as_deref() == Some(JOB_SCAN_WAIT) {
+                    self.status_note = None;
+                }
             }
         }
         if job.following {
             if !job.selection.unchanged(self, editor) {
                 job.following = false;
+                if self.status_note.as_deref() == Some(JOB_SCAN_WAIT) {
+                    self.status_note = None;
+                }
                 changed = true;
-            } else if let Some(after) =
-                planned_selection(&job.selection, &job.plan, &self.browser.items, resolve)
+            } else if editor.host.unsaved() {
+                job.scan_barrier = None;
+            } else if job.scan_barrier.is_none() {
+                job.scan_barrier = Some(self.browser.refresh_after_current_scan());
+            } else if job
+                .scan_barrier
+                .is_some_and(|barrier| self.browser.completed_scan_after(barrier))
+                && let Some(after) =
+                    planned_selection(&job.selection, &job.plan, &self.browser.items, resolve)
             {
                 if let Err(error) = editor.action(
                     "editor.workspace",
@@ -349,12 +364,14 @@ impl Shell {
                 job.following = false;
                 changed = true;
                 self.status_note = Some(backend::message(&job.status, &job.plan.labels));
-            } else if job.began.elapsed() > Duration::from_secs(30) {
-                // File success is never reinterpreted as failure or optimistically
-                // projected. Let the next semantic scan reconcile stale keys.
-                job.following = false;
+            } else if !job.scan_wait_notice
+                && (self.browser.error.is_some() || job.began.elapsed() > Duration::from_secs(30))
+            {
+                // Never drop selected-key protection on a failed/late scan.
+                // Refresh Assets remains available while this result is pending.
+                job.scan_wait_notice = true;
                 changed = true;
-                self.status_note=Some("Asset transaction completed; waiting for its semantic browser entries to refresh".into());
+                self.status_note = Some(JOB_SCAN_WAIT.into());
             }
         }
         self.asset_ops.job = Some(job);

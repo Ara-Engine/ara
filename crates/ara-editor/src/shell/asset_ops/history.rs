@@ -1,6 +1,8 @@
 //! Selection follows exact undo/redo chains only while its last navigation is intact.
 use super::*;
 use ara_ops::{Author, Transaction, TxnId};
+#[cfg(test)]
+mod index_tests;
 
 struct Record {
     source: TxnId,
@@ -13,6 +15,8 @@ struct Pending {
     expected: Selection,
     desired: Selection,
     began: Instant,
+    scan_barrier: Option<assets::ScanBarrier>,
+    scan_wait_notice: bool,
 }
 
 #[derive(Default)]
@@ -89,11 +93,15 @@ impl History {
         if transaction.author == Author::Human && guarded {
             if let Some(pending) = &mut self.pending {
                 pending.desired = desired.clone();
+                pending.began = Instant::now();
+                pending.scan_barrier = None;
             } else {
                 self.pending = Some(Pending {
                     expected: current,
                     desired: desired.clone(),
                     began: Instant::now(),
+                    scan_barrier: None,
+                    scan_wait_notice: false,
                 });
             }
         } else {
@@ -118,6 +126,9 @@ impl Shell {
                 .is_some_and(|pending| !pending.expected.unchanged(self, editor))
             {
                 self.asset_ops.history.pending = None;
+                if self.status_note.as_deref() == Some(HISTORY_SCAN_WAIT) {
+                    self.status_note = None;
+                }
                 self.asset_ops.revision += 1;
                 return true;
             }
@@ -130,6 +141,11 @@ impl Shell {
         }
         history.revision = revision;
         self.asset_ops.history = history;
+        if !self.asset_ops.history.pending()
+            && self.status_note.as_deref() == Some(HISTORY_SCAN_WAIT)
+        {
+            self.status_note = None;
+        }
         if changed {
             self.browser.refresh();
             self.asset_ops.revision += 1;
@@ -142,8 +158,30 @@ impl Shell {
         };
         if !pending.expected.unchanged(self, editor) {
             self.asset_ops.history.pending = None;
+            if self.status_note.as_deref() == Some(HISTORY_SCAN_WAIT) {
+                self.status_note = None;
+            }
             return Ok(true);
         }
+        if editor.host.unsaved() {
+            if let Some(pending) = &mut self.asset_ops.history.pending {
+                pending.scan_barrier = None;
+            }
+            return Ok(false);
+        }
+        if pending.scan_barrier.is_none() {
+            let barrier = self.browser.refresh_after_current_scan();
+            if let Some(pending) = &mut self.asset_ops.history.pending {
+                pending.scan_barrier = Some(barrier);
+            }
+            return Ok(false);
+        }
+        let pending = self
+            .asset_ops
+            .history
+            .pending
+            .as_ref()
+            .ok_or("Asset history navigation was removed")?;
         let desired = &pending.desired;
         let folder_ready = desired.folder.is_empty()
             || (!editor.host.store().workspace().reference_root().is_empty()
@@ -153,17 +191,23 @@ impl Shell {
                 .items
                 .iter()
                 .any(|asset| asset.kind == "folder" && asset.path == desired.folder);
-        if !folder_ready
+        if !pending
+            .scan_barrier
+            .is_some_and(|barrier| self.browser.completed_scan_after(barrier))
+            || !folder_ready
             || !desired
                 .paths
                 .iter()
                 .all(|path| self.browser.items.iter().any(|asset| &asset.path == path))
         {
-            if pending.began.elapsed() > Duration::from_secs(30) {
-                self.asset_ops.history.pending = None;
-                self.status_note = Some(
-                    "Asset history changed; the browser is still refreshing its entries".into(),
-                );
+            if !pending.scan_wait_notice
+                && (self.browser.error.is_some()
+                    || pending.began.elapsed() > Duration::from_secs(30))
+            {
+                if let Some(pending) = &mut self.asset_ops.history.pending {
+                    pending.scan_wait_notice = true;
+                }
+                self.status_note = Some(HISTORY_SCAN_WAIT.into());
                 return Ok(true);
             }
             return Ok(false);
@@ -188,6 +232,9 @@ impl Shell {
             self.asset_selection.focus(active);
         }
         self.asset_selection_path = pending.desired.primary;
+        if self.status_note.as_deref() == Some(HISTORY_SCAN_WAIT) {
+            self.status_note = None;
+        }
         self.asset_grid_dirty = true;
         Ok(true)
     }

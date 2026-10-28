@@ -8,6 +8,8 @@ mod history;
 mod jobs;
 mod plan;
 mod view;
+const HISTORY_SCAN_WAIT: &str = "Asset history is waiting for a fresh browser index. Use Refresh Assets to retry, or change selection to stop following this history entry.";
+const JOB_SCAN_WAIT: &str = "Asset transaction completed; waiting for a fresh browser index. Use Refresh Assets to retry, or change selection to stop following this result.";
 
 #[derive(Clone, PartialEq)]
 pub(crate) enum Action {
@@ -41,6 +43,8 @@ struct Job {
     plan: plan::Plan,
     selection: Selection,
     following: bool,
+    scan_barrier: Option<assets::ScanBarrier>,
+    scan_wait_notice: bool,
     cancel_requested: bool,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]

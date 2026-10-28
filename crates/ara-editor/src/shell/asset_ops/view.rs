@@ -145,6 +145,8 @@ impl Shell {
             ),
             selection: Selection::read(self, editor),
             following: false,
+            scan_barrier: None,
+            scan_wait_notice: false,
             cancel_requested: false,
         });
         self.asset_ops.revision += 1;
