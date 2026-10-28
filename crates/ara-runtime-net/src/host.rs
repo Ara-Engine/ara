@@ -2,7 +2,8 @@
 use super::*;
 use ara_input::Injection;
 use ara_net::{
-    AdapterRef, Authoritative, Conditions, JoinToken, Link, PolicyRegistry, Server, ServerConfig,
+    AdapterRef, Authoritative, Conditions, DirectionStats, JoinToken, Link, PolicyRegistry, Server,
+    ServerConfig,
 };
 use ara_sim::{SessionAdapter, SessionMode, TickRecord};
 use std::{net::SocketAddr, time::Instant};
@@ -52,6 +53,24 @@ pub struct HostConfig {
     pub clients: Vec<Option<Conditions>>,
 }
 
+/// One live authority proxy; client identity matches the launch/join order.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClientLinkStats {
+    /// Zero-based client link index, independent of rendering-player indices.
+    pub client_index: usize,
+    /// Runtime player identity assigned by the authority to this client.
+    pub player: u64,
+    /// Validated upstream conditions currently used by the live proxy.
+    pub up: Conditions,
+    /// Validated downstream conditions currently used by the live proxy.
+    pub down: Conditions,
+    /// Actual upstream datagram counters from that same proxy.
+    pub up_stats: DirectionStats,
+    /// Actual downstream datagram counters from that same proxy.
+    pub down_stats: DirectionStats,
+}
+
 /// Authority-side numbers for reports and `play.status`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,6 +91,10 @@ pub struct HostStats {
     pub down_packets: u64,
     /// Datagrams dropped by simulated loss, both directions.
     pub dropped: u64,
+    /// Per-client conditions and counters read from each actual live proxy.
+    /// Empty is omitted so the existing no-client wire shape remains unchanged.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<ClientLinkStats>,
 }
 
 /// The play world's [`Runtime`] owned by a Lightyear server. The server's timeline
@@ -85,6 +108,9 @@ pub struct NetHost {
     created: Instant,
     begin_ms: Option<f64>,
 }
+
+#[cfg(test)]
+mod inspection_tests;
 
 impl NetHost {
     /// Wraps a freshly built world (tick 0, after [`avatars`], with [`NetPlugin`]):
@@ -265,7 +291,16 @@ impl NetHost {
             payload_bytes: self.server.profile().values().map(|f| f.bytes).sum(),
             ..Default::default()
         };
-        for link in &self.links {
+        for (client_index, link) in self.links.iter().enumerate() {
+            let [up, down] = link.applied_conditions();
+            stats.links.push(ClientLinkStats {
+                client_index,
+                player: HOST_PLAYER + 1 + client_index as u64,
+                up,
+                down,
+                up_stats: link.up,
+                down_stats: link.down,
+            });
             stats.down_bytes += link.down.delivered_bytes;
             stats.up_bytes += link.up.delivered_bytes;
             stats.down_packets += link.down.packets;

@@ -53,7 +53,7 @@ impl Conditions {
 }
 
 /// Counts offered/delivered encrypted UDP payload, including transport headers and ACKs.
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DirectionStats {
     /// Datagrams received from the sender.
     pub packets: u64,
@@ -128,6 +128,11 @@ impl Link {
         down.validate()?;
         self.conditions = [up, down];
         Ok(())
+    }
+    /// Current validated conditions used by this proxy, ordered upstream/downstream.
+    /// Already queued packets retain the delays assigned when they arrived.
+    pub fn applied_conditions(&self) -> [Conditions; 2] {
+        self.conditions
     }
     fn random(&mut self) -> u64 {
         self.random_state ^= self.random_state << 13;
@@ -216,5 +221,37 @@ impl Link {
             stats.delivered_bytes += sent as u64;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod inspection_tests {
+    use super::*;
+
+    #[test]
+    fn inspection_reports_live_directional_conditions_and_rejected_changes_leave_them_intact() {
+        let mut link = Link::new(7, Conditions::default()).unwrap();
+        let up = Conditions {
+            latency_ms: 200,
+            jitter_ms: 50,
+            loss: 200,
+            ..Conditions::default()
+        };
+        let down = Conditions {
+            latency_ms: 17,
+            bandwidth: 32000,
+            ..Conditions::default()
+        };
+        assert_eq!(link.applied_conditions(), [Conditions::default(); 2]);
+        link.conditions(up, down).unwrap();
+        assert_eq!(link.applied_conditions(), [up, down]);
+        let invalid = Conditions {
+            loss: 10001,
+            ..Conditions::default()
+        };
+        assert!(link.conditions(Conditions::default(), invalid).is_err());
+        assert_eq!(link.applied_conditions(), [up, down]);
+        assert_eq!(link.up.packets, 0);
+        assert_eq!(link.down.delivered_bytes, 0);
     }
 }
