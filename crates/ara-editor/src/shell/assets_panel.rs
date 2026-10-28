@@ -385,7 +385,17 @@ impl Shell {
             }
             let lines = self
                 .name_fit
-                .lines(&mut self.text, names::stem(file), caption, 11., 2)
+                .lines(
+                    &mut self.text,
+                    names::stem(file),
+                    caption,
+                    11.,
+                    if compact && card_height < SIDE_TILE[1] {
+                        1
+                    } else {
+                        2
+                    },
+                )
                 .to_vec();
             out.push_str(&format!(
                 "<panel id='{id}-label' class='{}'>",

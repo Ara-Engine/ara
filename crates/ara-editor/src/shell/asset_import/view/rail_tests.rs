@@ -123,7 +123,8 @@ fn combined_active_and_terminal_jobs_leave_a_full_asset_target_in_short_and_norm
         "editor.search",
         json!({"panel":"assets","query":"Rail proof"}),
     )?;
-    shell.browser.insert_path("Rail proof.wav", "wav");
+    let filename = "Rail proof with a descriptive imported asset name that needs truncation.wav";
+    shell.browser.insert_path(filename, "wav");
     receipt(&mut shell, &editor, "jb_railold", false);
     receipt(&mut shell, &editor, "jb_raillive", true);
     shell.rebuild(&mut editor)?;
@@ -161,9 +162,20 @@ fn combined_active_and_terminal_jobs_leave_a_full_asset_target_in_short_and_norm
                     "Unbounded shared rail: {viewport:?}"
                 );
                 let file = shell.ui.nodes.iter().enumerate().find(|(index, node)| {
-                    shell.ui.shown(*index) && matches!(shell.bindings.get(&stable_id(&node.element.id)), Some(Binding::Asset(asset)) if asset.path == "Rail proof.wav")
+                    shell.ui.shown(*index) && matches!(shell.bindings.get(&stable_id(&node.element.id)), Some(Binding::Asset(asset)) if asset.path == filename)
                 }).map(|(_, node)| node.element.id.clone()).ok_or("Asset card/list row missing")?;
                 native_click(&mut shell, &file)?;
+                for node in &shell.ui.nodes {
+                    if node.element.id.starts_with(&format!("{file}-name")) {
+                        let visible = node.rect.intersection(node.clip);
+                        assert!(
+                            visible.h >= node.rect.h - 0.5,
+                            "The short drawer must retain a complete asset name: {:?} in {:?}",
+                            node.rect,
+                            node.clip
+                        );
+                    }
+                }
                 wheel_to_action(
                     &mut shell,
                     if running {
