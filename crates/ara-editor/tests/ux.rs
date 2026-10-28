@@ -17,13 +17,13 @@ impl Project {
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir_all(root.join("levels")).unwrap();
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
         write(
             &root.join("ara.project.json"),
-            json!({"name":"UX test","main":"levels/main.scene"}),
+            json!({"name":"UX test","layoutVersion":ara_host::project_layout::VERSION,"main":"levels/main.scene"}),
         );
         write(
-            &root.join("levels/main.scene"),
+            &root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),
             json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":{"e_crate001":{"name":"Salvage crate","Transform":{"position":[0,0.6,0]},"MeshRenderer":{}},"e_child001":{"name":"Child","parent":"e_crate001","Transform":{"position":[1,0,0]}}}}),
         );
         Self(root)
@@ -320,7 +320,10 @@ fn settings_edits_are_undoable_commands_in_both_scopes() {
 fn panels_show_real_empty_states() {
     let project = Project::new();
     std::fs::write(
-        project.0.join("levels/main.scene"),
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("levels/main.scene"),
         ara_json::to_canonical_string(
             &json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":{}}),
         ),
@@ -487,7 +490,10 @@ fn viewport_toolbar_overlays_the_image_and_first_click_selects_each_tool() {
 fn any_scene_opens_with_its_own_camera_and_agents_only_move_their_presence() {
     let project = Project::new();
     write(
-        &project.0.join("levels/hangar.scene"),
+        &project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("levels/hangar.scene"),
         json!({"$schema":"ara://schema/scene/1","id":"sc_hangar001","records":{"e_lamp0001":{"name":"Lamp","Transform":{"position":[200,2,190]}}}}),
     );
     let mut editor = Editor::open(&project.0).unwrap();
@@ -727,12 +733,43 @@ fn prefab_from_selection_overrides_apply_revert_and_open() {
 #[test]
 fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
     let project = Project::new();
-    std::fs::create_dir_all(project.0.join("models")).unwrap();
-    std::fs::create_dir_all(project.0.join("textures/rock")).unwrap();
-    std::fs::write(project.0.join("models/crate.gltf"), "{}").unwrap();
-    std::fs::write(project.0.join("models/crate.bin"), [0u8; 16]).unwrap();
-    std::fs::write(project.0.join("textures/rock/albedo.png"), [0u8; 16]).unwrap();
-    std::fs::write(project.0.join("NOTES.md"), "notes").unwrap();
+    std::fs::create_dir_all(project.0.join(ara_doc::AUTHORING_ROOT).join("models")).unwrap();
+    std::fs::create_dir_all(
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("textures/rock"),
+    )
+    .unwrap();
+    std::fs::write(
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("models/crate.gltf"),
+        "{}",
+    )
+    .unwrap();
+    std::fs::write(
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("models/crate.bin"),
+        [0u8; 16],
+    )
+    .unwrap();
+    std::fs::write(
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("textures/rock/albedo.png"),
+        [0u8; 16],
+    )
+    .unwrap();
+    std::fs::write(
+        project.0.join(ara_doc::AUTHORING_ROOT).join("NOTES.md"),
+        "notes",
+    )
+    .unwrap();
     let mut editor = Editor::open(&project.0).unwrap();
     editor
         .action("editor.layout.show", json!({"panel":"assets"}))
@@ -827,7 +864,14 @@ fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
         .unwrap();
     assert!(!files(&shell).contains(&"crate.bin".to_owned()));
     // A file that appears on disk shows up once the browser rescans.
-    std::fs::write(project.0.join("models/barrel.gltf"), "{}").unwrap();
+    std::fs::write(
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("models/barrel.gltf"),
+        "{}",
+    )
+    .unwrap();
     let start = std::time::Instant::now();
     while !files(&shell).contains(&"barrel.gltf".to_owned()) {
         assert!(
@@ -1174,7 +1218,8 @@ fn build_profile_comes_from_a_command_and_csharp_projects_can_build() {
     shell
         .run_command(&mut editor, "build.profile.create", &Target::None)
         .unwrap();
-    let text = std::fs::read_to_string(project.0.join("presets/windows.export.json")).unwrap();
+    let text =
+        std::fs::read_to_string(project.0.join("settings/builds/windows.export.json")).unwrap();
     let preset = ara_export::ExportPreset::from_unpinned_text(&text).unwrap();
     assert_eq!(preset.platform, ara_export::Platform::Windows);
     assert_eq!(
@@ -1193,10 +1238,13 @@ fn build_profile_comes_from_a_command_and_csharp_projects_can_build() {
         "an existing profile is never overwritten"
     );
 
-    std::fs::create_dir_all(project.0.join("scripts/Game")).unwrap();
+    std::fs::create_dir_all(project.0.join(ara_doc::AUTHORING_ROOT).join("scripts/Game")).unwrap();
     std::fs::write(
-        project.0.join("scripts/Game/ara.module.toml"),
-        "name = \"Game\"\n",
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("scripts/Game/game.module.json"),
+        ara_json::to_canonical_string(&json!({"name":"Game"})),
     )
     .unwrap();
     let commands = editor.action("editor.commands", json!({})).unwrap();

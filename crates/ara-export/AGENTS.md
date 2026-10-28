@@ -20,7 +20,7 @@ Run `cargo test -p ara-export`, `cargo clippy -p ara-export --all-targets`.
 Always use CARGO_BUILD_JOBS=2. Tool output stays in logs, NDJSON stays on stdout.
 Commands run out of process, below normal priority on Windows, with timeouts.
 Only C# and explicitly declared native plugins compile during an export.
-Runtime pins use `scripts::prepare`: project `ara.module.toml` gameplay modules,
+Runtime pins use `scripts::prepare`: authored `<name>.module.json` gameplay modules,
 dependency graph, SDK generators/analyzers, then one NativeAOT `ara_script_init`
 image. `data/game/scripts.json` carries ABI/layout identity and the linked inventory.
 `ara-export scripts --rid RID` (`scripts::build`) builds just that image and manifest,
@@ -39,8 +39,8 @@ See README.md for template bootstrapping, integration and Apple handoff.
 
 Exports output `build/<Game>.exe` (Linux: `<Game>`), one `build/data/` and notices;
 macOS uses `<Game>.app` with `Contents/Resources` as its data root.
-This full branch holds provisional authored `game/` naming pending D30 approval;
-export reads the selected root through `project::authored_root`.
+The D30 authored root is `content/`; export reads it through `project::authored_root`.
+Keep authored references root-relative and runtime `data/game/` paths distinct.
 `distribution.json`, packages, `report/`, logs and `symbols/<build-id>` sit outside `build/`.
 Never package symbols, verification logs or crash artifacts with the player.
 Windows pins require a matching PDB pin; ELF pins must retain DWARF until export.

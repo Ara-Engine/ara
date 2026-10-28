@@ -239,7 +239,7 @@ public sealed partial class Spinner : Behaviour
             .tempdir_in(base)
             .unwrap()
             .keep()
-            .join("game")
+            .join("player-output")
     } else {
         scratch.join("relocated")
     };

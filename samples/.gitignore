@@ -1,12 +1,12 @@
 # Downloaded third-party content (see assets.lock.json; `ara-samples fetch` restores it).
 .cache/
 # Fetched files and generated kit geometry stay local; their import sidecars are committed.
-*/game/third_party/**
-!*/game/third_party/**/
-!*/game/third_party/**/*.import.json
-*/game/kit/**
-!*/game/kit/**/
-!*/game/kit/**/*.import.json
+*/content/third_party/**
+!*/content/third_party/**/
+!*/content/third_party/**/*.import.json
+*/content/kit/**
+!*/content/kit/**/
+!*/content/kit/**/*.import.json
 # Project-local state (journal, cooked cache, daemon) and capture scratch.
 */.ara/
 */.scratch/

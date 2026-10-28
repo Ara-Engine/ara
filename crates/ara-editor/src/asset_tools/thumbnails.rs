@@ -515,15 +515,21 @@ mod tests {
     #[test]
     fn a_model_whose_import_has_not_published_is_pending_at_once() {
         let root = std::env::temp_dir().join(format!("ara-thumb-pending-{}", std::process::id()));
-        std::fs::create_dir_all(root.join("models")).expect("scratch project");
-        std::fs::write(root.join("ara.project.json"), r#"{"name":"Pending"}"#).expect("project");
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("models"))
+            .expect("scratch project");
         std::fs::write(
-            root.join("models/box.gltf"),
+            root.join("ara.project.json"),
+            r#"{"layoutVersion":4,"name":"Pending"}"#,
+        )
+        .expect("project");
+        std::fs::write(
+            root.join(ara_doc::AUTHORING_ROOT).join("models/box.gltf"),
             r#"{"asset":{"version":"2.0"}}"#,
         )
         .expect("model");
         std::fs::write(
-            root.join("models/box.gltf.import.json"),
+            root.join(ara_doc::AUTHORING_ROOT)
+                .join("models/box.gltf.import.json"),
             r#"{"id":"as_box"}"#,
         )
         .expect("sidecar");
@@ -544,11 +550,16 @@ mod tests {
         // Reports name project files as people see them.
         let message = format!(
             "{} could not be read",
-            root.join("models/box.gltf").display()
+            root.join(ara_doc::AUTHORING_ROOT)
+                .join("models/box.gltf")
+                .display()
         );
         assert_eq!(
             relative(&message, &root),
-            "models/box.gltf could not be read"
+            format!(
+                "{}/models/box.gltf could not be read",
+                ara_doc::AUTHORING_ROOT
+            )
         );
         // An import still copying its file in is pending too, not a failure.
         let copying = master(

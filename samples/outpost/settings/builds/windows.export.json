@@ -2,7 +2,7 @@
   "$schema": "ara://schema/export/1",
   "assembly": "Outpost",
   "config": "dev",
-  "content": "game",
+  "content": "content",
   "lane": "nativeAot",
   "name": "Outpost",
   "platform": "windows",

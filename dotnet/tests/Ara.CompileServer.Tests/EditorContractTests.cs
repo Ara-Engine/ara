@@ -27,7 +27,7 @@ public sealed class EditorContractTests
     public void A_fault_discards_queued_commands_and_disables_only_that_callback_until_reload()
     {
         var root = InstalledTools.Scratch("editor-fault");
-        var directory = Path.Combine(root, "game", "editor");
+        var directory = Path.Combine(root, "content", "editor");
         Directory.CreateDirectory(directory);
         var source = Path.Combine(directory, "Tools.cs");
         const string text = """
@@ -60,7 +60,7 @@ public sealed class EditorContractTests
     public void A_failed_editor_reload_retains_loaded_callbacks_and_a_new_generation_rejects_stale_invocations()
     {
         var root = InstalledTools.Scratch("editor-reload");
-        var directory = Path.Combine(root, "game", "editor");
+        var directory = Path.Combine(root, "content", "editor");
         Directory.CreateDirectory(directory);
         var source = Path.Combine(directory, "Tools.cs");
         const string text = """
@@ -96,7 +96,7 @@ public sealed class EditorContractTests
     public async Task Editor_extension_registers_one_catalog_and_returns_typed_authoring_commands_without_writing_sources()
     {
         var root = InstalledTools.Scratch("editor-extension");
-        var directory = Path.Combine(root, "game", "tools", "editor");
+        var directory = Path.Combine(root, "content", "tools", "editor");
         Directory.CreateDirectory(directory);
         var source = Path.Combine(directory, "Tools.cs");
         const string text = """
@@ -124,15 +124,15 @@ public sealed class EditorContractTests
             new { id="e_root", name="Root", parent=(string?)null, order="a0", components=new {} },
             new { id="e_child", name="Child", parent=(string?)"e_root", order="a0", components=new {} },
         }};
-        using var catalog = await InstalledTools.Run("--editor", new { project=root, authoringRoot="game", operation="catalog", scene, selection=new[]{"e_child"}, reserved=Array.Empty<string>() });
+        using var catalog = await InstalledTools.Run("--editor", new { project=root, authoringRoot="content", operation="catalog", scene, selection=new[]{"e_child"}, reserved=Array.Empty<string>() });
         Assert.Empty(catalog.RootElement.GetProperty("diagnostics").EnumerateArray());
         Assert.Equal("tools.mark", catalog.RootElement.GetProperty("commands")[0].GetProperty("id").GetString());
         Assert.Equal("Tools/Mark selection", catalog.RootElement.GetProperty("menus")[0].GetProperty("path").GetString());
-        using var invoked = await InstalledTools.Run("--editor", new { project=root, authoringRoot="game", operation="invoke", command="tools.mark", scene, selection=new[]{"e_child"}, reserved=Array.Empty<string>() });
+        using var invoked = await InstalledTools.Run("--editor", new { project=root, authoringRoot="content", operation="invoke", command="tools.mark", scene, selection=new[]{"e_child"}, reserved=Array.Empty<string>() });
         Assert.Empty(invoked.RootElement.GetProperty("diagnostics").EnumerateArray());
         Assert.Equal(new[] { "property.set", "entity.reparent", "entity.create" }, invoked.RootElement.GetProperty("authoring").EnumerateArray().Select(c => c.GetProperty("cmd").GetString()).ToArray());
         Assert.StartsWith("$", invoked.RootElement.GetProperty("selection")[0].GetString());
         Assert.Equal(text, File.ReadAllText(source));
-        Assert.Empty(Directory.GetFiles(Path.Combine(root, "game"), "*.csproj", SearchOption.AllDirectories));
+        Assert.Empty(Directory.GetFiles(Path.Combine(root, "content"), "*.csproj", SearchOption.AllDirectories));
     }
 }

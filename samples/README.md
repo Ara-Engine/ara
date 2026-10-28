@@ -6,8 +6,8 @@ file (URL, BLAKE3, size, license, authors, source page) and `fetch` restores the
 
 | Project | Scenes |
 |---|---|
-| `outpost/` | `game/levels/outpost.scene`: Outpost at dusk (a derelict compound on 384 m of terrain with foliage, a campfire, floodlights, wind and music). `game/levels/hangar.scene`: the hangar interior at night, lit by emissive panels, a festoon and a few lamps. |
-| `showcase/` | `game/levels/showcase.scene`: a turntable stage with an animated mannequin, a jogger, 11 hero props on plinths and 18 material balls under a studio HDRI. |
+| `outpost/` | `content/levels/outpost.scene`: Outpost at dusk (a derelict compound on 384 m of terrain with foliage, a campfire, floodlights, wind and music). `content/levels/hangar.scene`: the hangar interior at night, lit by emissive panels, a festoon and a few lamps. |
+| `showcase/` | `content/levels/showcase.scene`: a turntable stage with an animated mannequin, a jogger, 11 hero props on plinths and 18 material balls under a studio HDRI. |
 
 ## How to play Outpost
 
@@ -47,7 +47,7 @@ has changed. For a dedicated authority and up to four clients:
 & "$bin\ara-player.exe" --game --project samples/outpost --connect 127.0.0.1:41090
 ```
 
-In the editor, open `samples/outpost`, select `game/levels/outpost.scene`, and choose
+In the editor, open `samples/outpost`, select `content/levels/outpost.scene`, and choose
 **Host + N** or **Dedicated + N** in Play's multiplayer configuration. Each view uses
 its own input owner and native HUD. Source launches cook missing assets on the
 loading screen; an exported build loads its pinned cooked pack.
@@ -109,7 +109,7 @@ the attributed journal and keep stable document, stroke and exclusion IDs.
 The projects are ordinary Ara projects: `ara check`, `ara mcp` and the editor work in
 them as in any other. GPU commands need the Vulkan SDK (see `crates/ara-samples/AGENTS.md`).
 
-- `<project>/game/look/*.look.json`: what a scene cannot express yet for the captures:
+- `<project>/content/look/*.look.json`: what a scene cannot express yet for the captures:
   camera shots, an HDRI sky and the terrain ground material, plus temporary tuning
   overrides. Physical sky, height fog and exposure/post live in the scenes
   (`SkyAtmosphere`, `HeightFog`, `PostProcess`).

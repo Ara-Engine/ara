@@ -2,7 +2,7 @@
   "$schema": "ara://schema/export/1",
   "assembly": "Showcase",
   "config": "dev",
-  "content": "game",
+  "content": "content",
   "lane": "nativeAot",
   "name": "Material and character showcase",
   "platform": "windows",

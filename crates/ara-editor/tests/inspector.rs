@@ -20,14 +20,14 @@ impl Project {
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir_all(root.join("levels")).unwrap();
-        std::fs::create_dir_all(root.join("models")).unwrap();
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("models")).unwrap();
         write(
             &root.join("ara.project.json"),
-            json!({"name":"Inspector test","main":"levels/main.scene"}),
+            json!({"name":"Inspector test","layoutVersion":ara_host::project_layout::VERSION,"main":"levels/main.scene"}),
         );
         write(
-            &root.join("levels/main.scene"),
+            &root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),
             json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":{
                 "e_crate001":{"name":"Salvage crate","Transform":{"position":[0,0.6,0]},"MeshRenderer":{}},
                 "e_camera01":{"name":"Follow camera","Transform":{},"Camera":{},"FollowCamera":{}},
@@ -42,13 +42,24 @@ impl Project {
                 "ara.gltf",
             ),
         ] {
-            std::fs::write(root.join("models").join(file), "{}").unwrap();
+            std::fs::write(
+                root.join(ara_doc::AUTHORING_ROOT).join("models").join(file),
+                "{}",
+            )
+            .unwrap();
             write(
-                &root.join(format!("models/{file}.import.json")),
+                &root
+                    .join(ara_doc::AUTHORING_ROOT)
+                    .join(format!("models/{file}.import.json")),
                 json!({"$schema":"ara://schema/import/1","id":id,"records":{"i_settings":{"importer":importer,"settings":{}}}}),
             );
         }
-        std::fs::write(root.join("models/barrel.gltf"), "{}").unwrap();
+        std::fs::write(
+            root.join(ara_doc::AUTHORING_ROOT)
+                .join("models/barrel.gltf"),
+            "{}",
+        )
+        .unwrap();
         Self(root)
     }
     /// The editor with the crate selected and Assets showing `models`, once the asset

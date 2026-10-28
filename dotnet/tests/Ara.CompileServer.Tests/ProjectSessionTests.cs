@@ -10,12 +10,12 @@ public sealed class ProjectSessionTests
     {
         var first = InstalledTools.Scratch("project-session-first");
         var second = InstalledTools.Scratch("project-session-second");
-        Directory.CreateDirectory(Path.Combine(first, "game"));
-        Directory.CreateDirectory(Path.Combine(second, "game"));
-        var source = Path.Combine(first, "game", "Counter.cs");
+        Directory.CreateDirectory(Path.Combine(first, "content"));
+        Directory.CreateDirectory(Path.Combine(second, "content"));
+        var source = Path.Combine(first, "content", "Counter.cs");
         const string before = "using Ara; /// <summary>Counter in ECS.</summary>\n[Component] public partial struct Counter { /// <summary>Count.</summary>\n public int Value; }";
         File.WriteAllText(source, before);
-        File.WriteAllText(Path.Combine(second, "game", "Other.cs"), "class Other { }");
+        File.WriteAllText(Path.Combine(second, "content", "Other.cs"), "class Other { }");
         var tool = typeof(ProjectInventory).Assembly.Location;
         var start = new ProcessStartInfo("dotnet") {
             WorkingDirectory = Path.GetDirectoryName(tool)!, UseShellExecute = false, CreateNoWindow = true,
@@ -26,7 +26,7 @@ public sealed class ProjectSessionTests
         var errors = process.StandardError.ReadToEndAsync();
         async Task<JsonDocument> Call(string root, string operation)
         {
-            await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new { project=root, authoringRoot="game", domain="gameplay", operation }));
+            await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new { project=root, authoringRoot="content", domain="gameplay", operation }));
             await process.StandardInput.FlushAsync();
             var line = await process.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(60));
             Assert.False(line is null, process.HasExited ? await errors : "missing project response");

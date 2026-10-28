@@ -22,13 +22,21 @@ fn play_starts_in_the_background_and_shows_its_progress() {
         .join("../../target/ara-editor/play-start")
         .join(std::process::id().to_string());
     let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(root.join("levels")).unwrap();
+    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
     let write = |path: &str, value: Value| {
-        std::fs::write(root.join(path), ara_json::to_canonical_string(&value)).unwrap();
+        std::fs::write(
+            if path == "ara.project.json" {
+                root.join(path)
+            } else {
+                root.join(ara_doc::AUTHORING_ROOT).join(path)
+            },
+            ara_json::to_canonical_string(&value),
+        )
+        .unwrap();
     };
     write(
         "ara.project.json",
-        json!({"name":"Play start","main":"levels/main.scene"}),
+        json!({"name":"Play start","layoutVersion":ara_host::project_layout::VERSION,"main":"levels/main.scene"}),
     );
     write(
         "levels/main.scene",

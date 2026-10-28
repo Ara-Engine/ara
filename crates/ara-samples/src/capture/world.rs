@@ -119,7 +119,7 @@ mod tests {
     fn missing_model_placeholder_cannot_be_used_as_capture_ground_truth() -> Result<()> {
         let schema = ara_runtime::schema(&[])?;
         let path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../ara-player/demo/levels/demo.scene");
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../ara-player/demo/content/levels/demo.scene");
         let read = ara_doc::read(
             &std::fs::read_to_string(path)?,
             "levels/demo.scene",

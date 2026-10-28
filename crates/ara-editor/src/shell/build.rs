@@ -826,7 +826,12 @@ mod tests {
                 .templates
                 .is_empty()
         );
-        std::fs::write(root.join("ara.project.json"), r#"{"layoutVersion":3}"#)?;
+        std::fs::write(
+            root.join("ara.project.json"),
+            ara_json::to_canonical_string(
+                &json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
+            ),
+        )?;
         let chosen = ara_host::project::authored_root(root);
         assert_eq!(
             default_profile(root)?.content,

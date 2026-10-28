@@ -16,7 +16,7 @@ edit.
 - **Naming entities in commands:** an ID or address, a batch symbol (`$crate`),
   or a name: `name:Crate`, or `name:Floor/Crate` when the name alone matches
   several entities.
-- **Layout:** `game/` holds every authored file, including C#, in any
+- **Layout:** `content/` holds every authored file, including C#, in any
   folder arrangement. Any exact lowercase `editor` ancestor marks C# as editor-only.
   `settings/` holds project policy and `settings/builds/` export presets. `.ara/`
   holds generated projects, assemblies, schema, caches and logs. `builds/` is output.
@@ -34,7 +34,7 @@ edit.
   Defaults are `ui/game.ui`, `ui/game.css`, `ui/bindings.json` and `ui/resources.json`.
   Keep referenced UI resource paths and bindings valid when moving their files.
 - **References:** `@path#id` (`@prefabs/crate.prefab#pf_crate001`). Either half
-  repairs the other. Paths are relative to `game/`, not the project root.
+  repairs the other. Paths are relative to `content/`, not the project root.
 - **Use commands, not raw file surgery, for graphs**, hierarchy (parents, order)
   and prefab overrides: `ara_apply` over MCP or `ara do <command> -p key=value`.
   `doc` is optional: the engine picks the document holding the entities you name,

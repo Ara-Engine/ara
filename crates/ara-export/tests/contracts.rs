@@ -9,7 +9,7 @@ fn preset(platform: &str) -> ExportPreset {
     } else {
         vec!["x64"]
     };
-    ExportPreset::from_text(&json!({"$schema":"ara://schema/export/1","platform":platform,"scriptProject":"game/Game.csproj","assembly":"Game","content":"content","templates":arches.into_iter().map(|arch|json!({"platform":platform,"arch":arch,"config":"release","hash":"0".repeat(64),"source":"templates/runtime"})).collect::<Vec<_>>()} ).to_string()).unwrap()
+    ExportPreset::from_text(&json!({"$schema":"ara://schema/export/1","platform":platform,"scriptProject":"Game.csproj","assembly":"Game","content":ara_doc::AUTHORING_ROOT,"templates":arches.into_iter().map(|arch|json!({"platform":platform,"arch":arch,"config":"release","hash":"0".repeat(64),"source":"templates/runtime"})).collect::<Vec<_>>()} ).to_string()).unwrap()
 }
 #[test]
 fn preset_is_schema_registered_and_canonical_round_trip_preserves_defaults() {

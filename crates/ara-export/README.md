@@ -2,7 +2,7 @@
 
 ## Gameplay scripts in runtime exports
 
-`playerTemplate: "runtime"` builds every gameplay `ara.module.toml` module into
+`playerTemplate: "runtime"` builds gameplay modules declared by `<name>.module.json` into
 one NativeAOT shared library using the real generated `ara_script_init` ABI
 (A12/A13), rather than the S7 conformance ABI. References are linked in dependency
 order; editor modules are excluded, and missing dependencies/cycles are errors.
@@ -31,16 +31,18 @@ ReadyToRun is diagnosed for runtime gameplay exports until its host is integrate
 
 ## Project presets and distribution layout
 
-This full branch holds the proposed authored `game/` root pending D30 approval.
-Export resolves the project's selected authored root through its read-only adapter.
+D30 defines `content/` as the freely organized authored root, including C# scripts.
+Export resolves it through the shared read-only project adapter; legacy projects
+must migrate before ordinary open or export. Authored references omit the `content/` prefix.
 
 Project-owned presets live in `settings/builds/<name>.export.json`. For example,
 `ara-export export --project PROJECT --preset windows --output PROJECT/builds/windows`
 uses `settings/builds/windows.export.json`. Explicit project-relative and absolute
 preset paths work; the old `presets/` lookup remains available for existing projects.
 Derived template/cache/job data lives in `.ara/export-cache/`.
-Preset `content: "."` explicitly selects a legacy project's root directory;
-other content directories stay project-relative, and file/artifact paths remain strict.
+Preset `content: "."` explicitly selects the project directory as a content input;
+this does not bypass the current-layout requirement. Other content directories stay
+project-relative, and file/artifact paths remain strict.
 
 Windows and Linux ship one game executable, one `data/` directory and notices:
 
@@ -201,8 +203,9 @@ The conformance fixture can validate a pack containing the real Fox demo project
 it verifies every file and the main scene document, then runs the original seeded
 S7 ECS/C# workload. Its report explicitly says conformance; it does not simulate
 the authored Fox controllers, physics, navigation or rendering. Stage a copy of
-`crates/ara-player/demo` under a scratch project's `content/` and the existing
-`fixtures/sample/game` under `game/`; this is export-test scaffolding. Never change
+`crates/ara-player/demo` under a scratch project's `content/` and copy the C# files
+from `fixtures/sample/content/` into that same authored root. Use a layout-version-4
+marker and authored-relative `scriptProject: "Game.csproj"`; this is export-test scaffolding. Never change
 the demo or label this fixture as a runnable Outpost game. The Outpost Door,
 UseMedkit and Gravity samples under `dotnet/` need the integrated host ABI and are
 not wired into the S7 conformance ABI.
@@ -232,7 +235,7 @@ no Linux launch, FUSE mount, Android device, real signing identity or store uplo
 is claimed.
 
 To repeat the distribution test, stage the demo and conformance C# files as above
-under `EVIDENCE/project/content` and `EVIDENCE/project/game`, and save prepared base
+under `EVIDENCE/project/content/`, add the current project marker, and save prepared base
 presets at `EVIDENCE/presets/{windows,linux,android}.export.json`. The Windows preset
 needs `installerStub`, Linux needs `appimageRuntime`, and Android needs its explicit
 test-key signing configuration. Configure the SDK environment shown below and the

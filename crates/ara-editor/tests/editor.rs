@@ -22,13 +22,13 @@ impl Project {
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir_all(root.join("levels")).unwrap();
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
         write(
             &root.join("ara.project.json"),
-            json!({"name":"Editor test"}),
+            json!({"name":"Editor test","layoutVersion":ara_host::project_layout::VERSION,"main":"levels/main.scene"}),
         );
         write(
-            &root.join("levels/main.scene"),
+            &root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),
             json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":{"e_crate001":{"name":"Salvage crate","Transform":{"position":[0,0.6,0]},"MeshRenderer":{}},"e_child001":{"name":"Child","parent":"e_crate001","Transform":{"position":[1,0,0]}}}}),
         );
         Self(root)
@@ -76,7 +76,10 @@ fn x(editor: &Editor) -> f32 {
 fn only_scene_prefab_and_import_edits_reach_the_scene_through_its_views() {
     let project = Project::new();
     write(
-        &project.0.join("levels/other.scene"),
+        &project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("levels/other.scene"),
         json!({"$schema":"ara://schema/scene/1","id":"sc_test0009","records":{}}),
     );
     let mut editor = project.open();
@@ -597,7 +600,10 @@ fn hierarchy_100k_keeps_a_bounded_row_pool_and_reaches_the_last_entity() {
         })
         .collect();
     write(
-        &project.0.join("levels/main.scene"),
+        &project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("levels/main.scene"),
         json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":records}),
     );
     let mut editor = project.open();
@@ -698,7 +704,7 @@ fn numeric_scrubbing_is_one_undoable_batch_and_escape_is_nonmutating() {
 fn import_settings_are_typed_attributed_and_undoable() {
     let project = Project::new();
     std::fs::write(
-        project.0.join("paint.png"),
+        project.0.join(ara_doc::AUTHORING_ROOT).join("paint.png"),
         b"invalid source; settings test does not run an importer",
     )
     .unwrap();
@@ -1187,7 +1193,10 @@ fn missing_model_sources_open_with_placeholders_and_name_the_path() {
     use ara_editor::world::EditWorldView;
     let project = Project::new();
     write(
-        &project.0.join("levels/main.scene"),
+        &project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("levels/main.scene"),
         json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":{
             "e_hangar01":{"name":"Hangar","Transform":{},"MeshRenderer":{"model":"@assets/kit/hangar.gltf#as_kithangar"}},
             "e_crate001":{"name":"Salvage crate","Transform":{"position":[0,0.6,0]},"MeshRenderer":{}}}}),
@@ -1226,7 +1235,10 @@ fn missing_model_sources_open_with_placeholders_and_name_the_path() {
 fn scene_view_fov_is_read_set_clamped_and_aligned_to_a_scene_camera() {
     let project = Project::new();
     write(
-        &project.0.join("levels/main.scene"),
+        &project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("levels/main.scene"),
         json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":{
             "e_crate001":{"name":"Salvage crate","Transform":{"position":[0,0.6,0]},"MeshRenderer":{}},
             "e_rig00001":{"name":"Rig","Transform":{"position":[0,1,4]}},
@@ -1291,17 +1303,23 @@ fn scenes_open_with_their_saved_or_gameplay_camera_and_framing_skips_terrain() {
     let project = Project::new();
     write(
         &project.0.join("ara.project.json"),
-        json!({"name":"Editor test","main":"levels/main.scene"}),
+        json!({"name":"Editor test","layoutVersion":ara_host::project_layout::VERSION,"main":"levels/main.scene"}),
     );
     write(
-        &project.0.join("levels/main.scene"),
+        &project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("levels/main.scene"),
         json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":{
             "e_crate001":{"name":"Salvage crate","Transform":{"position":[2,0.5,-3]},"MeshRenderer":{}},
             "e_ground01":{"name":"Ground","Transform":{},"MeshRenderer":{"shape":"plane","size":[400,1,400]}},
             "e_chunk001":{"name":"Terrain chunk","Transform":{"position":[300,0,300],"scale":[96,10,96]},"TerrainChunk":{"x":3,"z":3}}}}),
     );
     write(
-        &project.0.join("levels/rig.scene"),
+        &project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("levels/rig.scene"),
         json!({"$schema":"ara://schema/scene/1","id":"sc_test0002","records":{
             "e_player01":{"name":"Player","Transform":{"position":[10,0,4]},"MeshRenderer":{}},
             "e_camera01":{"name":"Follow camera","Transform":{"position":[0,9,0]},"Camera":{"fov":46},
@@ -1309,7 +1327,10 @@ fn scenes_open_with_their_saved_or_gameplay_camera_and_framing_skips_terrain() {
     );
     // A static wall 2 m behind the player (a sensor before it does not count).
     write(
-        &project.0.join("levels/wall.scene"),
+        &project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("levels/wall.scene"),
         json!({"$schema":"ara://schema/scene/1","id":"sc_test0003","records":{
             "e_player01":{"name":"Player","Transform":{},"MeshRenderer":{}},
             "e_wall0001":{"name":"Wall","Transform":{"position":[0,1,-2]},"Collider":{"halfExtents":[5,3,0.1]},"RigidBody":{}},
@@ -1394,7 +1415,10 @@ fn scenes_open_with_their_saved_or_gameplay_camera_and_framing_skips_terrain() {
 fn one_entity_world_transform_matches_the_whole_scene() {
     let project = Project::new();
     write(
-        &project.0.join("levels/main.scene"),
+        &project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("levels/main.scene"),
         json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":{
             "e_root0001":{"name":"Root","Transform":{"position":[1,2,3],"rotation":[0,45,0],"scale":[2,2,2]}},
             "e_mid00001":{"name":"Mid","parent":"e_root0001","Transform":{"position":[0,1,0],"rotation":[30,0,10]}},
@@ -1433,7 +1457,10 @@ fn large_hierarchy_groups_start_collapsed() {
         json!({"name":"Salvage crate","Transform":{},"MeshRenderer":{}}),
     );
     write(
-        &project.0.join("levels/main.scene"),
+        &project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("levels/main.scene"),
         json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records": records}),
     );
     let mut editor = project.open();

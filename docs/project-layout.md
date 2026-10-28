@@ -1,13 +1,13 @@
 # Project layout
 
 `ara new <directory> --name <name>` (also `ara init`) and Hub Create produce the
-same project. All authored files share one freely organized root, provisionally
-named `game/`. That name has one engine definition, `ara_doc::AUTHORING_ROOT`.
+same project. All authored files share the freely organized `content/` root (D30).
+That name has one engine definition, `ara_doc::AUTHORING_ROOT`.
 
 ```text
 my-project/
   ara.project.json              identity, main scene and engine pin
-  game/                        all authored files, freely organized
+  content/                     all authored files, freely organized
     scenes/main.scene
     scripts/combat/combat.module.json
     editor/                    editor-only C# may also live in nested editor folders
@@ -24,11 +24,11 @@ my-project/
   .gitignore
 ```
 
-`game/` imposes no folder taxonomy. Scenes, prefabs, C#, materials, source models,
+`content/` imposes no folder taxonomy. Scenes, prefabs, C#, materials, source models,
 textures, audio, UI, animations, terrain and looks may be grouped by feature.
 Asset identity is carried by IDs. **References are relative to the authored root:**
-`@props/crate.prefab#pf_crate001` addresses `game/props/crate.prefab`. The marker's
-`main` is likewise `scenes/main.scene`, without a `game/` prefix. Host document
+`@props/crate.prefab#pf_crate001` addresses `content/props/crate.prefab`. The marker's
+`main` is likewise `scenes/main.scene`, without a `content/` prefix. Host document
 storage paths remain project-relative so project settings and authored files
 with similar names remain distinct. The shared semantic file inventory exposes
 both `path` (reference-relative) and `storagePath`, plus Authored or Project scope.
@@ -70,13 +70,14 @@ through links. Missing optional resource bytes retain their visible diagnostics.
 Migration writes existing bootstrap paths into this policy so asset moves can
 repair them, and pins legacy UI identities before moving native markup.
 
-These edits use the ordinary op stream and history. Legacy marker policies remain
-readable until migration; identity, main scene, engine pin and description stay
-in the root marker. Import defaults use `import.project.configure`.
+These edits use the ordinary op stream and history. Migration reads legacy marker
+policies; identity, main scene, engine pin and description stay in the root marker.
+Import defaults use `import.project.configure`. Ordinary open, compilation and export
+require layout version 4; older layouts receive a migration action before work starts.
 
 `.ara/` and root `builds/` are gitignored and excluded from authored discovery.
 Root `packages/` is present for future plugins and excluded too. A freely authored
-folder called `builds` or `target` inside `game/` stays visible. Project
+folder called `builds` or `target` inside `content/` stays visible. Project
 `settings/builds/` presets remain versioned and discoverable.
 
 Repository tests and evidence belong outside sample projects, in
@@ -94,8 +95,9 @@ ara --root path/to/project project migrate
 ```
 
 The dry run reads without creating a lock, directory or cache. Migration merges
-legacy type folders, `content/`, intermediate `assets/` and root `scripts/` into
-the authored root. Overlapping file destinations, including case collisions,
+legacy type folders, earlier `assets/` and `game/` drafts, and root `scripts/` into
+`content/`. Existing authored files beneath `content/` stay there. Overlapping
+file destinations, including case collisions,
 are rejected before anything changes. Empty authored folders are preserved.
 
 References in native documents, graph payloads, UI markup, C#, configuration and
@@ -113,5 +115,38 @@ Evidence, tests and obsolete machine-specific export helpers move to the sibling
 
 Apply takes the authority lock, rechecks planned source files, and rolls back
 completed moves and writes on failure. Journal reference paths, document storage
-paths and matching flush hashes are updated. The marker records `layoutVersion: 3`.
+paths and matching flush hashes are updated. The marker records `layoutVersion: 4`.
 A subsequent dry run reports no changes. Run `ara check` to validate the result.
+
+## Exporting the worked project
+
+For an Outpost Windows build, `settings/builds/windows.export.json` selects
+`content` as its authored input and supplies the runtime template pins. Export
+produces an envelope whose `build/` folder is the player distribution:
+
+```text
+builds/windows/<build-id>/
+  build/
+    Outpost.exe                game name, icon and version metadata
+    data/
+      ara-launch.json
+      ara-crash.json
+      engine.json
+      game.arapack              cooked project content, no author checkout paths
+      game/                     compiled gameplay image and scripts.json
+      resources/                cooked engine runtime resources
+    THIRD_PARTY_NOTICES.txt
+  distribution.json            store-agnostic delivery manifest
+  report/                      verification captures and reports
+  logs/
+  symbols/<build-id>/
+```
+
+Only the contents of `build/` ship to players. Linux follows the same structure
+with an `Outpost` executable. macOS ships `Outpost.app`, placing its executable in
+`Contents/MacOS` and its one data root in `Contents/Resources`. Distribution output
+stays compatible with any store's upload tooling (D22).
+
+The runtime's `data/game/` directory holds compiled scripts; its name is independent
+of the authored `content/` root. Export reports, captures, logs and symbols stay
+outside the distribution. Relocated launch resolves data relative to the executable.
