@@ -52,6 +52,9 @@ impl Shell {
         editor: &mut Editor,
         out: &mut String,
     ) -> ara_ui::Result<()> {
+        if self.import_defaults_open() {
+            return self.import_defaults_panel(editor, out);
+        }
         if editor.state.focus == "material" {
             return self.material_inspector(editor, out);
         }

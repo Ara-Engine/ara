@@ -6,7 +6,6 @@ use ara_asset::{
 };
 use ara_asset_format::{TextureFormat, write_ktx2};
 use rayon::prelude::*;
-use serde::{Deserialize, Serialize};
 mod gpu_input;
 mod mips;
 mod pixels;
@@ -27,62 +26,9 @@ fn encoder_for<'a>(
 }
 mod memo;
 
-/// Semantic texture usage selects transfer functions, mip filtering and BC format.
-#[derive(
-    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ara_schema::Schema,
-)]
-#[ara(module = "asset")]
-#[serde(rename_all = "camelCase")]
-pub enum TextureUsage {
-    /// sRGB color (alpha remains linear), BC7 sRGB.
-    #[default]
-    Color,
-    /// Linear RGBA data, BC7 UNORM.
-    Linear,
-    /// Tangent-space normals, normalized mips and BC5 XY.
-    Normal,
-    /// A single linear scalar channel, BC4.
-    Mask,
-    /// Nonnegative linear radiance, BC6H UFLOAT.
-    Hdr,
-    /// A colour lookup table strip (post-process volumes' grading): values kept as
-    /// authored, uncompressed RGBA half floats, without mips.
-    Lut,
-}
-/// Declarative texture import settings.
-#[derive(Debug, Clone, Serialize, Deserialize, ara_schema::Schema)]
-#[ara(module = "asset")]
-#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
-pub struct TextureSettings {
-    /// Optional quality override; absent inherits the source/project preset.
-    /// Changing it does not re-encode other texture tasks.
-    pub preset: Option<CookPreset>,
-    /// How color/normal/mask values are interpreted.
-    pub usage: TextureUsage,
-    /// Generate the complete mip chain through 1×1.
-    #[ara(default = true)]
-    pub mipmaps: bool,
-    /// Invert normal Y for DirectX-authored tangent-space inputs.
-    pub flip_normal_y: bool,
-    /// Source channel for BC4, R=0/G=1/B=2/A=3.
-    #[ara(range(min = 0, max = 3))]
-    pub mask_channel: u8,
-    /// Maximum permitted source dimension (decode limits are also enforced).
-    #[ara(default = 16384, range(min = 1, max = 16384))]
-    pub max_dimension: u32,
-}
-impl Default for TextureSettings {
-    fn default() -> Self {
-        Self {
-            preset: None,
-            usage: TextureUsage::Color,
-            mipmaps: true,
-            flip_normal_y: false,
-            mask_channel: 0,
-            max_dimension: 16384,
-        }
-    }
-}
+/// Shared reflected texture settings and usage.
+pub use ara_asset::{TextureSettings, TextureUsage};
+
 /// PNG, JPEG, Radiance HDR and OpenEXR importer with optional worker BCn encoding.
 /// Without an explicit encoding service, compression uses the qualified ISPC path.
 pub struct TextureImporter;

@@ -7,6 +7,8 @@ use ara_diag::{Diagnostic, codes};
 use ara_schema::{AssetRef, Schema, SchemaDb, Validator};
 use serde::Deserialize;
 use serde_json::{Value, json};
+#[cfg(test)]
+mod project_defaults_tests;
 
 fn invalid(message: impl ToString) -> Diagnostic {
     Diagnostic::error(codes::INVALID_PARAMS, message.to_string())
@@ -238,18 +240,54 @@ pub fn register(registry: &mut Registry, db: &mut SchemaDb) -> Result<(), Diagno
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ImportProjectConfigureParams {
     /// Default texture quality for sources and model textures without an override.
-    pub preset: CookPreset,
+    pub preset: Option<CookPreset>,
+    /// Texture defaults, using the exact installed texture settings schema.
+    pub texture: Option<crate::TextureSettings>,
+    /// glTF model defaults, overridden independently by explicit source keys.
+    pub gltf: Option<crate::MeshSettings>,
+    /// FBX model defaults; glTF-only opacity maps are rejected.
+    pub fbx: Option<crate::MeshSettings>,
+    /// Audio defaults, using the exact installed audio settings schema.
+    pub audio: Option<crate::audio::Settings>,
+    /// Remove one importer policy and return that type to built-in defaults.
+    pub reset_type: Option<ImportDefaultsType>,
+}
+/// Built-in importer policies which can return to their engine defaults.
+#[derive(Debug, Clone, Copy, Schema, Deserialize)]
+#[ara(module = "asset")]
+#[serde(rename_all = "camelCase")]
+pub enum ImportDefaultsType {
+    /// PNG/JPEG/HDR/EXR textures.
+    Texture,
+    /// glTF models and their embedded texture policy.
+    Gltf,
+    /// FBX models and their embedded texture policy.
+    Fbx,
+    /// Resident and streamed audio.
+    Audio,
 }
 struct ConfigureProject;
 impl Command for ConfigureProject {
     type Params = ImportProjectConfigureParams;
     type Output = Value;
     const NAME: &'static str = "import.project.configure";
-    const SUMMARY: &'static str = "Set the project's default texture import quality.";
+    const SUMMARY: &'static str =
+        "Configure global texture quality and typed per-importer project defaults.";
     fn examples() -> Vec<Value> {
         vec![json!({"preset":"balanced"})]
     }
     fn run(cx: &mut EditCtx<'_, '_>, p: Self::Params) -> Result<Value, Diagnostic> {
+        if p.preset.is_none()
+            && p.texture.is_none()
+            && p.gltf.is_none()
+            && p.fbx.is_none()
+            && p.audio.is_none()
+            && p.reset_type.is_none()
+        {
+            return Err(invalid(
+                "Choose a project preset, typed importer defaults, or resetType",
+            ));
+        }
         let existing = cx
             .read()
             .workspace()
@@ -259,14 +297,85 @@ impl Command for ConfigureProject {
                     || *path == ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE
             })
             .map(|(path, doc)| (path.to_owned(), doc.id.clone()));
+        let mut policy = match &existing {
+            Some((_, id)) => serde_json::from_value::<ProjectImportSettings>(Value::Object(
+                cx.read()
+                    .workspace()
+                    .doc(id.as_str())
+                    .and_then(|doc| doc.record("pi_settings"))
+                    .ok_or_else(|| invalid("project import policy has no settings record"))?
+                    .clone(),
+            ))
+            .map_err(invalid)?,
+            None => ProjectImportSettings::default(),
+        };
+        let defaults_changed = p.texture.is_some()
+            || p.gltf.is_some()
+            || p.fbx.is_some()
+            || p.audio.is_some()
+            || p.reset_type.is_some();
+        let conflict = match p.reset_type {
+            Some(ImportDefaultsType::Texture) => p.texture.is_some(),
+            Some(ImportDefaultsType::Gltf) => p.gltf.is_some(),
+            Some(ImportDefaultsType::Fbx) => p.fbx.is_some(),
+            Some(ImportDefaultsType::Audio) => p.audio.is_some(),
+            None => false,
+        };
+        if conflict {
+            return Err(invalid(
+                "Choose either typed defaults or resetType for the same importer",
+            ));
+        }
+        for (importer, value) in [
+            ("ara.texture", p.texture.as_ref().map(serde_json::to_value)),
+            ("ara.gltf", p.gltf.as_ref().map(serde_json::to_value)),
+            ("ara.fbx", p.fbx.as_ref().map(serde_json::to_value)),
+            ("ara.audio", p.audio.as_ref().map(serde_json::to_value)),
+        ] {
+            if let Some(value) = value {
+                validate_settings(importer, &value.map_err(invalid)?, cx.read().schema())?;
+            }
+        }
+        if let Some(preset) = p.preset {
+            policy.preset = preset;
+        }
+        if let Some(value) = p.texture {
+            policy.defaults.texture = Some(value);
+        }
+        if let Some(value) = p.gltf {
+            policy.defaults.gltf = Some(value);
+        }
+        if let Some(value) = p.fbx {
+            policy.defaults.fbx = Some(value);
+        }
+        if let Some(value) = p.audio {
+            policy.defaults.audio = Some(value);
+        }
+        match p.reset_type {
+            Some(ImportDefaultsType::Texture) => policy.defaults.texture = None,
+            Some(ImportDefaultsType::Gltf) => policy.defaults.gltf = None,
+            Some(ImportDefaultsType::Fbx) => policy.defaults.fbx = None,
+            Some(ImportDefaultsType::Audio) => policy.defaults.audio = None,
+            None => {}
+        }
         let record = ara_doc::RecordId::parse("pi_settings").map_err(invalid)?;
         let (path, id) = if let Some((path, id)) = existing {
-            cx.apply_edit(ara_doc::Edit::Set {
-                doc: id.clone(),
-                id: record,
-                path: ara_schema::FieldPath::field("preset"),
-                value: Some(json!(p.preset)),
-            })?;
+            if p.preset.is_some() {
+                cx.apply_edit(ara_doc::Edit::Set {
+                    doc: id.clone(),
+                    id: record.clone(),
+                    path: ara_schema::FieldPath::field("preset"),
+                    value: Some(json!(policy.preset)),
+                })?;
+            }
+            if defaults_changed {
+                cx.apply_edit(ara_doc::Edit::Set {
+                    doc: id.clone(),
+                    id: record,
+                    path: ara_schema::FieldPath::field("defaults"),
+                    value: Some(json!(policy.defaults)),
+                })?;
+            }
             (path, id)
         } else {
             let id =
@@ -274,7 +383,7 @@ impl Command for ConfigureProject {
             cx.apply_edit(ara_doc::Edit::Create {
                 doc: id.clone(),
                 id: record,
-                record: serde_json::to_value(ProjectImportSettings { preset: p.preset })
+                record: serde_json::to_value(&policy)
                     .map_err(invalid)?
                     .as_object()
                     .cloned()
@@ -282,6 +391,6 @@ impl Command for ConfigureProject {
             })?;
             (PROJECT_IMPORT_SETTINGS_FILE.to_owned(), id)
         };
-        Ok(json!({"id":id,"path":path,"preset":p.preset}))
+        Ok(json!({"id":id,"path":path,"preset":policy.preset,"defaults":policy.defaults}))
     }
 }

@@ -5,6 +5,7 @@ mod cache;
 mod encoder;
 mod graph;
 mod hot_reload;
+mod import_defaults;
 mod importer;
 mod metrics;
 mod preset;
@@ -18,6 +19,10 @@ pub use cache::{CacheBackend, CachedImport, FileCache, GcStats};
 pub use encoder::{BlockEncoder, EncoderEndpoint, ImportServices};
 pub use graph::DependencyGraph;
 pub use hot_reload::{ApplyPolicy, AssetChanged, AssetSlot, FileWatcher, HotReload, ReloadEvent};
+pub use import_defaults::{
+    AudioEffectCodec, AudioImportSettings, AudioImportUse, MeshSettings, TextureSettings,
+    TextureUsage,
+};
 pub use importer::{
     Artifact, ArtifactKind, Cancellation, Digest, ImportContext, ImportInput, ImportOutput,
     Importer, ImporterRegistry, Progress, TargetPlatform,
@@ -25,7 +30,8 @@ pub use importer::{
 pub use metrics::{ImportMetrics, ImportStage, StageTimer, StageTimes};
 pub use preset::{CookPreset, DEFAULT_THREAD_BUDGET};
 pub use project_settings::{
-    LEGACY_PROJECT_IMPORT_SETTINGS_FILE, PROJECT_IMPORT_SETTINGS_FILE, ProjectImportSettings,
+    ImporterDefaults, LEGACY_PROJECT_IMPORT_SETTINGS_FILE, PROJECT_IMPORT_SETTINGS_FILE,
+    ProjectImportSettings,
 };
 pub use sidecar::{ImportSettings, Sidecar, SidecarCommand, VersionCheck, register_schema};
 pub use source::{AssetPipeline, SourceAsset, snapshot};

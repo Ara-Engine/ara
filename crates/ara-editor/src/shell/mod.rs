@@ -58,6 +58,7 @@ mod hierarchy;
 mod hierarchy_actions;
 mod hierarchy_filters;
 mod history_panel;
+mod import_batch;
 mod import_panel;
 #[cfg(test)]
 mod inspector_capture;
@@ -342,6 +343,7 @@ pub struct Shell {
     resolver: crate::world::SceneResolver,
     /// The import settings `document_view` shares across revisions.
     import_settings: crate::world::ImportsCache,
+    import_batch: import_batch::State,
     /// The (document, store revision, workspace generation) `resolved` last answered.
     resolved_key: Option<(String, u64, u64)>,
     tooltip_text: Option<String>,
@@ -450,6 +452,7 @@ pub(crate) enum Binding {
     AssetRenameValue,
     ResourceContent(String, Vec<Value>, String),
     ImportField(String, String),
+    ImportBatchField(String, String),
     ResourceText(String, String),
     ResourceApply,
     PreviewShape(bool),
@@ -672,6 +675,7 @@ impl Shell {
             built: (u64::MAX, u64::MAX),
             resolver: Default::default(),
             import_settings: Default::default(),
+            import_batch: Default::default(),
             resolved_key: None,
             tooltip_text: None,
             tooltip_target: None,

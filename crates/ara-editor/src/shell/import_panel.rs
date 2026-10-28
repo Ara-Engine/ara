@@ -7,6 +7,9 @@ use super::*;
 mod namespace;
 impl Shell {
     pub(super) fn import_panel(&mut self, editor: &Editor, out: &mut String) -> ara_ui::Result<()> {
+        if self.multi_import_panel(editor, out)? {
+            return Ok(());
+        }
         let path = editor
             .state
             .asset_path
@@ -98,6 +101,7 @@ impl Shell {
                     "MeshSettings",
                 ),
             };
+            let defaults = import_batch::inherited_defaults(editor, &settings.importer, defaults)?;
             let db = editor.host.store().schema();
             let metadata = db.get(schema).and_then(|ty| {
                 if let ara_schema::Shape::Struct { fields, .. } = &ty.shape {
@@ -108,6 +112,9 @@ impl Shell {
             });
             if let Some(fields) = defaults.as_object() {
                 for (key, default) in fields {
+                    if settings.importer == "ara.fbx" && key == "opacityMaps" {
+                        continue;
+                    }
                     let value = settings.settings.get(key).unwrap_or(default);
                     let id = format!("import-setting-{key}");
                     let desc = metadata.and_then(|fields| fields.iter().find(|f| f.name == *key));
@@ -141,12 +148,12 @@ impl Shell {
                                     doc: doc.id.to_string(),
                                     key: key.clone(),
                                 },
-                                options: options
-                                    .iter()
-                                    .map(|option| {
-                                        (json!(option), super::inspector_panel::sentence(option))
-                                    })
-                                    .collect(),
+                                options: import_batch::enum_values(
+                                    options,
+                                    desc.is_some_and(|field| {
+                                        matches!(&field.ty, ara_schema::ValueType::Option(_))
+                                    }),
+                                ),
                                 current: value.clone(),
                             },
                             out,
@@ -164,20 +171,32 @@ impl Shell {
                                     _ => panels::display(value),
                                 }
                             });
-                        out.push_str(&format!("<field id='{id}' class='{}' style='flex-grow:1;flex-basis:0px' text='{}' action='Dispatch' label='{}' description='{}' />",if value.is_number(){"number"}else{""},escape(&draft),escape(&name),escape(help)));
+                        let bounds = import_batch::numeric_bounds(db, desc);
+                        out.push_str(&format!("<field id='{id}' class='{}' {bounds} style='flex-grow:1;flex-basis:0px' text='{}' action='Dispatch' label='{}' description='{}' />",if value.is_number(){"number"}else{""},escape(&draft),escape(&name),escape(help)));
                     }
                     out.push_str("</panel></panel>");
                 }
             }
-            out.push_str(&format!("<panel id='import-quality-row' class='prop-row'><panel id='import-quality-label-cell' class='prop-label' style='width:{label}px'><text id='import-quality-label' text='Quality' description='Final cook quality: Fast iterates, High quality ships' /></panel><panel id='import-quality-value' class='prop-value'><panel id='import-quality' class='segment'>"));
-            for (preset, name) in [
-                (ara_asset::CookPreset::Fast, "Fast"),
-                (ara_asset::CookPreset::Balanced, "Balanced"),
-                (ara_asset::CookPreset::HighQuality, "High"),
-            ] {
-                out.push_str(&self.bind_button(&format!("import-quality-{preset:?}"),name,Binding::ResourceContent(doc.id.to_string(),vec![json!({"cmd":"import.configure","args":{"source":source,"preset":preset}})],"Change import quality".into()),if Some(preset)==settings.preset{"segment-button selected"}else{"segment-button"}));
-            }
-            out.push_str("</panel></panel></panel><panel id='import-actions' class='row' style='flex-shrink:0;padding:8px;padding-left:12px'>");
+            out.push_str(&format!("<panel id='import-quality-row' class='prop-row'><panel id='import-quality-label-cell' class='prop-label' style='width:{label}px'><text id='import-quality-label' text='Quality' description='Source cook quality; absent follows project/default quality' /></panel><panel id='import-quality-value' class='prop-value'>"));
+            self.choice_button(
+                "import-quality",
+                "Cook quality",
+                choices::Select {
+                    destination: choices::Destination::ImportBatch {
+                        group: format!("@source:{}", doc.id),
+                        key: "$preset".into(),
+                    },
+                    current: json!(settings.preset),
+                    options: vec![
+                        (Value::Null, "Use project/default quality".into()),
+                        (json!("fast"), "Fast".into()),
+                        (json!("balanced"), "Balanced".into()),
+                        (json!("highQuality"), "High quality".into()),
+                    ],
+                },
+                out,
+            );
+            out.push_str("</panel></panel><panel id='import-actions' class='row' style='flex-shrink:0;padding:8px;padding-left:12px'>");
             out.push_str(&self.bind_button(
                 "asset-reimport",
                 "Reimport",
@@ -273,49 +292,31 @@ impl Shell {
         let keys = self
             .drafts
             .keys()
-            .filter(|k| k.starts_with("@import|"))
+            .filter(|k| k.starts_with("@import|") || k.starts_with("@import-batch|"))
             .cloned()
             .collect::<Vec<_>>();
         if keys.is_empty() {
             return Ok(false);
         }
-        // Per sidecar document: its source path and the edited settings object.
-        let mut documents = BTreeMap::<String, (String, Value)>::new();
+        let mut changes = Vec::new();
         for key in &keys {
             let mut parts = key.split('|');
-            let _ = parts.next();
+            let kind = parts.next().ok_or("invalid import draft kind")?;
             let doc = parts.next().ok_or("invalid import draft")?;
             let field = parts.next().ok_or("invalid import field")?;
-            if !documents.contains_key(doc) {
-                let workspace = editor.host.store().workspace();
-                let source = workspace
-                    .path_of(doc)
-                    .map(|path| workspace.reference_path(path))
-                    .and_then(|p| p.strip_suffix(".import.json"))
-                    .ok_or("import document disappeared")?
-                    .to_owned();
-                let settings = workspace
-                    .doc(doc)
-                    .and_then(|d| d.record("i_settings"))
-                    .and_then(|r| r.get("settings"))
-                    .filter(|s| s.is_object())
-                    .cloned()
-                    .unwrap_or_else(|| json!({}));
-                documents.insert(doc.into(), (source, settings));
-            }
-            let (_, settings) = documents.get_mut(doc).ok_or("import draft missing")?;
             let text = self.drafts.get(key).ok_or("import draft missing")?;
-            settings[field] = serde_json::from_str(text).unwrap_or_else(|_| json!(text));
+            let value = serde_json::from_str(text).unwrap_or_else(|_| json!(text));
+            if kind == "@import-batch" {
+                changes.extend(self.import_batch_changes(doc, field, value)?);
+            } else {
+                changes.push(import_batch::Change::Setting {
+                    doc: doc.into(),
+                    field: field.into(),
+                    value,
+                });
+            }
         }
-        for (doc, (source, settings)) in documents {
-            editor.apply_to(
-                &doc,
-                vec![
-                    json!({"cmd":"import.configure","args":{"source":source,"settings":settings}}),
-                ],
-                "Edit importer settings",
-            )?;
-        }
+        import_batch::apply_changes(editor, changes, "Edit importer settings")?;
         for key in keys {
             self.drafts.remove(&key);
         }

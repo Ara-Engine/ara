@@ -54,6 +54,7 @@ fn new_templates_get_balanced_import_policy_and_authored_policy_is_preserved() {
     .expect("marker");
     let text = ProjectImportSettings {
         preset: CookPreset::HighQuality,
+        ..Default::default()
     }
     .canonical_text()
     .expect("canonical");

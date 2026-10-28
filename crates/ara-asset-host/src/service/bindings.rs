@@ -5,6 +5,8 @@ use ara_doc::Workspace;
 use ara_schema::SchemaDb;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+#[cfg(test)]
+mod defaults_tests;
 
 pub(super) type AssetHashes = BTreeMap<String, (String, String, ara_asset::Digest)>;
 
@@ -14,6 +16,7 @@ pub(super) struct Bindings {
     pub workspace: Workspace,
     pub versions: BTreeMap<String, String>,
     pub preset: ara_asset::CookPreset,
+    pub policy: ara_asset::ProjectImportSettings,
     pub asset_hashes: AssetHashes,
 }
 
@@ -105,15 +108,20 @@ impl Bindings {
                 "the sidecar for `{path}` was authored by a newer importer; update Ara or install that importer before preparing this asset"
             )));
         }
-        self.validate_settings(&settings.importer, &settings.settings)?;
+        let (effective, preset) = self.policy.resolved_settings(
+            &settings.importer,
+            settings.preset,
+            &settings.settings,
+        )?;
+        self.validate_settings(&settings.importer, &effective)?;
         Ok(SourceAsset {
-            preset: Some(settings.preset.unwrap_or(self.preset)),
+            preset: Some(preset),
             thread_budget: 2,
             id,
             path: path.to_owned(),
             importer: settings.importer.clone(),
             version: installed.clone(),
-            settings: settings.settings.clone(),
+            settings: effective,
             target: if cfg!(target_os = "windows") {
                 TargetPlatform::Windows
             } else if cfg!(target_os = "macos") {

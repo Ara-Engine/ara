@@ -543,10 +543,14 @@ impl Shell {
                                 .map(str::to_owned)
                                 .unwrap_or_else(|| action.value.to_string()),
                         );
-                        if action.value.is_boolean() {
+                        if action.value.is_boolean() || action.value.is_number() {
                             self.commit_import_fields(editor)?;
                             rebuild = true;
                         }
+                    }
+                    Binding::ImportBatchField(group, key) => {
+                        rebuild |=
+                            self.import_batch_field(editor, group, key, action.value.clone())?;
                     }
                     Binding::Scrub(_, _) => {}
                     Binding::NestedScrub { .. } => {}

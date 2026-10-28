@@ -64,9 +64,10 @@ pub(super) fn run(
         workspace: frozen.workspace,
         versions: Default::default(),
         preset: Default::default(),
+        policy: Default::default(),
         asset_hashes: Default::default(),
     };
-    bindings.preset = ["settings/ara.imports", "ara.imports"]
+    bindings.policy = ["settings/ara.imports", "ara.imports"]
         .into_iter()
         .find_map(|path| {
             bindings
@@ -82,8 +83,8 @@ pub(super) fn run(
         })
         .transpose()
         .map_err(|error| one(Diagnostic::error(codes::INVALID_PARAMS, error.to_string())))?
-        .unwrap_or_default()
-        .preset;
+        .unwrap_or_default();
+    bindings.preset = bindings.policy.preset;
     let imports: Vec<_> = params
         .commands
         .iter()

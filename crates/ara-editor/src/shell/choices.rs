@@ -17,6 +17,11 @@ pub(crate) enum Destination {
         doc: String,
         key: String,
     },
+    ImportBatch {
+        group: String,
+        key: String,
+    },
+    ImportGroup,
     Field(String),
     Append {
         field: String,
@@ -185,6 +190,13 @@ impl Shell {
                 self.drafts
                     .insert(format!("@import|{doc}|{key}"), value.to_string());
                 self.commit_import_fields(editor)?;
+            }
+            Destination::ImportBatch { group, key } => {
+                self.import_batch_value(editor, group, key, value)?
+            }
+            Destination::ImportGroup => {
+                self.commit_import_fields(editor)?;
+                self.choose_import_group(value)?;
             }
             Destination::Field(path) => {
                 editor.apply(

@@ -1149,7 +1149,9 @@ fn build() -> Vec<Spec> {
             Ok(())
         }),
         later("assets.clear_cache", "Clear Cache", "trash", "", "Clearing caches while jobs run is unsafe; delete .ara/cache with the editor closed."),
-        later("assets.import_defaults", "Import Defaults…", "settings-2", "", "Per-type import defaults arrive with the Assets settings page."),
+        cmd("assets.import_defaults", "Import Defaults…", "settings-2", "", "Edit project-wide texture quality and typed per-importer defaults.", |s,e,_|s.import_defaults(e)),
+        cmd("assets.import_defaults.close", "Back to Selection", "arrow-left", "", "Close import defaults and return to the current Inspector selection.", |s,e,_|s.close_import_defaults(e)),
+        cmd("assets.import_defaults.reset", "Reset Import Type Defaults", "rotate-ccw", "", "Remove the selected importer's project defaults in one undoable action.", |s,e,t|s.reset_import_defaults(e,t)),
     ]);
     // Play
     c.extend([

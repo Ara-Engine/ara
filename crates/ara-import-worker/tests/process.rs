@@ -47,6 +47,7 @@ fn project_quality_changes_only_inherited_texture_inputs() {
         root.path().join(PROJECT_IMPORT_SETTINGS_FILE),
         ProjectImportSettings {
             preset: CookPreset::HighQuality,
+            ..Default::default()
         }
         .canonical_text()
         .unwrap(),
