@@ -501,7 +501,7 @@ impl Shell {
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,
             hierarchy_surface: None,
-            browser: assets::Browser::new(editor.host.root()),
+            browser: assets::Browser::new(&editor.host.root().join(ara_doc::AUTHORING_ROOT)),
             imports: imports::Imports::new(editor.host.root()),
             asset_rows: names::AssetRows::default(),
             name_fit: names::NameFit::default(),

@@ -10,17 +10,28 @@ use std::{
     },
 };
 
-pub(super) struct Server {
+pub(in crate::smoke) struct Server {
     pub api: String,
     stop: Arc<AtomicBool>,
     worker: Option<thread::JoinHandle<()>>,
 }
 impl Server {
     pub fn start(artifacts: &Path, log: &Path) -> Result<Self> {
+        Self::start_kinds(
+            artifacts,
+            env!("CARGO_PKG_VERSION"),
+            &["hub", "engine"],
+            log,
+        )
+    }
+    pub fn start_hub(artifacts: &Path, version: &str, log: &Path) -> Result<Self> {
+        Self::start_kinds(artifacts, version, &["hub"], log)
+    }
+    fn start_kinds(artifacts: &Path, version: &str, kinds: &[&str], log: &Path) -> Result<Self> {
         let mut routes = BTreeMap::new();
         let mut releases = Vec::new();
-        for kind in ["hub", "engine"] {
-            let tag = format!("{kind}-v{}", env!("CARGO_PKG_VERSION"));
+        for kind in kinds {
+            let tag = format!("{kind}-v{version}");
             let directory = artifacts.join("published").join(&tag);
             let bytes = fs::read(directory.join("release.json"))?;
             let signature = fs::read(directory.join("release.json.sig"))?;

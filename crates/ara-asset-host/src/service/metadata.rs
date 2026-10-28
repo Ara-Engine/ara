@@ -119,7 +119,7 @@ pub(super) fn json_owner(
     if storage == ara_host::project::MARKER {
         return Ok(Some(JsonOwner::Marker));
     }
-    if storage == ara_host::project_policy::PREFERENCES {
+    if storage == ara_host::project_layout::PREFERENCES {
         return Ok(Some(JsonOwner::Policy));
     }
     if storage.starts_with("settings/builds/") && storage.ends_with(".export.json") {
@@ -180,13 +180,18 @@ pub(super) fn has_explicit_reference(value: &serde_json::Value) -> bool {
 }
 
 fn scene_context(bindings: &Bindings) -> Result<Option<ara_doc::AssetId>, Vec<Diagnostic>> {
-    let Some(main) = ara_host::project_policy::policy(&bindings.workspace, "main")
+    let Some(main) = ara_host::project_layout::policy(&bindings.workspace, "main")
         .filter(|value| !value.is_null())
     else {
+        let defaults = if bindings.workspace.reference_root().is_empty() {
+            ["levels/main.scene", ara_host::project_layout::MAIN_SCENE]
+        } else {
+            [ara_host::project_layout::MAIN_SCENE, "levels/main.scene"]
+        };
         return Ok(bindings
             .workspace
-            .find(ara_host::project_policy::MAIN_SCENE)
-            .or_else(|| bindings.workspace.find("scenes/main.scene"))
+            .find(defaults[0])
+            .or_else(|| bindings.workspace.find(defaults[1]))
             .cloned());
     };
     let main = main.as_str().ok_or_else(|| {
@@ -194,12 +199,12 @@ fn scene_context(bindings: &Bindings) -> Result<Option<ara_doc::AssetId>, Vec<Di
             codes::INVALID_REF,
             "main must be an authored scene path or asset reference",
         )
-        .file(ara_host::project_policy::PREFERENCES)
+        .file(ara_host::project_layout::PREFERENCES)
         .path("main"))
     })?;
     let path = super::ui_paths::resolve(bindings, "main", main)?;
     let id=bindings.workspace.find(&path).filter(|id|bindings.workspace.doc(id.as_str()).is_some_and(|document|document.kind=="scene"))
-        .ok_or_else(||one(Diagnostic::error(codes::UNRESOLVED_REF,format!("main reference `{main}` does not resolve to a loaded scene; set main to a scene path or valid @path#id")).file(ara_host::project_policy::PREFERENCES).path("main")))?;
+        .ok_or_else(||one(Diagnostic::error(codes::UNRESOLVED_REF,format!("main reference `{main}` does not resolve to a loaded scene; set main to a scene path or valid @path#id")).file(ara_host::project_layout::PREFERENCES).path("main")))?;
     Ok(Some(id.clone()))
 }
 

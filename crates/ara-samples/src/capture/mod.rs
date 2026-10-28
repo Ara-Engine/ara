@@ -36,6 +36,7 @@ pub struct Request<'a> {
 pub fn run(samples: &Path, lock: &Lock, request: &Request<'_>) -> Result<()> {
     let root = samples.join(request.project);
     let path = root
+        .join(ara_doc::AUTHORING_ROOT)
         .join("look")
         .join(format!("{}.look.json", request.look));
     let mut look: look::Look = serde_json::from_str(

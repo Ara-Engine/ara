@@ -39,9 +39,9 @@ fn compatibility_source_write_returns_materialized_ops_and_undoable_agent_histor
         .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/source-fixes"));
     let root = target.join(format!("source-write-{}", std::process::id()));
     std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT)).expect("scratch");
-    std::fs::write(root.join("ara.project.json"), "{}").expect("marker");
+    std::fs::write(root.join("ara.project.json"), ara_json::to_canonical_string(&serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"main.scene"}))).expect("marker");
     std::fs::write(
-        root.join("main.scene"),
+        root.join(ara_doc::AUTHORING_ROOT).join("main.scene"),
         r#"{"$schema":"ara://schema/scene/1","id":"sc_write","records":{}}"#,
     )
     .expect("history document");
@@ -119,7 +119,7 @@ fn code_fixes_use_prepared_source_ops_and_round_trip_offline_history() {
             .as_nanos()
     ));
     std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT)).expect("scratch");
-    std::fs::write(root.join("ara.project.json"), "{}").expect("marker");
+    std::fs::write(root.join("ara.project.json"), ara_json::to_canonical_string(&serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"main.scene"}))).expect("marker");
     std::fs::write(
         root.join(ara_doc::AUTHORING_ROOT).join("main.scene"),
         r#"{"$schema":"ara://schema/scene/1","id":"sc_fix","records":{}}"#,

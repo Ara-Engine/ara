@@ -365,6 +365,13 @@ fn templates(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
                 let name = path.file_name().context("sample directory")?;
                 for file in files(&path)? {
                     let rel = file.strip_prefix(&path)?;
+                    if rel
+                        .components()
+                        .next()
+                        .is_some_and(|component| component.as_os_str() == "builds")
+                    {
+                        continue;
+                    }
                     if !rel.components().any(|c| {
                         [".git", ".ara", "target", "bin", "obj", "evidence"]
                             .iter()
@@ -396,9 +403,8 @@ fn templates(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Keep the Hub's template preview, which lives in the excluded `evidence/`: the
-/// Play capture of the sample's main scene becomes `thumbnail.png` (the rule
-/// `ara_hub_service::DirectoryTemplates` applies in a checkout).
+/// Keep the Hub preview while repository evidence stays outside the game project.
+/// The main scene's Play capture becomes the packaged template's thumbnail.
 fn sample_thumbnail(sample: &Path, templates: &Path) -> Result<()> {
     let marker: serde_json::Value =
         serde_json::from_slice(&fs::read(sample.join("ara.project.json"))?)?;
@@ -409,7 +415,11 @@ fn sample_thumbnail(sample: &Path, templates: &Path) -> Result<()> {
         return Ok(());
     };
     let preview = sample
-        .join("evidence")
+        .parent()
+        .and_then(Path::parent)
+        .context("sample repository root")?
+        .join("evidence/samples")
+        .join(sample.file_name().context("sample directory")?)
         .join(format!("{}-player.png", stem.to_string_lossy()));
     let target = templates
         .join(sample.file_name().context("sample directory")?)

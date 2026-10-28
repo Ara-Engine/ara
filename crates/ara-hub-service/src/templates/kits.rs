@@ -14,7 +14,12 @@ pub(super) fn missing(
     root: &Path,
     name: &str,
 ) -> Result<Option<TemplateSetup>, RpcError> {
-    let kit = root.join("assets/kit");
+    let authored = ara_host::project_layout::authored_root(root);
+    let kit = if authored == root {
+        authored.join("assets/kit")
+    } else {
+        authored.join("kit")
+    };
     let mut missing = BTreeSet::new();
     inspect(&kit, &kit, &mut missing).map_err(io_error)?;
     Ok((!missing.is_empty()).then(|| {

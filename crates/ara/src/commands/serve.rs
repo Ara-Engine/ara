@@ -161,6 +161,7 @@ pub fn serve(root: &Path, port: Option<u16>, stdio: bool, json: bool) -> Result<
 
 /// `ara mcp`.
 pub fn mcp(root: &Path) -> Result<bool, String> {
+    ara_host::project_layout::require_current_layout(root).map_err(|d| d.to_string())?;
     if let Some(mut client) = Client::for_project(root) {
         let stdin = io::stdin();
         let mut input = stdin.lock();

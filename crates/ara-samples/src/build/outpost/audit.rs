@@ -47,8 +47,13 @@ fn authored_chunks_cover_the_outpost_world_grid() -> Result<()> {
     let project = ara_play_host::open_project(&root).map_err(|d| anyhow::anyhow!("{d}"))?;
     let (workspace, diagnostics) = project.load(&[]);
     ensure!(
-        !diagnostics.values().flatten().any(|d| d.is_error()),
-        "sample documents must load: {diagnostics:?}"
+        !project
+            .diags
+            .iter()
+            .chain(diagnostics.values().flatten())
+            .any(|d| d.is_error()),
+        "sample documents must load: {:?}; {diagnostics:?}",
+        project.diags
     );
     let id = workspace.find(super::SCENE.0).context("Outpost scene")?;
     let mut problems = Vec::new();
@@ -94,7 +99,10 @@ fn authored_chunks_cover_the_outpost_world_grid() -> Result<()> {
                 .split('#')
                 .next()
                 .context("model path")?;
-            let (lo, hi) = super::super::bounds::file(&root.join(path), renderer["node"].as_str())?;
+            let (lo, hi) = super::super::bounds::file(
+                &crate::authored_path(&root, path),
+                renderer["node"].as_str(),
+            )?;
             let (mut min, mut max) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
             for corner in 0..8 {
                 let point = Vec3::new(
@@ -109,8 +117,10 @@ fn authored_chunks_cover_the_outpost_world_grid() -> Result<()> {
             geometry.insert(address, [min.to_array(), max.to_array()]);
         }
     }
-    let look: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(root.join("look/outpost.look.json"))?)?;
+    let look: serde_json::Value = serde_json::from_slice(&std::fs::read(crate::authored_path(
+        &root,
+        "look/outpost.look.json",
+    ))?)?;
     let mut shots = look["shots"].clone();
     let mut ground = ara_runtime::terrain::TerrainData {
         header: header.clone(),

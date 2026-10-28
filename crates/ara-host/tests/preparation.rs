@@ -122,7 +122,7 @@ fn preparation_validates_before_hook_defers_ops_and_falls_back_to_normal_apply()
     let root = scratch();
     fs::write(
         root.join("ara.project.json"),
-        r#"{"layoutVersion":3,"main":"scenes/main.scene"}"#,
+        r#"{"layoutVersion":4,"main":"scenes/main.scene"}"#,
     )
     .expect("marker");
     let scene = root.join(ara_doc::AUTHORING_ROOT).join("scenes/main.scene");

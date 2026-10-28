@@ -7,13 +7,13 @@ use std::io::{Read, Write};
 fn websocket_edits_and_mcp_capture_share_the_window_authority() {
     let root = std::env::temp_dir().join(format!("ara-editor-wire-{}", std::process::id()));
     std::fs::create_dir(&root).unwrap();
-    std::fs::create_dir(root.join("levels")).unwrap();
+    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
     std::fs::write(
         root.join("ara.project.json"),
-        ara_json::to_canonical_string(&json!({"name":"Wire test"})),
+        ara_json::to_canonical_string(&json!({"name":"Wire test","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene"})),
     )
     .unwrap();
-    std::fs::write(root.join("levels/main.scene"),ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_wire0001","records":{"e_crate001":{"name":"Crate","Transform":{}}}}))).unwrap();
+    std::fs::write(root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_wire0001","records":{"e_crate001":{"name":"Crate","Transform":{}}}}))).unwrap();
     let mut editor = Editor::open(&root).unwrap();
     let mut server = Server::start(&root).unwrap();
     let client_root = root.clone();
@@ -89,13 +89,13 @@ use std::time::Instant;
 fn only_history_that_changes_review_state_rebuilds_after_an_edit() {
     let root = std::env::temp_dir().join(format!("ara-editor-history-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(root.join("levels")).unwrap();
+    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
     std::fs::write(
         root.join("ara.project.json"),
-        ara_json::to_canonical_string(&json!({"name":"History test"})),
+        ara_json::to_canonical_string(&json!({"name":"History test","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene"})),
     )
     .unwrap();
-    std::fs::write(root.join("levels/main.scene"),ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_hist0001","records":{"e_crate001":{"name":"Crate","Transform":{}}}}))).unwrap();
+    std::fs::write(root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_hist0001","records":{"e_crate001":{"name":"Crate","Transform":{}}}}))).unwrap();
     let mut editor = Editor::open(&root).unwrap();
     let mut server = Server::start(&root).unwrap();
     server.pump(&mut editor);

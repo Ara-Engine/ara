@@ -23,7 +23,7 @@ use crate::{Editor, shell::Shell};
 /// The file the import step brings into the project (the demo's CC0 rock, ~1 m).
 const IMPORT: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../ara-player/demo/assets/props/rock.glb"
+    "/../ara-player/demo/content/assets/props/rock.glb"
 );
 /// Frames a step may wait for its effect (jobs, Play, reloads) before giving up.
 const PATIENCE: u32 = 144 * 90;

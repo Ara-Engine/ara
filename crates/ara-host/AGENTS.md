@@ -1,11 +1,18 @@
 # ara-host
-One project's Engine Protocol host: sessions, Service registry, attributed history,
-review, checkpoints, persistence and reconciliation. Used by `ara serve`, offline CLI and tests.
+Project Engine Protocol host: sessions, services, attributed history, review, persistence and reconciliation; used by `ara serve`, CLI and tests.
 ## Public API
 - `Project::open(root)` (needs `ara.project.json`), `main_scene()` (`main` in the
-  marker, else `levels/main.scene`), `project::discover(start)`,
-  `project::no_project` (ARA1901 + `ara init` fix), `MARKER`, `STATE_DIR` (`.ara`).
-  Scans skip hidden dirs, `target/`, `node_modules/`, `spikes/`, nested projects.
+  marker, else `scenes/main.scene`), `project::discover(start)`,
+  `project::no_project` (ARA1901 + `ara init` fix), `MARKER`, `STATE_DIR` (`.ara`). Scans skip hidden dirs, `target/`, `node_modules/`, `spikes/`, top-level `builds/` and `packages/`, nested projects.
+- `project::authored_files(root, db)`: one semantic inventory, sorted by unique storage_path;
+  authored paths are reference-relative, metadata/settings have Project scope.
+- `project_layout::{AUTHORING_ROOT, authored_root(root)}`: one authored-root contract.
+  Current projects use content-relative references and project-relative storage paths.
+- `project_layout`: `require_current_layout` rejects old opens (ARA1914). `migration_plan` is read-only.
+  `migrate_project` submits one typed, journaled command after consent and waits for its physical receipt; `Migration::apply` delegates.
+  Migration pins `CURRENT_ENGINE_VERSION`; `pin_current_engine` uses typed ops without compiling game code. History stays append-only; migration Undo restores old bytes and closes normal authoring.
+- `Workspace::insert_project_document` keeps root policy transactional without adding
+  it to the asset index; `is_project_document` excludes it from portable game data.
 - `Host::open(project, HostConfig)`: takes `.ara/lock` (ARA1903 if held), loads
   documents, replays `.ara/journal`. `call(conn, method, params)`,
   `handle_text(conn, json)`, `tick()` (watch + debounced flush + service ticks),
@@ -129,22 +136,15 @@ CLI/daemon register `run`/`capture`/`play`/`test` through ara-play-host; bare Ho
   lands (in commit order): a crash loses only queued lines; no fsync per line.
 ## Testing
 `cargo test -p ara-host`: query parsing, logs, journal compaction, review, a held file thread.
-`tests/host.rs` copies fixtures to scratch: protocol, scopes, dry runs, symbols, review,
-rollback/recovery, external edits/conflicts, the file thread, services/jobs/subscriptions,
-document inference, apply text and agent `why`. `tests/collab.rs`: advisory claims,
-presence, branches/restart/submits and participant undo. Scene-to-text snapshots.
+`tests/host.rs` copies fixtures to scratch: protocol, scopes, dry runs, symbols, review, recovery, external edits/conflicts, file thread, services/jobs/subscriptions, document inference, text and `why`.
+`tests/collab.rs`: advisory claims, presence, branches/restart/submits and participant undo. Scene-to-text snapshots.
 `tests/diag.rs` serializes the global bus: grouped/attributed logs, cross-thread
 subscriptions, report/clear, executable `why` fixes and restart persistence.
 `Cx::create_document` delegates to `doc.create`, including format templates; fill documents with `Cx::apply` for normal attribution/history/undo.
 ## Structured reference (`docs.json`)
-`docs::structured` writes canonical JSON via `ara_json`, format `ara.docs/1`. Top level: `format`, `engineVersion`, `protocolVersion`, `types`, `commands`,
-`methods`, `diagnostics`, `csharpExamples`, `topics`. Catalogs are objects keyed by
-stable schema/command/method/code name. Fields carry type, unit, range, materialized
-schema default, doc, replication and value examples. Commands carry parameter JSON
-Schemas; methods carry scope, params and extensible result JSON Schemas. Result
-properties are optional because several methods vary their payload with parameters.
-C# examples carry page ID, source, region and compiled code, extracted from
-`dotnet/examples/` and embedded in markdown, full text and MCP search.
-`ara docs --json` continues to print the file-count summary. The engine package ships
-`docs.json`; publish lists its hash/size/URL in the signed release manifest.
+`docs::structured` writes canonical `ara.docs/1` JSON via `ara_json`: `format`, `engineVersion`, `protocolVersion`, `types`, `commands`, `methods`, `diagnostics`, `csharpExamples`, `topics`.
+Catalogs use stable schema/command/method/code keys. Fields carry type, unit, range, materialized default, doc, replication and examples.
+Commands carry parameter JSON Schemas; methods carry scope, params and extensible result Schemas. Optional result properties accommodate parameter-dependent payloads.
+C# examples carry page ID/source/region/compiled code from `dotnet/examples/`, embedded in markdown, full text and MCP search.
+`ara docs --json` prints the file-count summary. Packages ship `docs.json`; signed release manifests list its hash, size and URL.
 Run `cargo test -p ara-host --test docs` for round-trip and complete catalog/region coverage.

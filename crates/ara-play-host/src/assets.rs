@@ -63,11 +63,11 @@ pub fn import_docs(workspace: &ara_doc::Workspace) -> Result<Vec<ImportDoc>, Str
 fn project_preset(imports: &[ImportDoc]) -> Result<ara_asset::CookPreset, String> {
     imports
         .iter()
-        .find(|(path, _, _)| path == "settings/ara.imports")
+        .find(|(path, _, _)| path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE)
         .or_else(|| {
             imports
                 .iter()
-                .find(|(path, _, _)| path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE)
+                .find(|(path, _, _)| path == ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE)
         })
         .map(|(_, _, record)| {
             serde_json::from_value::<ara_asset::ProjectImportSettings>(serde_json::Value::Object(
@@ -308,7 +308,9 @@ impl Assets {
         self.progress_stale |= project_changed;
         let mut current = BTreeMap::new();
         for (path, id, record) in imports {
-            if path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE || path == "settings/ara.imports" {
+            if path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE
+                || path == ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE
+            {
                 continue;
             }
             let source = path
@@ -560,12 +562,12 @@ mod tests {
         };
         let imports = vec![
             (
-                ara_asset::PROJECT_IMPORT_SETTINGS_FILE.into(),
+                ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE.into(),
                 "ip_legacy".into(),
                 record("highQuality"),
             ),
             (
-                "settings/ara.imports".into(),
+                ara_asset::PROJECT_IMPORT_SETTINGS_FILE.into(),
                 "ip_scoped".into(),
                 record("balanced"),
             ),
@@ -615,7 +617,14 @@ mod tests {
     #[test]
     fn project_quality_is_loaded_as_a_host_document_before_import_synchronization() {
         let root = tempfile::tempdir().expect("project");
-        std::fs::write(root.path().join("ara.project.json"), "{}").expect("marker");
+        std::fs::write(
+            root.path().join("ara.project.json"),
+            ara_json::to_canonical_string(
+                &serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
+            ),
+        )
+        .expect("marker");
+        std::fs::create_dir_all(root.path().join("settings")).expect("settings");
         let policy = ara_asset::ProjectImportSettings {
             preset: ara_asset::CookPreset::HighQuality,
         };

@@ -45,8 +45,12 @@ fn wav(seconds: usize) -> Vec<u8> {
 #[test]
 fn play_import_configuration_uses_current_commands_before_sidecar_save() {
     let dir = demo_copy("current-import");
-    std::fs::create_dir_all(dir.join("sounds")).unwrap();
-    std::fs::write(dir.join("sounds/tone.wav"), wav(1)).unwrap();
+    std::fs::create_dir_all(dir.join(ara_doc::AUTHORING_ROOT).join("sounds")).unwrap();
+    std::fs::write(
+        dir.join(ara_doc::AUTHORING_ROOT).join("sounds/tone.wav"),
+        wav(1),
+    )
+    .unwrap();
     let mut agent = Agent::open(&dir, 44, |_| {});
     agent.tool(
         "ara_apply",
@@ -69,13 +73,21 @@ fn play_import_configuration_uses_current_commands_before_sidecar_save() {
         .unwrap()["as_tone"]
         .clone();
     agent.host.flush();
-    let before = std::fs::read(dir.join("sounds/tone.wav.import.json")).unwrap();
+    let before = std::fs::read(
+        dir.join(ara_doc::AUTHORING_ROOT)
+            .join("sounds/tone.wav.import.json"),
+    )
+    .unwrap();
     agent.tool("ara_apply", json!({"why":"Use compressed effects", "commands":[
         {"cmd":"import.configure", "args":{"source":"sounds/tone.wav", "settings":{"usage":"shortEffect","codec":"adpcm"}}}
     ]}));
     assert_eq!(
         before,
-        std::fs::read(dir.join("sounds/tone.wav.import.json")).unwrap(),
+        std::fs::read(
+            dir.join(ara_doc::AUTHORING_ROOT)
+                .join("sounds/tone.wav.import.json")
+        )
+        .unwrap(),
         "test must cover the interval before the canonical save"
     );
     assets
@@ -209,8 +221,12 @@ fn long_score_renders_past_three_minutes_and_loops_with_a_64k_queue_budget() {
 #[test]
 fn agent_imports_and_plays_a_three_minute_music_document_headlessly() {
     let dir = demo_copy("streamed-music");
-    std::fs::create_dir_all(dir.join("sounds")).unwrap();
-    std::fs::write(dir.join("sounds/long.wav"), long_wav()).unwrap();
+    std::fs::create_dir_all(dir.join(ara_doc::AUTHORING_ROOT).join("sounds")).unwrap();
+    std::fs::write(
+        dir.join(ara_doc::AUTHORING_ROOT).join("sounds/long.wav"),
+        long_wav(),
+    )
+    .unwrap();
     let mut agent = Agent::open(&dir, 42, |_| {});
     agent.tool("ara_apply", json!({"why":"Import the long score", "commands":[
         {"cmd":"import.initialize", "args":{"source":"sounds/long.wav", "id":"as_longscore", "settings":{"usage":"music", "decodedBudget":65536}}},

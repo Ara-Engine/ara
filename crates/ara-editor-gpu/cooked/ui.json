@@ -1,7 +1,7 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "b8ed53beb3fbc0ce7e0c2abd336f3ab62dea7e38f8ef20b79b0f0612925af1ee",
+  "key": "fe8d5701a8be825c4b3d512dec94c16aa5698ef7d76d9230854e23cc692af5b9",
   "stages": [
     {
       "dxil": "b8ed53beb3fbc0ce7e0c2abd336f3ab62dea7e38f8ef20b79b0f0612925af1ee/fragmentMain.dxil",

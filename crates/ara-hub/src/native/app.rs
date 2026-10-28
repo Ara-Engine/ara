@@ -523,6 +523,10 @@ impl App {
 /// Focus a safe action when a dialog first opens or replaces a transfer control.
 fn dialog_focus(ui: &Ui) -> Option<u64> {
     [
+        "engine-layout-cancel",
+        "engine-layout-use",
+        "migration-cancel",
+        "migration-submit",
         "dialog-cancel",
         "dialog-later",
         "dialog-error-dismiss",

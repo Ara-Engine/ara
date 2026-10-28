@@ -2,7 +2,7 @@
 //!
 //! - `add-polyhaven` / `add-urls` pin a third-party asset in `samples/assets.lock.json`;
 //! - `fetch` downloads (resumable, BLAKE3-verified) into each project's ignored
-//!   `assets/third_party/`; `verify` checks without downloading;
+//!   `third_party/`; `verify` checks without downloading;
 //! - `credits` regenerates `samples/THIRD_PARTY_ASSETS.md` from the lock;
 //! - `build` authors a project's levels through the `ara` CLI (see `build`).
 //! - `kits` writes only the generated, git-ignored kit files (release packaging).
@@ -20,6 +20,21 @@ mod kit;
 mod lock;
 mod play;
 mod sources;
+
+/// Resolves an authored reference path to disk through the shared layout contract.
+fn authored_path(root: &std::path::Path, path: impl AsRef<std::path::Path>) -> PathBuf {
+    root.join(ara_doc::AUTHORING_ROOT).join(path)
+}
+
+/// Sample capture output is derived data; checked-in evidence needs an explicit opt-in.
+fn evidence_directory(project: &str) -> PathBuf {
+    std::env::var_os("ARA_CAPTURE_OUTPUT_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-samples/evidence")
+        })
+        .join(project)
+}
 
 #[derive(Parser)]
 #[command(about = "Ara sample projects with real CC0 art")]
@@ -98,7 +113,7 @@ enum Command {
         /// Project folder name.
         project: String,
     },
-    /// Write a project's generated, git-ignored kit files (`assets/kit/`) without
+    /// Write a project's generated, git-ignored kit files (`kit/`) without
     /// authoring any document. Needs fetched assets; projects without kits are a no-op.
     Kits {
         /// Project folder name.
@@ -343,10 +358,7 @@ fn main() -> Result<()> {
                     window: !headless,
                 },
             )?;
-            let path = samples
-                .join(&project)
-                .join("evidence")
-                .join(format!("{name}-player.json"));
+            let path = evidence_directory(&project).join(format!("{name}-player.json"));
             std::fs::write(
                 &path,
                 serde_json::to_string_pretty(&report)?
@@ -376,10 +388,7 @@ fn main() -> Result<()> {
                     ),
                 },
             )?;
-            let path = samples
-                .join(&project)
-                .join("evidence")
-                .join(format!("{name}-editor.json"));
+            let path = evidence_directory(&project).join(format!("{name}-editor.json"));
             std::fs::write(
                 &path,
                 serde_json::to_string_pretty(&report)?

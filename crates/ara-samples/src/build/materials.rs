@@ -27,7 +27,7 @@ pub(super) fn palette(
 ) -> Result<()> {
     super::native::whole(ctx, models, name, asset, &[])?;
     let (_, source) = super::native::source(ctx, asset)?;
-    let texture_path = format!("assets/kit/{palette}");
+    let texture_path = format!("kit/{palette}");
     let texture_id = format!("as_{}", short(&format!("{name}palette")));
     ctx.sidecar(&texture_path, &texture_id, json!({"usage":"color"}))?;
     let texture = format!("@{texture_path}#{texture_id}");

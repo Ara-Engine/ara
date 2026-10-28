@@ -57,6 +57,11 @@ pub fn tool(name: &str, env: &str) -> Result<PathBuf> {
 }
 
 impl Ctx {
+    /// Physical source/document path; authoring commands and references use short paths.
+    pub fn path(&self, path: impl AsRef<Path>) -> PathBuf {
+        crate::authored_path(&self.root, path)
+    }
+
     /// A context for `samples/<project>`, initializing the project with `ara init`
     /// when it does not exist yet.
     pub fn open(samples: &Path, project: &str, title: &str, lock: Lock) -> Result<Self> {
@@ -124,7 +129,7 @@ impl Ctx {
         for chunk in commands.chunks(120) {
             let n = self.batches.get() + 1;
             self.batches.set(n);
-            let dir = self.root.join(".scratch/batches");
+            let dir = self.root.join(".ara/samples/batches");
             std::fs::create_dir_all(&dir)?;
             let stem = Path::new(doc)
                 .file_name()
@@ -146,7 +151,7 @@ impl Ctx {
     /// Initializes or reconfigures a sidecar with engine-selected import/version data.
     pub fn sidecar(&self, source: &str, id: &str, settings: Value) -> Result<()> {
         ensure!(
-            self.root.join(source).is_file(),
+            self.path(source).is_file(),
             "{source} is missing; run `ara-samples fetch` first"
         );
         let settings = if settings.is_null() {
@@ -154,7 +159,7 @@ impl Ctx {
         } else {
             settings
         };
-        let sidecar = self.root.join(format!("{source}.import.json"));
+        let sidecar = self.path(format!("{source}.import.json"));
         let (command, args) = if sidecar.is_file() {
             let existing: Value = serde_json::from_slice(&std::fs::read(&sidecar)?)?;
             ensure!(
@@ -236,9 +241,9 @@ pub fn clean(ctx: &Ctx, paths: &[&str]) -> Result<()> {
     }
     let mut documents = std::collections::BTreeSet::new();
     for path in paths {
-        collect(&ctx.root.join(path), &mut documents)?;
+        collect(&ctx.path(path), &mut documents)?;
     }
-    collect(&ctx.root.join("assets/third_party"), &mut documents)?;
+    collect(&ctx.path("third_party"), &mut documents)?;
     let calls = documents
         .iter()
         .map(|id| ("doc.delete", json!({"document":format!("@#{id}")})))
@@ -250,7 +255,7 @@ pub fn clean(ctx: &Ctx, paths: &[&str]) -> Result<()> {
     )?;
     let root = std::fs::canonicalize(&ctx.root)?;
     for path in paths {
-        let path = ctx.root.join(path);
+        let path = ctx.path(path);
         if path.exists() {
             ensure!(
                 std::fs::canonicalize(&path)?.starts_with(&root),

@@ -13,13 +13,21 @@ fn the_problems_chip_counts_project_problems_not_this_machines_gpu_layers() {
         .join("../../target/ara-editor/problems")
         .join(std::process::id().to_string());
     let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(root.join("levels")).unwrap();
+    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
     let write = |path: &str, value: serde_json::Value| {
-        std::fs::write(root.join(path), ara_json::to_canonical_string(&value)).unwrap();
+        std::fs::write(
+            if path == "ara.project.json" {
+                root.join(path)
+            } else {
+                root.join(ara_doc::AUTHORING_ROOT).join(path)
+            },
+            ara_json::to_canonical_string(&value),
+        )
+        .unwrap();
     };
     write(
         "ara.project.json",
-        json!({"name":"Problems","main":"levels/main.scene"}),
+        json!({"name":"Problems","layoutVersion":ara_host::project_layout::VERSION,"main":"levels/main.scene"}),
     );
     write(
         "levels/main.scene",

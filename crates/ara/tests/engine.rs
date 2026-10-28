@@ -55,9 +55,9 @@ fn offline_file_preparation_finishes_before_the_cli_exits_including_undo_and_red
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root).expect("scratch");
     assert_eq!(ara_in(&root, &["init"]).0, 0);
-    fs::create_dir_all(root.join("scripts/Game")).expect("scripts");
-    fs::write(root.join("scripts/Game/Door.cs"), "before\n").expect("source");
-    let args = r#"{"path":"scripts/Game/Door.cs","baseHash":"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb","text":"after\n"}"#;
+    fs::create_dir_all(root.join("content/scripts/Game")).expect("scripts");
+    fs::write(root.join("content/scripts/Game/Door.cs"), "before\n").expect("source");
+    let args = r#"{"path":"content/scripts/Game/Door.cs","baseHash":"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb","text":"after\n"}"#;
     let (code, stdout, stderr) = ara_in(&root, &["do", "source.replace", "--args", args, "--json"]);
     assert_eq!(code, 0, "{stdout}{stderr}");
     assert!(
@@ -65,14 +65,14 @@ fn offline_file_preparation_finishes_before_the_cli_exits_including_undo_and_red
         "CLI must return the final transaction: {stdout}"
     );
     assert_eq!(
-        fs::read_to_string(root.join("scripts/Game/Door.cs")).expect("replaced"),
+        fs::read_to_string(root.join("content/scripts/Game/Door.cs")).expect("replaced"),
         "after\n"
     );
     for (command, text) in [("undo", "before\n"), ("redo", "after\n")] {
         let (code, stdout, stderr) = ara_in(&root, &[command, "--json"]);
         assert_eq!(code, 0, "{stdout}{stderr}");
         assert_eq!(
-            fs::read_to_string(root.join("scripts/Game/Door.cs")).expect("file"),
+            fs::read_to_string(root.join("content/scripts/Game/Door.cs")).expect("file"),
             text
         );
     }
@@ -110,8 +110,9 @@ fn authoring_creates_documents_sets_main_and_configures_sidecars_across_runs() {
     let marker =
         json_of(&fs::read_to_string(root.join("ara.project.json")).expect("project marker"));
     assert_eq!(marker["main"], "levels/second.scene");
-    fs::create_dir_all(root.join("assets")).expect("assets directory");
-    fs::write(root.join("assets/model.gltf"), "{}")
+    let authored = root.join(ara_doc::AUTHORING_ROOT);
+    fs::create_dir_all(authored.join("assets")).expect("assets directory");
+    fs::write(authored.join("assets/model.gltf"), "{}")
         .expect("source bytes; cooking is a separate operation");
     let created = apply(
         "import.initialize",
@@ -127,8 +128,9 @@ fn authoring_creates_documents_sets_main_and_configures_sidecars_across_runs() {
         "import.configure",
         r#"{"source":"assets/model.gltf","settings":{"lodCount":2},"preset":"fast"}"#,
     );
-    let settings =
-        json_of(&fs::read_to_string(root.join("assets/model.gltf.import.json")).expect("sidecar"));
+    let settings = json_of(
+        &fs::read_to_string(authored.join("assets/model.gltf.import.json")).expect("sidecar"),
+    );
     assert_eq!(settings["records"]["i_settings"]["settings"]["lodCount"], 2);
     assert_eq!(
         settings["records"]["i_settings"]["version"],
@@ -137,7 +139,8 @@ fn authoring_creates_documents_sets_main_and_configures_sidecars_across_runs() {
     let (code, output, error) = ara_in(&root, &["undo", "--json"]);
     assert_eq!(code, 0, "{output}{error}");
     let settings = json_of(
-        &fs::read_to_string(root.join("assets/model.gltf.import.json")).expect("restored sidecar"),
+        &fs::read_to_string(authored.join("assets/model.gltf.import.json"))
+            .expect("restored sidecar"),
     );
     assert!(
         settings["records"]["i_settings"]["settings"]
@@ -146,7 +149,7 @@ fn authoring_creates_documents_sets_main_and_configures_sidecars_across_runs() {
     );
     let (code, output, error) = ara_in(&root, &["undo", "--json"]);
     assert_eq!(code, 0, "{output}{error}");
-    assert!(!root.join("assets/model.gltf.import.json").exists());
+    assert!(!authored.join("assets/model.gltf.import.json").exists());
 }
 
 fn copy_dir(from: &Path, to: &Path) {
@@ -181,11 +184,16 @@ fn commands_need_a_project_marker_and_skip_nested_projects() {
         fs::write(root.join(dir).join("bad.scene"), "{ not json").expect("write");
     }
     fs::write(root.join("inner/ara.project.json"), "{}").expect("marker");
-    let (code, out, _) = ara_in(&root.join("levels"), &["check", "--json"]);
+    let (code, out, _) = ara_in(
+        &root
+            .join(ara_host::project_layout::AUTHORING_ROOT)
+            .join("scenes"),
+        &["check", "--json"],
+    );
     let report = json_of(&out);
     assert_eq!(
         (code, report["files"].clone(), report["errors"].clone()),
-        (0, json!(3), json!(0)),
+        (0, json!(4), json!(0)),
         "{out}"
     );
 }
@@ -202,14 +210,20 @@ fn init_writes_the_project_template() {
         .iter()
         .filter_map(Value::as_str)
         .collect();
+    let starter = format!(
+        "{}/{}",
+        ara_host::project_layout::AUTHORING_ROOT,
+        ara_host::project_layout::MAIN_SCENE
+    );
     for f in [
         "ara.project.json",
+        ara_host::project_layout::PREFERENCES,
         ara_asset::PROJECT_IMPORT_SETTINGS_FILE,
         "AGENTS.md",
         ".gitattributes",
         ".gitignore",
         ".mcp.json",
-        "levels/main.scene",
+        starter.as_str(),
     ] {
         assert!(created.contains(&f), "{f} not created: {created:?}");
     }
@@ -300,7 +314,9 @@ fn offline_redo_survives_each_cli_process_and_clears_after_a_new_edit() {
 fn protocol_commands_work_offline_and_keep_history_between_runs() {
     let root = scratch("offline");
     ara_in(&root, &["init"]);
-    let scene = root.join("levels/main.scene");
+    let scene = root
+        .join(ara_host::project_layout::AUTHORING_ROOT)
+        .join("scenes/main.scene");
     let empty = fs::read_to_string(&scene).expect("scene");
 
     let (code, out, err) = ara_in(
@@ -309,7 +325,7 @@ fn protocol_commands_work_offline_and_keep_history_between_runs() {
             "do",
             "entity.create",
             "--doc",
-            "levels/main.scene",
+            "scenes/main.scene",
             "-p",
             "name=Crate",
             "-p",
@@ -364,7 +380,7 @@ fn protocol_commands_work_offline_and_keep_history_between_runs() {
     );
     let (code, out, _) = ara_in(
         &root,
-        &["do", "entity.creat", "--doc", "levels/main.scene", "--json"],
+        &["do", "entity.creat", "--doc", "scenes/main.scene", "--json"],
     );
     assert_eq!(code, 1);
     let d = &json_of(&out)["diagnostics"][0];
@@ -537,7 +553,11 @@ fn installed_sdk_code_fixes_work_through_cli_and_mcp_apply_with_offline_undo() {
     );
     let project = root.join("project");
     fs::create_dir_all(project.join(ara_doc::AUTHORING_ROOT)).expect("project");
-    fs::write(project.join("ara.project.json"), "{}").expect("marker");
+    fs::write(
+        project.join("ara.project.json"),
+        r#"{"layoutVersion":4,"main":"main.scene"}"#,
+    )
+    .expect("marker");
     fs::write(
         project.join(ara_doc::AUTHORING_ROOT).join("main.scene"),
         r#"{"$schema":"ara://schema/scene/1","id":"sc_fix","records":{}}"#,
@@ -620,7 +640,7 @@ fn an_mcp_agent_edits_through_the_daemon_and_reverts_its_turn() {
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/project"),
         &root,
     );
-    let scene = root.join("levels/arena.scene");
+    let scene = root.join("content/levels/arena.scene");
     let original = fs::read_to_string(&scene).expect("scene");
 
     let daemon = Proc(
@@ -736,7 +756,7 @@ fn mcp_without_a_daemon_becomes_one_and_serves_http_too() {
     let session = begun["session"].as_str().expect("session").to_owned();
     mcp.tool(
         "ara_apply",
-        json!({ "session": session, "doc": "levels/main.scene", "why": "first entity",
+        json!({ "session": session, "doc": "scenes/main.scene", "why": "first entity",
                 "commands": [{ "cmd": "entity.create", "args": { "name": "Probe" } }] }),
     );
 
@@ -807,20 +827,25 @@ fn native_ui_and_material_documents_are_created_and_formatted_through_the_cli() 
         );
         assert_eq!(code, 0, "{out}{err}");
     }
-    let source = fs::read_to_string(root.join("ui/hud.ui")).expect("UI source");
+    let authored = root.join(ara_doc::AUTHORING_ROOT);
+    let ui = authored.join("ui/hud.ui");
+    let graph = authored.join("materials/plain.graph");
+    let source = fs::read_to_string(&ui).expect("UI source");
     assert!(source.starts_with("<!-- ara:asset ui_hud -->"));
     assert!(source.contains("<ui id=\"ui_hud\" />"));
     let (code, out, err) = ara_in(
         &root,
-        &["fmt", "--check", "ui/hud.ui", "materials/plain.graph"],
+        &[
+            "fmt",
+            "--check",
+            ui.to_str().expect("UI path"),
+            graph.to_str().expect("graph path"),
+        ],
     );
     assert_eq!(code, 0, "{out}{err}");
     let (code, out, err) = ara_in(&root, &["check"]);
     assert_eq!(code, 0, "{out}{err}");
-    assert_eq!(
-        fs::read_to_string(root.join("ui/hud.ui")).expect("source unchanged"),
-        source
-    );
+    assert_eq!(fs::read_to_string(&ui).expect("source unchanged"), source);
 }
 
 #[test]

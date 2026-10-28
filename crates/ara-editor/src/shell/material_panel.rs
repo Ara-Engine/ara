@@ -178,7 +178,7 @@ impl Shell {
                 .map_err(|d| d.to_string())?;
             // Rendered at 2× the logical preview size: crisp at 1× and 2× displays.
             let key = self.thumbnails.request_live(
-                path,
+                editor.host.store().workspace().reference_path(path),
                 source.into_bytes(),
                 editor.state.preview_plane,
                 (2. * (SIDE - 16.)) as u32,

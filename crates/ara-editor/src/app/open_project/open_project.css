@@ -1,0 +1,30 @@
+ui { width:100%; height:100%; background:var(--background); color:var(--foreground); font-size:13px; }
+panel { min-width:0px; min-height:0px; }
+text { color:inherit; flex-shrink:0; }
+.layer { position:absolute; left:0px; top:0px; width:100%; height:100%; align-items:center; justify-content:center; background:var(--overlay); }
+.frame { width:600px; max-height:592px; }
+.card { width:600px; flex-shrink:0; padding:24px; gap:16px; background:var(--card); border-radius:var(--radius-base); border-width:1px; border-color:var(--separator-strong); }
+.card-ready { height:592px; gap:14px; }
+.details-scroll { flex-grow:1; flex-basis:0px; min-height:0px; }
+.details { flex-shrink:0; gap:12px; }
+.title { font-size:21px; color:var(--foreground); white-space:normal; flex-shrink:1; }
+.copy { font-size:13px; white-space:normal; flex-shrink:1; }
+.muted { color:var(--muted-foreground); }
+.label { font-size:12px; color:var(--muted-foreground); }
+.mono { font-family:JetBrains Mono; }
+.moves { gap:8px; }
+.moves-scroll { max-height:100px; }
+.preview { gap:10px; padding:14px; background:var(--background); border-radius:var(--radius-md); border-width:1px; border-color:var(--border); }
+.tree-scroll { max-height:160px; }
+.tree { gap:4px; }
+.tree-line { font-family:JetBrains Mono; font-size:12px; white-space:normal; flex-shrink:1; }
+.actions { flex-direction:row; justify-content:end; gap:8px; padding-top:8px; }
+button { height:34px; flex-shrink:0; padding-left:14px; padding-right:14px; align-items:center; justify-content:center; border-radius:var(--radius-sm); border-width:1px; border-color:var(--separator-strong); background:var(--raised); color:var(--foreground); }
+button:hover { background:var(--hover-surface); }
+button:focus { border-color:var(--ring); }
+button:disabled { color:var(--muted-foreground); background:var(--card); }
+.primary { background:var(--primary); color:var(--primary-foreground); border-color:var(--primary); }
+.primary:hover { background:var(--selection-surface); }
+.track { width:100%; height:4px; background:var(--raised); border-radius:2px; }
+.progress { height:4px; background:var(--primary); border-radius:2px; }
+.errors { max-height:300px; }

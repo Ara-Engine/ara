@@ -3,7 +3,7 @@ use super::*;
 
 pub(super) fn author(ctx: &Ctx) -> Result<()> {
     const MENU: &str = "levels/menu.scene";
-    if ctx.root.join(MENU).is_file() {
+    if ctx.path(MENU).is_file() {
         ctx.apply(
             "ara.project.json",
             "Reauthor the native menu vista",
@@ -14,7 +14,7 @@ pub(super) fn author(ctx: &Ctx) -> Result<()> {
         )?;
     }
     ctx.new_document(MENU, "scene", "sc_outpostmenu")?;
-    let source: Value = serde_json::from_slice(&std::fs::read(ctx.root.join(SCENE))?)?;
+    let source: Value = serde_json::from_slice(&std::fs::read(ctx.path(SCENE))?)?;
     let records = source["records"].as_object().context("outpost records")?;
     let depth = |id: &str| {
         let mut current = id;

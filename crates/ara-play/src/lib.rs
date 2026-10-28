@@ -736,8 +736,9 @@ impl PlayScene {
     pub fn documents(workspace: &Workspace) -> Vec<DocumentData> {
         workspace
             .docs()
+            .filter(|(_, doc)| !workspace.is_project_document(doc.id.as_str()))
             .map(|(path, doc)| DocumentData {
-                path: path.to_owned(),
+                path: workspace.reference_path(path).to_owned(),
                 kind: doc.kind.clone(),
                 id: doc.id.to_string(),
                 records: doc

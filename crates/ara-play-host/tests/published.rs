@@ -49,13 +49,20 @@ fn driver() -> Result<(), Box<dyn std::error::Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-play-host/published")
         .join(std::process::id().to_string());
-    fs::create_dir_all(&root)?;
+    let authored = root.join(ara_doc::AUTHORING_ROOT);
+    fs::create_dir_all(&authored)?;
+    fs::write(
+        root.join("ara.project.json"),
+        ara_json::to_canonical_string(
+            &serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Feed","main":"main.scene"}),
+        ),
+    )?;
     let release = root.join("release");
-    fs::write(root.join("ready.bin"), b"ready")?;
+    fs::write(authored.join("ready.bin"), b"ready")?;
     let sidecar = serde_json::json!({"$schema":"ara://schema/import/1","id":"as_ready",
         "records":{"i_settings":{"importer":"published-fixture","version":"1","settings":{"gate":release}}}});
     fs::write(
-        root.join("ready.bin.import.json"),
+        authored.join("ready.bin.import.json"),
         ara_json::to_canonical_string(&ara_json::sort_keys(&sidecar)),
     )?;
     // The read-only attachment is valid before the owner starts any asset work.
@@ -69,12 +76,16 @@ fn driver() -> Result<(), Box<dyn std::error::Error>> {
     ara_doc::register(&mut schema);
     ara_asset::register_schema(&mut schema);
     let mut workspace = ara_doc::Workspace::default();
+    workspace.set_reference_root(ara_doc::AUTHORING_ROOT);
     let ready = ara_asset::Sidecar::read(
-        &fs::read_to_string(root.join("ready.bin.import.json"))?,
+        &fs::read_to_string(authored.join("ready.bin.import.json"))?,
         "ready.bin.import.json",
         &schema,
     )?;
-    workspace.insert("ready.bin.import.json", ready.into_document());
+    workspace.insert(
+        format!("{}/ready.bin.import.json", ara_doc::AUTHORING_ROOT),
+        ready.into_document(),
+    );
     assets.synchronize(&workspace, 1)?;
     let deadline = Instant::now() + Duration::from_secs(10);
     let first = loop {
@@ -96,13 +107,13 @@ fn driver() -> Result<(), Box<dyn std::error::Error>> {
     assert!(progress.pending.is_empty() && progress.failed.is_empty());
     // Start pending work only after the first cook, so the proof also works on a
     // one-core host whose importer admission cap is one.
-    fs::write(root.join("pending.bin"), b"pending")?;
+    fs::write(authored.join("pending.bin"), b"pending")?;
     let value = serde_json::json!({"$schema":"ara://schema/import/1","id":"as_pending",
         "records":{"i_settings":{"importer":"published-fixture","version":"1","settings":{"gate":release}}}});
     let text = ara_json::to_canonical_string(&ara_json::sort_keys(&value));
-    fs::write(root.join("pending.bin.import.json"), &text)?;
+    fs::write(authored.join("pending.bin.import.json"), &text)?;
     workspace.insert(
-        "pending.bin.import.json",
+        format!("{}/pending.bin.import.json", ara_doc::AUTHORING_ROOT),
         ara_asset::Sidecar::read(&text, "pending.bin.import.json", &schema)?.into_document(),
     );
     assets.synchronize(&workspace, 2)?;
@@ -193,13 +204,13 @@ fn driver() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!((progress.done, progress.total), (2, 2));
     assert!(progress.pending.is_empty());
     // A failed import is reported with its error, not left pending.
-    fs::write(root.join("broken.bin"), b"broken")?;
+    fs::write(authored.join("broken.bin"), b"broken")?;
     let value = serde_json::json!({"$schema":"ara://schema/import/1","id":"as_broken",
         "records":{"i_settings":{"importer":"published-fixture","version":"1","settings":{}}}});
     let text = ara_json::to_canonical_string(&ara_json::sort_keys(&value));
-    fs::write(root.join("broken.bin.import.json"), &text)?;
+    fs::write(authored.join("broken.bin.import.json"), &text)?;
     workspace.insert(
-        "broken.bin.import.json",
+        format!("{}/broken.bin.import.json", ara_doc::AUTHORING_ROOT),
         ara_asset::Sidecar::read(&text, "broken.bin.import.json", &schema)?.into_document(),
     );
     assets.synchronize(&workspace, 3)?;
@@ -225,11 +236,7 @@ fn driver() -> Result<(), Box<dyn std::error::Error>> {
     // That pipeline starts from scratch (every source pending) but never owns the
     // feed: the Importing chip neither flashes back during the export nor sticks after.
     fs::write(
-        root.join("ara.project.json"),
-        ara_json::to_canonical_string(&serde_json::json!({"name":"Feed","main":"main.scene"})),
-    )?;
-    fs::write(
-        root.join("main.scene"),
+        authored.join("main.scene"),
         ara_json::to_canonical_string(
             &serde_json::json!({"$schema":"ara://schema/scene/1","id":"sc_feed0001","records":{}}),
         ),

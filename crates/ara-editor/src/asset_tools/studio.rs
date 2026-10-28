@@ -391,8 +391,8 @@ mod tests {
         let mut renderer = None;
         for (name, path) in [
             ("avocado", "ara-render/examples/assets/Avocado.glb"),
-            ("fox", "ara-player/demo/assets/fox/Fox.glb"),
-            ("rock", "ara-player/demo/assets/props/rock.glb"),
+            ("fox", "ara-player/demo/content/assets/fox/Fox.glb"),
+            ("rock", "ara-player/demo/content/assets/props/rock.glb"),
         ] {
             let input = ara_asset::ImportInput {
                 preset: ara_asset::CookPreset::Fast,

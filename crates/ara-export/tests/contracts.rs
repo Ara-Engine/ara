@@ -9,7 +9,7 @@ fn preset(platform: &str) -> ExportPreset {
     } else {
         vec!["x64"]
     };
-    ExportPreset::from_text(&json!({"$schema":"ara://schema/export/1","platform":platform,"scriptProject":"game/Game.csproj","assembly":"Game","content":"content","templates":arches.into_iter().map(|arch|json!({"platform":platform,"arch":arch,"config":"release","hash":"0".repeat(64),"source":"templates/runtime"})).collect::<Vec<_>>()} ).to_string()).unwrap()
+    ExportPreset::from_text(&json!({"$schema":"ara://schema/export/1","platform":platform,"scriptProject":"Game.csproj","assembly":"Game","content":ara_doc::AUTHORING_ROOT,"templates":arches.into_iter().map(|arch|json!({"platform":platform,"arch":arch,"config":"release","hash":"0".repeat(64),"source":"templates/runtime"})).collect::<Vec<_>>()} ).to_string()).unwrap()
 }
 #[test]
 fn preset_is_schema_registered_and_canonical_round_trip_preserves_defaults() {
@@ -81,10 +81,14 @@ fn authored_icon_paths_and_project_artifact_pins_keep_separate_roots() {
     std::fs::create_dir_all(&target).unwrap();
     let scratch = tempfile::tempdir_in(target).unwrap();
     let root = scratch.path();
-    tools::write_json(&root.join("ara.project.json"), &json!({"layoutVersion":3})).unwrap();
-    let authored = ara_host::project::authored_root(root);
+    let authored = root.join(ara_host::project_layout::AUTHORING_ROOT);
     std::fs::create_dir_all(authored.join("icons")).unwrap();
     std::fs::create_dir_all(root.join("templates")).unwrap();
+    tools::write_json(
+        &root.join("ara.project.json"),
+        &json!({"layoutVersion":ara_host::project_layout::VERSION}),
+    )
+    .unwrap();
     std::fs::write(authored.join("icons/game.ico"), b"authored icon").unwrap();
     std::fs::write(root.join("templates/player.zip"), b"artifact pin").unwrap();
     assert_eq!(
@@ -231,6 +235,11 @@ fn doctor_versions_and_platform_scoping_have_stable_fixable_diagnostics() {
 #[test]
 fn failed_exports_emit_coded_errors_and_keep_failure_report() {
     let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("ara.project.json"),
+        r#"{"layoutVersion":4}"#,
+    )
+    .unwrap();
     let mut p = preset("windows");
     p.templates[0].source = "missing-runtime".into();
     let request = ara_export::ExportRequest {

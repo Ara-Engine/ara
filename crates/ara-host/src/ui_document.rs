@@ -50,7 +50,8 @@ fn identity(text: &str, path: &str) -> Result<AssetId, Diagnostic> {
     AssetId::parse(&format!("ui_{:x}", ara_ui_document::stable_id(path))).map_err(invalid)
 }
 
-fn with_identity(text: &str, id: &AssetId) -> Result<String, Diagnostic> {
+/// Pins an existing identity before a source file changes its storage path.
+pub(crate) fn with_identity(text: &str, id: &AssetId) -> Result<String, Diagnostic> {
     if let Some(found) = metadata(text) {
         if found != id.as_str() {
             return Err(invalid("UI asset identity cannot change"));

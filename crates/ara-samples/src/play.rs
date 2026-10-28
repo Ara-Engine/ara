@@ -24,7 +24,7 @@ pub(crate) struct Mcp {
 impl Mcp {
     pub(crate) fn start(root: &Path) -> Result<Self> {
         let ara = tool("ara", "ARA_BIN")?;
-        let log = std::fs::File::create(root.join(".scratch/ara-mcp.log"))?;
+        let log = std::fs::File::create(root.join(".ara/samples/ara-mcp.log"))?;
         let mut child = Command::new(ara)
             .arg("--root")
             .arg(root)
@@ -64,7 +64,7 @@ impl Mcp {
         loop {
             let mut line = String::new();
             if self.output.read_line(&mut line)? == 0 {
-                bail!("ara mcp exited (see .scratch/ara-mcp.log)");
+                bail!("ara mcp exited (see .ara/samples/ara-mcp.log)");
             }
             let Ok(message) = serde_json::from_str::<Value>(&line) else {
                 continue;
@@ -116,8 +116,8 @@ pub struct Request<'a> {
 /// Plays `scene` windowed, walks, captures (presented and full) and reports status.
 pub fn run(samples: &Path, request: &Request<'_>) -> Result<Value> {
     let root = samples.join(request.project);
-    std::fs::create_dir_all(root.join(".scratch"))?;
-    let evidence = root.join("evidence");
+    std::fs::create_dir_all(root.join(".ara/samples"))?;
+    let evidence = crate::evidence_directory(request.project);
     std::fs::create_dir_all(&evidence)?;
     let mut mcp = Mcp::start(&root)?;
     let started = Instant::now();

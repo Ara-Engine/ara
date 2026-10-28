@@ -18,7 +18,7 @@ the ABI and the host API. Design: `docs/research/10-csharp-scripting.md` (R10 D1
 | `src/Ara.RunWorker` | The `ara_run` worker: compile, IL whitelist, run | its own process |
 | `samples/Outpost.Sample` | R10 §D3 sample: Door behaviour, UseMedkit command, Gravity/Movement systems | host |
 | `samples/Outpost.Sample.Aot` | The sample as one NativeAOT library exporting `ara_script_init` | host (AOT) |
-| `samples/Outpost.Game` | Compiles the co-op game in `samples/outpost/scripts/Salvage` with the same generators and analyzers. | solution build, compile server |
+| `samples/Outpost.Game` | Compiles the co-op game in `samples/outpost/content/scripts/Salvage` with the same generators and analyzers. | solution build, compile server |
 | `examples/Ara.Examples` | Compiled gameplay regions for every engine component. | .NET and Rust tests |
 | `examples/Ara.EditorExamples` | Compiled editor API regions, under `editor/`; never a player dependency. | solution build, documentation |
 | `examples/Ara.CommandExamples` | Authoring command regions; `--trace-commands` feeds Rust schema validation. Kept separate from gameplay's allowed references. | .NET and Rust tests |

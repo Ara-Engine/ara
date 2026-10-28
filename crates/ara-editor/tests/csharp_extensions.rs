@@ -22,15 +22,23 @@ impl ara_ui_text::Clipboard for MemoryClipboard {
 #[test]
 fn csharp_commands_share_native_menus_palette_history_and_agent_attribution() {
     let root = std::env::temp_dir().join(format!("ara-csharp-editor-{}", std::process::id()));
-    fs::create_dir_all(root.join("levels")).expect("scenes");
+    fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).expect("scenes");
     let sources = root.join(ara_doc::AUTHORING_ROOT).join("tools/editor");
     fs::create_dir_all(&sources).expect("editor sources");
     let write = |path: &str, value: Value| {
-        fs::write(root.join(path), ara_json::to_canonical_string(&value)).expect("fixture")
+        fs::write(
+            if path == "ara.project.json" {
+                root.join(path)
+            } else {
+                root.join(ara_doc::AUTHORING_ROOT).join(path)
+            },
+            ara_json::to_canonical_string(&value),
+        )
+        .expect("fixture")
     };
     write(
         "ara.project.json",
-        json!({"name":"C# editor API","main":"levels/main.scene"}),
+        json!({"name":"C# editor API","layoutVersion":ara_host::project_layout::VERSION,"main":"levels/main.scene"}),
     );
     write(
         "levels/main.scene",

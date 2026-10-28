@@ -1,7 +1,7 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e",
+  "key": "ef395072aa1d4febc5e66fb814eb6640f868146577b764975f3b1034db23bfd3",
   "stages": [
     {
       "dxil": "218e387f9612e4b9194444c304b0007b424e55c1299aa24107ac14981be9879e/shadowFragment.dxil",

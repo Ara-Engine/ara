@@ -114,6 +114,8 @@ impl Driver<'_> {
 /// A failed export emits one coded error and preserves its private job logs plus
 /// failure report. Existing exports are never mutated.
 pub fn export(request: &ExportRequest, sink: &mut dyn EventSink) -> Result<ExportSummary> {
+    ara_host::project_layout::require_current_layout(&request.project)
+        .map_err(|diagnostic| anyhow::anyhow!("{diagnostic}"))?;
     let started = Instant::now();
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let work = std::path::absolute(&request.cache)?

@@ -33,6 +33,34 @@ fn path(p: &Path) -> &str {
 }
 
 #[test]
+fn capabilities_report_layout_support_without_opening_a_project_or_profile() {
+    let root = scratch("capabilities");
+    let config = root.join("profile");
+    let crashes = root.join("crashes");
+    let output = Command::new(env!("CARGO_BIN_EXE_ara"))
+        .args(["--json", "capabilities"])
+        .current_dir(&root)
+        .env("ARA_CONFIG_DIR", &config)
+        .env("ARA_CRASH_DIR", &crashes)
+        .output()
+        .expect("capability query");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("capability JSON");
+    assert_eq!(value["projectLayouts"], serde_json::json!([4]));
+    assert_eq!(
+        value["engineVersion"],
+        ara_host::project_layout::CURRENT_ENGINE_VERSION
+    );
+    assert!(!root.join(".ara").exists());
+    assert!(!config.exists());
+    assert!(!crashes.exists());
+}
+
+#[test]
 fn sample_project_checks_clean_and_is_canonical() {
     let (code, out) = ara("project", &["check"]);
     assert_eq!(
@@ -45,7 +73,7 @@ fn sample_project_checks_clean_and_is_canonical() {
         "prefabs/crate.prefab",
         "prefabs/stack.prefab",
     ]
-    .map(|d| fixtures().join("project").join(d));
+    .map(|d| fixtures().join("project/content").join(d));
     let args: Vec<&str> = ["fmt", "--check"]
         .into_iter()
         .chain(docs.iter().map(|d| path(d)))
@@ -196,9 +224,13 @@ fn ara_at(root: &Path, args: &[&str]) -> (i32, String) {
 fn conflicts_resolve_and_fixes_apply_without_hand_editing() {
     let merge = fixtures().join("merge");
     let root = scratch("resolve");
-    fs::write(root.join("ara.project.json"), "{ \"name\": \"r\" }\n").expect("marker");
-    fs::create_dir_all(root.join("levels")).expect("levels");
-    let conf = root.join("levels/conf.scene");
+    fs::write(
+        root.join("ara.project.json"),
+        r#"{"name":"r","layoutVersion":4}"#,
+    )
+    .expect("marker");
+    fs::create_dir_all(root.join("content/levels")).expect("levels");
+    let conf = root.join("content/levels/conf.scene");
     let input = |n: &str| merge.join(n).to_string_lossy().into_owned();
     let (code, _) = ara_at(
         &root,
@@ -218,11 +250,21 @@ fn conflicts_resolve_and_fixes_apply_without_hand_editing() {
     let fixes = &ara_json_parse(&out)["diagnostics"][0]["fixes"];
     assert_eq!(
         fixes[1]["args"],
-        serde_json::json!(["resolve", "levels/conf.scene", "--pick", "e_b2:name=theirs"])
+        serde_json::json!([
+            "resolve",
+            "content/levels/conf.scene",
+            "--pick",
+            "e_b2:name=theirs"
+        ])
     );
     let (code, out) = ara_at(
         &root,
-        &["resolve", "levels/conf.scene", "--pick", "e_b2:name=theirs"],
+        &[
+            "resolve",
+            "content/levels/conf.scene",
+            "--pick",
+            "e_b2:name=theirs",
+        ],
     );
     assert_eq!(code, 0, "{out}");
     let text = fs::read_to_string(&conf).expect("resolved");
@@ -240,7 +282,7 @@ fn conflicts_resolve_and_fixes_apply_without_hand_editing() {
     let (code, out) = ara_at(&root, &["check", "--fix"]);
     assert_eq!(code, 0, "{out}");
     assert!(
-        out.contains("fixed levels/conf.scene: Rename `ordr` to `order`"),
+        out.contains("fixed content/levels/conf.scene: Rename `ordr` to `order`"),
         "{out}"
     );
     assert_eq!(fs::read_to_string(&conf).expect("fixed"), text);

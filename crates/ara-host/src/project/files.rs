@@ -63,7 +63,13 @@ pub struct AuthoredFile {
 /// Derived roots are skipped only at the project root, so settings/builds/ is authored.
 pub fn authored_files(root: &Path, db: &SchemaDb) -> Result<Vec<AuthoredFile>, Diagnostic> {
     let mut out = Vec::new();
-    let authored = authored_root(root);
+    // Explicit subdirectory scans (for example editor layouts) have no marker.
+    // Marked projects always use the current authored boundary.
+    let authored = if root.join(super::MARKER).is_file() {
+        authored_root(root)
+    } else {
+        root.to_path_buf()
+    };
     if authored == root {
         walk(root, root, root, AuthoredScope::Authored, db, &mut out)?;
     } else {
@@ -236,22 +242,8 @@ fn io_error(error: std::io::Error) -> Diagnostic {
     Diagnostic::error(codes::IO, error.to_string())
 }
 
-/// Resolves the reference base without changing a project. Layout-version 3 and
-/// newer projects opt into AUTHORING_ROOT; older projects retain root-relative paths.
-/// This is read support only: it never creates directories or migrates content.
+/// Resolves a current project's reference base without changing any files.
+/// Open-time validation rejects older layouts before any consumer reaches this adapter.
 pub fn authored_root(root: &Path) -> std::path::PathBuf {
-    let modern = fs::read(root.join(super::MARKER))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
-        .and_then(|marker| {
-            marker
-                .get("layoutVersion")
-                .and_then(serde_json::Value::as_u64)
-        })
-        .is_some_and(|version| version >= 3);
-    if modern {
-        root.join(ara_doc::AUTHORING_ROOT)
-    } else {
-        root.to_owned()
-    }
+    root.join(ara_doc::AUTHORING_ROOT)
 }

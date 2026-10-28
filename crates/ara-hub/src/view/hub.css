@@ -224,6 +224,15 @@ field:focus { border-color:var(--ring); }
 .dialog-title { min-width:0px; flex-grow:1; flex-basis:0px; font-size:19px; white-space:normal; flex-shrink:1; color:var(--foreground); }
 .dialog-eyebrow { font-size:12px; color:var(--muted-foreground); }
 .dialog-copy { font-size:13px; white-space:normal; flex-shrink:1; color:var(--foreground); }
+.migration-preview { gap:10px; padding:14px; background:var(--background); border-width:1px; border-color:var(--border); border-radius:var(--radius-md); }
+.migration-card { gap:14px; }
+.migration-details-scroll { flex-grow:1; flex-basis:0px; min-height:0px; }
+.migration-details { flex-shrink:0; gap:12px; }
+.migration-preview-scroll { max-height:190px; }
+.migration-moves-scroll { max-height:120px; }
+.migration-moves { gap:8px; }
+.migration-tree { gap:4px; }
+.migration-tree-line { font-family:JetBrains Mono; font-size:12px; white-space:normal; flex-shrink:1; color:var(--foreground); }
 .dialog-actions { flex-direction:row; align-items:center; gap:8px; padding-top:8px; }
 .release-notes { gap:12px; padding:18px; background:var(--background); border-width:1px; border-color:var(--border); border-radius:var(--radius-md); }
 .release-notes-scroll { max-height:180px; }

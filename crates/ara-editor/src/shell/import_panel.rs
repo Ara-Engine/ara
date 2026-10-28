@@ -61,7 +61,11 @@ impl Shell {
         }
         out.push_str("<panel id='import-header' class='row' style='flex-shrink:0;align-items:start;gap:10px;padding:8px'>");
         self.asset_thumbnail(&preview_asset, out, "import-preview", 96.);
-        let sidecar = format!("{path}.import.json");
+        let sidecar = editor
+            .host
+            .store()
+            .workspace()
+            .storage_path(&format!("{path}.import.json"));
         let doc = editor
             .host
             .store()
@@ -232,7 +236,15 @@ impl Shell {
             for record in doc.records().values() {
                 collect_refs(&Value::Object(record.clone()), &mut refs);
             }
-            graph.replace(doc_path.to_owned(), refs);
+            graph.replace(
+                editor
+                    .host
+                    .store()
+                    .workspace()
+                    .reference_path(doc_path)
+                    .to_owned(),
+                refs,
+            );
         }
         for (label, links) in [
             (
@@ -286,6 +298,7 @@ impl Shell {
                 let workspace = editor.host.store().workspace();
                 let source = workspace
                     .path_of(doc)
+                    .map(|path| workspace.reference_path(path))
                     .and_then(|p| p.strip_suffix(".import.json"))
                     .ok_or("import document disappeared")?
                     .to_owned();

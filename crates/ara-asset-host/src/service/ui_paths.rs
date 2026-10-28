@@ -7,7 +7,7 @@ pub(super) fn configured(
     field: &str,
     fallback: &str,
 ) -> Result<String, Vec<Diagnostic>> {
-    let policy = ara_host::project_policy::policy(&bindings.workspace, "ui");
+    let policy = ara_host::project_layout::policy(&bindings.workspace, "ui");
     let Some(value) = policy
         .and_then(|policy| policy.get(field))
         .filter(|value| !value.is_null())
@@ -52,10 +52,10 @@ pub(super) fn resolve(
 
 fn invalid(field: &str, message: impl Into<String>) -> Vec<Diagnostic> {
     one(Diagnostic::error(codes::INVALID_REF, message)
-        .file(ara_host::project_policy::PREFERENCES)
+        .file(ara_host::project_layout::PREFERENCES)
         .path(field))
 }
 
 fn unresolved(field: &str, value: &str) -> Vec<Diagnostic> {
-    one(Diagnostic::error(codes::UNRESOLVED_REF,format!("{field} reference `{value}` has no live authored path; set {field} to an authored file path or a valid @path#id reference")).file(ara_host::project_policy::PREFERENCES).path(field))
+    one(Diagnostic::error(codes::UNRESOLVED_REF,format!("{field} reference `{value}` has no live authored path; set {field} to an authored file path or a valid @path#id reference")).file(ara_host::project_layout::PREFERENCES).path(field))
 }
