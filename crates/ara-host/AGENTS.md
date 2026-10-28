@@ -9,8 +9,11 @@ review, checkpoints, persistence and reconciliation. Used by `ara serve`, offlin
 - `project::authored_files(root, db)`: one semantic inventory, sorted by unique storage_path;
   authored paths are reference-relative, metadata/settings have Project scope.
 - `project_layout::{AUTHORING_ROOT, authored_root(root)}`: one authored-root contract.
-  Modern projects use authored-root-relative references and project-relative storage paths.
-- `project_layout`: shared lowercase scaffold; `Migration::plan` is read-only; `apply` locks, validates and rolls back failed moves/writes. See `docs/project-layout.md` for the CLI contract.
+  Current projects use content-relative references and project-relative storage paths.
+- `project_layout`: `require_current_layout` rejects old layouts before open (ARA1914).
+  `migration_plan` is read-only; `migrate_project` submits one typed, journaled command
+  after consent and waits for its physical receipt. `Migration::apply` delegates to it.
+  Prior history stays append-only; Undo restores old bytes and closes normal authoring.
 - `Workspace::insert_project_document` keeps root policy transactional without adding
   it to the asset index; `is_project_document` excludes it from portable game data.
 - `Host::open(project, HostConfig)`: takes `.ara/lock` (ARA1903 if held), loads

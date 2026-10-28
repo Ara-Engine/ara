@@ -21,8 +21,9 @@ use std::{collections::BTreeMap, path::Path, sync::OnceLock};
 /// Fox's clips and controllers, referenced per record (`@anim/fox.animation#an_walk`).
 const ANIMATION: (&str, &str) = ("anim/fox.animation", "ac_foxanim1");
 
-fn demo() -> &'static Path {
+fn demo() -> std::path::PathBuf {
     Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../ara-player/demo"))
+        .join(ara_doc::AUTHORING_ROOT)
 }
 
 /// The Fox, cooked once in-process (the player loads the same artifacts from cache).
@@ -34,7 +35,7 @@ fn fox() -> &'static CachedImport {
             preset: ara_asset::CookPreset::Fast,
             thread_budget: 4,
             source_path: "assets/fox/Fox.glb".into(),
-            source: std::fs::read(demo().join("content/assets/fox/Fox.glb")).unwrap(),
+            source: std::fs::read(demo().join("assets/fox/Fox.glb")).unwrap(),
             importer: "ara.gltf".into(),
             version: registry.get("ara.gltf").unwrap().version().into(),
             settings: Value::Null,
@@ -71,7 +72,7 @@ fn runtime(seed: u64) -> Runtime {
 /// The demo with its scene text rewritten by `edit` (variants of the same level).
 fn runtime_with(seed: u64, edit: impl Fn(String) -> String) -> Runtime {
     let schema = ara_runtime::schema(&[]).unwrap();
-    let text = edit(std::fs::read_to_string(demo().join("content/levels/demo.scene")).unwrap());
+    let text = edit(std::fs::read_to_string(demo().join("levels/demo.scene")).unwrap());
     let doc = read("levels/demo.scene", &text, &schema);
     let scene = doc.id.clone();
     let mut workspace = Workspace::default();
