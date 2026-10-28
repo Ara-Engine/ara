@@ -13,6 +13,14 @@ fn moving_camera_measures_resident_mip_lag_and_same_uv_transitions() -> Result<(
     let output = root.join("captures/texture-motion");
     std::fs::create_dir_all(&output)?;
     let mut gpu = GpuDevice::new(&[], output.join("cache"))?;
+    // Atomic visibility needs 64-bit buffer atomics (Metal has none yet): skip with the
+    // reason `GeometryView` gives, like the product path.
+    if !gpu.info().buffer_int64_atomics {
+        eprintln!(
+            "skipped: ARA_GEO_CAPABILITY: shaderBufferInt64Atomics required for atomic visibility"
+        );
+        return Ok(());
+    }
     let source = SourceMesh {
         vertices: [
             [-16., 0., -16.],

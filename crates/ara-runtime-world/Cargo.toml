@@ -27,6 +27,7 @@ ara-music = { path = "../ara-music" }
 ara-nav = { path = "../ara-nav" }
 ara-ops.workspace = true
 ara-terrain = { path = "../ara-terrain" }
+libm = "0.2"
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 glam34 = { workspace = true }
 

@@ -48,6 +48,14 @@ fn previous_hzb_defers_and_current_hzb_recovers_disoccluded_geometry() -> Result
         },
     ];
     let mut gpu = GpuDevice::new(&[], capture.join("gpu"))?;
+    // Atomic visibility needs 64-bit buffer atomics (Metal has none yet): skip with the
+    // reason `GeometryView` gives, like the product path.
+    if !gpu.info().buffer_int64_atomics {
+        eprintln!(
+            "skipped: ARA_GEO_CAPABILITY: shaderBufferInt64Atomics required for atomic visibility"
+        );
+        return Ok(());
+    }
     let mut view = GeometryView::new(
         &mut gpu,
         &g,
