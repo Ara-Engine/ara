@@ -60,11 +60,10 @@ impl BoundaryCheck {
                 native::text(window, "Boundary recovery B", events)?;
             }
             10 => {
-                let help = crate::shell::commands::menus::MENUS
-                    .iter()
-                    .position(|menu| menu.title == "Help")
+                let help = shell
+                    .menu_header_node("Help")
                     .ok_or("Help menu is not registered")?;
-                click(shell, window, scale, &format!("menu-title-{help}"), events)?;
+                click(shell, window, scale, &help, events)?;
             }
             11 => native::tap(window, 81, events)?,
             13 => native::tap(window, 41, events)?,
