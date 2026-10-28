@@ -130,7 +130,11 @@ impl Shell {
                         keys: Vec::new(),
                         reason: None,
                         group: "Engine commands",
-                        score: s + 5000,
+                        score: if name.eq_ignore_ascii_case(&term) {
+                            0
+                        } else {
+                            s + 5000
+                        },
                     });
                 }
             }
