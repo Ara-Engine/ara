@@ -123,14 +123,20 @@ impl ProfilerCheck {
         }
         Ok(())
     }
+    /// Request a fresh main-surface draw only for a pending evidence capture.
+    pub fn wants_frame(&self) -> bool {
+        !self.finished() && self.complete.is_some()
+    }
     pub fn end(
         &mut self,
         editor: &Editor,
         shell: &mut Shell,
         gpu: &mut NativeUi,
         scene_ready: bool,
+        main_ui_submitted: bool,
     ) -> ara_ui::Result<()> {
-        if self.finished()
+        if !main_ui_submitted
+            || self.finished()
             || (!scene_ready && editor.state.maximized.as_deref() != Some("profiler"))
         {
             return Ok(());

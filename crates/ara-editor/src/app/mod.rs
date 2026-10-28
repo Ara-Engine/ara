@@ -1774,6 +1774,10 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let mut scene_overlays = None;
             let mut probe_blocked_scene = false;
             let mut gpu_surface_submissions = 0;
+            let mut main_ui_submitted_this_frame = false;
+            dirty |= profiler_check
+                .as_ref()
+                .is_some_and(profiler_verify::ProfilerCheck::wants_frame);
             let mut native_presentations = 0;
             // A window that cannot show anything (minimized, occluded; the probe's
             // unpresentable scenario) renders and presents nothing: a driver's present
@@ -1941,6 +1945,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                         TextMode::Raster,
                     )?;
                     gpu_surface_submissions += 1;
+                    main_ui_submitted_this_frame = true;
                 }
                 render_ms = render_at.elapsed().as_secs_f64() * 1000.;
                 let graph_gpu = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
@@ -2286,7 +2291,13 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if let Some(check) = &mut profiler_check {
                 let ready =
                     verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
-                check.end(&editor, &mut shell, &mut gpu, ready)?;
+                check.end(
+                    &editor,
+                    &mut shell,
+                    &mut gpu,
+                    ready,
+                    main_ui_submitted_this_frame,
+                )?;
                 if check.finished() {
                     game.close(&mut editor, &mut gpu)?;
                     break;
