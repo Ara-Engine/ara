@@ -348,35 +348,7 @@ impl Shell {
                 let title = panels::title(panel);
                 self.ui.set_text(t, title)?;
             }
-            if let Some(icon) = self.ui.find("drop-label-icon")
-                && let Some(Drag::Tab { panel, .. }) = &self.drag
-            {
-                let name = panels::panel_icon(panel);
-                let node = &mut self.ui.nodes[icon];
-                if node
-                    .element
-                    .attrs
-                    .get("src")
-                    .and_then(|s| s.strip_prefix("icon-"))
-                    != Some(name)
-                {
-                    node.element
-                        .attrs
-                        .insert("src".into(), format!("icon-{name}"));
-                    node.dirty.paint = true;
-                }
-            }
-            let node = &mut self.ui.nodes[i];
-            let x = (self.pointer[0] + 14.).clamp(0., (self.ui.size[0] - 140.).max(0.));
-            let y = (self.pointer[1] + 18.).clamp(0., (self.ui.size[1] - 28.).max(0.));
-            let offset = [
-                x - (node.rect.x - node.paint_offset[0]),
-                y - (node.rect.y - node.paint_offset[1]),
-            ];
-            if offset != node.paint_offset {
-                node.paint_offset = offset;
-                node.dirty.paint = true;
-            }
+            self.ui.place_feedback(i, self.pointer, None)?;
         }
         Ok(())
     }

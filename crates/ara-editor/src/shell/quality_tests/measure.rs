@@ -154,87 +154,46 @@ impl Sweep {
     }
 
     fn overlays(&mut self, shell: &Shell, context: &str) {
-        for (index, node) in shell.ui.nodes.iter().enumerate() {
-            if !shell.ui.shown(index)
-                || !matches!(node.element.tag.as_str(), "popover" | "tooltip" | "popup")
-            {
-                continue;
-            }
-            let rect = node.rect;
-            if rect.w <= 0. || rect.h <= 0. {
-                continue;
-            }
-            let max = if node.element.id == "palette" {
-                640.
-            } else {
-                ara_ui::popover::MAX_WIDTH
-            };
-            if rect.w > max + 0.75 {
+        let measured = crate::shell::feedback_geometry::audit(&shell.ui);
+        self.violations.extend(
+            measured
+                .violations
+                .into_iter()
+                .map(|finding| format!("{context}: {finding}")),
+        );
+        self.measurements
+            .extend(measured.surfaces.into_iter().map(|mut surface| {
+                surface["context"] = json!(context);
+                surface
+            }));
+        // Keep the original intrinsic-tooltip-width gate in addition to the
+        // shared geometry checks, which also cover drag feedback and banners.
+        let Some(root) = shell.ui.find("tooltip") else {
+            return;
+        };
+        if !shell.ui.shown(root) {
+            return;
+        }
+        let node = &shell.ui.nodes[root];
+        let outer = shell.ui.tree.layout(node.layout_id).unwrap();
+        if let Some(text) = shell
+            .ui
+            .find("tooltip-text")
+            .and_then(|index| shell.ui.nodes[index].text.as_ref())
+        {
+            let required = text.layout.width()
+                + outer.padding.left
+                + outer.padding.right
+                + outer.border.left
+                + outer.border.right;
+            if node.rect.w > required.max(ara_ui::popover::MIN_WIDTH) + 16. {
                 self.violations.push(format!(
-                    "{context}: {} too wide: {} > {max}",
-                    node.element.id, rect.w
+                    "{context}: tooltip has excessive empty width ({} for {required} content)",
+                    node.rect.w
                 ));
             }
-            if rect.x < -0.75
-                || rect.y < -0.75
-                || rect.x + rect.w > shell.ui.size[0] + 0.75
-                || rect.y + rect.h > shell.ui.size[1] + 0.75
-            {
-                self.violations.push(format!(
-                    "{context}: {} escapes viewport: {rect:?}",
-                    node.element.id
-                ));
-            }
-            for (child_index, child) in shell.ui.nodes.iter().enumerate() {
-                let mut parent = child.element.parent;
-                let mut inside = false;
-                while let Some(ancestor) = parent {
-                    if ancestor == index {
-                        inside = true;
-                        break;
-                    }
-                    parent = shell.ui.nodes[ancestor].element.parent;
-                }
-                if !inside || !shell.ui.shown(child_index) {
-                    continue;
-                }
-                if let Some(text) = &child.text {
-                    let layout = shell.ui.tree.layout(child.layout_id).unwrap();
-                    let available = layout.size.width
-                        - layout.padding.left
-                        - layout.padding.right
-                        - layout.border.left
-                        - layout.border.right;
-                    if text.layout.width() > available + 1. {
-                        self.violations.push(format!(
-                            "{context}: {} text clips horizontally ({} > {available})",
-                            child.element.id,
-                            text.layout.width()
-                        ));
-                    }
-                    if node.element.id == "tooltip" && text.layout.height() > child.rect.h + 1. {
-                        self.violations.push(format!(
-                            "{context}: {} tooltip text clips vertically",
-                            child.element.id
-                        ));
-                    }
-                    if node.element.id == "tooltip" {
-                        let outer = shell.ui.tree.layout(node.layout_id).unwrap();
-                        let required = text.layout.width()
-                            + outer.padding.left
-                            + outer.padding.right
-                            + outer.border.left
-                            + outer.border.right;
-                        if rect.w > required.max(ara_ui::popover::MIN_WIDTH) + 16. {
-                            self.violations.push(format!("{context}: tooltip has excessive empty width ({} for {required} content)",rect.w));
-                        }
-                    }
-                }
-            }
-            self.measurements.push(json!({"context":context,"overlay":node.element.id,"box":rect,"viewport":shell.ui.size,"maxWidth":max}));
         }
     }
-
     pub fn write(&self, output: &std::path::Path) {
         std::fs::create_dir_all(output).unwrap();
         std::fs::write(output.join("quality-measurements.json"),ara_json::to_canonical_string(&json!({
@@ -242,3 +201,5 @@ impl Sweep {
         }))).unwrap();
     }
 }
+
+mod feedback_tests;

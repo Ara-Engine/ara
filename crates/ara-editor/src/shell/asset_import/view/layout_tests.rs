@@ -42,7 +42,7 @@ fn bounded_import_rail_exposes_cancel_and_dismiss_without_collapsing_the_browser
 -> ara_ui::Result<()> {
     let (mut editor, mut shell) = open()?;
     for (id, running, destination) in [
-        ("jb_importlayoutold", false, "assets"),
+        ("jb_importlayoutold", true, "assets"),
         (
             "jb_importlayoutactive",
             true,
@@ -73,6 +73,23 @@ fn bounded_import_rail_exposes_cancel_and_dismiss_without_collapsing_the_browser
         (36. ..=180.).contains(&viewport.h),
         "Import rail has no bounded viewport: {viewport:?}"
     );
+    let first = format!(
+        "asset-import-{:016x}",
+        ara_ui::source::stable_id("jb_importlayoutold")
+    );
+    for part in ["message", "progress"] {
+        let index = shell
+            .shown_node(&format!("{first}-{part}"))
+            .ok_or("First import feedback missing")?;
+        let node = &shell.ui.nodes[index];
+        let visible = node.rect.intersection(node.clip);
+        assert!(
+            visible.h >= node.rect.h - 0.5,
+            "The first running card's {part} must fit the intrinsic rail: {:?} in {:?}",
+            node.rect,
+            node.clip
+        );
+    }
     let browser = shell
         .shown_node("assets-content")
         .ok_or("Assets browser was removed")?;

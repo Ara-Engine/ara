@@ -26,7 +26,8 @@ pub struct Element {
 pub const TAGS: &[&str] = &[
     "ui", "panel", "text", "image", "button", "toggle", "slider", "field", "input", "scroll",
     "splitter", "tabs", "tab", "dropdown", "menu", "popup", "popover", "tooltip", "modal",
-    "progress", "list", "tree", "table", "dock", "template", "instance", "slot",
+    "progress", "list", "tree", "table", "dock", "template", "instance", "slot", "feedback",
+    "banner",
 ];
 /// Attributes shared by native controls; typed widget values are validated by the runtime.
 pub const ATTRIBUTES: &[&str] = &[
