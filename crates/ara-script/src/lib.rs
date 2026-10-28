@@ -29,7 +29,7 @@ pub use ecs::cmdbuf::Applied;
 pub use host::{
     Boundary, CommandRecord, ComponentWrite, Cue, EditOrigin, EngineBindings, LogSink,
     ModuleStatus, ResourceWrite, ScriptConfig, ScriptControls, ScriptHost, ScriptInputs,
-    ScriptNavigation,
+    ScriptNavigation, SourceClaim, SourceClaimPhase,
 };
 pub use module::{MODULE_FILE, ModuleProfile, ModuleSpec, load_order};
 pub mod project;

@@ -735,12 +735,25 @@ pub fn catalog(world: &World) -> Value {
         .map_or(Value::Null, |s| s.host.command_catalog())
 }
 
-/// Claims `paths` of `module` as an agent edit before the agent writes them (D20:
-/// coalesced, compiled behind human edits). False when hot reload is off.
+/// Compile current source bytes as an agent edit (D20: coalesced behind human work).
+/// Use `source_claim` for a revision that will materialize asynchronously.
+/// False when hot reload is off.
 pub fn request_compile(world: &World, module: &str, paths: &[PathBuf]) -> bool {
     world
         .get_resource::<Scripts>()
         .is_some_and(|s| s.host.request_compile(module, paths, EditOrigin::Agent))
+}
+
+/// Forward a private source job's exact prepared/materialized/cancelled revision.
+pub fn source_claim(
+    world: &World,
+    module: &str,
+    paths: &[PathBuf],
+    claim: &ara_script::SourceClaim,
+) -> bool {
+    world
+        .get_resource::<Scripts>()
+        .is_some_and(|scripts| scripts.host.source_claim(module, paths, claim))
 }
 
 /// Queue an engine-private recovery without advancing simulation or waiting for compilation.

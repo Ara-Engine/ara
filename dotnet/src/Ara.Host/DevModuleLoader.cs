@@ -464,7 +464,8 @@ public sealed class DevModuleLoader : IModuleLoader
         if (_client is null) return -1;
         if (Find(root.GetProperty("module").GetString() ?? "") is not { } m) return -2;
         var paths = root.GetProperty("paths").EnumerateArray().Select(p => p.GetString() ?? "").Where(p => p.Length > 0).ToList();
-        _client.Change(m.Slot, paths, root.GetProperty("origin").GetUInt32());
+        _client.Change(m.Slot, paths, root.GetProperty("origin").GetUInt32(),
+            root.TryGetProperty("sourceClaim", out var claim) && claim.ValueKind != JsonValueKind.Null ? claim.GetRawText() : null);
         return 0;
     }
 

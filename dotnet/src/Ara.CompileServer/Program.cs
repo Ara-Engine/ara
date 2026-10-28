@@ -109,7 +109,8 @@ while (Protocol.Receive(pipe) is { } msg)
             break;
         case MessageKind.Change:
             var (changeSlot, paths, origin) = (r.U32(), r.Strs(), r.U32());
-            coordinator.Change(changeSlot, paths, origin, Stopwatch.GetTimestamp());
+            var claim = r.Remaining == 0 ? null : SourceClaims.Parse(r.Str());
+            coordinator.Change(changeSlot, paths, origin, Stopwatch.GetTimestamp(), claim);
             break;
         case MessageKind.Recover:
             coordinator.Recover(r.U64());
