@@ -1,6 +1,7 @@
 //! SDL event loop and same-device native UI/scene composition.
 mod asset_ops_verify;
 mod assets_verify;
+mod bookmarks_verify;
 mod boundary_verify;
 mod capture;
 mod chrome_verify;
@@ -414,6 +415,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     let mut selection_check = None;
     let mut hierarchy_check = None;
     let mut collection_check = None;
+    let mut bookmarks_check = None;
     let mut snapping_check = None;
     let mut input_check = None;
     let mut boundary_check = None;
@@ -677,6 +679,20 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if collection_check
                 .as_ref()
                 .is_some_and(collection_verify::CollectionCheck::finished)
+                && bookmarks_check.is_none()
+            {
+                bookmarks_check = Some(bookmarks_verify::BookmarksCheck::new(
+                    &mut editor,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut bookmarks_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+            }
+            if bookmarks_check
+                .as_ref()
+                .is_some_and(bookmarks_verify::BookmarksCheck::finished)
                 && input_check.is_none()
             {
                 input_check = Some(input_verify::InputCheck::new(&options.output));
@@ -1997,6 +2013,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if let Some(check) = &mut collection_check {
                 check.end(&editor, &mut shell, &mut gpu)?;
             }
+            if let Some(check) = &mut bookmarks_check {
+                check.end(&editor, &mut shell, &mut gpu)?;
+            }
             if let Some(check) = &mut input_check {
                 check.end(
                     &editor,
@@ -2183,6 +2202,11 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 )
                 .into());
             }
+            let check = bookmarks_check
+                .as_ref()
+                .ok_or("The Assets bookmarks journey did not start")?;
+            check.write()?;
+            check.validate()?;
             let check = input_check
                 .as_ref()
                 .ok_or("The native input journey did not start")?;
