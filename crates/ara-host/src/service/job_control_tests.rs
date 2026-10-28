@@ -120,7 +120,7 @@ impl Harness {
             .call(
                 ConnId::LOCAL,
                 "session.begin",
-                json!({"author":"human:job-control-test","client":"test"}),
+                json!({"author":"human","client":"test"}),
             )
             .unwrap()["session"]
             .clone();
