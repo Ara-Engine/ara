@@ -242,7 +242,19 @@ impl PlayCheck {
         };
         self.waiting = false;
         let input = if act == Act::Dedicated {
-            self.dedicated_input(editor, shell, window, scale, events)
+            let before = events.len();
+            let result = self.dedicated_input(editor, shell, window, scale, events);
+            let previous = self
+                .proofs
+                .get("dedicated-native-ingress")
+                .and_then(|value| value["events"].as_u64())
+                .unwrap_or(0);
+            self.proofs.insert("dedicated-native-ingress".into(),json!({
+                "events":previous+(events.len().saturating_sub(before)) as u64,"pointsToLogical":scale,
+                "route":"SDL_PushEvent -> Window::poll_tagged -> production editor event loop",
+                "setup":"typed authoring/navigation commands before measured gestures"
+            }));
+            result
         } else {
             self.input(act, editor, shell, scale, events)
         };
@@ -1062,7 +1074,7 @@ impl PlayCheck {
         std::fs::write(
             self.output.join("play-behaviours.json"),
             ara_json::to_canonical_string(
-                &json!({"journeys":self.results,"completed":self.finished(),"passed":self.results.iter().filter(|result|result["ok"]==true).count(),"failed":self.failures().len(),"active":ACTS.get(self.index).map(|act|json!({"journey":act.label(),"age":self.age,"initialScene":self.scene_before,"initialRevision":self.initial,"configuration":self.configuration,"waits":self.waits.values()}))}),
+                &json!({"journeys":self.results,"completed":self.finished(),"expected":ACTS.len(),"attempted":self.results.len(),"passed":self.results.iter().filter(|result|result["ok"]==true).count(),"failed":self.failures().len(),"active":ACTS.get(self.index).map(|act|json!({"journey":act.label(),"age":self.age,"initialScene":self.scene_before,"initialRevision":self.initial,"configuration":self.configuration,"waits":self.waits.values()}))}),
             ),
         )?;
         Ok(())

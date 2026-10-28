@@ -1,5 +1,5 @@
 //! Dedicated story controls use SDL injection, drained through Window::poll_tagged.
-use super::super::super::super::input_verify::native;
+use super::super::super::input_verify::native;
 use super::*;
 
 pub(super) fn click(
