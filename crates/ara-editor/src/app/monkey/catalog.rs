@@ -194,10 +194,10 @@ impl State {
         }
         if let Some(registration) = current
             && let Some(cases) = self.known.get_mut(registration)
+            && cases.insert(case)
+            && cases.len() == actions::edge_case_count()
         {
-            if cases.insert(case) && cases.len() == actions::edge_case_count() {
-                self.completed_registrations += 1;
-            }
+            self.completed_registrations += 1;
         }
         if !self.draining && self.completed_registrations == self.known.len() {
             self.ordinary_sweep_complete = true;

@@ -12,6 +12,8 @@ mod drags;
 mod eyedropper;
 mod file_picker;
 mod game;
+#[cfg(test)]
+mod game_input_tests;
 mod game_preview;
 mod hierarchy_verify;
 mod history_verify;
@@ -2373,10 +2375,10 @@ fn route_event(
         shell.note_pointer_chord();
     }
     if shell.game_captured && (shell.modal_active() || shell.choice_open()) {
-        game_input(&Event::FocusLost, editor, shell, dpi);
+        game_input(&Event::FocusLost, editor, shell, 1.);
     }
     if matches!(event, Event::FileDropBegin) && shell.game_captured {
-        game_input(&Event::FocusLost, editor, shell, dpi);
+        game_input(&Event::FocusLost, editor, shell, 1.);
     }
     if import_drops.event(&event, sdl, editor, shell, window, dpi, floats)? {
         for float in &mut floats.windows {
@@ -2384,11 +2386,23 @@ fn route_event(
         }
         return Ok((true, false, false));
     }
+    let captured_input_scale = if shell.game_captured {
+        if let Some(float) = floats.windows.iter().find(|float| float.sdl == sdl) {
+            crate::native::points_to_logical(
+                float.window.raw(),
+                float.window.display_scale().max(0.25) * windows::ui_scale(editor),
+            )
+        } else {
+            crate::native::points_to_logical(window.raw(), dpi)
+        }
+    } else {
+        1.
+    };
     if !shell.tab_pending()
         && !shell.content_pending()
         && !shell.modal_active()
         && !shell.choice_open()
-        && let Some(handled) = game_input(&event, editor, shell, dpi)
+        && let Some(handled) = game_input(&event, editor, shell, captured_input_scale)
     {
         return Ok((handled, false, false));
     }
@@ -2713,7 +2727,12 @@ fn panels_of(node: &ara_ui::docking::DockNode) -> Vec<String> {
 /// client (the player maps it exactly like its own window). Esc, or pressing outside
 /// the view, gives them back; F5-F8 (Play, Pause, Step, Stop) stay with the editor.
 /// `None` lets the editor handle the event; `Some(redraw)` consumed it.
-fn game_input(event: &Event, editor: &mut Editor, shell: &mut Shell, dpi: f32) -> Option<bool> {
+fn game_input(
+    event: &Event,
+    editor: &mut Editor,
+    shell: &mut Shell,
+    points_to_logical: f32,
+) -> Option<bool> {
     use ara_play_host::embed::DeviceEvent;
     if !shell.game_captured {
         return None;
@@ -2771,7 +2790,8 @@ fn game_input(event: &Event, editor: &mut Editor, shell: &mut Shell, dpi: f32) -
             }]
         }
         Event::MouseMotion { position, delta } => {
-            shell.pointer = [position[0] / dpi, position[1] / dpi];
+            // Captured input uses the same window-density mapping as editor input.
+            shell.pointer = position.map(|value| value * points_to_logical);
             vec![DeviceEvent::MouseMotion {
                 dx: delta[0],
                 dy: delta[1],
