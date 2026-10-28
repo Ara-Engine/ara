@@ -476,8 +476,14 @@ mod tests {
             serde_json::from_slice(&fs::read(output.join("report.json")).unwrap()).unwrap();
         assert!(verdict.contains("INVALID"));
         assert_eq!(report["status"], "invalid");
-        assert_eq!(report["diagnostic"], "ARA6093");
-        assert!(results.pass_failure().unwrap().starts_with("ARA6093:"));
+        let code = ara_bench::passes::INVALID_PASS_SET;
+        assert_eq!(report["diagnostic"], code.to_string());
+        assert!(
+            results
+                .pass_failure()
+                .unwrap()
+                .starts_with(&format!("{code}:"))
+        );
         let rows = report["rows"].as_array().unwrap();
         let gpu = rows
             .iter()

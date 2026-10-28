@@ -1,2 +1,4 @@
-# Offline reflection is regenerated; runtime consumes the checked-in binaries.
-/*/*.json
+# SPIR-V and DXIL reflection is regenerated offline. Metal reflection
+# (`<stage>.metal.json`) is consumed at runtime, so it stays tracked.
+/*/*.spirv.json
+/*/*.dxil.json

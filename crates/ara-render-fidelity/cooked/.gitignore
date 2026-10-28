@@ -1,3 +1,4 @@
-# Slang reflection is an offline compiler cache; runtime artifacts are the binaries
-# and the pipeline descriptions directly in this directory.
-/*/*.json
+# SPIR-V and DXIL reflection is an offline compiler cache. Metal reflection
+# (`<stage>.metal.json`) is a runtime artifact the manifests reference, so it stays tracked.
+/*/*.spirv.json
+/*/*.dxil.json
