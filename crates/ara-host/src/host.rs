@@ -417,6 +417,12 @@ impl Host {
     pub fn store(&self) -> &Store {
         &self.st.store
     }
+
+    /// Controlled file-reply ordering for authority unit tests; absent in shipping builds.
+    #[cfg(test)]
+    pub(crate) fn file_test_state(&mut self) -> &mut State {
+        &mut self.st
+    }
     /// Per-entity review state for one transaction, keyed by `doc/entity`.
     /// Editor overlays read the same state that `review.list/accept/revert` use.
     pub fn review_entities(&self, txn: &TxnId) -> Option<&BTreeMap<String, ReviewStatus>> {
