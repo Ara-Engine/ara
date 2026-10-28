@@ -41,6 +41,7 @@ fn main() -> Result<()> {
                 &effect,
                 &root.join("cooked").join(&effect.name),
                 [2560, 1440],
+                ara_vfx_gpu::LINEAR_HDR,
             )?;
             let view = View {
                 async_compute,

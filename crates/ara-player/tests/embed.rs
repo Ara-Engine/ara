@@ -247,8 +247,9 @@ fn embedded_play_shares_frames_with_the_owner_device() {
     );
     agent.play("resume", json!({"world": world}));
 
-    // Resize through the typed API: a new generation at the new size.
-    surfaces.resize(&world, 0, 320, 180);
+    // Resize through the typed API at a Retina UI scale: a new generation at the new
+    // size (the player accepts the scale; its params reject unknown fields).
+    surfaces.resize(&world, 0, [320, 180], 2.);
     let resized = Instant::now();
     loop {
         assert!(

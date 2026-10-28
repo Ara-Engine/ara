@@ -3,6 +3,7 @@
 //! Ara's owned GPU resources, explicit queues and offline pipeline contract.
 pub mod acceleration;
 pub mod arena;
+mod attachments;
 pub mod commands;
 pub mod cooked;
 mod cpu;
@@ -22,6 +23,9 @@ pub type GpuDevice = vulkan::VulkanDevice;
 /// The platform's native backend (D12): Metal 4 on macOS (D15). See the Vulkan alias.
 #[cfg(target_os = "macos")]
 pub type GpuDevice = metal::MetalDevice;
+/// Ended deferred scopes a device allows unconsumed at once: one frame on the GPU
+/// while the next one records (`begin_deferred_completion` refuses a third).
+pub const FRAMES_IN_FLIGHT: usize = 2;
 /// Deferred frame completion returned by [`GpuDevice`].
 #[cfg(not(target_os = "macos"))]
 pub type GpuCompletion = vulkan::Completion;
@@ -174,12 +178,16 @@ pub enum Resource {
 /// Semantic resource usage lowered to backend stages, masks and layouts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Access {
-    /// First use of uninitialized transient storage.
+    /// First use of uninitialized transient storage. As a barrier's `after`, the
+    /// contents are discarded: a rendering scope right before skips storing them.
     Undefined,
     /// Vertex input buffer.
     Vertex,
     /// Index input buffer.
     Index,
+    /// Index input and readonly shader storage at once: a geometry pool that an
+    /// indexed draw reads indices from while its vertex shader pulls vertices.
+    Geometry,
     /// GPU-generated dispatch/draw arguments, also readable by shaders.
     Indirect,
     /// Sampled image / readonly shader storage.

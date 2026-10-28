@@ -78,7 +78,7 @@ internal sealed class ModuleSession
     {
         Slot = slot;
         Name = name;
-        Dir = Path.TrimEndingDirectorySeparator(Path.GetFullPath(dir));
+        Dir = Path.TrimEndingDirectorySeparator(ProjectInventory.ProjectPath(dir));
         _startHot = hot;
         References = references;
         Profile = profile;
@@ -115,10 +115,10 @@ internal sealed class ModuleSession
     }
 
     internal IEnumerable<string> SourceFiles() => _project is { } project
-        ? project.Scan().Modules.Single(m => m.Name == Name).Sources.Select(s => Path.GetFullPath(Path.Combine(project.Project, s.StoragePath)))
+        ? project.Scan().Modules.Single(m => m.Name == Name).Sources.Select(s => ProjectInventory.ProjectPath(Path.Combine(project.Project, s.StoragePath)))
         : Directory.EnumerateFiles(Dir, "*.cs", SearchOption.AllDirectories).Where(p => !IsIgnored(p));
 
-    static string Graph(ProjectInventoryResult inventory) => System.Text.Json.JsonSerializer.Serialize(inventory.Modules.Select(m => new { m.Name, m.Directory, m.Hot, m.Profile, m.References }));
+    static string Graph(ProjectInventoryResult inventory) => System.Text.Json.JsonSerializer.Serialize(inventory.Modules.Select(m => new { m.Name, m.Directory, m.Hot, m.Profile, m.References, Sources = m.Sources.Select(s => s.StoragePath) }));
 
     Outcome? CheckInventory(Phases timing)
     {
@@ -127,13 +127,20 @@ internal sealed class ModuleSession
         if (inventory.Diagnostics.Length > 0)
             return new(this, OutcomeKind.Errors) { Timing = timing, Extra = [.. inventory.Diagnostics.Select(d => ((string)d["code"]!, (string)d["severity"]!, (string)d["message"]!))] };
         if (Graph(inventory) != _graph)
+        {
+            // Compile the entire candidate gameplay graph before asking the player
+            // to restart. Broken moves retain the running last-good generation.
+            var candidate = ProjectCompiler.Compile(new(project.Project, project.AuthoringRoot), writeOutputs: false);
+            if (candidate.Diagnostics.Any(d => (string?)d["severity"] == "error"))
+                return new(this, OutcomeKind.Errors) { Timing = timing, Extra = [.. candidate.Diagnostics.Select(d => ((string)d["code"]!, (string)d["severity"]!, (string)d["message"]!))] };
             return new(this, OutcomeKind.Restart) { ReloadKind = AbiConst.ReloadL4, Timing = timing, Escalation = Escalation.Requested };
+        }
         return null;
     }
 
     internal bool IsIgnored(string path)
     {
-        if (_project is not null) return !SourceFiles().Contains(Path.GetFullPath(path), ModuleState.Paths);
+        if (_project is not null) return !SourceFiles().Contains(ProjectInventory.ProjectPath(path), ModuleState.Paths);
         var rel = Path.GetRelativePath(Dir, path).Replace('\\', '/');
         if (rel.Split('/').Any(part => part.StartsWith(".", StringComparison.Ordinal)
             || part is "target" or "artifacts" or "node_modules" or "spikes")) return true;
@@ -171,7 +178,7 @@ internal sealed class ModuleSession
         var texts = ImmutableDictionary.CreateBuilder<string, string>(ModuleState.Paths);
         foreach (var path in SourceFiles())
         {
-            var full = Path.GetFullPath(path);
+            var full = ProjectInventory.ProjectPath(path);
             var text = ReadWithRetry(full) ?? throw new FileNotFoundException("module source disappeared", full);
             _disk[full] = text;
             texts[full] = text;
@@ -253,7 +260,7 @@ internal sealed class ModuleSession
         var p = new Phases(tEvent, Stopwatch.GetTimestamp());
         if (CheckInventory(p) is { } invalid) return invalid;
         if (_state is not { } s) return Initial(ctx, ct);
-        HashSet<string>? membership = _project is null ? null : new(SourceFiles().Select(Path.GetFullPath), ModuleState.Paths);
+        HashSet<string>? membership = _project is null ? null : new(SourceFiles().Select(ProjectInventory.ProjectPath), ModuleState.Paths);
         if (membership is not null)
         {
             foreach (var removed in _disk.Keys.Where(path => !membership.Contains(path)).ToArray()) _disk.Remove(removed);
@@ -261,8 +268,8 @@ internal sealed class ModuleSession
         }
         foreach (var path in paths)
         {
-            if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) || (membership is null ? IsIgnored(path) : !membership.Contains(Path.GetFullPath(path)))) continue;
-            var full = Path.GetFullPath(path);
+            if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) || (membership is null ? IsIgnored(path) : !membership.Contains(ProjectInventory.ProjectPath(path)))) continue;
+            var full = ProjectInventory.ProjectPath(path);
             if (ReadWithRetry(full) is { } text) _disk[full] = text;
             else _disk.Remove(full);
         }

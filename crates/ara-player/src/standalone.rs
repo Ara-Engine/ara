@@ -8,6 +8,7 @@ use serde::Deserialize;
 use serde_json::json;
 use std::{path::PathBuf, sync::Arc, time::Instant};
 mod perf;
+pub(super) mod probes;
 mod startup;
 #[cfg(test)]
 mod tests;
@@ -43,6 +44,9 @@ pub(super) struct Options {
     /// Exit a standalone window after this many frames (unlimited by default).
     #[arg(long)]
     pub(crate) frames: Option<u32>,
+    /// Run one hidden-window GPU probe of the present path and exit (`probes.rs`).
+    #[arg(long, hide = true)]
+    pub(crate) probe: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -233,7 +237,11 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
         };
         let mut previous = Instant::now();
         let mut frames = 0;
+        #[cfg(feature = "hotpatch")]
+        let mut rust_patches = ara_hotpatch::Hotpatch::connect();
         while args.standalone.frames.is_none_or(|limit| frames < limit) {
+            #[cfg(feature = "hotpatch")]
+            rust_patches.frame_boundary();
             ara_gpu::cpu_scope!("Player.standalone_frame");
             if perf.control(&mut *presenter)? {
                 break;

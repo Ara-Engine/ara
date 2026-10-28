@@ -64,3 +64,39 @@ fn native_submission_failure_drains_recording_and_rejects_retry_without_heap_gro
     }
     gpu.assert_clean()
 }
+
+/// A bounded completion wait never consumes a frame it gave up on: false leaves it
+/// pending for a later wait (an event pump's retry); true consumes it once. Two
+/// frames may be pending at once, the newer recorded while the older runs.
+#[test]
+#[cfg_attr(
+    target_os = "macos",
+    ignore = "Vulkan GPU test; macOS runs the Metal backend"
+)]
+fn bounded_completion_waits_leave_unfinished_frames_pending() -> Result<()> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-gpu/bounded-completion");
+    let mut gpu = VulkanDevice::new_raster(&[], root)?;
+    let mut frames = Vec::new();
+    for _ in 0..crate::FRAMES_IN_FLIGHT {
+        gpu.begin_deferred_completion_on_current_queue()?;
+        gpu.submit(gpu.begin(Queue::Graphics).finish(), &[])?;
+        frames.push(gpu.end_deferred_completion()?);
+    }
+    assert!(
+        gpu.begin_deferred_completion_on_current_queue().is_err(),
+        "a third frame waits for the oldest"
+    );
+    for frame in &mut frames {
+        // Zero time may or may not suffice; either way the contract holds.
+        if !gpu.wait_completion_for(frame, std::time::Duration::ZERO, |_, _| {})? {
+            assert!(!frame.is_resolved(), "a timed-out wait consumed the frame");
+            let done =
+                gpu.wait_completion_for(frame, std::time::Duration::from_secs(5), |_, _| {})?;
+            assert!(done, "an idle device completes the frame");
+        }
+        assert!(frame.is_resolved());
+    }
+    gpu.assert_clean()?;
+    Ok(())
+}

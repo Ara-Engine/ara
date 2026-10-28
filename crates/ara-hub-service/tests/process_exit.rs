@@ -178,7 +178,7 @@ fn editor_exit_notifies_without_discovery_polling() {
         let deadline = Instant::now() + Duration::from_secs(3);
         let mut closed = false;
         while Instant::now() < deadline && !closed {
-            ara_rpc::Handler::tick(&mut hub);
+            Handler::tick(&mut hub);
             closed = hub.outbox().into_iter().any(|(_, text)| {
                 let note: Value = serde_json::from_str(&text).expect("notification");
                 note["method"] == "hub.changed"

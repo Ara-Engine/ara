@@ -62,6 +62,22 @@ impl FidelityView {
         input: &FrameInput<'_>,
         colour: ImageInput,
     ) -> Result<()> {
+        #[cfg(feature = "hotpatch")]
+        {
+            ara_hotpatch::call!(Self::record_post_process, self, gpu, input, colour)
+        }
+        #[cfg(not(feature = "hotpatch"))]
+        {
+            self.record_post_process(gpu, input, colour)
+        }
+    }
+
+    fn record_post_process(
+        &mut self,
+        gpu: &mut GpuDevice,
+        input: &FrameInput<'_>,
+        colour: ImageInput,
+    ) -> Result<()> {
         ensure!(
             self.history && colour.state.queue == Queue::Graphics,
             "post input requires a completed Graphics frame"

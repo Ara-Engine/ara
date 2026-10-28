@@ -29,6 +29,8 @@ struct Pending {
 #[derive(Default)]
 pub(crate) struct FileJobs {
     pending: Vec<Pending>,
+    awaiting: Vec<(String, u64, Value)>,
+    pub(crate) materialized: BTreeMap<u64, Result<(), Diagnostic>>,
     pub(crate) applying: bool,
 }
 
@@ -91,21 +93,31 @@ impl State {
                     let mut inventory = PreparedInventory::default();
                     let mut staged = BTreeMap::new();
                     for source in sources {
-                        let state = store.snapshot(&source.path).map_err(|d| vec![d])?;
-                        let key = ara_doc::file_state::path_key(&source.path);
+                        let from = source.from.as_deref().unwrap_or(&source.path);
+                        let state = store.snapshot(from).map_err(|d| vec![d])?;
+                        let key = ara_doc::file_state::path_key(from);
                         let current = staged.get(&key).unwrap_or(&state);
-                        if current.as_ref().is_none_or(|s| s.hash != source.base_hash) {
+                        if current.as_ref().map(|s| s.hash.as_str()) != source.base_hash.as_deref()
+                        {
                             return Err(vec![
                                 Diagnostic::error(
                                     codes::STALE_BASE,
                                     "source changed since analysis; analyze it again",
                                 )
-                                .file(&source.path),
+                                .file(from),
                             ]);
                         }
                         let next = store.put(source.text.as_bytes()).map_err(|d| vec![d])?;
-                        staged.insert(key, Some(next));
-                        inventory.entries.entry(source.path).or_insert(state);
+                        inventory.entries.entry(from.to_owned()).or_insert(state);
+                        if from != source.path {
+                            let destination = store.snapshot(&source.path).map_err(|d| vec![d])?;
+                            inventory
+                                .entries
+                                .entry(source.path.clone())
+                                .or_insert(destination);
+                            staged.insert(key, None);
+                        }
+                        staged.insert(ara_doc::file_state::path_key(&source.path), Some(next));
                     }
                     store.preflight_ops(&inverse).map_err(|d| vec![d])?;
                     for op in inverse {
@@ -169,6 +181,16 @@ impl State {
     }
 
     pub(crate) fn poll_file_jobs(&mut self) {
+        let mut awaiting = Vec::new();
+        for (job, revision, value) in std::mem::take(&mut self.file_jobs.awaiting) {
+            if let Some(result) = self.file_jobs.materialized.get(&revision) {
+                let result = result.clone().map(|()| value).map_err(|d| vec![d]);
+                self.finish_job(&job, result);
+            } else {
+                awaiting.push((job, revision, value));
+            }
+        }
+        self.file_jobs.awaiting = awaiting;
         let mut waiting = Vec::new();
         for mut pending in std::mem::take(&mut self.file_jobs.pending) {
             let prepared = match pending.ready.try_recv() {
@@ -195,6 +217,7 @@ impl State {
             if !pending.revalidated
                 && let Ok(inventory) = prepared.as_ref()
             {
+                self.job_progress(&pending.job, 0.4, "Revalidating source files");
                 let inventory = inventory.clone();
                 let history = FileHistory::new(self.root.clone());
                 let (send, ready) = mpsc::channel();
@@ -252,7 +275,22 @@ impl State {
                 self.store.set_origin(None);
                 result
             });
-            self.finish_job(&pending.job, result);
+            let revision = self
+                .store
+                .history()
+                .last()
+                .filter(|txn| {
+                    txn.result > pending.revision
+                        && txn.ops.iter().any(|op| matches!(op, Op::File { .. }))
+                })
+                .map(|txn| txn.result);
+            match (result, revision) {
+                (Ok(value), Some(revision)) => {
+                    self.job_progress(&pending.job, 0.8, "Writing source files");
+                    self.file_jobs.awaiting.push((pending.job, revision, value));
+                }
+                (result, _) => self.finish_job(&pending.job, result),
+            }
         }
         waiting.append(&mut self.file_jobs.pending);
         self.file_jobs.pending = waiting;

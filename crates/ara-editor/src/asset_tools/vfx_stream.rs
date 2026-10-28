@@ -92,8 +92,13 @@ impl VfxStream {
                             let device = gpu
                                 .as_mut()
                                 .ok_or_else(|| anyhow::anyhow!("preview device missing"))?;
-                            let mut replacement =
-                                ara_vfx_gpu::GpuSystem::new(device, &new, &cooked, [768, 768])?;
+                            let mut replacement = ara_vfx_gpu::GpuSystem::new(
+                                device,
+                                &new,
+                                &cooked,
+                                [768, 768],
+                                ara_vfx_gpu::LINEAR_HDR,
+                            )?;
                             for _ in 0..warm {
                                 replacement.step(device, &view)?;
                             }

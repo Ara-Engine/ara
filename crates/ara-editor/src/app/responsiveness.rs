@@ -7,7 +7,10 @@
 //! `responsiveness.json` (per-scenario frame costs, UI work counters, GPU UI time,
 //! input-to-present latency and click results). The Play scenario clicks Play and
 //! measures to the first presented frame showing an embedded Game image (cold, then
-//! warm), then clicks Stop. A Scene orbit moves the editor camera every frame.
+//! warm), then clicks Stop. A Scene orbit moves the editor camera every frame. The
+//! unpresentable scenario stands in for a minimized or occluded window: the loop must
+//! render and present nothing, keep each frame under `UNPRESENTABLE_LIMIT_MS` and
+//! present again afterwards, or the run fails (`--verify-unpresentable` runs it alone).
 //!
 //! Startup is timed from [`LAUNCHED`]: the first presented frame, when imports
 //! settled, and the first Scene frame after that (the full first scene; texture
@@ -16,6 +19,12 @@
 //! frame records whether imports were pending.
 use super::*;
 use crate::shell::commands::Target;
+
+/// Frames the unpresentable scenario holds the window unable to show.
+const UNPRESENTABLE_FRAMES: u32 = 30;
+/// Longest an unpresentable frame may take: no rendering, a 10 ms pacing sleep, no
+/// waits on a present path that may be stalled.
+const UNPRESENTABLE_LIMIT_MS: f64 = 150.;
 
 /// How a click's press and release reach the loop.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize)]
@@ -52,6 +61,9 @@ enum Control {
 
 enum Act {
     Idle(&'static str, u32),
+    /// The window cannot show (minimized or occluded) for this many frames: the loop
+    /// renders and presents nothing and returns to the pump promptly.
+    Unpresentable(u32),
     Hover(u32),
     Click(Control, Timing),
     /// The View > Theme rows' command, then frames for it to settle.
@@ -259,6 +271,8 @@ impl Probe {
             acts.push(Act::Drag);
         }
         acts.push(Act::Idle("idle-after", 120));
+        acts.push(Act::Unpresentable(UNPRESENTABLE_FRAMES));
+        acts.push(Act::Idle("after-unpresentable", 30));
         acts.push(Act::Orbit(ORBIT_FRAMES));
         for _ in 0..3 {
             acts.push(Act::Play);
@@ -267,6 +281,22 @@ impl Probe {
         if settle == Some(Settle::After) {
             acts.push(Act::Settle);
         }
+        Self::with_acts(output, acts)
+    }
+
+    /// `--verify-unpresentable`: only the unpresentable scenario between idle frames.
+    pub fn unpresentable_only(output: &std::path::Path) -> Self {
+        Self::with_acts(
+            output,
+            vec![
+                Act::Idle("warmup", 30),
+                Act::Unpresentable(UNPRESENTABLE_FRAMES),
+                Act::Idle("after-unpresentable", 30),
+            ],
+        )
+    }
+
+    fn with_acts(output: &std::path::Path, acts: Vec<Act>) -> Self {
         Self {
             output: output.into(),
             acts,
@@ -294,6 +324,7 @@ impl Probe {
     fn label(&self) -> String {
         match self.acts.get(self.index) {
             Some(Act::Idle(name, _)) => (*name).into(),
+            Some(Act::Unpresentable(_)) => "unpresentable".into(),
             Some(Act::Hover(_)) => "hover".into(),
             Some(Act::Click(control, _)) => format!("click-{control:?}").to_lowercase(),
             Some(Act::Theme(_)) => "theme".into(),
@@ -318,6 +349,12 @@ impl Probe {
             }
             None => "done".into(),
         }
+    }
+
+    /// Whether the loop should treat the window as unable to show anything this frame
+    /// (the unpresentable scenario stands in for a minimized or occluded window).
+    pub fn unpresentable(&self) -> bool {
+        matches!(self.acts.get(self.index), Some(Act::Unpresentable(_)))
     }
 
     /// Before polling: apply a slow frame and reset the shell's counters.
@@ -586,7 +623,9 @@ impl Probe {
         }
         self.age += 1;
         let done = match self.acts.get(self.index) {
-            Some(Act::Idle(_, frames) | Act::Hover(frames)) => self.age >= *frames,
+            Some(Act::Idle(_, frames) | Act::Hover(frames) | Act::Unpresentable(frames)) => {
+                self.age >= *frames
+            }
             Some(Act::Theme(_) | Act::Edit) => self.age >= 8,
             Some(Act::Type(typed)) => self.age >= 12 + typed.text(self.index).len() as u32,
             Some(Act::Drag) => self.age >= 10 + DRAG_FRAMES,
@@ -683,9 +722,28 @@ impl Probe {
                 }),
             );
         }
+        // An unpresentable window presents nothing and never stalls the pump.
+        let hidden: Vec<&Sample> = self
+            .samples
+            .iter()
+            .filter(|(name, _)| name == "unpresentable")
+            .map(|(_, sample)| sample)
+            .collect();
+        let hidden_presented = hidden.iter().filter(|s| s.presented).count();
+        let hidden_max_ms = hidden.iter().map(|s| s.cpu_ms).fold(0., f64::max);
+        // And presenting resumes once the window can show again.
+        let resumed = self
+            .samples
+            .iter()
+            .any(|(name, sample)| name == "after-unpresentable" && sample.presented);
+        let hidden_ok = !hidden.is_empty()
+            && hidden_presented == 0
+            && hidden_max_ms < UNPRESENTABLE_LIMIT_MS
+            && resumed;
         let landed = self.clicks.iter().filter(|c| c["ok"] == true).count();
         let report = json!({
             "clicks": {"total": self.clicks.len(), "landed": landed, "each": self.clicks},
+            "unpresentable": {"frames": hidden.len(), "presented": hidden_presented, "maxMs": hidden_max_ms, "limitMs": UNPRESENTABLE_LIMIT_MS, "resumed": resumed, "ok": hidden_ok},
             "play": self.plays,
             "startup": self.startup,
             "settleTimedOut": self.settle_timed_out,
@@ -699,6 +757,14 @@ impl Probe {
             self.output.join("responsiveness.json"),
             ara_json::to_canonical_string(&report),
         )?;
+        // Written first, so the report shows what went wrong.
+        if !hidden_ok {
+            return Err(format!(
+                "responsiveness: an unpresentable window presented {hidden_presented} of {} frames, slowest {hidden_max_ms:.1} ms (limit {UNPRESENTABLE_LIMIT_MS} ms), resumed: {resumed}",
+                hidden.len()
+            )
+            .into());
+        }
         Ok(())
     }
 }

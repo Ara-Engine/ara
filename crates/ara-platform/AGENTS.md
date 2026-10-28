@@ -14,7 +14,8 @@ Metal view presented through `ara_gpu::metal::present` (`src/present/metal.rs`).
   switches at runtime (game Settings menus) and `game_mode` reads it back; presenters
   follow the new drawable size. Hidden game windows never enter fullscreen. SDL
   fullscreen synchronization finishes before loading/swapchain sizing; direct scanout
-  remains an OS/overlay decision.
+  remains an OS/overlay decision. Game windows raise on show and take the click that
+  activates them (`SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH`).
 - `Event`: close, drawable resize, key/repeat, mouse motion/button and wheel input.
   Hosts translate these events into deterministic simulation actions.
 - `Window::set_cursor(SystemCursor)` lazily owns native cursor shapes until video
@@ -23,7 +24,8 @@ Metal view presented through `ara_gpu::metal::present` (`src/present/metal.rs`).
   (above its parent, minimizes with it). `poll_tagged()` drains every window's
   events tagged with `id()` (0 = application; a close request is `Quit` for its
   window); `poll()` keeps the single-window shape. `rect`/`set_position`/`raise`/
-  `toggle_fullscreen`/`display_scale`, `displays()` (usable bounds, for off-screen
+  `toggle_fullscreen`/`display_scale`/`pixel_density` (pixels per window point: pointer
+  events are in points, `size()` in pixels), `displays()` (usable bounds, for off-screen
   recovery) and `global_mouse()` (cross-window drags). `raw()` is for host adapters.
 - Custom captions: `Window::enable_custom_chrome` installs native caption/resize hit
   testing. Update `chrome_mut()` after layout in SDL window points. `minimize` and
@@ -35,17 +37,24 @@ Metal view presented through `ara_gpu::metal::present` (`src/present/metal.rs`).
   `assets/brand/icons/`. Regenerate with `cargo run -p ara-brand -- icons`.
 - `Present`: backend-selected (`src/present/{vulkan,metal}.rs`). Portable surface:
   `create`, `create_with_output`, `present_image`, `present_encoded`, `retire` (no
-  wait; callers wait for idle where they need it), `output_settings`, `surface_format`.
-  Metal accepts SDR only and scales/converts like the Vulkan blit.
+  wait; callers wait for idle where they need it), `output_settings`, `surface_format`,
+  `settled` (bounded wait for presentations still reading their source; always true on
+  Metal). Metal accepts SDR only and scales/converts like the Vulkan blit; a nil
+  `nextDrawable` (hidden window) skips the frame.
+- Never block the event pump on presentation: skip rendering and presenting while
+  `Window::presentable()` is false (minimized, occluded). Vulkan acquire and slot
+  waits are bounded (`PRESENT_WAIT_NS`, 100 ms); a stalled presentation engine skips
+  frames, and a synchronous display leaves its blit pending, so hosts gate the next
+  write to the source on `settled`.
 - Vulkan `Present`: unsafe native integration over an existing GPU context. Retain both
   native owners, present only completed CopySource images, and destroy after idle.
-  Leaf acquire/present/queue-idle waits contribute to `Context::host_wait_stats`.
+  Leaf acquire/present/slot waits contribute to `Context::host_wait_stats`.
   Loading/game may transfer the same Present between owners of one native device;
   all uses must be complete first. `native_swapchain()` exposes its stable identity.
 
 Per-image render semaphores are reused after reacquisition. Construction cleans
 partially created surface/swapchain/semaphores; destruction is idempotent.
-The v0 display path serializes presentation before releasing its command buffer.
+The synchronous display path waits its blit's slot fence (bounded) before returning.
 The windowed example recreates on resize and OUT_OF_DATE; minimized windows wait.
 
 ## Setup and test

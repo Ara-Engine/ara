@@ -1,5 +1,7 @@
 //! The host thread never waits on the disk: journal and diagnostics writes queue on
 //! the file thread. `flush` waits; `queue_flush` exposes a nonblocking save receipt.
+mod file_jobs;
+mod why_paths;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};

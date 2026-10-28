@@ -8,7 +8,7 @@
     "state": {
       "blend": true,
       "color_formats": [
-        109,
+        97,
         100,
         43,
         77,
@@ -65,7 +65,7 @@
     "state": {
       "blend": false,
       "color_formats": [
-        109
+        97
       ],
       "depth_format": null,
       "depth_test": false,
@@ -418,12 +418,31 @@
     "state": {
       "blend": true,
       "color_formats": [
-        109,
+        97,
         100,
         43,
         77,
         37,
         122,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_lit": {
+    "entries": {
+      "nativeForwardLitFragment": "fragment",
+      "nativeGeometryVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        97,
+        100,
         83
       ],
       "depth_format": 126,

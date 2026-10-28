@@ -213,7 +213,12 @@ impl Facts for HostFacts<'_> {
                         (p.to_owned(), i.to_owned())
                     });
                 let kind = index.kind_of(&id).map(str::to_owned);
-                let source_exists = kind.is_none().then(|| self.st.root.join(&path).exists());
+                let source_exists = kind.is_none().then(|| {
+                    self.st
+                        .root
+                        .join(self.st.store.workspace().storage_path(&path))
+                        .exists()
+                });
                 Asset {
                     reference: reference.to_owned(),
                     id: Some(id),
@@ -243,7 +248,16 @@ impl Facts for HostFacts<'_> {
         }
         // Links and junctions may point outside: the resolved file must be inside.
         let root = self.st.root.canonicalize().ok()?;
-        let file = root.join(rel).canonicalize().ok()?;
+        let workspace = self.st.store.workspace();
+        let policy = workspace.docs().any(|(storage, doc)| {
+            storage == path && workspace.is_project_document(doc.id.as_str())
+        });
+        let storage = if policy {
+            path.to_owned()
+        } else {
+            workspace.storage_path(path)
+        };
+        let file = root.join(storage).canonicalize().ok()?;
         file.starts_with(&root)
             .then(|| std::fs::read_to_string(&file).ok())
             .flatten()

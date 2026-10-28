@@ -264,13 +264,13 @@ impl Preset {
 /// Resolved bindings: preset over defaults, then per-command user overrides.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Keymap {
-    by_chord: BTreeMap<Chord, Vec<&'static str>>,
-    by_command: BTreeMap<&'static str, Vec<Chord>>,
+    by_chord: BTreeMap<Chord, Vec<String>>,
+    by_command: BTreeMap<String, Vec<Chord>>,
 }
 impl Keymap {
     /// `defaults` yields `(command id, Ara shortcut list)` for every registry command.
     pub fn new<'a>(
-        defaults: impl Iterator<Item = (&'static str, &'a str)>,
+        defaults: impl Iterator<Item = (&'a str, &'a str)>,
         preset: Preset,
         overrides: &BTreeMap<String, String>,
     ) -> Self {
@@ -289,14 +289,14 @@ impl Keymap {
                 .unwrap_or(keys);
             let chords = parse_list(keys);
             for chord in &chords {
-                map.by_chord.entry(*chord).or_default().push(id);
+                map.by_chord.entry(*chord).or_default().push(id.to_owned());
             }
-            map.by_command.insert(id, chords);
+            map.by_command.insert(id.to_owned(), chords);
         }
         map
     }
     /// Commands bound to a chord; more than one means a conflict.
-    pub fn commands(&self, chord: Chord) -> &[&'static str] {
+    pub fn commands(&self, chord: Chord) -> &[String] {
         self.by_chord.get(&chord).map_or(&[], Vec::as_slice)
     }
     /// A command's bindings, primary first.
@@ -304,11 +304,11 @@ impl Keymap {
         self.by_command.get(id).map_or(&[], Vec::as_slice)
     }
     /// Other commands sharing any of `id`'s chords.
-    pub fn conflicts(&self, id: &str) -> Vec<&'static str> {
+    pub fn conflicts(&self, id: &str) -> Vec<&str> {
         let mut out: Vec<_> = self
             .chords(id)
             .iter()
-            .flat_map(|c| self.commands(*c).iter().copied())
+            .flat_map(|c| self.commands(*c).iter().map(String::as_str))
             .filter(|other| *other != id)
             .collect();
         out.sort_unstable();

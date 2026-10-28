@@ -282,7 +282,13 @@ impl Cx<'_> {
             )]
         })?;
         let previous = self.session.replace(session.to_owned());
+        let previous_calling = self.st.calling.replace(session.to_owned());
+        let previous_origin = self.st.store.origin().map(str::to_owned);
+        self.st.store.set_origin(Some(session.to_owned()));
         let result = complete(self);
+        self.st.drain();
+        self.st.store.set_origin(previous_origin);
+        self.st.calling = previous_calling;
         self.session = previous;
         Ok(result)
     }
@@ -440,5 +446,15 @@ impl Cx<'_> {
             .jobs
             .get(job)
             .is_some_and(|j| j.status == crate::jobs::JobStatus::Cancelled)
+    }
+    /// A service-owned job's current status/result, without another protocol call.
+    pub fn job_record(&self, job: &str) -> Option<&crate::jobs::JobRecord> {
+        self.st.jobs.get(job)
+    }
+
+    /// Result of materializing a file-bearing transaction at this revision. None
+    /// means its worker has not acknowledged it yet; no disk work occurs here.
+    pub fn materialization_result(&self, revision: u64) -> Option<&Result<(), Diagnostic>> {
+        self.st.file_jobs.materialized.get(&revision)
     }
 }

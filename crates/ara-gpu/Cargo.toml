@@ -27,6 +27,7 @@ tracy-client = { version = "0.18", optional = true, default-features = false, fe
 # Metal 4 backend (D12/D15): Apple silicon only. Bindings are generated from the
 # Xcode 26 SDK; the backend never links a shader compiler.
 [target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6.2"
 objc2 = "0.6.2"
 objc2-foundation = "0.3.2"
 objc2-metal = { version = "0.3.2", features = ["objc2-io-surface"] }

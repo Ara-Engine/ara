@@ -181,6 +181,7 @@ impl Culling {
                     first: rows.len() as u32,
                     count: chunk.len() as u32,
                     vertices: group.counts[lod],
+                    first_index: group.first_indices[lod],
                 });
                 rows.extend(
                     chunk

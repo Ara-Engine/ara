@@ -2,7 +2,7 @@
 use anyhow::{Context, Result, ensure};
 use std::{
     collections::BTreeMap,
-    io::Write,
+    io::{Read, Write},
     path::{Path, PathBuf},
 };
 
@@ -46,6 +46,7 @@ pub(crate) struct Inventory {
 
 /// The exact inputs read by packaging, also used by the read-only preflight.
 pub(crate) fn inventory(player: &Path, engine: &Path) -> Result<Inventory> {
+    require_shipping_player(player)?;
     let player_name = player
         .file_name()
         .context("player executable filename")?
@@ -116,6 +117,55 @@ pub(crate) fn inventory(player: &Path, engine: &Path) -> Result<Inventory> {
         None
     };
     Ok(Inventory { files, icon })
+}
+
+/// Refuse development patch hosts even when supplied as externally pinned templates.
+pub(crate) fn require_shipping_player(player: &Path) -> Result<()> {
+    const MARKER: &[u8] = b"ARA_DEV_RUST_HOTPATCH_v1";
+    let mut file = std::fs::File::open(player)?;
+    let mut buffer = [0_u8; 65536];
+    let mut carry = 0;
+    loop {
+        let count = file.read(&mut buffer[carry..])?;
+        if count == 0 {
+            break;
+        }
+        let end = carry + count;
+        ensure!(
+            !buffer[..end].windows(MARKER.len()).any(|b| b == MARKER),
+            "ARA7602: export refuses a Rust hotpatch development player; rebuild ara-player without --features hotpatch"
+        );
+        carry = end.min(MARKER.len() - 1);
+        buffer.copy_within(end - carry..end, 0);
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod hotpatch_tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+    #[test]
+    fn exports_reject_hotpatch_hosts_including_a_split_marker() {
+        let root =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/hotpatch-export-tests");
+        std::fs::create_dir_all(&root).unwrap();
+        let scratch = tempfile::tempdir_in(root).unwrap();
+        let player = scratch.path().join("ara-player.exe");
+        std::fs::write(&player, b"shipping player").unwrap();
+        require_shipping_player(&player).unwrap();
+        let mut bytes = vec![0; 65530];
+        bytes.extend_from_slice(b"ARA_DEV_RUST_HOTPATCH_v1");
+        std::fs::write(&player, bytes).unwrap();
+        let error = build_runtime_template(
+            &player,
+            scratch.path(),
+            &scratch.path().join("template.zip"),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("export refuses a Rust hotpatch"));
+        assert!(!scratch.path().join("template.zip").exists());
+    }
 }
 
 /// Whether `player` is a Mach-O executable, the macOS player.

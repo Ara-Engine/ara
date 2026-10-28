@@ -9,12 +9,14 @@ publish.workspace = true
 workspace = true
 
 [features]
+hotpatch = ["dep:ara-hotpatch", "ara-runtime-render/hotpatch"]
 tracy = ["ara-gpu/tracy", "ara-profile/tracy"]
 
 [build-dependencies]
 embed-resource.workspace = true
 
 [dependencies]
+ara-hotpatch = { path = "../ara-hotpatch", optional = true, features = ["runtime"] }
 ara-texture-gpu = { path = "../ara-texture-gpu" }
 ara-crash = { path = "../ara-crash" }
 ara-asset = { path = "../ara-asset" }
@@ -60,6 +62,7 @@ ara-ui = { path = "../ara-ui" }
 ara-ui-render = { path = "../ara-ui-render" }
 ara-ui-text = { path = "../ara-ui-text" }
 anyhow = { workspace = true }
+notify = "8.2"
 bytemuck = { workspace = true }
 glam = { workspace = true, features = ["serde", "bytemuck"] }
 glam34 = { workspace = true }

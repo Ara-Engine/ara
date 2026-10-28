@@ -16,12 +16,11 @@ Owns the native GPU boundary. Vulkan uses ash revision
   never waits. Adoption stays on the owner, as do ordered uploads and queue access.
 - `Context::host_wait_stats` snapshots cumulative host time in explicit driver waits.
   Native integration uses `measure_host_wait` for leaf waits only; never nest it.
-- Completed timestamp pools are reused (32 pools, at most 1024 queries each).
-  In-flight pools stay exclusive; oversized/burst overflow pools are freed on resolve.
-- Pass begins follow leading barriers at ALL_COMMANDS; `PassTiming` carries device
-  start/end. `reset_timing_window`/`timing_window` include every resolved submission
-  and gaps. KHR/EXT calibrated timestamps enable a shared clock; mixed queues without
-  that guarantee have no whole-frame span. Tests cover ordering, overlap and wrap.
+- Timestamp pools are reused (32, at most 1024 queries); in-flight pools stay exclusive,
+  overflow pools are freed on resolve. Pass begins follow leading barriers; `PassTiming`
+  carries device start/end; `timing_window` spans resolved submissions and gaps (shared
+  clock via calibrated timestamps, else no mixed-queue span). `set_pass_timing(false)`
+  makes Metal lists untimed; Vulkan keeps timing. Tests cover ordering, overlap, wrap.
 - `upload_range(buffer, byte_offset, bytes)` writes only changed coherent rows,
   with the same bounds and in-flight-use checks as `upload`.
 - `VulkanDevice::create_mip_image`: native sampled mip chains, including BC4/5/7.
@@ -34,7 +33,8 @@ Owns the native GPU boundary. Vulkan uses ash revision
   `Stage::{Mesh,Task}` and `DrawMeshTasksIndirect` require the mesh tier; the
   existing vertex/indirect path remains available. Mesh reads use ALL_GRAPHICS
   barriers. Slang PrimitiveId also needs the reported core geometryShader feature.
-- `Barrier`, `Access`, `Handoff`, `TimelinePoint`: explicit graph synchronization.
+- `Barrier`, `Access`, `Handoff`, `TimelinePoint`: graph synchronization; `after: Undefined` discards, so `attachments::ops` skips the scope's store and colour load.
+  `TRANSIENT_ATTACHMENT` images are attachment-only: Metal memoryless, Vulkan lazily allocated.
 - `AccelerationDesc`: static BLAS/TLAS allocation; build with a typed command.
   `TriangleRange` selects checked aligned byte ranges in shared vertex/index
   allocations; indices remain local to the range. Multiple BLAS builds and their
@@ -146,5 +146,5 @@ updates: `cargo run -p ara-gpu --example heap_probe_manifest`, then
 cycles every slot through a resize and checks pixels and validation on both.
 Metal 4 (macOS; `src/metal/mod.rs` holds the contract). Portable aliases: `GpuDevice`, `GpuCompletion`, `NativeImage`, `NativeView`, `external`.
 Converter ABI checked against MSC 4.0.3 (`abi.rs`: constants, four tables, then the static-sampler table); one MTL4Compiler + archive serializer per process (`cache.rs`, flushed once, never under shader validation); one timestamp heap per device, shared as slot ranges (`timestamps.rs`; 32 heaps per process), with back-to-back pass boundaries sharing one command-buffer timestamp (each is a driver dispatch); queue barriers carry their accesses' stages (`encode.rs`), so an attachment-only dependency waits in the fragment stage and the pass's tiling overlaps the previous pass; a deferred scope's lists commit as one batch per queue (`flush`), like Vulkan; `native::pool` around Metal calls.
-Presentation and shared-surface copies blit, or scale/convert with MPS, on a classic queue (`transfer.rs`); `adopt_texture` shares textures across devices of the GPU (UI adapter, loading split).
+Presentation and shared-surface copies blit, or scale/convert with MPS, on a classic queue (`transfer.rs`); a stalled present (pending copy, full drawable pool) skips after `PRESENT_WAIT`, never blocking the pump; `adopt_texture` shares textures across devices of the GPU (UI adapter, loading split). RT tier (`new`, Apple9+; `acceleration.rs`): static BLAS/TLAS built on a compute encoder, all resident (a TLAS names BLASes by ID); a bound TLAS is a descriptor holding the address of MSC's 64-byte AS header (resource ID, per-instance hit contributions), which cooked `RayQuery` stages read with no extra converter flags.
 Test: `MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1 cargo test -p ara-gpu --lib metal`, and once without shader validation; Vulkan GPU tests are ignored on macOS.

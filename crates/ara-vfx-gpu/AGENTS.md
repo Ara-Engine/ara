@@ -17,7 +17,9 @@ events. Shader compilers are never runtime dependencies.
   Native pipeline compilation and its private cache I/O never run on the frame thread.
 - `View`: camera/frame inputs; optional scene HDR and depth for world composition.
   `placement` (world origin + uniform scale) maps the world camera, scene depth and
-  probe lattice into effect space; `intensity` scales particle radiance.
+  probe lattice into effect space; `intensity` scales particle radiance; `hdr_exposure`
+  pre-exposes particles for the raster scene (systems built with `RASTER_HDR`; previews,
+  captures and the fidelity view use `LINEAR_HDR`).
 - Lit soft/smoke sprites shade as thin media (HG phase g=0.35 + probe mean
   radiance), not Lambert surfaces; spark sheets, meshes and ribbons keep surface light.
 - `GpuSystem::capture_over(gpu, request, scene)`: `capture` composited over a scene
@@ -61,6 +63,9 @@ enabled with ARA_VFX_GPU_TESTS=1. They require this device/driver and SDK layers
 GPU test captures and measurements go under target/ara-vfx-gpu; tracked evidence
 and goldens stay unchanged unless the explicit golden update flag is set.
 ARA_UPDATE_GOLDENS=1 deliberately updates six still/sequence PNG baseline pairs.
+Each fidelity tier has its own: `goldens/` (RT, on devices with ray queries) and
+`goldens/raster/` (unbaked-probe Raster: no ray queries, or Metal until its RT tier is verified);
+ARA_VFX_GOLDEN_TIER=rt|raster forces one.
 Inspect captures before accepting them. Gallery frames use lit geometry and the
 fidelity post stack; benchmark sprites intentionally isolate simulation/fill cost.
 Cooked artifacts are committed. A fresh check/test never runs a shader compiler.

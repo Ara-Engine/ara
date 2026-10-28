@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Ara.Runtime/Ara.Runtime.csproj" />
+    <Project Path="src/Ara.Editor/Ara.Editor.csproj" />
     <Project Path="src/Ara.Generators/Ara.Generators.csproj" />
     <Project Path="src/Ara.Host/Ara.Host.csproj" />
     <Project Path="src/Ara.Analyzers/Ara.Analyzers.csproj" />
@@ -11,6 +12,7 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="examples/Ara.Examples/Ara.Examples.csproj" />
+    <Project Path="examples/Ara.EditorExamples/Ara.EditorExamples.csproj" />
     <Project Path="examples/Ara.CommandExamples/Ara.CommandExamples.csproj" />
     <Project Path="samples/Outpost.Sample/Outpost.Sample.csproj" />
     <Project Path="samples/Outpost.Sample.Aot/Outpost.Sample.Aot.csproj" />

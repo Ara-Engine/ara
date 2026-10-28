@@ -493,6 +493,30 @@ expression: pretty
     }
   },
   {
+    "name": "ara_fix",
+    "title": "Fix C# diagnostics",
+    "description": "Apply shipped ARA0001/ARA0101/ARA0506 C# code fixes through attributed source.replace commands with offline undo and redo. Optional apply:false returns a dry-run diff plus commands usable by ara_apply. Returns a standard preparation job; poll ara_jobs with action:status for its ordinary transaction/ops result. Not available in this engine build yet: calls return diagnostic ARA1806 until a service provides it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "description": "Session handle from ara_session `begin`."
+        }
+      },
+      "required": [
+        "session"
+      ]
+    },
+    "annotations": {
+      "title": "Fix C# diagnostics",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "ara_capture",
     "title": "Capture images",
     "description": "Render images of a scene: camera specs (frame entities, angles, existing cameras), debug view modes, numbered marks with a pixel-to-entity legend, deterministic settling and golden-image comparison. Not available in this engine build yet: calls return diagnostic ARA1806 until a service provides it.",

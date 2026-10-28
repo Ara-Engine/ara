@@ -326,11 +326,12 @@ impl State {
                 self.files.receipts.error(&d);
                 self.log(d);
             }
-            Reply::Materialized(result) => {
-                if let Err(d) = result {
-                    self.files.receipts.error(&d);
-                    self.log(d);
+            Reply::Materialized { revision, result } => {
+                if let Err(d) = &result {
+                    self.files.receipts.error(d);
+                    self.log(d.clone());
                 }
+                self.file_jobs.materialized.insert(revision, result);
             }
             Reply::DiagnosticsFailed { seqs, error } => {
                 self.diag_file.retry(seqs);
