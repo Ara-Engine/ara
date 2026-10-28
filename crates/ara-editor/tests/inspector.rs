@@ -788,7 +788,7 @@ fn clicking_an_asset_in_assets_selects_it() {
     shell.dispatch(&mut editor).unwrap();
     assert_eq!(
         editor.state.asset_path.as_deref(),
-        Some("models/crate.gltf")
+        Some(format!("{}/models/crate.gltf", ara_doc::AUTHORING_ROOT).as_str())
     );
     assert_eq!(model(&editor), Value::Null);
 }

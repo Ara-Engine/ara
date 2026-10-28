@@ -155,7 +155,10 @@ impl CollectionCheck {
                 "editor.search",
                 json!({"panel":"inspector","query":self.search}),
             )?;
-            editor.action("editor.view", json!({"maximized":self.maximized}))?;
+            editor.action(
+                "editor.view",
+                json!({"maximized":self.maximized.as_deref().unwrap_or("")}),
+            )?;
             editor.action("editor.select", json!({"entities":self.selection}))?;
             shell.rebuild(editor)?;
             self.restored = true;
