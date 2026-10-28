@@ -2,6 +2,7 @@
 use super::*;
 use crate::shell::Binding;
 mod cleanup;
+mod pointer;
 pub(super) fn tap(window: &Window, key: i32, events: &mut Vec<(u32, Event)>) {
     for pressed in [true, false] {
         events.push((
@@ -177,6 +178,35 @@ impl AssetOpsCheck {
         scale: f32,
         events: &mut Vec<(u32, Event)>,
     ) -> ara_ui::Result<()> {
+        let initial = events.len();
+        let result = self.input_stage(act, editor, shell, window, scale, events);
+        if result.is_ok()
+            && events[initial..]
+                .iter()
+                .any(|(_, event)| matches!(event, Event::MouseMotion { .. }))
+            && let Some(mapping) =
+                pointer::map(window.id(), window.rect()?, scale, &events[initial..])?
+        {
+            // The same virtual desktop mapping as the native monkey adapter:
+            // SDL client points plus this event window's desktop-point origin.
+            shell.desktop_pointer = Some(mapping.desktop);
+            self.trace.push(json!({"stage":"native-pointer-mapping","age":self.age,
+                "window":window.id(),"windowRect":mapping.window_rect,"pointsToLogical":scale,
+                "nativePosition":mapping.native,"logicalPosition":mapping.logical,"desktopPointer":mapping.desktop,
+                "sourceSelection":self.selection,"sourceSelectionPaths":self.selection_paths}));
+        }
+        result
+    }
+
+    fn input_stage(
+        &mut self,
+        act: Act,
+        editor: &mut Editor,
+        shell: &mut Shell,
+        window: &Window,
+        scale: f32,
+        events: &mut Vec<(u32, Event)>,
+    ) -> ara_ui::Result<()> {
         let storage = fixture::storage(shell, &act.path())
             .ok_or("Native asset case folder is missing from the cached index")?;
         if self.age == 0 {
@@ -315,6 +345,27 @@ impl AssetOpsCheck {
             6 => {
                 if act.drag() {
                     self.drag_preview = shell.content_drag_report();
+                    let target = if act == Act::InvalidFolder {
+                        act.source()
+                    } else {
+                        format!("{}/Destination", act.path())
+                    };
+                    let expected_storage = fixture::storage(shell, &target)
+                        .ok_or("The cached native folder drop target disappeared before release")?;
+                    self.trace.push(json!({"stage":"before-native-drop-release","age":self.age,
+                        "sourceSelection":self.selection,"sourceSelectionPaths":self.selection_paths,
+                        "expectedFolder":{"authored":target,"storage":expected_storage},
+                        "sourceLogical":self.source,"destinationLogical":self.destination,
+                        "localPointer":shell.pointer,"desktopPointer":shell.desktop_pointer,"drag":self.drag_preview}));
+                    if act == Act::Move
+                        && (self.drag_preview["active"] != true
+                            || self.drag_preview["feedback"]["valid"] != true
+                            || self.drag_preview["feedback"]["target"]["kind"] != "assetFolder"
+                            || self.drag_preview["feedback"]["target"]["storagePath"].as_str()
+                                != Some(expected_storage.as_str()))
+                    {
+                        return Err("Native multi-asset drag did not activate with valid feedback for its expected folder before release".into());
+                    }
                     button(window, 1, false, events);
                 } else if matches!(act, Act::Delete | Act::DeleteCancel | Act::SafeDelete) {
                     let suffix = if act == Act::DeleteCancel {
