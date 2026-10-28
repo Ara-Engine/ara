@@ -73,6 +73,14 @@ struct Cells {
 }
 
 impl<R> World<R> {
+    /// The scene's document ID and the project content cache reflection-probe
+    /// captures bind to (`Presenter::set_probe_scene`); `None` for exported packs.
+    pub fn probe_scene(&self) -> Option<(&str, &std::path::Path)> {
+        self.packed
+            .is_none()
+            .then_some((self.scene.as_str(), self.cache.as_path()))
+    }
+
     /// Attach the runtime's main-thread role without copying its ECS or metadata.
     pub(crate) fn map_runtime<T>(self, attach: impl FnOnce(R) -> Result<T>) -> Result<World<T>> {
         Ok(World {

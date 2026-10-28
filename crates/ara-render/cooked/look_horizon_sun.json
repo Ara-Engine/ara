@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae",
+  "key": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a",
   "stages": [
     {
-      "dxil": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/look_horizon_sun/horizonSunMain.dxil",
+      "dxil": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a/look_horizon_sun/horizonSunMain.dxil",
       "dxil_hash": "d2f20c61254b233be4a9620bb29f12d8c96f63823651d832bf767595e911f17a",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/look_horizon_sun/horizonSunMain.metallib",
+        "metallib": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a/look_horizon_sun/horizonSunMain.metallib",
         "metallib_hash": "cc542e1a5baabb0d865fcf553476b815fd7c5628dbaa17d6df4f98408779d4d9",
-        "reflection": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/look_horizon_sun/horizonSunMain.metal.json",
+        "reflection": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a/look_horizon_sun/horizonSunMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "horizonSunMain",
-      "spirv": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/look_horizon_sun/horizonSunMain.spv",
+      "spirv": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a/look_horizon_sun/horizonSunMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "636fca79630c905050ccb7c265581eda53b2df67deb511de1b0c69fe1bbb20c7",
       "stage": "compute"

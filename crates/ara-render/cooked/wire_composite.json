@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae",
+  "key": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a",
   "stages": [
     {
-      "dxil": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/wire_composite/wireCompositeMain.dxil",
+      "dxil": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a/wire_composite/wireCompositeMain.dxil",
       "dxil_hash": "57ab9a2e2fec1f9a018b6eda4ab9c78ae2e08a791c01141cc152e7d1018db80a",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/wire_composite/wireCompositeMain.metallib",
+        "metallib": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a/wire_composite/wireCompositeMain.metallib",
         "metallib_hash": "49bbdeb3ecae70bcd0676a8d96554cf08fe27b946086f664772fbc22144ebabd",
-        "reflection": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/wire_composite/wireCompositeMain.metal.json",
+        "reflection": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a/wire_composite/wireCompositeMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "wireCompositeMain",
-      "spirv": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/wire_composite/wireCompositeMain.spv",
+      "spirv": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a/wire_composite/wireCompositeMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "e3569e8f44626aa2feb6b547a3ffbcefd92ccb43153a74cba91bf3f8949207a9",
       "stage": "compute"

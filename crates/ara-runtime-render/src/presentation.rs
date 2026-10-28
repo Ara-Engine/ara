@@ -128,6 +128,25 @@ impl Presenter {
         }
     }
 
+    /// Binds reflection-probe captures to scene document `doc` and the project's
+    /// content cache `project_cache` (`<project>/.ara/cache`): Play restores the
+    /// editor's captures from its `probes` folder when their portable source hash
+    /// matches and bakes the rest itself (`ProbeCaptures::set_auto_capture`). Cheap
+    /// to call every frame; rebinds only on change.
+    pub fn set_probe_scene(&mut self, doc: &str, project_cache: &std::path::Path) {
+        if self
+            .probe_scene
+            .as_ref()
+            .is_some_and(|(d, c)| d == doc && c == project_cache)
+        {
+            return;
+        }
+        self.probe_scene = Some((doc.to_owned(), project_cache.to_owned()));
+        if let Some(raster) = &mut self.raster {
+            bind_probes(raster, self.probe_scene.as_ref(), &self.cache);
+        }
+    }
+
     /// Whether probe GI acquisition/delivery or settling remains pending. False
     /// when disabled, independently of emitter searches and model arrival fades.
     pub fn probe_gi_pending(&self) -> bool {
@@ -659,5 +678,21 @@ impl Drop for Presenter {
             }
             let _ = renderer.gpu_mut().collect();
         }
+    }
+}
+
+/// Binds a presenter-owned view's probe captures to `scene` (see
+/// `Presenter::set_probe_scene`), else to the presenter's own `gpu_cache` (exported
+/// games, harnesses); presenter views capture what has no capture.
+fn bind_probes(
+    raster: &mut RasterView,
+    scene: Option<&(String, PathBuf)>,
+    gpu_cache: &std::path::Path,
+) {
+    let probes = raster.probes_mut();
+    probes.set_auto_capture(true);
+    match scene {
+        Some((doc, cache)) => probes.set_scene(doc.clone(), cache.join("probes")),
+        None => probes.set_scene("", gpu_cache.join("probes")),
     }
 }

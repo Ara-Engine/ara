@@ -6,7 +6,10 @@
 //! own column. Only primary frames bake; every camera reads the result.
 use super::*;
 use crate::graph::Graph;
-use crate::look::captures::{CaptureSpec, LEVELS, Lighting, Settled, Work, level_y};
+use crate::look::captures::{
+    BakeStatus, CaptureImage, CaptureSpec, LEVELS, Lighting, Settled, Work, level_y,
+};
+use ara_gpu::{Barrier, TimelinePoint};
 use ara_gpu::{
     RootConstants,
     vulkan::{Command, Recorder},
@@ -82,10 +85,15 @@ impl Renderer {
                 .native_texture_stats()
                 .is_none_or(|stats| stats.pending_textures == 0),
         };
+        self.poll_capture_readbacks(sync)?;
         let work = self
             .views
             .captures
             .plan(&mut self.gpu, quality, lighting, settled, sync)?;
+        // A restore rewrites the atlas (scratch column included) and restarts bakes.
+        if self.views.captures.take_restore() {
+            return self.restore_captures();
+        }
         for item in work {
             match item {
                 Work::Face {
@@ -100,8 +108,224 @@ impl Renderer {
                 } => {
                     self.prefilter_capture(capture, resolution)?;
                     self.views.captures.finished(capture);
+                    if self.views.captures.is_explicit(capture) {
+                        self.read_capture(capture)?;
+                    }
                 }
             }
+        }
+        Ok(())
+    }
+
+    /// Requests a bake of authored probe `key` (an explicit capture); false when the
+    /// renderer holds no record of it (unknown, or past the preset's capture count).
+    /// The bake runs one step per live frame once probe GI has settled.
+    pub fn request_reflection_capture(&mut self, key: u64) -> bool {
+        self.views.captures.request(key)
+    }
+    /// Cancels authored probe `key`'s requested bake before it publishes; its
+    /// published image stays. False when nothing was pending.
+    pub fn cancel_reflection_capture(&mut self, key: u64) -> bool {
+        self.views.captures.cancel(key)
+    }
+    /// Authored probe `key`'s bake state, if the renderer holds its record.
+    pub fn reflection_capture_status(&self, key: u64) -> Option<BakeStatus> {
+        self.views.captures.status(key)
+    }
+    /// The published explicit captures read back since the last call (without a fence
+    /// wait: each lands a frame or two after it publishes).
+    pub fn take_reflection_capture_images(&mut self) -> Vec<CaptureImage> {
+        std::mem::take(&mut self.views.capture_landed)
+    }
+    /// Restores a cached capture of authored probe `image.key` into its column (the
+    /// next primary frame uploads it; a resolution that no longer matches is ignored).
+    pub fn load_reflection_capture(&mut self, image: CaptureImage) -> Result<()> {
+        let expected = CaptureImage::extent_for(image.resolution);
+        let texels = u64::from(expected[0]) * u64::from(expected[1]);
+        anyhow::ensure!(
+            image.extent == expected && image.bytes.len() as u64 == texels * 8,
+            "reflection capture image {:?} does not match {} texels",
+            image.extent,
+            image.resolution
+        );
+        self.views.capture_images.insert(image.key, image);
+        self.views.captures.request_restore();
+        Ok(())
+    }
+    /// A portable hash of what a capture of this scene depends on besides the probe
+    /// itself: the uploaded content (and its dynamic updates), the sun, the sky and
+    /// fog, and the local lights. Identical across processes for identical inputs.
+    pub fn reflection_capture_inputs(&self) -> String {
+        use sha2::{Digest, Sha256};
+        let mut hash = Sha256::new();
+        hash.update(self.scene_hash().as_bytes());
+        let (d, l) = (self.content.sun_direction, self.content.sun_lux);
+        for v in [d.x, d.y, d.z, l.x, l.y, l.z] {
+            hash.update(v.to_le_bytes());
+        }
+        hash.update(format!("{:?}", (self.look.look.sky, self.look.look.fog)).as_bytes());
+        hash.update(light_hash(&self.content.lights).to_le_bytes());
+        format!("{:x}", hash.finalize())
+    }
+
+    /// Copies the atlas into a host-visible buffer after record `capture` published,
+    /// to read its column back once the copy completes (`poll_capture_readbacks`).
+    fn read_capture(&mut self, capture: usize) -> Result<()> {
+        let (Some((atlas, _, state, _)), Some(size), Some((key, bake)), Some(x)) = (
+            self.views.captures.atlas(),
+            self.views.captures.atlas_size(),
+            self.views.captures.key_and_bakes(capture),
+            self.views.captures.column(capture),
+        ) else {
+            return Ok(());
+        };
+        let resolution = self.views.captures.status(key).map_or(0, |s| s.resolution);
+        let buffer = self.gpu.create_buffer(
+            u64::from(size[0]) * u64::from(size[1]) * 8,
+            vk::BufferUsageFlags::TRANSFER_DST,
+            true,
+        )?;
+        let mut commands = self.gpu.begin(Queue::Graphics);
+        commands.push(Command::BeginPass("CaptureReadback".into()));
+        commands.barriers([
+            Barrier {
+                resource: Resource::Image(atlas),
+                before: state.access,
+                after: Access::CopySource,
+                handoff: None,
+            },
+            Barrier {
+                resource: Resource::Buffer(buffer),
+                before: Access::Undefined,
+                after: Access::CopyDestination,
+                handoff: None,
+            },
+        ]);
+        commands.push(Command::ReadImage {
+            source: atlas,
+            destination: buffer,
+        });
+        commands.barriers([Barrier {
+            resource: Resource::Buffer(buffer),
+            before: Access::CopyDestination,
+            after: Access::HostRead,
+            handoff: None,
+        }]);
+        commands.push(Command::EndPass);
+        let point = self.gpu.submit(commands.finish(), &[])?;
+        // Inside a live frame's deferred scope this only records the wait.
+        self.gpu.resolve(point)?;
+        self.views.captures.set_atlas_state(crate::graph::State {
+            access: Access::CopySource,
+            queue: Queue::Graphics,
+        });
+        self.views.capture_readbacks.push(CaptureReadback {
+            key,
+            bake,
+            x,
+            resolution,
+            atlas: size,
+            buffer,
+            point,
+        });
+        Ok(())
+    }
+
+    /// Takes the column of every completed readback (all of them, waiting, when
+    /// `sync`), keeps it for restores and hands it to the host.
+    fn poll_capture_readbacks(&mut self, sync: bool) -> Result<()> {
+        if self.views.capture_readbacks.is_empty() {
+            return Ok(());
+        }
+        let completed = self.gpu.completed()?;
+        let mut pending = Vec::new();
+        for readback in std::mem::take(&mut self.views.capture_readbacks) {
+            if completed[readback.point.queue.index()] < readback.point.value {
+                if !sync {
+                    pending.push(readback);
+                    continue;
+                }
+                self.gpu.wait(readback.point)?;
+            }
+            let atlas = self.gpu.read_completed(readback.buffer, readback.point)?;
+            self.gpu.retire(Resource::Buffer(readback.buffer))?;
+            let extent = CaptureImage::extent_for(readback.resolution);
+            let row = extent[0] as usize * 8;
+            let mut bytes = Vec::with_capacity(row * extent[1] as usize);
+            for y in 0..extent[1] as usize {
+                let start = (y * readback.atlas[0] as usize + readback.x as usize) * 8;
+                bytes.extend_from_slice(&atlas[start..start + row]);
+            }
+            let image = CaptureImage {
+                key: readback.key,
+                bake: readback.bake,
+                resolution: readback.resolution,
+                extent,
+                bytes,
+            };
+            self.views.capture_images.insert(image.key, image.clone());
+            self.views.capture_landed.push(image);
+        }
+        self.views.capture_readbacks = pending;
+        Ok(())
+    }
+
+    /// Uploads the whole atlas with every explicit record's retained image (other
+    /// texels zero), marking those records ready.
+    fn restore_captures(&mut self) -> Result<()> {
+        let (Some((atlas, _, state, _)), Some(size)) = (
+            self.views.captures.atlas(),
+            self.views.captures.atlas_size(),
+        ) else {
+            return Ok(());
+        };
+        let width = size[0] as usize;
+        let mut texels = vec![0u8; width * size[1] as usize * 8];
+        let mut restored = Vec::new();
+        for (capture, key, x, resolution) in self.views.captures.explicit_columns() {
+            let Some(image) = self
+                .views
+                .capture_images
+                .get(&key)
+                .filter(|i| i.resolution == resolution)
+            else {
+                continue;
+            };
+            let row = image.extent[0] as usize * 8;
+            for (y, source) in image.bytes.chunks_exact(row).enumerate() {
+                let start = (y * width + x as usize) * 8;
+                texels[start..start + row].copy_from_slice(source);
+            }
+            restored.push(capture);
+        }
+        let staging = self.gpu.create_buffer(
+            texels.len() as u64,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            true,
+        )?;
+        self.gpu.upload_queued(staging, &texels)?;
+        let mut commands = self.gpu.begin(Queue::Graphics);
+        commands.push(Command::BeginPass("CaptureRestore".into()));
+        commands.barriers([Barrier {
+            resource: Resource::Image(atlas),
+            before: state.access,
+            after: Access::CopyDestination,
+            handoff: None,
+        }]);
+        commands.push(Command::UploadImage {
+            source: staging,
+            destination: atlas,
+        });
+        commands.push(Command::EndPass);
+        let point = self.gpu.submit(commands.finish(), &[])?;
+        self.gpu.resolve(point)?;
+        self.gpu.retire(Resource::Buffer(staging))?;
+        self.views.captures.set_atlas_state(crate::graph::State {
+            access: Access::CopyDestination,
+            queue: Queue::Graphics,
+        });
+        for capture in restored {
+            self.views.captures.restored(capture);
         }
         Ok(())
     }
@@ -351,4 +575,15 @@ fn light_hash(lights: &[crate::scene::Light]) -> u64 {
         }
     }
     hash
+}
+
+/// An atlas copy in flight after an explicit capture published (`read_capture`).
+pub(super) struct CaptureReadback {
+    key: u64,
+    bake: u64,
+    x: u32,
+    resolution: u32,
+    atlas: [u32; 2],
+    buffer: ara_gpu::Buffer,
+    point: TimelinePoint,
 }

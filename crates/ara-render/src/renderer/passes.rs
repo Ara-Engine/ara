@@ -30,16 +30,24 @@ enum Recipe {
     VsmPages,
     GBuffer,
     Tile,
-    Lighting,
-    /// Blended and transmissive draws; `true` through the native lit PSO, which
-    /// leaves the G-buffer alone (only the debug views read it afterwards).
-    Forward(bool),
+    /// Deferred lighting; `true`: the gi_diffuse view's variant (`ViewMode::GiDiffuse`).
+    Lighting(bool),
+    /// Blended and transmissive draws; `lit` through the native lit PSO, which
+    /// leaves the G-buffer alone (only the debug views read it afterwards). Without
+    /// `draws` (the gi_diffuse view, opaque surfaces only) the pass draws nothing.
+    Forward {
+        lit: bool,
+        draws: bool,
+    },
     Taa,
     /// One Ara TSR dispatch (`crate::tsr`), declared instead of `Taa` when selected.
     Tsr(crate::tsr::TsrPass),
     Tonemap,
     /// The camera's native draws again into the wire mask (`ViewMode::wire`).
     Wire,
+    /// The camera's native draws again, without the depth test, adding one per kept
+    /// fragment into the count target (`ViewMode::Overdraw`).
+    Overdraw,
     /// The wire mask over the display output; `true` over the lit image (one
     /// colour), `false` over the wireframe view's background (per-entity colours).
     WireComposite(bool),
@@ -354,6 +362,7 @@ impl Renderer {
         self.look.frame_motion = motion && lit;
         // Edges come from the native draws (legacy content has none).
         self.look.frame_wire = mode.wire() && self.native.is_some();
+        self.look.frame_overdraw = mode == ViewMode::Overdraw && self.native.is_some();
         let (sampled, storage) = self.look.indices();
         // Exposure snaps to its meter on a reset unless a host seeded it, and
         // while new probe GI converges or fades in (no adaptation swing as the
@@ -928,7 +937,8 @@ impl Renderer {
             .chain(translucent_reads.iter().copied())
             .chain(self.rays.lighting_reads()),
         );
-        declare(lighting, Recipe::Lighting);
+        let gi_diffuse = mode == ViewMode::GiDiffuse;
+        declare(lighting, Recipe::Lighting(gi_diffuse));
         let refract_atlas = refract_rect.and_then(|_| {
             let (atlas, passes) = self
                 .look
@@ -968,7 +978,13 @@ impl Renderer {
             // Hybrid frames' TLAS, for forward variants that trace (look-rt.slangh).
             .chain(self.rays.tlas_read()),
         );
-        declare(forward, Recipe::Forward(forward_lit));
+        declare(
+            forward,
+            Recipe::Forward {
+                lit: forward_lit,
+                draws: !gi_diffuse,
+            },
+        );
         let mut shaded = shadow_passes;
         shaded.extend([gbuffer, lighting, forward]);
         if self.look.frame_wire {
@@ -980,6 +996,16 @@ impl Renderer {
             );
             declare(wire, Recipe::Wire);
             shaded.push(wire);
+        }
+        if self.look.frame_overdraw {
+            // Every submitted fragment, before depth rejection: no depth attachment.
+            let count = graph.pass(
+                "Overdraw.Count",
+                Queue::Graphics,
+                [(ids[WIRE], Access::Color)],
+            );
+            declare(count, Recipe::Overdraw);
+            shaded.push(count);
         }
         // Deferred post leaves the lit scene in HDR for external composites (`finish`).
         // Captures always produce their own output, never a deferred frame.
@@ -1125,6 +1151,11 @@ impl Renderer {
                     (ids[DEPTH], Access::ShaderRead),
                 ]
                 .into_iter()
+                .chain(
+                    self.look
+                        .frame_overdraw
+                        .then_some((ids[WIRE], Access::ShaderRead)),
+                )
                 .chain(cascade_reads.iter().copied())
                 .chain(far_read)
                 .chain(local_read),
@@ -1153,7 +1184,14 @@ impl Renderer {
                 [
                     (ids[OUTPUT], Access::CopySource),
                     (ids[ID], Access::CopySource),
-                ],
+                ]
+                .into_iter()
+                // Captures read the overdraw count back (`Capture::overdraw`).
+                .chain(
+                    self.look
+                        .frame_overdraw
+                        .then_some((ids[WIRE], Access::CopySource)),
+                ),
             );
             declare(ready, Recipe::Empty);
         } else {
@@ -1472,11 +1510,15 @@ impl Renderer {
                             1,
                         ]));
                     }
-                    Recipe::Lighting => {
-                        // Frames that trace bind the variant reading their reflections.
+                    Recipe::Lighting(gi_diffuse) => {
+                        // Frames that trace bind the variant reading their reflections;
+                        // the gi_diffuse view reads none.
+                        let high = self.look.quality.high_tier;
                         let lighting = match self.rays.lighting() {
+                            _ if gi_diffuse && high => self.pipelines.lighting_high_gi,
+                            _ if gi_diffuse => self.pipelines.lighting_gi,
                             Some(rays) => rays,
-                            None if self.look.quality.high_tier => self.pipelines.lighting_high,
+                            None if high => self.pipelines.lighting_high,
                             None => self.pipelines.lighting,
                         };
                         recorder.push(Command::Pipeline(lighting));
@@ -1492,7 +1534,7 @@ impl Renderer {
                         recorder.push(Command::Fullscreen);
                         recorder.push(Command::EndRendering);
                     }
-                    Recipe::Forward(lit) => {
+                    Recipe::Forward { lit, draws } => {
                         recorder.push(Command::Pipeline(self.pipelines.forward));
                         // Attachment order matches the PSOs' targets: colour, id,
                         // then the G-buffer (unless lit), then motion (native).
@@ -1519,7 +1561,7 @@ impl Renderer {
                             }),
                             size: self.render,
                         });
-                        if let Some(native) = &self.native {
+                        if let Some(native) = self.native.as_ref().filter(|_| draws) {
                             native.record_forward(
                                 &mut recorder,
                                 footprint,
@@ -1533,7 +1575,7 @@ impl Renderer {
                             .meshes
                             .iter()
                             .enumerate()
-                            .filter(|(_, m)| self.native.is_none() && m.transparent)
+                            .filter(|(_, m)| draws && self.native.is_none() && m.transparent)
                             .collect::<Vec<_>>();
                         transparent.sort_by(|(_, a), (_, b)| {
                             b.centre
@@ -1566,6 +1608,20 @@ impl Renderer {
                         }
                         recorder.push(Command::EndRendering);
                     }
+                    Recipe::Overdraw => {
+                        recorder.push(Command::BeginRendering {
+                            colors: vec![Attachment {
+                                image: self.targets.images[WIRE],
+                                clear: Some([0.; 4]),
+                            }],
+                            depth: None,
+                            size: self.render,
+                        });
+                        if let Some(native) = &self.native {
+                            native.record_overdraw(&mut recorder, footprint);
+                        }
+                        recorder.push(Command::EndRendering);
+                    }
                     Recipe::WireComposite(lit) => self.record_wire_composite(&mut recorder, lit),
                     Recipe::Tsr(tsr_pass) => self.tsr.record(&mut recorder, tsr_pass),
                     Recipe::Taa | Recipe::Tonemap => {
@@ -1581,6 +1637,8 @@ impl Renderer {
                             self.look.sampled[DOF_COMPOSITE]
                         } else if taa {
                             self.targets.sampled[HDR]
+                        } else if self.look.frame_overdraw {
+                            self.targets.sampled[WIRE]
                         } else {
                             self.targets.sampled[output_history]
                         };

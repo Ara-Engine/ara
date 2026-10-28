@@ -168,6 +168,9 @@ pub struct ReflectionCaptures {
     pub resolution: u32,
     /// Captures kept at most (1 to `captures::MAX_CAPTURES`), by priority, then size.
     pub captures: u32,
+    /// Whether a scene that authors no reflection probe gets captures placed over its
+    /// content (`captures::auto_place`); authored probes bake either way.
+    pub automatic: bool,
 }
 
 /// Ground-truth-based ambient occlusion (horizon search per screen slice).

@@ -81,6 +81,15 @@ pub struct CaptureSpec {
     pub resolution: u32,
     /// Radiance multiplier.
     pub intensity: f32,
+    /// Stable identity of an authored probe (its entity's render ID); zero for
+    /// automatic placements.
+    pub key: u64,
+    /// Bakes only when requested ([`crate::Renderer::request_reflection_capture`]) or
+    /// restored from a cache ([`crate::Renderer::load_reflection_capture`]), never on
+    /// content or lighting changes: an authored probe's image then always matches a
+    /// receipt, and goes stale instead of changing under it. Automatic placements bake
+    /// themselves.
+    pub explicit: bool,
 }
 
 impl CaptureSpec {
@@ -303,6 +312,8 @@ fn place(boxes: &[([Vec3; 2], bool)], limit: usize) -> Vec<CaptureSpec> {
             priority,
             resolution: 0,
             intensity: 1.,
+            key: 0,
+            explicit: false,
         }
     };
     let objects: Vec<_> = valid
@@ -529,7 +540,10 @@ impl CaptureGpu {
             size[0],
             size[1],
             vk::Format::R16G16B16A16_SFLOAT,
-            vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::STORAGE,
+            vk::ImageUsageFlags::SAMPLED
+                | vk::ImageUsageFlags::STORAGE
+                | vk::ImageUsageFlags::TRANSFER_SRC
+                | vk::ImageUsageFlags::TRANSFER_DST,
         )?;
         let sampled = gpu.sampled_image(atlas, false)?.index;
         let storage = gpu.storage_image(atlas)?.index;
@@ -608,6 +622,54 @@ pub(crate) struct Captures {
     pub baking: bool,
     /// A bake failed: captures stay off until new specs arrive.
     failed: bool,
+    /// Per record: bakes completed into its column (explicit records' receipts).
+    bakes: Vec<u64>,
+    /// Explicit records' columns must be restored from retained images (a new atlas,
+    /// or another probe moved into a column): `Renderer` uploads them.
+    restore: bool,
+}
+
+/// A published explicit capture as read back from the atlas
+/// (`Renderer::take_reflection_capture_images`, `Renderer::load_reflection_capture`):
+/// its column, borders and all five prefiltered levels, row-major RGBA16F.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaptureImage {
+    /// The probe's key ([`CaptureSpec::key`]).
+    pub key: u64,
+    /// Which of the column's bakes it is (`BakeStatus::bakes`); 0 for a loaded image.
+    pub bake: u64,
+    /// Level-0 interior texels per side.
+    pub resolution: u32,
+    /// Texel rows and row width of `bytes` (`resolution + 2` wide).
+    pub extent: [u32; 2],
+    /// `extent[0] * extent[1]` RGBA16F texels.
+    pub bytes: Vec<u8>,
+}
+
+impl CaptureImage {
+    /// The column extent of a capture of `resolution` texels: width, height.
+    pub fn extent_for(resolution: u32) -> [u32; 2] {
+        [resolution + 2, level_y(resolution, LEVELS)]
+    }
+}
+
+/// One record's bake state (`Captures::status`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BakeStatus {
+    /// A bake is requested and not yet published.
+    pub pending: bool,
+    /// Steps done while this record is the one baking (0-5 faces rendered; 6: the
+    /// faces are done and the reduce and prefilter publish next); `None` while it
+    /// waits its turn or nothing is pending.
+    pub step: Option<u32>,
+    /// Bake steps per capture (six faces and the prefilter).
+    pub steps: u32,
+    /// The column holds a published image shading reads.
+    pub ready: bool,
+    /// Bakes published into the column so far.
+    pub bakes: u64,
+    /// Level-0 texels per side of the column.
+    pub resolution: u32,
 }
 
 /// Probe GI and texture residency are settled enough to bake (`Captures::plan`).
@@ -675,8 +737,10 @@ impl Captures {
             }
             self.layout = None;
             self.gpu = Some(CaptureGpu::new(gpu, layout.size)?);
-            self.pending = vec![true; records.len()];
+            self.pending = records.iter().map(|r| !r.explicit).collect();
             self.ready = vec![false; records.len()];
+            self.bakes = vec![0; records.len()];
+            self.restore = records.iter().any(|r| r.explicit);
             self.progress = None;
             self.rebaseline = 0;
             self.reset = u32::MAX;
@@ -686,6 +750,20 @@ impl Captures {
         } else if self.records != records {
             for (i, (old, new)) in self.records.iter().zip(&records).enumerate() {
                 if old == new {
+                    continue;
+                }
+                if new.explicit {
+                    // An explicit probe keeps its image (stale) until a requested bake
+                    // replaces it; another probe moving into the column restores its own.
+                    if old.key != new.key {
+                        self.ready[i] = false;
+                        self.pending[i] = false;
+                        self.bakes[i] = 0;
+                        self.restore = true;
+                        if self.progress.is_some_and(|(c, _)| c == i) {
+                            self.progress = None;
+                        }
+                    }
                     continue;
                 }
                 self.pending[i] = true;
@@ -714,8 +792,15 @@ impl Captures {
             Some(old) => old.differs(&lighting) && (self.cooldown == 0 || sync),
         };
         if rebake {
-            self.pending.fill(true);
-            self.progress = None;
+            for (pending, record) in self.pending.iter_mut().zip(&self.records) {
+                *pending |= !record.explicit;
+            }
+            if self
+                .progress
+                .is_some_and(|(c, _)| !self.records.get(c).is_some_and(|r| r.explicit))
+            {
+                self.progress = None;
+            }
             self.lighting = Some(lighting);
         }
         self.cooldown = self.cooldown.saturating_sub(1);
@@ -780,12 +865,108 @@ impl Captures {
         if let Some(pending) = self.pending.get_mut(capture) {
             *pending = false;
             self.ready[capture] = true;
+            self.bakes[capture] += 1;
             self.rebaseline |= 1 << capture;
         }
         if !self.pending.contains(&true) {
             self.cooldown = COOLDOWN;
             self.waited = 0;
         }
+    }
+
+    /// The record of explicit probe `key`, if the quality holds it.
+    fn index(&self, key: u64) -> Option<usize> {
+        self.records.iter().position(|r| r.explicit && r.key == key)
+    }
+
+    /// Requests a bake of explicit probe `key` (no cooldown); false when the renderer
+    /// holds no such record (unknown, or past the quality's capture count).
+    pub(crate) fn request(&mut self, key: u64) -> bool {
+        let Some(i) = self.index(key) else {
+            return false;
+        };
+        self.pending[i] = true;
+        true
+    }
+
+    /// Drops a requested, unpublished bake of `key` (its column keeps its image); false
+    /// when nothing was pending. A bake publishes within one frame's work, so between
+    /// frames every pending bake can still be cancelled.
+    pub(crate) fn cancel(&mut self, key: u64) -> bool {
+        let Some(i) = self.index(key) else {
+            return false;
+        };
+        let was = std::mem::replace(&mut self.pending[i], false);
+        if self.progress.is_some_and(|(c, _)| c == i) {
+            self.progress = None;
+        }
+        was
+    }
+
+    /// Explicit probe `key`'s bake state, if the quality holds its record.
+    pub(crate) fn status(&self, key: u64) -> Option<BakeStatus> {
+        let i = self.index(key)?;
+        Some(BakeStatus {
+            pending: self.pending[i],
+            step: self.progress.filter(|(c, _)| *c == i).map(|(_, step)| step),
+            steps: FACES + 1,
+            ready: self.ready[i],
+            bakes: self.bakes[i],
+            resolution: self.layout.as_ref()?.columns.get(i)?.1,
+        })
+    }
+
+    /// Takes the restore flag set by a new atlas, a moved column or a loaded image. A
+    /// restore rewrites the whole atlas, scratch column included, so a bake under way
+    /// starts its faces again.
+    pub(crate) fn take_restore(&mut self) -> bool {
+        let restore = std::mem::take(&mut self.restore) && self.gpu.is_some();
+        if restore {
+            self.progress = None;
+        }
+        restore
+    }
+
+    /// Asks for a restore of the explicit columns (an image was loaded).
+    pub(crate) fn request_restore(&mut self) {
+        self.restore = true;
+    }
+
+    /// Whether record `capture` is explicit.
+    pub(crate) fn is_explicit(&self, capture: usize) -> bool {
+        self.records.get(capture).is_some_and(|r| r.explicit)
+    }
+
+    /// Record `capture`'s key and bakes published so far.
+    pub(crate) fn key_and_bakes(&self, capture: usize) -> Option<(u64, u64)> {
+        Some((self.records.get(capture)?.key, *self.bakes.get(capture)?))
+    }
+
+    /// The explicit records and their columns (`key`, x, resolution) for a restore.
+    pub(crate) fn explicit_columns(&self) -> Vec<(usize, u64, u32, u32)> {
+        let Some(layout) = &self.layout else {
+            return Vec::new();
+        };
+        self.records
+            .iter()
+            .zip(&layout.columns)
+            .enumerate()
+            .filter(|(_, (r, _))| r.explicit)
+            .map(|(i, (r, &(x, n)))| (i, r.key, x, n))
+            .collect()
+    }
+
+    /// Marks record `capture` as holding a restored image shading may read.
+    pub(crate) fn restored(&mut self, capture: usize) {
+        if let Some(ready) = self.ready.get_mut(capture) {
+            *ready = true;
+            self.rebaseline |= 1 << capture;
+        }
+    }
+
+    /// The atlas extent (texels).
+    pub(crate) fn atlas_size(&self) -> Option<[u32; 2]> {
+        Some(self.layout.as_ref()?.size)
     }
 
     fn upload_records(&mut self, gpu: &mut GpuDevice) -> Result<()> {
@@ -930,6 +1111,8 @@ mod tests {
             priority: 0,
             resolution: 0,
             intensity: 1.,
+            key: 0,
+            explicit: false,
         };
         let bytes = spec.record([10, 0], 128);
         let words = bytes.as_chunks::<4>().0;
@@ -1052,6 +1235,7 @@ mod tests {
             layout: Some(Layout::new(&[64, 64])),
             pending: vec![true, true],
             ready: vec![false, false],
+            bakes: vec![0, 0],
             ..Default::default()
         };
         let first = captures.schedule(false);

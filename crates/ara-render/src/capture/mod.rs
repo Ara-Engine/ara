@@ -34,14 +34,17 @@ pub enum ViewMode {
     /// The lit image with the native geometry's triangle edges drawn over it.
     LitWireframe = 8,
     /// The diffuse indirect light surface shading actually samples (probe GI, sky
-    /// irradiance and the screen-space bounce), without direct light, emission or
-    /// specular reflection: exposed like Lit, shown in sRGB without tone mapping.
-    /// Only where [`RenderCapabilities::gi_diffuse`] holds.
+    /// irradiance and the screen-space bounce, with ambient occlusion), without direct
+    /// light, emission, specular reflection or fog: exposed like Lit, shown in sRGB
+    /// without tone mapping. Opaque surfaces only (blended draws are not drawn);
+    /// the background is black. Only where [`RenderCapabilities::gi_diffuse`] holds.
     GiDiffuse = 9,
     /// Raster fragments per pixel of the submitted native geometry before depth
-    /// rejection (alpha discard respected), on the fixed heat legend: 0 black, 1 blue,
-    /// 2 green, 4 yellow, 8 orange, 16 or more red. Only where
-    /// [`RenderCapabilities::overdraw`] holds.
+    /// rejection (both faces: native draws cull none; masked materials' alpha discard
+    /// respected), on the fixed heat legend: 0 black, 1 blue, 2 green, 4 yellow,
+    /// 8 orange, 16 or more red. Captures carry the measured maximum and the pixels
+    /// per legend band ([`OverdrawStats`]). Only where [`RenderCapabilities::overdraw`]
+    /// holds.
     Overdraw = 10,
 }
 impl ViewMode {
@@ -150,6 +153,38 @@ pub struct CaptureMetadata {
     pub device: serde_json::Value,
     /// Actual queue timestamps for the final settle frame.
     pub timings: Vec<PassTiming>,
+    /// The overdraw view's measured counts (`ViewMode::Overdraw` captures only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overdraw: Option<OverdrawStats>,
+}
+/// Fragments per render pixel of an overdraw capture (`ViewMode::Overdraw`), counted
+/// before depth rejection with alpha discard respected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OverdrawStats {
+    /// The most fragments any pixel received.
+    pub max: u32,
+    /// Render pixels counted.
+    pub pixels: u64,
+    /// Pixels per legend band: 0, 1, 2-3, 4-7, 8-15, 16 or more fragments.
+    pub bands: [u64; 6],
+}
+impl OverdrawStats {
+    /// Statistics of per-pixel fragment `counts`.
+    pub fn of(counts: impl IntoIterator<Item = u32>) -> Self {
+        let mut stats = Self {
+            max: 0,
+            pixels: 0,
+            bands: [0; 6],
+        };
+        for count in counts {
+            stats.max = stats.max.max(count);
+            stats.pixels += 1;
+            // 0 -> band 0, 1 -> 1, 2-3 -> 2, 4-7 -> 3, 8-15 -> 4, 16+ -> 5.
+            stats.bands[(u32::BITS - count.leading_zeros()).min(5) as usize] += 1;
+        }
+        stats
+    }
 }
 /// Immutable offline shader provenance; no runtime compiler participates.
 #[derive(Clone, Serialize)]
@@ -270,6 +305,7 @@ impl Capture {
                     .collect(),
                 device: ara_json::to_value(device)?,
                 timings: timings.to_vec(),
+                overdraw: None,
             },
         })
     }
