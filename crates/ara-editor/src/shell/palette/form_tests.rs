@@ -311,6 +311,11 @@ fn generated_import_form_uses_select_toggle_plain_strings_and_native_back_focus_
         assert_eq!(shell.ui.nodes[index].element.tag, "dropdown");
         let index = shell.ui.find("param-dryRun").unwrap();
         assert_eq!(shell.ui.nodes[index].element.tag, "toggle");
+        assert_eq!(shell.palette_params.get("dryRun"), Some(&json!(false)));
+        assert!(shell.shown_node("param-default-dryRun").is_none());
+        assert!(
+            !shell.ui.nodes[index].element.attrs["description"].contains("omitted until edited")
+        );
         click_control(&mut shell, &mut editor, "param-conflict", &mut clip);
         assert!(shell.choice_open());
         shell.key(&mut editor, 77, true, &mut clip).unwrap();
@@ -373,6 +378,47 @@ fn generated_import_form_uses_select_toggle_plain_strings_and_native_back_focus_
             "Editing import parameters must not import or stage files"
         );
     }
+}
+
+#[test]
+fn optional_boolean_parameters_keep_backend_defaults_until_explicit_native_edits() {
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let revision = editor.host.store().revision();
+    let transactions = editor.host.store().history().len();
+    let mut shell = Shell::new(&mut editor, [320., 450.]).unwrap();
+    let mut clip = Clip::default();
+    shell
+        .run_command(&mut editor, "edit.palette", &Target::None)
+        .unwrap();
+    // This registered method's omitted compile parameter means true in the
+    // backend. Exercise its real schema without submitting source-authoring IO.
+    shell.begin_palette_form(&editor, "script.create").unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    shell.frame().unwrap();
+    assert!(!shell.palette_params.contains_key("compile"));
+    assert!(shell.shown_node("param-default-compile").is_some());
+    let index = shell.ui.find("param-compile").unwrap();
+    assert!(shell.ui.nodes[index].element.attrs["label"].contains("using command default"));
+    assert!(shell.ui.nodes[index].element.attrs["description"].contains("omitted until edited"));
+    click_control(&mut shell, &mut editor, "param-compile", &mut clip);
+    assert_eq!(shell.palette_params.get("compile"), Some(&json!(true)));
+    assert!(shell.shown_node("param-default-compile").is_none());
+    click_control(&mut shell, &mut editor, "param-compile", &mut clip);
+    assert_eq!(shell.palette_params.get("compile"), Some(&json!(false)));
+    click_control(&mut shell, &mut editor, "param-unset-compile", &mut clip);
+    assert!(!shell.palette_params.contains_key("compile"));
+    assert!(shell.shown_node("param-default-compile").is_some());
+    shell.key(&mut editor, 41, true, &mut clip).unwrap();
+
+    // Engine command discovery reaches the same optional-bool adapter.
+    open_form(&mut shell, &mut editor, "tilemap.paint", &mut clip);
+    assert!(!shell.palette_params.contains_key("autotile"));
+    assert!(shell.shown_node("param-default-autotile").is_some());
+    assert_eq!(editor.host.store().revision(), revision);
+    assert_eq!(editor.host.store().history().len(), transactions);
+    assert!(!project.0.join("Assets").exists());
+    assert!(!project.0.join("Scripts").exists());
 }
 
 #[test]

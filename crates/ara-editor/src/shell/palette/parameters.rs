@@ -275,7 +275,9 @@ impl Shell {
                     "entities" if !editor.state.selection.is_empty() => {
                         Some(json!(editor.state.selection))
                     }
-                    _ if matches!(field.kind, Kind::Boolean) => Some(json!(false)),
+                    _ if field.required && matches!(field.kind, Kind::Boolean) => {
+                        Some(json!(false))
+                    }
                     _ => None,
                 });
                 if let Some(value) = initial {
@@ -356,7 +358,8 @@ impl Shell {
                         ara_ui::source::stable_id(&id),
                         Binding::PaletteParam(key.clone()),
                     );
-                    out.push_str(&format!("<toggle id='{id}' label='{}' checked='{}' description='{}' action='Dispatch' style='width:28px;min-height:28px' />",escape(&field.label),value.as_bool().unwrap_or(false),escape(&field.description)));
+                    let inherited = !field.required && value.is_null();
+                    out.push_str(&format!("<toggle id='{id}' label='{}{}' checked='{}' description='{}{}' action='Dispatch' style='width:28px;min-height:28px' />",escape(&field.label),if inherited {" (using command default)"}else{""},value.as_bool().unwrap_or(false),escape(&field.description),if inherited {" · Using the command default; omitted until edited"}else{""}));
                 }
                 Kind::Vector {
                     count,
