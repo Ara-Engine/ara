@@ -49,7 +49,10 @@ impl GatePolicy {
                 },
                 Some(OsString::new()),
             )
-        } else if incremental == "1" && wrapper.as_ref().is_none_or(|v| is_sccache(v)) {
+        } else if incremental == "1"
+            && (wrapper.as_ref().is_some_and(|v| is_sccache(v))
+                || (wrapper.is_none() && installed.is_some()))
+        {
             // sccache 0.18 exits before compilation when CARGO_INCREMENTAL=1.
             // Preserve the requested probe/debug mode using Cargo's own cache.
             ("incremental requires direct rustc", Some(OsString::new()))
@@ -212,6 +215,13 @@ mod tests {
         );
         let absent = GatePolicy::new(false, false, None, None, None);
         assert!(absent.wrapper.is_none(), "do not require installing a tool");
+        let configured = GatePolicy::new(false, false, Some("1".into()), None, None);
+        assert!(
+            configured.wrapper.is_none(),
+            "preserve Cargo's configured wrapper when no sccache is selected"
+        );
+        assert_eq!(configured.incremental, "1");
+        assert_eq!(configured.cache, "Cargo configured wrapper or direct rustc");
         let incremental = GatePolicy::new(false, false, Some("1".into()), None, installed.clone());
         assert!(
             incremental.bypassed(),

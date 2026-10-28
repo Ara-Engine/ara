@@ -24,7 +24,7 @@ fn wrapper_with_wait(root: &Path, id: &str, timeout: u64, wait: bool) -> Child {
         .args(if wait {
             vec!["--wait-for-quiet"]
         } else {
-            vec![]
+            vec!["--no-wait"]
         })
         .arg("--")
         .arg(std::env::current_exe().unwrap())

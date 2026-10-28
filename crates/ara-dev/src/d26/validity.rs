@@ -183,6 +183,11 @@ pub(super) fn apply(
                     "invalid saved source window for {key}"
                 );
                 row.measurement_window = Some(window.clone());
+                if !report.cpu.errors.is_empty() {
+                    row.invalidate(InvalidReason::Unmonitored,"CPU monitoring failed; this window has no reliable background CPU coverage");
+                    invalid += 1;
+                    continue;
+                }
                 if report.monitoring.overlaps(window.interval) {
                     row.invalidate(InvalidReason::Unmonitored,"unmonitored: measurement window overlaps five seconds or more without valid GPU counters");
                     invalid += 1;
@@ -211,11 +216,12 @@ pub(super) fn apply(
                     }
                 }
                 let overlaps = report.overlaps(window.interval);
+                let cpu_overlap = report.cpu.overlaps(window.interval);
                 row.measurement_window = Some(window);
                 if overlaps {
                     row.invalidate(
-                        InvalidReason::ForeignGpuLoad,
-                        "measurement window overlaps foreign GPU contamination",
+                        if cpu_overlap { InvalidReason::ForeignCpuLoad } else { InvalidReason::ForeignGpuLoad },
+                        if cpu_overlap { "ARA_CPU_FOREIGN_LOAD: measurement window overlaps background CPU contamination" } else { "measurement window overlaps foreign GPU contamination" },
                     );
                     invalid += 1;
                 }

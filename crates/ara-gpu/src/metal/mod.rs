@@ -27,7 +27,7 @@
 //! Acceleration structures and inline ray queries run on GPUs with hardware ray
 //! tracing (Apple9, M3 and later; D29) on the RT-tier device ([`acceleration`]).
 //!
-//! Not yet available: mesh/task stages, shader hot reload and HDR output.
+//! Not yet available: mesh/task stages and HDR output.
 mod abi;
 mod acceleration;
 mod cache;
@@ -170,7 +170,6 @@ pub struct MetalDevice {
     deferred: Option<Vec<TimelinePoint>>,
     /// Submitted values when the scope began; every scoped submission waits on them.
     deferred_waits: [u64; 2],
-    /// An ended scope awaits poll/wait.
     /// Ended deferred scopes not yet consumed (at most `FRAMES_IN_FLIGHT`).
     pending_completions: usize,
     resource_worker: Option<prepare::ResourceWorker>,
@@ -185,8 +184,9 @@ pub struct MetalDevice {
     waits: crate::vulkan::waits::Counter,
     /// The cooked `ClearDepth` pipeline, loaded on first use.
     clear: Option<clear::Clear>,
-    /// Shader reload provenance (no hot reload on Metal yet, see `reload`).
-    shader_status: vulkan::ShaderStatus,
+    shader_worker: Option<reload::Worker>,
+    #[cfg(feature = "fidelity-lab")]
+    pub(crate) lab_params: crate::tunables::Registry,
     submission_stats: vulkan::SubmissionStats,
     /// Last: released after the workers joined, so the archive flush races no compile.
     _cache: cache::Lease,
@@ -260,6 +260,11 @@ impl MetalDevice {
         info.ray_tracing = ray_tracing && info::hardware_ray_tracing(&device);
         // Joined last: a failed creation above never counts as a live device.
         let (compiler, cache) = cache::acquire(&device, cache_dir)?;
+        let shader_worker = if std::env::var_os("ARA_SHADER_DIR").is_some() {
+            Some(reload::Worker::new(device.clone(), compiler.clone())?)
+        } else {
+            None
+        };
         Ok(Self {
             device,
             queues,
@@ -298,7 +303,9 @@ impl MetalDevice {
             recent_spans: Default::default(),
             waits: Default::default(),
             clear: None,
-            shader_status: Default::default(),
+            shader_worker,
+            #[cfg(feature = "fidelity-lab")]
+            lab_params: Default::default(),
             submission_stats: Default::default(),
             _cache: cache,
         })
@@ -500,10 +507,20 @@ impl MetalDevice {
     ) -> Result<Pipeline> {
         let created =
             native::pool(|| pipeline::create(&self.device, &self.compiler, cooked, artifacts))?;
-        self.pipelines.insert(created)
+        let handle = self.pipelines.insert(created)?;
+        if let Some(worker) = &mut self.shader_worker
+            && let Err(error) = worker.track(handle, cooked, artifacts)
+        {
+            self.retire_pipeline(handle)?;
+            return Err(error.into());
+        }
+        Ok(handle)
     }
     /// Invalidate a pipeline identity; release it after all queues complete.
     pub fn retire_pipeline(&mut self, pipeline: Pipeline) -> Result<()> {
+        if let Some(worker) = &self.shader_worker {
+            worker.forget(pipeline);
+        }
         let native = self.pipelines.remove(pipeline)?;
         self.retired.push(Retired::Pipeline {
             _native: native,

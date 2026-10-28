@@ -42,6 +42,44 @@ pub(super) fn create_on_device(
     cooked: &CookedPipeline,
     dir: &Path,
 ) -> Result<NativePipeline> {
+    create_inner(device, mesh_shading, layout, cache, cooked, dir, None)
+}
+
+#[derive(Default)]
+pub(super) struct CreationTimes {
+    pub load_ms: f64,
+    pub pso_ms: f64,
+}
+
+pub(super) fn create_profiled(
+    device: &ash::Device,
+    mesh_shading: bool,
+    layout: vk::PipelineLayout,
+    cache: vk::PipelineCache,
+    cooked: &CookedPipeline,
+    dir: &Path,
+    times: &mut CreationTimes,
+) -> Result<NativePipeline> {
+    create_inner(
+        device,
+        mesh_shading,
+        layout,
+        cache,
+        cooked,
+        dir,
+        Some(times),
+    )
+}
+
+pub(super) fn create_inner(
+    device: &ash::Device,
+    mesh_shading: bool,
+    layout: vk::PipelineLayout,
+    cache: vk::PipelineCache,
+    cooked: &CookedPipeline,
+    dir: &Path,
+    mut times: Option<&mut CreationTimes>,
+) -> Result<NativePipeline> {
     let trace_started = std::time::Instant::now();
     let legacy_preview = cooked.stages.len() == 2
         && cooked.stages.iter().all(|stage| {
@@ -117,6 +155,10 @@ pub(super) fn create_on_device(
             })
             .collect::<Result<Vec<_>>>()?;
         let compute = cooked.stages.len() == 1 && cooked.stages[0].stage == Stage::Compute;
+        let pso_started = times.as_ref().map(|_| std::time::Instant::now());
+        if let Some(times) = &mut times {
+            times.load_ms += trace_started.elapsed().as_secs_f64() * 1000.;
+        }
         // SAFETY: State and shader modules remain live through creation; host cache access is exclusive.
         let handle = unsafe {
             if compute {
@@ -230,6 +272,9 @@ pub(super) fn create_on_device(
             }
             GpuError::Backend(anyhow::anyhow!("Pipeline creation: {error:?}"))
         })?[0];
+        if let (Some(times), Some(started)) = (&mut times, pso_started) {
+            times.pso_ms += started.elapsed().as_secs_f64() * 1000.;
+        }
         Ok(NativePipeline {
             handle,
             compute,

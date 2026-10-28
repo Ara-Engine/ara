@@ -8,6 +8,14 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 
+static LAST_READING: std::sync::Mutex<Option<serde_json::Value>> = std::sync::Mutex::new(None);
+/// Evidence from the most recently finished guarded window in this orchestrator.
+pub(crate) fn last_reading() -> Option<serde_json::Value> {
+    crate::gpu_guard::reading()
+        .map(|report| serde_json::json!({"reading":report,"status":report.status()}))
+        .or_else(|| LAST_READING.lock().expect("guard evidence").clone())
+}
+
 fn open(path: &Path) -> Result<File> {
     Ok(OpenOptions::new()
         .read(true)
@@ -143,7 +151,7 @@ pub(crate) fn run(
 pub(crate) fn locked<T>(timeout: u64, operation: impl FnOnce() -> Result<T>) -> Result<T> {
     locked_with(
         timeout,
-        false,
+        true,
         crate::gpu_guard::Policy::default(),
         operation,
     )
@@ -159,7 +167,64 @@ pub(crate) fn locked_unmeasured<T>(
     locked_inner(timeout, None, operation)
 }
 
-fn locked_with<T>(
+/// Concurrent visual work shares the machine lock. FIFO timing tickets block new
+/// visuals, and exclusive timing admission waits for every existing visual lease.
+pub(crate) struct VisualLease {
+    _file: File,
+}
+pub(crate) fn visual(timeout: u64) -> Result<VisualLease> {
+    let local = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from))
+        .unwrap_or_else(std::env::temp_dir);
+    visual_at(&local, timeout)
+}
+fn visual_at(local: &Path, timeout: u64) -> Result<VisualLease> {
+    let directory = local.join("ara/gpu-queue");
+    fs::create_dir_all(&directory)?;
+    let queue = open(&directory.join("queue.lock"))?;
+    let gpu = open(&local.join("ara/gpu.lock"))?;
+    let deadline = Instant::now() + Duration::from_secs(timeout);
+    loop {
+        transaction(&queue, deadline)?;
+        let admitted = (|| -> Result<bool> {
+            let mut waiting = false;
+            for entry in fs::read_dir(&directory)? {
+                let path = entry?.path();
+                if path.extension().is_none_or(|e| e != "ticket") {
+                    continue;
+                }
+                let file = open(&path)?;
+                match file.try_lock() {
+                    Ok(()) => {
+                        drop(file);
+                        let _ = fs::remove_file(path);
+                    }
+                    Err(std::fs::TryLockError::WouldBlock) => waiting = true,
+                    Err(error) => return Err(error.into()),
+                }
+            }
+            if waiting {
+                return Ok(false);
+            }
+            match gpu.try_lock_shared() {
+                Ok(()) => Ok(true),
+                Err(std::fs::TryLockError::WouldBlock) => Ok(false),
+                Err(error) => Err(error.into()),
+            }
+        })();
+        queue.unlock()?;
+        if admitted? {
+            return Ok(VisualLease { _file: gpu });
+        }
+        if Instant::now() >= deadline {
+            bail!("visual GPU admission timeout after {timeout}s");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+pub(crate) fn locked_with<T>(
     timeout: u64,
     wait_for_quiet: bool,
     policy: crate::gpu_guard::Policy,
@@ -218,17 +283,32 @@ fn locked_inner<T>(
         .unwrap_or(std::env::current_dir()?);
     let path = crate::gpu_guard::default_path(&root);
     let guard = match guard {
-        Some((wait_for_quiet, policy)) if !crate::gpu_guard::active() => Some(
-            crate::gpu_guard::Guard::start(wait_for_quiet, path.clone(), policy)?,
-        ),
+        Some((wait_for_quiet, policy)) if !crate::gpu_guard::active() => {
+            *LAST_READING.lock().expect("guard evidence") = None;
+            match crate::gpu_guard::Guard::start(wait_for_quiet, path.clone(), policy) {
+                Ok(guard) => Some(guard),
+                Err(error) => {
+                    let evidence = fs::read(&path)
+                        .ok()
+                        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
+                    *LAST_READING.lock().expect("guard evidence") = evidence.map(|mut value| {
+                        value["report"] = serde_json::json!(path);
+                        value
+                    });
+                    return Err(error);
+                }
+            }
+        }
         _ => None,
     };
     let mut result = operation();
     if let Some(guard) = guard {
         let report = guard.finish()?;
+        *LAST_READING.lock().expect("guard evidence") =
+            Some(serde_json::json!({"report":path,"reading":report,"status":report.status()}));
         eprintln!(
             "ARA_DEV_GPU_READING {}",
-            serde_json::json!({"status":report.status(),"report":path,"diagnostic":if report.invalid(){Some(crate::gpu_guard::CODE)}else{None},"reading":report})
+            serde_json::json!({"status":report.status(),"report":path,"diagnostic":report.diagnostic(),"reading":report})
         );
         if report.invalid() {
             result = Err(crate::gpu_guard::invalid_error(report.detail()));
@@ -237,4 +317,42 @@ fn locked_inner<T>(
     drop(gpu);
     drop(ticket);
     result
+}
+
+#[cfg(test)]
+mod visual_tests {
+    use super::*;
+    #[test]
+    fn visuals_share_but_an_existing_timing_ticket_blocks_new_visuals() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-dev/visual-tests")
+            .join(format!(
+                "{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+        let first = visual_at(&root, 1).unwrap();
+        let second = visual_at(&root, 1).unwrap();
+        let gpu = open(&root.join("ara/gpu.lock")).unwrap();
+        assert!(matches!(
+            gpu.try_lock(),
+            Err(std::fs::TryLockError::WouldBlock)
+        ));
+        let directory = root.join("ara/gpu-queue");
+        let mut queue = open(&directory.join("queue.lock")).unwrap();
+        let ticket = allocate(
+            &directory,
+            &mut queue,
+            Instant::now() + Duration::from_secs(1),
+        )
+        .unwrap();
+        assert!(visual_at(&root, 0).is_err());
+        drop(ticket);
+        drop(first);
+        drop(second);
+        assert!(gpu.try_lock().is_ok());
+    }
 }
