@@ -216,10 +216,12 @@ pub(super) fn authorized_file(
     Ok(canonical)
 }
 
+/// Rejects a path with a link or reparse point in it or in any ancestor, except
+/// [`system_alias`]es.
 pub(super) fn no_links(path: &Path) -> Result<()> {
     for ancestor in path.ancestors() {
         let metadata = fs::symlink_metadata(ancestor)?;
-        if linked(&metadata) {
+        if linked(&metadata) && !system_alias(ancestor, &metadata) {
             return Err(Error::Invalid(format!(
                 "linked/reparse source paths are not supported: {}",
                 ancestor.display()
@@ -227,6 +229,22 @@ pub(super) fn no_links(path: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// A root-owned link directly under `/`: macOS's `/var`, `/tmp` and `/etc` alias
+/// `/private/...`, so every temp and cache folder sits below one. No unprivileged
+/// user can plant such a link.
+fn system_alias(path: &Path, metadata: &fs::Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        path.parent() == Some(Path::new("/")) && metadata.uid() == 0
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (path, metadata);
+        false
+    }
 }
 
 pub(super) fn linked(metadata: &fs::Metadata) -> bool {
@@ -308,4 +326,22 @@ fn reserved(part: &str) -> bool {
                 )
             })
         })
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    /// Temp folders sit below a system alias on macOS (`/var` -> `/private/var`); a
+    /// link the user made inside the selection is still refused.
+    #[test]
+    fn system_aliases_pass_and_user_links_are_refused() {
+        let scratch = tempfile::tempdir().expect("scratch");
+        let file = scratch.path().join("source.png");
+        fs::write(&file, b"png").expect("file");
+        no_links(&file).expect("a temp file below the system aliases");
+        let link = scratch.path().join("linked");
+        std::os::unix::fs::symlink(scratch.path(), &link).expect("link");
+        assert!(no_links(&link.join("source.png")).is_err());
+    }
 }
