@@ -122,10 +122,12 @@ impl State {
 impl Shell {
     /// Renderer-owned capability snapshot for native view command availability.
     pub(crate) fn probe_debug_capabilities(
-        &self, editor: &Editor,
+        &self,
+        editor: &Editor,
     ) -> Option<&ara_runtime_render::probes::RenderCapabilities> {
         (self.probe_ui.doc == editor.state.doc && self.probe_ui.available)
-            .then_some(self.probe_ui.capabilities.as_ref()).flatten()
+            .then_some(self.probe_ui.capabilities.as_ref())
+            .flatten()
     }
 
     /// Read-only native proof projection; never polls, changes or re-logs jobs.

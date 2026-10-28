@@ -248,9 +248,13 @@ fn renderer_debug_mode(c: &Ctx, name: &str) -> Avail {
         "overdraw" => (caps.overdraw, "overdraw"),
         _ => return Avail::Blocked("Unknown renderer debug view".into()),
     };
-    if available { mode(c, name) }
-    else { Avail::Blocked(caps.reasons.get(key).cloned().unwrap_or_else(||
-        "This renderer does not currently provide the requested debug view".into())) }
+    if available {
+        mode(c, name)
+    } else {
+        Avail::Blocked(caps.reasons.get(key).cloned().unwrap_or_else(|| {
+            "This renderer does not currently provide the requested debug view".into()
+        }))
+    }
 }
 
 fn flag(c: &Ctx, key: &str) -> Avail {

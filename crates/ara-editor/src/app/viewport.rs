@@ -554,7 +554,10 @@ impl SceneView {
             if !self.raster_snapshot_dirty
                 && !self.convergence.needs_frame()
                 && !self.preview_needs_frame()
-                && self.raster.as_ref().is_none_or(|raster| !raster.needs_frame())
+                && self
+                    .raster
+                    .as_ref()
+                    .is_none_or(|raster| !raster.needs_frame())
             {
                 // A completion only publishes its retained image. It must not
                 // turn an exhausted convergence budget into another submission.
@@ -891,7 +894,10 @@ impl SceneView {
             return self.frame_pending;
         }
         self.frame_pending
-            || self.raster.as_ref().is_some_and(|raster| raster.needs_frame())
+            || self
+                .raster
+                .as_ref()
+                .is_some_and(|raster| raster.needs_frame())
             || self.recovery.pending()
             || self.content_job.is_some()
             || self.content_ready.is_some()

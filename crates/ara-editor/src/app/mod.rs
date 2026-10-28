@@ -33,6 +33,7 @@ mod pilot;
 mod pilot_verify;
 mod play_verify;
 mod prefab_verify;
+mod probe_verify;
 mod probes;
 mod qa;
 mod reachability_verify;
@@ -424,6 +425,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     let mut bookmarks_check = None;
     let mut lighting_check = None;
     let mut pilot_check = None;
+    let mut probe_check = None;
     let mut snapping_check = None;
     let mut input_check = None;
     let mut boundary_check = None;
@@ -743,6 +745,23 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if pilot_check
                 .as_ref()
                 .is_some_and(pilot_verify::PilotCheck::finished)
+                && probe_check.is_none()
+            {
+                probe_check = Some(probe_verify::ProbeCheck::new(
+                    &mut editor,
+                    &mut shell,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut probe_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                let ready =
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events, ready)?;
+            }
+            if probe_check
+                .as_ref()
+                .is_some_and(probe_verify::ProbeCheck::finished)
                 && input_check.is_none()
             {
                 input_check = Some(input_verify::InputCheck::new(&options.output));
@@ -901,6 +920,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 {
                     check.clipboard()
                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
+                    check.clipboard()
+                } else if let Some(check) = probe_check.as_mut().filter(|check| !check.finished()) {
                     check.clipboard()
                 } else if let Some(check) = pilot_check.as_mut().filter(|check| !check.finished()) {
                     check.clipboard()
@@ -1122,6 +1143,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     check.clipboard()
                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
                     check.clipboard()
+                } else if let Some(check) = probe_check.as_mut().filter(|check| !check.finished()) {
+                    check.clipboard()
                 } else if let Some(check) = pilot_check.as_mut().filter(|check| !check.finished()) {
                     check.clipboard()
                 } else {
@@ -1192,7 +1215,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let server_ms = measure_authority.then(|| tick_at.elapsed().as_secs_f64() * 1000.);
             editor.tick();
             // Cancellation reaches the retained bake before the next Scene GPU unit.
-            scene_dirty |= probe_owner.poll_cancellations(&mut editor, &mut scene_view, &mut renderer);
+            scene_dirty |=
+                probe_owner.poll_cancellations(&mut editor, &mut scene_view, &mut renderer);
             let pilot_changed = pilot::update(&controller, &mut editor, &mut shell, false);
             dirty |= pilot_changed;
             scene_dirty |= pilot_changed;
@@ -2204,6 +2228,21 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
                 check.end(&editor, &mut shell, &mut gpu, ready)?;
             }
+            if let Some(check) = &mut probe_check {
+                let ready =
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
+                if let Some(mode) = check.view_mode_observation_needed() {
+                    if let Some(observation) = scene_view.completed_debug_view_observation(
+                        &mut renderer,
+                        &editor,
+                        mode,
+                        ready,
+                    )? {
+                        check.observe_view_mode(observation)?;
+                    }
+                }
+                check.end(&mut editor, &mut shell, &mut gpu, ready)?;
+            }
             if let Some(check) = &mut bookmarks_check {
                 check.end(&editor, &mut shell, &mut gpu)?;
             }
@@ -2421,6 +2460,11 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let check = pilot_check
                 .as_ref()
                 .ok_or("The native Pilot journey did not start")?;
+            check.write()?;
+            check.validate()?;
+            let check = probe_check
+                .as_ref()
+                .ok_or("The native probe/debug-view journey did not start")?;
             check.write()?;
             check.validate()?;
             let check = input_check

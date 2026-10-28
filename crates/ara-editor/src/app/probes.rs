@@ -319,19 +319,27 @@ impl Owner {
     /// Deliver cancel intent before the next Scene preparation can record work.
     /// Progress stays rate-limited; cancellation and retirement never wait for it.
     pub(super) fn poll_cancellations(
-        &mut self, editor: &mut Editor, scene: &mut SceneView, renderer: &mut Renderer,
+        &mut self,
+        editor: &mut Editor,
+        scene: &mut SceneView,
+        renderer: &mut Renderer,
     ) -> bool {
         self.cancel_eligible(editor, scene);
         self.poll_retirement(editor, scene, renderer)
     }
 
     fn poll_retirement(
-        &mut self, editor: &mut Editor, scene: &mut SceneView, renderer: &mut Renderer,
+        &mut self,
+        editor: &mut Editor,
+        scene: &mut SceneView,
+        renderer: &mut Renderer,
     ) -> bool {
-        if !self.retirement_pending || !(self.draining || self.jobs.is_empty()
-            || self.jobs.iter().any(|(job, sub)| {
-                !sub.terminal_queued && editor.probe_captures.cancel_requested(job)
-            }))
+        if !self.retirement_pending
+            || !(self.draining
+                || self.jobs.is_empty()
+                || self.jobs.iter().any(|(job, sub)| {
+                    !sub.terminal_queued && editor.probe_captures.cancel_requested(job)
+                }))
         {
             return false;
         }

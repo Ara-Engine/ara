@@ -215,13 +215,18 @@ impl SceneView {
         &mut self,
         renderer: &mut ara_render::Renderer,
     ) -> Result<bool, Diagnostic> {
-        let raster = self.raster.as_mut().ok_or_else(|| Diagnostic::error(
-            codes::PROBE_MISSING,
-            "The retiring probe raster owner is missing; retirement cannot be confirmed",
-        ))?;
-        raster.poll_probe_retirement(renderer).map_err(|error| Diagnostic::error(
-            crate::codes::RENDER, format!("Probe retirement polling failed: {error}"),
-        ))
+        let raster = self.raster.as_mut().ok_or_else(|| {
+            Diagnostic::error(
+                codes::PROBE_MISSING,
+                "The retiring probe raster owner is missing; retirement cannot be confirmed",
+            )
+        })?;
+        raster.poll_probe_retirement(renderer).map_err(|error| {
+            Diagnostic::error(
+                crate::codes::RENDER,
+                format!("Probe retirement polling failed: {error}"),
+            )
+        })
     }
 
     /// One explicit native-verification observation of the completed Scene image.
@@ -240,18 +245,31 @@ impl SceneView {
             "overdraw" => ViewMode::Overdraw,
             _ => return Err("Unknown native debug-view observation".into()),
         };
-        if !scene_ready || self.frame_pending || renderer.scene_frame_pending()
-            || !renderer.presentation_ready() || !renderer.is_native()
+        if !scene_ready
+            || self.frame_pending
+            || renderer.scene_frame_pending()
+            || !renderer.presentation_ready()
+            || !renderer.is_native()
             || self.raster_presentation.as_ref().map(|(mode, _)| *mode) != Some(expected)
-            || self.validate_probe_frame(editor, &editor.state.doc, editor.host.store().revision()).is_err()
+            || self
+                .validate_probe_frame(editor, &editor.state.doc, editor.host.store().revision())
+                .is_err()
         {
             return Ok(None);
         }
         let request = CaptureRequest {
-            camera: editor.state.camera.spec(), size: renderer.size(), mode: expected,
+            camera: editor.state.camera.spec(),
+            size: renderer.size(),
+            mode: expected,
             deterministic: true,
-            exposure: self.raster_frame.as_ref().map_or(1.0, |frame| frame.environment.exposure),
-            settle_frames: 1, tick: 0, seed: 7, marks: None,
+            exposure: self
+                .raster_frame
+                .as_ref()
+                .map_or(1.0, |frame| frame.environment.exposure),
+            settle_frames: 1,
+            tick: 0,
+            seed: 7,
+            marks: None,
         };
         // The caller requests this only once per measured mode. This reads the
         // completed live image; it never asks capture() to render another frame.
@@ -272,7 +290,13 @@ impl SceneView {
 mod completed_debug_tests {
     #[test]
     fn debug_mode_names_cannot_fall_back_to_lit() {
-        assert_eq!(super::super::view_mode("gi_diffuse"), ara_render::capture::ViewMode::GiDiffuse);
-        assert_eq!(super::super::view_mode("overdraw"), ara_render::capture::ViewMode::Overdraw);
+        assert_eq!(
+            super::super::view_mode("gi_diffuse"),
+            ara_render::capture::ViewMode::GiDiffuse
+        );
+        assert_eq!(
+            super::super::view_mode("overdraw"),
+            ara_render::capture::ViewMode::Overdraw
+        );
     }
 }

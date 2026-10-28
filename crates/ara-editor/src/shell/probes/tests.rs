@@ -253,17 +253,42 @@ fn native_debug_commands_use_current_renderer_capabilities_and_preserve_real_rea
     f.shell.probe_ui.current_doc(&f.editor.state.doc);
     f.shell.probe_ui.available = true;
     let mut caps = ara_runtime_render::probes::RenderCapabilities::default();
-    caps.reasons.insert("giDiffuse".into(), "The renderer is still acquiring GI data".into());
-    caps.reasons.insert("overdraw".into(), "This rendering path has no fragment-count pass".into());
+    caps.reasons.insert(
+        "giDiffuse".into(),
+        "The renderer is still acquiring GI data".into(),
+    );
+    caps.reasons.insert(
+        "overdraw".into(),
+        "This rendering path has no fragment-count pass".into(),
+    );
     f.shell.probe_ui.capabilities = Some(caps);
-    assert_eq!(gi.avail(&f.shell.ctx(&f.editor,&target)), commands::Avail::Blocked("The renderer is still acquiring GI data".into()));
-    assert_eq!(overdraw.avail(&f.shell.ctx(&f.editor,&target)), commands::Avail::Blocked("This rendering path has no fragment-count pass".into()));
+    assert_eq!(
+        gi.avail(&f.shell.ctx(&f.editor, &target)),
+        commands::Avail::Blocked("The renderer is still acquiring GI data".into())
+    );
+    assert_eq!(
+        overdraw.avail(&f.shell.ctx(&f.editor, &target)),
+        commands::Avail::Blocked("This rendering path has no fragment-count pass".into())
+    );
     let caps = f.shell.probe_ui.capabilities.as_mut().unwrap();
-    caps.gi_diffuse = true; caps.overdraw = true;
+    caps.gi_diffuse = true;
+    caps.overdraw = true;
     f.editor.state.view_mode = "gi_diffuse".into();
-    assert_eq!(gi.avail(&f.shell.ctx(&f.editor,&target)), commands::Avail::Checked(true));
-    assert_eq!(overdraw.avail(&f.shell.ctx(&f.editor,&target)), commands::Avail::Checked(false));
+    assert_eq!(
+        gi.avail(&f.shell.ctx(&f.editor, &target)),
+        commands::Avail::Checked(true)
+    );
+    assert_eq!(
+        overdraw.avail(&f.shell.ctx(&f.editor, &target)),
+        commands::Avail::Checked(false)
+    );
     f.shell.probe_ui.doc = "sc_old_scene".into();
-    assert!(matches!(gi.avail(&f.shell.ctx(&f.editor,&target)), commands::Avail::Blocked(_)), "another Scene's capability must not enable the command");
+    assert!(
+        matches!(
+            gi.avail(&f.shell.ctx(&f.editor, &target)),
+            commands::Avail::Blocked(_)
+        ),
+        "another Scene's capability must not enable the command"
+    );
     assert_eq!(f.editor.host.store().revision(), before);
 }
