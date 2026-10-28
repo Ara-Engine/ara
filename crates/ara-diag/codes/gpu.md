@@ -5,6 +5,7 @@ the numbers are internal slots.
 
 ## ARA6093 PERF_PASS_SET_INVALID: Timing window omitted its expected GPU workload
 owner: ara-bench
+shown as: ARA_PERF_PASS_SET_INVALID
 
 A perf, D26, lab measure/A-B or sample capture timing window could not prove that every timed frame executed its selected ray-traced workload. Partial durations are invalid, including plausible but faster SSR fallback frames.
 
