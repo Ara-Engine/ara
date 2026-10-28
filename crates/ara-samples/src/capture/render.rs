@@ -574,6 +574,12 @@ fn baseline(
     let cold = std::env::var_os("ARA_CAPTURE_COLD").is_some();
     if !cold {
         presenter.wait_probe_gi()?;
+        // Timings and shots need the full path: hybrid ray-query and live-effect PSOs
+        // compile off-thread while frames present (bounded, as the capture's own wait).
+        let started = std::time::Instant::now();
+        while presenter.readiness().pipelines_pending && started.elapsed().as_secs() < 120 {
+            presenter.present(frame)?;
+        }
     }
     let create_ms = created.elapsed().as_secs_f64() * 1000.;
     let mut timing = Value::Null;

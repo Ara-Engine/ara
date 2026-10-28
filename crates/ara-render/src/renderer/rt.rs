@@ -266,6 +266,23 @@ fn affine(world: &Mat4) -> [f32; 12] {
 }
 
 impl Rays {
+    /// Whether hybrid ray queries apply (as `prepare` decides: `quality` asks for
+    /// them, the device has them and `native` has instances) but their PSOs are still
+    /// compiling. Frames meanwhile keep the raster path, so captures and loading
+    /// gates wait for this (`Renderer::ray_pipelines_pending`). A failed preparation
+    /// turns them unavailable, which never counts as pending.
+    pub(super) fn pipelines_pending(
+        &self,
+        gpu: &GpuDevice,
+        native: Option<&Native>,
+        quality: &crate::look::Quality,
+    ) -> bool {
+        quality.ray_queries.is_some()
+            && gpu.info().ray_tracing
+            && native.is_some_and(|native| native.ray_tables().instances > 0)
+            && matches!(self.psos, Psos::Empty | Psos::Pending(_))
+    }
+
     /// Brings the structures up to date for this frame (call after the native
     /// prepare, before the frame record is written). Traces when the quality asks
     /// for ray queries, the device has them, native content is published and the

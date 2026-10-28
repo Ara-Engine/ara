@@ -707,6 +707,13 @@ impl RasterView {
             while self.effects.is_pending() {
                 self.render(renderer, frame, camera, mode)?;
             }
+            // Hybrid ray-query PSOs compile off-thread after the native ones, which
+            // frames advance; until they land, frames keep the raster path. Bounded:
+            // a stuck preparation leaves the capture raster rather than hanging it.
+            let started = std::time::Instant::now();
+            while renderer.ray_pipelines_pending() && started.elapsed().as_secs() < 120 {
+                self.render(renderer, frame, camera, mode)?;
+            }
         }
         renderer.reset_capture_history()?;
         Ok(())
