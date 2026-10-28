@@ -173,9 +173,27 @@ impl Host {
     /// replays the journal (recovering edits a crash kept from disk) and registers
     /// the core and profiling services.
     pub fn open(project: Project, config: HostConfig) -> Result<Host, Diagnostic> {
+        crate::project_layout::require_current_layout(&project.root)?;
+        Self::open_inner(project, config, true)
+    }
+
+    /// Migration reconstructs attribution/history without replaying authored native
+    /// records into its intentionally metadata-only workspace.
+    pub(crate) fn open_migration(project: Project, config: HostConfig) -> Result<Host, Diagnostic> {
+        Self::open_inner(project, config, false)
+    }
+
+    fn open_inner(
+        project: Project,
+        config: HostConfig,
+        replay_native: bool,
+    ) -> Result<Host, Diagnostic> {
         let state_dir = project.root.join(STATE_DIR);
         fs::create_dir_all(&state_dir).map_err(|e| io_error("create", &state_dir, e))?;
         let lock = lock(&state_dir)?;
+        if replay_native {
+            crate::project_layout::require_current_layout(&project.root)?;
+        }
         let (mut ws, per_file) = project.load(&[]);
         // Canonical import sidecars are editable documents too. Source-only legacy
         // identity stubs remain index entries until explicitly initialized.
@@ -307,7 +325,7 @@ impl Host {
             ops,
             _lock: lock,
         };
-        st.recover(&entries);
+        st.recover(&entries, replay_native);
         st.refresh_project_settings();
         st.collab_open(config.seed);
         st.collab.hub.set_overwrite_window(
@@ -461,6 +479,7 @@ impl Host {
         if !problems.is_empty() {
             return Err(problems);
         }
+        crate::project_layout::check_history_layout(&self.st, method, &params)?;
         self.st.calling = session.clone();
         // Origins preserve the participant identity of attributed transactions.
         self.st.store.set_origin(session.clone());
@@ -796,6 +815,16 @@ impl State {
                     }
                 }
             }
+            // Migration's prepared marker retains exact original bytes on Undo.
+            // Other native documents still need their normal save/Flush replay baseline.
+            if txn.ops.iter().any(|op| {
+                matches!(op, ara_doc::Op::File { path, .. }
+                if ara_doc::file_state::same_path(path, crate::project::MARKER))
+            }) {
+                self.files
+                    .changed
+                    .retain(|id, _| id.as_str() != "pj_project");
+            }
             self.refresh_project_settings();
             self.track_review(&txn);
             let summary = self.txn_summary(&txn);
@@ -855,7 +884,7 @@ impl State {
 
     /// Rebuilds history, sessions and review from the journal, re-applying
     /// transactions newer than each document's file.
-    fn recover(&mut self, entries: &[Entry]) {
+    fn recover(&mut self, entries: &[Entry], replay_native: bool) {
         self.recover_file_states(entries);
         let mut base = 0;
         let mut flushes: BTreeMap<&str, Vec<(u64, &str)>> = BTreeMap::new();
@@ -921,7 +950,7 @@ impl State {
                         .ops
                         .iter()
                         .zip(&needs)
-                        .filter(|(_, needed)| **needed == Some(true))
+                        .filter(|(_, needed)| replay_native && **needed == Some(true))
                         .map(|(op, _)| op.doc().clone())
                         .collect();
                     for op in &txn.ops {

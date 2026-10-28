@@ -49,8 +49,12 @@ fn crackle() -> Vec<u8> {
 fn add_sound(dir: &Path) {
     let worker = support::import_worker();
     let versions = ara_asset::ProcessWorker::new(worker).versions().unwrap();
-    std::fs::create_dir_all(dir.join("sounds")).unwrap();
-    std::fs::write(dir.join("sounds/fire.wav"), crackle()).unwrap();
+    std::fs::create_dir_all(dir.join(ara_doc::AUTHORING_ROOT).join("sounds")).unwrap();
+    std::fs::write(
+        dir.join(ara_doc::AUTHORING_ROOT).join("sounds/fire.wav"),
+        crackle(),
+    )
+    .unwrap();
     let mut schema = ara_schema::SchemaDb::new();
     ara_doc::register(&mut schema);
     ara_asset::register_schema(&mut schema);
@@ -70,7 +74,12 @@ fn add_sound(dir: &Path) {
         .transact(ara_ops::TxnMeta::by(ara_ops::Author::Human), [edit])
         .unwrap();
     let text = ara_doc::write(store.workspace().doc(id.as_str()).unwrap(), store.schema());
-    std::fs::write(dir.join("sounds/fire.wav.import.json"), text).unwrap();
+    std::fs::write(
+        dir.join(ara_doc::AUTHORING_ROOT)
+            .join("sounds/fire.wav.import.json"),
+        text,
+    )
+    .unwrap();
 }
 
 #[test]

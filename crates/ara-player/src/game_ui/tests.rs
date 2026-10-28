@@ -64,9 +64,9 @@ fn project_fonts_keep_bundled_body_fallbacks() -> Result<()> {
 
 fn outpost_ui() -> Result<GameUi> {
     Ok(serde_json::from_value(serde_json::json!({
-        "markup":include_str!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../samples/outpost/ui/game.ui")),
-        "stylesheet":include_str!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../samples/outpost/ui/game.css")),
-        "bindings":serde_json::from_str::<Value>(include_str!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../samples/outpost/ui/bindings.json")))?
+        "markup":include_str!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../samples/outpost/content/ui/game.ui")),
+        "stylesheet":include_str!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../samples/outpost/content/ui/game.css")),
+        "bindings":serde_json::from_str::<Value>(include_str!(concat!(env!("CARGO_MANIFEST_DIR"),"/../../samples/outpost/content/ui/bindings.json")))?
     }))?)
 }
 

@@ -27,6 +27,7 @@ pub struct Engine {
 /// The daemon if one answers, else an in-process host (waiting while another
 /// process holds the lock, and switching to a daemon as soon as one answers).
 pub fn endpoint(root: &Path) -> Result<Box<dyn Endpoint>, Diagnostic> {
+    ara_host::project_layout::require_current_layout(root)?;
     let start = Instant::now();
     loop {
         if let Some(c) = Client::for_project(root) {

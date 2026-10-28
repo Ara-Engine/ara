@@ -24,7 +24,9 @@ pub use importer::{
 };
 pub use metrics::{ImportMetrics, ImportStage, StageTimer, StageTimes};
 pub use preset::{CookPreset, DEFAULT_THREAD_BUDGET};
-pub use project_settings::{PROJECT_IMPORT_SETTINGS_FILE, ProjectImportSettings};
+pub use project_settings::{
+    LEGACY_PROJECT_IMPORT_SETTINGS_FILE, PROJECT_IMPORT_SETTINGS_FILE, ProjectImportSettings,
+};
 pub use sidecar::{ImportSettings, Sidecar, SidecarCommand, VersionCheck, register_schema};
 pub use source::{AssetPipeline, SourceAsset, snapshot};
 pub use trace::event as record_import_trace;
@@ -45,6 +47,9 @@ pub enum Error {
     /// Source content, settings, or cooked data are invalid.
     #[error("{0}")]
     Invalid(String),
+    /// A project layout check failed before source discovery or cooking.
+    #[error("{0}")]
+    ProjectLayout(ara_diag::Diagnostic),
     /// The job was cancelled before publication.
     #[error("import cancelled")]
     Cancelled,
@@ -70,6 +75,7 @@ impl Error {
             format!("@{asset}")
         };
         let d = match self {
+            Error::ProjectLayout(diagnostic) => diagnostic.clone(),
             Error::Cancelled => Diagnostic::info(
                 codes::ASSET_IMPORT_CANCELLED,
                 format!("import of `{asset}` was cancelled or superseded"),

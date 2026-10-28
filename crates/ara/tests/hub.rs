@@ -163,10 +163,8 @@ fn installation_registration_does_not_start_a_service_and_reuses_one_when_runnin
         "unregistering another build must not replace/remove this one"
     );
     assert_eq!(
-        registry.engines[0].executable,
-        ara_hub_service::normalized_path(
-            &fs::canonicalize(&alternate).expect("alternate executable")
-        )
+        fs::canonicalize(&registry.engines[0].executable).expect("registered alternate executable"),
+        fs::canonicalize(&alternate).expect("alternate executable")
     );
     assert!(ara_rpc::DaemonInfo::read(&hub.config().join("hub")).is_none());
     hub.cli(&["hub", "register-engine", "--no-start"]);
@@ -561,7 +559,13 @@ fn global_mcp_edits_two_isolated_daemons_and_closes_one() {
         "open"
     );
     let scene: Value = serde_json::from_slice(
-        &fs::read(hub.directory.join("A/levels/main.scene")).expect("saved A"),
+        &fs::read(
+            hub.directory
+                .join("A")
+                .join(ara_host::project_layout::AUTHORING_ROOT)
+                .join("scenes/main.scene"),
+        )
+        .expect("saved A"),
     )
     .expect("scene");
     assert!(scene.to_string().contains("Only A"));

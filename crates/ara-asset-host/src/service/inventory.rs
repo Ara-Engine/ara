@@ -85,7 +85,7 @@ impl Inventory {
             "ara.project.json",
             "settings/ara.imports",
             "ara.imports",
-            ara_host::project_policy::PREFERENCES,
+            ara_host::project_layout::PREFERENCES,
         ] {
             if !prepared.entries.contains_key(path) {
                 prepared

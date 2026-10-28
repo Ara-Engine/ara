@@ -9,7 +9,7 @@ fn project_policy_and_preset_parents_have_readonly_state_and_membership_proofs()
     write_project(root);
     fs::create_dir_all(root.join("settings/builds")).expect("profile directory");
     fs::write(
-        root.join(ara_host::project_policy::PREFERENCES),
+        root.join(ara_host::project_layout::PREFERENCES),
         r#"{"main":"scenes/main.scene"}"#,
     )
     .expect("policy");
@@ -32,7 +32,7 @@ fn project_policy_and_preset_parents_have_readonly_state_and_membership_proofs()
     );
     assert_eq!(
         inventory.prepared.directories["settings"],
-        vec!["settings/builds", ara_host::project_policy::PREFERENCES]
+        vec!["settings/builds", ara_host::project_layout::PREFERENCES]
     );
     assert_eq!(
         inventory.prepared.directories["settings/builds"],

@@ -38,14 +38,17 @@ fn fixture() -> Scratch {
         SEQUENCE.fetch_add(1, Ordering::Relaxed)
     )));
     std::fs::create_dir_all(&project.0).unwrap();
-    std::fs::create_dir(project.0.join("levels")).unwrap();
+    std::fs::create_dir_all(project.0.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
     std::fs::write(
         project.0.join("ara.project.json"),
-        ara_json::to_canonical_string(&json!({"name":"Outpost"})),
+        ara_json::to_canonical_string(&json!({"name":"Outpost","layoutVersion":ara_host::project_layout::VERSION,"main":"levels/main.scene"})),
     )
     .unwrap();
     std::fs::write(
-        project.0.join("levels/main.scene"),
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("levels/main.scene"),
         ara_json::to_canonical_string(
             &json!({"$schema":"ara://schema/scene/1","id":"sc_golden00","records":{}}),
         ),

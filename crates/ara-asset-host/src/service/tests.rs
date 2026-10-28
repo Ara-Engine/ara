@@ -33,7 +33,7 @@ pub(super) fn write_project(root: &Path) {
     fs::create_dir_all(authored.join("props")).expect("props directory");
     fs::write(
         root.join("ara.project.json"),
-        r#"{"layoutVersion":3,"name":"Asset service test","main":"scenes/main.scene"}"#,
+        ara_json::to_canonical_string(&json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Asset service test","main":"scenes/main.scene"})),
     )
     .expect("marker");
     fs::write(
@@ -526,11 +526,7 @@ fn build_profile_uses_its_worker_without_importer_discovery_and_is_undoable() {
     write_project(scratch.path());
     let mut host = open(scratch.path());
     let session = begin(&mut host, None);
-    let preset = json!({
-        "$schema":"ara://schema/export/1", "platform":"windows", "config":"release",
-        "lane":"nativeAot", "playerTemplate":"runtime", "assembly":"Game",
-        "content":ara_doc::AUTHORING_ROOT, "templates":[]
-    });
+    let preset = ara_host::project_layout::default_build_preset("Game");
     let started = call(
         &mut host,
         "cmd.apply",

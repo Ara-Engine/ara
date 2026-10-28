@@ -9,6 +9,7 @@ mod eyedropper;
 mod game;
 mod game_preview;
 mod journey;
+mod open_project;
 mod panels_verify;
 mod qa;
 mod responsiveness;
@@ -58,8 +59,17 @@ const UX_IDLE_PATIENCE: Duration = Duration::from_secs(20);
 /// When the process started: `main` sets it first. Startup timings
 /// (`--verify-responsiveness`) count from it.
 pub static LAUNCHED: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+/// Ask for legacy-layout migration before profile, scripts or project initialization.
+/// False means Cancel; bounded runs report ARA1914 without showing a window.
+pub fn before_open_project(options: &Options) -> ara_ui::Result<bool> {
+    open_project::before_open(options)
+}
+
 /// Open the SDL3 editor, host the project authority and serve authenticated EP/MCP.
 pub fn run(options: Options) -> ara_ui::Result<()> {
+    if !before_open_project(&options)? {
+        return Ok(());
+    }
     if options.headless {
         return headless(options);
     }

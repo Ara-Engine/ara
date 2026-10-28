@@ -28,6 +28,8 @@ use image::{RgbaImage, imageops};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::Path};
 
+mod timing;
+
 /// Display resolution of every capture.
 pub const DISPLAY: [u32; 2] = [2560, 1440];
 
@@ -228,6 +230,20 @@ pub fn run(
     look: &Look,
     options: &Options<'_>,
 ) -> Result<Value> {
+    let path = options
+        .evidence
+        .join(format!("{}-timings.json", options.name));
+    timing::record(&path, || run_inner(gpu, scene, frame, stats, look, options))
+}
+
+fn run_inner(
+    gpu: &mut GpuDevice,
+    scene: Scene,
+    frame: &mut RenderFrame,
+    stats: &Stats,
+    look: &Look,
+    options: &Options<'_>,
+) -> Result<Value> {
     std::fs::create_dir_all(options.evidence)?;
     std::fs::create_dir_all(options.scratch)?;
     let capabilities = Capabilities::of(gpu);
@@ -274,6 +290,7 @@ pub fn run(
         }
     }
     let report = json!({
+        "completed": true,
         "scene": look.scene,
         "name": options.name,
         "budgets": {"decision": "D26", "gpuMs": {"low": 2.0, "medium": 3.5, "high": 6.0, "epic": 10.0},
@@ -286,14 +303,6 @@ pub fn run(
         "modes": modes,
         "sharedGpu": "other agents share this RTX 4070 SUPER; gpuBefore/gpuAfter record nvidia-smi load around each window",
     });
-    let mut text = serde_json::to_string_pretty(&report)?;
-    text.push('\n');
-    std::fs::write(
-        options
-            .evidence
-            .join(format!("{}-timings.json", options.name)),
-        text,
-    )?;
     Ok(report)
 }
 
@@ -392,6 +401,24 @@ fn fidelity(
         }
         if i == 0 {
             PresentationImage::publish(&mut published, gpu, view.output(), plan.display_size)?;
+            let mut guard = ara_bench::passes::Guard::configured(
+                ara_bench::passes::Expected::Fidelity,
+                std::time::Duration::from_secs(120),
+            )?;
+            let ready_started = std::time::Instant::now();
+            loop {
+                view.render(gpu, &frame(&cam, tick, false))?;
+                if !effects.is_empty() {
+                    effects.composite(gpu, &mut view, &cam, tick)?;
+                }
+                tick += 1;
+                let passes = ara_bench::passes::Frame::from_names(
+                    view.timings().iter().map(|pass| pass.pass.as_str()),
+                );
+                if guard.wait(ready_started.elapsed(), Some(passes))? {
+                    break;
+                }
+            }
             let before = gpu_load();
             let mut window = Window::default();
             for _ in 0..options.timing_frames {
@@ -406,6 +433,9 @@ fn fidelity(
                     view.output(),
                     plan.display_size,
                 )?;
+                guard.record(ara_bench::passes::Frame::from_names(
+                    view.timings().iter().map(|pass| pass.pass.as_str()),
+                ))?;
                 window.push_with_composites(view.timings(), effects.gpu_ms(), publish);
             }
             timing = window.report(
@@ -414,6 +444,7 @@ fn fidelity(
                 &shot.name,
                 before,
             );
+            timing["pass_presence"] = guard.report();
         }
         // Composite effects into the last frames so the temporal resolve converges
         // on them (one composite alone would show them at the history weight).
@@ -597,6 +628,23 @@ fn baseline(
             presenter.present(frame)?;
         }
         if i == 0 && !cold {
+            let hardware_rt = presenter
+                .renderer()
+                .context("capture presenter")?
+                .gpu()
+                .info()
+                .ray_tracing;
+            let mut guard = ara_bench::passes::Guard::configured(
+                ara_bench::passes::Expected::resolve(name, hardware_rt, options.ray_tracing),
+                std::time::Duration::from_secs(120),
+            )?;
+            let ready_started = std::time::Instant::now();
+            loop {
+                presenter.present(frame)?;
+                if guard.wait(ready_started.elapsed(), timing::frame(&presenter))? {
+                    break;
+                }
+            }
             let before = gpu_load();
             let mut window = Window::default();
             // `ARA_CAPTURE_MOTION=1` walks the camera forward (1.5 m/s) while it
@@ -607,6 +655,7 @@ fn baseline(
                     frame.camera = Some(moving(shot, k as f32 / 60.));
                 }
                 presenter.present(frame)?;
+                guard.record(timing::frame(&presenter).unwrap_or_default())?;
                 window.push(presenter.renderer().context("Low presenter")?.timings());
             }
             let mode = if motion { " (moving)" } else { "" };
@@ -616,6 +665,7 @@ fn baseline(
                 &shot.name,
                 before,
             );
+            timing["pass_presence"] = guard.report();
         }
         // `ARA_CAPTURE_STUDY` captures the upscaler study's frames (capture/study.rs).
         super::study::run(&mut presenter, frame, shot, options, size)?;

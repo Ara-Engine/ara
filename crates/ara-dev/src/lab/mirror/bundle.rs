@@ -1,4 +1,5 @@
 //! Changed immutable files travel in one archive; publication happens under the peer's visual lock.
+mod packet;
 use super::{Config, transport};
 use anyhow::{Context, Result, ensure};
 use serde_json::{Value, json};
@@ -9,6 +10,25 @@ use std::{
     process::{Command, Stdio},
     time::{Duration, Instant},
 };
+
+struct File {
+    source: PathBuf,
+    stamp: Value,
+}
+impl File {
+    fn new(source: PathBuf, metadata: fs::Metadata) -> Result<Self> {
+        let stamp = json!([
+            source,
+            metadata.len(),
+            metadata
+                .modified()?
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+                .to_string()
+        ]);
+        Ok(Self { source, stamp })
+    }
+}
 
 fn relative(path: &str) -> Result<&Path> {
     let p = Path::new(path);
@@ -21,7 +41,7 @@ fn relative(path: &str) -> Result<&Path> {
     );
     Ok(p)
 }
-fn inventory(source: &Path, prefix: &str, files: &mut BTreeMap<String, PathBuf>) -> Result<()> {
+fn inventory(source: &Path, prefix: &str, files: &mut BTreeMap<String, File>) -> Result<()> {
     if !source.is_dir() {
         return Ok(());
     }
@@ -45,12 +65,12 @@ fn inventory(source: &Path, prefix: &str, files: &mut BTreeMap<String, PathBuf>)
         if ty.is_dir() {
             inventory(&entry.path(), &name, files)?;
         } else if ty.is_file() {
-            files.insert(name, entry.path());
+            files.insert(name, File::new(entry.path(), entry.metadata()?)?);
         }
     }
     Ok(())
 }
-fn shaders(source: &Path, prefix: &str, files: &mut BTreeMap<String, PathBuf>) -> Result<()> {
+fn shaders(source: &Path, prefix: &str, files: &mut BTreeMap<String, File>) -> Result<()> {
     if !source.is_dir() {
         return Ok(());
     }
@@ -77,14 +97,14 @@ fn shaders(source: &Path, prefix: &str, files: &mut BTreeMap<String, PathBuf>) -
             .file_name()
             .is_some_and(|n| n == ".ara-shader-reload" || n == "atlas.rgba" || n == "atlas.png")
         {
-            files.insert(name, path);
+            files.insert(name, File::new(path, entry.metadata()?)?);
             continue;
         }
         if path.extension().is_some_and(|e| e == "json")
             && let Ok(v) = serde_json::from_slice::<Value>(&fs::read(&path)?)
             && let Some(stages) = v["stages"].as_array()
         {
-            files.insert(name, path);
+            files.insert(name, File::new(path, entry.metadata()?)?);
             for stage in stages {
                 ensure!(
                     stage["metal"].is_object(),
@@ -97,35 +117,35 @@ fn shaders(source: &Path, prefix: &str, files: &mut BTreeMap<String, PathBuf>) -
                 ] {
                     let file = field.as_str().context("cooked stage artifact missing")?;
                     let src = source.join(relative(file)?);
+                    let metadata = fs::metadata(&src).with_context(|| {
+                        format!("PC cooked artifact missing: {}", src.display())
+                    })?;
                     ensure!(
-                        src.is_file(),
+                        metadata.is_file(),
                         "PC cooked artifact missing: {}",
                         src.display()
                     );
-                    files.insert(format!("{prefix}/{file}"), src);
+                    files.insert(format!("{prefix}/{file}"), File::new(src, metadata)?);
                 }
             }
         }
     }
     Ok(())
 }
-fn stamp(path: &Path) -> Result<Value> {
-    let meta = fs::metadata(path)?;
-    Ok(json!([
-        path,
-        meta.len(),
-        meta.modified()?
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos()
-            .to_string()
-    ]))
+pub(super) struct Transfer {
+    /// Cold/source synchronization imports only after the peer has bootstrapped.
+    pub staged_import: Option<Value>,
+    pub timing: Value,
 }
+
 pub(super) fn push(
     root: &Path,
     base: &Path,
     config: &Config,
     activity: &super::super::track::Activity,
-) -> Result<()> {
+    activate: bool,
+) -> Result<Transfer> {
+    let started = Instant::now();
     let _snapshot = activity.gpu.read().expect("lab publication");
     let mut files = BTreeMap::new();
     shaders(&base.join("shaders"), "shaders", &mut files)?;
@@ -170,8 +190,8 @@ pub(super) fn push(
     }
     let current = files
         .iter()
-        .map(|(name, path)| Ok((name.clone(), stamp(path)?)))
-        .collect::<Result<BTreeMap<_, _>>>()?;
+        .map(|(name, file)| (name.clone(), file.stamp.clone()))
+        .collect::<BTreeMap<_, _>>();
     let changed = files
         .iter()
         .filter(|(name, _)| previous[*name] != current[*name])
@@ -186,76 +206,62 @@ pub(super) fn push(
         && previous["_shaders_current"] == shaders_current
         && previous["_claims"] == claims
     {
-        return Ok(());
+        return Ok(Transfer {
+            staged_import: if activate {
+                None
+            } else {
+                super::super::session::read(&base.join("mirror/incoming-local.json"))
+            },
+            timing: json!({"changed":false,"inventory_ms":started.elapsed().as_secs_f64()*1000.,"connections":0}),
+        });
     }
     let job = transport::job(base)?;
     let data = job.join("data");
     fs::create_dir_all(&data)?;
+    let inventory_ms = started.elapsed().as_secs_f64() * 1000.;
     let mut names = Vec::new();
-    for (name, source) in changed {
+    for (name, file) in changed {
         let target = data.join(relative(name)?);
         fs::create_dir_all(target.parent().context("artifact parent")?)?;
-        if fs::hard_link(source, &target).is_err() {
-            fs::copy(source, &target)?;
+        if fs::hard_link(&file.source, &target).is_err() {
+            fs::copy(&file.source, &target)?;
         }
         names.push(name.as_str());
     }
     drop(_snapshot);
-    // A claim/recipe-only publication still needs a valid, empty archive.
-    if names.is_empty() {
-        names.push(".");
-    }
-    fs::write(job.join("files.txt"), names.join("\n") + "\n")?;
-    let archive = job.join("changed.tar");
-    let mut tar = Command::new("tar");
-    tar.arg("-cf")
-        .arg(&archive)
-        .arg("-C")
-        .arg(&data)
-        .arg("-T")
-        .arg(job.join("files.txt"))
-        .stdin(Stdio::null());
-    super::super::build::background(&mut tar);
-    ensure!(
-        crate::process::run(&mut tar, Some(Instant::now() + Duration::from_secs(120)))?.success(),
-        "cannot archive cooked changes"
-    );
     let inbox = format!("mirror/inbox/{}", super::super::session::id());
-    let remote = format!("{}/target/ara-dev/lab/{inbox}", config.repo);
-    transport::ssh(
-        config,
-        base,
-        &format!("set -eu\nmkdir -p {}\n", transport::quote(&remote)),
-        20,
-    )?;
-    transport::scp(config, base, &archive, &format!("{remote}/changed.tar"))?;
-    transport::ssh(
-        config,
-        base,
-        &format!(
-            "set -eu\nmkdir -p {0}/data\ntar -xf {0}/changed.tar -C {0}/data\n",
-            transport::quote(&remote)
-        ),
-        120,
-    )?;
-    // First bootstrap can precede the endpoint; the peer imports this record at startup.
     let import = json!({"directory":inbox,"variants":portable(variants.clone()),"claims":portable(claims.clone()),"shaders_current":shaders_current});
-    super::super::session::write(&base.join("mirror/incoming-local.json"), &import)?;
-    let record = job.join("incoming.json");
-    super::super::session::write(&record, &import)?;
-    transport::scp(
+    let packing = Instant::now();
+    let archive = packet::archive(&job, &names, &import)?;
+    let archive_ms = packing.elapsed().as_secs_f64() * 1000.;
+    let wire = Instant::now();
+    let output = transport::stream(
         config,
         base,
-        &record,
-        &format!("{}/target/ara-dev/lab/mirror/incoming.json", config.repo),
+        &archive,
+        &packet::receiver(config, &inbox, activate),
     )?;
-    let _ = transport::rpc(config, base, "_lab_import", import);
+    if activate {
+        transport::response(&output)?;
+    } else {
+        ensure!(
+            serde_json::from_str::<Value>(&output)?["received"] == true,
+            "Mac did not acknowledge staged artifacts"
+        );
+    }
+    let timing = json!({"changed":true,"files":names.len(),"bytes":fs::metadata(&archive)?.len(),"inventory_ms":inventory_ms,"archive_ms":archive_ms,"wire_ms":wire.elapsed().as_secs_f64()*1000.,"total_ms":started.elapsed().as_secs_f64()*1000.,"connections":1,"activated":activate});
+    super::super::session::write(&job.join("transfer.json"), &timing)?;
+    super::super::session::write(&base.join("mirror/incoming-local.json"), &import)?;
     let mut uploaded = serde_json::to_value(current)?;
     uploaded["_variants"] = variants;
     uploaded["_shaders_current"] = json!(shaders_current);
     uploaded["_claims"] = claims;
     uploaded["_configuration"] = configuration;
-    super::super::session::write(&base.join("mirror/uploaded.json"), &uploaded)
+    super::super::session::write(&base.join("mirror/uploaded.json"), &uploaded)?;
+    Ok(Transfer {
+        staged_import: (!activate).then_some(import),
+        timing,
+    })
 }
 
 pub(super) fn portable(value: Value) -> Value {
@@ -383,46 +389,4 @@ pub(super) fn pull(config: &Config, base: &Path, value: &mut Value) -> Result<()
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn shader_bundle_follows_active_metadata_and_requires_metal() -> Result<()> {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/lab-tests")
-            .join(super::super::super::session::id());
-        fs::create_dir_all(root.join("key"))?;
-        for name in ["a.spv", "a.metallib", "a.metal.json", "orphan.metallib"] {
-            fs::write(root.join("key").join(name), b"artifact")?;
-        }
-        let obsolete = root.join("f".repeat(64));
-        fs::create_dir_all(&obsolete)?;
-        fs::write(
-            obsolete.join("reflection.json"),
-            br#"{"stages":[{"spirv":"missing"}]}"#,
-        )?;
-        let manifest = json!({"stages":[{"spirv":"key/a.spv","metal":{"metallib":"key/a.metallib","reflection":"key/a.metal.json"}}]});
-        super::super::super::session::write(&root.join("pipeline.json"), &manifest)?;
-        let mut files = BTreeMap::new();
-        shaders(&root, "shaders/cooked", &mut files)?;
-        assert_eq!(files.len(), 4);
-        assert!(!files.keys().any(|p| p.contains("orphan")));
-        super::super::super::session::write(
-            &root.join("pipeline.json"),
-            &json!({"stages":[{"spirv":"key/a.spv"}]}),
-        )?;
-        assert!(shaders(&root, "shaders/cooked", &mut files).is_err());
-        fs::remove_dir_all(root)?;
-        Ok(())
-    }
-    #[test]
-    fn artifact_paths_are_confined_and_windows_recipes_are_portable() {
-        for p in ["/tmp/a", "../a", "a/../../b", "a\\b", "a\nb"] {
-            assert!(relative(p).is_err());
-        }
-        assert!(relative("shaders/crates/a/cooked/a.json").is_ok());
-        assert_eq!(
-            portable(json!({"crates\\a\\pipelines.json":{"source":"x\\y.slang"}})),
-            json!({"crates/a/pipelines.json":{"source":"x/y.slang"}})
-        );
-    }
-}
+mod tests;

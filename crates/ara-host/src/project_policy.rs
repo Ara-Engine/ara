@@ -149,7 +149,7 @@ mod tests {
         assert!(!root.join(PREFERENCES).exists());
         std::fs::write(
             root.join(crate::project::MARKER),
-            r#"{"ui":{"main":"ui/legacy.ui"},"rendering":{"quality":"high"}}"#,
+            ara_json::to_canonical_string(&json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"ui":{"main":"ui/legacy.ui"},"rendering":{"quality":"high"}})),
         )
         .expect("marker");
         std::fs::create_dir(root.join("settings")).expect("settings fixture");
@@ -183,7 +183,13 @@ mod tests {
             read(&root, "ui").expect_err("object diagnostic").code,
             ara_diag::codes::INVALID_PARAMS
         );
-        std::fs::write(root.join(crate::project::MARKER), "{}").expect("valid marker");
+        std::fs::write(
+            root.join(crate::project::MARKER),
+            ara_json::to_canonical_string(
+                &json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
+            ),
+        )
+        .expect("valid marker");
         std::fs::create_dir(root.join("settings")).expect("settings fixture");
         for (text, code) in [
             ("{", ara_diag::codes::JSON_SYNTAX),

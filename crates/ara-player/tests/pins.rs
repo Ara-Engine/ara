@@ -50,7 +50,7 @@ fn first_pins_are_persisted_final_generations() {
 fn a_missing_asset_reports_a_code_and_keeps_play_running() {
     use serde_json::json;
     let dir = support::demo_copy("missing-source");
-    std::fs::remove_file(dir.join("assets/fox/Fox.glb")).unwrap();
+    std::fs::remove_file(dir.join(ara_doc::AUTHORING_ROOT).join("assets/fox/Fox.glb")).unwrap();
     let mut agent = support::Agent::open(&dir, 9, |_| {});
     agent.pool_ready();
     let world = agent.play("start", json!({"startPaused":true}));

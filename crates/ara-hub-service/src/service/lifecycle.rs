@@ -17,24 +17,23 @@ impl Hub {
         project: &ProjectEntry,
         headless: bool,
     ) -> Result<Value, RpcError> {
+        if self.migrations.running_for(&project.id) {
+            return Err(invalid(
+                "this project's layout migration is still saving files and history; wait for it to finish before opening",
+            ));
+        }
+        let engine = self.project_engine(project)?;
         self.discover_process(project)?;
         let mut status = self.status_of(project);
         if status["state"] == "open" && (headless || status["headless"] == false) {
             return Ok(status);
         }
-        let marker: Value = serde_json::from_slice(
-            &fs::read(project.path.join("ara.project.json")).map_err(io_error)?,
-        )
-        .map_err(io_error)?;
-        let version = marker["engineVersion"]
-            .as_str()
-            .ok_or_else(|| invalid("project is missing its engineVersion pin"))?;
-        if self.engine_removal_running(version) {
+        let version = engine.version.clone();
+        if self.engine_removal_running(&version) {
             return Err(invalid(
                 "this engine is being uninstalled; cancel or finish the uninstall before opening the project",
             ));
         }
-        let engine = self.registry.engine(version)?.clone();
         let executable = if headless {
             engine.executable
         } else {
@@ -95,7 +94,7 @@ impl Hub {
             .find(|p| p.id == project.id)
         {
             entry.last_opened = Some(now());
-            entry.engine_version = version.to_owned();
+            entry.engine_version = version.clone();
             status["project"] = json!(entry);
         }
         self.registry.save(&self.config.directory)?;

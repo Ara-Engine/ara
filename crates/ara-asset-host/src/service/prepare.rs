@@ -66,25 +66,24 @@ pub(super) fn run(
         preset: Default::default(),
         asset_hashes: Default::default(),
     };
-    bindings.preset = [
-        "settings/ara.imports",
-        ara_asset::PROJECT_IMPORT_SETTINGS_FILE,
-    ]
-    .into_iter()
-    .find_map(|path| {
-        bindings
-            .workspace
-            .docs()
-            .find_map(|(name, document)| (name == path).then_some(document))
-            .and_then(|document| document.record("pi_settings"))
-    })
-    .map(|record| {
-        serde_json::from_value::<ara_asset::ProjectImportSettings>(Value::Object(record.clone()))
-    })
-    .transpose()
-    .map_err(|error| one(Diagnostic::error(codes::INVALID_PARAMS, error.to_string())))?
-    .unwrap_or_default()
-    .preset;
+    bindings.preset = ["settings/ara.imports", "ara.imports"]
+        .into_iter()
+        .find_map(|path| {
+            bindings
+                .workspace
+                .docs()
+                .find_map(|(name, document)| (name == path).then_some(document))
+                .and_then(|document| document.record("pi_settings"))
+        })
+        .map(|record| {
+            serde_json::from_value::<ara_asset::ProjectImportSettings>(Value::Object(
+                record.clone(),
+            ))
+        })
+        .transpose()
+        .map_err(|error| one(Diagnostic::error(codes::INVALID_PARAMS, error.to_string())))?
+        .unwrap_or_default()
+        .preset;
     let imports: Vec<_> = params
         .commands
         .iter()

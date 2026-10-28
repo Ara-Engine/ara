@@ -555,7 +555,7 @@ old PSO until the new cohort is ready. A visual reload does not start a timing
 window or pay measurement warmup. Evidence is under
 `target/lab-baseline/shader-latency/{m2-baseline,after-fastpath}.json`.
 
-The Mac mirror is experimental until native build and Metal validation pass. The PC endpoint owns its transport:
+The Mac mirror has native raster validation; hybrid RT remains experimental. The PC endpoint owns its transport:
 
 ```powershell
 ara-dev lab mirror --host mac --repo /Users/islam/projects/ara
@@ -586,6 +586,14 @@ snapshot, fetch or tool bootstrap. Rust changes use the source lane. Coalesced
 notifications retain a pending Rust update, and snapshots preserve Git's stat cache
 for unchanged files. Slot grants do not invalidate the already uploaded scene and
 reference inventory. Mirror status reports source, transfer and bootstrap phases.
+Hot shader imports stream the changed artifacts, durable metadata and import request
+through one SSH connection. The receiver checks AC power before extracting, holds
+`caffeinate` only for that job, then asks the warm peer to publish; source updates
+still bootstrap before importing. Unchanged notices do not contact the Mac.
+`mirror.transfer` records inventory/archive/wire/total milliseconds, changed file
+count and bytes; each transport job also retains its duration. Metal shader status
+separates library loading (`load_ms`) and PSO creation (`pso_ms`). The inventory
+captures each artifact's metadata once, keeping reference and scene changes visible.
 The Mac publishes complete imports under its visual lock, signals
 cohorts last, and hot-swaps native Metal PSOs in a background worker. Layout/state
 changes or failed compilation retain the last good cohort. The Mac never cooks
@@ -610,10 +618,31 @@ The PC proxy smoke test kept status responsive (0.307 s) and captured all three
 cameras in 3.990 s while the unreachable Mac peer retried. All 15 MCP tool schemas
 expose the platform argument.
 
-Mac native build, Metal validation and turnaround measurements are still pending.
-The first native bootstrap exposed a missing libc Mach binding; the guard now uses
-the public system ABI directly. This remains experimental until the native checks
-pass. PC-side tests cover slot refusal without starting any SSH or snapshot job.
+Native Mac validation on 2026-10-28 used a dedicated checkout of main `b3fb6dc7`
+plus the lab's pass-presence guard. All 29 active Metal tests passed with API and
+shader validation enabled, as did six shared pass-contract tests. A validated
+four-frame raster window passed; forcing a hybrid contract on raster refused with
+ARA6093 before any timing sample. This base does not select hybrid RT on Metal.
+The first bootstrap exposed a missing libc Mach binding; the guard uses the public
+system ABI directly. Native sampling also exposed Mach process CPU ticks being
+compared with host nanoseconds: they now use the device timebase (125/3 on the M5).
+Hidden Mac players interpret requested extents as physical pixels, avoiding Retina's
+previous 2560x1440 -> 5120x2880 expansion. No render pass changed.
+
+| Native Mac lab path | Measured turnaround |
+|---|---:|
+| Cold perf player and companion tools, one Cargo worker | 22m 53s |
+| Rust save -> replacement warm player; camera, preset, params and variant retained | 14.66 s |
+| Shader save -> changed warm Metal epoch, including PC cooking/SSH observation | 5.85 s (5 s target still missed) |
+| Three-camera 2560x1440 quick capture, seven regions and matched-transform FLIP | 1.81 s native / 6.03 s through PC with artifact download |
+| Default four-pair, 120-frame A/B with cached temporal evidence | 17.78 s through PC |
+
+The A/B kept one player PID and complete per-window pass proofs. Its GPU delta was
+inconclusive; CPU background load (6.80% mean, 11.94% peak) remains in the report.
+These are functional turnaround probes, not formal rendering budgets. Quick capture
+reports intentionally leave three-run repeatability gates unmeasured. The Mac's
+build output is disposable; evidence is retained under `target/lab-baseline/mac-p4/`
+on the PC. PC-side tests also cover slot refusal without starting SSH or a snapshot.
 
 Cold scene preparation runs in an owned, cancellable helper, under a scene-cache
 lease and the GPU queue. Opening a track returns `queued:true`; watch
@@ -807,6 +836,22 @@ The player accepts `--perf-wait-ready --perf-ready-timeout-ms 120000` with
 prove the boundary: readiness at frame 430 with 60 warmup frames starts sampling
 at frame 491. A deadline failure never becomes a zero-cost GPU result.
 
+Perf/D26, lab measure/A/B, and `ara-samples capture` share `ara-bench::passes::Guard`.
+Before timing, the selected workload must execute for three consecutive completed
+GPU frames. Hybrid High/Epic require `RT.Reflect`, `RT.Filter.X/Y`, `RT.Rough` and
+`RT.Rough.X/Y`; full fidelity transport has its own trace/ReSTIR contract. Losing
+any required pass inside the window fails it with `ARA6093`. Reports retain
+`pass_presence.rt_present` (for example `240/240 frames`), required passes and the
+configured stability/deadline. Old players/reports without this proof are refused;
+rebuild the matching timing player before using `--no-build`.
+
+`ARA_TIMING_STABLE_FRAMES=3` and `ARA_TIMING_READY_TIMEOUT_MS=120000` configure the
+shared wait. `ARA_TIMING_EXPECTED_RT=auto|raster|hybrid|fidelity` explicitly selects
+a contract for deliberate renderer-mode experiments; the resolved mode remains
+visible in the JSON. Normal auto selection uses the preset/device and requested
+fidelity mode, never whichever passes happened to appear. A failed capture replaces
+its timing JSON with invalid evidence instead of retaining an older valid result.
+
 Protocol verification on Windows/RTX 4070 SUPER (2026-10-26): a hidden 640×360
 Low debug player on the frozen Outpost pack signalled readiness at frame 544;
 two warmup frames placed the five GPU samples at frames 547–551. `run.cpu`
@@ -859,6 +904,11 @@ pinned upstream revision, applies the small checked-in native watcher patch, and
 builds the optional tool with the engine's pinned Rust toolchain. `--plan` prints
 the revision and destination without downloading or building. `ARA_DX` selects an
 already prepared tool. A missing version or native-fix capability reports ARA7600.
+Prepared tools need native protocol 4 and workspace capture capability 1. Re-run
+`hotpatch --install-dx` after upgrading: it backs up and replaces a recognized
+older tool patch while preserving unrecognized source edits. This fixes warm
+Cargo baselines that otherwise acknowledge a patch without rebuilding its edited
+library. Missing captures now reject the patch with ARA7602.
 
 ```
 cargo run -p ara-dev -- hotpatch --plan -- player
@@ -870,7 +920,8 @@ The initial fat build is expensive. Subsequent edits use Subsecond's thin linkin
 and hot function table; the `hotpatch` profile favors compiler latency. The driver
 isolates Cargo outputs, config and crash files under `<CARGO_TARGET_DIR>/ara-hotpatch`
 (the checkout's `target/ara-hotpatch` when unset), uses
-four BelowNormal build jobs on Windows (two jobs on Mac), and binds dx to loopback.
+the caller's `CARGO_BUILD_JOBS` budget (two when unset), runs build children
+BelowNormal on Windows, and binds dx to loopback.
 It forwards native arguments as data, without shell execution.
 
 Windows uses an MSVC-shaped facade over the pinned rust-lld plus the installed
@@ -894,8 +945,15 @@ The optional native watcher patch bypasses RSX diffing only when Ara sets
 `ARA_NATIVE_RUST_PATCH`. Stock alpha.3 can silently miss an undo/redo save after a
 multi-file patch because its file snapshots become stale. The prepared CLI
 replays every native Rust save, including saves queued during compilation.
-Native capability v2 also drains queued saves after a failed compile; upstream
-only drains them after a successful build.
+Native capability v4 drains queued saves after failed compilation, deduplicates
+identical file notifications, and supports lab-admitted patch requests. It also
+selects Ara's explicit `RUSTC` facade for dependency replay and prevents a custom
+workspace linker from doing a redundant executable link before the real patch
+link. Windows snapshots wait for an active writer to close, including the gap
+between truncating a file and writing its new contents. Upstream only drains
+pending changes after successful builds. Reused compiler invocations take their
+Ara contract and settings from the current session. Native build-input changes
+retain the running process and request an explicit rebuild.
 
 The CLI prerelease is required for its fix to uncaptured workspace replay (#5903).
 Ara keeps Bevy's Subsecond 0.7.10 runtime; the prerelease's patch-table schema is
@@ -941,10 +999,35 @@ which older readers refuse; unpatched artifacts retain format 1. Release hosts f
 enabled, and ara-export rejects a marked development executable both when making
 and when unpacking a runtime template.
 
-`ara-dev lab` can call `hotpatch::available` before choosing its Rust reload
-strategy; a missing/incompatible tool selects its existing warm-restart path.
-ARA7602 requires rebuilding/restarting rather than retrying an incompatible patch.
-No lab state or file-control protocol is owned by the hotpatch module.
+`ara-dev hotpatch -- lab` selects the lab's Rust reload strategy seam. This
+experimental adapter supports one shared player; ordinary `ara-dev lab` retains
+its multi-track warm restart behavior. Missing or incompatible dx selects warm
+restart with ARA7600. Body patches are built under lab admission, bound to the
+exact source revision and player PID, and acknowledged after frame-boundary
+publication. Incompatible source/layout edits establish a new baseline and use
+the existing rebuild and warm restart strategy. The lab owns sessions and GPU
+admission; the adapter owns its dx baseline and Rust publication handshake.
+Cached patch batches and launchers are scoped to that DX process. Entering or
+leaving the hotpatch command restores the cached normal player template; saved
+scene selections survive the transition. If that template was deleted, only the
+disposable binary receipt is invalidated and the lab builds a new one.
+
+For manual latency investigations, `ARA_HOTPATCH_TRACE_DIR` writes timestamped
+events off the idle frame path. The opt-in scripts `measure-latency.ps1` and
+`analyze-latency.ps1` in S11 separate watching, compiler work, links, validation,
+publication and observed output. `ARA_HOTPATCH_EXPERIMENT` selects per-crate
+codegen-unit/incremental and lld-thread experiments. These settings never affect
+ordinary Cargo commands. For example, point it at a JSON file containing
+`{"crates":{"ara_render_fidelity":{"codegen_units":64}}}` to tune that crate
+alone. Optional `--cranelift-crate <name>` requires an explicitly
+selected nightly with `rustc-codegen-cranelift-preview`; it uses panic=abort in
+the isolated hotpatch profile. It does not change the pinned stable toolchain.
+
+`ARA_HOTPATCH_LATENCY=1` lets the hidden render/editor proof admit concurrent CPU
+work while retaining the GPU-load check. It measures the shared development
+workflow, not quiet-machine frame performance or D26 acceptance. Defaults retain
+the ordinary foreign-CPU guard. No latency capture should be cited as a renderer
+performance benchmark.
 
 For a windowless real-renderer proof without game imports:
 
@@ -964,11 +1047,15 @@ entity/query/system alive and verifies replay, restore and network refusal after
 patch. Captures prove behavior, not D26 performance.
 
 Measured evidence and current limitations: [S11](../../spikes/s11-rust-hotpatch/RESULT.md).
-Its initial 0.39 s Mac result is a minimal loop measurement, not editor latency.
-Windows' actual fidelity/system/panel first edits measured 21.87 / 3.85 / 20.59 s;
-repeated edits varied up to 34.57 s. This is currently an experimental functional
-lane, above the 2–3 s latency target. Mac ECS/editor and the lab strategy adapter
-remain pending.
+Windows warm medians after the native watcher/link corrections are 2.476 s for
+fidelity recording, 2.149 s for the small real-ECS probe (1.388 s with a targeted
+16-CGU setting), and 15.205 s for editor panels. Mac ECS/editor warm medians are
+0.494 / 2.976 s on main 792064a7 plus the owned timing/runtime fixes. The initial
+0.39 s Mac result is only a minimal loop; native raster-pass edits previously
+passed around one second. Full stage tables and substantial shared-disk tails
+are in S11. Editor compilation still misses the Windows 2–3 s target; no blanket
+engine profile change is justified. The lab adapter's resident-player validation
+is still pending.
 
 ## Gate usage
 

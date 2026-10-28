@@ -102,7 +102,9 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
     let captures =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/runtime-polish/captures");
     // An importer upgrade must not fail Play: record an older glTF importer version.
-    let sidecar = dir.join("assets/fox/Fox.glb.import.json");
+    let sidecar = dir
+        .join(ara_doc::AUTHORING_ROOT)
+        .join("assets/fox/Fox.glb.import.json");
     let current = std::fs::read_to_string(&sidecar).unwrap();
     let recorded =
         serde_json::from_str::<Value>(&current).unwrap()["records"]["i_settings"]["version"]

@@ -645,6 +645,7 @@ name = "ara-bench"
 version = "0.0.1-alpha"
 dependencies = [
  "ara-components",
+ "ara-diag",
  "ara-doc",
  "ara-host",
  "ara-input",
@@ -775,12 +776,16 @@ name = "ara-dev"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-bench",
+ "ara-doc",
  "ara-hotpatch",
+ "ara-json",
  "blake3",
  "cc",
  "clap",
  "libc",
  "object",
+ "proc-macro2",
  "quote",
  "semver",
  "serde",
@@ -1058,6 +1063,7 @@ dependencies = [
 name = "ara-host"
 version = "0.0.1-alpha"
 dependencies = [
+ "ara-asset",
  "ara-cmd",
  "ara-collab",
  "ara-components",
@@ -1077,6 +1083,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "toml",
  "tracing",
 ]
 
@@ -1605,6 +1612,7 @@ dependencies = [
  "ara-anim",
  "ara-asset",
  "ara-audio",
+ "ara-bench",
  "ara-components",
  "ara-crash",
  "ara-diag",
@@ -1678,6 +1686,7 @@ name = "ara-release"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-doc",
  "ara-export-installer",
  "ara-json",
  "ara-proto",
@@ -1969,6 +1978,7 @@ dependencies = [
  "anyhow",
  "ara-anim",
  "ara-asset",
+ "ara-bench",
  "ara-components",
  "ara-diag",
  "ara-doc",

@@ -83,6 +83,20 @@ redownloading an unchanged feed. Offline/rate-limit fallback visibly identifies
 the cached feed and verifies its signatures again. Invalid signatures never
 fall back silently. Interrupted downloads resume with HTTP Range, using the
 signed hash as their staging identity. Cancel removes partial downloads.
+The Hub only checks for updates automatically. An update indicator opens signed
+release notes with **Update now**, **Later** and **Skip this version**. Download
+and verification begin after Update now; a verified update waits for the explicit
+**Restart and update** action. Skipping a version does not hide a newer source build
+of that version. Engine installs show download, verification and extraction
+separately, check disk space before download and exact expansion, and resume after
+network or storage interruptions. Uninstall is cancellable until its atomic
+registration/removal commit, then finishes file cleanup in the background.
+
+Game exports are separate from engine releases. Upload only the export's `build/`
+folder (or its package): the game-named executable, `data/` and notices on Windows
+and Linux, or a native game-named `.app` on macOS. The store-neutral
+`distribution.json` describes that payload. Sibling `report/`, `logs/` and
+`symbols/` directories are private export evidence, never player payload.
 
 ## Signing keys
 

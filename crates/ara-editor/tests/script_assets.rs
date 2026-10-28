@@ -15,16 +15,28 @@ impl Project {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir_all(root.join("Assets/Gameplay/Empty")).unwrap();
-        std::fs::create_dir_all(root.join("levels")).unwrap();
+        std::fs::create_dir_all(
+            root.join(ara_doc::AUTHORING_ROOT)
+                .join("Assets/Gameplay/Empty"),
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
+        std::fs::create_dir_all(root.join("settings")).unwrap();
+        std::fs::write(
+            root.join("settings/ara.imports"),
+            ara_asset::ProjectImportSettings::default()
+                .canonical_text()
+                .unwrap(),
+        )
+        .unwrap();
         std::fs::write(
             root.join("ara.project.json"),
             ara_json::to_canonical_string(
-                &json!({"name":"Script Test","main":"levels/main.scene"}),
+                &json!({"name":"Script Test","layoutVersion":ara_host::project_layout::VERSION,"main":"levels/main.scene"}),
             ),
         )
         .unwrap();
-        std::fs::write(root.join("levels/main.scene"),ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_script01","records":{"e_player01":{"name":"Player","Transform":{}}}}))).unwrap();
+        std::fs::write(root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_script01","records":{"e_player01":{"name":"Player","Transform":{}}}}))).unwrap();
         Self(root)
     }
 }
@@ -148,7 +160,13 @@ fn typed_script_create_emits_files_in_the_selected_folder_and_refuses_overwrites
     ] {
         assert!(editor.action("script.create", args).is_err());
     }
-    assert!(!project.0.join("Assets/Nope.cs").exists());
+    assert!(
+        !project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("Assets/Nope.cs")
+            .exists()
+    );
 }
 
 #[test]
@@ -349,7 +367,10 @@ fn asset_grid_scrollbar_drives_a_bounded_card_pool() {
     let project = Project::new();
     for n in 0..500 {
         std::fs::write(
-            project.0.join(format!("Assets/Gameplay/Code{n:04}.cs")),
+            project
+                .0
+                .join(ara_doc::AUTHORING_ROOT)
+                .join(format!("Assets/Gameplay/Code{n:04}.cs")),
             "// Browser fixture\n",
         )
         .unwrap();

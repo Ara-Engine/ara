@@ -8,7 +8,7 @@
   <ItemGroup>
     <Using Include="System.Numerics" />
     <Using Include="Ara" />
-    <Compile Include="../../../samples/outpost/scripts/Salvage/*.cs" Link="%(Filename)%(Extension)" />
+    <Compile Include="../../../samples/outpost/content/scripts/Salvage/*.cs" Link="%(Filename)%(Extension)" />
     <ProjectReference Include="../../src/Ara.Runtime/Ara.Runtime.csproj" />
     <ProjectReference Include="../../src/Ara.Generators/Ara.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../src/Ara.Analyzers/Ara.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />

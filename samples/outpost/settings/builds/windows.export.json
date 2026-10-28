@@ -1,0 +1,11 @@
+{
+  "$schema": "ara://schema/export/1",
+  "assembly": "Outpost",
+  "config": "dev",
+  "content": "content",
+  "lane": "nativeAot",
+  "name": "Outpost",
+  "platform": "windows",
+  "playerTemplate": "runtime",
+  "templates": []
+}

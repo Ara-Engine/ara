@@ -43,7 +43,7 @@ fn patch(agent: &mut Agent, world: &Value, path: &str, value: Value) {
 #[test]
 fn agent_selects_a_kit_piece_and_toggles_its_source_emission_without_derived_gltfs() {
     let dir = demo_copy("model-authoring");
-    std::fs::create_dir_all(dir.join("models")).unwrap();
+    std::fs::create_dir_all(dir.join(ara_doc::AUTHORING_ROOT).join("models")).unwrap();
     let mut source: Value = serde_json::from_slice(include_bytes!(
         "../../ara-importers/tests/fixtures/material-extensions.gltf"
     ))
@@ -54,7 +54,7 @@ fn agent_selects_a_kit_piece_and_toggles_its_source_emission_without_derived_glt
     ]);
     source["scenes"] = json!([{"nodes":[0,1]}]);
     std::fs::write(
-        dir.join("models/kit.gltf"),
+        dir.join(ara_doc::AUTHORING_ROOT).join("models/kit.gltf"),
         ara_json::to_canonical_string(&source),
     )
     .unwrap();

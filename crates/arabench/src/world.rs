@@ -110,7 +110,7 @@ impl World {
         let ws = store.workspace();
         for (path, doc) in ws.docs() {
             if let Some(t) = Tree::build(ws, store.schema(), &doc.id) {
-                world.trees.insert(path.to_owned(), t);
+                world.trees.insert(ws.reference_path(path).to_owned(), t);
             }
         }
         world.errors = check_errors(root)?;
@@ -135,7 +135,7 @@ impl World {
         }
     }
 
-    /// Every entity of `doc` (a project path), in hierarchy order.
+    /// Every entity of `doc` (an authored-root-relative path), in hierarchy order.
     pub fn entities(&self, doc: &str) -> Vec<Ent<'_>> {
         let Some(tree) = self.tree(doc) else {
             return Vec::new();
@@ -252,6 +252,11 @@ impl World {
     /// `ara check` errors over every project document.
     pub fn errors(&self) -> &[Diagnostic] {
         &self.errors
+    }
+
+    /// An authored-root-relative file's text.
+    pub fn authored_file(&self, rel: &str) -> Option<String> {
+        std::fs::read_to_string(crate::fixture::authored_path(&self.root, rel)).ok()
     }
 
     /// A project file's text.

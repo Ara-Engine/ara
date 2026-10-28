@@ -26,11 +26,15 @@ const DOCUMENTS: &[&str] = &[
 /// to a file that is absent or outside the template.
 pub fn check(template: &Path) -> Result<()> {
     let mut missing = BTreeSet::new();
+    let authored = template.join(ara_doc::AUTHORING_ROOT);
     for file in crate::support::files(template)? {
-        let document = file
-            .strip_prefix(template)?
-            .to_string_lossy()
-            .replace('\\', "/");
+        let document = if file == template.join("ara.project.json") {
+            "ara.project.json".to_owned()
+        } else if let Ok(path) = file.strip_prefix(&authored) {
+            path.to_string_lossy().replace('\\', "/")
+        } else {
+            continue;
+        };
         if document != "ara.project.json" && !DOCUMENTS.iter().any(|ext| document.ends_with(ext)) {
             continue;
         }
@@ -40,7 +44,7 @@ pub fn check(template: &Path) -> Result<()> {
             let resolved = normalize(&target);
             if !resolved
                 .as_ref()
-                .is_some_and(|path| template.join(path).is_file())
+                .is_some_and(|path| authored.join(path).is_file())
             {
                 missing.insert(format!("{document} -> {}", resolved.unwrap_or(target)));
             }
@@ -56,7 +60,7 @@ pub fn check(template: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Template-relative targets referenced by `document` (itself template-relative).
+/// Authored-relative targets referenced by a logical document or the root marker.
 fn references(document: &str, value: &Value) -> Vec<String> {
     let mut out = Vec::new();
     strings(value, &mut |text| {
@@ -158,8 +162,13 @@ mod tests {
 
     fn template(files: &[(&str, &str)]) -> tempfile::TempDir {
         let root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(root.path().join(ara_doc::AUTHORING_ROOT)).unwrap();
+        crate::support::json(
+            &root.path().join("ara.project.json"),
+            &serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/a.scene"}),
+        ).unwrap();
         for (path, text) in files {
-            let path = root.path().join(path);
+            let path = root.path().join(ara_doc::AUTHORING_ROOT).join(path);
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(path, text).unwrap();
         }
@@ -169,7 +178,6 @@ mod tests {
     #[test]
     fn missing_generated_kits_and_textures_are_named() {
         let root = template(&[
-            ("ara.project.json", r#"{"main":"levels/a.scene"}"#),
             (
                 "levels/a.scene",
                 r#"{"records":{"e":{"mesh":"@assets/kit/hut.gltf#as_kithut","name":"@ not a path"}}}"#,
@@ -203,9 +211,20 @@ mod tests {
     }
 
     #[test]
+    fn project_root_decoys_cannot_satisfy_authored_references() {
+        let root = template(&[]);
+        fs::create_dir_all(root.path().join("levels")).unwrap();
+        fs::write(root.path().join("levels/a.scene"), "{}").unwrap();
+        let error = format!("{:#}", check(root.path()).unwrap_err());
+        assert!(
+            error.contains("ara.project.json -> levels/a.scene"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn a_complete_template_passes() {
         let root = template(&[
-            ("ara.project.json", r#"{"main":"levels/a.scene"}"#),
             (
                 "levels/a.scene",
                 r#"{"mesh":"@assets/kit/road.gltf#as_kitroad"}"#,

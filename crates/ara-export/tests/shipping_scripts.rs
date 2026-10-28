@@ -44,6 +44,11 @@ fn exported_nativeaot_behaviour_runs_without_sources_and_rejects_stale_bindings(
         .join(ara_doc::AUTHORING_ROOT)
         .join("scripts/Gameplay");
     std::fs::create_dir_all(&module).unwrap();
+    tools::write_json(
+        &project.join("ara.project.json"),
+        &json!({"name":"Shipping scripts","layoutVersion":ara_host::project_layout::VERSION}),
+    )
+    .unwrap();
     std::fs::create_dir_all(module.join("nested/editor")).unwrap();
     std::fs::write(
         module.join("nested/editor/Tools.cs"),

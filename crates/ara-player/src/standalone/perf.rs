@@ -14,6 +14,7 @@ mod cpu;
 mod gpu;
 mod hitches;
 mod lab;
+mod passes;
 mod report;
 mod span;
 
@@ -101,6 +102,9 @@ pub(super) struct Window {
     last_epoch: Option<u64>,
     live_status: Vec<u8>,
     lab: lab::State,
+    fidelity_rt: bool,
+    requested_preset: Option<ara_runtime_render::QualityPreset>,
+    pass_guard: Option<ara_bench::passes::Guard>,
 }
 
 fn quantiles(samples: &[f64]) -> Value {
@@ -161,6 +165,9 @@ impl Window {
             last_epoch: None,
             live_status: Vec::new(),
             lab: lab::State::default(),
+            fidelity_rt: false,
+            requested_preset: None,
+            pass_guard: None,
         }
     }
 
@@ -175,6 +182,7 @@ impl Window {
 
     fn reset(&mut self) {
         self.clear_samples();
+        self.pass_guard = None;
         self.arrival = arrival::Samples::default();
         self.boundary = boundary::Boundary::new(
             self.options.perf_warmup,
@@ -249,7 +257,9 @@ impl Window {
                 return Ok(true);
             }
             if let Some(quality) = &command.quality {
-                presenter.set_quality(quality.parse()?);
+                let choice = quality.parse()?;
+                self.configure_rt(self.fidelity_rt, choice);
+                presenter.set_quality(choice);
             }
             if let Some(frames) = command.frames {
                 ensure!((1..=100000).contains(&frames), "invalid measurement frames");
@@ -412,18 +422,38 @@ impl Window {
             return Ok(false);
         }
         self.seen += 1;
+        let pass_frame = passes::frame(presenter);
+        let pass_ready = match self.passes_ready(presenter, pass_frame) {
+            Ok(ready) => ready,
+            Err(error) => {
+                self.publish(presenter, phases, camera, report::Outcome::Failed)?;
+                self.lab.respond(&json!({"error":error.to_string()}))?;
+                return Err(error.into());
+            }
+        };
         if self.options.perf_wait_ready {
             let status = presenter.readiness();
             if self.boundary.confirmed() && (status.failed || !status.raster || !status.gi_enabled)
             {
                 self.publish(presenter, phases, camera, report::Outcome::Failed)?;
                 bail!(
-                    "perf presentation lost its eligible raster/GI path: {:?}; {:?}",
+                    "{}: perf presentation lost its eligible raster/GI path: {:?}; {:?}",
+                    ara_bench::passes::INVALID_PASS_SET,
                     status,
                     presenter.presentation_error()
                 );
             }
-            let ready = shaders_ready && status.raster && status.gi_enabled && status.is_ready();
+            if !pass_ready && self.boundary.confirmed() {
+                if self.measured == 0 {
+                    self.arrival.record(presenter, &frame);
+                }
+                return Ok(false);
+            }
+            let ready = shaders_ready
+                && status.raster
+                && status.gi_enabled
+                && status.is_ready()
+                && pass_ready;
             if ready && !self.boundary.confirmed() {
                 self.ready_status = Some(status);
             }
@@ -452,6 +482,19 @@ impl Window {
             }
         } else if self.seen <= self.options.perf_warmup {
             return Ok(false);
+        }
+        if !pass_ready {
+            return Ok(false);
+        }
+        if let Err(error) = self
+            .pass_guard
+            .as_mut()
+            .context("pass readiness initialized")?
+            .record(pass_frame.unwrap_or_default())
+        {
+            self.publish(presenter, phases, camera, report::Outcome::Failed)?;
+            self.lab.respond(&json!({"error":error.to_string()}))?;
+            return Err(error.into());
         }
         let total = frame.total_ms;
         self.cpu.record(total, frame.wait_ms, frame.first_presented);

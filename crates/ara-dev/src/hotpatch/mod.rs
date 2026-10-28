@@ -1,6 +1,8 @@
 //! Optional dx lane. The lab can probe availability before selecting this strategy.
 mod companion;
 mod compiler;
+mod experiment;
+mod lab;
 pub(crate) mod linker;
 mod response;
 mod tool;
@@ -20,7 +22,9 @@ use std::{
 const DX_VERSION: &str = "0.8.0-alpha.3";
 
 pub(crate) fn forward() -> Option<std::process::ExitCode> {
-    linker::forward().or_else(compiler::forward)
+    linker::forward()
+        .or_else(compiler::forward)
+        .or_else(lab::forward)
 }
 
 /// Keep fat/thin artifacts and tool caches beneath the caller's selected Cargo disk.
@@ -51,6 +55,10 @@ pub(crate) struct Options {
     /// Print the selected target/tool version without compiling or launching.
     #[arg(long)]
     plan: bool,
+    /// Experimental optional nightly backend for one Rust crate (underscore name).
+    /// Requires a separately selected nightly plus rustc-codegen-cranelift-preview.
+    #[arg(long, conflicts_with = "install_dx")]
+    cranelift_crate: Option<String>,
     /// player|editor followed by native application arguments.
     #[arg(last = true, required_unless_present = "install_dx", num_args = 1..)]
     args: Vec<OsString>,
@@ -91,7 +99,52 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
     if options.install_dx {
         return tool::install(root, options.plan).context("ARA7600: optional dx setup failed");
     }
+    match options.args.first().and_then(|a| a.to_str()) {
+        Some("lab") => {
+            ensure!(
+                options.cranelift_crate.is_none(),
+                "ARA7600: lab uses stable LLVM; --cranelift-crate targets player/editor/probes"
+            );
+            ensure!(
+                options.args.len() == 1,
+                "use ara-dev hotpatch -- lab; ordinary ara-dev lab owns session options"
+            );
+            return lab::run(root, tool::select(root, options.dx), options.plan);
+        }
+        Some("lab-build") => {
+            return lab::build(
+                root,
+                Path::new(options.args.get(1).context("lab build target")?),
+                Path::new(options.args.get(2).context("prepared lab baseline")?),
+            );
+        }
+        Some("lab-error") => bail!(
+            "{}",
+            options
+                .args
+                .get(1)
+                .context("lab setup error")?
+                .to_string_lossy()
+        ),
+        _ => {}
+    }
     let (package, bin, feature) = target(&options.args)?;
+    if options.cranelift_crate.is_some() {
+        let version = tool::command("rustc").arg("--version").output()?;
+        ensure!(
+            version.status.success()
+                && String::from_utf8_lossy(&version.stdout).contains("nightly"),
+            "ARA7600: Cranelift is optional and needs an explicitly selected nightly (RUSTUP_TOOLCHAIN); ordinary hotpatch uses the pinned stable LLVM toolchain"
+        );
+        let backend = tool::command("rustc")
+            .args(["-Zcodegen-backend=cranelift", "--print=target-features"])
+            .output()?;
+        ensure!(
+            backend.status.success(),
+            "ARA7600: optional Cranelift component unavailable; install rustc-codegen-cranelift-preview for the selected nightly: {}",
+            String::from_utf8_lossy(&backend.stderr)
+        );
+    }
     let dx = tool::select(root, options.dx);
     available(&dx)?;
     if options.plan {
@@ -103,7 +156,14 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
         return Ok(true);
     }
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
-    let artifacts = output_root(root).join("ara-hotpatch");
+    let mut artifacts = output_root(root).join("ara-hotpatch");
+    if let Ok(generation) = std::env::var("ARA_HOTPATCH_LAB_GENERATION") {
+        ensure!(
+            !generation.is_empty() && generation.bytes().all(|c| c.is_ascii_digit()),
+            "invalid lab generation"
+        );
+        artifacts = artifacts.join("lab").join(generation);
+    }
     let companion = (package == "ara-editor-hotpatch")
         .then(|| companion::prepare(root, &artifacts))
         .transpose()?;
@@ -112,7 +172,21 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
     let contract_path = directory.join("contract.json");
     eprintln!("Capturing Rust compatibility baseline (off the frame thread)...");
     ara_hotpatch::Contract::capture(root)?.write(&contract_path)?;
+    if let Some(manifest) = std::env::var_os("ARA_HOTPATCH_LAB_MANIFEST") {
+        std::fs::write(
+            manifest,
+            serde_json::to_vec(&serde_json::json!({
+                "root":root,"contract":contract_path,"port":options.port,"directory":artifacts,
+                "app_directory":artifacts.join("build/dx/ara-player/debug/windows/app"),
+            }))?,
+        )?;
+    }
     let mut command = Command::new(&dx);
+    if let Some(crate_name) = options.cranelift_crate {
+        command
+            .env("ARA_HOTPATCH_CRANELIFT_CRATE", crate_name.replace('-', "_"))
+            .env("CARGO_PROFILE_HOTPATCH_PANIC", "abort");
+    }
     if let Some(player) = companion {
         command.env("ARA_PLAYER", player);
     }
@@ -137,7 +211,11 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
         "--bin",
         bin,
         "--features",
-        feature,
+        if bin == "ara-player" && std::env::var_os("ARA_HOTPATCH_LAB_CONTROL").is_some() {
+            "hotpatch,fidelity-lab"
+        } else {
+            feature
+        },
         "--port",
         &options.port.to_string(),
     ]);
@@ -159,12 +237,16 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
     command.env_remove("ARA_HOTPATCH_GPU_CHILD");
     command
         .env("ARA_HOTPATCH_CONTRACT", contract_path)
-        .env(
-            "CARGO_BUILD_JOBS",
-            if cfg!(target_os = "macos") { "2" } else { "4" },
-        )
+        .env("CARGO_BUILD_JOBS", tool::build_jobs())
         .env("CARGO_TARGET_DIR", artifacts.join("build"))
-        .env("CARGO_BUILD_BUILD_DIR", artifacts.join("intermediates"))
+        .env(
+            "CARGO_BUILD_BUILD_DIR",
+            if std::env::var_os("ARA_HOTPATCH_LAB_GENERATION").is_some() {
+                output_root(root).join("ara-hotpatch/lab-intermediates")
+            } else {
+                artifacts.join("intermediates")
+            },
+        )
         .env("RUSTC_WRAPPER", "")
         .env("ARA_CONFIG_DIR", directory.join("profile"))
         .env("ARA_CRASH_DIR", directory.join("crashes"));

@@ -7,13 +7,13 @@ public sealed class SourceOwnershipTests
     public void Compile_session_uses_project_inventory_and_requests_restart_when_a_file_crosses_editor_boundary()
     {
         var root = InstalledTools.Scratch("compile-membership");
-        var authored = Path.Combine(root, "game");
+        var authored = Path.Combine(root, "content");
         var state = Path.Combine(root, ".ara", "scripts", "game");
         Directory.CreateDirectory(authored);
         Directory.CreateDirectory(state);
         var source = Path.Combine(authored, "Helper.cs");
         File.WriteAllText(source, "public class Helper { public int Value() => 1; }");
-        File.WriteAllText(Path.Combine(state, "module.inputs.json"), System.Text.Json.JsonSerializer.Serialize(new { project = root, authoringRoot = "game", name = "game" }));
+        File.WriteAllText(Path.Combine(state, "module.inputs.json"), System.Text.Json.JsonSerializer.Serialize(new { project = root, authoringRoot = "content", name = "game" }));
         var session = new ModuleSession(0, "game", state, false, [typeof(Behaviour).Assembly.Location], [], "gameplay", null);
         Assert.Equal([source], session.SourceFiles());
         Assert.Equal(authored, session.WatchDirectory);

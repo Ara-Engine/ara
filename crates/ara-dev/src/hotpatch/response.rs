@@ -30,8 +30,9 @@ pub(super) fn prepare_argument(arg: OsString) -> Result<OsString> {
             .collect()
     };
     let mut encoded = Vec::with_capacity(args.len());
+    let branded = args.iter().any(|arg| ara_resource(arg));
     for argument in args {
-        if empty_dx_archive(std::ffi::OsStr::new(argument)) {
+        if empty_dx_archive(std::ffi::OsStr::new(argument)) || (branded && dx_resource(argument)) {
             continue;
         }
         #[cfg(windows)]
@@ -49,6 +50,27 @@ pub(super) fn prepare_argument(arg: OsString) -> Result<OsString> {
     let normalized = file.with_file_name(format!("ara-link-{}.rsp", std::process::id()));
     std::fs::write(&normalized, encoded).context("quote dx linker response")?;
     Ok(format!("@{}", normalized.display()).into())
+}
+
+// DX adds a default icon to native binaries. Ara's own build script already
+// embeds the game/editor icon; lld rejects their duplicate resource identifiers.
+fn ara_resource(argument: &str) -> bool {
+    matches!(
+        argument.rsplit(['\\', '/']).next(),
+        Some("ara-game.lib" | "ara-editor.lib")
+    )
+}
+fn dx_resource(argument: &str) -> bool {
+    let mut parts = argument.rsplit(['\\', '/']);
+    parts.next() == Some("resource.lib") && parts.next() == Some(".winres")
+}
+pub(super) fn prefer_ara_resources(args: &mut Vec<OsString>) {
+    if args
+        .iter()
+        .any(|arg| arg.to_str().is_some_and(ara_resource))
+    {
+        args.retain(|arg| !arg.to_str().is_some_and(dx_resource));
+    }
 }
 
 /// DX writes a zero-byte libdeps archive when target outputs are outside its
@@ -90,6 +112,66 @@ fn quote(arg: &str) -> String {
 mod tests {
     use super::*;
     use std::{fs, path::PathBuf, process::Command};
+
+    #[test]
+    fn ara_resource_replaces_dx_icon_without_hiding_other_link_failures() {
+        let scratch = tempfile::tempdir().unwrap();
+        let dx = scratch.path().join(".winres");
+        fs::create_dir(&dx).unwrap();
+        let resources = [scratch.path().join("ara-game.lib"), dx.join("resource.lib")];
+        let rc = cc::windows_registry::find_tool("x86_64-pc-windows-msvc", "rc.exe")
+            .expect("the required Windows SDK provides rc.exe");
+        for (index, resource) in resources.iter().enumerate() {
+            let script = scratch.path().join(format!("resource-{index}.rc"));
+            fs::write(&script, format!("101 RCDATA BEGIN\n{}\nEND\n", index + 1)).unwrap();
+            let output = rc
+                .to_command()
+                .arg("/nologo")
+                .arg("/fo")
+                .arg(resource)
+                .arg(script)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        let sysroot = Command::new("rustc")
+            .args(["--print", "sysroot"])
+            .output()
+            .unwrap();
+        let lld = PathBuf::from(String::from_utf8(sysroot.stdout).unwrap().trim())
+            .join("lib/rustlib/x86_64-pc-windows-msvc/bin/rust-lld.exe");
+        let mut args: Vec<OsString> = [
+            "-flavor",
+            "link",
+            "/NOLOGO",
+            "/DLL",
+            "/NOENTRY",
+            "/NODEFAULTLIB",
+            "/MACHINE:X64",
+        ]
+        .into_iter()
+        .map(Into::into)
+        .collect();
+        args.push(format!("/OUT:{}", scratch.path().join("resources.dll").display()).into());
+        args.extend(resources.iter().map(|path| path.as_os_str().to_owned()));
+        let duplicate = Command::new(&lld).args(&args).output().unwrap();
+        assert!(!duplicate.status.success());
+        assert!(String::from_utf8_lossy(&duplicate.stderr).contains("duplicate resource"));
+        prefer_ara_resources(&mut args);
+        let fixed = Command::new(&lld).args(&args).output().unwrap();
+        assert!(
+            fixed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&fixed.stderr)
+        );
+        // An unrelated library error must still surface, rather than using /FORCE.
+        args.push(scratch.path().join("missing.lib").into_os_string());
+        assert!(!Command::new(&lld).args(&args).status().unwrap().success());
+    }
 
     #[test]
     fn dx_raw_response_with_spaces_links_through_the_real_lld() {

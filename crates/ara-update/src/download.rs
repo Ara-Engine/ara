@@ -299,6 +299,12 @@ pub fn extract(archive: &Path, destination: &Path, cancel: &Cancel) -> Result<()
                     return Err(Error::new(SIZE, "archive entry differs from declared size"));
                 }
                 output.sync_all()?;
+                #[cfg(unix)]
+                if let Some(mode) = entry.unix_mode() {
+                    use std::os::unix::fs::PermissionsExt;
+                    // Preserve only ordinary permission bits; ZIP set-id bits never apply.
+                    output.set_permissions(fs::Permissions::from_mode(mode & 0o777))?;
+                }
             }
         }
         cancel.check()

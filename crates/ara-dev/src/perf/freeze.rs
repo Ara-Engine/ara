@@ -64,7 +64,9 @@ pub(crate) fn pack(
         .get("ara-export")
         .context("first perf run needs ara-export (omit --no-build)")?;
     let player = binaries
-        .get("ara-player")
+        // A dev strategy may launch through a wrapper while retaining a clean template.
+        .get("ara-player-template")
+        .or_else(|| binaries.get("ara-player"))
         .context("missing built ara-player")?;
     let worker = binaries
         .get("ara-import-worker")
@@ -206,7 +208,10 @@ mod assembly_tests {
         ] {
             fs::write(
                 dir.join("ara.project.json"),
-                serde_json::json!({ "name": name }).to_string(),
+                ara_json::to_canonical_string(&serde_json::json!({
+                    "name": name,
+                    "layoutVersion": ara_doc::PROJECT_LAYOUT_VERSION,
+                })),
             )
             .unwrap();
             assert_eq!(assembly_stem(&dir), stem);

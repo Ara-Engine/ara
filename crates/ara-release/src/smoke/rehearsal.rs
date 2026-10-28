@@ -1,5 +1,5 @@
 //! Opt-in packaged release-day flow. No GitHub writes, real profiles or desktop windows.
-mod server;
+pub(super) mod server;
 use super::*;
 
 pub(crate) fn run(artifacts: &Path, older_setup: &Path, directory: &Path) -> Result<()> {

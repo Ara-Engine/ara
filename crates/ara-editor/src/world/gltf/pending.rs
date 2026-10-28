@@ -137,12 +137,12 @@ mod tests {
         let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../target/renderer-unification/pending-status")
             .join(std::process::id().to_string());
-        std::fs::create_dir_all(root.join("levels"))?;
-        std::fs::create_dir_all(root.join("models"))?;
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels"))?;
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("models"))?;
         for (path, value) in [
             (
                 "ara.project.json",
-                serde_json::json!({"name":"Pending style","main":"levels/main.scene"}),
+                serde_json::json!({"name":"Pending style","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene"}),
             ),
             (
                 "levels/main.scene",
@@ -157,9 +157,19 @@ mod tests {
                 serde_json::json!({"$schema":"ara://schema/import/1","id":"as_pending1","records":{"i_settings":{"importer":"ara.gltf","version":"1","settings":{}}}}),
             ),
         ] {
-            std::fs::write(root.join(path), ara_json::to_canonical_string(&value))?;
+            std::fs::write(
+                if path == "ara.project.json" {
+                    root.join(path)
+                } else {
+                    root.join(ara_doc::AUTHORING_ROOT).join(path)
+                },
+                ara_json::to_canonical_string(&value),
+            )?;
         }
-        std::fs::write(root.join("models/model.gltf"), "{}")?;
+        std::fs::write(
+            root.join(ara_doc::AUTHORING_ROOT).join("models/model.gltf"),
+            "{}",
+        )?;
         let editor = crate::Editor::open(&root).map_err(|e| anyhow::anyhow!("{e}"))?;
         let mut owner = ara_play_host::assets::Assets::new(&root, &root.join("absent-worker.exe"))
             .map_err(anyhow::Error::msg)?;

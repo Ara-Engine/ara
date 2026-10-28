@@ -1,0 +1,565 @@
+{
+  "$schema": "ara://schema/graph/1",
+  "id": "gr_groundrock",
+  "records": {
+    "g_meta": {
+      "domain": "material",
+      "payload": {
+        "domain": "surface",
+        "functions": {},
+        "name": "Ground",
+        "variantBudget": 1
+      }
+    },
+    "l_editor": {},
+    "n_0b29794fcdde8baa3534": {
+      "kind": "material.mul",
+      "ports": {
+        "in0": {
+          "ty": "ColorLinear",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "ColorLinear",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "ColorLinear",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "color",
+        "order": 5,
+        "ty": "ColorLinear"
+      }
+    },
+    "n_17f41371af8dc1cb2323": {
+      "kind": "material.mul",
+      "ports": {
+        "in0": {
+          "ty": "vec2",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "vec2",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "vec2",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "coords",
+        "order": 2,
+        "ty": "vec2"
+      }
+    },
+    "n_21bb8e38e223a9fbf27f": {
+      "kind": "material.sampleColor",
+      "ports": {
+        "in0": {
+          "ty": "TextureColor",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "vec2",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "ColorLinear",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "sample",
+        "order": 3,
+        "ty": "ColorLinear"
+      }
+    },
+    "n_369a5c30136edf293e80": {
+      "kind": "material.literal",
+      "ports": {
+        "out": {
+          "ty": "ColorLinear",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [0.9, 0.86, 0.82]
+      },
+      "payload": {
+        "name": "tint",
+        "order": 4,
+        "ty": "ColorLinear"
+      }
+    },
+    "n_5e5ef9545486700b12e8": {
+      "kind": "material.sampleData",
+      "ports": {
+        "in0": {
+          "ty": "TextureData",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "vec2",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "vec4",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "arm",
+        "order": 7,
+        "ty": "vec4"
+      }
+    },
+    "n_76e81d07d145f3e8864a": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "TextureColor",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "isStatic": false,
+        "value": {
+          "kind": "asset",
+          "value": "@third_party/rocky_terrain_02/rocky_terrain_02_diff_2k.jpg#as_groundrockcolor"
+        }
+      },
+      "payload": {
+        "name": "colorMap",
+        "order": 0,
+        "ty": "TextureColor"
+      }
+    },
+    "n_919db123f275dbfe3bec": {
+      "kind": "material.literal",
+      "ports": {
+        "out": {
+          "ty": "vec4",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [0, 1, 0, 0]
+      },
+      "payload": {
+        "name": "green",
+        "order": 8,
+        "ty": "vec4"
+      }
+    },
+    "n_9da9dacd953577f0075d": {
+      "kind": "material.literal",
+      "ports": {
+        "out": {
+          "ty": "vec4",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [0, 0, 1, 0]
+      },
+      "payload": {
+        "name": "blue",
+        "order": 9,
+        "ty": "vec4"
+      }
+    },
+    "n_a0e1646241b8878b4da1": {
+      "kind": "material.dot",
+      "ports": {
+        "in0": {
+          "ty": "vec4",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "vec4",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "roughness",
+        "order": 10,
+        "ty": "float"
+      }
+    },
+    "n_bc61f58a5a996e417496": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "TextureData",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "isStatic": false,
+        "value": {
+          "kind": "asset",
+          "value": "@third_party/rocky_terrain_02/rocky_terrain_02_arm_2k.jpg#as_groundrockarm"
+        }
+      },
+      "payload": {
+        "name": "armMap",
+        "order": 2,
+        "ty": "TextureData"
+      }
+    },
+    "n_ca1f6d2605c0552c191b": {
+      "kind": "material.parameter",
+      "ports": {
+        "out": {
+          "ty": "TextureNormal",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "isStatic": false,
+        "value": {
+          "kind": "asset",
+          "value": "@third_party/rocky_terrain_02/rocky_terrain_02_nor_gl_2k.jpg#as_groundrocknormal"
+        }
+      },
+      "payload": {
+        "name": "normalMap",
+        "order": 1,
+        "ty": "TextureNormal"
+      }
+    },
+    "n_d17505b9e571025faaaf": {
+      "kind": "material.uv",
+      "ports": {
+        "out": {
+          "ty": "vec2",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "world",
+        "order": 0,
+        "ty": "vec2"
+      }
+    },
+    "n_d9004d08b70c80a62cfe": {
+      "kind": "material.literal",
+      "ports": {
+        "out": {
+          "ty": "vec2",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "params": {
+        "value": [0.011111111, 0.011111111]
+      },
+      "payload": {
+        "name": "repeat",
+        "order": 1,
+        "ty": "vec2"
+      }
+    },
+    "n_e36b8fbb45d1dbe58e67": {
+      "kind": "material.sampleNormal",
+      "ports": {
+        "in0": {
+          "ty": "TextureNormal",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "vec2",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "vec3",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "normal",
+        "order": 6,
+        "ty": "vec3"
+      }
+    },
+    "n_eb86b1925aac45990aed": {
+      "kind": "material.dot",
+      "ports": {
+        "in0": {
+          "ty": "vec4",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "in1": {
+          "ty": "vec4",
+          "doc": "Ordered function argument.",
+          "required": true
+        },
+        "out": {
+          "ty": "float",
+          "direction": "output",
+          "doc": "Typed expression result."
+        }
+      },
+      "payload": {
+        "name": "metallic",
+        "order": 11,
+        "ty": "float"
+      }
+    },
+    "n_output": {
+      "kind": "material.output",
+      "ports": {
+        "baseColor": {
+          "ty": "ColorLinear",
+          "doc": "Material domain output."
+        },
+        "clearCoat": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "clearCoatRoughness": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "emissive": {
+          "ty": "ColorLinear",
+          "doc": "Material domain output."
+        },
+        "metallic": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "normal": {
+          "ty": "vec3",
+          "doc": "Material domain output."
+        },
+        "opacityMask": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "roughness": {
+          "ty": "float",
+          "doc": "Material domain output."
+        },
+        "transmission": {
+          "ty": "float",
+          "doc": "Material domain output."
+        }
+      }
+    },
+    "w_16d61d6779ce471bd4e8": {
+      "from": {
+        "node": "n_17f41371af8dc1cb2323",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_5e5ef9545486700b12e8",
+        "port": "in1"
+      }
+    },
+    "w_48f4972c4e0c39eb8b93": {
+      "from": {
+        "node": "n_d17505b9e571025faaaf",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_17f41371af8dc1cb2323",
+        "port": "in0"
+      }
+    },
+    "w_5a0e0c771dd543b80ff5": {
+      "from": {
+        "node": "n_5e5ef9545486700b12e8",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_eb86b1925aac45990aed",
+        "port": "in0"
+      }
+    },
+    "w_5b3b4fd1cf7ac8b8f333": {
+      "from": {
+        "node": "n_eb86b1925aac45990aed",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "metallic"
+      }
+    },
+    "w_5e3b82a9ef5b49155014": {
+      "from": {
+        "node": "n_76e81d07d145f3e8864a",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_21bb8e38e223a9fbf27f",
+        "port": "in0"
+      }
+    },
+    "w_6ef13d1f2f31751312d4": {
+      "from": {
+        "node": "n_e36b8fbb45d1dbe58e67",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "normal"
+      }
+    },
+    "w_76c99c7a3141de31029a": {
+      "from": {
+        "node": "n_5e5ef9545486700b12e8",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_a0e1646241b8878b4da1",
+        "port": "in0"
+      }
+    },
+    "w_7f2a6d8211d33e9a537d": {
+      "from": {
+        "node": "n_919db123f275dbfe3bec",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_a0e1646241b8878b4da1",
+        "port": "in1"
+      }
+    },
+    "w_82cb3ae27ac827b79b1a": {
+      "from": {
+        "node": "n_9da9dacd953577f0075d",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_eb86b1925aac45990aed",
+        "port": "in1"
+      }
+    },
+    "w_92511284bae5bd7d7d14": {
+      "from": {
+        "node": "n_17f41371af8dc1cb2323",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_21bb8e38e223a9fbf27f",
+        "port": "in1"
+      }
+    },
+    "w_9671402b226db595804b": {
+      "from": {
+        "node": "n_a0e1646241b8878b4da1",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "roughness"
+      }
+    },
+    "w_b760f6c3ee4bcb0f5b9c": {
+      "from": {
+        "node": "n_369a5c30136edf293e80",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_0b29794fcdde8baa3534",
+        "port": "in1"
+      }
+    },
+    "w_b7ab1c23f4603bb6e959": {
+      "from": {
+        "node": "n_0b29794fcdde8baa3534",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_output",
+        "port": "baseColor"
+      }
+    },
+    "w_d1755ccf21f2b2733226": {
+      "from": {
+        "node": "n_d9004d08b70c80a62cfe",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_17f41371af8dc1cb2323",
+        "port": "in1"
+      }
+    },
+    "w_e40233b11552bd82abfb": {
+      "from": {
+        "node": "n_ca1f6d2605c0552c191b",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_e36b8fbb45d1dbe58e67",
+        "port": "in0"
+      }
+    },
+    "w_e63646d15a4965fa2e4f": {
+      "from": {
+        "node": "n_21bb8e38e223a9fbf27f",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_0b29794fcdde8baa3534",
+        "port": "in0"
+      }
+    },
+    "w_f0dac87a9ced519ee617": {
+      "from": {
+        "node": "n_bc61f58a5a996e417496",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_5e5ef9545486700b12e8",
+        "port": "in0"
+      }
+    },
+    "w_fe1dd8ef49596ef37838": {
+      "from": {
+        "node": "n_17f41371af8dc1cb2323",
+        "port": "out"
+      },
+      "to": {
+        "node": "n_e36b8fbb45d1dbe58e67",
+        "port": "in1"
+      }
+    }
+  }
+}

@@ -421,6 +421,26 @@ pub(crate) fn run(root: &Path, options: Options<'_>) -> Result<bool> {
     );
     let fmt = logs.formatting(root, &metadata, &format_packages, true)?;
     let ready = fmt && logs.rows.iter().all(|row| row.passed);
+    // Fixture-only edits otherwise select only their owning crate. Audit all
+    // project generators too, even when ara-dev itself is unchanged.
+    let ready = ready
+        && (scope.test_packages.contains("ara-dev")
+            || !root
+                .join("crates/ara-dev/tests/project_layout.rs")
+                .is_file()
+            || logs.command(
+                root,
+                "project-layout-fixtures",
+                &[
+                    "test",
+                    "-p",
+                    "ara-dev",
+                    "--test",
+                    "project_layout",
+                    "--locked",
+                ]
+                .map(String::from),
+            )?);
     let codes = changed.iter().any(|p| {
         p.starts_with("dotnet") && p.extension().is_some_and(|e| e == "cs")
             || metadata

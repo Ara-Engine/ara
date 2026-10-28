@@ -10,11 +10,11 @@ impl Project {
     fn new() -> Result<Self> {
         let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
             .join(format!("editor-scroll-{}", std::process::id()));
-        std::fs::create_dir_all(root.join("levels"))?;
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels"))?;
         std::fs::write(
             root.join("ara.project.json"),
             ara_json::to_canonical_string(
-                &json!({"name":"Scroll verification","main":"levels/main.scene"}),
+                &json!({"name":"Scroll verification","layoutVersion":ara_host::project_layout::VERSION,"main":"levels/main.scene"}),
             ),
         )?;
         let records: serde_json::Map<_, _> = (0..512)
@@ -26,7 +26,7 @@ impl Project {
             })
             .collect();
         std::fs::write(
-            root.join("levels/main.scene"),
+            root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),
             ara_json::to_canonical_string(
                 &json!({"$schema":"ara://schema/scene/1","id":"sc_scroll01","records":records}),
             ),

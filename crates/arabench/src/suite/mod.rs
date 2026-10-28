@@ -3,7 +3,7 @@
 //! renderer, simulation or C# join when those land.
 //!
 //! Every task starts from the outpost fixture (`fixtures/outpost/` over a fresh
-//! `ara init`), so `levels/main.scene` is empty and `levels/outpost.scene` is a
+//! `ara init`), so `content/scenes/main.scene` is empty and `content/levels/outpost.scene` is a
 //! populated level. Prompts read like user requests; verifiers check the
 //! documents, history and calls, never the agent's prose.
 
@@ -24,7 +24,7 @@ use crate::task::{Checks, Task};
 use crate::world::{EXTERNAL_EDIT, Ent, World};
 
 /// The empty starter scene.
-pub const MAIN: &str = "levels/main.scene";
+pub const MAIN: &str = ara_host::project_layout::MAIN_SCENE;
 /// The populated outpost level.
 pub const OUTPOST: &str = "levels/outpost.scene";
 
@@ -191,10 +191,12 @@ pub(crate) fn clean(c: &mut Checks, w: &World) -> bool {
 
 /// Checks that the prefab files are exactly as the fixture has them.
 pub(crate) fn prefabs_untouched(c: &mut Checks, w: &World) -> bool {
-    let dir = crate::fixture::fixtures_dir().join("outpost");
+    let dir = crate::fixture::fixtures_dir()
+        .join("outpost")
+        .join(ara_doc::AUTHORING_ROOT);
     let changed: Vec<&str> = ["prefabs/crate.prefab", "prefabs/lamp.prefab"]
         .into_iter()
-        .filter(|rel| std::fs::read_to_string(dir.join(rel)).ok() != w.file(rel))
+        .filter(|rel| std::fs::read_to_string(dir.join(rel)).ok() != w.authored_file(rel))
         .collect();
     c.check(
         "prefab files unchanged",

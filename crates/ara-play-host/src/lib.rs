@@ -577,9 +577,9 @@ impl PlayService {
         let wanted = scene
             .map(str::to_owned)
             .ok_or_else(|| fail(codes::REQUEST, "no scene given and no project main scene"))?;
-        let (_, doc) = workspace
-            .docs()
-            .find(|(path, doc)| *path == wanted || doc.id.as_str() == wanted)
+        let doc = workspace
+            .find(&wanted)
+            .and_then(|id| workspace.doc(id.as_str()))
             .ok_or_else(|| {
                 fail(
                     codes::REQUEST,
@@ -818,6 +818,8 @@ impl PlayService {
         progress: Option<&starting::Reporter>,
     ) -> Result<Value, Vec<Diagnostic>> {
         let began = Instant::now();
+        ara_host::project_layout::require_current_layout(&self.root)
+            .map_err(|diagnostic| vec![diagnostic])?;
         starting::report(progress, "snapshot", 0, 1)?;
         let mode = p.mode.as_deref().unwrap_or("local");
         let clients = p.clients.unwrap_or(0) as usize;
@@ -1514,6 +1516,7 @@ impl Service for PlayService {
 /// `.world`…) load, project types build on engine types, and the host (CLI, daemon,
 /// editor) validates documents exactly as its players do. Clashes become diagnostics.
 pub fn open_project(root: &Path) -> Result<ara_host::Project, Diagnostic> {
+    ara_host::project_layout::require_current_layout(root)?;
     let root = &std::fs::canonicalize(root)
         .map_err(|error| Diagnostic::error(ara_diag::codes::IO, error.to_string()))?;
     let published = ara_script::project::publish(root, ara_script::ModuleProfile::Gameplay);

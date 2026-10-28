@@ -84,6 +84,32 @@ pub(super) struct Results {
     pub skipped: BTreeMap<Section, String>,
 }
 
+impl Results {
+    /// Workload omissions invalidate the run, independently of CPU/GPU foreign load.
+    pub(super) fn pass_failure(&self) -> Option<String> {
+        let code = ara_bench::passes::INVALID_PASS_SET.to_string();
+        self.cold
+            .values()
+            .chain(self.steady.values())
+            .find_map(|window| {
+                let failure = match window {
+                    Ok(window) => perf::readiness::failure(&window.player),
+                    Err(reason) => Some(reason.to_owned()),
+                };
+                failure.filter(|reason| reason.contains(&code))
+            })
+            .or_else(|| {
+                self.flip.values().find_map(|output| match output {
+                    Ok(output) => output.value["diagnostic"]
+                        .as_str()
+                        .filter(|reason| reason.contains(&code))
+                        .map(str::to_owned),
+                    Err(reason) => reason.contains(&code).then(|| reason.to_owned()),
+                })
+            })
+    }
+}
+
 /// What every step needs.
 pub(super) struct Context<'a> {
     pub root: &'a Path,
@@ -231,7 +257,7 @@ impl Context<'_> {
 
     fn capture(&self, scene: &Scene) -> Measured<Output> {
         let folder = self.output.join("captures");
-        (|| -> Result<()> {
+        let captured = (|| -> Result<()> {
             fs::create_dir_all(&folder)?;
             let log = folder.join(format!("{}-{}.log", scene.project, scene.look));
             let mut command = Command::new(self.binary("ara-samples")?);
@@ -247,8 +273,14 @@ impl Context<'_> {
             eprintln!("D26: capturing {} / {} (ꟻLIP)", scene.project, scene.look);
             run(&mut command, Duration::from_secs(2 * 3600), &log)
         })()
-        .map_err(error)?;
-        timings(&folder, scene)
+        .map_err(error);
+        let report = timings(&folder, scene);
+        if let Err(reason) = &report
+            && reason.starts_with(&ara_bench::passes::INVALID_PASS_SET.to_string())
+        {
+            return Err(reason.to_owned());
+        }
+        captured.and(report)
     }
 
     /// The editor probe: a fresh Outpost copy (cold: interactions during imports,
@@ -333,6 +365,31 @@ fn timings(folder: &Path, scene: &Scene) -> Measured<Output> {
         .join(format!("{}-timings.json", scene.look));
     let bytes =
         fs::read(&path).map_err(|e| format!("no capture timings at {}: {e}", path.display()))?;
-    let value = serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    let value: Value =
+        serde_json::from_slice(&bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    if let Some(reason) = value["diagnostic"].as_str()
+        && reason.starts_with(&ara_bench::passes::INVALID_PASS_SET.to_string())
+    {
+        return Err(reason.to_owned());
+    }
     Ok(Output { path, value })
+}
+
+#[cfg(test)]
+mod pass_tests {
+    use super::*;
+    #[test]
+    fn capture_pass_failure_keeps_its_code_through_the_scoreboard_reader() {
+        let folder = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-dev/tests")
+            .join(format!("capture-pass-failure-{}", std::process::id()));
+        let scene = &SCENES[0];
+        let evidence = folder.join(scene.project).join(scene.look).join("evidence");
+        fs::create_dir_all(&evidence).unwrap();
+        fs::write(evidence.join(format!("{}-timings.json",scene.look)), br#"{"completed":false,"status":"invalid","diagnostic":"ARA6093: timed frame lost RT.Reflect"}"#).unwrap();
+        let reason = timings(&folder, scene).err().unwrap();
+        let mut results = Results::default();
+        results.flip.insert(scene.name, Err(reason));
+        assert!(results.pass_failure().unwrap().starts_with("ARA6093:"));
+    }
 }

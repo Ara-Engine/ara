@@ -36,7 +36,7 @@ installation dialogs use the engine SVG family; update dialogs use the Hub icon.
   D18), and `Page::bindings` mapping each control's stable ID to its `Intent`.
 - `view/dialogs.rs`: confirmations, errors, release notes, transfer progress and kit
   shared searchable Select choices; native input uses the kit layer stack for dialogs.
-  Install/repair dialogs request read-only preflight space summaries; technical source
+  Install/repair dialogs request read-only preflight space summaries; explicit Install current engine uses a verified same-version replacement lane. Technical source
   settings stay under Advanced. Repair jobs retain engine pins.
   Uninstall first inspects destination/size in a cancellable read-only job; only the
   subsequent explicit confirmation can start removal.
@@ -49,7 +49,7 @@ installation dialogs use the engine SVG family; update dialogs use the Hub icon.
 - `capture.rs`: `ara-hub --capture DIR` seeds a fixed fixture through the model's
   reply paths and writes every page, dark and light, from the real GPU target.
   No window opens: a headless Vulkan device drives the same `NativeUi` adapter.
-  `capture/flows.rs` adds update/install/error states in both themes.
+  `capture/flows.rs` adds update/install/error states; `capture/migration.rs` adds migration consent/progress in both themes.
 
 ## Behavior worth knowing
 
@@ -78,8 +78,7 @@ This feature stays off in shipping builds; see ara-release's rehearsal command.
 - Create validation is the service's: every edit sends `hub.create {dryRun:true}`;
   diagnostics carry `location.path` = `name|path|template|engineVersion` and render
   under that field. One dry run in flight; a stale reply re-checks.
-- Lifecycle calls show progress (`Opening…`), never approval (D24). Open failures
-  link `.ara/hub-process.log`; service startup failures link `hub-start.log`.
+- Lifecycle calls show progress (`Opening…`). ARA1914 opens a kit migration modal with move/tree preview and Migrate/Cancel. ARA1915 opens Use current engine (or Install current engine)/Cancel; signed installs recheck capabilities before a typed pin. Cancel stays closed; successful physical persistence resumes the original editor/headless mode. Other open failures link `.ara/hub-process.log`; service startup failures link `hub-start.log`.
 - Remove keeps files and its toast offers Undo (re-register). Diagnostic fixes run
   only `hub.*` `Call` fixes; `Cli` fixes are copied as `ara …`.
 - First run of an installed build (an `engine.json` beside the exe) registers that

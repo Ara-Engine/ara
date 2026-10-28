@@ -21,7 +21,7 @@ fn native_inspector_component_captures() {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::path::PathBuf::from("target/inspector-captures"));
     let root = output.join(format!("project-{}", std::process::id()));
-    std::fs::create_dir_all(root.join("levels")).unwrap();
+    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
     std::fs::create_dir_all(root.join(".ara")).unwrap();
     std::fs::write(
         root.join(".ara/editor-layout.json"),
@@ -33,11 +33,11 @@ fn native_inspector_component_captures() {
     std::fs::write(
         root.join("ara.project.json"),
         ara_json::to_canonical_string(
-            &json!({"name":"Inspector capture","main":"levels/main.scene"}),
+            &json!({"name":"Inspector capture","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene"}),
         ),
     )
     .unwrap();
-    std::fs::write(root.join("levels/main.scene"), ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_inspect01","records":{
+    std::fs::write(root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"), ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_inspect01","records":{
         "e_light001":{"name":"Spot light","Transform":{},"Light":{"kind":"spot","intensity":1200,"color":[1,0.65,0.32,1]}},
         "e_mesh0001":{"name":"Salvage crate","Transform":{"position":[1.5,0.6,-2]},"MeshRenderer":{}},
         "e_post0001":{"name":"Post process","Transform":{},"PostProcess":{}}

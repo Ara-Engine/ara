@@ -39,6 +39,7 @@ impl Handler for Hub {
     fn tick(&mut self) {
         self.poll_updates();
         self.poll_processes();
+        self.poll_migrations();
         if self.subscribers.is_empty()
             || self.processes.running.is_empty()
             || self.last_activity_check.elapsed() < Duration::from_secs(2)

@@ -50,7 +50,7 @@ pub(super) struct Session {
     shader_view: PathBuf,
     // A control acknowledgement precedes the asynchronous status-file refresh.
     shader_cohorts: Option<Value>,
-    _generation: Option<fs::File>,
+    _generation: Option<super::generations::Lease>,
 }
 impl Session {
     pub fn launch(
@@ -193,6 +193,7 @@ impl Session {
             json!({"measure":true,"frames":frames,"quality":preset}),
             Duration::from_secs(180),
         )?;
+        crate::perf::readiness::validate(&result["player"]).map_err(anyhow::Error::msg)?;
         self.selection.preset = preset.into();
         Ok(result)
     }

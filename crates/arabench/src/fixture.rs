@@ -16,7 +16,7 @@ use crate::task::{Fixture, Task};
 pub enum Init<'a> {
     /// The real `ara init` (what users and agents get), from this binary.
     Binary(&'a Path),
-    /// `ara.project.json` and an empty `levels/main.scene` only (no AGENTS.md or
+    /// A current-layout marker and empty `content/scenes/main.scene` (no AGENTS.md or
     /// `.mcp.json`): enough for verifiers and reference solutions.
     Minimal,
 }
@@ -56,9 +56,14 @@ pub fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Replaces the one occurrence of `from` in project file `rel` with `to`.
+/// Physical location of an authored-root-relative fixture file.
+pub fn authored_path(root: &Path, rel: &str) -> PathBuf {
+    root.join(ara_doc::AUTHORING_ROOT).join(rel)
+}
+
+/// Replaces the one occurrence of `from` in authored file `rel` with `to`.
 pub fn patch(root: &Path, rel: &str, from: &str, to: &str) -> Result<(), String> {
-    let path = root.join(rel);
+    let path = authored_path(root, rel);
     let text = fs::read_to_string(&path).map_err(|e| format!("cannot read `{rel}`: {e}"))?;
     if text.matches(from).count() != 1 {
         return Err(format!("`{rel}` must contain `{from}` exactly once"));
@@ -95,9 +100,17 @@ pub fn create(root: &Path, task: &Task, init: Init<'_>) -> Result<(), String> {
                 }
                 fs::write(&path, ara_json::to_canonical_string(&v)).map_err(|e| e.to_string())
             };
-            write("ara.project.json", json!({ "name": name }))?;
+            ara_host::project_layout::create_directories(root).map_err(|e| e.to_string())?;
             write(
-                "levels/main.scene",
+                "ara.project.json",
+                json!({
+                    "name": name,
+                    "main": crate::suite::MAIN,
+                    "layoutVersion": ara_doc::PROJECT_LAYOUT_VERSION,
+                }),
+            )?;
+            write(
+                &format!("{}/{}", ara_doc::AUTHORING_ROOT, crate::suite::MAIN),
                 json!({ "$schema": "ara://schema/scene/1", "id": "sc_main0001", "records": {} }),
             )?;
         }

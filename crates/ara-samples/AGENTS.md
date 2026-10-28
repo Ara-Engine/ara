@@ -13,14 +13,14 @@ pins them, `fetch` restores them.
 |---|---|
 | `add-polyhaven <id> --kind model\|texture\|hdri --resolution 1k --projects a,b` | resolve, download, BLAKE3 and pin a Poly Haven asset (models also pin their opacity maps) |
 | `add-urls <id> --title --source --license --authors --projects path=url..` | pin explicit files with explicit attribution |
-| `fetch [projects]` / `verify [projects]` | resumable, verified download into `<project>/assets/third_party/` (hard links from `samples/.cache/blobs`) / check only |
+| `fetch [projects]` / `verify [projects]` | resumable, verified download into `<project>/content/third_party/` (hard links from `samples/.cache/blobs`) / check only |
 | `credits` | regenerate `samples/THIRD_PARTY_ASSETS.md` from the lock |
 | `build outpost\|showcase` | author the project through `ara` (typed command batches via `ara do`), then `ara check` |
 | `game` | publish Outpost C# types through headless Play, then author its salvage loop, character, caches, doors, drones, animation and audio through typed commands |
-| `kits <project>` | write only the generated, git-ignored `assets/kit/` files (glTF + bin, suit palette); no document is authored. Release packaging runs it on the staged template copy (`--samples <stage>/templates`) |
+| `kits <project>` | write only the generated, git-ignored `content/kit/` files (glTF + bin, suit palette); no document is authored. Release packaging runs it on the staged template copy (`--samples <stage>/templates`) |
 | `capture <project> <look> [--quick] [--quality low\|medium\|high\|epic] [--reference spp]` | captures, per-pass timings and optional path-tracer errors → `target/ara-samples/captures/<project>/<look>/` |
 | `play <project> <scene> <name> [--walk ticks]` | windowed `ara-player` through `ara mcp` (`ara_play`), presented + full captures |
-| `editor <project> <scene> <name> [--camera x,y,z,yaw,pitch,distance]` | `ara-editor --screenshot`, framed over the Engine Protocol → `evidence/<name>-editor.png` |
+| `editor <project> <scene> <name> [--camera x,y,z,yaw,pitch,distance]` | `ara-editor --screenshot`, framed over the Engine Protocol → `target/ara-samples/evidence/<project>/<name>-editor.png` |
 
 `build`, `capture`, `play` and `editor` need release builds of `ara`,
 `ara-import-worker`, `ara-player` and `ara-editor` (found next to this binary, in `target/release`, or via `ARA_BIN`,
@@ -43,7 +43,7 @@ an empty dir, `VK_LAYER_PATH` = the SDK `Bin`).
   lock/look assets, then calls ara-runtime-render's engine-owned fidelity adapter),
   `render` (shots, upscaled pass, strip, timings), `look` (the per-scene look file).
 - `play`: MCP client over `ara mcp`.
-- `game/`: repeatable co-op game authoring; `samples/outpost/tests/coop.ps1` drives
+- `game/`: repeatable co-op game authoring; `tests/samples/outpost/coop.ps1` drives
   four real bot players, late join, private inventories, captures and authority replay.
 - `editor`: switches the project's `main` scene for the run (the editor opens only
   `main`), then frames the view from a navigation-only `human` session, because an
@@ -83,7 +83,7 @@ captures leave tracked sample evidence unchanged.
 
 ## Testing
 
-`ara-samples game` also authors Outpost's native `levels/menu.scene` through entity
+`ara-samples game` also authors Outpost's native `content/levels/menu.scene` through entity
 and prefab commands; it shares the compound art but contains no gameplay components.
 
 `cargo test -p ara-samples` (lock validation, kit geometry, source-pivot bounds, fold-in maths).

@@ -27,6 +27,7 @@ pub mod journal;
 pub mod params;
 mod profile;
 pub mod project;
+pub mod project_layout;
 pub mod project_policy;
 mod project_settings;
 pub mod query;

@@ -1,0 +1,647 @@
+{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_showcase1",
+  "records": {
+    "e_ball0": {
+      "name": "ball_gold",
+      "order": "aW",
+      "MeshRenderer": {
+        "model": "@kit/ball_gold.gltf#as_kitballgold"
+      },
+      "Transform": {
+        "position": [-2.25, 0, 3]
+      }
+    },
+    "e_ball1": {
+      "name": "ball_copper",
+      "order": "aX",
+      "MeshRenderer": {
+        "model": "@kit/ball_copper.gltf#as_kitballcopper"
+      },
+      "Transform": {
+        "position": [-1.35, 0, 3]
+      }
+    },
+    "e_ball10": {
+      "name": "ball_leather",
+      "order": "ag",
+      "MeshRenderer": {
+        "model": "@kit/ball_leather.gltf#as_kitballleather"
+      },
+      "Transform": {
+        "position": [1.35, 0, 3.9]
+      }
+    },
+    "e_ball11": {
+      "name": "ball_velvet",
+      "order": "ah",
+      "MeshRenderer": {
+        "model": "@kit/ball_velvet.gltf#as_kitballvelvet"
+      },
+      "Transform": {
+        "position": [2.25, 0, 3.9]
+      }
+    },
+    "e_ball12": {
+      "name": "ball_skin",
+      "order": "ai",
+      "MeshRenderer": {
+        "model": "@kit/ball_skin.gltf#as_kitballskin"
+      },
+      "Transform": {
+        "position": [-2.25, 0, 4.8]
+      }
+    },
+    "e_ball13": {
+      "name": "ball_marble",
+      "order": "aj",
+      "MeshRenderer": {
+        "model": "@kit/ball_marble.gltf#as_kitballmarble"
+      },
+      "Transform": {
+        "position": [-1.35, 0, 4.8]
+      }
+    },
+    "e_ball14": {
+      "name": "ball_wood",
+      "order": "ak",
+      "MeshRenderer": {
+        "model": "@kit/ball_wood.gltf#as_kitballwood"
+      },
+      "Transform": {
+        "position": [-0.45, 0, 4.8]
+      }
+    },
+    "e_ball15": {
+      "name": "ball_glass",
+      "order": "al",
+      "MeshRenderer": {
+        "model": "@kit/ball_glass.gltf#as_kitballglass"
+      },
+      "Transform": {
+        "position": [0.45, 0, 4.8]
+      }
+    },
+    "e_ball16": {
+      "name": "ball_glass_tinted",
+      "order": "am",
+      "MeshRenderer": {
+        "model": "@kit/ball_glass_tinted.gltf#as_kitballglasstinted"
+      },
+      "Transform": {
+        "position": [1.35, 0, 4.8]
+      }
+    },
+    "e_ball17": {
+      "name": "ball_emissive",
+      "order": "an",
+      "MeshRenderer": {
+        "model": "@kit/ball_emissive.gltf#as_kitballemissive",
+        "emissive": [2400, 2400, 2400]
+      },
+      "Transform": {
+        "position": [2.25, 0, 4.8]
+      }
+    },
+    "e_ball2": {
+      "name": "ball_chrome",
+      "order": "aY",
+      "MeshRenderer": {
+        "model": "@kit/ball_chrome.gltf#as_kitballchrome"
+      },
+      "Transform": {
+        "position": [-0.45, 0, 3]
+      }
+    },
+    "e_ball3": {
+      "name": "ball_aluminium",
+      "order": "aZ",
+      "MeshRenderer": {
+        "model": "@kit/ball_aluminium.gltf#as_kitballaluminium"
+      },
+      "Transform": {
+        "position": [0.45, 0, 3]
+      }
+    },
+    "e_ball4": {
+      "name": "ball_rust",
+      "order": "aa",
+      "MeshRenderer": {
+        "model": "@kit/ball_rust.gltf#as_kitballrust"
+      },
+      "Transform": {
+        "position": [1.35, 0, 3]
+      }
+    },
+    "e_ball5": {
+      "name": "ball_plate",
+      "order": "ab",
+      "MeshRenderer": {
+        "model": "@kit/ball_plate.gltf#as_kitballplate"
+      },
+      "Transform": {
+        "position": [2.25, 0, 3]
+      }
+    },
+    "e_ball6": {
+      "name": "ball_plastic_red",
+      "order": "ac",
+      "MeshRenderer": {
+        "model": "@kit/ball_plastic_red.gltf#as_kitballplasticred"
+      },
+      "Transform": {
+        "position": [-2.25, 0, 3.9]
+      }
+    },
+    "e_ball7": {
+      "name": "ball_plastic_white",
+      "order": "ad",
+      "MeshRenderer": {
+        "model": "@kit/ball_plastic_white.gltf#as_kitballplasticwhite"
+      },
+      "Transform": {
+        "position": [-1.35, 0, 3.9]
+      }
+    },
+    "e_ball8": {
+      "name": "ball_rubber",
+      "order": "ae",
+      "MeshRenderer": {
+        "model": "@kit/ball_rubber.gltf#as_kitballrubber"
+      },
+      "Transform": {
+        "position": [-0.45, 0, 3.9]
+      }
+    },
+    "e_ball9": {
+      "name": "ball_denim",
+      "order": "af",
+      "MeshRenderer": {
+        "model": "@kit/ball_denim.gltf#as_kitballdenim"
+      },
+      "Transform": {
+        "position": [0.45, 0, 3.9]
+      }
+    },
+    "e_camera": {
+      "name": "Camera",
+      "order": "a9",
+      "Camera": {
+        "fov": 45
+      },
+      "Transform": {
+        "position": [0, 2.2, -7.5],
+        "rotation": [-170.90973, 0, -180]
+      }
+    },
+    "e_env": {
+      "name": "Studio",
+      "order": "a0",
+      "Environment": {
+        "sky": [0.5, 0.48, 0.45, 1],
+        "horizon": [0.6, 0.55, 0.5, 1],
+        "ground": [0.25, 0.22, 0.2, 1],
+        "exposure": 0.002
+      },
+      "PostProcess": {
+        "toneMapping": "neutral"
+      }
+    },
+    "e_fill": {
+      "name": "Studio spot",
+      "order": "a3",
+      "Light": {
+        "kind": "spot",
+        "color": [1, 0.9, 0.8, 1],
+        "intensity": 4000,
+        "range": 14,
+        "innerAngle": 25,
+        "outerAngle": 45
+      },
+      "Transform": {
+        "position": [4, 2.5, -3.5],
+        "rotation": [-156.8014, 46.409485, 162.75523]
+      }
+    },
+    "e_hero0": {
+      "name": "flight_helmet",
+      "order": "aB",
+      "MeshRenderer": {
+        "model": "@third_party/khronos_flight_helmet/FlightHelmet.gltf#as_khronosflighthelmet"
+      },
+      "Transform": {
+        "position": [-4.264, 1, -1.118],
+        "rotation": [0, 200, 0]
+      }
+    },
+    "e_hero1": {
+      "name": "scifi_helmet",
+      "order": "aD",
+      "MeshRenderer": {
+        "model": "@third_party/khronos_scifi_helmet/SciFiHelmet.gltf#as_khronosscifihelmet"
+      },
+      "Transform": {
+        "position": [-3.811, 1.292, -2.2],
+        "rotation": [0, 160, 0],
+        "scale": [0.2, 0.2, 0.2]
+      }
+    },
+    "e_hero10": {
+      "name": "gas_mask",
+      "order": "aV",
+      "MeshRenderer": {
+        "model": "@third_party/old_gas_mask/old_gas_mask_2k.gltf#as_oldgasmask"
+      },
+      "Transform": {
+        "position": [4.235, 2.407, -1.097],
+        "rotation": [0, 160, 0],
+        "scale": [1.4, 1.4, 1.4]
+      }
+    },
+    "e_hero2": {
+      "name": "antique_camera",
+      "order": "aF",
+      "MeshRenderer": {
+        "model": "@third_party/khronos_antique_camera/AntiqueCamera.gltf#as_khronosantiquecamera"
+      },
+      "Transform": {
+        "position": [-3.153, 1, -3.112],
+        "rotation": [0, 210, 0],
+        "scale": [0.11, 0.11, 0.11]
+      }
+    },
+    "e_hero3": {
+      "name": "water_bottle",
+      "order": "aH",
+      "MeshRenderer": {
+        "model": "@third_party/khronos_water_bottle/WaterBottle.gltf#as_khronoswaterbottle"
+      },
+      "Transform": {
+        "position": [-2.2, 1.208, -3.811],
+        "rotation": [0, 180, 0],
+        "scale": [1.6, 1.6, 1.6]
+      }
+    },
+    "e_hero4": {
+      "name": "camera",
+      "order": "aJ",
+      "MeshRenderer": {
+        "model": "@third_party/camera_01/Camera_01_2k.gltf#as_camera01"
+      },
+      "Transform": {
+        "position": [-1.271, 0.999, -4.147],
+        "rotation": [0, 150, 0],
+        "scale": [2.2, 2.2, 2.2]
+      }
+    },
+    "e_hero5": {
+      "name": "lantern",
+      "order": "aL",
+      "MeshRenderer": {
+        "model": "@third_party/lantern_01/Lantern_01_2k.gltf#as_lantern01"
+      },
+      "Transform": {
+        "position": [0, 1, -4.4],
+        "rotation": [0, 190, 0],
+        "scale": [2.2, 2.2, 2.2]
+      }
+    },
+    "e_hero6": {
+      "name": "binoculars",
+      "order": "aN",
+      "MeshRenderer": {
+        "model": "@third_party/binoculars/binoculars_2k.gltf#as_binoculars"
+      },
+      "Transform": {
+        "position": [1.259, 1.016, -4.371],
+        "rotation": [0, 140, 0],
+        "scale": [2, 2, 2]
+      }
+    },
+    "e_hero7": {
+      "name": "blowtorch",
+      "order": "aP",
+      "MeshRenderer": {
+        "model": "@third_party/brass_blowtorch/brass_blowtorch_2k.gltf#as_brassblowtorch"
+      },
+      "Transform": {
+        "position": [2.211, 1, -3.781],
+        "rotation": [0, 200, 0],
+        "scale": [2, 2, 2]
+      }
+    },
+    "e_hero8": {
+      "name": "boombox",
+      "order": "aR",
+      "MeshRenderer": {
+        "model": "@third_party/boombox/boombox_2k.gltf#as_boombox"
+      },
+      "Transform": {
+        "position": [3.108, 1, -3.092],
+        "rotation": [0, 170, 0]
+      }
+    },
+    "e_hero9": {
+      "name": "radio",
+      "order": "aT",
+      "MeshRenderer": {
+        "model": "@third_party/vintage_radio_transceiver/vintage_radio_transceiver_2k.gltf#as_vintageradiotransceiver"
+      },
+      "Transform": {
+        "position": [3.762, 1.001, -2.129],
+        "rotation": [0, 180, 0]
+      }
+    },
+    "e_jogger": {
+      "name": "Mannequin (jogging)",
+      "order": "a7",
+      "Animator": {
+        "controller": "@anim/human.animation#an_locomotion"
+      },
+      "Collider": {
+        "kind": "capsule",
+        "radius": 0.3,
+        "halfHeight": 0.6
+      },
+      "MeshRenderer": {
+        "model": "@third_party/m2m_human/human-base-animations.glb#as_m2mhuman",
+        "materialOverrides": [
+          {
+            "material": "@materials/humanpalette0.graph#gr_humanpalette0"
+          }
+        ]
+      },
+      "NavAgent": {},
+      "RigidBody": {
+        "motion": "kinematic"
+      },
+      "Transform": {
+        "position": [-3.5, 0, 2.5],
+        "rotation": [0, 90, 0]
+      },
+      "Wanderer": {
+        "min": [-4.5, 0, -1],
+        "max": [4.5, 0, 4.5],
+        "pauseTicks": 20
+      }
+    },
+    "e_key": {
+      "name": "Key light",
+      "order": "a1",
+      "Light": {
+        "kind": "directional",
+        "color": [1, 0.95, 0.88, 1],
+        "intensity": 2200
+      },
+      "Transform": {
+        "position": [0, 10, 0],
+        "rotation": [-56.30994, -26.529753, -33.821842]
+      }
+    },
+    "e_model": {
+      "name": "Mannequin (turntable)",
+      "order": "a6",
+      "Animator": {
+        "controller": "@anim/human.animation#an_locomotion"
+      },
+      "CharacterController": {},
+      "MeshRenderer": {
+        "model": "@third_party/m2m_human/human-base-animations.glb#as_m2mhuman",
+        "materialOverrides": [
+          {
+            "material": "@materials/humanpalette0.graph#gr_humanpalette0"
+          }
+        ]
+      },
+      "PlayerControl": {
+        "walkSpeed": 1.5,
+        "runSpeed": 5,
+        "yaw": 200,
+        "camera": "e_camera"
+      },
+      "Transform": {
+        "position": [0, 0.12, 0],
+        "rotation": [0, 200, 0]
+      }
+    },
+    "e_navsurface": {
+      "name": "Stage navigation",
+      "order": "a8",
+      "NavMeshSurface": {
+        "min": [-7, -1, -7],
+        "max": [7, 3, 7]
+      },
+      "Transform": {}
+    },
+    "e_plinth0": {
+      "name": "Plinth",
+      "order": "aA",
+      "Collider": {
+        "center": [0, 0.5, 0],
+        "halfExtents": [0.30000001192092896, 0.5, 0.30000001192092896]
+      },
+      "MeshRenderer": {
+        "model": "@kit/plinth.gltf#as_kitplinth"
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-4.25, 0, -1.139],
+        "rotation": [0, 75, 0]
+      }
+    },
+    "e_plinth1": {
+      "name": "Plinth",
+      "order": "aC",
+      "Collider": {
+        "center": [0, 0.5, 0],
+        "halfExtents": [0.30000001192092896, 0.5, 0.30000001192092896]
+      },
+      "MeshRenderer": {
+        "model": "@kit/plinth.gltf#as_kitplinth"
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-3.811, 0, -2.2],
+        "rotation": [0, 60, 0]
+      }
+    },
+    "e_plinth10": {
+      "name": "Plinth",
+      "order": "aU",
+      "Collider": {
+        "center": [0, 0.5, 0],
+        "halfExtents": [0.30000001192092896, 0.5, 0.30000001192092896]
+      },
+      "MeshRenderer": {
+        "model": "@kit/plinth.gltf#as_kitplinth"
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [4.25, 0, -1.139],
+        "rotation": [0, -75, 0]
+      }
+    },
+    "e_plinth2": {
+      "name": "Plinth",
+      "order": "aE",
+      "Collider": {
+        "center": [0, 0.5, 0],
+        "halfExtents": [0.30000001192092896, 0.5, 0.30000001192092896]
+      },
+      "MeshRenderer": {
+        "model": "@kit/plinth.gltf#as_kitplinth"
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-3.111, 0, -3.111],
+        "rotation": [0, 45, 0]
+      }
+    },
+    "e_plinth3": {
+      "name": "Plinth",
+      "order": "aG",
+      "Collider": {
+        "center": [0, 0.5, 0],
+        "halfExtents": [0.30000001192092896, 0.5, 0.30000001192092896]
+      },
+      "MeshRenderer": {
+        "model": "@kit/plinth.gltf#as_kitplinth"
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-2.2, 0, -3.811],
+        "rotation": [0, 30, 0]
+      }
+    },
+    "e_plinth4": {
+      "name": "Plinth",
+      "order": "aI",
+      "Collider": {
+        "center": [0, 0.5, 0],
+        "halfExtents": [0.30000001192092896, 0.5, 0.30000001192092896]
+      },
+      "MeshRenderer": {
+        "model": "@kit/plinth.gltf#as_kitplinth"
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [-1.139, 0, -4.25],
+        "rotation": [0, 15, 0]
+      }
+    },
+    "e_plinth5": {
+      "name": "Plinth",
+      "order": "aK",
+      "Collider": {
+        "center": [0, 0.5, 0],
+        "halfExtents": [0.30000001192092896, 0.5, 0.30000001192092896]
+      },
+      "MeshRenderer": {
+        "model": "@kit/plinth.gltf#as_kitplinth"
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [0, 0, -4.4]
+      }
+    },
+    "e_plinth6": {
+      "name": "Plinth",
+      "order": "aM",
+      "Collider": {
+        "center": [0, 0.5, 0],
+        "halfExtents": [0.30000001192092896, 0.5, 0.30000001192092896]
+      },
+      "MeshRenderer": {
+        "model": "@kit/plinth.gltf#as_kitplinth"
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [1.139, 0, -4.25],
+        "rotation": [0, -15, 0]
+      }
+    },
+    "e_plinth7": {
+      "name": "Plinth",
+      "order": "aO",
+      "Collider": {
+        "center": [0, 0.5, 0],
+        "halfExtents": [0.30000001192092896, 0.5, 0.30000001192092896]
+      },
+      "MeshRenderer": {
+        "model": "@kit/plinth.gltf#as_kitplinth"
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [2.2, 0, -3.811],
+        "rotation": [0, -30, 0]
+      }
+    },
+    "e_plinth8": {
+      "name": "Plinth",
+      "order": "aQ",
+      "Collider": {
+        "center": [0, 0.5, 0],
+        "halfExtents": [0.30000001192092896, 0.5, 0.30000001192092896]
+      },
+      "MeshRenderer": {
+        "model": "@kit/plinth.gltf#as_kitplinth"
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [3.111, 0, -3.111],
+        "rotation": [0, -45, 0]
+      }
+    },
+    "e_plinth9": {
+      "name": "Plinth",
+      "order": "aS",
+      "Collider": {
+        "center": [0, 0.5, 0],
+        "halfExtents": [0.30000001192092896, 0.5, 0.30000001192092896]
+      },
+      "MeshRenderer": {
+        "model": "@kit/plinth.gltf#as_kitplinth"
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [3.811, 0, -2.2],
+        "rotation": [0, -60, 0]
+      }
+    },
+    "e_rim": {
+      "name": "Studio spot",
+      "order": "a2",
+      "Light": {
+        "kind": "spot",
+        "color": [0.75, 0.85, 1, 1],
+        "intensity": 9000,
+        "range": 14,
+        "innerAngle": 25,
+        "outerAngle": 45
+      },
+      "Transform": {
+        "position": [-3.5, 3.2, 3],
+        "rotation": [-36.253838, -43.25303, -26.679337]
+      }
+    },
+    "e_stage": {
+      "name": "Stage",
+      "order": "a4",
+      "MeshRenderer": {
+        "model": "@kit/stage.gltf#as_kitstage"
+      },
+      "Transform": {}
+    },
+    "e_stagec": {
+      "name": "Floor collider",
+      "order": "a5",
+      "Collider": {
+        "halfExtents": [15, 0.1, 15]
+      },
+      "RigidBody": {},
+      "Transform": {
+        "position": [0, -0.1, 0]
+      }
+    }
+  }
+}

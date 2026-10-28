@@ -1,4 +1,4 @@
-//! Export reads existing authored roots and policy without activating a new layout.
+//! Export reads current authored roots; legacy projects migrate before packaging.
 use ara_play_host::{package_scene_for_export, read_game_ui};
 use serde_json::json;
 use std::{
@@ -27,7 +27,9 @@ fn scratch() -> Result<tempfile::TempDir, std::io::Error> {
 fn modern_project(root: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
     fs::write(
         root.join("ara.project.json"),
-        r#"{"layoutVersion":3,"main":"scenes/main.scene"}"#,
+        ara_json::to_canonical_string(
+            &json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"scenes/main.scene"}),
+        ),
     )?;
     let authored = ara_host::project::authored_root(root);
     fs::create_dir_all(authored.join("scenes"))?;
@@ -65,11 +67,12 @@ fn configured_feature_paths_package_ui_short_references_and_exclude_project_poli
     )?;
     let policy = ara_asset::ProjectImportSettings::default().canonical_text()?;
     fs::write(
-        root.path().join(ara_asset::PROJECT_IMPORT_SETTINGS_FILE),
+        root.path()
+            .join(ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE),
         &policy,
     )?;
     fs::write(
-        root.path().join("settings/ara.imports"),
+        root.path().join(ara_asset::PROJECT_IMPORT_SETTINGS_FILE),
         policy.replace("ip_project", "ip_scoped"),
     )?;
     fs::write(
@@ -189,7 +192,7 @@ fn configured_missing_ui_and_escaping_resource_paths_fail_before_packaging()
 }
 
 #[test]
-fn legacy_ui_sources_remain_byte_exact_without_policy_or_scaffold_creation()
+fn legacy_ui_sources_require_migration_without_policy_or_scaffold_creation()
 -> Result<(), Box<dyn std::error::Error>> {
     let root = scratch()?;
     fs::write(root.path().join("ara.project.json"), "{}")?;
@@ -202,12 +205,60 @@ fn legacy_ui_sources_remain_byte_exact_without_policy_or_scaffold_creation()
     ] {
         fs::write(root.path().join("ui").join(name), text)?;
     }
-    let ui = read_game_ui(root.path())?.ok_or("legacy UI")?;
-    assert_eq!(ui.markup, markup);
-    assert_eq!(ui.stylesheet, ".title {}\n");
-    assert_eq!(serde_json::to_value(&ui.bindings)?, json!([]));
+    let diagnostic = ara_host::project_layout::require_current_layout(root.path())
+        .expect_err("legacy sources require migration before any read");
+    assert_eq!(diagnostic.code, ara_diag::codes::PROJECT_MIGRATION_REQUIRED);
+    assert_eq!(fs::read_to_string(root.path().join("ui/game.ui"))?, markup);
+    assert_eq!(
+        fs::read_to_string(root.path().join("ui/game.css"))?,
+        ".title {}\n"
+    );
+    assert_eq!(
+        fs::read_to_string(root.path().join("ui/bindings.json"))?,
+        "[]"
+    );
     assert!(!root.path().join("settings").exists());
     assert!(!root.path().join(".ara").exists());
     assert!(!root.path().join(ara_doc::AUTHORING_ROOT).exists());
+    Ok(())
+}
+
+#[test]
+fn migration_materializes_movable_legacy_ui_paths() -> Result<(), Box<dyn std::error::Error>> {
+    let root = scratch()?;
+    fs::write(root.path().join("ara.project.json"), "{}")?;
+    fs::create_dir_all(root.path().join("ui"))?;
+    for (file, text) in [
+        ("game.ui", "<ui id='root'/>"),
+        ("game.css", ""),
+        ("bindings.json", "[]"),
+        ("resources.json", "{}"),
+    ] {
+        fs::write(root.path().join("ui").join(file), text)?;
+    }
+    let diagnostic = ara_host::project_layout::require_current_layout(root.path())
+        .expect_err("legacy sources require migration before any read");
+    assert_eq!(diagnostic.code, ara_diag::codes::PROJECT_MIGRATION_REQUIRED);
+    let before = fs::read_to_string(root.path().join("ui/game.ui"))?;
+    let stylesheet = fs::read_to_string(root.path().join("ui/game.css"))?;
+    let bindings: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.path().join("ui/bindings.json"))?)?;
+    ara_host::project_layout::Migration::plan(root.path(), None)
+        .map_err(|error| error.to_string())?
+        .apply()
+        .map_err(|error| error.to_string())?;
+    let policy =
+        ara_host::project_layout::preferences(root.path()).map_err(|error| error.to_string())?;
+    assert_eq!(
+        policy["ui"],
+        serde_json::json!({"main":"ui/game.ui","stylesheet":"ui/game.css","bindings":"ui/bindings.json","resources":"ui/resources.json"})
+    );
+    let after = read_game_ui(root.path())?.ok_or("migrated UI")?;
+    assert!(
+        after.markup.ends_with(&before),
+        "migration only adds stable asset identity metadata"
+    );
+    assert_eq!(after.stylesheet, stylesheet);
+    assert_eq!(serde_json::to_value(after.bindings)?, bindings);
     Ok(())
 }

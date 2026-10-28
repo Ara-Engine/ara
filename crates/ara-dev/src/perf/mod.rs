@@ -398,6 +398,13 @@ pub(crate) fn session(
         });
         crate::d26::validity::record(&directory.join("measurement-window.json"), launched)?;
         let outcome = outcome?;
+        if !outcome.success()
+            && let Ok(bytes) = fs::read(&raw)
+            && let Ok(player) = serde_json::from_slice::<serde_json::Value>(&bytes)
+            && let Some(problem) = readiness::failure(&player)
+        {
+            anyhow::bail!("{problem}");
+        }
         ensure!(
             outcome.success(),
             "perf player failed or timed out; {}",

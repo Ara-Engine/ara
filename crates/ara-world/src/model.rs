@@ -167,7 +167,12 @@ impl Manifest {
                 let doc = workspace
                     .doc(id)
                     .ok_or_else(|| invalid(format!("cell document {reference} is not loaded")))?;
-                if doc.kind != "scene" || workspace.path_of(id) != Some(path) {
+                if doc.kind != "scene"
+                    || workspace
+                        .path_of(id)
+                        .map(|path| workspace.reference_path(path))
+                        != Some(path)
+                {
                     return Err(invalid("cell reference path/identity mismatch"));
                 }
                 if cell.actors.contains(reference) && doc.children(None).len() != 1 {

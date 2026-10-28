@@ -42,8 +42,15 @@ fn main() -> Result<()> {
     if !gpu_child && cfg!(windows) {
         let driver = std::env::var_os("ARA_HOTPATCH_DRIVER")
             .context("launch this probe with ara-dev hotpatch")?;
-        let status = std::process::Command::new(driver)
-            .args(["gpu", "--timeout", "900", "--wait-for-quiet", "--"])
+        let mut command = std::process::Command::new(driver);
+        command.args(["gpu", "--timeout", "900", "--wait-for-quiet"]);
+        if std::env::var_os("ARA_HOTPATCH_LATENCY").is_some() {
+            // Compilation is the measured workload; retain GPU admission/load checks.
+            // This explicitly declared CPU policy cannot establish D26 frame budgets.
+            command.args(["--foreign-cpu-percent", "100"]);
+        }
+        let status = command
+            .arg("--")
             .arg(std::env::current_exe()?)
             .arg("--gpu-child")
             .args(arguments.iter().skip(1))

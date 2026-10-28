@@ -68,7 +68,7 @@ try {
         }
         $platformName = if ($platform -eq 'windows') { 'Windows' } elseif ($platform -eq 'linux') { 'Linux' } else { 'Android' }
         $configName = if ($Configuration -eq 'release') { 'Release' } elseif ($Configuration -eq 'dev') { 'Dev' } else { 'Profile' }
-        $preset = @{ '$schema'='ara://schema/export/1'; platform=$platform; config=$Configuration; scriptProject='game/Game.csproj'; assembly='Game'; content='content'; templates=$pins }
+        $preset = @{ '$schema'='ara://schema/export/1'; platform=$platform; config=$Configuration; scriptProject='Game.csproj'; assembly='Game'; content='content'; templates=$pins }
         $path = Join-Path $presets "$platform.export.json"
         [IO.File]::WriteAllText($path, ($preset | ConvertTo-Json -Depth 20), (New-Object Text.UTF8Encoding $false))
         & $exporter preset-fmt $path

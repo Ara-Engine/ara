@@ -14,6 +14,8 @@ fn main() -> ara_ui::Result<()> {
         .collect::<Result<Vec<_>, _>>()?;
     if arguments.get(1).map(String::as_str) == Some("--compile-scripts") {
         let root = PathBuf::from(arguments.get(2).ok_or("missing script project")?);
+        ara_host::project_layout::require_current_layout(&root)
+            .map_err(|diagnostic| format!("{diagnostic}"))?;
         return ara_editor::compile_scripts(&root);
     }
     ara_editor::LAUNCHED.get_or_init(std::time::Instant::now);
@@ -97,8 +99,13 @@ fn main() -> ara_ui::Result<()> {
             _ => options.project = PathBuf::from(arg),
         }
     }
-    // SAFETY: still single-threaded: nothing above starts a thread.
-    unsafe { options.isolate_profile() };
+    if !ara_editor::before_open_project(&options)? {
+        return Ok(());
+    }
+    if options.offscreen() {
+        // SAFETY: a bounded pre-open check starts no workers/windows; startup is still single-threaded.
+        unsafe { options.isolate_profile() };
+    }
     #[cfg(feature = "tracy")]
     let _tracy = ara_gpu::__tracy::Client::start();
     // Bounded runs never offer the crash folder or consume its "seen" marker.

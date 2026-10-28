@@ -13,12 +13,19 @@ use std::{
 
 // Mach's public SDK ABI; libc omits port deallocation and deprecates its host helper.
 unsafe extern "C" {
+    fn mach_timebase_info(info: *mut Timebase) -> libc::kern_return_t;
     fn mach_host_self() -> libc::mach_port_t;
     fn mach_port_deallocate(
         task: libc::mach_port_t,
         name: libc::mach_port_t,
     ) -> libc::kern_return_t;
     static mach_task_self_: libc::mach_port_t;
+}
+
+#[repr(C)]
+struct Timebase {
+    numer: u32,
+    denom: u32,
 }
 
 #[repr(C)]
@@ -37,6 +44,13 @@ struct Usage {
 }
 
 fn processes() -> Result<Vec<cpu::Process>> {
+    let mut timebase = Timebase { numer: 0, denom: 0 };
+    // SAFETY: the initialized SDK timebase output is valid for the query's exact ABI.
+    let status = unsafe { mach_timebase_info(&mut timebase) };
+    ensure!(
+        status == 0 && timebase.numer > 0 && timebase.denom > 0,
+        "Mach CPU timebase unavailable: {status}"
+    );
     // SAFETY: null/zero requests a count; no process is altered.
     let count = unsafe { libc::proc_listallpids(std::ptr::null_mut(), 0) };
     ensure!(count > 0, "proc_listallpids count failed");
@@ -94,7 +108,11 @@ fn processes() -> Result<Vec<cpu::Process>> {
             birth: info.pbi_start_tvsec * 1000 + info.pbi_start_tvusec / 1000,
             name: String::from_utf8_lossy(&name).into_owned(),
             ticks: if read == 0 {
-                usage.user.saturating_add(usage.system)
+                cpu::mach_nanoseconds(
+                    usage.user.saturating_add(usage.system),
+                    timebase.numer,
+                    timebase.denom,
+                )
             } else {
                 0
             },

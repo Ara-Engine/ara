@@ -16,17 +16,33 @@ edit.
 - **Naming entities in commands:** an ID or address, a batch symbol (`$crate`),
   or a name: `name:Crate`, or `name:Floor/Crate` when the name alone matches
   several entities.
+- **Layout:** `content/` holds every authored file, including C#, in any
+  folder arrangement. Any exact lowercase `editor` ancestor marks C# as editor-only.
+  `settings/` holds project policy and `settings/builds/` export presets. `.ara/`
+  holds generated projects, assemblies, schema, caches and logs. `builds/` is output.
+  Root `packages/` is reserved for future plugins and excluded from authored files.
+- **C# modules:** a lowercase `<name>.module.json` in a folder declares
+  `{"name":"Name","references":["Other"]}`; `references` and `hot` are optional.
+  Nested manifests start a new module. With no manifest the implicit module is game.
+  Editor-only code never ships and gameplay modules cannot depend on editor modules.
+- **Project policy:** `settings/project.json` holds input, rendering/look, physics, layers
+  and editor defaults (omitted fields inherit engine defaults). Edit through
+  `property.set` with `doc=settings/project.json`, `entity=p_settings` and a path
+  such as `settings.rendering.quality` so changes produce ordinary undoable ops.
+- **Native UI:** `settings/project.json` may set `ui.main`, `ui.stylesheet`,
+  `ui.bindings` and `ui.resources` to authored-relative paths (or `@path#id`).
+  Defaults are `ui/game.ui`, `ui/game.css`, `ui/bindings.json` and `ui/resources.json`.
+  Keep referenced UI resource paths and bindings valid when moving their files.
 - **References:** `@path#id` (`@prefabs/crate.prefab#pf_crate001`). Either half
-  repairs the other.
+  repairs the other. Paths are relative to `content/`, not the project root.
 - **Use commands, not raw file surgery, for graphs**, hierarchy (parents, order)
   and prefab overrides: `ara_apply` over MCP or `ara do <command> -p key=value`.
   `doc` is optional: the engine picks the document holding the entities you name,
-  else the main scene (`levels/main.scene`). Batches are atomic; mint IDs with
+  else the main scene (`scenes/main.scene`). Batches are atomic; mint IDs with
   `"as": "$crate"` and use them in later calls. Preview with `dryRun`. Small
   value edits straight in the JSON are fine: the engine validates them.
 - **Review:** every change is a transaction with a `why` (agents must give one).
-  Agent changes apply live but stay unreviewed until a human runs `ara accept` or
-  `ara revert`.
+  Agent changes apply immediately. Use per-turn undo or `ara revert` to reverse them.
 - **When something is wrong, ask the engine first:** `ara why name:Crate not
   visible`, `ara why ARA1302`, `ara why "is the frame slow"` (MCP: `ara_why`). It
   answers with ranked causes, their evidence and fixes you can run as is.
@@ -36,7 +52,7 @@ edit.
 - MCP: `.mcp.json` starts `ara mcp` (13 tools). Over `ara mcp` the session is
   optional (one begins on first use); `ara_session {"action": "begin", "client":
   "<you>"}` names yours. Codex: add `[mcp_servers.ara]` with `command = "ara"`,
-  `args = ["mcp"]` to its config.
+  `args = ["mcp", "--root", "<project path>"]` to its config.
 - CLI: `ara check` (validate), `ara query "Light"` / `ara query Crate`,
   `ara inspect` (main scene) or `ara inspect --doc outpost name:Crate`,
   `ara do property.set -p entity=name:Crate -p path=Light.intensity -p value=500

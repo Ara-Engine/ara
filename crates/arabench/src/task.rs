@@ -53,7 +53,7 @@ pub enum Area {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Fixture {
-    /// A fresh `ara init` project (empty `levels/main.scene`).
+    /// A fresh `ara init` project (empty `content/scenes/main.scene`).
     Empty,
     /// `ara init` plus `fixtures/outpost/` (types, prefabs, meshes, the outpost level).
     Outpost,

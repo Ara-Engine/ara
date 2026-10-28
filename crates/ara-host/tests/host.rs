@@ -107,8 +107,8 @@ fn source_replace_has_offline_undo_redo_and_rejects_external_changes() {
         .join(format!("source-replace-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     copy_dir(&fixtures(), &dir);
-    fs::create_dir_all(dir.join("scripts/Game")).expect("module directory");
-    let path = "scripts/Game/Door.cs";
+    fs::create_dir_all(dir.join("content/scripts/Game")).expect("module directory");
+    let path = "content/scripts/Game/Door.cs";
     fs::write(dir.join(path), "before\n").expect("source");
     let mut h = open(&dir, 2041);
     let session = begin(&mut h, "agent:fixer");
@@ -194,7 +194,7 @@ fn native_ui_creation_and_source_ops_preserve_xml_across_restart_and_undo() {
     let preview = call(&mut h, "cmd.apply", request(true));
     let applied = call(&mut h, "cmd.apply", request(false));
     assert_eq!(preview["ops"], applied["ops"]);
-    assert!(!dir.join("ui/hud.ui").exists());
+    assert!(!dir.join("content/ui/hud.ui").exists());
     call(
         &mut h,
         "cmd.apply",
@@ -203,7 +203,7 @@ fn native_ui_creation_and_source_ops_preserve_xml_across_restart_and_undo() {
         ]}),
     );
     h.flush();
-    let text = fs::read_to_string(dir.join("ui/hud.ui")).expect("native source");
+    let text = fs::read_to_string(dir.join("content/ui/hud.ui")).expect("native source");
     assert!(text.starts_with("<?xml"));
     assert!(text.contains("<!-- ara:asset ui_hud -->"));
     assert!(text.contains("<!-- keep -->"));
@@ -222,11 +222,11 @@ fn native_ui_creation_and_source_ops_preserve_xml_across_restart_and_undo() {
     let session = begin(&mut h, "agent:builder");
     call(&mut h, "history.undo", json!({"session":session}));
     h.flush();
-    let text = fs::read_to_string(dir.join("ui/hud.ui")).expect("empty native source");
+    let text = fs::read_to_string(dir.join("content/ui/hud.ui")).expect("empty native source");
     assert!(text.contains("<ui id=\"ui_hud\" />"));
     call(&mut h, "history.undo", json!({"session":session}));
     h.flush();
-    assert!(!dir.join("ui/hud.ui").exists());
+    assert!(!dir.join("content/ui/hud.ui").exists());
 }
 
 #[test]
@@ -250,7 +250,7 @@ fn recovery_replays_only_unsaved_documents_after_a_partial_flush() {
     h.flush();
     h.kill();
     // Simulate a crash after the first file's rename and flush journal entry.
-    fs::remove_file(dir.join("levels/second.scene")).unwrap();
+    fs::remove_file(dir.join("content/levels/second.scene")).unwrap();
     let journal = dir.join(".ara/journal");
     let text = fs::read_to_string(&journal).unwrap();
     let text = text
@@ -269,7 +269,7 @@ fn recovery_replays_only_unsaved_documents_after_a_partial_flush() {
     assert!(docs.iter().any(|d| d["id"] == "sc_first"));
     assert!(docs.iter().any(|d| d["id"] == "sc_second"));
     h.flush();
-    assert!(dir.join("levels/second.scene").is_file());
+    assert!(dir.join("content/levels/second.scene").is_file());
     let session = begin(&mut h, "agent:builder");
     call(
         &mut h,
@@ -277,8 +277,8 @@ fn recovery_replays_only_unsaved_documents_after_a_partial_flush() {
         json!({"session":session,"txn":created["txn"]}),
     );
     h.flush();
-    assert!(!dir.join("levels/first.scene").exists());
-    assert!(!dir.join("levels/second.scene").exists());
+    assert!(!dir.join("content/levels/first.scene").exists());
+    assert!(!dir.join("content/levels/second.scene").exists());
 }
 
 #[test]
@@ -292,7 +292,7 @@ fn document_creation_and_main_scene_survive_crash_and_undo() {
     let session = begin(&mut h, "agent:builder");
     let request = |dry| json!({"session":session,"why":"Create a second level","dryRun":dry,"commands":[{"cmd":"doc.create","as":"level","args":{"path":"levels/new.scene"}}]});
     let dry = call(&mut h, "cmd.apply", request(true));
-    assert!(!dir.join("levels/new.scene").exists());
+    assert!(!dir.join("content/levels/new.scene").exists());
     let created = call(&mut h, "cmd.apply", request(false));
     assert_eq!(dry["ops"], created["ops"]);
     assert_eq!(dry["ids"], created["ids"]);
@@ -306,7 +306,7 @@ fn document_creation_and_main_scene_survive_crash_and_undo() {
     let mut h = open(&dir, 2027);
     let resumed = begin(&mut h, "agent:builder");
     assert!(
-        dir.join("levels/new.scene").is_file(),
+        dir.join("content/levels/new.scene").is_file(),
         "unflushed document recovered"
     );
     let marker: Value =
@@ -317,14 +317,14 @@ fn document_creation_and_main_scene_survive_crash_and_undo() {
     call(&mut h, "history.undo", json!({"session":resumed}));
     h.flush();
     assert!(
-        !dir.join("levels/new.scene").exists(),
+        !dir.join("content/levels/new.scene").exists(),
         "undo removes the empty skeleton"
     );
     drop(h);
     let mut h = open(&dir, 2028);
     let resumed = begin(&mut h, "agent:builder");
     assert!(
-        !dir.join("levels/new.scene").exists(),
+        !dir.join("content/levels/new.scene").exists(),
         "recovery respects the deletion flush"
     );
     // A source file must never be overwritten by a document command.
@@ -355,28 +355,29 @@ fn explicit_document_deletion_flushes_recovers_and_undoes_with_history() {
         ]}),
     );
     host.flush();
-    let before = fs::read_to_string(dir.join("levels/generated.scene")).expect("saved scene");
+    let before =
+        fs::read_to_string(dir.join("content/levels/generated.scene")).expect("saved scene");
     call(
         &mut host,
         "cmd.apply",
         json!({"session":session,"doc":"ara.project.json","why":"Regenerate the level through document ops","commands":[{"cmd":"doc.delete","args":{"document":"@#sc_generated"}}]}),
     );
     host.flush();
-    assert!(!dir.join("levels/generated.scene").exists());
+    assert!(!dir.join("content/levels/generated.scene").exists());
     drop(host);
     let mut host = open(&dir, 902);
     let session = begin(&mut host, "agent:builder");
-    assert!(!dir.join("levels/generated.scene").exists());
+    assert!(!dir.join("content/levels/generated.scene").exists());
     call(&mut host, "history.undo", json!({"session":session}));
     host.flush();
     assert_eq!(
         before,
-        fs::read_to_string(dir.join("levels/generated.scene")).expect("restored scene")
+        fs::read_to_string(dir.join("content/levels/generated.scene")).expect("restored scene")
     );
 }
 
 fn scene(dir: &Path) -> String {
-    fs::read_to_string(dir.join("levels/arena.scene")).expect("scene file")
+    fs::read_to_string(dir.join("content/levels/arena.scene")).expect("scene file")
 }
 
 fn name_of(h: &mut Host, s: &str, entity: &str) -> Value {
@@ -851,7 +852,7 @@ fn external_edits_merge_in_or_are_reported_without_overwriting() {
     let s = begin(&mut h, "agent:claude");
 
     fs::write(
-        dir.join("levels/arena.scene"),
+        dir.join("content/levels/arena.scene"),
         scene(&dir).replace("\"Floor\"", "\"Ground floor\""),
     )
     .expect("edit");
@@ -869,7 +870,7 @@ fn external_edits_merge_in_or_are_reported_without_overwriting() {
                 "commands": [{ "cmd": "property.set", "args": { "entity": "e_flr1", "path": "name", "value": "Agent" } }] }),
     );
     let human_text = scene(&dir).replace("\"Ground floor\"", "\"Human\"");
-    fs::write(dir.join("levels/arena.scene"), &human_text).expect("edit");
+    fs::write(dir.join("content/levels/arena.scene"), &human_text).expect("edit");
     h.tick();
     let logs = call(
         &mut h,
@@ -882,7 +883,7 @@ fn external_edits_merge_in_or_are_reported_without_overwriting() {
     assert_eq!(scene(&dir), human_text, "the file is not overwritten");
     let status = call(&mut h, "session.status", json!({ "session": s }));
     assert_eq!(
-        status["files"]["diverged"]["levels/arena.scene"],
+        status["files"]["diverged"]["content/levels/arena.scene"],
         "conflict"
     );
 
@@ -893,7 +894,7 @@ fn external_edits_merge_in_or_are_reported_without_overwriting() {
     );
     assert!(scene(&dir).contains("\"Agent\""));
 
-    fs::write(dir.join("levels/arena.scene"), "{ not json").expect("break");
+    fs::write(dir.join("content/levels/arena.scene"), "{ not json").expect("break");
     h.tick();
     let logs = call(
         &mut h,
@@ -907,12 +908,13 @@ fn external_edits_merge_in_or_are_reported_without_overwriting() {
 #[test]
 fn equivalent_default_spelling_after_undo_keeps_redo_but_real_external_edits_are_journaled() {
     let dir = project("default-echo");
-    fs::remove_file(dir.join("types/render.types.json"))
+    let content = dir.join(ara_doc::AUTHORING_ROOT);
+    fs::remove_file(content.join("types/render.types.json"))
         .expect("replace fixture schemas with runtime schemas");
     let mut disk: Value = serde_json::from_str(&scene(&dir)).expect("scene JSON");
     disk["records"]["e_flr1"]["MeshRenderer"] = json!({"materialOverrides":[{"primitive":0,"material":"@prefabs/stack.prefab#pf_stack001"}]});
     fs::write(
-        dir.join("levels/arena.scene"),
+        content.join("levels/arena.scene"),
         ara_json::to_canonical_string(&disk),
     )
     .expect("renderer defaults");
@@ -955,7 +957,7 @@ fn equivalent_default_spelling_after_undo_keeps_redo_but_real_external_edits_are
     disk["records"]["e_flr1"]["Transform"]["scale"] = json!([40.0, 0.5, 40.0]);
     disk["records"]["e_flr1"]["MeshRenderer"]["materialOverrides"][0]["primitive"] = json!(0);
     fs::write(
-        dir.join("levels/arena.scene"),
+        content.join("levels/arena.scene"),
         serde_json::to_string_pretty(&disk).expect("equivalent JSON"),
     )
     .expect("default spelling");
@@ -980,7 +982,7 @@ fn equivalent_default_spelling_after_undo_keeps_redo_but_real_external_edits_are
     let mut disk: Value = serde_json::from_str(&scene(&dir)).expect("saved scene");
     disk["records"]["e_flr1"]["Transform"]["position"] = json!([4, 0, 0]);
     fs::write(
-        dir.join("levels/arena.scene"),
+        content.join("levels/arena.scene"),
         ara_json::to_canonical_string(&disk),
     )
     .expect("real external edit");
@@ -1042,7 +1044,7 @@ fn the_file_thread_saves_and_watches_off_the_tick() {
     );
 
     fs::write(
-        dir.join("levels/arena.scene"),
+        dir.join("content/levels/arena.scene"),
         scene(&dir).replace("\"Saved\"", "\"Edited\""),
     )
     .expect("edit");
@@ -1052,7 +1054,7 @@ fn the_file_thread_saves_and_watches_off_the_tick() {
     assert_eq!(merged(&mut h), 1);
 
     fs::write(
-        dir.join("levels/extra.scene"),
+        dir.join("content/levels/extra.scene"),
         r#"{"$schema":"ara://schema/scene/1","id":"sc_extra001","records":{}}"#,
     )
     .expect("new document");
@@ -1301,10 +1303,10 @@ fn calls_find_their_document_and_report_created_ids_plainly() {
                 ] }),
     );
     let pad = r["ids"]["$pad"].as_str().expect("pad").to_owned();
-    assert_eq!(r["doc"], "levels/arena.scene");
+    assert_eq!(r["doc"], "content/levels/arena.scene");
     let text = r["text"].as_str().expect("text");
     assert!(
-        text.starts_with("applied tx_") && text.contains("to levels/arena.scene"),
+        text.starts_with("applied tx_") && text.contains("to content/levels/arena.scene"),
         "{text}"
     );
     assert!(

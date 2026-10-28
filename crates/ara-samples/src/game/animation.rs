@@ -5,7 +5,7 @@ use ara_anim::graph::{
 };
 
 pub(super) fn actions(ctx: &Ctx, path: &str, controller: &str) -> Result<()> {
-    let doc: Value = serde_json::from_slice(&std::fs::read(ctx.root.join(path))?)?;
+    let doc: Value = serde_json::from_slice(&std::fs::read(ctx.path(path))?)?;
     let mut data: ControllerData =
         serde_json::from_value(doc["records"][controller]["controller"].clone())?;
     let mut calls = Vec::new();

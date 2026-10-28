@@ -158,9 +158,18 @@ fn scene() -> String {
 fn project() -> PathBuf {
     let dir = std::env::temp_dir().join(format!("ara-collab-demo-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
-    fs::create_dir_all(dir.join("levels")).expect("mkdir");
-    fs::write(dir.join("ara.project.json"), r#"{ "name": "demo" }"#).expect("marker");
-    fs::write(dir.join("levels/yard.scene"), scene()).expect("scene");
+    let authored = dir.join(ara_doc::AUTHORING_ROOT);
+    fs::create_dir_all(authored.join("levels")).expect("mkdir");
+    fs::write(
+        dir.join("ara.project.json"),
+        ara_json::to_canonical_string(&json!({
+            "layoutVersion": ara_doc::PROJECT_LAYOUT_VERSION,
+            "name": "demo",
+            "main": "levels/yard.scene",
+        })),
+    )
+    .expect("marker");
+    fs::write(authored.join("levels/yard.scene"), scene()).expect("scene");
     dir
 }
 
@@ -560,10 +569,12 @@ fn two_process_demo() {
         .call("collab.sync", json!({ "session": s, "snapshot": true }))
         .expect("snapshot");
     let snap: Snapshot = serde_json::from_value(snap["snapshot"].clone()).expect("snapshot");
+    assert_eq!(snap.reference_root, ara_doc::AUTHORING_ROOT);
+    let yard_storage = format!("{}/levels/yard.scene", ara_doc::AUTHORING_ROOT);
     let truth = snap
         .docs
         .iter()
-        .find(|doc| doc.path == "levels/yard.scene")
+        .find(|doc| doc.path == yard_storage)
         .expect("yard scene")
         .text
         .clone();

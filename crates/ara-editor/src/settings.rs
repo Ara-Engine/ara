@@ -826,7 +826,7 @@ mod tests {
         std::fs::create_dir_all(&root).expect("temp root");
         std::fs::write(
             root.join("ara.project.json"),
-            r#"{"main":"levels/main.scene","name":"Outpost"}"#,
+            r#"{"layoutVersion":4,"main":"levels/main.scene","name":"Outpost"}"#,
         )
         .expect("manifest");
         let user = root.join("user.json");
