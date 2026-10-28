@@ -6,9 +6,7 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 pub(super) struct Project(pub PathBuf);
 impl Project {
     pub fn new() -> Self {
-        let root = std::env::var_os("CARGO_TARGET_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("target"))
+        let root = crate::test_target()
             .join("editor-quality")
             .join(format!(
                 "{}-{}",

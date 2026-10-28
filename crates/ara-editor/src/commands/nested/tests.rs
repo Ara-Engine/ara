@@ -10,9 +10,7 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 struct Project(PathBuf);
 impl Project {
     fn new() -> Self {
-        let root = std::env::var_os("CARGO_TARGET_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("target"))
+        let root = crate::test_target()
             .join("collection-tests")
             .join(format!(
                 "{}-{}",
