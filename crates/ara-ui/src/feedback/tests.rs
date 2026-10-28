@@ -141,6 +141,32 @@ fn feedback_flips_away_from_target_rows_and_stays_inside_small_detached_viewport
             assert!(result.x + result.w + GAP <= avoid.x);
         }
     }
+    for avoid in [
+        Box2 { x: 2000., ..right },
+        Box2 {
+            y: 2000.,
+            w: 900.,
+            ..left
+        },
+    ] {
+        let result = place(
+            Anchor {
+                point: [250., 250.],
+                avoid: Some(avoid),
+            },
+            content,
+            [900., 300.],
+        );
+        fits(
+            result,
+            Box2 {
+                x: 0.,
+                y: 0.,
+                w: 900.,
+                h: 300.,
+            },
+        );
+    }
     let mut text = TextSystem::bundled()?;
     let mut ui = Ui::editor(
         "<ui id='root'><feedback id='feedback' style='padding:8px;font-size:12px'><text id='copy' text='A localized drag explanation with enough words to wrap after the detached surface becomes narrow.' /></feedback></ui>",
@@ -190,6 +216,28 @@ fn inline_banner_keeps_intrinsic_height_and_host_width_without_popup_limits() ->
     fits(ui.nodes[copy].rect, ui.nodes[status].rect);
     let rail = ui.nodes[ui.find("rail").expect("rail")].rect;
     fits(ui.nodes[status].rect, rail);
+    assert_eq!(ui.frame(&mut text)?, Work::default());
+    Ok(())
+}
+
+#[test]
+fn reconciled_message_copy_inherits_existing_feedback_typography() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let mut ui = Ui::editor(
+        "<ui id='root'><feedback id='feedback' style='padding:8px;font-size:12px' /></ui>",
+        EDITOR_CSS,
+        [500., 300.],
+    )?;
+    let feedback = ui.find("feedback").expect("feedback");
+    ui.place_feedback(feedback, [30., 30.], None)?;
+    ui.frame(&mut text)?;
+    ui.reconcile("<ui id='root'><feedback id='feedback' style='padding:8px;font-size:12px'><text id='new-copy' style='font-size:24px;white-space:nowrap' text='A new descriptive destination whose complete label needs to wrap after a retained markup update.' /></feedback></ui>")?;
+    ui.frame(&mut text)?;
+    let copy = ui.find("new-copy").expect("new copy");
+    let feedback = ui.find("feedback").expect("retained feedback");
+    assert_eq!(ui.nodes[copy].computed.font_size, 12.);
+    assert!(ui.nodes[copy].computed.wrap_text);
+    fits(ui.nodes[copy].rect, ui.nodes[feedback].rect);
     assert_eq!(ui.frame(&mut text)?, Work::default());
     Ok(())
 }

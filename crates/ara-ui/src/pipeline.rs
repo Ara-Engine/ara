@@ -19,7 +19,15 @@ impl Ui {
                 .element
                 .parent
                 .map(|p| self.nodes[p].computed.color);
-            let computed = if self.nodes[index].dirty.style {
+            let message_copy = self.nodes[index].dirty.layout
+                && self.nodes[index].element.tag == "text"
+                && self.nodes[index].element.parent.is_some_and(|parent| {
+                    matches!(
+                        self.nodes[parent].element.tag.as_str(),
+                        "feedback" | "banner"
+                    )
+                });
+            let computed = if self.nodes[index].dirty.style || message_copy {
                 let mut computed = self
                     .sheet
                     .compute(&self.nodes[index].element, self.nodes[index].state)?;

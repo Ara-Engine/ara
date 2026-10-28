@@ -99,7 +99,7 @@ pub(crate) fn place(anchor: Anchor, content: [f32; 2], window: [f32; 2]) -> Box2
         }
         let left = avoid.x - GAP - w;
         if left >= margin {
-            return rect(left, y(py + 18.0));
+            return rect(x(left), y(py + 18.0));
         }
         let below = avoid.y + avoid.h + GAP;
         if below + h <= window[1] - margin {
@@ -107,7 +107,7 @@ pub(crate) fn place(anchor: Anchor, content: [f32; 2], window: [f32; 2]) -> Box2
         }
         let above = avoid.y - GAP - h;
         if above >= margin {
-            return rect(x(px + 14.0), above);
+            return rect(x(px + 14.0), y(above));
         }
     }
     // Point-only hints choose the roomier vertical side and flip horizontally
