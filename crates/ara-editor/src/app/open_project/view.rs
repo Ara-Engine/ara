@@ -138,7 +138,7 @@ fn text(out: &mut String, class: &str, value: &str) {
 fn button(out: &mut String, id: &str, label: &str, class: &str, enabled: bool) {
     let _ = write!(
         out,
-        "<button id='{id}' class='{class}' label='{label}' {}><text id='{id}-label' text='{label}' /></button>",
+        "<button id='{id}' class='{class}' label='{label}' action='Dispatch' {}><text id='{id}-label' text='{label}' /></button>",
         if enabled { "" } else { "disabled='true'" }
     );
 }
