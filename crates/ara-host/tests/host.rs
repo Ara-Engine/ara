@@ -905,6 +905,97 @@ fn external_edits_merge_in_or_are_reported_without_overwriting() {
     assert_eq!(name_of(&mut h, &s, "e_flr1"), "Agent");
 }
 
+#[test]
+fn equivalent_default_spelling_after_undo_keeps_redo_but_real_external_edits_are_journaled() {
+    let dir = project("default-echo");
+    fs::remove_file(dir.join("types/render.types.json"))
+        .expect("replace fixture schemas with runtime schemas");
+    let mut disk: Value = serde_json::from_str(&scene(&dir)).expect("scene JSON");
+    disk["records"]["e_flr1"]["MeshRenderer"] = json!({"materialOverrides":[{"primitive":0,"material":"@prefabs/stack.prefab#pf_stack001"}]});
+    fs::write(
+        dir.join("levels/arena.scene"),
+        ara_json::to_canonical_string(&disk),
+    )
+    .expect("renderer defaults");
+    let project = Project::open_with(&dir, |db, _| {
+        ara_runtime::components::register_schemas(db);
+        Vec::new()
+    })
+    .expect("runtime project");
+    let mut host = Host::open(
+        project,
+        HostConfig {
+            debounce: Duration::from_secs(3600),
+            watch_every: Duration::ZERO,
+            scan_every: Duration::ZERO,
+            seed: Some(701),
+            ..HostConfig::default()
+        },
+    )
+    .expect("runtime host");
+    let session = begin(&mut host, "human");
+    call(
+        &mut host,
+        "cmd.apply",
+        json!({"session":session,"doc":"levels/arena.scene","commands":[
+            {"cmd":"property.set","args":{"entity":"e_flr1","path":"Transform.position","value":[2,0,0]}}
+        ]}),
+    );
+    host.flush();
+    call(&mut host, "history.undo", json!({"session":session}));
+    host.flush();
+    let revision = host.store().revision();
+    let mut disk: Value = serde_json::from_str(&scene(&dir)).expect("scene JSON");
+    assert!(
+        disk["records"]["e_flr1"]["MeshRenderer"]["materialOverrides"][0]
+            .get("primitive")
+            .is_none(),
+        "canonical native save elides the primitive slot default"
+    );
+    disk["records"]["e_flr1"]["Transform"]["position"] = json!([0, 0, 0]);
+    disk["records"]["e_flr1"]["Transform"]["scale"] = json!([40.0, 0.5, 40.0]);
+    disk["records"]["e_flr1"]["MeshRenderer"]["materialOverrides"][0]["primitive"] = json!(0);
+    fs::write(
+        dir.join("levels/arena.scene"),
+        serde_json::to_string_pretty(&disk).expect("equivalent JSON"),
+    )
+    .expect("default spelling");
+    host.tick();
+    assert_eq!(
+        host.store().revision(),
+        revision,
+        "default spelling must not become an external-edit transaction"
+    );
+    call(&mut host, "history.redo", json!({"session":session}));
+    assert_eq!(
+        host.store()
+            .workspace()
+            .doc("sc_arena001")
+            .expect("scene")
+            .record("e_flr1")
+            .expect("floor")["Transform"]["position"],
+        json!([2, 0, 0])
+    );
+    host.flush();
+    let revision = host.store().revision();
+    let mut disk: Value = serde_json::from_str(&scene(&dir)).expect("saved scene");
+    disk["records"]["e_flr1"]["Transform"]["position"] = json!([4, 0, 0]);
+    fs::write(
+        dir.join("levels/arena.scene"),
+        ara_json::to_canonical_string(&disk),
+    )
+    .expect("real external edit");
+    host.tick();
+    assert_eq!(host.store().revision(), revision + 1);
+    let history = call(
+        &mut host,
+        "history.list",
+        json!({"session":session,"limit":1}),
+    );
+    assert_eq!(history["items"][0]["label"], "external edit");
+    assert_eq!(history["items"][0]["author"], "human");
+}
+
 /// Tick until `done`, failing after ten seconds.
 fn tick_until(h: &mut Host, what: &str, mut done: impl FnMut(&mut Host) -> bool) {
     let deadline = Instant::now() + Duration::from_secs(10);

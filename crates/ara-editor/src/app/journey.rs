@@ -694,7 +694,7 @@ impl Journey {
                             "editor.settings.set",
                             json!({"key": "project.mainScene", "value": "levels/hangar.scene"}),
                         )?;
-                        self.note = "Project Settings > Main Scene = hangar.scene, then Build > Build Current Profile (no profile yet: it creates presets/windows.export.json)".into();
+                        self.note = "Project Settings > Main Scene = hangar.scene, then Build > Build Current Profile (no profile yet: it creates settings/builds/windows.export.json)".into();
                     } else {
                         self.note = "Build > Build Current Profile again: the project now has a C# module, which the export publishes NativeAOT".into();
                     }
@@ -711,9 +711,11 @@ impl Journey {
                     .clone()
                     .filter(|game| Some(game) != self.previous_build.as_ref())
                     .ok_or("the build failed; see Problems")?;
-                if name == "export-csharp" && !game.join("game/scripts.json").is_file() {
+                if name == "export-csharp"
+                    && !crate::shell::build::scripts_manifest(&game)?.is_file()
+                {
                     return Err(
-                        "the build did not ship the C# module (no game/scripts.json)".into(),
+                        "the build did not ship the C# module (no scripts manifest in application data)".into(),
                     );
                 }
                 if !self.note.contains("builds/") {

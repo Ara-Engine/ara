@@ -1,4 +1,5 @@
 //! Disposable authority tests; production workers never touch the user's profile.
+mod echo;
 use super::{
     AssetService, bindings::Bindings, import_entries::entry_metadata, inventory::Inventory,
 };

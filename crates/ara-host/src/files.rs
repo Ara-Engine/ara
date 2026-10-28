@@ -7,7 +7,9 @@
 //!   Journal and diagnostics writes take the same queue (`journal`, `persist_diag`);
 //!   `settle_files` waits for all of it.
 //! - **Watch:** OS notifications (or polling) report changed files. A changed file
-//!   is validated, then three-way merged (base: the last synced text, ours: memory,
+//!   is validated and compared with known states using the writer's default rules.
+//!   Equivalent writes are acknowledged without a transaction; real changes are
+//!   three-way merged (base: the last synced text, ours: memory,
 //!   theirs: disk) and applied as a human transaction (`external edit`). Invalid
 //!   files and conflicts with unsaved changes are reported and the document is
 //!   marked diverged: nothing is overwritten until `doc.sync` or a clean edit.
@@ -31,7 +33,10 @@ use crate::host::State;
 use crate::journal::{self, Entry};
 use crate::params::Keep;
 mod receipts;
+mod semantic;
 pub use receipts::FileCommitReceipt;
+use semantic::canonical;
+pub(crate) use semantic::equivalent;
 
 /// The last state a document and its file agreed on.
 #[derive(Debug, Clone)]
@@ -40,7 +45,7 @@ pub(crate) struct Synced {
     pub path: String,
     /// The file's text.
     pub text: String,
-    /// The document that text reads as: the merge base for external edits.
+    /// The text's semantic document state: the merge base for external edits.
     pub doc: Document,
 }
 
@@ -218,7 +223,7 @@ impl State {
             .files
             .synced
             .get(id)
-            .filter(|s| s.path == path && s.doc == *doc);
+            .filter(|s| s.path == path && equivalent(&s.doc, doc, self.store.schema()));
         if let Some(synced) = synced.filter(|_| !always) {
             let hash = journal::hash(&synced.text);
             self.journal(Entry::Flush {
@@ -415,7 +420,7 @@ impl State {
             .store
             .workspace()
             .doc(id.as_str())
-            .is_some_and(|d| *d != synced.doc);
+            .is_some_and(|d| !equivalent(d, &synced.doc, self.store.schema()));
         if dirty {
             if self
                 .files
@@ -513,7 +518,20 @@ impl State {
         let Some(ours) = self.store.workspace().doc(id.as_str()).cloned() else {
             return;
         };
-        let merged = match ara_merge::merge(&base, &ours, &theirs, db) {
+        let base = canonical(&base, db);
+        let ours = canonical(&ours, db);
+        let disk = canonical(&theirs, db);
+        // File snapshots can restore a different spelling of explicit defaults
+        // before the canonical save receipt arrives. A known state is an echo,
+        // even while memory contains a newer unsaved edit; do not clear Redo.
+        if equivalent(&disk, &base, db) || equivalent(&disk, &ours, db) {
+            self.files
+                .synced
+                .insert(id.clone(), Synced::new(path, text, theirs));
+            self.files.diverged.remove(id);
+            return;
+        }
+        let merged = match ara_merge::merge(&base, &ours, &disk, db) {
             Ok(m) => m,
             Err(d) => {
                 self.files.diverged.insert(id.clone(), Diverged::Invalid);
@@ -652,7 +670,7 @@ impl State {
                 self.store
                     .workspace()
                     .doc(id.as_str())
-                    .is_some_and(|d| *d != s.doc)
+                    .is_some_and(|d| !equivalent(d, &s.doc, self.store.schema()))
             })
             .map(|(_, s)| s.path.as_str())
             .collect();

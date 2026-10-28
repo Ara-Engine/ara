@@ -576,6 +576,20 @@ impl Worker {
         let text = crate::ui_document::validate(&save.doc, path)
             .and_then(|()| crate::project_settings::write(&save.doc, &self.db))
             .map_err(|d| d.file(path.clone()))?;
+        if let Ok(existing) = fs::read_to_string(&abs) {
+            if existing == text {
+                return Ok(existing);
+            }
+            let read = crate::project_settings::read(&existing, path, &self.db, None);
+            if let Some(doc) = read.doc.filter(|_| !ara_diag::has_errors(&read.diags))
+                && crate::files::equivalent(&doc, &save.doc, &self.db)
+            {
+                // A file op may just have restored its immutable snapshot. Keep
+                // those exact bytes and acknowledge them as the write receipt;
+                // canonicalizing them again would invalidate the Redo base hash.
+                return Ok(existing);
+            }
+        }
         let tmp = abs.with_extension("ara-tmp");
         fs::write(&tmp, &text)
             .and_then(|()| fs::rename(&tmp, &abs))
