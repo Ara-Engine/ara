@@ -65,6 +65,12 @@ impl Toolchain {
     }
 }
 fn run(command: &mut Command) -> Result<Vec<u8>> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // Background shader tools must not open a desktop console.
+        command.creation_flags(0x0800_0000);
+    }
     let output = command
         .output()
         .with_context(|| format!("Starting {command:?}"))?;
