@@ -208,9 +208,34 @@ interaction fixes above, not new editor panels.
 
 ## Performance
 
-Insert the final-source performance and quality reading after all rendering and
-editor changes land. Include per-scene/per-preset GPU p50/p95, CPU work and frame
-outliers, cold/warm startup, editor interaction during imports, import completion,
-and reference-image error. Identify hardware, resolution, render path, build and
-validation settings. Do not reuse alpha.3's table or intermediate branch speedups;
-no preview-4 budget pass or percentage improvement is claimed in this draft.
+Measured on this release's source (`d78e59368`) on Windows 11 with an RTX 4070 SUPER
+and a Ryzen 7 7800X3D at 2560×1440, using an optimized build without LTO. Every run
+held the GPU lease with no foreign GPU or CPU load and passed its pass-coverage check;
+High and Epic use the hybrid ray-query path, Low and Medium the raster path.
+
+**Showcase player, D26 protocol** (600 frames after readiness; GPU frame time):
+
+| Preset | p50 | p95 | Max | D26 limit |
+|---|---|---|---|---|
+| Low | 1.06 ms | 1.51 ms | 1.58 ms | 2.0 ms |
+| Medium | 1.27 ms | 1.87 ms | 2.14 ms | 3.5 ms |
+| High | 2.58 ms | 3.70 ms | 3.86 ms | 6.0 ms |
+| High, cold start | 2.67 ms | 3.26 ms | 3.75 ms | 6.0 ms |
+| Epic | 3.59 ms | 4.06 ms | 4.42 ms | 10.0 ms |
+
+CPU work stays at or below 1.12 ms p50 and 2.19 ms p95 in every row. Medium had
+two frames over 16 ms (the longest 17.2 ms); no other row had any. These Showcase
+rows ran the release player against packs frozen on 2026-10-27, with its main-thread
+stack reserve raised to the 8 MB this release ships.
+
+**Showcase materials shot (D29):** High 2.30 ms p50 / 2.36 ms p95; Epic 3.48 ms /
+3.61 ms. The sun-bounce correction has no measurable cost, one authored reflection
+probe adds about 0.05 ms at High, and the RT-tier bloom change is cost-neutral.
+
+**Editor:** with a warm cache, the first frame appears 1.31 s after launch and the
+first scene is fully drawn after 2.38 s.
+
+**Not measured in this release:** Outpost and Hangar frame times, editor
+responsiveness during imports and cold import time. Freshly exported performance
+packs now embed the C# NativeAOT image, which the timing player cannot run yet, and
+older packs carry the previous script ABI that this player correctly refuses.
