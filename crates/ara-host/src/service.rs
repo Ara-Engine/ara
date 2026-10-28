@@ -309,6 +309,12 @@ impl Cx<'_> {
         &self.st.store
     }
 
+    /// Whether the Host has observed disk divergence for this document ID.
+    /// Services check this before committing dependent policy migrations; no I/O occurs.
+    pub fn document_diverged(&self, id: &str) -> bool {
+        self.st.files.diverged.contains_key(id)
+    }
+
     /// The command, query and job registry.
     pub fn registry(&self) -> &Registry {
         &self.st.registry
@@ -458,3 +464,7 @@ impl Cx<'_> {
         self.st.file_jobs.materialized.get(&revision)
     }
 }
+
+#[cfg(test)]
+#[path = "service/divergence_tests.rs"]
+mod divergence_tests;
