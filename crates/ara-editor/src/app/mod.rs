@@ -101,7 +101,22 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     // Bounded runs resolve an isolated ARA_CONFIG_DIR (`Options::isolate_profile`);
     // tests and cargo runs are refused the owner's profile.
     let user_settings = crate::settings::user_settings_path()?;
-    let mut editor = Editor::open_with(&options.project, Some(user_settings))?;
+    let host_seed = if options.verify_monkey {
+        Some(match options.monkey_replay.as_deref() {
+            Some(journal) => monkey::Monkey::journal_seed(journal)?,
+            None => options.monkey_seed,
+        })
+    } else {
+        None
+    };
+    let mut editor = Editor::open_config(
+        &options.project,
+        Some(user_settings),
+        ara_host::HostConfig {
+            seed: host_seed,
+            ..Default::default()
+        },
+    )?;
     setup::prepare(&mut editor, &options)?;
     let mut server = Server::start(editor.host.root())?;
     eprintln!(
@@ -361,6 +376,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     } else {
         None
     };
+    if let (Some(runner), Some(seed)) = (&mut monkey, host_seed) {
+        runner.record_host_seed(seed)?;
+    }
     let mut content_drags = if options.verify_behaviours {
         Some(content_drags::ContentDrags::new(
             &mut editor,

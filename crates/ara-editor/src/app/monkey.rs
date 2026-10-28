@@ -3,6 +3,8 @@
 //! Every action is flushed before it runs. If the process stops responding, the last
 //! `begin` without an `end` identifies the exact action, seed and sequence to replay.
 mod actions;
+mod catalog;
+mod journal;
 mod measurements;
 pub(super) mod native;
 mod play;
@@ -13,10 +15,7 @@ mod tests;
 mod typed;
 mod watchdog;
 
-use crate::{
-    Editor,
-    shell::{Shell, commands},
-};
+use crate::{Editor, shell::Shell};
 pub(super) use actions::Action;
 use actions::{Generator, MemoryClipboard};
 use ara_ui_text::Clipboard;
@@ -42,6 +41,8 @@ struct Recorded {
 /// One production-loop runner with durable actions and an injectable input router.
 pub(super) struct Monkey {
     seed: u64,
+    host_seed: Option<u64>,
+    replay_original_host_seed: Option<u64>,
     budget: Duration,
     max_steps: Option<u64>,
     started: Instant,
@@ -52,6 +53,7 @@ pub(super) struct Monkey {
     clipboard: MemoryClipboard,
     play: play::State,
     typed: typed::State,
+    shell_catalog: catalog::State,
     resources: resources::Resources,
     last_catalog_matched: Option<bool>,
     actions: u64,
@@ -103,6 +105,8 @@ impl Monkey {
         std::fs::create_dir_all(output)?;
         Ok(Self {
             seed,
+            host_seed: None,
+            replay_original_host_seed: None,
             budget,
             max_steps,
             started: Instant::now(),
@@ -113,6 +117,7 @@ impl Monkey {
             clipboard: MemoryClipboard::default(),
             play: play::State::default(),
             typed: typed::State::default(),
+            shell_catalog: catalog::State::default(),
             resources: resources::Resources::default(),
             last_catalog_matched: None,
             actions: 0,
@@ -163,31 +168,34 @@ impl Monkey {
                     .into(),
             );
         }
-        let mut actions = VecDeque::new();
-        let mut seed = 0;
-        for (line, text) in std::fs::read_to_string(path)?.lines().enumerate() {
-            if text.trim().is_empty() {
-                continue;
-            }
-            let record: Value = serde_json::from_str(text)
-                .map_err(|error| format!("Replay line {}: {error}", line + 1))?;
-            if record["phase"] != "begin" {
-                continue;
-            }
-            seed = record["seed"].as_u64().unwrap_or(seed);
-            let action = serde_json::from_value(record["action"].clone())
-                .map_err(|error| format!("Replay action on line {}: {error}", line + 1))?;
-            actions.push_back(Recorded {
-                action,
-                cleanup: record["cleanup"].as_bool().unwrap_or(false),
-            });
-        }
-        if actions.is_empty() {
-            return Err("The monkey journal contains no recorded actions".into());
-        }
-        let mut runner = Self::new(seed, budget, Some(actions.len() as u64), output)?;
-        runner.replay = Some(actions);
+        let replay = journal::read(path)?;
+        let mut runner = Self::new(
+            replay.seed,
+            budget,
+            Some(replay.actions.len() as u64),
+            output,
+        )?;
+        runner.replay_original_host_seed = replay.original_host_seed;
+        runner.replay = Some(replay.actions);
         Ok(runner)
+    }
+
+    /// Read the Host seed before constructing the replay's Editor. Legacy journals
+    /// fall back to the action seed; their original Host entropy remains unknown.
+    pub fn journal_seed(path: &Path) -> ara_ui::Result<u64> {
+        journal::seed(path)
+    }
+
+    /// Record the exact seed supplied to HostConfig at startup, before any action.
+    /// Other consumers retain unknown provenance rather than inventing a Host seed.
+    pub fn record_host_seed(&mut self, seed: u64) -> ara_ui::Result<()> {
+        if self.actions != 0 || seed != self.seed {
+            return Err(
+                "Host seed must match the monkey seed and be recorded before actions".into(),
+            );
+        }
+        self.host_seed = Some(seed);
+        Ok(())
     }
 
     /// Execute one action at a frame boundary and dispatch ordinary widget actions.
@@ -221,6 +229,7 @@ impl Monkey {
             return Err("The editor monkey requires a fresh scratch project marked .ara-monkey-fixture or .ara-behaviour-fixture".into());
         }
         shell.open_ide = false;
+        self.shell_catalog.observe(&editor.extensions);
         if !self.resources.initialized() {
             // Instrumentation precedes every workload action, including queued
             // fixture actions. It never borrows or clones authoring documents.
@@ -259,8 +268,21 @@ impl Monkey {
                 .drain()
                 .or_else(|| self.typed.drain())
                 .or_else(|| self.resources.next())
+                .or_else(|| {
+                    if self.is_soak() {
+                        self.shell_catalog.next()
+                    } else {
+                        None
+                    }
+                })
             {
                 action
+            } else if self.is_soak() && self.shell_catalog.drain_pending() {
+                Action::Protocol {
+                    method: "editor.commands".into(),
+                    params: json!({}),
+                    raw: false,
+                }
             } else {
                 return Ok(false);
             };
@@ -281,10 +303,11 @@ impl Monkey {
         } else {
             let generator = &mut self.generator;
             let typed = &mut self.typed;
+            let catalog = &mut self.shell_catalog;
             let before = self.play.cleanup_actions();
             let action = self.play.next(|| {
                 generator.initialize(editor);
-                generator.next(editor, shell, typed)
+                generator.next(editor, shell, typed, catalog)
             });
             Recorded {
                 action,
@@ -296,7 +319,7 @@ impl Monkey {
         self.watchdog
             .progress(self.actions, Some(action_json.clone()));
         self.write_event(
-            json!({"phase":"begin","seed":self.seed,"step":self.actions,"cleanup":cleanup,"action":action_json}),
+            json!({"phase":"begin","seed":self.seed,"hostSeed":self.host_seed,"step":self.actions,"cleanup":cleanup,"action":action_json}),
         )?;
         let at = Instant::now();
         let mut play_event = None;
@@ -343,6 +366,7 @@ impl Monkey {
                     *self.command_successes.entry(id.clone()).or_default() += 1;
                 }
                 if let Some(case) = actions::edge_case(target) {
+                    self.shell_catalog.record(id, case);
                     self.command_cases
                         .entry(id.clone())
                         .or_default()
@@ -379,6 +403,7 @@ impl Monkey {
         for result in self.typed.take_events() {
             self.write_event(json!({"phase":"typedResult","step":self.actions-1,"result":result}))?;
         }
+        self.write_shell_catalog_events()?;
         if self.panics.is_empty() {
             self.observe_shell_resources(editor, shell)?;
         }
@@ -438,7 +463,9 @@ impl Monkey {
             || if let Some(replay) = &self.replay {
                 self.started.elapsed() >= self.budget || replay.is_empty()
             } else {
-                self.budget_reached() && self.resources_drained()
+                self.budget_reached()
+                    && self.resources_drained()
+                    && (!self.is_soak() || !self.shell_catalog.drain_pending())
             }
     }
 
@@ -517,8 +544,9 @@ impl Monkey {
         self.is_soak()
             && self.succeeded()
             && self.started.elapsed() >= self.budget
+            && self.host_seed == Some(self.seed)
             && self.native_events > 0
-            && self.missing_command_cases().is_empty()
+            && self.shell_catalog.complete()
             && self.typed.complete()
     }
 
@@ -544,6 +572,7 @@ impl Monkey {
         if !self.panics.is_empty() {
             return Ok(());
         }
+        self.shell_catalog.observe(&editor.extensions);
         if !self.budget_reached() && !self.replay.as_ref().is_some_and(VecDeque::is_empty) {
             return Ok(());
         }
@@ -558,11 +587,25 @@ impl Monkey {
         self.resources.settle_files(editor);
         let catalog = editor.action("schema.list", json!({"kind":"command"}))?;
         self.typed.validate_final_catalog(&catalog)?;
+        self.shell_catalog.observe(&editor.extensions);
+        let shell_catalog = editor.action("editor.commands", json!({}))?;
+        let settled = self.resources_drained();
+        self.shell_catalog.reconcile_final(&shell_catalog, settled);
+        self.write_shell_catalog_events()?;
         let matched = self.typed.final_catalog_matched();
         if self.resources.take_changed() || self.last_catalog_matched != Some(matched) {
             self.write_event(json!({"phase":"jobInventory","when":"finish","step":self.actions,"resources":self.resources.report(),
-                "typedCommandCatalogFinalMatched":matched}))?;
+                "typedCommandCatalogFinalMatched":matched,
+                "shellCommandCatalogFinalMatched":self.shell_catalog.final_matched()}))?;
             self.last_catalog_matched = Some(matched);
+        }
+        Ok(())
+    }
+
+    fn write_shell_catalog_events(&mut self) -> ara_ui::Result<()> {
+        for mut event in self.shell_catalog.take_events() {
+            event["step"] = self.actions.into();
+            self.write_event(event)?;
         }
         Ok(())
     }
@@ -652,10 +695,11 @@ impl Monkey {
 
     fn write_report(&mut self) -> ara_ui::Result<()> {
         let snapshot_at = Instant::now();
-        let unvisited: Vec<_> = commands::all()
-            .iter()
-            .filter(|spec| !self.commands.contains_key(spec.id))
-            .map(|spec| spec.id)
+        let unvisited: Vec<_> = self
+            .shell_catalog
+            .ids()
+            .into_iter()
+            .filter(|id| !self.commands.contains_key(*id))
             .collect();
         let missing_cases = self.missing_command_cases();
         let accepted = if self.is_soak() {
@@ -667,6 +711,10 @@ impl Monkey {
         for section in [
             json!({
                 "seed":self.seed,"finished":self.finished(),"accepted":accepted,
+                "hostSeed":self.host_seed,"hostSeedProvenance":if self.host_seed.is_some() {"startup"} else {"unknown"},
+                "replayOriginalHostSeed":self.replay_original_host_seed,
+                "replayOriginalHostSeedProvenance":if self.replay_original_host_seed.is_some() {"journal"} else {"unknown"},
+                "hostSeedMatchesReplay":self.replay.as_ref().and(self.host_seed.zip(self.replay_original_host_seed).map(|(actual,original)|actual==original)),
                 "seconds":self.started.elapsed().as_secs_f64(),"requestedSeconds":self.budget.as_secs_f64(),
                 "soakRequested":self.is_soak(),"soakAccepted":self.soak_succeeded(),
                 "durationCompleted":self.started.elapsed()>=self.budget,
@@ -691,8 +739,7 @@ impl Monkey {
                 "commandEdgeCases":self.command_cases,"commandCallbacksAccepted":self.command_successes,
                 "protocolMethods":self.methods,"unvisitedCommands":unvisited,
                 "uiActions":self.ui_actions,
-                "shellCommandCoverageComplete":missing_cases.is_empty(),
-                "coverageComplete":missing_cases.is_empty() && self.typed.complete(),"missingCommandEdgeCases":missing_cases,
+                "coverageComplete":self.shell_catalog.complete() && self.typed.complete(),"missingCommandEdgeCases":missing_cases,
                 "edgeCasesPerCommand":actions::edge_case_count(),"nativeEventsRouted":self.native_events,
                 "journal":"monkey-events.jsonl",
                 "replayedJournal":self.replay.is_some(),
@@ -704,6 +751,7 @@ impl Monkey {
                 "limits":["Command coverage counts attempted edge targets; disabled or deferred commands can reject before their implementation runs. Accepted callbacks are counted separately.","Protocol method probes include malformed envelopes and stale sessions; a method attempt is not complete implementation coverage.","The watchdog persists permanent stalls independently; an external process timeout is required to end a permanently stalled editor.","Long frames and watchdog stalls are reported separately; hangs is their lower bound because their intervals can overlap.","NaN and infinity reach numeric controls as text because JSON cannot represent non-finite numbers."]
             }),
             self.typed.report(),
+            self.shell_catalog.report(),
             json!({"hostJobResources":self.resources.report()}),
         ] {
             let Value::Object(fields) = section else {
@@ -729,20 +777,7 @@ impl Monkey {
     }
 
     fn missing_command_cases(&self) -> Vec<Value> {
-        commands::all()
-            .iter()
-            .filter_map(|command| {
-                let seen = self.command_cases.get(command.id);
-                let missing: Vec<_> = (0..actions::edge_case_count())
-                    .filter(|case| seen.is_none_or(|seen| !seen.contains(case)))
-                    .collect();
-                if missing.is_empty() {
-                    None
-                } else {
-                    Some(json!({"command":command.id,"cases":missing}))
-                }
-            })
-            .collect()
+        self.shell_catalog.missing()
     }
 
     fn termination(&self) -> &'static str {

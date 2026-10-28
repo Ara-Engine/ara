@@ -1,10 +1,7 @@
 //! Replayable actions and a fixed integer RNG; elapsed time never selects an action.
 use crate::{
     Editor,
-    shell::{
-        Shell,
-        commands::{self, Target},
-    },
+    shell::{Shell, commands::Target},
 };
 use ara_ui::input::InputEvent;
 use ara_ui_text::{Clipboard, EditEvent};
@@ -308,15 +305,16 @@ impl Generator {
         editor: &Editor,
         shell: &Shell,
         typed: &mut super::typed::State,
+        catalog: &mut super::catalog::State,
     ) -> Action {
+        catalog.observe(&editor.extensions);
         if let Some(action) = self.pending.pop_front() {
             return action;
         }
         // Native input must already run during coverage, even when expensive
         // commands consume most of the budget. Pending gestures stay contiguous.
-        let specs = commands::all();
         let covered = self.command_cursor + self.method_cursor + typed.generated;
-        if (self.command_cursor < specs.len() * TARGET_CASES
+        if (catalog.pending()
             || typed.pending()
             || !typed.drained()
             || self.method_cursor < self.methods.len() * PARAM_CASES)
@@ -327,11 +325,9 @@ impl Generator {
             self.interleaved_at = covered;
             return self.interleave(shell);
         }
-        if self.command_cursor < specs.len() * TARGET_CASES {
-            let spec = &specs[self.command_cursor / TARGET_CASES];
-            let target = edge_target(self.command_cursor % TARGET_CASES);
+        if let Some(action) = catalog.next() {
             self.command_cursor += 1;
-            return registry_action(spec.id, target);
+            return action;
         }
         if let Some(action) = typed.next(editor) {
             return action;
@@ -397,8 +393,10 @@ impl Generator {
                 }
             }
             6 => {
-                let spec = &specs[self.index(specs.len())];
-                registry_action(spec.id, edge_target(self.index(TARGET_CASES)))
+                let Some(id) = catalog.id(self.index(catalog.len())) else {
+                    return Action::FocusLost;
+                };
+                registry_action(id, edge_target(self.index(TARGET_CASES)))
             }
             7 => {
                 let (method, params) = match self.index(6) {
@@ -594,7 +592,7 @@ fn registry_action(id: &str, target: Target) -> Action {
     }
 }
 
-fn edge_target(index: usize) -> Target {
+pub(super) fn edge_target(index: usize) -> Target {
     match index {
         0 => Target::None,
         1 => Target::Entity(String::new()),

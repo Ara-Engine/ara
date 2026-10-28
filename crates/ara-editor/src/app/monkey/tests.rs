@@ -1,5 +1,6 @@
 //! Determinism, durable reporting and malformed inputs use the actual editor authority.
 use super::*;
+use crate::shell::commands;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -31,6 +32,20 @@ impl Project {
     fn open(&self) -> (Editor, Shell) {
         let mut editor =
             Editor::open_with(&self.0, Some(self.0.join(".ara/test-user.json"))).unwrap();
+        let mut shell = Shell::new(&mut editor, [900., 600.]).unwrap();
+        shell.offscreen = true;
+        (editor, shell)
+    }
+    fn open_seeded(&self, seed: u64) -> (Editor, Shell) {
+        let mut editor = Editor::open_config(
+            &self.0,
+            Some(self.0.join(".ara/test-user.json")),
+            ara_host::HostConfig {
+                seed: Some(seed),
+                ..Default::default()
+            },
+        )
+        .unwrap();
         let mut shell = Shell::new(&mut editor, [900., 600.]).unwrap();
         shell.offscreen = true;
         (editor, shell)
@@ -246,8 +261,9 @@ fn native_inputs_interleave_the_complete_command_edge_sweep() {
     let required = commands::all().len() * actions::edge_case_count();
     let mut reached_protocol = false;
     let mut typed = typed::State::default();
+    let mut catalog = catalog::State::default();
     for _ in 0..required * 2 + 128 {
-        let action = generator.next(&editor, &shell, &mut typed);
+        let action = generator.next(&editor, &shell, &mut typed, &mut catalog);
         if let Action::Command { id, target } = &action {
             cases_seen
                 .entry(id.clone())
@@ -292,6 +308,134 @@ fn native_inputs_interleave_the_complete_command_edge_sweep() {
             "missing early native input {kind}"
         );
     }
+}
+
+#[test]
+fn loaded_dynamic_cases_use_real_shell_availability_and_final_authority_reconciliation() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    let revision = editor.host.store().revision();
+    let camera = editor.state.camera;
+    let mut catalog = catalog::State::default();
+    catalog.observe(&editor.extensions);
+    // Consume generated native cases without recording attempts: this test only
+    // offers late C# cases, so it must never claim complete native coverage.
+    while catalog.next().is_some() {}
+    editor.extensions = crate::extensions::Catalog {
+        commands: ["tools.fixture_zeta", "tools.fixture_alpha"]
+            .into_iter()
+            .map(|id| crate::extensions::Command {
+                id: id.into(),
+                title: id.into(),
+                summary: "Controlled loaded registration".into(),
+                enabled: false,
+                disabled_reason: Some("Fixture callback is disabled".into()),
+            })
+            .collect(),
+        generation: Some("fixture-generation".into()),
+        ..Default::default()
+    };
+    let mut generator = Generator::new(73);
+    generator.initialize(&editor);
+    let mut typed = typed::State::default();
+    let mut clipboard = MemoryClipboard::default();
+    let mut offered = BTreeMap::<String, BTreeSet<usize>>::new();
+    for _ in 0..actions::edge_case_count() * 2 {
+        let action = generator.next(&editor, &shell, &mut typed, &mut catalog);
+        let Action::Command { id, target } = &action else {
+            panic!("Expected a loaded C# registration probe")
+        };
+        let error = action
+            .run(&mut editor, &mut shell, &mut clipboard)
+            .unwrap_err();
+        assert!(error.to_string().contains("Fixture callback is disabled"));
+        let case = actions::edge_case(target).unwrap();
+        catalog.record(id, case);
+        offered.entry(id.clone()).or_default().insert(case);
+    }
+    assert_eq!(offered.len(), 2);
+    assert!(
+        offered
+            .values()
+            .all(|cases| cases.len() == actions::edge_case_count())
+    );
+    assert_eq!(editor.host.store().revision(), revision);
+    assert_eq!(editor.state.camera, camera);
+    // A window-side snapshot is insufficient: the ordinary authority query must
+    // agree after asynchronous registration/controls have actually published.
+    let authority = editor.action("editor.commands", json!({})).unwrap();
+    catalog.reconcile_final(&authority, true);
+    assert!(!catalog.final_matched());
+    assert!(!catalog.complete());
+}
+
+#[test]
+fn seeded_host_and_streamed_journal_replay_mint_the_same_actual_entity_ids() {
+    let seed = 104729;
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open_seeded(seed);
+    let output = project.0.join("seeded-host");
+    let mut runner = Monkey::new(seed, Duration::from_secs(30), Some(1), &output).unwrap();
+    assert!(runner.record_host_seed(seed + 1).is_err());
+    runner.record_host_seed(seed).unwrap();
+    runner.generator.enqueue([Action::TypedCommand {
+        name: "entity.create".into(),
+        doc: "sc_monkey01".into(),
+        args: json!({"name":"Minted by seeded Host"}),
+        case: "registeredExample".into(),
+        changed_fields: 0,
+    }]);
+    while !runner.finished() {
+        runner.step(&mut editor, &mut shell).unwrap();
+        editor.tick();
+    }
+    runner.finish_with(&mut editor).unwrap();
+    let created: Vec<_> = editor
+        .host
+        .store()
+        .workspace()
+        .doc("sc_monkey01")
+        .unwrap()
+        .records()
+        .keys()
+        .cloned()
+        .collect();
+    assert_eq!(created.len(), 1);
+    let journal = output.join("monkey-events.jsonl");
+    assert_eq!(Monkey::journal_seed(&journal).unwrap(), seed);
+
+    let replay_project = Project::new();
+    let (mut replay_editor, mut replay_shell) =
+        replay_project.open_seeded(Monkey::journal_seed(&journal).unwrap());
+    assert_eq!(editor.session, replay_editor.session);
+    let replay_output = replay_project.0.join("seeded-replay");
+    let mut replay =
+        Monkey::from_journal(&journal, Duration::from_secs(30), &replay_output).unwrap();
+    replay.record_host_seed(seed).unwrap();
+    while !replay.finished() {
+        replay.step(&mut replay_editor, &mut replay_shell).unwrap();
+        replay_editor.tick();
+    }
+    replay.finish_with(&mut replay_editor).unwrap();
+    let replayed: Vec<_> = replay_editor
+        .host
+        .store()
+        .workspace()
+        .doc("sc_monkey01")
+        .unwrap()
+        .records()
+        .keys()
+        .cloned()
+        .collect();
+    assert_eq!(created, replayed);
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(replay_output.join("monkey.json")).unwrap())
+            .unwrap();
+    assert_eq!(report["hostSeed"], seed);
+    assert_eq!(report["hostSeedProvenance"], "startup");
+    assert_eq!(report["replayOriginalHostSeed"], seed);
+    assert_eq!(report["hostSeedMatchesReplay"], true);
+    assert!(replay.record_host_seed(seed).is_err());
 }
 
 #[test]
@@ -598,6 +742,7 @@ fn exact_replay_preserves_recorded_actions_and_multilingual_text() {
         .collect::<Vec<_>>()
         .join("\n");
     std::fs::write(&source, lines).unwrap();
+    assert_eq!(Monkey::journal_seed(&source).unwrap(), 77);
     let output = project.0.join("replayed");
     let mut runner = Monkey::from_journal(&source, Duration::from_secs(30), &output).unwrap();
     while !runner.finished() {
@@ -615,6 +760,12 @@ fn exact_replay_preserves_recorded_actions_and_multilingual_text() {
         .collect();
     assert_eq!(actual, actions);
     assert!(source.is_file());
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(output.join("monkey.json")).unwrap())
+            .unwrap();
+    assert_eq!(report["replayOriginalHostSeed"], Value::Null);
+    assert_eq!(report["replayOriginalHostSeedProvenance"], "unknown");
+    assert_eq!(report["hostSeedMatchesReplay"], Value::Null);
 }
 
 #[test]
