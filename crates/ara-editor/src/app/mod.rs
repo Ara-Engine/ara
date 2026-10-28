@@ -1180,6 +1180,14 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let authority_scope = profile_frame.map(|_| ara_profile::scope("editor.authority"));
             let tick_at = Instant::now();
             let measure_authority = monkey.is_some() || probe.is_some();
+            // A UI Scene switch precedes RPC reads in this frame. Deliver its
+            // cache invalidation before serving queries about the new Scene.
+            for _ in 0..2 {
+                if !probe_owner.invalidate_scene(&mut editor) {
+                    break;
+                }
+                editor.tick();
+            }
             server.pump(&mut editor);
             let server_ms = measure_authority.then(|| tick_at.elapsed().as_secs_f64() * 1000.);
             editor.tick();
@@ -1694,6 +1702,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     || shell.drafts() != &edit_before.1);
             dirty |= scene_dirty;
             let mut scene_overlays = None;
+            let mut probe_blocked_scene = false;
             let mut gpu_surface_submissions = 0;
             let mut native_presentations = 0;
             // A window that cannot show anything (minimized, occluded; the probe's
@@ -1752,6 +1761,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                         {
                             editor.report_failure(&*error);
                         }
+                        probe_blocked_scene = !safe;
                     }
                     scene_view.attach(&mut gpu, &renderer, editor.state.quality)?;
                     if renderer.presentation_ready() {
@@ -1914,7 +1924,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 profile_draws = ui_renderer.batches.len() as u64;
                 profile_triangles = ui_renderer.instances.len() as u64 * 2;
                 dirty = false;
-                scene_dirty = defer_scene;
+                scene_dirty = defer_scene || probe_blocked_scene;
                 if let Some(start) = interaction_start {
                     interaction_samples.push(start.elapsed().as_secs_f64() * 1000.);
                 }

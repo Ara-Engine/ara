@@ -43,6 +43,8 @@ pub(super) struct Owner {
     outgoing: VecDeque<Event>,
     cancel_sent: BTreeSet<u64>,
     bound_doc: Option<String>,
+    /// Last UI Scene observed before protocol requests are pumped.
+    observed_doc: Option<String>,
     cache_root: Option<PathBuf>,
     next_poll: Option<Instant>,
     last_snapshot: Option<(SceneBinding, u64)>,
@@ -58,6 +60,48 @@ pub(super) struct Owner {
 }
 
 impl Owner {
+    /// Invalidate the read model before pumping requests after a UI Scene switch.
+    /// True asks the caller to tick the Host, then retry until false: an existing
+    /// full event channel must drain before it can accept this invalidation.
+    pub(super) fn invalidate_scene(&mut self, editor: &mut Editor) -> bool {
+        self.observe_scene(&editor.state.doc);
+        let delivered = self.flush(editor);
+        delivered
+            || self
+                .outgoing
+                .iter()
+                .any(|event| matches!(event, Event::Unavailable { .. }))
+    }
+
+    fn observe_scene(&mut self, doc: &str) {
+        if self.observed_doc.as_deref() == Some(doc) {
+            return;
+        }
+        let previous = self
+            .observed_doc
+            .as_deref()
+            .or(self.bound_doc.as_deref())
+            .or_else(|| {
+                self.last_snapshot
+                    .as_ref()
+                    .map(|(binding, _)| binding.doc.as_str())
+            });
+        let changed_scene = previous.is_some_and(|previous| previous != doc);
+        self.observed_doc = Some(doc.to_owned());
+        if !changed_scene {
+            return;
+        }
+        self.last_snapshot = None;
+        self.refresh = true;
+        let reason = "The active Scene changed; its current renderer snapshot is not available yet";
+        self.unavailable = Some(reason.into());
+        self.outgoing
+            .retain(|event| !matches!(event, Event::Snapshot { .. } | Event::Unavailable { .. }));
+        self.outgoing.push_front(Event::Unavailable {
+            reason: reason.into(),
+        });
+    }
+
     /// Call every application iteration after the Scene update, including when
     /// that update was skipped. No waits, I/O, extraction, or renderer submission.
     pub(super) fn poll(
@@ -101,6 +145,8 @@ impl Owner {
                 Ok(false) => {
                     self.blocker = None;
                     self.retirement_pending = false;
+                    update.changed = true;
+                    update.scene_dirty = true;
                 }
                 Ok(true) => {
                     self.blocker = Some("Probe GPU/cache retirement is still pending".into())
@@ -118,7 +164,7 @@ impl Owner {
 
     fn update(&self, scene: &mut SceneView, mut update: Update) -> Update {
         update.busy = self.busy();
-        update.scene_dirty = self.jobs.values().any(|sub| !sub.terminal_queued);
+        update.scene_dirty |= self.jobs.values().any(|sub| !sub.terminal_queued);
         if update.scene_dirty {
             scene.wake_probe_work();
         }
@@ -570,6 +616,61 @@ mod tests {
         assert_eq!(terminal.receipts.len(), 1);
         assert!(terminal.receipts[0].published);
         assert_eq!(terminal.receipts[0].source_revision, 7);
+    }
+
+    #[test]
+    fn scene_invalidation_preserves_terminal_delivery_and_retirement_ownership() {
+        let mut owner = Owner::default();
+        let sub = subscription();
+        owner.bound_doc = Some(sub.binding.doc.clone());
+        owner.observed_doc = Some(sub.binding.doc.clone());
+        owner.last_snapshot = Some((sub.binding.clone(), 8));
+        owner.retirement_pending = true;
+        owner.outgoing.push_back(Event::Status {
+            job: "host-job".into(),
+            session: sub.session.clone(),
+            binding: sub.binding.clone(),
+            status: status(true),
+        });
+        owner.outgoing.push_back(Event::Unavailable {
+            reason: "Previous read-model state".into(),
+        });
+        owner.jobs.insert("host-job".into(), sub);
+
+        owner.observe_scene("sc_newscene");
+        assert!(
+            matches!(owner.outgoing.front(), Some(Event::Unavailable { reason }) if reason.contains("active Scene changed"))
+        );
+        assert_eq!(owner.outgoing.len(), 2);
+        assert!(
+            matches!(owner.outgoing.back(), Some(Event::Status { job, status, .. }) if job == "host-job" && status.finished)
+        );
+        assert_eq!(owner.jobs.len(), 1);
+        assert_eq!(owner.jobs["host-job"].binding.doc, "sc_probe");
+        assert!(owner.retirement_pending);
+        assert!(owner.busy());
+        assert!(owner.last_snapshot.is_none());
+        assert!(owner.refresh);
+
+        owner.observe_scene("sc_newscene");
+        assert_eq!(
+            owner.outgoing.len(),
+            2,
+            "same Scene does not invalidate again"
+        );
+    }
+
+    #[test]
+    fn observing_current_bound_scene_preserves_its_valid_snapshot() {
+        let mut owner = Owner::default();
+        let binding = subscription().binding;
+        owner.bound_doc = Some(binding.doc.clone());
+        owner.last_snapshot = Some((binding.clone(), 8));
+        owner.observe_scene(&binding.doc);
+        owner.observe_scene(&binding.doc);
+        assert_eq!(owner.last_snapshot.as_ref(), Some(&(binding, 8)));
+        assert!(owner.outgoing.is_empty());
+        assert!(!owner.refresh);
     }
 
     #[test]

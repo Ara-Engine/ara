@@ -1,5 +1,5 @@
 use super::bridge::{Event, Request, SceneBinding};
-use super::params::{RenderProbeCancelParams, RenderProbesQueryParams, RenderProbeRecaptureParams};
+use super::params::{RenderProbeCancelParams, RenderProbeRecaptureParams, RenderProbesQueryParams};
 use ara_diag::{Diagnostic, Location};
 use ara_host::{Cx, Method, Service};
 use ara_runtime_render::probes::{ProbeJobStatus, ProbeSnapshot, ProbeState};
@@ -129,7 +129,11 @@ impl ProbeService {
         Ok(json!({"ok":true,"job":job,"queued":true,"ops":[],"txn":null}))
     }
 
-    fn cancel(&mut self, cx: &mut Cx<'_>, params: RenderProbeCancelParams) -> Result<Value, Vec<Diagnostic>> {
+    fn cancel(
+        &mut self,
+        cx: &mut Cx<'_>,
+        params: RenderProbeCancelParams,
+    ) -> Result<Value, Vec<Diagnostic>> {
         let record = cx
             .job_record(&params.job)
             .filter(|record| {
@@ -154,7 +158,11 @@ impl ProbeService {
         )
     }
 
-    fn query(&mut self, cx: &Cx<'_>, params: RenderProbesQueryParams) -> Result<Value, Vec<Diagnostic>> {
+    fn query(
+        &mut self,
+        cx: &Cx<'_>,
+        params: RenderProbesQueryParams,
+    ) -> Result<Value, Vec<Diagnostic>> {
         if let Some(entities) = &params.entities {
             validate_entities(entities, true)?;
         }
@@ -164,12 +172,18 @@ impl ProbeService {
             .map(|doc| scene_id(cx, doc))
             .transpose()?;
         self.refresh();
-        let Some(cached) = self
-            .cached
-            .as_ref()
-            .filter(|cached| doc.as_deref().is_none_or(|doc| cached.binding.doc == doc))
-        else {
-            let reason = if self.cached.is_some() {
+        let source_revision = cx.store().revision();
+        let Some(cached) = self.cached.as_ref().filter(|cached| {
+            cached.binding.source_revision == source_revision
+                && doc.as_deref().is_none_or(|doc| cached.binding.doc == doc)
+        }) else {
+            let reason = if self
+                .cached
+                .as_ref()
+                .is_some_and(|cached| cached.binding.source_revision != source_revision)
+            {
+                "The authored Scene changed; its current renderer snapshot is not available yet"
+            } else if self.cached.is_some() {
                 "No current renderer snapshot exists for the requested Scene"
             } else {
                 self.unavailable.as_str()

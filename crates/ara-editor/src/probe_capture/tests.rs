@@ -283,6 +283,54 @@ fn full_snapshot_cache_is_scene_scoped_and_since_empty_does_not_erase_last_good_
 }
 
 #[test]
+fn cached_rows_are_unavailable_immediately_after_typed_edit_or_delete() {
+    let mut f = Fixture::new();
+    f.call(
+        "cmd.apply",
+        json!({"doc":"sc_probejobs","why":"Create snapshot source",
+        "commands":[{"cmd":"entity.create","args":{"id":"e_probe","name":"Probe source"}}]}),
+    );
+    f.snapshot(8);
+    assert_eq!(f.query(None, None)["probes"][0]["entity"], "e_probe");
+    for (command, version) in [
+        (
+            json!({"cmd":"property.set","args":{"entity":"e_probe","path":"name","value":"Changed source"}}),
+            9,
+        ),
+        (
+            json!({"cmd":"entity.delete","args":{"entities":["e_probe"]}}),
+            10,
+        ),
+    ] {
+        let cached_revision = f.host.store().revision();
+        f.call(
+            "cmd.apply",
+            json!({"doc":"sc_probejobs","why":"Invalidate cached renderer source",
+            "commands":[command]}),
+        );
+        let edited_revision = f.host.store().revision();
+        assert!(edited_revision > cached_revision);
+        // No owner poll, renderer update, sleep or service-event injection occurs
+        // between the authoritative edit and this real protocol query.
+        let unavailable = f.query(None, None);
+        assert_eq!(unavailable["capabilities"]["reflectionProbes"], false);
+        assert!(unavailable["probes"].as_array().unwrap().is_empty());
+        assert!(
+            unavailable["capabilities"]["reasons"]["reflectionProbes"]
+                .as_str()
+                .unwrap()
+                .contains("changed")
+        );
+        assert_eq!(f.host.store().revision(), edited_revision);
+        if version == 9 {
+            f.snapshot(version);
+            assert_eq!(f.query(None, None)["version"], version);
+            assert_eq!(f.query(None, None)["probes"][0]["entity"], "e_probe");
+        }
+    }
+}
+
+#[test]
 fn owner_backpressure_and_scene_close_cannot_report_false_retirement() {
     let mut f = Fixture::new();
     let task = f.queue("e_probe");
