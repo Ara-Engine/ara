@@ -105,6 +105,7 @@ impl Renderer {
             compute_frame_index,
             previous_vp: Mat4::IDENTITY,
             frame_number: 0,
+            jitter_override: None,
             artifacts: artifacts.to_path_buf(),
             shader_metadata,
             last_timings: Vec::new(),
@@ -112,10 +113,12 @@ impl Renderer {
             look,
             native: None,
             native_pipelines: Default::default(),
+            rays: Default::default(),
             views: views::Views::default(),
             secondary_active: false,
             live: None,
             entity_epoch: 0,
+            tsr: crate::tsr::Tsr::from_env(),
         })
     }
 

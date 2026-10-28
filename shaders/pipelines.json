@@ -73,6 +73,68 @@
       "vertex_stride": 0
     }
   },
+  "lighting_high": {
+    "entries": {
+      "fullscreenVertex": "vertex",
+      "lightingHighFragment": "fragment"
+    },
+    "source": "baseline.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        97
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "lighting_high_rt": {
+    "entries": {
+      "fullscreenVertex": "vertex",
+      "lightingHighRtFragment": "fragment"
+    },
+    "source": "baseline.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        97
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_ao_bitmask": {
+    "entries": {
+      "aoBitmaskMain": "compute"
+    },
+    "source": "look-ao.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_ao_bitmask_denoise": {
+    "entries": {
+      "aoBitmaskDenoiseMain": "compute"
+    },
+    "source": "look-ao.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_ao_denoise": {
     "entries": {
       "aoDenoiseMain": "compute"
@@ -106,6 +168,76 @@
       "bloomMain": "compute"
     },
     "source": "look-post.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_capture_face": {
+    "entries": {
+      "captureFaceMain": "compute"
+    },
+    "source": "look-captures.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_capture_mip": {
+    "entries": {
+      "captureMipMain": "compute"
+    },
+    "source": "look-captures.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_capture_prefilter": {
+    "entries": {
+      "capturePrefilterMain": "compute"
+    },
+    "source": "look-captures.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_capture_refit": {
+    "entries": {
+      "captureRefitMain": "compute"
+    },
+    "source": "look-captures.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_capture_tiles": {
+    "entries": {
+      "captureTilesMain": "compute"
+    },
+    "source": "look-captures.slang",
     "state": {
       "blend": false,
       "color_formats": [],
@@ -297,6 +429,76 @@
       "vertex_stride": 0
     }
   },
+  "look_refract": {
+    "entries": {
+      "refractMain": "compute"
+    },
+    "source": "look-refract.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_rt_filter": {
+    "entries": {
+      "rtFilterMain": "compute"
+    },
+    "source": "look-rt.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_rt_reflect": {
+    "entries": {
+      "rtReflectMain": "compute"
+    },
+    "source": "look-rt.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_rt_rough": {
+    "entries": {
+      "rtRoughMain": "compute"
+    },
+    "source": "look-rt.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_rt_rough_filter": {
+    "entries": {
+      "rtRoughFilterMain": "compute"
+    },
+    "source": "look-rt.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_sky_irradiance": {
     "entries": {
       "skyIrradianceMain": "compute"
@@ -432,12 +634,164 @@
       "vertex_stride": 0
     }
   },
+  "native_forward_high": {
+    "entries": {
+      "nativeForwardHighFragment": "fragment",
+      "nativeForwardVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        97,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_high_back": {
+    "entries": {
+      "nativeForwardHighBackFragment": "fragment",
+      "nativeForwardVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        97,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_high_front": {
+    "entries": {
+      "nativeForwardHighFrontFragment": "fragment",
+      "nativeForwardVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        97,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "native_forward_lit": {
     "entries": {
       "nativeForwardLitFragment": "fragment",
       "nativeForwardVertex": "vertex"
     },
     "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        97,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_lit_back": {
+    "entries": {
+      "nativeForwardLitBackFragment": "fragment",
+      "nativeForwardVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        97,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_lit_front": {
+    "entries": {
+      "nativeForwardLitFrontFragment": "fragment",
+      "nativeForwardVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        97,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_refract": {
+    "entries": {
+      "nativeGeometryVertex": "vertex",
+      "nativeForwardRefractFragment": "fragment"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        97,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_refract_high": {
+    "entries": {
+      "nativeGeometryVertex": "vertex",
+      "nativeForwardRefractHighFragment": "fragment"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        97,
+        100,
+        83
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_forward_refract_rt": {
+    "entries": {
+      "nativeForwardRefractRtFragment": "fragment",
+      "nativeGeometryVertex": "vertex"
+    },
+    "source": "native-refract-rt.slang",
     "state": {
       "blend": true,
       "color_formats": [
@@ -507,6 +861,23 @@
       "depth_format": 126,
       "depth_test": true,
       "depth_write": true,
+      "vertex_stride": 0
+    }
+  },
+  "native_shadow_translucent": {
+    "entries": {
+      "nativeShadowTranslucentFragment": "fragment",
+      "nativeShadowVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        76
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
       "vertex_stride": 0
     }
   },
@@ -589,6 +960,132 @@
       "tonemapMain": "compute"
     },
     "source": "baseline.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "tsr_accumulate": {
+    "entries": {
+      "tsrAccumulateMain": "compute"
+    },
+    "source": "tsr/accumulate.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "tsr_accumulate_fsr": {
+    "entries": {
+      "tsrAccumulateFsrMain": "compute"
+    },
+    "source": "tsr/accumulate-fsr.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "tsr_clear": {
+    "entries": {
+      "tsrClearMain": "compute"
+    },
+    "source": "tsr/clear.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "tsr_luma_instability": {
+    "entries": {
+      "tsrLumaInstabilityMain": "compute"
+    },
+    "source": "tsr/luma-instability.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "tsr_prepare_inputs": {
+    "entries": {
+      "tsrPrepareInputsMain": "compute"
+    },
+    "source": "tsr/prepare-inputs.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "tsr_prepare_inputs_reproject": {
+    "entries": {
+      "tsrPrepareInputsReprojectMain": "compute"
+    },
+    "source": "tsr/prepare-inputs-reproject.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "tsr_prepare_reactivity": {
+    "entries": {
+      "tsrPrepareReactivityMain": "compute"
+    },
+    "source": "tsr/prepare-reactivity.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "tsr_rcas": {
+    "entries": {
+      "tsrRcasMain": "compute"
+    },
+    "source": "tsr/rcas.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "tsr_shading_change_pyramid": {
+    "entries": {
+      "tsrShadingChangePyramidMain": "compute"
+    },
+    "source": "tsr/shading-change-pyramid.slang",
     "state": {
       "blend": false,
       "color_formats": [],

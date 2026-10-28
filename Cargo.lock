@@ -1900,6 +1900,7 @@ dependencies = [
  "ara-asset",
  "ara-asset-format",
  "ara-components",
+ "ara-diag",
  "ara-doc",
  "ara-foliage",
  "ara-gpu",

@@ -1,0 +1,443 @@
+// This file is part of the FidelityFX SDK.
+//
+// Copyright (C) 2024 Advanced Micro Devices, Inc.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files(the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and /or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions :
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+// Ara: Ara TSR, a port of the FSR 3.1.4 temporal upscaler (AMD FidelityFX SDK
+// v1.1.4, MIT). This header replaces ffx_fsr3upscaler_callbacks_hlsl.h: the same
+// callback functions, implemented against Ara's bindless ABI (raster.slangh) and
+// the record `TsrConstants` (crates/ara-render/src/tsr/constants.rs) instead of
+// descriptor tables and constant buffers. Everything below is Ara code derived
+// from that file; the vendored FidelityFX headers under ffx/ are unmodified except
+// for lines marked `// Ara:`.
+//
+// Fixed FSR options (as AMD's host selects for Ara's inputs): HDR colour,
+// render-resolution unjittered motion, reversed-Z depth and full precision (the
+// device enables no Float16, so FFX_HALF is 0). Two accumulate paths:
+// - Ara (TSR_ARA_HISTORY, the default): history is the renderer's own display
+//   history pair (sampled last frame's, written this frame's: the post chain's
+//   input), reprojected with a five-tap Catmull-Rom; upsampling weights are a
+//   Gaussian in display pixels (FSR_..._UPSAMPLE_USE_LANCZOS_TYPE 3, Ara's); no RCAS;
+// - FSR: FSR's own history pair, reference Lanczos reprojection (the non-LUT path FSR
+//   picks on wave32 GPUs), approximate-Lanczos upsampling and RCAS sharpening into
+//   the display history.
+//
+// Resource notes (crates/ara-render/src/tsr/mod.rs owns the images):
+// - ping-pong pairs (luma, accumulation, luma history, upscaled colour) are one
+//   image twice as wide; `pair.x` of this frame's half is `slot * width`;
+// - the half-size farthest depth (written by prepare inputs: FSR's luma pyramid
+//   folded in) and the shading change pyramid's three mips share one atlas
+//   (`tsrPyramidSize`), sampled with explicit clamps;
+// - the dilated depth, motion and entity ID, the reconstructed previous depth and
+//   the masks live in one storage buffer (atomics need integer storage, the
+//   bindless images are float);
+// - pairs a pass both reads (previous) and writes (current) are read through the
+//   storage view (manual bilinear where FSR samples), so no image is bound sampled
+//   and as storage in one pass;
+// - every store is bounds-checked (dispatches overhang the images, and atlas
+//   neighbours must not be overwritten) and loads FSR may issue off-screen return
+//   zero, as D3D12's out-of-bounds loads do.
+#define FFX_GPU 1
+#define FFX_HLSL 1
+#define FFX_HALF 0
+// Below 6.2: FFX typedefs plain 32-bit HLSL types (no explicit float32_t forms).
+#define FFX_HLSL_SM 60
+#define FFX_FSR3UPSCALER_OPTION_HDR_COLOR_INPUT 1
+#define FFX_FSR3UPSCALER_OPTION_LOW_RESOLUTION_MOTION_VECTORS 1
+#define FFX_FSR3UPSCALER_OPTION_JITTERED_MOTION_VECTORS 0
+#define FFX_FSR3UPSCALER_OPTION_INVERTED_DEPTH 1
+#ifdef TSR_ARA_HISTORY
+#define FFX_FSR3UPSCALER_OPTION_APPLY_SHARPENING 0
+#define FFX_FSR3UPSCALER_OPTION_UPSAMPLE_USE_LANCZOS_TYPE 3
+#else
+#define FFX_FSR3UPSCALER_OPTION_APPLY_SHARPENING 1
+#define FFX_FSR3UPSCALER_OPTION_UPSAMPLE_USE_LANCZOS_TYPE 2
+#endif
+#define FFX_FSR3UPSCALER_OPTION_REPROJECT_USE_LANCZOS_TYPE 0
+#define FFX_FSR3UPSCALER_OPTION_REPROJECT_SAMPLERS_USE_DATA_HALF 0
+#include "../raster.slangh"
+#include "ffx/fsr3upscaler/ffx_fsr3upscaler_resources.h"
+#include "ffx/ffx_core.h"
+// Ara: FFX's [unroll] hints become Slang's guaranteed unrolling, as DXC (FSR's
+// compiler) unrolls them: indexed sample arrays then stay in registers instead of
+// local memory.
+#undef FFX_UNROLL
+#define FFX_UNROLL [ForceUnroll]
+
+// The per-frame TSR record (tsr/constants.rs `TsrConstants`, root word 0). Sizes
+// in pixels; jitter in render pixels with FSR's sign (the negated Frame.upscale.xy:
+// the unjittered position of render pixel p's sample is p + 0.5 - jitter).
+struct TsrConstants {
+    int4 renderSize;        // xy this frame's render size, zw the previous frame's
+    int4 upscaleSize;       // xy display size, zw the previous frame's
+    int4 maxSize;           // xy allocated render size, zw allocated display size
+    float4 deviceToViewDepth; // FSR fDeviceToViewDepth: view depth = y / (device - x); zw 1/projection scale
+    float4 jitter;          // xy this frame's jitter, zw the previous frame's
+    float4 scale;           // xy downscale factor (render / display), z tan(half horizontal fov), w jitter sequence length
+    float4 frame;           // x frame index (0 resets), y velocity factor, z reactiveness scale, w shading change scale
+    float4 accumulation;    // x accumulation added per frame, y minimum disocclusion accumulation, z delta time (s), w view space to metres
+    float4 exposure;        // x input pre-exposure (0: Ara's applied exposure), y the frame's exposure argument (exposureScale fallback)
+    uint4 rcas;             // FsrRcasCon constants
+    uint4 inputs;           // x colour, y depth, z motion (sampled; u32 max without), w the display frame record (buffer)
+    uint4 resources;        // x exposure state (buffer), y scratch (buffer), z output (storage), w this frame's pair slot (0 or 1)
+    uint4 sampled0;         // intermediate (luma instability), luma pair, pyramid atlas, unused
+    uint4 sampled1;         // accumulation pair, dilated reactive masks, new locks, luma history pair
+    uint4 sampled2;         // x upscaled colour pair (FSR path)
+    uint4 storage0;         // as sampled0
+    uint4 storage1;         // as sampled1
+    uint4 storage2;         // as sampled2
+    // Ara engine signals (tsr-signals.slangh; u32 max: absent this frame).
+    uint4 signalInputs;     // x entity IDs, y opaque-only copy (look::refract level 0), z the composited HDR it compares with, w SSR trace (sampled)
+    uint4 opaqueRect;       // the opaque copy's valid render-pixel rect (x0, y0, x1, y1)
+    float4 signals;         // x new-surface disocclusion, y same-surface depth tolerance (x FSR's separation; 0 off), z reflection reactive, w composition weight
+    float4 autogen;         // FSR autogen reactive: x scale, y threshold, z binary value; w parallax (render px) for full reactivity
+    uint4 external;         // x the host's reactive coverage (sampled, render size; Renderer::finish_reactive)
+    float4 kernel;          // Ara upsampling: x Gaussian spread of converged pixels, y of new or moving ones (display px^-2), z weight gain, w still-transparency current-frame weight
+    uint4 options;          // x TSR_OPTION_* flags, y last frame's display history (sampled; Ara path)
+};
+// TsrConstants.options.x: prepare inputs computes masks; accumulate reads luma
+// instability; prepare reactivity reads the shading change pyramid; the entity-ID
+// signal runs (tsr-signals.slangh TsrIdDisocclusion).
+static const uint TSR_OPTION_MASKS=1,TSR_OPTION_LUMA_INSTABILITY=2,TSR_OPTION_SHADING_CHANGE=4,TSR_OPTION_IDS=8;
+static TsrConstants gTsr;
+bool tsrOption(uint option){return (gTsr.options.x&option)!=0;}
+// The record and the exposure state, loaded once by `tsrBegin` (the first line of
+// every TSR entry): the passes write storage buffers, so the compiler could not
+// merge repeated loads of the same bindless array.
+static float2 gTsrPreExposure;
+TsrConstants tsr(){return gTsr;}
+
+// --- Constants (ffx_fsr3upscaler_callbacks_hlsl.h cbFSR3Upscaler getters) ---
+FfxInt32x2 RenderSize(){return tsr().renderSize.xy;}
+FfxInt32x2 PreviousFrameRenderSize(){return tsr().renderSize.zw;}
+FfxInt32x2 MaxRenderSize(){return tsr().maxSize.xy;}
+FfxInt32x2 UpscaleSize(){return tsr().upscaleSize.xy;}
+FfxInt32x2 PreviousFrameUpscaleSize(){return tsr().upscaleSize.zw;}
+FfxInt32x2 MaxUpscaleSize(){return tsr().maxSize.zw;}
+FfxFloat32x2 Jitter(){return tsr().jitter.xy;}
+FfxFloat32x2 PreviousFrameJitter(){return tsr().jitter.zw;}
+FfxFloat32x4 DeviceToViewSpaceTransformFactors(){return tsr().deviceToViewDepth;}
+// Ara: motion arrives in UV units already (LoadInputMotionVector), so no scale and
+// no jitter cancellation (the motion target is unjittered).
+FfxFloat32x2 MotionVectorScale(){return FfxFloat32x2(1,1);}
+FfxFloat32x2 DownscaleFactor(){return tsr().scale.xy;}
+FfxFloat32x2 MotionVectorJitterCancellation(){return FfxFloat32x2(0,0);}
+FfxFloat32 TanHalfFoV(){return tsr().scale.z;}
+FfxFloat32 JitterSequenceLength(){return tsr().scale.w;}
+FfxFloat32 DeltaTime(){return tsr().accumulation.z;}
+FfxFloat32 ViewSpaceToMetersFactor(){return tsr().accumulation.w;}
+FfxFloat32 FrameIndex(){return tsr().frame.x;}
+FfxFloat32 VelocityFactor(){return tsr().frame.y;}
+FfxFloat32 AccumulationAddedPerFrame(){return tsr().accumulation.x;}
+FfxFloat32 MinDisocclusionAccumulation(){return tsr().accumulation.y;}
+FfxUInt32x4 RCASConfig(){return tsr().rcas;}
+
+// --- Exposure ---
+// Ara: TSR works in the post chain's pre-exposed space: the colour times the applied
+// exposure (look.slangh exposureState x), which is FSR's preExposure. Its
+// "exposure" (the scale to tonemappable values) is then one, and history written
+// last frame under exposure y converts by x / y. Mirrors look.slangh exposureScale.
+float tsrExposureScale(TsrConstants c,float s){
+    float fallback=c.exposure.y;return s>0 && s<1e30?s:fallback>0 && fallback<1e30?fallback:1;
+}
+// x this frame's applied exposure, y the one last frame's TSR history was written with.
+float2 tsrPreExposure(){return gTsrPreExposure;}
+void tsrBegin(){
+    gTsr=buffers[NonUniformResourceIndex(root.frame)].Load<TsrConstants>(0);
+    float4 state=buffers[NonUniformResourceIndex(gTsr.resources.x)].Load<float4>(0);
+    gTsrPreExposure=float2(tsrExposureScale(gTsr,state.x),tsrExposureScale(gTsr,state.y));
+}
+FfxFloat32 Exposure(){return 1.0f;}
+FfxFloat32 DeltaPreExposure(){float2 e=tsrPreExposure();return e.x/e.y;}
+// The single input-exposure parameter: `exposure.x` is the factor still to apply to
+// the HDR input, 1 since the scene writes pre-exposed HDR (look.slangh exposeHdr);
+// 0 would scale linear input by the applied exposure.
+float tsrInputScale(){TsrConstants c=tsr();return c.exposure.x>0?c.exposure.x:tsrPreExposure().x;}
+
+// --- Helpers ---
+bool tsrInside(int2 p,int2 size){return all(uint2(p)<uint2(size));}
+int2 tsrClamp(int2 p,int2 size){return clamp(p,int2(0,0),size-1);}
+// This frame's (`current`) or last frame's half of a ping-pong pair `width` wide.
+int2 tsrHalf(bool current,int width){uint slot=tsr().resources.w;return int2((current?slot:1-slot)*uint(width),0);}
+// Bilinear filter of a pair's previous half through its storage view, as a clamped
+// hardware sample would (FSR's callers already clamp `uv` half a texel inside).
+float4 tsrPreviousBilinear(uint image,float2 uv,int2 size){
+    float2 position=uv*float2(size)-0.5;int2 base=int2(floor(position));float2 t=position-float2(base);int2 offset=tsrHalf(false,size.x);
+    RWTexture2D<float4> pair=images[NonUniformResourceIndex(image)];
+    float4 a=pair[tsrClamp(base,size)+offset],b=pair[tsrClamp(base+int2(1,0),size)+offset];
+    float4 c=pair[tsrClamp(base+int2(0,1),size)+offset],d=pair[tsrClamp(base+int2(1,1),size)+offset];
+    return lerp(lerp(a,b,t.x),lerp(c,d,t.x),t.y);
+}
+// Scratch buffer regions, in units of n words for n render pixels padded to whole
+// 8x8 tiles (tsr/mod.rs SCRATCH_WORDS, scratch_pixels): 0 dilated motion (two
+// halves, FSR's RG16F), 1 reconstructed previous nearest depth (u32 atomics),
+// 2 masks, 3-4 and 5-6 the dilated surface (entity ID, depth) of this and last
+// frame by pair slot. Pixels are stored tile by tile (8x8, row-major within), so a
+// neighbourhood read touches one or two cache lines instead of one per row.
+uint tsrTilesX(){return uint(MaxRenderSize().x+7)>>3;}
+uint tsrPixels(){return tsrTilesX()*(uint(MaxRenderSize().y+7)>>3)*64;}
+uint tsrIndex(int2 p){uint2 q=uint2(p);return ((q.y>>3)*tsrTilesX()+(q.x>>3))*64+(q.y&7)*8+(q.x&7);}
+uint tsrSlot(bool current){uint slot=tsr().resources.w;return current?slot:1-slot;}
+// Byte address of pixel p's word in region `region`.
+uint tsrScratch(uint region,int2 p){return (region*tsrPixels()+tsrIndex(p))*4;}
+// Byte address of pixel p's dilated surface (ID, depth) in this or last frame's slot.
+uint tsrSurfaceAddress(int2 p,bool current){return ((3+2*tsrSlot(current))*tsrPixels()+tsrIndex(p)*2)*4;}
+// IEEE half conversions by bit math (Slang's f32tof16 needs the Float16 capability
+// the device does not enable): round to nearest even, denormals kept.
+uint tsrHalfBits(float value){
+    uint sign=(asuint(value)>>16)&0x8000u;float a=abs(value);
+    if(!(a<65520.))return sign|0x7c00u;
+    if(a<6.103515625e-05)return sign|uint(round(a*16777216.));
+    uint x=asuint(a),h=(((x>>23)-112u)<<10)|((x>>13)&0x3ffu),rest=x&0x1fffu;
+    return sign|(h+uint(rest>0x1000u || (rest==0x1000u && (h&1u)!=0)));
+}
+float tsrHalfValue(uint h){
+    uint e=(h>>10)&0x1fu,m=h&0x3ffu;
+    float a=e==0?float(m)*5.9604644775390625e-08:e==31?asfloat(0x7f800000u|(m<<13)):asfloat(((e+112u)<<23)|(m<<13));
+    return (h&0x8000u)!=0?-a:a;
+}
+
+// --- Inputs ---
+FfxFloat32x3 LoadInputColor(FfxUInt32x2 p){
+    TsrConstants c=tsr();return textures[NonUniformResourceIndex(c.inputs.x)].Load(int3(tsrClamp(int2(p),c.renderSize.xy),0)).rgb*tsrInputScale();
+}
+FfxFloat32 LoadInputDepth(FfxUInt32x2 p){
+    TsrConstants c=tsr();return textures[NonUniformResourceIndex(c.inputs.y)].Load(int3(tsrClamp(int2(p),c.renderSize.xy),0)).x;
+}
+// Ara: camera motion of render pixel q at reversed-Z `depth`: its sample reprojected
+// through last frame's unjittered view-projection (baseline.slang taaMain's static
+// path), as FSR's offset to the previous position. The homogeneous point is
+// projected undivided, so the sky (depth zero, at infinity) moves with rotation.
+FfxFloat32x2 tsrCameraMotion(int2 q,float depth){
+    TsrConstants c=tsr();Frame f=buffers[NonUniformResourceIndex(c.inputs.w)].Load<Frame>(0);
+    float2 size=float2(c.renderSize.xy),s=(float2(q)+0.5)/size;
+    float4 h=mul(f.inverseVp,float4(s.x*2-1,1-s.y*2,depth,1)),prior=mul(f.previousVp,h);
+    float2 previous=float2(prior.x/prior.w*0.5+0.5,0.5-prior.y/prior.w*0.5);
+    return prior.w!=0?previous-(s+f.upscale.xy/size):FfxFloat32x2(0,0);
+}
+#ifdef TSR_REPROJECT
+// Ara: without a motion target every sample moves with the camera.
+FfxFloat32x2 LoadInputMotionVector(FfxUInt32x2 p){
+    TsrConstants c=tsr();int2 q=tsrClamp(int2(p),c.renderSize.xy);
+    return tsrCameraMotion(q,textures[NonUniformResourceIndex(c.inputs.y)].Load(int3(q,0)).x);
+}
+#else
+// Ara: the motion target holds current-minus-previous UV (FSR wants the offset to
+// the previous position) where geometry was drawn; it stays zero over the
+// background, which FSR expects to carry camera motion, so that comes from depth.
+FfxFloat32x2 LoadInputMotionVector(FfxUInt32x2 p){
+    TsrConstants c=tsr();int2 q=tsrClamp(int2(p),c.renderSize.xy);
+    float depth=textures[NonUniformResourceIndex(c.inputs.y)].Load(int3(q,0)).x;
+    if(depth==0)return tsrCameraMotion(q,0);
+    return -textures[NonUniformResourceIndex(c.inputs.z)].Load(int3(q,0)).xy;
+}
+#endif
+// Ara: the reactive and transparency-and-composition masks come from the engine's
+// signals (tsr-signals.slangh tsrPrepareMasks, stored by prepare inputs) as unorm
+// bit fields: reactive (11 low bits), composition (11), still transparency (10);
+// zero where nothing applies, or without any signal this frame.
+uint tsrMaskWord(int2 p){
+    if(!tsrOption(TSR_OPTION_MASKS) || !tsrInside(p,RenderSize()))return 0;
+    return buffers[NonUniformResourceIndex(tsr().resources.y)].Load(tsrScratch(2,p));
+}
+float tsrMask(int2 p,uint shift,uint bits){uint one=(1u<<bits)-1;return float((tsrMaskWord(p)>>shift)&one)/float(one);}
+FfxFloat32 LoadReactiveMask(FfxUInt32x2 p){return tsrMask(int2(p),0,11)*tsr().frame.z;}
+FfxFloat32 SampleReactiveMask(FfxFloat32x2 uv){return LoadReactiveMask(FfxUInt32x2(tsrClamp(int2(uv*float2(RenderSize())),RenderSize())));}
+FfxInt32x2 GetReactiveMaskResourceDimensions(){return MaxRenderSize();}
+FfxFloat32 LoadTransparencyAndCompositionMask(FfxUInt32x2 p){return tsrMask(int2(p),11,11);}
+// FSR samples at pixel centres (ClampUv to this size), so the nearest pixel is exact.
+FfxFloat32 SampleTransparencyAndCompositionMask(FfxFloat32x2 uv){
+    return LoadTransparencyAndCompositionMask(FfxUInt32x2(tsrClamp(int2(uv*float2(MaxRenderSize())),RenderSize())));
+}
+FfxInt32x2 GetTransparencyAndCompositionMaskResourceDimensions(){return MaxRenderSize();}
+FfxFloat32 SampleLanczos2Weight(FfxFloat32 x){return 0.f;}
+
+// --- Scratch buffer: dilated surface and motion, reconstructed previous depth ---
+// Ara: the dilated depth is stored with its entity ID (StoreDilatedSurface).
+void StoreDilatedDepth(FfxUInt32x2 p,FfxFloat32 depth){}
+FfxFloat32 LoadDilatedDepth(FfxUInt32x2 p){
+    return tsrInside(int2(p),RenderSize())?asfloat(buffers[NonUniformResourceIndex(tsr().resources.y)].Load(tsrSurfaceAddress(int2(p),true)+4)):0;
+}
+void StoreDilatedMotionVector(FfxUInt32x2 p,FfxFloat32x2 motion){
+    if(tsrInside(int2(p),RenderSize()))buffers[NonUniformResourceIndex(tsr().resources.y)].Store(tsrScratch(0,int2(p)),tsrHalfBits(motion.x)|(tsrHalfBits(motion.y)<<16));
+}
+FfxFloat32x2 LoadDilatedMotionVector(FfxUInt32x2 p){
+    if(!tsrInside(int2(p),RenderSize()))return FfxFloat32x2(0,0);
+    uint packed=buffers[NonUniformResourceIndex(tsr().resources.y)].Load(tsrScratch(0,int2(p)));
+    return FfxFloat32x2(tsrHalfValue(packed&0xffffu),tsrHalfValue(packed>>16));
+}
+// Reversed-Z: the nearest depth is the largest (FFX_FSR3UPSCALER_OPTION_INVERTED_DEPTH).
+void StoreReconstructedDepth(FfxUInt32x2 p,FfxFloat32 depth){
+    if(tsrInside(int2(p),RenderSize()))buffers[NonUniformResourceIndex(tsr().resources.y)].InterlockedMax(tsrScratch(1,int2(p)),asuint(depth));
+}
+void SetReconstructedDepth(FfxUInt32x2 p,FfxUInt32 value){
+    if(tsrInside(int2(p),RenderSize()))buffers[NonUniformResourceIndex(tsr().resources.y)].Store(tsrScratch(1,int2(p)),value);
+}
+FfxFloat32 LoadReconstructedPrevDepth(FfxUInt32x2 p){
+    return tsrInside(int2(p),RenderSize())?asfloat(buffers[NonUniformResourceIndex(tsr().resources.y)].Load(tsrScratch(1,int2(p)))):0;
+}
+// Ara: the dilated surface, the entity ID at the nearest-depth sample FSR dilates
+// depth and motion from and that depth, kept for this and last frame
+// (tsr-signals.slangh).
+// Without the ID signal only the depth is stored (no ID read).
+void StoreDilatedSurface(FfxInt32x2 p,FfxInt32x2 nearest,FfxFloat32 depth){
+    TsrConstants c=tsr();if(!tsrInside(p,c.renderSize.xy))return;
+    uint address=tsrSurfaceAddress(p,true);
+    if(!tsrOption(TSR_OPTION_IDS)){buffers[NonUniformResourceIndex(c.resources.y)].Store(address+4,asuint(depth));return;}
+    uint id=uint(textures[NonUniformResourceIndex(c.signalInputs.x)].Load(int3(tsrClamp(nearest,c.renderSize.xy),0)).x);
+    buffers[NonUniformResourceIndex(c.resources.y)].Store2(address,uint2(id,asuint(depth)));
+}
+// x entity ID, y reversed-Z depth bits; last frame's reads are clamped on-screen.
+uint2 tsrSurface(int2 p,bool current){
+    return buffers[NonUniformResourceIndex(tsr().resources.y)].Load2(tsrSurfaceAddress(p,current));
+}
+
+// --- Farthest depth: prepare inputs averages it into the half-size mip (the luma
+// pyramid's only consumed output) through group memory, 8x8 pixels a group ---
+groupshared float gsTsrFarthest[8][8];
+void StoreFarthestDepth(FfxUInt32x2 p,FfxFloat32 depth){gsTsrFarthest[p.y&7][p.x&7]=depth;}
+
+// --- Luma instability (render size; the luma instability pass, when enabled) ---
+void StoreLumaInstability(FfxUInt32x2 p,FfxFloat32 instability){
+    if(tsrInside(int2(p),RenderSize()))images[NonUniformResourceIndex(tsr().storage0.x)][p]=float4(instability,0,0,0);
+}
+FfxFloat32 SampleLumaInstability(FfxFloat32x2 uv){
+    return tsrOption(TSR_OPTION_LUMA_INSTABILITY)?textures[NonUniformResourceIndex(tsr().sampled0.x)].SampleLevel(samplers[2],uv,0).x:0;
+}
+
+
+// --- Luma pair (FSR LUMA_1/LUMA_2): current and previous ---
+void StoreCurrentLuma(FfxUInt32x2 p,FfxFloat32 luma){
+    int2 size=RenderSize();if(tsrInside(int2(p),size))images[NonUniformResourceIndex(tsr().storage0.y)][int2(p)+tsrHalf(true,MaxRenderSize().x)]=float4(luma,0,0,0);
+}
+FfxFloat32 LoadCurrentLuma(FfxUInt32x2 p){
+    return textures[NonUniformResourceIndex(tsr().sampled0.y)].Load(int3(tsrClamp(int2(p),RenderSize())+tsrHalf(true,MaxRenderSize().x),0)).x;
+}
+FfxFloat32 SampleCurrentLuma(FfxFloat32x2 uv){
+    int2 size=MaxRenderSize();float2 at=(uv*float2(size)+float2(tsrHalf(true,size.x)))/float2(size.x*2,size.y);
+    return textures[NonUniformResourceIndex(tsr().sampled0.y)].SampleLevel(samplers[2],at,0).x;
+}
+FfxFloat32 LoadPreviousLuma(FfxUInt32x2 p){
+    return textures[NonUniformResourceIndex(tsr().sampled0.y)].Load(int3(tsrClamp(int2(p),PreviousFrameRenderSize())+tsrHalf(false,MaxRenderSize().x),0)).x;
+}
+
+// --- Pyramid atlas: shading change mips 0..2 and the farthest-depth mip ---
+// Mip 0 is (int(render * 0.5)) at the origin, the farthest-depth mip (same size)
+// below it, mips 1 and 2 stacked to the right of mip 0 (tsr/mod.rs pyramid_extent).
+int2 tsrMipSize(uint mip){int2 s=MaxRenderSize()/2;return max(s>>mip,int2(1,1));}
+int2 tsrMipOrigin(uint mip){int2 s=tsrMipSize(0);return mip==0?int2(0,0):mip==1?int2(s.x,0):int2(s.x,tsrMipSize(1).y);}
+int2 tsrPyramidSize(){int2 s=tsrMipSize(0);return int2(s.x+tsrMipSize(1).x,max(s.y*2,tsrMipSize(1).y+tsrMipSize(2).y));}
+// A clamped bilinear sample of the atlas region at `origin`, `size` texels.
+float4 tsrSampleRegion(uint index,float2 uv,int2 origin,int2 size){
+    float2 at=(float2(origin)+clamp(uv*float2(size),0.5,float2(size)-0.5))/float2(tsrPyramidSize());
+    return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[2],at,0);
+}
+FfxInt32x2 GetSPDMipDimensions(FfxUInt32 mip){return tsrMipSize(mip);}
+FfxFloat32x2 SampleSPDMipLevel(FfxFloat32x2 uv,FfxUInt32 mip){return tsrSampleRegion(tsr().sampled0.z,uv,tsrMipOrigin(mip),tsrMipSize(mip)).xy;}
+void StorePyramid(FfxInt32x2 p,FfxFloat32x2 value,FfxUInt32 mip){
+    if(mip<3 && tsrInside(p,tsrMipSize(mip)))images[NonUniformResourceIndex(tsr().storage0.z)][p+tsrMipOrigin(mip)]=float4(value,0,0);
+}
+// Ara: SPD's single-pass tail (mips 6+, the global atomic and mip 5 as scratch)
+// never runs: TSR_SPD_MIPS keeps both pyramids at or below six mips (see the pass
+// files), so these are never reached.
+FfxFloat32x2 RWLoadPyramid(FfxInt32x2 p,FfxUInt32 mip){return FfxFloat32x2(0,0);}
+void SPD_IncreaseAtomicCounter(inout FfxUInt32 counter){counter=0;}
+void SPD_ResetAtomicCounter(){}
+FfxInt32x2 GetFarthestDepthMip1ResourceDimensions(){return tsrMipSize(0);}
+void StoreFarthestDepthMip1(FfxUInt32x2 p,FfxFloat32 depth){
+    int2 size=tsrMipSize(0);if(tsrInside(int2(p),size))images[NonUniformResourceIndex(tsr().storage0.z)][int2(p)+int2(0,size.y)]=float4(depth,0,0,0);
+}
+FfxFloat32 SampleFarthestDepthMip1(FfxFloat32x2 uv){int2 size=tsrMipSize(0);return tsrSampleRegion(tsr().sampled0.z,uv,int2(0,size.y),size).x;}
+FfxFloat32 LoadFarthestDepthMip1(FfxUInt32x2 p){
+    int2 size=tsrMipSize(0);return textures[NonUniformResourceIndex(tsr().sampled0.z)].Load(int3(tsrClamp(int2(p),size)+int2(0,size.y),0)).x;
+}
+// Ara: FrameInfo (FSR's own auto exposure, from the luma pyramid's 1x1 mip) has no
+// reader once the host supplies exposure, as Ara does; it is not produced.
+FfxFloat32x4 LoadFrameInfo(){return FfxFloat32x4(0,0,0,0);}
+void StoreFrameInfo(FfxFloat32x4 info){}
+#ifndef TSR_SPD_MIPS
+#define TSR_SPD_MIPS 0
+#endif
+FfxUInt32 MipCount(){return TSR_SPD_MIPS;}
+FfxUInt32 NumWorkGroups(){return 0;}
+FfxUInt32x2 WorkGroupOffset(){return FfxUInt32x2(0,0);}
+
+// --- Accumulation pair (prepare reactivity reads last frame's, writes this frame's) ---
+FfxFloat32 SampleAccumulation(FfxFloat32x2 uv){return tsrPreviousBilinear(tsr().storage1.x,uv,MaxRenderSize()).x;}
+void StoreAccumulation(FfxUInt32x2 p,FfxFloat32 accumulation){
+    if(tsrInside(int2(p),RenderSize()))images[NonUniformResourceIndex(tsr().storage1.x)][int2(p)+tsrHalf(true,MaxRenderSize().x)]=float4(accumulation,0,0,0);
+}
+
+// --- Dilated reactive masks ---
+void StoreDilatedReactiveMasks(FfxUInt32x2 p,FfxFloat32x4 masks){
+    if(tsrInside(int2(p),RenderSize()))images[NonUniformResourceIndex(tsr().storage1.y)][p]=masks;
+}
+FfxFloat32x4 SampleDilatedReactiveMasks(FfxFloat32x2 uv){return textures[NonUniformResourceIndex(tsr().sampled1.y)].SampleLevel(samplers[2],uv,0);}
+
+// --- New locks (display size; prepare reactivity scatters, accumulate consumes) ---
+void StoreNewLocks(FfxUInt32x2 p,FfxFloat32 lock){
+    if(tsrInside(int2(p),UpscaleSize()))images[NonUniformResourceIndex(tsr().storage1.z)][p]=float4(lock,0,0,0);
+}
+FfxFloat32 LoadRwNewLocks(FfxUInt32x2 p){return tsrInside(int2(p),UpscaleSize())?images[NonUniformResourceIndex(tsr().storage1.z)][p].x:0;}
+FfxFloat32 LoadNewLocks(FfxUInt32x2 p){return textures[NonUniformResourceIndex(tsr().sampled1.z)].Load(int3(tsrClamp(int2(p),UpscaleSize()),0)).x;}
+
+// --- Luma history pair (luma instability reads last frame's, writes this frame's) ---
+void StoreLumaHistory(FfxUInt32x2 p,FfxFloat32x4 history){
+    if(tsrInside(int2(p),RenderSize()))images[NonUniformResourceIndex(tsr().storage1.w)][int2(p)+tsrHalf(true,MaxRenderSize().x)]=history;
+}
+FfxFloat32x4 SampleLumaHistory(FfxFloat32x2 uv){return tsrPreviousBilinear(tsr().storage1.w,uv,MaxRenderSize());}
+
+#ifdef TSR_ARA_HISTORY
+// --- Ara path: TSR's history is the renderer's display history pair ---
+// Ara: last frame's texel (sampled; tsr-signals.slangh TsrReprojectHistory filters
+// it) and this frame's colour and lock written straight into the history slot the
+// post chain reads: pre-exposed, clamped to 65000, w the lock (taaMain's depth
+// check fails for one frame if TAAU takes over).
+FfxFloat32x4 LoadHistory(FfxUInt32x2 p){
+    return textures[NonUniformResourceIndex(tsr().options.y)].Load(int3(tsrClamp(int2(p),PreviousFrameUpscaleSize()),0));
+}
+void StoreInternalColorAndWeight(FfxUInt32x2 p,FfxFloat32x4 colorAndWeight){
+    if(tsrInside(int2(p),UpscaleSize()))images[NonUniformResourceIndex(tsr().resources.z)][p]=float4(min(max(colorAndWeight.rgb,0),65000),colorAndWeight.w);
+}
+void StoreUpscaledOutput(FfxUInt32x2 p,FfxFloat32x3 color){}
+#else
+// --- FSR path: upscaled colour pair (accumulate reads last frame's, writes this frame's; RCAS reads it) ---
+FfxFloat32x4 LoadHistory(FfxUInt32x2 p){
+    int2 size=MaxUpscaleSize();return images[NonUniformResourceIndex(tsr().storage2.x)][tsrClamp(int2(p),size)+tsrHalf(false,size.x)];
+}
+void StoreInternalColorAndWeight(FfxUInt32x2 p,FfxFloat32x4 colorAndWeight){
+    int2 size=MaxUpscaleSize();if(tsrInside(int2(p),UpscaleSize()))images[NonUniformResourceIndex(tsr().storage2.x)][int2(p)+tsrHalf(true,size.x)]=colorAndWeight;
+}
+// Ara: RCAS reads the 3x3 cross clamped to the image (D3D12 would read zero past
+// the border; clamping keeps edge pixels from sharpening against black).
+FfxFloat32x4 LoadRCAS_Input(FfxInt32x2 p){
+    int2 size=MaxUpscaleSize();return textures[NonUniformResourceIndex(tsr().sampled2.x)].Load(int3(tsrClamp(p,UpscaleSize())+tsrHalf(true,size.x),0));
+}
+// --- Output: the renderer's display history (RGBA16F, pre-exposed; w = depth) ---
+// Ara: the post chain reads this image as it reads taaMain's result: pre-exposed by
+// the applied exposure (FSR's working space here), clamped to 65000, and w holds the
+// reversed-Z depth of the render sample nearest the pixel centre.
+void StoreUpscaledOutput(FfxUInt32x2 p,FfxFloat32x3 color){
+    TsrConstants c=tsr();if(!tsrInside(int2(p),c.upscaleSize.xy))return;
+    float2 at=(float2(p)+0.5)/float2(c.upscaleSize.xy)*float2(c.renderSize.xy)+c.jitter.xy;
+    float depth=textures[NonUniformResourceIndex(c.inputs.y)].Load(int3(tsrClamp(int2(floor(at)),c.renderSize.xy),0)).x;
+    images[NonUniformResourceIndex(c.resources.z)][p]=float4(min(max(color,0),65000),depth);
+}
+#endif

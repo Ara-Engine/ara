@@ -2,6 +2,7 @@
 #include "raster.slangh"
 #include "look.slangh"
 #include "look-shading.slangh"
+#include "look-refract.slangh"
 #include "native_sample.slangh"
 struct NativeVertex {float3 position;float3 normal;float2 uv;float4 tangent;float2 uv1;uint weights;uint reserved;};
 struct NativeUv {float2 offset;float2 scale;float rotation;uint set;uint2 reserved;};
@@ -91,14 +92,38 @@ float2 coordinates(NativeUv transform,Varying v){float2 p=(transform.set==0?v.uv
 // resolution's mips (a negative mip bias the temporal resolve reconstructs);
 // shadow passes keep 1.
 static float footprint=1;
+// Resident map `id` (not 0xffffffff) at `uv` with explicit UV gradients: the hardware picks
+// the mip and, on the sampler's anisotropy (samplers[0], up to 16x), takes extra taps along
+// the footprint's long axis, so grazing surfaces stay sharp where a single isotropic LOD
+// blurs. The view holds only the resident levels, so the gradient LOD is already relative
+// to the first resident mip (native_sample.slangh ntSampleLevel subtracts info.y for the same
+// reason) and clamps to the tail. native_sample.slangh is a byte-identical contract copy
+// (ara-texture-stream, ara-render-fidelity), so grad sampling lives here.
+float4 ntSampleGrad(uint table,uint id,float2 uv,float2 dx,float2 dy){
+    uint image=buffers[NonUniformResourceIndex(table)].Load(id*32);
+    return textures[NonUniformResourceIndex(image)].SampleGrad(samplers[0],uv,dx,dy);
+}
+// A sampled normal texel as ntNormal (native_sample.slangh) decodes it: BC5 stores XY,
+// Z is reconstructed before glTF normalScale.
+float3 ntNormalTexel(uint table,uint id,float3 texel,float scale){
+    float3 n=texel*2-1;
+    uint encoding=buffers[NonUniformResourceIndex(table)].Load(id*32+16);
+    if(encoding==2)n.z=sqrt(max(0,1-dot(n.xy,n.xy)));
+    n.xy*=scale;
+    return dot(n,n)>1e-12?normalize(n):float3(0,0,1);
+}
+// Map `slot` of `m` at the fragment, anisotropically filtered over the pixel's UV
+// footprint scaled by `footprint` (gradients scale uniformly, so the mip shifts by
+// log2(footprint) and the anisotropy ratio is unchanged).
 float4 sampleMap(NativeMaterial m,uint slot,Varying v){
     uint id=slot<4?m.pbr.textures[min(slot,3)]:(slot==4?m.slots.x:m.slots.y);
     if(id==0xffffffff)return float4(slot==1?float3(0,0,1):float3(1),1);
     float2 uv=coordinates(m.uv[slot],v);
-    float lod=ntDesiredLod(root.sample,id,ddx(uv)*footprint,ddy(uv)*footprint);
-    if(slot==1)return float4(ntNormal(root.sample,id,uv,lod,m.pbr.surface.y),1);
+    float4 texel=ntSampleGrad(root.sample,id,uv,ddx(uv)*footprint,ddy(uv)*footprint);
+    if(slot==1)return float4(ntNormalTexel(root.sample,id,texel.xyz,m.pbr.surface.y),1);
     bool decode=slot==0?(m.pbr.flags.y&(1u<<25))!=0:slot==3 && (m.pbr.flags.y&(1u<<26))!=0;
-    return ntSampleColorLevel(root.sample,id,uv,lod,decode);
+    if(decode)texel.rgb=ntDecodeColor(texel.rgb);
+    return texel;
 }
 // Unit `v`, or `fallback` for zero-length or non-finite input (degenerate skinned or
 // UV-less tangent frames would otherwise turn shading into NaN/inf fireflies).
@@ -112,7 +137,8 @@ Surface surfaceMaterial(NativeMaterial m,Varying v){
         if(abs(determinant)>1e-10){float3 e1=ddx(v.world),e2=ddy(v.world);t=(e1*b.y-e2*a.y)/determinant;t-=normal*dot(t,normal);float3 bitangent=(e2*a.x-e1*b.x)/determinant;handedness=dot(cross(normal,t),bitangent)<0?-1:1;}
     }
     t=safeNormalize(t,normalize(cross(normal,abs(normal.y)<0.99?float3(0,1,0):float3(1,0,0))));float3 n=sampleMap(m,1,v).xyz;
-    s.normal=normalize(t*n.x+cross(normal,t)*handedness*n.y+normal*n.z);
+    // A degenerate tangent frame (zero handedness) can cancel the mapped normal.
+    s.normal=safeNormalize(t*n.x+cross(normal,t)*handedness*n.y+normal*n.z,normal);
     float4 mr=sampleMap(m,2,v);s.roughness=clamp(m.pbr.emissiveRoughness.w*mr.g,0.045,1);s.metal=saturate(m.pbr.surface.x*mr.b);
     s.emissive=max(0,m.pbr.emissiveRoughness.rgb*sampleMap(m,3,v).rgb);
     // Transmission is the dielectric layer's (glTF KHR_materials_transmission): metal
@@ -244,19 +270,93 @@ Surface surface<let SIDES:int>(Varying v){
 }
 float2 motion(Varying v){float2 now=v.currentClip.xy/v.currentClip.w,previous=v.previousClip.xy/v.previousClip.w;return (now-previous)*float2(0.5,-0.5);}
 struct GBuffer {float4 albedo:SV_Target0;float4 normal:SV_Target1;float4 material:SV_Target2;float4 emissive:SV_Target3;float id:SV_Target4;float2 velocity:SV_Target5;};
-GBuffer geometry<let SIDES:int>(Varying v){Surface s=surface<SIDES>(v);GBuffer g;g.albedo=float4(s.albedo,s.ao);g.normal=gbufferEncodeNormal(s.normal,1);g.material=gbufferEncodeMaterial(s.roughness,s.metal,material(v.material).pbr.flags.x==1?0:1,1);g.emissive=gbufferEncodeEmissive(s.emissive,1);g.id=float(v.id);g.velocity=motion(v);return g;}
+// glTF doubleSided (ara_render::scene::DOUBLE_SIDED in material flags.y).
+static const uint DOUBLE_SIDED=1u<<28;
+// Whether a G-buffer fragment is a double-sided material's back face, lit on its own
+// side (glTF: back faces reverse their normals before lighting). The rasterizer's
+// winding decides (SV_IsFrontFace: counter-clockwise front, as -fvk-invert-y keeps
+// glTF's), corrected for mirrored instances whose transform reverses it (the instance
+// row's determinant sign, meta.w); the interpolated normal must agree it faces away,
+// so a front face is never flipped and a silhouette never misjudged.
+bool backFace(Varying v,bool front){
+    if((material(v.material).pbr.flags.y&DOUBLE_SIDED)==0)return false;
+    bool mirrored=asfloat(buffers[NonUniformResourceIndex(root.material)].Load(128+(v.id-1)*192+12))<0;
+    return front==mirrored && dot(v.normal,frame().camera.xyz-v.world)<0;
+}
+GBuffer geometry<let SIDES:int>(Varying v,bool front){Surface s=surface<SIDES>(v);if(backFace(v,front))s.normal=-s.normal;GBuffer g;g.albedo=float4(s.albedo,s.ao);g.normal=gbufferEncodeNormal(s.normal,1);g.material=gbufferEncodeMaterial(s.roughness,s.metal,material(v.material).pbr.flags.x==1?0:1,1);g.emissive=gbufferEncodeEmissive(s.emissive,1);g.id=float(v.id);g.velocity=motion(v);return g;}
 [shader("fragment")]
-GBuffer nativeGeometryFragment(Varying v){return geometry<1>(v);}
+GBuffer nativeGeometryFragment(Varying v,bool front:SV_IsFrontFace){return geometry<1>(v,front);}
 // The G-buffer for presets without terrain detail: terrain keeps its top projection.
 [shader("fragment")]
-GBuffer nativeGeometryTopFragment(Varying v){return geometry<0>(v);}
+GBuffer nativeGeometryTopFragment(Varying v,bool front:SV_IsFrontFace){return geometry<0>(v,front);}
 [shader("fragment")]
 void nativeShadowFragment(ShadowVarying shadow){Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);if(m.pbr.flags.x==1 && sampleMap(m,0,v).a*m.pbr.color.a<m.pbr.surface.w)discard;}
+// Translucent sun casters' film opacity (look-translucent.slangh): coverage times the
+// share the film stops, blended ONE, ONE_MINUS_SRC_ALPHA from a zero colour over a
+// map cleared to one, so the map keeps the product of (1 - opacity) over every film.
+[shader("fragment")]
+float4 nativeShadowTranslucentFragment(ShadowVarying shadow):SV_Target0{
+    Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);
+    float alpha=saturate(sampleMap(m,0,v).a*m.pbr.color.a)*(1-saturate(m.factors.y*sampleMap(m,5,v).r));
+    return float4(0,0,0,alpha);
+}
 struct Forward {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 emissive:SV_Target5;float4 velocity:SV_Target6;};
+// Whether a forward fragment faces the viewer, by its interpolated normal rather than
+// the rasterizer's winding: the back- and front-face passes classify every fragment
+// alike, so each draws exactly once.
+bool facesViewer(Varying v){return dot(v.normal,frame().camera.xyz-v.world)>=0;}
+// A forward fragment's surface. Double-sided transparency lights each side as seen
+// (glTF: back faces reverse their normals before lighting), as a path tracer does;
+// lit from outside, a film's far side caught sunlight its near side never sees.
+// FACES is a compile-time pass choice: 0 both sides, 1 back faces only,
+// 2 front faces only. Lit frames draw a double-sided blended volume's back faces
+// before its front faces (NativePipelines::forward_lit_back/front), so a closed film
+// composites far under near side instead of in triangle order (blocks along the
+// tessellation); every other blended draw takes one pass over both sides.
+// The sun is a disk, not a point: forward surfaces (often thin, glossy and lit at
+// grazing angles) widen their lobe to at least its angular radius (GGX alpha), so a
+// mirror-like rim shows the sun's area-filtered highlight rather than a sub-pixel peak.
+Surface forwardSurface<let FACES:int>(Varying v){
+    bool front=facesViewer(v);if((FACES==1 && front)||(FACES==2 && !front))discard;
+    Surface s=surface<1>(v);if(!front)s.normal=-s.normal;
+    s.roughness=max(s.roughness,sqrt(max(look(frame()).sunLux.w,0)));return s;
+}
+// The forward pass; `high` selects the High/Epic tier's code at compile time.
+Forward nativeForward(ForwardVarying i,bool high){Varying v=i.v;Surface s=forwardSurface<0>(v);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),i.exposure,high);o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;}
 [shader("fragment")]
-Forward nativeForwardFragment(ForwardVarying i){Varying v=i.v;Surface s=surface<1>(v);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),i.exposure);o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;}
+Forward nativeForwardFragment(ForwardVarying i){return nativeForward(i,false);}
 // Lit frames' forward pass: nothing reads the G-buffer after it (only the debug
-// views do, through nativeForwardFragment), so it writes colour, id and motion only.
+// views do, through nativeForwardFragment), so it writes colour, id and motion only;
+// `high` selects the High/Epic tier's code at compile time.
 struct ForwardLit {float4 color:SV_Target0;float id:SV_Target1;float4 velocity:SV_Target2;};
+ForwardLit nativeForwardLit<let FACES:int>(ForwardVarying i,bool high){Varying v=i.v;Surface s=forwardSurface<FACES>(v);Frame f=frame();Look l=look(f);ForwardLit o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),i.exposure,high);o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;}
 [shader("fragment")]
-ForwardLit nativeForwardLitFragment(ForwardVarying i){Varying v=i.v;Surface s=surface<1>(v);Frame f=frame();Look l=look(f);ForwardLit o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),i.exposure);o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;}
+ForwardLit nativeForwardLitFragment(ForwardVarying i){return nativeForwardLit<0>(i,false);}
+[shader("fragment")]
+ForwardLit nativeForwardLitFrontFragment(ForwardVarying i){return nativeForwardLit<2>(i,false);}
+[shader("fragment")]
+ForwardLit nativeForwardLitBackFragment(ForwardVarying i){return nativeForwardLit<1>(i,false);}
+[shader("fragment")]
+ForwardLit nativeForwardHighFragment(ForwardVarying i){return nativeForwardLit<0>(i,true);}
+[shader("fragment")]
+ForwardLit nativeForwardHighFrontFragment(ForwardVarying i){return nativeForwardLit<2>(i,true);}
+[shader("fragment")]
+ForwardLit nativeForwardHighBackFragment(ForwardVarying i){return nativeForwardLit<1>(i,true);}
+// Transmissive forward draws (NativePipelines::refract): the surface composites the
+// opaque scene it refracts (look-refract.slangh) instead of blending a film. A
+// volume's back faces are its far side, which its front faces already refract
+// through; a thin wall shades both sides, facing the viewer.
+ForwardLit nativeRefract(Varying v,bool high){
+    NativeMaterial m=material(v.material);uint2 volume=uint2(asuint(m.factors.z),asuint(m.factors.w));
+    bool front=facesViewer(v);if(!front && (volume.x&0xffff)!=0)discard;
+    Surface s=forwardSurface<0>(v);float3 geometric=safeNormalize(v.normal,float3(0,1,0))*(front?1:-1);
+    // The instance's scale (the cube root of its determinant) for the mesh-space thickness.
+    float4x4 world=buffers[NonUniformResourceIndex(root.material)].Load<float4x4>(128+(v.id-1)*192+16);
+    float scale=pow(abs(determinant((float3x3)world)),1./3.);
+    Frame f=frame();Look l=look(f);ForwardLit o;o.color=refractColour(f,l,s,volume,scale,v.world,geometric,int2(v.clip.xy),high);
+    o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;
+}
+[shader("fragment")]
+ForwardLit nativeForwardRefractFragment(Varying v){return nativeRefract(v,false);}
+[shader("fragment")]
+ForwardLit nativeForwardRefractHighFragment(Varying v){return nativeRefract(v,true);}

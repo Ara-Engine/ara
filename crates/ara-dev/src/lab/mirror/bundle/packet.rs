@@ -3,10 +3,11 @@ use super::*;
 
 pub(super) fn archive(job: &Path, files: &[&str], import: &Value) -> Result<PathBuf> {
     super::super::super::session::write(&job.join("incoming.json"), import)?;
-    super::super::super::session::write(
-        &job.join("request.json"),
-        &json!({"tool":"_lab_import","arguments":import}),
-    )?;
+    let request = json!({"tool":"_lab_import","arguments":import});
+    // The CLI consumes exactly one NDJSON frame from stdin.
+    let mut frame = serde_json::to_vec(&request)?;
+    frame.push(b'\n');
+    fs::write(job.join("request.json"), frame)?;
     let names = files
         .iter()
         .map(|p| format!("data/{p}\n"))

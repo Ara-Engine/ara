@@ -633,7 +633,7 @@ previous 2560x1440 -> 5120x2880 expansion. No render pass changed.
 |---|---:|
 | Cold perf player and companion tools, one Cargo worker | 22m 53s |
 | Rust save -> replacement warm player; camera, preset, params and variant retained | 14.66 s |
-| Shader save -> changed warm Metal epoch, including PC cooking/SSH observation | 5.85 s (5 s target still missed) |
+| Shader save -> changed warm Metal epoch, including PC cooking/SSH observation | 5.85 s initial; 3.47–4.15 s with streamed imports (below) |
 | Three-camera 2560x1440 quick capture, seven regions and matched-transform FLIP | 1.81 s native / 6.03 s through PC with artifact download |
 | Default four-pair, 120-frame A/B with cached temporal evidence | 17.78 s through PC |
 
@@ -643,6 +643,49 @@ These are functional turnaround probes, not formal rendering budgets. Quick capt
 reports intentionally leave three-run repeatability gates unmeasured. The Mac's
 build output is disposable; evidence is retained under `target/lab-baseline/mac-p4/`
 on the PC. PC-side tests also cover slot refusal without starting SSH or a snapshot.
+
+The streamed-import follow-up measured three fresh shader constants on the same
+warm Metal player (High, 2560x1440, Materials camera, exposure +0.25): **4.150,
+3.700 and 3.471 seconds**, median **3.700 seconds**. These probes waited for the
+player's post-render acknowledgement of the changed cohort; the earlier 5.85 s
+probe observed its published epoch. The changed artifact packet was 127,488 bytes
+over one SSH connection, with no source fetch or bootstrap on these saves.
+
+| Stage | Initial trace / profile | Streamed native follow-up |
+|---|---:|---:|
+| Save detection and debounce | 0.512 s | 0.493–0.574 s |
+| PC cook | 1.522 s | 1.436–1.650 s |
+| PC cohort publication | 0.381 s | 0.369–0.444 s |
+| Mirror snapshot wait plus inventory | Not separately instrumented | 0.884–1.182 s |
+| Archive creation | Not separately instrumented | 0.061–0.112 s |
+| SSH upload, extraction and import enqueue | Several SSH/SCP jobs | 0.464–0.466 s |
+| Native library/hash/reflection loading | Combined with PSO below | 1.24–2.91 ms on changed-PSO replies |
+| Native PSO creation | 16.12 ms combined load + PSO | 14.99–15.37 ms on changed-PSO replies |
+| Native reload request -> rendered frame acknowledgement | Not separately instrumented | 34–39 ms |
+| Save -> frame acknowledgement observed on PC | 5.848 s (epoch observation) | 3.471–4.150 s |
+
+Snapshot timing includes waiting for PC publication, and native request-to-frame
+timing includes loading and PSO creation; these rows overlap. A final metadata-only
+acknowledgement can show zero PSO time after an earlier changed-PSO publication.
+Independent warm inventory probes over 5,792 files fell from 0.73–0.87 s to
+0.36–0.40 s after eliminating duplicate metadata reads. Reducing SSH/SCP jobs
+supplied the main turnaround reduction.
+
+Native validation caught and fixed an import framing error: `lab rpc` consumes one
+NDJSON frame, so the archived request must be compact single-line JSON. The packet
+test now parses the first line exactly as the CLI does. Cancelled visual requests
+also leave GPU admission promptly, releasing their lab activity lock while foreign
+timing tickets retain priority. This prevents a closed startup track from delaying
+shader publication behind a long timing lease.
+
+All 29 active Metal tests passed with API/shader validation, all 117 active native
+ara-dev unit tests passed, and native all-target clippy passed for ara-dev/ara-gpu.
+Before/after captures showed the intended shader multiplier: mean brightness
+changed by 0.89382x, matching 0.8849/0.99. Evidence is retained under
+`target/lab-baseline/mac-shader-latency/`, including stage records and a native
+archive. Both owned lab daemons were stopped and native Cargo/runtime output was
+removed after validation (11.64 GiB reclaimed). These are iteration-turnaround
+probes, not formal GPU budget measurements.
 
 Cold scene preparation runs in an owned, cancellable helper, under a scene-cache
 lease and the GPU queue. Opening a track returns `queued:true`; watch

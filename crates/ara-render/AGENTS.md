@@ -18,9 +18,9 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and camera pose/bounds requests. Materials use bindless texture indices.
 - `instanced::Scene`: native model-space content contract for shared geometry,
   current/previous instance transforms, deforming revisions, 64-byte UV0/UV1
-  vertices and 320-byte materials with six independent map transforms, AO,
-  transmission and authored terrain layer IDs. Texture IDs address the native
-  residency table; u32::MAX means neutral texels (separate from the legacy `Scene` ABI).
+  vertices and 320-byte materials with six map transforms, AO, transmission (+ IOR/volume packed by `instanced::Volume`:
+  refractive forward PSOs over `look::refract`'s copy of the lit scene; blended films draw back then front faces and cast
+  `look::translucent` sun shadows on High/Epic) and terrain layer IDs. Texture IDs address the residency table; u32::MAX is neutral.
   Validate only at content publication; do not hash/traverse static vertices
   when moving instances. Culling bounds handle mirrored/nonuniform transforms.
 - `Renderer::new_native` consumes this scene and an owned `instanced::Textures`
@@ -76,12 +76,12 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   distance; stable light space, practical splits, gather PCF, cascade blend; one
   cached D32 map per cascade, redrawn only when its matrix or casters in its light volume change; moved casters
   patch only their texels (a per-list cell grid finds their casters, culling/patches.rs); outer cascades redraw whole at most one per frame, `Cascades::plan`), a cached far map (`look::far`),
-  local-light shadows (`look::local`, patched alike; `in_gi_and_fog` also shadows GI relight and fog), half-res GTAO and SSR (cone footprint into
+  local-light shadows (`look::local`, patched alike; `in_gi_and_fog` also shadows GI relight and fog), half-res GTAO (High/Epic: visibility bitmask plus one-bounce near-field light, `LookGpu::bitmask_ao`) and SSR (cone footprint into
   last frame's colour pyramid), GI relight, bloom, emitter lights, LOD/cull pixels, terrain detail (zero binds `gbuffer_top`, no side projections), and the
   heightfield horizon (`look::horizon`: distant landforms' sun shadow, min'd into `visibility`, and sky visibility
   outside the probe volume), and sun virtual shadow maps (`look::vsm`, High/Epic: clipmap pages that pixels mark in `VSM.Mark`, read back once their frame
-  completes, cached in world space, drawn under a per-frame budget; `VSM.Project` resolves them into a mask lighting reads, GI relight
-  has its own pipeline, and no other shader inlines page lookups, which would cost every preset registers; moved casters re-dirty pages). Look images are allocated lazily; probe GI is gathered at half resolution.
+  completes, cached in world space, drawn under a per-frame budget; `VSM.Project` resolves them, contact-hardening (PCSS for the sun disc), into a mask lighting reads, GI relight
+  has its own pipeline, and no other shader inlines page lookups, which would cost every preset registers; moved casters re-dirty pages). Look images are allocated lazily; probe GI is gathered at half resolution. Reflection captures (`look::captures`; `set_reflection_captures`, `auto_place`): faces bake through a square deferred view (a face or the prefilter per live frame, all at once in captures, only once probe GI settles), relit per frame by an ambient ratio, read by High/Epic `ibl` under SSR. Hybrid ray queries (D29, `renderer::rt`, `Quality::ray_queries`; `new_hybrid` devices): High/Epic on RT GPUs trace one deterministic reflection ray per pixel below the roughness cut against a TLAS over native content (LOD 0 BLAS per entry, fresh TLAS on change, skin BLASes amortised), cone-blurred and composited over SSR for `lighting_high_rt`; `shaders/look-rt.slangh` is the reusable trace/surface/shade API.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
   an externally composited HDR frame (landscape, particles) with the same look post; TAA reprojects with native motion
   (Frame.look.w). HDR is RGBA16F, pre-exposed (`hdr_exposure`, look.slangh `exposeHdr`): writers multiply, readers divide.
@@ -93,8 +93,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 
 The Vulkan SDK is required for cooking, not runtime. Cooked SPIR-V/DXIL and their reflection are committed under
 `cooked/`; no shader compiler is linked at runtime. Use `../../shaders/pipelines.json`; changing the binding ABI requires a full cook.
-The renderer rejects mixed source cohorts. Byte-address frame/material/light
-records and 48-byte vertex records must match Slang's column-major ABI.
+The renderer rejects mixed source cohorts. Byte-address frame/material/light records and 48-byte vertex records must match Slang's column-major ABI.
 
 Shaders: `raster.slangh` is the shared ABI (bindings, Frame, Surface; Frame.look.x is the look record, look.w the
 native motion texture, sizes/upscale the TAAU sizes, jitter offset and mip footprint; resolve and post use a
@@ -109,6 +108,7 @@ The G-buffer is compact: RGBA8 sRGB albedo + AO, RG16 octahedral normal, RGBA8
 roughness/metal/AO occluder (zero for cutouts), B10G11R11 emissive, R32 ID and
 RG16F motion; positions are rebuilt from depth. Shaders read and write it only through raster.slangh's
 `gbuffer*` helpers, so the formats change there and in `Renderer::targets` together.
+Material AO (glTF occlusion maps) scales ambient light only without screen AO + probe GI (Low, or either off): `dynamicOcclusion`.
 Local light lists are tiled 16x16 (`scene::MAX_LOCAL_LIGHTS` 256 per scene, the
 first `TILE_LIGHTS` 128 per tile); `look::local` shadows the brightest few in view
 (cube or spot faces, one cached D32 atlas). Spot lumens are point-equivalent, as in

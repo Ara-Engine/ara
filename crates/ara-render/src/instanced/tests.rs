@@ -113,3 +113,30 @@ fn bad_material_references_and_nested_splats_are_rejected_before_upload() {
     scene.materials[0].extras.layer_materials[0] = 1;
     scene.validate().unwrap();
 }
+
+#[test]
+fn volume_packs_ior_thickness_and_absorption_for_the_refraction_shader() {
+    assert_eq!(Volume::default().pack(), [0; 2]);
+    assert_eq!(Volume::unpack([0; 2]), (1.5, 0., [0.; 3]));
+    let volume = Volume {
+        ior: 1.33,
+        thickness: 0.6,
+        attenuation_color: [0.2, 0.55, 0.45],
+        attenuation_distance: 1.,
+    };
+    let (ior, thickness, absorption) = Volume::unpack(volume.pack());
+    assert!((ior - 1.33).abs() < 1e-4);
+    assert!((thickness - 0.6).abs() < 1e-3);
+    for (got, colour) in absorption.into_iter().zip(volume.attenuation_color) {
+        let expected = -colour.ln();
+        assert!(
+            (got - expected).abs() < expected * 0.01,
+            "{got} vs {expected}"
+        );
+    }
+    let mut scene = triangle();
+    scene.materials[0].extras.volume = volume.pack();
+    assert!(scene.validate().is_ok());
+    scene.materials[0].extras.volume[0] |= 0x7c00;
+    assert!(scene.validate().is_err());
+}

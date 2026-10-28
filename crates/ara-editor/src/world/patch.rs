@@ -25,12 +25,13 @@ pub(crate) struct Patch {
 const MATERIAL_FIELDS: [&str; 4] = ["color", "emissive", "roughness", "metallic"];
 
 /// Components the Scene extracts beyond meshes, lights and transforms (environment,
-/// post-processing, terrain, effects): a change to any of them, even on a hidden
-/// entity, needs a full extraction.
-const SCENE_WIDE: [&str; 8] = [
+/// reflection captures, post-processing, terrain, effects): a change to any of them,
+/// even on a hidden entity, needs a full extraction.
+const SCENE_WIDE: [&str; 9] = [
     "Environment",
     "SkyAtmosphere",
     "HeightFog",
+    "ReflectionProbe",
     "PostProcessVolume",
     "Terrain",
     "TerrainChunk",

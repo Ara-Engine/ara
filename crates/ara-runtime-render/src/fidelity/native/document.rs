@@ -2,7 +2,7 @@
 use super::*;
 use ara_components::{
     post::PostProcessVolume,
-    render::{HeightFog, SkyAtmosphere},
+    render::{HeightFog, ReflectionProbe, SkyAtmosphere},
 };
 use ara_doc::{Workspace, prefab::Resolved};
 use ara_runtime::{
@@ -89,6 +89,7 @@ pub fn document_frame_selected(
         insert::<Environment>(&mut entity, &row.record, "Environment")?;
         insert::<SkyAtmosphere>(&mut entity, &row.record, "SkyAtmosphere")?;
         insert::<HeightFog>(&mut entity, &row.record, "HeightFog")?;
+        insert::<ReflectionProbe>(&mut entity, &row.record, "ReflectionProbe")?;
         insert::<PostProcessVolume>(&mut entity, &row.record, "PostProcessVolume")?;
         insert::<Light>(&mut entity, &row.record, "Light")?;
         insert::<VisualEffect>(&mut entity, &row.record, "VisualEffect")?;

@@ -7,6 +7,7 @@ mod budgets;
 mod gbuffer;
 mod lens;
 mod prepared;
+mod rays;
 mod shadow_patches;
 mod shadows;
 mod wire;
@@ -326,7 +327,18 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
             "batched submissions retain the {name} timestamp"
         );
     }
+    // Transmission refracts what lies behind (look-refract.slangh). Against this
+    // uniform environment a thin red wall would look like red diffuse (both are the
+    // albedo times the environment), so the wall gets a volume whose absorption
+    // darkens what it transmits.
     scene.materials[0].extras.transmission_factor = 1.;
+    scene.materials[0].extras.volume = instanced::Volume {
+        thickness: 0.5,
+        attenuation_color: [0.1; 3],
+        attenuation_distance: 0.1,
+        ..Default::default()
+    }
+    .pack();
     renderer.update_native_changed(
         &scene,
         &instanced::Changes {

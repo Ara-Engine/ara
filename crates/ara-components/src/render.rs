@@ -1,6 +1,6 @@
 //! The authorable look of a scene: physical sky and height fog (the first entity in
 //! stable-ID order carrying each), post-process volumes (`crate::post`, all of them),
-//! plus the project's rendering quality setting. Renderers receive them through the
+//! reflection captures (all of them), plus the project's rendering quality setting. Renderers receive them through the
 //! runtime extraction; the sun is the scene's directional light. Every field doc is an
 //! inspector tooltip.
 
@@ -110,6 +110,125 @@ impl Default for HeightFog {
     }
 }
 
+/// An authored reflection probe (High and Epic): the renderer captures the lit scene
+/// around the entity into a six-face map, and smooth surfaces inside its box of
+/// influence reflect it, so mirrors and metals show the room around them, including
+/// what is off screen. The entity's Transform places the capture origin and orients
+/// and scales the box. Captures are derived runtime data (a recapture job; cached
+/// under `.ara/cache/probes`), never authored edits: a change to these settings, the
+/// geometry, materials, lighting or environment marks the capture stale, and the last
+/// valid capture stays in use until its replacement is published. Without any probe,
+/// the renderer places captures over the scene's content automatically.
+#[derive(Debug, Clone, Copy, PartialEq, Component, Schema, Serialize, Deserialize)]
+#[ara(component, module = "render")]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReflectionProbe {
+    /// Whether this probe contributes reflections. A disabled probe keeps its last
+    /// valid capture but contributes nothing.
+    #[ara(default = true)]
+    pub enabled: bool,
+    /// Full size of the box of influence along the entity's axes, centred on its
+    /// origin and scaled by its transform: surfaces inside reflect this probe.
+    #[ara(default = [10, 10, 10], unit = Meters, range(min = 0.01, max = 100000))]
+    pub bounds: [f32; 3],
+    /// Selection among overlapping probes: a larger priority wins; equal priorities
+    /// blend by influence (ties ordered by document and entity identity).
+    #[ara(default = 0, range(min = -1000, max = 1000))]
+    pub priority: i32,
+    /// Distance outside the box over which the probe's contribution fades to zero.
+    /// Zero is a hard boundary.
+    #[ara(default = 1, unit = Meters, range(min = 0, max = 1000))]
+    pub blend_distance: f32,
+    /// Texels per side of each captured face: one of 64, 128, 256, 512 or 1024
+    /// ([`ReflectionProbe::RESOLUTIONS`]).
+    #[ara(default = 256, range(min = 64, max = 1024))]
+    pub capture_resolution: u32,
+    /// Advanced: full size of the box reflections are projected onto (match the
+    /// room's walls and floor). Zero uses `bounds`.
+    #[ara(default = [0, 0, 0], unit = Meters, range(min = 0, max = 100000))]
+    pub projection_bounds: [f32; 3],
+    /// Advanced: centre of the projection box relative to the entity.
+    #[ara(unit = Meters)]
+    pub projection_offset: [f32; 3],
+    /// Advanced: where the capture is taken, relative to the entity. Keep it in open
+    /// space, near the reflective surfaces it serves.
+    #[ara(unit = Meters)]
+    pub capture_offset: [f32; 3],
+    /// Advanced: brightness multiplier of the reflection.
+    #[ara(default = 1, range(min = 0, max = 8))]
+    pub intensity: f32,
+}
+
+impl ReflectionProbe {
+    /// The supported `captureResolution` values (texels per face side).
+    pub const RESOLUTIONS: [u32; 5] = [64, 128, 256, 512, 1024];
+
+    /// Why these settings cannot be captured, or `None` if they can: nonfinite or
+    /// out-of-range sizes, or a resolution outside [`Self::RESOLUTIONS`]. Checked
+    /// before any allocation.
+    pub fn invalid(&self) -> Option<String> {
+        let size = |v: &[f32; 3], min: f32| {
+            v.iter()
+                .all(|x| x.is_finite() && (min..=100_000.0).contains(x))
+        };
+        if !size(&self.bounds, 0.01) {
+            return Some(format!(
+                "bounds {:?} must be finite and 0.01-100000 m",
+                self.bounds
+            ));
+        }
+        if !size(&self.projection_bounds, 0.0) {
+            return Some(format!(
+                "projectionBounds {:?} must be finite and 0-100000 m",
+                self.projection_bounds
+            ));
+        }
+        if !(self.blend_distance.is_finite() && (0.0..=1000.0).contains(&self.blend_distance)) {
+            return Some(format!(
+                "blendDistance {} must be finite and 0-1000 m",
+                self.blend_distance
+            ));
+        }
+        if !(-1000..=1000).contains(&self.priority) {
+            return Some(format!("priority {} must be -1000..1000", self.priority));
+        }
+        if !Self::RESOLUTIONS.contains(&self.capture_resolution) {
+            return Some(format!(
+                "captureResolution {} must be one of {:?}",
+                self.capture_resolution,
+                Self::RESOLUTIONS
+            ));
+        }
+        if !(self
+            .projection_offset
+            .iter()
+            .chain(&self.capture_offset)
+            .all(|x| x.is_finite())
+            && self.intensity.is_finite()
+            && (0.0..=8.0).contains(&self.intensity))
+        {
+            return Some("offsets must be finite and intensity 0-8".to_owned());
+        }
+        None
+    }
+}
+
+impl Default for ReflectionProbe {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            bounds: [10.0; 3],
+            priority: 0,
+            blend_distance: 1.0,
+            capture_resolution: 256,
+            projection_bounds: [0.0; 3],
+            projection_offset: [0.0; 3],
+            capture_offset: [0.0; 3],
+            intensity: 1.0,
+        }
+    }
+}
+
 /// How the camera exposes the scene (a post-process volume's exposure override).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Schema, Serialize, Deserialize)]
 #[ara(module = "render")]
@@ -135,6 +254,13 @@ pub enum ToneMapping {
     Neutral,
     /// Narkowicz's per-channel ACES fit (the legacy curve; saturated highlights).
     AcesFit,
+    /// AgX as Blender 5.1 forms it (Cycles' default view): keeps mid grey, bends
+    /// bright saturated light smoothly towards white instead of clipping its hue.
+    Agx,
+    /// AgX with Blender's Punchy look: deeper shadows and more contrast.
+    AgxPunchy,
+    /// AgX with Blender's Medium High Contrast look: contrast 1.2 about mid grey.
+    AgxMediumHighContrast,
 }
 
 /// The scene's authored look as extracted for renderers: the first entity in ID order

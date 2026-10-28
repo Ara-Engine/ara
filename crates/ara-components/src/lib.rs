@@ -53,6 +53,7 @@ pub fn register(db: &mut SchemaDb) {
         .register::<render::RenderSettings>()
         .register::<render::SkyAtmosphere>()
         .register::<render::HeightFog>()
+        .register::<render::ReflectionProbe>()
         .register::<post::PostProcessVolume>();
 }
 
@@ -96,6 +97,7 @@ mod tests {
         check::<render::RenderSettings>(&db, "RenderSettings");
         check::<render::SkyAtmosphere>(&db, "SkyAtmosphere");
         check::<render::HeightFog>(&db, "HeightFog");
+        check::<render::ReflectionProbe>(&db, "ReflectionProbe");
         check::<post::PostProcessVolume>(&db, "PostProcessVolume");
     }
 

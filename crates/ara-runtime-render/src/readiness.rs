@@ -23,7 +23,8 @@ pub struct PresentationReadiness {
     pub model_fades_pending: bool,
     /// An emitter search/rerun has not yet been adopted.
     pub emitter_search_pending: bool,
-    /// Live-effect pipelines still compiling or awaiting adoption.
+    /// Live-effect or hybrid ray-query pipelines still compiling or awaiting
+    /// adoption (until the latter land, frames render the raster path).
     pub pipelines_pending: bool,
     /// Remaining residency promotions, or None before native residency exists.
     pub textures_pending: Option<usize>,

@@ -2439,7 +2439,8 @@ fn headless(options: Options) -> ara_ui::Result<()> {
         if crate::world::gltf::render_settings(editor.host.store().workspace())?.ray_tracing {
             Renderer::new
         } else {
-            Renderer::new_raster
+            // D29: ray queries where the GPU has them (High/Epic hybrid reflections).
+            Renderer::new_hybrid
         };
     let mut renderer = create_renderer(
         view.scene(editor.host.root(), &editor.state, None, &mut editor.models)?,

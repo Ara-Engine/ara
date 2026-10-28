@@ -120,6 +120,9 @@ impl FrameEnvironment {
                 ToneMapping::Filmic => ToneMapper::Filmic,
                 ToneMapping::Neutral => ToneMapper::PbrNeutral,
                 ToneMapping::AcesFit => ToneMapper::AcesFit,
+                ToneMapping::Agx => ToneMapper::Agx,
+                ToneMapping::AgxPunchy => ToneMapper::AgxPunchy,
+                ToneMapping::AgxMediumHighContrast => ToneMapper::AgxMediumHighContrast,
             },
             bloom: p.bloom.clamp(0., 0.25),
             grading: Grading {
@@ -220,6 +223,9 @@ impl FrameEnvironment {
                 ToneMapper::AcesFit => ToneCurve::AcesFit,
                 ToneMapper::PbrNeutral => ToneCurve::Neutral,
                 ToneMapper::Filmic => ToneCurve::Filmic,
+                ToneMapper::Agx => ToneCurve::Agx,
+                ToneMapper::AgxPunchy => ToneCurve::AgxPunchy,
+                ToneMapper::AgxMediumHighContrast => ToneCurve::AgxMediumHighContrast,
             },
             auto_exposure: self.ev100.is_none().then_some(Metering {
                 minimum_ev100: a.minimum_ev100,

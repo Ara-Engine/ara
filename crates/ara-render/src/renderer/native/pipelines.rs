@@ -1,4 +1,4 @@
-//! Six native PSOs are retained by the renderer across content generations.
+//! Fourteen native PSOs are retained by the renderer across content generations.
 use super::*;
 use ara_gpu::vulkan::{PipelinePreparation, PipelinePreparationId};
 
@@ -13,7 +13,7 @@ pub(in crate::renderer) struct NativePipelines {
     /// which read the G-buffer it blends into.
     pub forward: Pipeline,
     /// The forward pass of lit frames: colour, ids and motion only, since nothing
-    /// reads the G-buffer after it.
+    /// reads the G-buffer after it; both sides in one pass.
     pub forward_lit: Pipeline,
     /// The G-buffer fill for presets without terrain detail
     /// (`Quality::terrain_detail` zero): terrain keeps its top projection, and
@@ -22,6 +22,25 @@ pub(in crate::renderer) struct NativePipelines {
     /// Triangle edges for the wireframe view modes (`ViewMode::wire`): the camera
     /// draws again into the wire mask, depth-tested against the frame's depth.
     pub wire: Pipeline,
+    /// The forward pass with the High/Epic tier's code (`Quality::high_tier`).
+    pub forward_high: Pipeline,
+    /// Transmissive forward draws (`batches::is_refractive`): refraction of the
+    /// copied opaque scene, absorption and Fresnel, composited as final colour
+    /// (look-refract.slangh), so ordinary transparency compiles none of it.
+    pub refract: Pipeline,
+    /// The refractive forward pass with the High/Epic tier's code.
+    pub refract_high: Pipeline,
+    /// The back faces of lit frames' blended draws, before `forward_lit`.
+    pub forward_lit_back: Pipeline,
+    /// The back faces of blended draws with the High/Epic tier's code.
+    pub forward_high_back: Pipeline,
+    /// Blended casters' film opacity into the translucent sun map (`look::translucent`).
+    pub translucent: Pipeline,
+    /// The front faces of double-sided blended volumes, after `forward_lit_back`, so
+    /// closed films composite far side under near (`batches::is_two_pass`).
+    pub forward_lit_front: Pipeline,
+    /// The front faces of double-sided blended volumes with the High/Epic tier's code.
+    pub forward_high_front: Pipeline,
 }
 
 impl NativePipelines {
@@ -37,13 +56,21 @@ impl NativePipelines {
 }
 
 /// Cooked recipe names, in `NativePipelines` field order.
-const RECIPES: [&str; 6] = [
+const RECIPES: [&str; 14] = [
     "native_shadow",
     "native_gbuffer",
     "native_forward",
     "native_forward_lit",
     "native_gbuffer_top",
     "native_wire",
+    "native_forward_high",
+    "native_forward_refract",
+    "native_forward_refract_high",
+    "native_forward_lit_back",
+    "native_forward_high_back",
+    "native_shadow_translucent",
+    "native_forward_lit_front",
+    "native_forward_high_front",
 ];
 
 #[derive(Default)]
@@ -51,7 +78,7 @@ pub(in crate::renderer) enum Pipelines {
     #[default]
     Empty,
     Pending(PipelinePreparationId),
-    Ready(NativePipelines),
+    Ready(Box<NativePipelines>),
 }
 impl Renderer {
     /// Poll the native PSOs without compiling or waiting on this thread. Content
@@ -82,18 +109,40 @@ impl Renderer {
                 self.native_pipelines = Pipelines::Empty;
             }
             if let Some(handles) = result? {
-                let [shadow, gbuffer, forward, forward_lit, gbuffer_top, wire]: [Pipeline;
-                    RECIPES.len()] = handles
-                    .try_into()
-                    .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
-                self.native_pipelines = Pipelines::Ready(NativePipelines {
+                let [
                     shadow,
                     gbuffer,
                     forward,
                     forward_lit,
                     gbuffer_top,
                     wire,
-                });
+                    forward_high,
+                    refract,
+                    refract_high,
+                    forward_lit_back,
+                    forward_high_back,
+                    translucent,
+                    forward_lit_front,
+                    forward_high_front,
+                ]: [Pipeline; RECIPES.len()] = handles
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
+                self.native_pipelines = Pipelines::Ready(Box::new(NativePipelines {
+                    shadow,
+                    gbuffer,
+                    forward,
+                    forward_lit,
+                    gbuffer_top,
+                    wire,
+                    forward_high,
+                    refract,
+                    refract_high,
+                    forward_lit_back,
+                    forward_high_back,
+                    translucent,
+                    forward_lit_front,
+                    forward_high_front,
+                }));
             }
         }
         Ok(matches!(self.native_pipelines, Pipelines::Ready(_)))
@@ -108,9 +157,9 @@ impl Renderer {
             // content calls preallocate and retains its last completed image.
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
-        let Pipelines::Ready(handles) = self.native_pipelines else {
+        let Pipelines::Ready(handles) = &self.native_pipelines else {
             unreachable!("PSOs ready")
         };
-        Ok(handles)
+        Ok(**handles)
     }
 }

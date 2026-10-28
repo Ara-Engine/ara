@@ -35,6 +35,8 @@ enum Recipe {
     /// leaves the G-buffer alone (only the debug views read it afterwards).
     Forward(bool),
     Taa,
+    /// One Ara TSR dispatch (`crate::tsr`), declared instead of `Taa` when selected.
+    Tsr(crate::tsr::TsrPass),
     Tonemap,
     /// The camera's native draws again into the wire mask (`ViewMode::wire`).
     Wire,
@@ -42,6 +44,12 @@ enum Recipe {
     /// colour), `false` over the wireframe view's background (per-entity colours).
     WireComposite(bool),
     Look(LookPass),
+    /// A hybrid ray-query pass (`renderer::rt`).
+    Rays(super::rt::RtPass),
+    /// The refraction copy (0) or a blurred level (1..4) of `look::refract`.
+    Refract(u32),
+    /// Blended casters' depth and film opacity from the sun (`look::translucent`).
+    TranslucentSun,
     /// Ownership/synchronization only.
     Empty,
 }
@@ -57,6 +65,10 @@ impl Renderer {
         mode: ViewMode,
         capture: bool,
     ) -> Result<()> {
+        // A debug view this renderer cannot draw fails instead of drawing Lit.
+        if let Some(reason) = self.view_mode_unavailable(mode) {
+            anyhow::bail!(reason);
+        }
         #[cfg(feature = "hotpatch")]
         {
             ara_hotpatch::call!(
@@ -86,6 +98,9 @@ impl Renderer {
         ara_gpu::cpu_scope!("Raster.render_frame");
         self.exposure = exposure;
         self.collect_view_resources()?;
+        // Reflection captures bake off the hot path (look::captures; never per
+        // frame), before this frame reads them.
+        self.bake_reflection_captures(deterministic || capture);
         ensure!(
             exposure.is_finite() && exposure > 0.,
             "Exposure must be a finite positive multiplier"
@@ -100,6 +115,22 @@ impl Renderer {
         if let Some(native) = &mut self.native {
             native.prepare(&mut self.gpu, &frame, &camera, &self.look.quality)?;
         }
+        self.rays.prepare(
+            &mut self.gpu,
+            self.native.as_ref(),
+            &self.look.quality,
+            self.render,
+            !self.secondary_active,
+            deterministic,
+            &self.artifacts,
+            &self.shader_metadata.content_key,
+        )?;
+        // Transmissive forward draws in view refract a copy of the lit scene
+        // (look::refract); other frames declare and allocate nothing for it.
+        let refract_rect = self
+            .native
+            .as_ref()
+            .and_then(|native| native.refraction_rect(self.render));
         // The far map redraws only when its view, content or casters inside it
         // changed; its draws read the far matrix as cascade 0 of their own frame
         // record, and native casters come from a culled pass of their own.
@@ -108,10 +139,11 @@ impl Renderer {
         if self.look.cascades.is_none() {
             self.ensure_cascades()?;
         }
-        let (mut far, mut cascades, mut local) = (
+        let (mut far, mut cascades, mut local, mut translucent) = (
             self.look.far.take(),
             self.look.cascades.take(),
             self.look.local.take(),
+            self.look.translucent.take(),
         );
         let (all, bounds) = match self.native_caster_changes() {
             Some(changes) => (changes.all, changes.bounds),
@@ -126,7 +158,15 @@ impl Renderer {
         if let Some(local) = &mut local {
             local.cache.observe(all, bounds);
         }
-        (self.look.far, self.look.cascades, self.look.local) = (far, cascades, local);
+        if let Some(translucent) = &mut translucent {
+            translucent.observe(all);
+        }
+        (
+            self.look.far,
+            self.look.cascades,
+            self.look.local,
+            self.look.translucent,
+        ) = (far, cascades, local, translucent);
         if all && let Some(horizon) = &mut self.look.horizon {
             horizon.invalidate();
         }
@@ -420,6 +460,13 @@ impl Renderer {
             ];
             look_frame.ssr_images = self.look.ssr_indices();
         }
+        self.rays.write_rows(
+            &mut look_frame,
+            &self.look.quality,
+            camera.projection.y_axis.y,
+            self.render,
+            self.look.look.ssr.intensity,
+        );
         if let Some(ao) = self.look.quality.ambient_occlusion {
             look_frame.flags[1] |= crate::look::frame::AMBIENT_OCCLUSION;
             let tuning = self.look.look.ao;
@@ -430,6 +477,7 @@ impl Renderer {
                 tuning.intensity,
             ];
             look_frame.ao_images = self.look.ao_indices();
+            self.look.ambient_rows(&mut look_frame);
         }
         let contribution = self.look.look.grading.lut_contribution;
         if self.look.lut_size > 0 && contribution > 0. {
@@ -467,6 +515,39 @@ impl Renderer {
             ];
             look_frame.motion_images = self.look.motion_indices();
         }
+        if let Some(rect) = refract_rect {
+            self.look.refraction(&mut self.gpu, &mut look_frame, rect)?;
+        }
+        // Blended casters' sun shadows (look::translucent) on High/Epic, whose shading
+        // and virtual page projection alone compile the lookup.
+        // Only casters within the cascades' reach shadow anything they show.
+        let translucent_casters = self
+            .native_translucent_casters(camera.position, self.look.quality.shadows.distance)
+            .filter(|_| self.look.quality.high_tier);
+        let mut translucent_draw = None;
+        if let Some((bounds, revision)) = translucent_casters {
+            let (matrix, record) = self.look.translucent_sun(
+                &mut self.gpu,
+                &mut look_frame,
+                std::mem::size_of_val(&frame) as u64,
+                bounds,
+                revision,
+                self.content.sun_direction,
+            )?;
+            if let Some(record) = record {
+                let mut translucent_frame = frame;
+                translucent_frame.shadows[0] = matrix;
+                self.gpu
+                    .upload_queued(record, bytemuck::bytes_of(&translucent_frame))?;
+                self.cull_native_translucent(matrix)?;
+                translucent_draw = Some((matrix, revision));
+            }
+        }
+        // Every camera reads the baked reflection captures (look::captures).
+        let captures = self.look.quality.reflection_captures.is_some();
+        self.views
+            .captures
+            .write(&mut look_frame, captures, camera.projection * camera.view);
         self.gpu
             .upload_queued(self.look.frame, bytemuck::bytes_of(&look_frame))?;
         let mut graph = Graph::default();
@@ -491,6 +572,7 @@ impl Renderer {
             },
         );
         let look = self.look.import(&mut graph);
+        let capture_ids = self.views.captures.import(&mut graph, captures);
         // Conservative bindless reachability of every graphics-queue shader pass.
         let mut graphics = self
             .content
@@ -657,6 +739,21 @@ impl Renderer {
             .local
             .filter(|_| local_written)
             .map(|local| (local, Access::ShaderRead));
+        let translucent = translucent_casters.and_then(|_| self.look.translucent_ids(&mut graph));
+        if let (Some([depth, transmittance]), Some(_)) = (translucent, translucent_draw) {
+            let pass = graph.pass(
+                "TranslucentSun",
+                Queue::Graphics,
+                [(depth, Access::Depth), (transmittance, Access::Color)],
+            );
+            declare(pass, Recipe::TranslucentSun);
+            shadow_passes.push(pass);
+        }
+        let translucent_reads: Vec<_> = translucent
+            .into_iter()
+            .flatten()
+            .map(|id| (id, Access::ShaderRead))
+            .collect();
         let gbuffer = graph.pass(
             "GBuffer",
             Queue::Graphics,
@@ -686,6 +783,8 @@ impl Renderer {
                         (ids[NORMAL], Access::ShaderRead),
                         (request, Access::Storage),
                         (look.frame, Access::ShaderRead),
+                        // Last frame's soft-filter reach (before VSM.Project rewrites it).
+                        (look.image(crate::look::gpu::VSM_MASK), Access::ShaderRead),
                     ]
                     .into_iter()
                     .chain(graphics.iter().copied()),
@@ -710,6 +809,7 @@ impl Renderer {
                 ]
                 .into_iter()
                 .chain(vsm_sampled.then_some((atlas, Access::ShaderRead)))
+                .chain(translucent_reads.iter().copied())
                 .chain(graphics.iter().copied()),
             );
             declare(project, Recipe::Look(LookPass::VsmProject));
@@ -720,13 +820,17 @@ impl Renderer {
             (ids[DEPTH], Access::ShaderRead),
             (ids[NORMAL], Access::ShaderRead),
         ]);
-        for (id, pass) in self.look.ao_passes(&mut graph, &look, &ao_reads) {
-            declare(id, Recipe::Look(pass));
-        }
         let mut ssr_reads = ao_reads.clone();
         ssr_reads.push((ids[MATERIAL], Access::ShaderRead));
         let history = self.targets.history.map(|h| ids[h]);
-        for (id, pass) in self.look.ssr_passes(&mut graph, &look, history, &ssr_reads) {
+        let ssr = self.look.ssr_passes(&mut graph, &look, history, &ssr_reads);
+        let pyramid = !ssr.is_empty();
+        for (id, pass) in ssr {
+            declare(id, Recipe::Look(pass));
+        }
+        // After the reflection pyramid: the High/Epic bitmask bounces last frame's colour.
+        // Materials mark cutouts, which occlude nothing.
+        for (id, pass) in self.look.ao_passes(&mut graph, &look, &ssr_reads, pyramid) {
             declare(id, Recipe::Look(pass));
         }
         // Fog and GI relight shadow local lights too (look::local).
@@ -750,6 +854,19 @@ impl Renderer {
         for (id, pass) in self.look.gather_passes(&mut graph, &look, &gather_reads) {
             declare(id, Recipe::Look(pass));
         }
+        // Hybrid ray-traced reflections (renderer::rt) read what lighting reads, and
+        // the exposure state (the rough lobes' radiance ceiling).
+        if self.rays.active() {
+            let reflected =
+                self.look.quality.reflections.is_some() && self.targets.history.is_some();
+            let mut ray_reads = gather_reads.clone();
+            ray_reads.push((ids[MATERIAL], Access::ShaderRead));
+            ray_reads.push((look.state, Access::ShaderRead));
+            ray_reads.extend(self.look.lighting_reads(&look, reflected));
+            for (id, pass) in self.rays.declare(&mut graph, gbuffer, &ray_reads)? {
+                declare(id, Recipe::Rays(pass));
+            }
+        }
         // This tiny dispatch feeds lighting in the same frame. Keeping it on
         // graphics batches the entire view instead of leaving CPU-recording gaps
         // between graphics/compute submissions and a final ownership handoff.
@@ -757,6 +874,38 @@ impl Renderer {
         declare(culling, Recipe::Tile);
         let reflected = self.look.quality.reflections.is_some() && self.targets.history.is_some();
         let look_reads = self.look.lighting_reads(&look, reflected);
+        // Reflection captures relight against their bakes; then shading reads them.
+        let mut capture_reads = Vec::new();
+        if let Some(c) = &capture_ids {
+            let refit = graph.pass(
+                "Captures.Refit",
+                Queue::Graphics,
+                [(c.records, Access::ShaderRead), (c.frame, Access::Storage)]
+                    .into_iter()
+                    .chain(look_reads.iter().copied())
+                    .chain(cascade_reads.iter().copied())
+                    .chain(graphics.iter().copied()),
+            );
+            let (masks, copy) = (
+                self.views.captures.refit_masks(),
+                self.views.captures.copy_records(),
+            );
+            declare(refit, Recipe::Look(LookPass::CaptureRefit { masks, copy }));
+            // Each 16x16 tile's captures, from the G-buffer depth.
+            let tiles = graph.pass(
+                "Captures.Tiles",
+                Queue::Graphics,
+                [
+                    (c.frame, Access::Storage),
+                    (ids[DEPTH], Access::ShaderRead),
+                    (look.frame, Access::ShaderRead),
+                ]
+                .into_iter()
+                .chain(graphics.iter().copied()),
+            );
+            declare(tiles, Recipe::Look(LookPass::CaptureTiles));
+            capture_reads = vec![(c.atlas, Access::ShaderRead), (c.frame, Access::ShaderRead)];
+        }
         let lighting = graph.pass(
             "DeferredLighting",
             Queue::Graphics,
@@ -774,9 +923,21 @@ impl Renderer {
             .chain(far_read)
             .chain(local_read)
             .chain(vsm_mask)
-            .chain(look_reads.iter().copied()),
+            .chain(look_reads.iter().copied())
+            .chain(capture_reads.iter().copied())
+            .chain(translucent_reads.iter().copied())
+            .chain(self.rays.lighting_reads()),
         );
         declare(lighting, Recipe::Lighting);
+        let refract_atlas = refract_rect.and_then(|_| {
+            let (atlas, passes) = self
+                .look
+                .refract_passes(&mut graph, look.frame, ids[HDR], ids[DEPTH], &graphics)?;
+            for (id, level) in passes {
+                declare(id, Recipe::Refract(level));
+            }
+            Some(atlas)
+        });
         // Lit native frames blend colour, ids and motion only, so the G-buffer's
         // last use (and its discard) is lighting; the debug views (and the
         // baseline PSO) also blend into the G-buffer they display.
@@ -800,7 +961,12 @@ impl Renderer {
             .chain(far_read)
             .chain(local_read)
             .chain(look_reads.iter().copied())
-            .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color))),
+            .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color)))
+            .chain(capture_reads.iter().copied())
+            .chain(refract_atlas.map(|atlas| (atlas, Access::ShaderRead)))
+            .chain(translucent_reads.iter().copied())
+            // Hybrid frames' TLAS, for forward variants that trace (look-rt.slangh).
+            .chain(self.rays.tlas_read()),
         );
         declare(forward, Recipe::Forward(forward_lit));
         let mut shaded = shadow_passes;
@@ -818,6 +984,46 @@ impl Renderer {
         // Deferred post leaves the lit scene in HDR for external composites (`finish`).
         // Captures always produce their own output, never a deferred frame.
         let deferred = self.look.deferred && mode.lit() && !capture;
+        // Ara TSR (crate::tsr) replaces TemporalResolve when selected, for perspective
+        // frames of the primary view; a deferred frame plans it here and `finish`
+        // declares it. Resolving the primary view without it forgets its history.
+        self.tsr.release_unused(&mut self.gpu)?;
+        // Secondary views (editor Game previews) keep TAAU: each TSR view holds eight
+        // of the device's 64 bindless storage images.
+        let tsr = self.tsr.upscaler == crate::tsr::Upscaler::Tsr
+            && !self.secondary_active
+            && camera.projection.z_axis.w != 0.;
+        if tsr {
+            self.tsr.prepare(
+                &mut self.gpu,
+                &self.artifacts,
+                &self.shader_metadata.content_key,
+                self.render,
+                self.size,
+            )?;
+            self.tsr.begin(&crate::tsr::FrameInputs {
+                render: self.render,
+                display: self.size,
+                upscale: [frame.upscale[0], frame.upscale[1]],
+                projection: camera.projection,
+                phases: temporal_phases(self.render, self.size),
+                reset: self.targets.history.is_none() || deterministic,
+                exposure,
+                depth: self.targets.sampled[DEPTH],
+                motion: self.native.is_some().then(|| self.targets.sampled[MOTION]),
+                display_frame: self.display_frame_index,
+                exposure_state: self.look.state_index,
+                ids: self.targets.sampled[ID],
+                // look::refract's copy of the lit opaque scene (level 0) and its rect.
+                opaque: refract_atlas
+                    .and(refract_rect)
+                    .map(|rect| (look_frame.refract_info[0][0], rect)),
+                reflections: reflected.then(|| self.look.sampled[crate::look::gpu::SSR_TRACE]),
+            })?;
+        } else if !self.secondary_active {
+            self.tsr.invalidate();
+        }
+        let mut tsr_ids = None;
         if !deferred {
             let mut taa = vec![
                 (ids[HDR], Access::ShaderRead),
@@ -842,9 +1048,56 @@ impl Renderer {
                 }
                 taa.push((look.image(DOF_COMPOSITE), Access::ShaderRead));
             }
-            let temporal = graph.pass("TemporalResolve", Queue::Graphics, taa);
-            declare(temporal, Recipe::Taa);
-            shaded.push(temporal);
+            if tsr {
+                let dof = self.look.frame_dof;
+                // TSR's Ara path accumulates into the renderer's history pair.
+                let history = self.targets.history.filter(|_| self.tsr.reads_history());
+                self.tsr.upload(
+                    &mut self.gpu,
+                    &crate::tsr::Bindings {
+                        colour: if dof {
+                            self.look.sampled[DOF_COMPOSITE]
+                        } else {
+                            self.targets.sampled[HDR]
+                        },
+                        composited: self.targets.sampled[HDR],
+                        output: self.targets.storage[output_history - HISTORY0],
+                        history: history.map(|h| self.targets.sampled[h]),
+                        reactive: None,
+                        opaque: true,
+                        reflections: reflected,
+                    },
+                )?;
+                // Prepare inputs reads the engine signals (tsr-signals.slangh).
+                let signals = refract_atlas
+                    .into_iter()
+                    .chain(dof.then_some(ids[HDR]))
+                    .chain(reflected.then(|| look.image(crate::look::gpu::SSR_TRACE)))
+                    .collect();
+                let io = crate::tsr::Io {
+                    colour: if dof {
+                        look.image(DOF_COMPOSITE)
+                    } else {
+                        ids[HDR]
+                    },
+                    depth: ids[DEPTH],
+                    motion: self.native.as_ref().map(|_| ids[MOTION]),
+                    output: ids[output_history],
+                    history: history.map(|h| ids[h]),
+                    exposure: look.state,
+                    ids: ids[ID],
+                    signals,
+                };
+                let (chain, passes) = self.tsr.declare(&mut graph, &io, &graphics)?;
+                for (id, pass) in passes {
+                    declare(id, Recipe::Tsr(pass));
+                }
+                tsr_ids = Some(chain);
+            } else {
+                let temporal = graph.pass("TemporalResolve", Queue::Graphics, taa);
+                declare(temporal, Recipe::Taa);
+                shaded.push(temporal);
+            }
         }
         if mode.lit() && !deferred {
             for (id, pass) in self.look.post_passes(
@@ -1220,7 +1473,13 @@ impl Renderer {
                         ]));
                     }
                     Recipe::Lighting => {
-                        recorder.push(Command::Pipeline(self.pipelines.lighting));
+                        // Frames that trace bind the variant reading their reflections.
+                        let lighting = match self.rays.lighting() {
+                            Some(rays) => rays,
+                            None if self.look.quality.high_tier => self.pipelines.lighting_high,
+                            None => self.pipelines.lighting,
+                        };
+                        recorder.push(Command::Pipeline(lighting));
                         recorder.push(Command::Constants(root));
                         recorder.push(Command::BeginRendering {
                             colors: vec![Attachment {
@@ -1261,7 +1520,13 @@ impl Renderer {
                             size: self.render,
                         });
                         if let Some(native) = &self.native {
-                            native.record_forward(&mut recorder, footprint, lit);
+                            native.record_forward(
+                                &mut recorder,
+                                footprint,
+                                lit,
+                                self.look.quality.high_tier,
+                                self.rays.refract(),
+                            );
                         }
                         let mut transparent = self
                             .content
@@ -1302,6 +1567,7 @@ impl Renderer {
                         recorder.push(Command::EndRendering);
                     }
                     Recipe::WireComposite(lit) => self.record_wire_composite(&mut recorder, lit),
+                    Recipe::Tsr(tsr_pass) => self.tsr.record(&mut recorder, tsr_pass),
                     Recipe::Taa | Recipe::Tonemap => {
                         let taa = matches!(recipes[pass.id.0], Recipe::Taa);
                         recorder.push(Command::Pipeline(if taa {
@@ -1340,6 +1606,56 @@ impl Renderer {
                         },
                         true,
                     ),
+                    Recipe::TranslucentSun => {
+                        let map = self
+                            .look
+                            .translucent
+                            .as_ref()
+                            .expect("declared only with a translucent sun map");
+                        let size = [crate::look::translucent::RESOLUTION; 2];
+                        let mut constants = root;
+                        constants.words[0] = map.frame_index;
+                        constants.words[4] = 0;
+                        // Nearest film depth, then every film's opacity over a clear of one.
+                        for (transmittance, colors, depth) in [
+                            (false, Vec::new(), Some(map.depth)),
+                            (true, vec![map.transmittance], None),
+                        ] {
+                            recorder.push(Command::BeginRendering {
+                                colors: colors
+                                    .into_iter()
+                                    .map(|image| Attachment {
+                                        image,
+                                        clear: Some([1.; 4]),
+                                    })
+                                    .collect(),
+                                depth: depth.map(|image| Attachment {
+                                    image,
+                                    clear: Some([0.; 4]),
+                                }),
+                                size,
+                            });
+                            recorder.push(Command::Viewport {
+                                origin: [0, 0],
+                                size,
+                            });
+                            if let Some(native) = &self.native {
+                                native.record_translucent(&mut recorder, constants, transmittance);
+                            }
+                            recorder.push(Command::EndRendering);
+                        }
+                    }
+                    Recipe::Refract(level) => self.look.record_refract(
+                        &mut recorder,
+                        level,
+                        self.frames(),
+                        self.targets.sampled[HDR],
+                        refract_rect.unwrap_or_default(),
+                    ),
+                    Recipe::Rays(ray_pass) => {
+                        self.rays
+                            .record(&mut recorder, ray_pass, self.frame_index, self.render)
+                    }
                     Recipe::Empty => {}
                 }
                 recorder.barriers(pass.after.iter().copied());
@@ -1363,6 +1679,22 @@ impl Renderer {
             self.targets.states[i] = compiled.final_states[id.0];
         }
         self.look.finish(&look, &compiled.final_states);
+        self.rays.finish(&compiled.final_states);
+        if let Some(chain) = &tsr_ids {
+            self.tsr.complete(chain, &compiled.final_states);
+        }
+        if let Some(ids) = &capture_ids {
+            self.views.captures.finish(ids, &compiled.final_states);
+        }
+        if let Some(atlas) = refract_atlas {
+            self.look.refract_finish(atlas, &compiled.final_states);
+        }
+        if let Some(ids) = translucent {
+            self.look.translucent_finish(ids, &compiled.final_states);
+        }
+        if let Some((matrix, revision)) = translucent_draw {
+            self.look.translucent_drawn(matrix, revision);
+        }
         if let (Some(far), Some((matrix, view))) = (&mut self.look.far, far_draw) {
             far.cache.drawn(matrix, view);
         }
@@ -1431,6 +1763,20 @@ impl Renderer {
     /// it grades `color` directly, which needs a native (not upscaled) frame.
     /// Reuses the frame's constants; returns the SDR output in CopySource.
     pub fn finish(&mut self, color: Image, sampled: u32, state: State) -> Result<Image> {
+        self.finish_reactive(color, sampled, state, None)
+    }
+
+    /// [`Self::finish`] with the composite's reactive coverage (`reactive`: image,
+    /// sampled index and state; render size, R in 0..1, e.g. particle alpha): Ara TSR
+    /// trusts the current frame there (FSR's reactive mask) instead of history. TAAU
+    /// ignores it. The image is left in Graphics ShaderRead.
+    pub fn finish_reactive(
+        &mut self,
+        color: Image,
+        sampled: u32,
+        state: State,
+        reactive: Option<(Image, u32, State)>,
+    ) -> Result<Image> {
         ensure!(
             self.look.deferred_history.is_some() || self.render == self.size,
             "An upscaled frame is graded only through its temporal resolve"
@@ -1443,6 +1789,8 @@ impl Renderer {
             self.targets.states[OUTPUT],
         );
         let slot = self.look.deferred_history.take();
+        // The frame planned Ara TSR (`render_frame`): its chain resolves into the slot.
+        let tsr = slot.is_some() && self.tsr.planned();
         let mut imported = Vec::new();
         let mut import = |graph: &mut Graph, target: usize| {
             let id = graph.import(
@@ -1453,11 +1801,18 @@ impl Renderer {
             id
         };
         let depth = import(&mut graph, DEPTH);
-        let vectors = self.look.frame_motion.then(|| import(&mut graph, MOTION));
-        let wire_inputs = self
-            .look
-            .frame_wire
-            .then(|| (import(&mut graph, WIRE), import(&mut graph, ID)));
+        // Motion blur and TSR (native motion) read the motion target.
+        let motion = (self.look.frame_motion || (tsr && self.native.is_some()))
+            .then(|| import(&mut graph, MOTION));
+        let vectors = motion.filter(|_| self.look.frame_motion);
+        // The wire composite and TSR read entity IDs.
+        let entity_ids = (self.look.frame_wire || tsr).then(|| import(&mut graph, ID));
+        let wire_inputs = entity_ids
+            .filter(|_| self.look.frame_wire)
+            .map(|ids| (import(&mut graph, WIRE), ids));
+        let reactive = reactive
+            .filter(|_| tsr)
+            .map(|(image, index, state)| (graph.import(Resource::Image(image), state), index));
         // Focus blur runs before a resolve; a frame graded directly keeps it sharp.
         let dof = self.look.frame_dof && slot.is_some();
         let resolve = slot.map(|slot| {
@@ -1466,10 +1821,15 @@ impl Renderer {
                 (depth, Access::ShaderRead),
                 (import(&mut graph, slot), Access::Storage),
             ];
-            if let Some(history) = self.targets.history {
-                uses.push((import(&mut graph, history), Access::ShaderRead));
-            }
-            (slot, uses)
+            // TAAU and TSR's Ara path read last frame's history; FSR's keeps its own.
+            let reads = !tsr || self.tsr.reads_history();
+            let history = self
+                .targets
+                .history
+                .filter(|_| reads)
+                .map(|history| (history, import(&mut graph, history)));
+            uses.extend(history.map(|(_, id)| (id, Access::ShaderRead)));
+            (slot, uses, history)
         });
         let look = self.look.import(&mut graph);
         let frame = graph.import(
@@ -1490,24 +1850,82 @@ impl Renderer {
         } else {
             Vec::new()
         };
-        let resolved = resolve.map(|(slot, uses)| {
-            let id = graph.pass(
-                "TemporalResolve",
-                Queue::Graphics,
-                uses.into_iter()
-                    .chain([
-                        (frame, Access::ShaderRead),
-                        (look.state, Access::ShaderRead),
-                    ])
-                    .chain(dof.then(|| (look.image(DOF_COMPOSITE), Access::ShaderRead))),
-            );
-            let slot_id = imported
-                .iter()
-                .find(|(target, _)| *target == slot)
-                .map(|(_, id)| *id)
-                .expect("the resolve imported its history slot");
-            (id, slot, slot_id)
-        });
+        let (mut tsr_chain, mut tsr_passes) = (None, Vec::new());
+        let resolved = match resolve {
+            Some((slot, uses, history)) => {
+                let slot_id = imported
+                    .iter()
+                    .find(|(target, _)| *target == slot)
+                    .map(|(_, id)| *id)
+                    .expect("the resolve imported its history slot");
+                // With Ara TSR the resolve is its chain; the last pass (accumulate,
+                // or RCAS on FSR's path) writes the slot. Its passes are recorded
+                // before the TemporalResolve arm.
+                let id = if tsr {
+                    // As planned by render_frame; the opaque copy is that graph's.
+                    let reflected =
+                        self.look.quality.reflections.is_some() && self.targets.history.is_some();
+                    self.tsr.upload(
+                        &mut self.gpu,
+                        &crate::tsr::Bindings {
+                            colour: if dof {
+                                self.look.sampled[DOF_COMPOSITE]
+                            } else {
+                                sampled
+                            },
+                            composited: sampled,
+                            output: self.targets.storage[slot - HISTORY0],
+                            history: history.map(|(h, _)| self.targets.sampled[h]),
+                            reactive: reactive.map(|(_, index)| index),
+                            opaque: false,
+                            reflections: reflected,
+                        },
+                    )?;
+                    let signals = dof
+                        .then_some(input)
+                        .into_iter()
+                        .chain(reflected.then(|| look.image(crate::look::gpu::SSR_TRACE)))
+                        .chain(reactive.map(|(id, _)| id))
+                        .collect();
+                    let io = crate::tsr::Io {
+                        colour: if dof {
+                            look.image(DOF_COMPOSITE)
+                        } else {
+                            input
+                        },
+                        depth,
+                        motion: motion.filter(|_| self.native.is_some()),
+                        output: slot_id,
+                        history: history.map(|(_, id)| id),
+                        exposure: look.state,
+                        ids: entity_ids.ok_or_else(|| anyhow::anyhow!("TSR imports entity IDs"))?,
+                        signals,
+                    };
+                    let (chain, passes) =
+                        self.tsr
+                            .declare(&mut graph, &io, &[(frame, Access::ShaderRead)])?;
+                    let last = passes
+                        .last()
+                        .map(|(id, _)| *id)
+                        .ok_or_else(|| anyhow::anyhow!("TSR declares its passes"))?;
+                    (tsr_chain, tsr_passes) = (Some(chain), passes);
+                    last
+                } else {
+                    graph.pass(
+                        "TemporalResolve",
+                        Queue::Graphics,
+                        uses.into_iter()
+                            .chain([
+                                (frame, Access::ShaderRead),
+                                (look.state, Access::ShaderRead),
+                            ])
+                            .chain(dof.then(|| (look.image(DOF_COMPOSITE), Access::ShaderRead))),
+                    )
+                };
+                Some((id, slot, slot_id))
+            }
+            None => None,
+        };
         let (post_input, post_sampled) = match resolved {
             Some((_, slot, slot_id)) => (slot_id, self.targets.sampled[slot]),
             None => (input, sampled),
@@ -1534,10 +1952,14 @@ impl Renderer {
                 ],
             )
         });
+        // Entity IDs end ready for picks and capture readbacks, as after a frame's
+        // PresentationReady, when TSR or the wire composite read them here.
         graph.pass(
             "Output.Ready",
             Queue::Graphics,
-            [(input, Access::ShaderRead), (output, Access::CopySource)],
+            [(input, Access::ShaderRead), (output, Access::CopySource)]
+                .into_iter()
+                .chain(entity_ids.map(|id| (id, Access::CopySource))),
         );
         let compiled = graph.compile()?;
         let mut points = Vec::new();
@@ -1546,7 +1968,9 @@ impl Renderer {
             for pass in batch {
                 recorder.push(Command::BeginPass(pass.name.clone()));
                 recorder.barriers(pass.before.iter().copied());
-                if let Some((_, look_pass)) = passes.iter().find(|(id, _)| *id == pass.id) {
+                if let Some((_, tsr_pass)) = tsr_passes.iter().find(|(id, _)| *id == pass.id) {
+                    self.tsr.record(&mut recorder, *tsr_pass);
+                } else if let Some((_, look_pass)) = passes.iter().find(|(id, _)| *id == pass.id) {
                     // Depth of field reads the composited scene; the post chain its resolve.
                     let input = match look_pass {
                         LookPass::Dof(_) => sampled,
@@ -1597,6 +2021,9 @@ impl Renderer {
             self.targets.history = Some(slot);
         }
         self.look.finish(&look, &compiled.final_states);
+        if let Some(chain) = &tsr_chain {
+            self.tsr.complete(chain, &compiled.final_states);
+        }
         self.gpu.assert_clean()?;
         self.publish_sync_scene()?;
         Ok(self.targets.images[OUTPUT])

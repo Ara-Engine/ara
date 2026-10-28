@@ -1,4 +1,5 @@
 //! Renderer orchestration. Extraction snapshots are uploaded once; frames record handles.
+mod capabilities;
 mod edit;
 mod frame;
 mod gi;
@@ -11,6 +12,7 @@ mod passes;
 pub mod post;
 mod readback;
 mod readiness;
+mod rt;
 mod submission;
 mod targets;
 mod transfer;
@@ -77,6 +79,8 @@ struct Pipelines {
     gbuffer: Pipeline,
     tile: Pipeline,
     lighting: Pipeline,
+    /// Deferred lighting with the High/Epic tier's code (`Quality::high_tier`).
+    lighting_high: Pipeline,
     forward: Pipeline,
     taa: Pipeline,
     tonemap: Pipeline,
@@ -120,6 +124,8 @@ pub struct Renderer {
     /// Unjittered view-projection of the last rendered frame (`Frame::previous_vp`).
     previous_vp: Mat4,
     frame_number: u32,
+    /// A fixed sample offset for every frame (`set_jitter_override`).
+    jitter_override: Option<[f32; 2]>,
     artifacts: PathBuf,
     shader_metadata: crate::capture::ShaderMetadata,
     last_timings: Vec<PassTiming>,
@@ -129,10 +135,14 @@ pub struct Renderer {
     look: crate::look::gpu::LookGpu,
     native: Option<native::Native>,
     native_pipelines: native::pipelines::Pipelines,
+    /// Hybrid ray queries over the native content (High/Epic on RT devices; D29).
+    rays: rt::Rays,
     views: views::Views,
     secondary_active: bool,
     live: Option<live::Live>,
     entity_epoch: u64,
+    /// The selected temporal upscaler and Ara TSR's state (primary view only).
+    tsr: crate::tsr::Tsr,
 }
 
 impl Renderer {
@@ -183,6 +193,19 @@ impl Renderer {
     ) -> Result<Self> {
         Self::new_device(scene, size, extensions, cache.into(), true)
     }
+    /// Raster bootstrap like `new_raster`, on a device that also enables hardware
+    /// ray queries where the GPU has them (D29): High/Epic then add ray-traced
+    /// reflections (`Quality::ray_queries`) without recreating the device when the
+    /// preset changes. Other GPUs get the same raster-only device as `new_raster`.
+    pub fn new_hybrid(
+        scene: Scene,
+        size: [u32; 2],
+        extensions: &[std::ffi::CString],
+        cache: impl Into<PathBuf>,
+    ) -> Result<Self> {
+        ensure!(!size.contains(&0), "Render extent is zero");
+        Self::with_device(scene, size, GpuDevice::new(extensions, cache.into())?)
+    }
     fn new_device(
         scene: Scene,
         size: [u32; 2],
@@ -230,6 +253,7 @@ impl Renderer {
             gbuffer: load("gbuffer")?,
             tile: load("tile")?,
             lighting: load("lighting")?,
+            lighting_high: load("lighting_high")?,
             forward: load("forward")?,
             taa: load("taa")?,
             tonemap: load("tonemap")?,
@@ -462,6 +486,9 @@ impl Renderer {
         ara_gpu::cpu_scope!("Raster.set_quality");
         quality.validate()?;
         let previous = std::mem::replace(&mut self.look.quality, quality);
+        // The preset's upscaler, unless `ARA_UPSCALER` forces one (A/B runs).
+        self.tsr
+            .select(crate::tsr::Upscaler::forced().unwrap_or(quality.upscaler));
         if let Err(error) = self.ensure_cascades() {
             self.look.quality = previous;
             return Err(error);
@@ -538,6 +565,32 @@ impl Renderer {
     /// The per-preset raster budgets in effect.
     pub fn quality(&self) -> &crate::look::Quality {
         &self.look.quality
+    }
+    /// Fixes every frame's sub-pixel sample offset (render pixels from the pixel
+    /// centre, each axis in [-0.5, 0.5], the temporal Halton jitter's convention),
+    /// deterministic captures included, or restores the Halton sequence (`None`).
+    /// Supersampled ground truth renders one pose at a grid of offsets and averages
+    /// the captures (upscaler studies); live views never set it.
+    pub fn set_jitter_override(&mut self, jitter: Option<[f32; 2]>) {
+        self.jitter_override = jitter;
+    }
+    /// Selects the temporal upscaler from the next frame (`set_quality` applies the
+    /// preset's `Quality::upscaler`, or `ARA_UPSCALER` when set). TSR resolves
+    /// perspective frames of the primary view; secondary views and orthographic
+    /// cameras keep TAAU. Selecting TAAU releases TSR's images on the next frame.
+    pub fn set_upscaler(&mut self, upscaler: crate::tsr::Upscaler) {
+        self.tsr.select(upscaler);
+    }
+    /// The selected temporal upscaler.
+    pub fn upscaler(&self) -> crate::tsr::Upscaler {
+        self.tsr.upscaler
+    }
+    /// Ara TSR's RCAS sharpening from the next frame: FSR's `sharpness`, 0 (none,
+    /// the default: no RCAS pass) to 1 (most); `ARA_TSR_SHARPNESS` sets it at
+    /// creation. Above zero TSR resolves on FSR's path (RCAS needs FSR's own history;
+    /// the history restarts); it sharpens the displayed image only.
+    pub fn set_tsr_sharpness(&mut self, sharpness: f32) {
+        self.tsr.set_sharpness(sharpness);
     }
     /// Render live with TAA jitter and camera reprojection. `exposure` is the linear
     /// multiplier of a manual look; automatic looks meter instead.

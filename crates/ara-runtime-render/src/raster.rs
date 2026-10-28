@@ -60,6 +60,10 @@ pub struct RasterView {
     lut: Option<std::sync::Arc<ara_components::post::ColorLut>>,
     fades: fade::Fades,
     placeholder_changes: ara_render::instanced::Changes,
+    /// Reflection captures: authored, or placed over the current generation.
+    captures: crate::captures::Placement,
+    /// Reflection-probe capture jobs and their retained state (`crate::probes`).
+    probes: crate::probes::ProbeCaptures,
 }
 
 impl RasterView {
@@ -102,9 +106,20 @@ impl RasterView {
             lut: None,
             fades: Default::default(),
             placeholder_changes: Default::default(),
+            captures: Default::default(),
+            probes: Default::default(),
         }
     }
 
+    /// This view's reflection-probe capture jobs (`render.probes.query`).
+    pub fn probes(&self) -> &crate::probes::ProbeCaptures {
+        &self.probes
+    }
+    /// This view's reflection-probe capture jobs (`render.probe.recapture` and
+    /// `render.probe.cancel`); bind the scene first (`ProbeCaptures::set_scene`).
+    pub fn probes_mut(&mut self) -> &mut crate::probes::ProbeCaptures {
+        &mut self.probes
+    }
     /// Enable/disable probe acquisition. Preset budgets govern relighting; the
     /// renderer keeps sky ambient until the asynchronous surface cache arrives.
     pub fn set_probe_gi(&mut self, enabled: bool) {
@@ -464,6 +479,17 @@ impl RasterView {
                 renderer.set_look(raster_look)?;
             }
             crate::apply_lut(renderer, frame, &look, &mut self.lut)?;
+            // Reflection captures: authored, else placed over this generation's content.
+            if let Some(prepared) = &self.prepared {
+                let limit = plan
+                    .quality
+                    .reflection_captures
+                    .map_or(0, |r| r.captures as usize);
+                let specs = self.captures.specs(frame, &prepared.scene, self.key, limit);
+                renderer.set_reflection_captures(&specs)?;
+            }
+            self.probes
+                .observe(renderer.capabilities(), frame, self.key);
             self.adopt_emitters(false)?;
             let prepared = self.prepared.as_mut().context("native raster content")?;
             if snapshot_changed {
@@ -699,6 +725,13 @@ impl RasterView {
         if matches!(mode, ViewMode::Lit) {
             self.effects.wait_pipelines(renderer, frame)?;
             while self.effects.is_pending() {
+                self.render(renderer, frame, camera, mode)?;
+            }
+            // Hybrid ray-query PSOs compile off-thread after the native ones, which
+            // frames advance; until they land, frames keep the raster path. Bounded:
+            // a stuck preparation leaves the capture raster rather than hanging it.
+            let started = std::time::Instant::now();
+            while renderer.ray_pipelines_pending() && started.elapsed().as_secs() < 120 {
                 self.render(renderer, frame, camera, mode)?;
             }
         }

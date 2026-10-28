@@ -43,13 +43,23 @@ void shadowFragment(Varying v) {Surface s=surface(v);}
 struct FullscreenVarying {float4 clip:SV_Position;};
 [shader("vertex")]
 FullscreenVarying fullscreenVertex(uint id:SV_VertexID){FullscreenVarying o;float2 uv=float2((id<<1)&2,id&2);o.clip=float4(uv*2-1,0,1);return o;}
-[shader("fragment")]
-float4 lightingFragment(FullscreenVarying v):SV_Target0 {
+// Deferred lighting; `high` selects the High/Epic tier's code at compile time,
+// `rays` the hybrid path's ray-traced reflections (renderer::rt, D29).
+float4 lighting(FullscreenVarying v,bool high,bool rays=false){
     Frame f=frame();Look l=look(f);int2 p=int2(v.clip.xy);float2 uv=(float2(p)+0.5)/float2(f.extent.xy);bool covered;float3 world=gbufferWorld(f,p,covered);
     if(!covered)return float4(exposeHdr(f,l,background(f,l,viewRay(f,float2(p)+0.5),uv)),1);
-    Surface s;float4 a=gbufferAlbedo(f,p);float2 m=gbufferMaterial(f,p);s.albedo=a.rgb;s.alpha=1;s.transmission=0;s.ao=min(a.a,screenOcclusion(f,l,p,length(world-f.camera.xyz)));s.normal=gbufferNormal(f,p);s.roughness=m.x;s.metal=m.y;s.emissive=gbufferEmissive(f,p);
-    return float4(exposeHdr(f,l,applyFog(f,l,shade(f,l,s,world,p,true),world,uv)),1);
+    Surface s;float4 a=gbufferAlbedo(f,p);float2 m=gbufferMaterial(f,p);s.albedo=a.rgb;s.alpha=1;s.transmission=0;
+    // The material's occlusion map only where the frame has no dynamic occlusion (dynamicOcclusion).
+    s.ao=min(dynamicOcclusion(l)?1:a.a,screenOcclusion(f,l,p,length(world-f.camera.xyz),high));s.normal=gbufferNormal(f,p);s.roughness=m.x;s.metal=m.y;s.emissive=gbufferEmissive(f,p);
+    return float4(exposeHdr(f,l,applyFog(f,l,shade(f,l,s,world,p,true,high,rays),world,uv)),1);
 }
+[shader("fragment")]
+float4 lightingFragment(FullscreenVarying v):SV_Target0 {return lighting(v,false);}
+[shader("fragment")]
+float4 lightingHighFragment(FullscreenVarying v):SV_Target0 {return lighting(v,true);}
+// High/Epic with ray-traced reflections (only bound on frames that trace them).
+[shader("fragment")]
+float4 lightingHighRtFragment(FullscreenVarying v):SV_Target0 {return lighting(v,true,true);}
 struct ForwardOut {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 emissive:SV_Target5;};
 [shader("fragment")]
 ForwardOut forwardFragment(Varying v){Frame f=frame();Surface s=surface(v);ForwardOut o;Look l=look(f);o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),hdrExposure(f,l));o.id=float(root.entity);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);return o;}
@@ -166,7 +176,7 @@ void taaMain(uint3 t:SV_DispatchThreadID){
     }
     images[NonUniformResourceIndex(f.post.z)][p]=float4(min(result*exposure,65000),depth);
 }
-float3 displayCurve(Frame f,float3 x){uint curve=uint(f.forward.w);return curve==1?neutralCurve(x):curve==2?filmicCurve(x):tonemap(x);}
+float3 displayCurve(Frame f,float3 x){uint curve=uint(f.forward.w);return curve>=3?agxCurve(x,curve-3):curve==1?neutralCurve(x):curve==2?filmicCurve(x):tonemap(x);}
 [shader("compute")]
 [numthreads(8,8,1)]
 void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);float3 color=pixel(root.materials,p).rgb;

@@ -80,6 +80,24 @@ pub struct LightView {
     pub cone: [f32; 2],
 }
 
+/// An authored reflection probe with its entity's world pose (interpolated).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProbeView {
+    /// The entity's resolved address (prefab-instance path included): with the
+    /// scene's document ID, the probe's identity in capture jobs and receipts.
+    pub address: String,
+    /// Stable render identity (`stable_id` of `address`).
+    pub entity: u64,
+    /// The authored probe.
+    pub probe: ara_components::render::ReflectionProbe,
+    /// World position of the entity.
+    pub translation: [f32; 3],
+    /// World rotation of the entity (quaternion xyzw).
+    pub rotation: [f32; 4],
+    /// World scale of the entity (scales the boxes and offsets).
+    pub scale: [f32; 3],
+}
+
 /// A GPU particle effect to composite at an entity.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EffectView {
@@ -178,6 +196,9 @@ pub struct RenderFrame {
     pub sun: Option<([f32; 3], [f32; 3])>,
     /// Local lights in stable order.
     pub lights: Vec<LightView>,
+    /// Authored reflection probes in stable order (renderers place their own
+    /// when there are none).
+    pub reflection_probes: Vec<ProbeView>,
     /// Draws in stable order.
     pub draws: Vec<Draw>,
     /// Flat skinning palettes (model space, skin joint order).
@@ -203,6 +224,7 @@ impl RenderFrame {
         self.look.luts.clear();
         self.sun = None;
         self.lights.clear();
+        self.reflection_probes.clear();
         self.draws.clear();
         self.palettes.clear();
         self.effects.clear();
@@ -273,6 +295,16 @@ impl RenderFrame {
             }
             if let Some(light) = entity.get::<Light>() {
                 self.light(light, &pose);
+            }
+            if let Some(probe) = entity.get::<ara_components::render::ReflectionProbe>() {
+                self.reflection_probes.push(ProbeView {
+                    address: address.to_string(),
+                    entity: stable_id(address),
+                    probe: *probe,
+                    translation: pose.translation.to_array(),
+                    rotation: pose.rotation.to_array(),
+                    scale: pose.scale.to_array(),
+                });
             }
             if let (Some(tile), Some(terrain)) = (
                 entity.get::<crate::terrain::TerrainChunk>(),

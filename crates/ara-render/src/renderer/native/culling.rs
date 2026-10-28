@@ -8,8 +8,11 @@ mod patches;
 mod projection;
 pub(crate) use pages::PageView;
 
-/// Cascades, opaque/forward camera lists and the existing far-shadow list.
-pub(super) const BASE_PASSES: usize = 7;
+/// Cascades, opaque/forward camera lists, the existing far-shadow list and the
+/// translucent sun casters.
+pub(super) const BASE_PASSES: usize = 8;
+/// Blended casters seen from the sun (`look::translucent`); every other pass skips them.
+pub(super) const TRANSLUCENT_PASS: usize = 7;
 
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct View {
@@ -33,6 +36,15 @@ pub(super) struct Culling {
     lod_dirty: Indices,
     transparent_dirty: bool,
     transparent: Vec<(f32, usize, usize)>,
+    /// Per forward draw (`draws[5]`), whether it refracts (`batches::is_refractive`).
+    pub(super) refract: Vec<bool>,
+    /// Per forward draw, whether it takes back- and front-face passes
+    /// (`batches::is_two_pass`).
+    pub(super) two_pass: Vec<bool>,
+    /// Normalised screen rect (x0, y0, x1, y1; +y down) the visible refractive
+    /// draws sample the opaque scene in: their bounds, widened by their own size
+    /// on every side for rays bent sideways; `None` without refractive draws.
+    pub(super) refract_rect: Option<[f32; 4]>,
     scratch: Vec<Vec<[u32; 2]>>,
     /// Per shadow pass, its culled instances by clip cell (`patches::Grid`).
     grids: Vec<patches::Grid>,
@@ -94,6 +106,9 @@ impl Culling {
             lod_dirty: Indices::new(instances),
             transparent_dirty: true,
             transparent: Vec::with_capacity(instances),
+            refract: Vec::new(),
+            two_pass: Vec::new(),
+            refract_rect: None,
             scratch: (0..groups
                 .groups
                 .iter()
@@ -158,10 +173,24 @@ impl Culling {
         value: &crate::instanced::Material,
     ) {
         let transparent = batches::is_transparent(value);
+        let refract = batches::is_refractive(value);
+        let translucent = batches::is_translucent(value);
         for &g in &groups.material_groups[material] {
-            if groups.groups[g].transparent != transparent {
+            if groups.groups[g].transparent != transparent
+                || groups.groups[g].translucent != translucent
+            {
                 groups.groups[g].transparent = transparent;
+                groups.groups[g].translucent = translucent;
                 self.group(g);
+                self.transparent_dirty = true;
+            }
+            if groups.groups[g].refract != refract {
+                groups.groups[g].refract = refract;
+                self.transparent_dirty = true;
+            }
+            let two_pass = batches::is_two_pass(value, groups.groups[g].planar);
+            if groups.groups[g].two_pass != two_pass {
+                groups.groups[g].two_pass = two_pass;
                 self.transparent_dirty = true;
             }
         }
@@ -281,7 +310,12 @@ impl Culling {
                 self.draws[pass][group.slot + lod].count = 0;
                 self.scratch[lod].clear();
             }
-            if group.transparent {
+            let drawn = if pass == TRANSLUCENT_PASS {
+                group.translucent
+            } else {
+                !group.transparent
+            };
+            if !drawn {
                 continue;
             }
             for &i in &group.instances {
@@ -354,6 +388,10 @@ impl Culling {
         self.transparent
             .sort_unstable_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
         let first = 5 * self.selected.len();
+        self.refract.clear();
+        self.two_pass.clear();
+        self.refract_rect = None;
+        let matrix = camera.projection * camera.view;
         for (n, &(_, i, g)) in self.transparent.iter().enumerate() {
             let lod = self.selected[i].expect("visible transparent instance has a selected LOD");
             self.draws[5].push(Batch {
@@ -363,6 +401,20 @@ impl Culling {
                 first_index: groups.groups[g].first_indices[lod],
             });
             self.visible[first + n] = [i as u32, groups.groups[g].first + lod as u32];
+            let refract = groups.groups[g].refract;
+            self.refract.push(refract);
+            self.two_pass.push(groups.groups[g].two_pass);
+            if refract {
+                let rect = refract_rect(matrix, bounds[i]);
+                self.refract_rect = Some(self.refract_rect.map_or(rect, |r| {
+                    [
+                        r[0].min(rect[0]),
+                        r[1].min(rect[1]),
+                        r[2].max(rect[2]),
+                        r[3].max(rect[3]),
+                    ]
+                }));
+            }
         }
         let count = self.transparent.len();
         if count > 0 {
@@ -375,6 +427,45 @@ impl Culling {
         }
         Ok(())
     }
+}
+
+/// The normalised screen rect a refractive instance's rays may sample: its
+/// projected bounds widened by their own size on every side, clamped to the
+/// screen; the whole screen when the bounds reach behind the camera.
+fn refract_rect(matrix: Mat4, bounds: [Vec3; 2]) -> [f32; 4] {
+    let (mut lo, mut hi) = (glam::Vec2::splat(f32::MAX), glam::Vec2::splat(f32::MIN));
+    for corner in 0..8 {
+        let p = Vec3::new(
+            if corner & 1 == 0 {
+                bounds[0].x
+            } else {
+                bounds[1].x
+            },
+            if corner & 2 == 0 {
+                bounds[0].y
+            } else {
+                bounds[1].y
+            },
+            if corner & 4 == 0 {
+                bounds[0].z
+            } else {
+                bounds[1].z
+            },
+        );
+        let clip = matrix * p.extend(1.);
+        if clip.w <= 1e-4 {
+            return [0., 0., 1., 1.];
+        }
+        let uv = glam::Vec2::new(clip.x / clip.w * 0.5 + 0.5, 0.5 - clip.y / clip.w * 0.5);
+        lo = lo.min(uv);
+        hi = hi.max(uv);
+    }
+    let size = hi - lo;
+    let (lo, hi) = (
+        (lo - size).max(glam::Vec2::ZERO),
+        (hi + size).min(glam::Vec2::ONE),
+    );
+    [lo.x, lo.y, hi.x, hi.y]
 }
 
 fn planes(matrix: Mat4) -> [Vec4; 6] {

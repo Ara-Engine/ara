@@ -291,6 +291,33 @@ codes! {
     GPU_VALIDATION = 6004,
     /// A message from the GPU driver or loader environment (`ARA_GPU_ENVIRONMENT`).
     GPU_ENVIRONMENT = 6005,
+
+    /// A requested reflection probe does not resolve to a live `ReflectionProbe`
+    /// entity of the retained scene (`ARA_PROBE_MISSING`).
+    PROBE_MISSING = 6101,
+    /// A reflection probe's settings or world transform cannot be captured
+    /// (`ARA_PROBE_INVALID`).
+    PROBE_INVALID = 6102,
+    /// A reflection probe's `captureResolution` is not a supported size
+    /// (`ARA_PROBE_RESOLUTION`).
+    PROBE_RESOLUTION = 6103,
+    /// More reflection probes, or larger ones, than the renderer holds
+    /// (`ARA_PROBE_LIMIT`).
+    PROBE_LIMIT = 6104,
+    /// The current device or quality preset does not shade reflection probes
+    /// (`ARA_PROBE_UNSUPPORTED`).
+    PROBE_UNSUPPORTED = 6105,
+    /// A capture's inputs changed or its probe disappeared before it finished; the
+    /// replacement was discarded and the last valid capture kept (`ARA_PROBE_STALE`).
+    PROBE_STALE = 6106,
+    /// Reading or writing a probe capture's cache failed (`ARA_PROBE_CACHE`).
+    PROBE_CACHE = 6107,
+    /// A capture was cancelled before publishing; the last valid capture is kept
+    /// (`ARA_PROBE_CANCELLED`).
+    PROBE_CANCELLED = 6108,
+    /// A debug view mode is unsupported or not ready on this renderer
+    /// (`ARA_VIEW_MODE_UNAVAILABLE`).
+    VIEW_MODE_UNAVAILABLE = 6109,
 }
 
 #[cfg(test)]

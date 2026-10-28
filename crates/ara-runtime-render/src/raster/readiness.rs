@@ -15,7 +15,7 @@ impl RasterView {
                 .map_or(0, |p| p.unpublished_materials.len()),
             model_fades_pending: self.fades.is_active(),
             emitter_search_pending: self.emitter_search.is_busy(),
-            pipelines_pending: self.effects.is_pending(),
+            pipelines_pending: self.effects.is_pending() || renderer.ray_pipelines_pending(),
             textures_pending: textures.map(|t| t.pending_textures),
             texture_uploaded_bytes: textures.map_or(0, |t| t.uploaded_bytes),
             gi_enabled,

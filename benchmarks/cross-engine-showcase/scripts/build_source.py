@@ -158,6 +158,12 @@ bpy.ops.object.select_all(action='DESELECT')
 for o in scene.objects:
     o.select_set(o.type=='MESH')
 bpy.ops.export_scene.gltf(filepath=str(out/(name+'.glb')),export_format='GLB',use_selection=True,export_animations=False,export_cameras=False,export_lights=False,export_yup=True)
+# Cycles refracts closed transmissive meshes as solids; glTF calls a transmissive
+# material without a volume thin-walled, so give those solids their thickness.
+# Alpha-blended films (Transmission Weight 0) stay as exported.
+sys.path.insert(0,str(Path(__file__).parent));import glass
+doc,rest,binary=glass.read(out/(name+'.glb'))
+if glass.patch(doc,binary):glass.write(out/(name+'.glb'),doc,rest,backup=False)
 if '--fbx' in sys.argv:bpy.ops.export_scene.fbx(filepath=str(out/(name+'.fbx')),use_selection=True,object_types={'MESH'},bake_anim=False,axis_forward='-Z',axis_up='Y',path_mode='COPY',embed_textures=False)
 manifest={'scene':name,'source':'Blender 5.1 static rest geometry','units':'meters','axes':'right-handed Y-up; cameras look at target','duration':20,'fps':60,'ev100':ev,'sunKelvin':5500,'lights':lights,'shots':shots,'path':samples,'environment':environment,'imports':imports,'triangles':sum(len(p.vertices)-2 for o in scene.objects if o.type=='MESH' for p in o.data.polygons)}
 (out/'manifest.json').write_text(json.dumps(manifest,indent=2))

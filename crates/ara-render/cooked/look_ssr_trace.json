@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "320574cb5cd77d465ffe190f1349ab0f428a214c8e26c37a54547b0c3cf23354",
+  "key": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae",
   "stages": [
     {
-      "dxil": "7f56262d3a35dcaaff3fef995a1da5d53722f176910a3e1919e89fcf1a18887e/ssrTraceMain.dxil",
-      "dxil_hash": "79c3f202714ad4351d5a5cdc71d6c64321ce5982f6d3a2721a339525725356b5",
+      "dxil": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/look_ssr_trace/ssrTraceMain.dxil",
+      "dxil_hash": "67ddc46c3230092cf9dc857e40bd3558902175b6544dc6f01fcca66b9a6f0fa1",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "7f56262d3a35dcaaff3fef995a1da5d53722f176910a3e1919e89fcf1a18887e/ssrTraceMain.metallib",
-        "metallib_hash": "248f711cc099c0ada7516a2d9ab4d85e4e545634ce8d4d373f748e8e62d9ff81",
-        "reflection": "7f56262d3a35dcaaff3fef995a1da5d53722f176910a3e1919e89fcf1a18887e/ssrTraceMain.metal.json",
+        "metallib": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/look_ssr_trace/ssrTraceMain.metallib",
+        "metallib_hash": "513cb3b5fc45ef76370ab364c9a674d624a5176fc50bbb989c60cbe77e7273c8",
+        "reflection": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/look_ssr_trace/ssrTraceMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "ssrTraceMain",
-      "spirv": "7f56262d3a35dcaaff3fef995a1da5d53722f176910a3e1919e89fcf1a18887e/ssrTraceMain.spv",
+      "spirv": "460aa5c98d26a43b4400c47aa6d8039816464ba8bd36c80e9e941143bd140cae/look_ssr_trace/ssrTraceMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "b346ecf64343b1d950ecdcdcd705e777d346f29a1e0c018d7d5a782f7c9b793d",
+      "spirv_hash": "7db6575a2dd662aa73d4629bfce32d554a1dfa7e70de2539c40b79dea1340dfb",
       "stage": "compute"
     }
   ],

@@ -47,10 +47,40 @@ pub struct ModelMaterial {
     pub transmission_texture: Option<usize>,
     /// Transmission coordinates and transform.
     pub transmission_uv: TextureTransform,
+    /// KHR_materials_ior and KHR_materials_volume: how transmitted light refracts
+    /// and is absorbed.
+    pub volume: ModelVolume,
+    /// glTF `doubleSided`: back faces render, lit on their own side.
+    pub double_sided: bool,
     /// Alpha mode: 0 opaque, 1 mask, 2 blend.
     pub alpha_mode: u32,
     /// Mask cutoff.
     pub alpha_cutoff: f32,
+}
+
+/// A transmissive material's medium (KHR_materials_ior, KHR_materials_volume).
+/// The volume's thickness texture is not represented: the factor applies alone.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ModelVolume {
+    /// Index of refraction (glTF default 1.5).
+    pub ior: f32,
+    /// Thickness beneath the surface in mesh units; zero is thin-walled.
+    pub thickness: f32,
+    /// Linear colour white light keeps after `attenuation_distance` in the medium.
+    pub attenuation_color: [f32; 3],
+    /// World distance (m) for `attenuation_color`; infinite: no absorption.
+    pub attenuation_distance: f32,
+}
+
+impl Default for ModelVolume {
+    fn default() -> Self {
+        Self {
+            ior: 1.5,
+            thickness: 0.,
+            attenuation_color: [1.; 3],
+            attenuation_distance: f32::INFINITY,
+        }
+    }
 }
 
 pub(super) fn decode(
@@ -60,6 +90,7 @@ pub(super) fn decode(
 ) -> Result<ModelMaterial> {
     let pbr = &m["pbrMetallicRoughness"];
     let transmission = &m["extensions"]["KHR_materials_transmission"];
+    let volume = &m["extensions"]["KHR_materials_volume"];
     let strength = m["extensions"]["KHR_materials_emissive_strength"]["emissiveStrength"]
         .as_f64()
         .unwrap_or(1.) as f32;
@@ -91,6 +122,17 @@ pub(super) fn decode(
         transmission_factor: transmission["transmissionFactor"].as_f64().unwrap_or(0.) as f32,
         transmission_texture: slot(&transmission["transmissionTexture"], TextureUsage::Linear),
         transmission_uv: uv::transform(&transmission["transmissionTexture"])?,
+        volume: ModelVolume {
+            ior: m["extensions"]["KHR_materials_ior"]["ior"]
+                .as_f64()
+                .unwrap_or(1.5) as f32,
+            thickness: volume["thicknessFactor"].as_f64().unwrap_or(0.) as f32,
+            attenuation_color: floats(&volume["attenuationColor"], [1.; 3]),
+            attenuation_distance: volume["attenuationDistance"]
+                .as_f64()
+                .map_or(f32::INFINITY, |d| d as f32),
+        },
+        double_sided: m["doubleSided"].as_bool().unwrap_or(false),
         alpha_mode: match m["alphaMode"].as_str() {
             Some("MASK") => 1,
             Some("BLEND") => 2,
@@ -104,5 +146,35 @@ impl Default for ModelMaterial {
     fn default() -> Self {
         decode(&Value::Null, &[], &BTreeMap::new())
             .expect("default glTF factors and identity transforms are valid")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ior_and_volume_extensions_decode_with_gltf_defaults() {
+        let glass = serde_json::json!({"extensions": {
+            "KHR_materials_transmission": {"transmissionFactor": 1.0},
+            "KHR_materials_ior": {"ior": 1.45},
+            "KHR_materials_volume": {
+                "thicknessFactor": 0.6,
+                "attenuationColor": [0.2, 0.55, 0.45],
+                "attenuationDistance": 1.0
+            }
+        }});
+        let m = decode(&glass, &[], &BTreeMap::new()).expect("glass");
+        assert_eq!(m.transmission_factor, 1.);
+        assert_eq!(
+            m.volume,
+            ModelVolume {
+                ior: 1.45,
+                thickness: 0.6,
+                attenuation_color: [0.2, 0.55, 0.45],
+                attenuation_distance: 1.,
+            }
+        );
+        assert_eq!(ModelMaterial::default().volume, ModelVolume::default());
     }
 }
