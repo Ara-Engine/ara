@@ -60,12 +60,24 @@ impl Shell {
         let Some((doc, source)) = &self.resource_text else {
             return Ok(());
         };
+        let revision = editor.host.store().revision();
         editor.apply_to(
             doc,
             vec![json!({"cmd":"material.text.apply","args":{"text":source}})],
             "Edit material DSL",
         )?;
         self.resource_text = None;
+        if editor.host.store().revision() > revision
+            && let Some(index) = self.ui.find("material-source")
+            && matches!(
+                self.ui
+                    .widgets
+                    .get(&ara_ui::source::stable_id("material-source")),
+                Some(ara_ui::widgets::Widget::Input(_))
+            )
+        {
+            self.ui.accept_text(index)?;
+        }
         Ok(())
     }
     pub(super) fn edit_graph_layout(
