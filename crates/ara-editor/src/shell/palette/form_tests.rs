@@ -180,7 +180,7 @@ fn native_palette_result_opens_a_generated_engine_form_and_escape_leaves_authori
                     .get("label")
                     .is_some_and(|label| label == "transform.set")
         })
-        .unwrap_or_else(|| panic!("Registered engine command/job result: {command}"))
+        .expect("Registered transform.set command result")
         .element
         .id
         .clone();
@@ -211,7 +211,7 @@ fn result_id(shell: &Shell, command: &str) -> String {
                     .get("label")
                     .is_some_and(|label| label == command)
         })
-        .expect("Registered engine command result")
+        .unwrap_or_else(|| panic!("Registered engine command/job result: {command}"))
         .element
         .id
         .clone()
