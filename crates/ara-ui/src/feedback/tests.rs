@@ -222,7 +222,13 @@ fn feedback_geometry_validation_and_noninteractive_descendants_preserve_focus() 
     ui.place_feedback(feedback, [10.0, 10.0], None)?;
     ui.frame(&mut text)?;
     let mut input = InputState::default();
-    input.push(&mut ui, stable_id("root"), Some(stable_id("owner")), false)?;
+    input.push(
+        &mut ui,
+        stable_id("root"),
+        Some(stable_id("not-a-control")),
+        false,
+    )?;
+    assert_eq!(input.focused(), Some(stable_id("owner")));
     input.focus(&mut ui, stable_id("owner"))?;
     assert!(input.focus(&mut ui, stable_id("not-a-control")).is_err());
     assert_eq!(input.focused(), Some(stable_id("owner")));

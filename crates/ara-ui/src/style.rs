@@ -111,7 +111,6 @@ impl Computed {
         // Inline status prose takes its natural height instead of shrinking to
         // a neighboring control's fixed chrome height. Hosts own the rail width.
         if tag == "banner" {
-            layout.display = Display::Block;
             layout.flex_shrink = 0.0;
         }
         Self {

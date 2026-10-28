@@ -28,15 +28,13 @@ fn kind(ui: &Ui, index: usize) -> Option<Kind> {
     if element.tag == "feedback" || element.id == "drop-label" {
         return Some(Kind::Feedback);
     }
-    element
-        .attrs
-        .get("class")
-        .is_some_and(|classes| {
+    (element.tag == "banner"
+        || element.attrs.get("class").is_some_and(|classes| {
             classes
                 .split_whitespace()
                 .any(|class| matches!(class, "notice" | "asset-job" | "banner" | "loading-pill"))
-        })
-        .then_some(Kind::Banner)
+        }))
+    .then_some(Kind::Banner)
 }
 
 fn finite(rect: Box2) -> bool {

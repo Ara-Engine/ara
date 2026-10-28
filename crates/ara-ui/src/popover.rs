@@ -282,8 +282,8 @@ impl Ui {
                 // Drag status is measured from current copy, never an inherited
                 // fixed chrome width/height from a host's old label stylesheet.
                 style.size = taffy::Size {
-                    width: taffy::Dimension::Auto,
-                    height: taffy::Dimension::Auto,
+                    width: taffy::Dimension::auto(),
+                    height: taffy::Dimension::auto(),
                 };
                 style.flex_shrink = 0.0;
                 style.max_size.height =

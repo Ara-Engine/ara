@@ -261,8 +261,8 @@ scroll { overflow:hidden; flex-basis:0px; min-height:0px; min-width:0px; }
 .on-selection-muted { color:var(--selection-muted-foreground); }
 /* D24 notices over the Scene view and the following chip. */
 .notice-stack { position:absolute; left:12px; bottom:12px; width:380px; gap:6px; }
-.notice { flex-direction:row; align-items:center; gap:8px; min-height:34px; padding-left:10px; padding-right:4px; border-radius:var(--radius-md); background:var(--menu-surface); border-width:1px; border-color:var(--separator-strong); }
-.asset-job { height:auto; flex-direction:column; align-items:stretch; gap:4px; padding:6px; min-width:0px; flex-shrink:0; }
+.notice { flex-direction:row; align-items:center; gap:8px; min-height:34px; padding-left:10px; padding-right:4px; border-radius:var(--radius-md); background:var(--menu-surface); border-width:1px; border-color:var(--separator-strong); font-size:13px; }
+.asset-job { height:auto; flex-direction:column; align-items:stretch; gap:4px; padding:6px; min-width:0px; flex-shrink:0; font-size:12px; }
 .notice-text { flex-grow:1; flex-shrink:1; flex-basis:0px; min-width:0px; overflow:hidden; white-space:normal; padding-top:6px; padding-bottom:6px; font-size:12px; color:var(--foreground); }
 .notice-action { height:22px; padding-left:8px; padding-right:8px; border-width:0px; border-radius:var(--radius-sm); background:var(--raised); color:var(--foreground); font-size:12px; }
 .notice-action:hover { background:var(--hover-surface); }
