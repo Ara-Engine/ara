@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Collections.Concurrent;
+using System.Text.Json;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using Ara.Hosting;
@@ -65,6 +67,9 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     bool _busy;
     bool _compiling;
     bool _restartSent;
+    readonly CompileProducer _diagnostics = new("warm");
+    readonly ConcurrentDictionary<uint, CompileAttempt> _attempts = new();
+    readonly ConcurrentDictionary<(string Module, string Profile), byte> _bound = new();
 
     /// <inheritdoc/>
     public bool Enc { get; private set; }
@@ -100,8 +105,9 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             var missing = references.Where(r => !_byName.ContainsKey(r)).ToList();
             if (missing.Count > 0)
             {
+                var attempt = Begin(slot, name, profile, track: false);
                 SendDiagnostics(slot, dir, [], [(AraCodes.UnknownModule, "error",
-                    $"module `{name}` references {string.Join(", ", missing.Select(m => $"`{m}`"))}, which the compile server does not have; modules load after the modules they reference, and references cannot form a cycle")], 0, AbiConst.OriginHuman);
+                    $"module `{name}` references {string.Join(", ", missing.Select(m => $"`{m}`"))}, which the compile server does not have; modules load after the modules they reference, and references cannot form a cycle")], 0, AbiConst.OriginHuman, supplied: attempt);
                 return;
             }
             var m = new ModuleSession(slot, name, dir, hot, assemblies, references, profile, _analysis);
@@ -246,15 +252,19 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             }
             catch (OperationCanceledException) when (agent && !_stop.IsCancellationRequested)
             {
+                CancelAttempts();
                 Log(0, $"agent compile of module `{_bySlot[w.Slot].Name}` yielded to a human edit; requeued");
                 Enqueue(w);
             }
             catch (Exception e) when (e is not OperationCanceledException)
             {
+                if (_bySlot.TryGetValue(w.Slot, out var failed))
+                    SendDiagnostics(failed.Slot, failed.Dir, [], [(AraCodes.CompileServer, "error", e.Message)], 0, w.Origin, validated: false);
                 Log(2, $"module {w.Slot}: {e}");
             }
             finally
             {
+                CancelAttempts();
                 lock (_lock)
                 {
                     _busy = false;
@@ -283,6 +293,8 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     void Run(Work w, CancellationToken ct)
     {
         if (!_bySlot.TryGetValue(w.Slot, out var m)) return;
+        if (w.Kind == WorkKind.Heat && m.State is { } current && current.Hot == (w.Hot && Enc)) return;
+        Begin(m.Slot, m.Name, m.Profile);
         CompileState(true);
         switch (w.Kind)
         {
@@ -294,34 +306,39 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                         $"module `{m.Name}` is not built because {string.Join(", ", unbuilt.Select(u => $"`{u}`"))} did not build")], 0, w.Origin);
                     return;
                 }
-                Handle(m.Initial(this, ct), w.Origin);
+                Handle(Evaluated(m.Initial(this, ct), ct), w.Origin, ct);
                 m.Prewarm(this);
                 break;
             case WorkKind.Change:
-                Handle(m.Compile(w.Paths, w.TEvent, this, ct), w.Origin);
+                Handle(Evaluated(m.Compile(w.Paths, w.TEvent, this, ct), ct), w.Origin, ct);
                 break;
             case WorkKind.Heat:
                 if (m.State is { } s && s.Hot == (w.Hot && Enc)) return;
-                Handle(m.Full(Escalation.Requested, w.Hot, this, ct), w.Origin);
+                Handle(Evaluated(m.Full(Escalation.Requested, w.Hot, this, ct), ct), w.Origin, ct);
                 break;
             case WorkKind.Rebuild:
-                Handle(m.Full(w.Escalation, null, this, ct), w.Origin);
+                Handle(Evaluated(m.Full(w.Escalation, null, this, ct), ct), w.Origin, ct);
                 break;
         }
     }
 
-    void Handle(Outcome o, uint origin)
+    static Outcome Evaluated(Outcome outcome, CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        return outcome;
+    }
+
+    void Handle(Outcome o, uint origin, CancellationToken cancellation)
     {
         var m = o.Module;
         switch (o.Kind)
         {
             case OutcomeKind.None:
-                if (o.Next is null) return;
-                m.Commit(o);
-                RebindDependents(m);
+                if (o.Next is not null) { m.Commit(o); RebindDependents(m); }
+                SendDiagnostics(m.Slot, m.Dir, o.Problems, o.Extra, 0, origin, o.ValidatedInputs);
                 return;
             case OutcomeKind.Errors:
-                SendDiagnostics(m.Slot, m.Dir, o.Problems, o.Extra, o.Timing.ToTiming().ServerUs, origin);
+                SendDiagnostics(m.Slot, m.Dir, o.Problems, o.Extra, o.Timing.ToTiming().ServerUs, origin, o.ValidatedInputs);
                 return;
             case OutcomeKind.Restart:
                 _out.Send(MessageKind.Restart, new Protocol.Writer().U32(m.Slot).Str("module/source domain boundary changed; restart Play from the current snapshot to load the new inventory (L4)").ToArray());
@@ -329,11 +346,11 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             case OutcomeKind.Delta:
                 m.Commit(o);
                 RebindDependents(m);
-                SendDiagnostics(m.Slot, m.Dir, o.Problems, o.Extra, 0, origin);
+                SendDiagnostics(m.Slot, m.Dir, o.Problems, o.Extra, 0, origin, o.ValidatedInputs);
                 SendDelta(o, origin);
                 return;
             case OutcomeKind.Image:
-                Cascade(o, origin);
+                Cascade(o, origin, cancellation);
                 return;
         }
     }
@@ -361,7 +378,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     /// Relinks or rebuilds every dependent against the new image; commits and sends all of
     /// them as one reload, or nothing if any dependent fails to compile.
     /// </summary>
-    void Cascade(Outcome root, uint origin)
+    void Cascade(Outcome root, uint origin, CancellationToken cancellation)
     {
         var order = Dependents(root.Module);
         _cascade = new Dictionary<ModuleSession, Outcome> { [root.Module] = root };
@@ -370,7 +387,8 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             var outcomes = new List<Outcome> { root };
             foreach (var d in order)
             {
-                var o = d.Cascade(this);
+                Begin(d.Slot, d.Name, d.Profile);
+                var o = d.Cascade(this, cancellation);
                 if (o.Kind == OutcomeKind.Errors)
                 {
                     o.Extra.Add((AraCodes.DependencyFailed, "error",
@@ -384,8 +402,9 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 _cascade[d] = o;
                 outcomes.Add(o);
             }
+            cancellation.ThrowIfCancellationRequested();
             foreach (var o in outcomes) o.Module.Commit(o);
-            foreach (var o in outcomes) SendDiagnostics(o.Module.Slot, o.Module.Dir, o.Problems, o.Extra, 0, origin);
+            foreach (var o in outcomes) SendDiagnostics(o.Module.Slot, o.Module.Dir, o.Problems, o.Extra, 0, origin, o.ValidatedInputs);
             SendReload(outcomes, origin);
         }
         finally
@@ -437,16 +456,35 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     };
 
     void SendDiagnostics(uint slot, string dir, List<Microsoft.CodeAnalysis.Diagnostic> problems,
-        List<(string Code, string Severity, string Message)> extra, ulong serverUs, uint origin)
+        List<(string Code, string Severity, string Message)> extra, ulong serverUs, uint origin, bool validated = true, CompileAttempt? supplied = null)
     {
-        if (problems.Count == 0 && extra.Count == 0) return;
+        var attempt = supplied;
+        if (attempt is null) _attempts.TryRemove(slot, out attempt);
+        if (problems.Count == 0 && extra.Count == 0 && attempt is null) return;
         var errors = (uint)(problems.Count(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error) + extra.Count(e => e.Severity == "error"));
-        var json = Diagnostics.Array(w =>
-        {
-            foreach (var d in problems.Take(50)) Diagnostics.Write(w, d);
-            foreach (var (code, sev, msg) in extra) Diagnostics.Write(w, code, sev, msg, dir);
-        });
+        var rows = problems.Select(Diagnostics.Row).Concat(extra.Select(e => Diagnostics.Row(e.Code, e.Severity, e.Message, dir))).ToArray();
+        var result = errors > 0 ? "errors" : validated ? "success" : "cancelled";
+        var json = JsonSerializer.Serialize(attempt?.Complete(rows, result, validated) ?? rows);
         _out.Send(MessageKind.Diagnostics, new Protocol.Writer().U32(slot).U32(errors).Str(json).U64(serverUs).U32(origin).ToArray());
+    }
+
+    CompileAttempt Begin(uint slot, string module, string profile, bool track = true)
+    {
+        var attempt = _diagnostics.Next(module, profile);
+        if (track) _attempts[slot] = attempt;
+        var rows = new List<System.Text.Json.Nodes.JsonObject>();
+        if (_bound.TryAdd((module, profile), 0)) rows.Add((attempt with { Request = attempt.Request with { Attempt = 0 } }).Marker("bound"));
+        rows.Add(attempt.Marker("started"));
+        _out.Send(MessageKind.Diagnostics, new Protocol.Writer().U32(slot).U32(0).Str(JsonSerializer.Serialize(rows)).U64(0).U32(0).ToArray());
+        return attempt;
+    }
+
+    void CancelAttempts()
+    {
+        foreach (var (slot, attempt) in _attempts)
+            if (_attempts.TryRemove(slot, out _))
+                _out.Send(MessageKind.Diagnostics, new Protocol.Writer().U32(slot).U32(0)
+                    .Str(JsonSerializer.Serialize(new[] { attempt.Marker("completed", "cancelled") })).U64(0).U32(0).ToArray());
     }
 
     void CompileState(bool active)

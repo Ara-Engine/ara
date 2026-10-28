@@ -33,6 +33,10 @@ public static class AraCodes
     /// </summary>
     public const string DeltaRejected = "ARA0905";
     /// <summary>
+    /// A scoped C# compilation attempt started, bound its producer, or completed; application is reported separately.
+    /// </summary>
+    public const string CompileResult = "ARA0906";
+    /// <summary>
     /// A C# system threw; it is disabled until the next reload.
     /// </summary>
     public const string SystemFault = "ARA0910";

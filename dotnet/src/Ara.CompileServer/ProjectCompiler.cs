@@ -3,21 +3,37 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Ara.Hosting;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Ara.CompileServer;
 
-internal sealed record ProjectBuildRequest(string Project, string AuthoringRoot, string Domain = "gameplay");
+internal sealed record ProjectBuildRequest(string Project, string AuthoringRoot, string Domain = "gameplay", CompileRequestContext? DiagnosticContext = null);
 
 /// <summary>Compile and describe modules before scene validation; never start a gameplay world.</summary>
 internal static class ProjectCompiler
 {
+    static readonly CompileProducer ProjectDiagnostics = new("project");
+    static readonly CompileProducer EditorDiagnostics = new("editor");
     internal static ProjectInventoryResult Compile(ProjectBuildRequest request, bool writeOutputs = true)
     {
         var inventory = ProjectInventory.Scan(new(request.Project, request.AuthoringRoot));
         if (inventory.Diagnostics.Any(d => (string?)d["severity"] == "error"))
-            return inventory with { Modules = inventory.Modules.Select(m => m with { Result = "failed", Schema = null, Fingerprint = null }).ToArray() };
+        {
+            // Ownership comes from discovery, never the diagnostic's mapped path.
+            // Unowned manifest/I/O failures stay conservative configuration rows.
+            var graphRows = inventory.Diagnostics.Where(d => d["data"]?["module"] is null).ToList();
+            foreach (var module in inventory.Modules.Where(m => request.Domain == "editor" || m.Profile == "gameplay"))
+            {
+                var attempt = Attempt(request, module);
+                var owned = inventory.Diagnostics.Where(d => string.Equals((string?)d["data"]?["module"], module.Name, StringComparison.OrdinalIgnoreCase)).ToArray();
+                graphRows.Add((attempt with { Request = attempt.Request with { Attempt = 0 } }).Marker("bound"));
+                graphRows.Add(attempt.Marker("started"));
+                graphRows.AddRange(attempt.Complete(owned, owned.Any(d => (string?)d["severity"] == "error") ? "errors" : "cancelled", validated:false));
+            }
+            return inventory with { Modules = inventory.Modules.Select(m => m with { Result = "failed", Schema = null, Fingerprint = null }).ToArray(), Diagnostics=[.. graphRows] };
+        }
         var root = ProjectInventory.ProjectPath(request.Project);
         var modules = inventory.Modules.ToDictionary(m => m.Name, StringComparer.OrdinalIgnoreCase);
         var built = new Dictionary<string, (MetadataReference Reference, string Hash)>(StringComparer.OrdinalIgnoreCase);
@@ -33,10 +49,20 @@ internal static class ProjectCompiler
             if (built.ContainsKey(name)) return true;
             if (results.ContainsKey(name)) return false;
             var module = modules[name];
-            foreach (var dependency in module.References)
-                if (!Build(dependency)) { results[name] = module with { Result = "failed", Schema = null, Fingerprint = null }; return false; }
+            var attempt = Attempt(request, module);
+            var rows = new List<JsonObject>();
+            var validated = false;
+            diagnostics.Add((attempt with { Request = attempt.Request with { Attempt = 0 } }).Marker("bound"));
+            diagnostics.Add(attempt.Marker("started"));
             try
             {
+                foreach (var dependency in module.References)
+                    if (!Build(dependency))
+                    {
+                        rows.Add(Diagnostics.Row(AraCodes.DependencyFailed, "error", $"module `{name}` cannot compile because `{dependency}` failed", module.Directory));
+                        results[name] = module with { Result = "failed", Schema = null, Fingerprint = null };
+                        return false;
+                    }
                 var sources = module.Sources.Select(s => (Source:s, Text:File.ReadAllText(Path.Combine(root, s.StoragePath)))).ToArray();
                 var fingerprint = Hash(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
                 {
@@ -59,6 +85,7 @@ internal static class ProjectCompiler
                     {
                         built[name] = (MetadataReference.CreateFromImage(File.ReadAllBytes(assembly)), fingerprint);
                         results[name] = module with { Schema = schema, Result = "cached", Fingerprint = fingerprint };
+                        validated = true;
                         return true;
                     }
                 }
@@ -76,12 +103,13 @@ internal static class ProjectCompiler
                 var driver = ModuleCompiler.Driver().RunGeneratorsAndUpdateCompilation(compilation, out var final, out var generatorDiagnostics);
                 var problems = generatorDiagnostics.Concat(final.GetDiagnostics()).Concat(analysis.Analyze(final, trees, module.Profile))
                     .Where(Diagnostics.Reportable).ToArray();
-                foreach (var diagnostic in problems) diagnostics.Add(ToJson(diagnostic));
+                validated = true;
+                foreach (var diagnostic in problems) rows.Add(ToJson(diagnostic));
                 if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) { results[name] = module with { Result = "failed", Schema = null, Fingerprint = null }; return false; }
                 var (image, errors) = ModuleCompiler.Emit(final);
                 if (image is null)
                 {
-                    diagnostics.AddRange(errors.Select(ToJson));
+                    rows.AddRange(errors.Select(ToJson));
                     results[name] = module with { Result = "failed", Schema = null, Fingerprint = null };
                     return false;
                 }
@@ -119,9 +147,15 @@ internal static class ProjectCompiler
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
             {
-                diagnostics.Add(ProjectInventory.Error("ARA1003", error.Message, module.Directory));
+                rows.Add(ProjectInventory.Error("ARA1003", error.Message, module.Directory));
+                validated = false;
                 results[name] = module with { Result = "failed", Schema = null, Fingerprint = null };
                 return false;
+            }
+            finally
+            {
+                var result = rows.Any(d => (string?)d["severity"] == "error") ? "errors" : validated ? "success" : "cancelled";
+                diagnostics.AddRange(attempt.Complete(rows, result, validated));
             }
         }
 
@@ -131,11 +165,13 @@ internal static class ProjectCompiler
 
     static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
+    static CompileAttempt Attempt(ProjectBuildRequest request, ProjectModule module) => request.DiagnosticContext is { } context
+        ? new(module.Name, module.Profile, context)
+        : (request.Domain == "editor" ? EditorDiagnostics : ProjectDiagnostics).Next(module.Name, module.Profile);
+
     static JsonObject ToJson(Diagnostic diagnostic)
     {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream)) Diagnostics.Write(writer, diagnostic);
-        return JsonNode.Parse(stream.ToArray())!.AsObject();
+        return Diagnostics.Row(diagnostic);
     }
 
     static void AtomicWrite(string path, byte[] bytes)

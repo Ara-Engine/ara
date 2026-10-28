@@ -8,6 +8,7 @@ use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 mod editor;
 mod fixes;
+mod lifecycle;
 mod lock;
 mod session;
 mod tool;
@@ -182,7 +183,7 @@ pub fn publish(root: &Path, domain: crate::ModuleProfile) -> Result<Inventory, D
     publish_outputs(root, inventory)
 }
 
-fn publish_outputs(root: &Path, mut inventory: Inventory) -> Result<Inventory, Diagnostic> {
+fn publish_outputs(root: &Path, inventory: Inventory) -> Result<Inventory, Diagnostic> {
     for module in &inventory.modules {
         let Some(schema) = &module.schema else {
             continue;
@@ -281,9 +282,7 @@ fn publish_outputs(root: &Path, mut inventory: Inventory) -> Result<Inventory, D
             &project,
         )?;
     }
-    inventory.diagnostics.sort_by(|a, b| {
-        (a.location.file.as_deref(), &a.message).cmp(&(b.location.file.as_deref(), &b.message))
-    });
+    // Preserve producer batch order: completion must follow the rows it closes.
     Ok(inventory)
 }
 
@@ -372,7 +371,10 @@ fn invoke(
     mode: &str,
     domain: Option<crate::ModuleProfile>,
 ) -> Result<Inventory, Diagnostic> {
-    let request = json!({"project":root, "authoringRoot":ara_doc::AUTHORING_ROOT, "domain":domain.map(crate::ModuleProfile::as_str), "operation":mode});
+    let mut request = json!({"project":root, "authoringRoot":ara_doc::AUTHORING_ROOT, "domain":domain.map(crate::ModuleProfile::as_str), "operation":mode});
+    if mode == "--compile-project" {
+        request["diagnosticContext"] = lifecycle::context(root, "project")?;
+    }
     session::invoke(root, request)
 }
 
@@ -390,5 +392,9 @@ pub fn editor(root: &Path, request: Value) -> Result<Value, Diagnostic> {
     })?;
     request.insert("project".into(), root.to_string_lossy().into_owned().into());
     request.insert("authoringRoot".into(), ara_doc::AUTHORING_ROOT.into());
+    request.insert(
+        "diagnosticContext".into(),
+        lifecycle::context(root, "editor")?,
+    );
     tool::run(root, "--editor", request.into())
 }

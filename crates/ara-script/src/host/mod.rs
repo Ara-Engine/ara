@@ -374,6 +374,7 @@ impl ScriptHost {
         world: &mut World,
         modules: &[ModuleSpec],
     ) -> Result<(), Vec<Diagnostic>> {
+        let diagnostic_start = self.ctx.diagnostic_count();
         let (order, mut refused) = crate::module::load_order(modules);
         let config = json!({
             "compileServer": self.compile_server.as_ref().map(|p| p.display().to_string()),
@@ -400,11 +401,22 @@ impl ScriptHost {
             }
         });
         self.rebuild(world);
+        // Startup results must remain observable through take_diagnostics, just
+        // like later compile attempts. Inspect this call's errors without draining
+        // its binding, diagnostic rows or completion boundary.
         let mut problems: Vec<Diagnostic> = self
-            .take_diagnostics()
-            .into_iter()
-            .filter(Diagnostic::is_error)
-            .collect();
+            .ctx
+            .diagnostics
+            .lock()
+            .map(|diagnostics| {
+                diagnostics
+                    .iter()
+                    .skip(diagnostic_start)
+                    .filter(|d| d.is_error())
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default();
         problems.append(&mut refused);
         if rc != 0 || !problems.is_empty() {
             return Err(if problems.is_empty() {

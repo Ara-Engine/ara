@@ -145,6 +145,7 @@ pub(crate) fn spawn(
                 .and_then(|_| link.flush())
                 .map_err(|e| e.to_string())?;
             players.push(Player {
+                incarnation: ara_doc::IdGen::from_entropy().asset_id("ps").to_string(),
                 child: handles.pop().ok_or("Shared player handles exhausted")?,
                 link,
                 hello,

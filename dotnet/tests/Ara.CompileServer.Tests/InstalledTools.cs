@@ -1,11 +1,18 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using Ara.Hosting;
 
 namespace Ara.CompileServer.Tests;
 
 /// <summary>Runs the installed tool layout with no symbols or checkout probing.</summary>
 internal static class InstalledTools
 {
+    internal static void AssertNoProblems(IEnumerable<JsonElement> rows) =>
+        Assert.DoesNotContain(rows, row => row.GetProperty("code").GetString() != AraCodes.CompileResult);
+
+    internal static void AssertNoProblems(IEnumerable<JsonObject> rows) =>
+        Assert.DoesNotContain(rows, row => (string?)row["code"] != AraCodes.CompileResult);
     internal static string Repo
     {
         get

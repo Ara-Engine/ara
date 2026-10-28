@@ -11,7 +11,7 @@ public sealed class ProjectInventoryTests
         File.WriteAllText(Path.Combine(root, "content", "packages", "nested", "Utility.cs"), "public static class Utility { public static int Value => 7; }");
         File.WriteAllText(Path.Combine(root, "packages", "plugin", "Wrong.cs"), "#error project plugin packages are not authored source");
         using var result = await InstalledTools.Run("--compile-project", new { project=root, authoringRoot="content", domain="gameplay" });
-        Assert.Empty(result.RootElement.GetProperty("diagnostics").EnumerateArray());
+        InstalledTools.AssertNoProblems(result.RootElement.GetProperty("diagnostics").EnumerateArray());
         var source = Assert.Single(result.RootElement.GetProperty("sources").EnumerateArray());
         Assert.Equal("packages/nested/Utility.cs", source.GetProperty("path").GetString());
         Assert.Equal("compiled", result.RootElement.GetProperty("modules")[0].GetProperty("result").GetString());
@@ -24,7 +24,7 @@ public sealed class ProjectInventoryTests
         Directory.CreateDirectory(Path.Combine(root, "content"));
         File.WriteAllText(Path.Combine(root, "content", "Helper.cs"), "public static class Helper { public static int Value => 7; }");
         using var result = await InstalledTools.Run("--compile-project", new { project = root, authoringRoot = "content", domain = "gameplay" });
-        Assert.Empty(result.RootElement.GetProperty("diagnostics").EnumerateArray());
+        InstalledTools.AssertNoProblems(result.RootElement.GetProperty("diagnostics").EnumerateArray());
         var state = Path.Combine(root, ".ara", "scripts", "game");
         Assert.Contains("[assembly: global::Ara.Hosting.AraModule(", File.ReadAllText(Path.Combine(state, "generated", "AraModule.g.cs")));
     }
@@ -70,7 +70,7 @@ public sealed class ProjectInventoryTests
         File.WriteAllText(Path.Combine(root, "content", "Armour.cs"), "using Ara; /// <summary>Armour in the ECS.</summary>\n[Component] public partial struct Armour { /// <summary>Remaining protection.</summary>\n public float Points; }");
         File.WriteAllText(Path.Combine(root, "content", "deep", "editor", "MustNotShip.cs"), "this editor-only source is deliberately not valid C#");
         using var result = await InstalledTools.Run("--compile-project", new { project = root, authoringRoot = "content", domain = "gameplay" });
-        Assert.Empty(result.RootElement.GetProperty("diagnostics").EnumerateArray());
+        InstalledTools.AssertNoProblems(result.RootElement.GetProperty("diagnostics").EnumerateArray());
         var module = result.RootElement.GetProperty("modules").EnumerateArray().Single(m => m.GetProperty("name").GetString() == "game");
         Assert.Equal(".ara/scripts/game/game.types.json", module.GetProperty("schemaPath").GetString());
         Assert.Equal("compiled", module.GetProperty("result").GetString());
@@ -104,7 +104,7 @@ public sealed class ProjectInventoryTests
         Write("packages/Wrong.cs", "this is not C#");
         Write("settings/Wrong.cs", "this is not C#");
         using var result = await InstalledTools.Run("--inventory", new { project = root, authoringRoot = "content" });
-        Assert.Empty(result.RootElement.GetProperty("diagnostics").EnumerateArray());
+        InstalledTools.AssertNoProblems(result.RootElement.GetProperty("diagnostics").EnumerateArray());
         var sources = result.RootElement.GetProperty("sources").EnumerateArray().ToArray();
         Assert.Equal(6, sources.Length);
         Assert.Equal(6, sources.Select(s => s.GetProperty("storagePath").GetString()).Distinct().Count());

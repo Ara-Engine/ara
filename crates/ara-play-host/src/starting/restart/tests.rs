@@ -190,6 +190,7 @@ impl Fixture {
             }
         };
         Player {
+            incarnation: format!("restart-test-{name}-{pid}"),
             child: child.into(),
             link: Link::accept(stream).unwrap(),
             hello: ara_play::Hello {

@@ -120,7 +120,10 @@ fn migrated_outpost_sample_compiles_and_ticks_without_shipping_its_editor_extens
     let published = ara_script::project::publish(&root, ara_script::ModuleProfile::Gameplay)
         .expect("publication");
     assert!(
-        published.diagnostics.is_empty(),
+        published
+            .diagnostics
+            .iter()
+            .all(|d| d.code == ara_script::codes::COMPILE_RESULT),
         "{:?}",
         published.diagnostics
     );
@@ -181,7 +184,11 @@ fn migrated_outpost_sample_compiles_and_ticks_without_shipping_its_editor_extens
             .rotation[1],
         9.0
     );
-    assert!(host.take_diagnostics().is_empty());
+    assert!(
+        host.take_diagnostics()
+            .iter()
+            .all(|d| d.code == ara_script::codes::COMPILE_RESULT)
+    );
     assert!(!module.join("Outpost.Sample.csproj").exists());
     assert_eq!(host.shutdown(), 0);
 }
@@ -289,7 +296,10 @@ fn published_schema_can_be_adopted_by_runtime_module_registration() {
     let publication = ara_script::project::publish(&root, ara_script::ModuleProfile::Gameplay)
         .expect("publication");
     assert!(
-        publication.diagnostics.is_empty(),
+        publication
+            .diagnostics
+            .iter()
+            .all(|d| d.code == ara_script::codes::COMPILE_RESULT),
         "{:?}",
         publication.diagnostics
     );
@@ -329,5 +339,9 @@ fn published_schema_can_be_adopted_by_runtime_module_registration() {
         host.read_component(&world, entity, "Counter"),
         Some(serde_json::json!({"value":1}))
     );
-    assert!(host.take_diagnostics().is_empty());
+    assert!(
+        host.take_diagnostics()
+            .iter()
+            .all(|d| d.code == ara_script::codes::COMPILE_RESULT)
+    );
 }
