@@ -371,15 +371,15 @@ public static class ComponentExamples
     }
     #endregion
 
-    #region types/ReflectionCapture
-    /// <summary>Fit a reflection capture to a 12 x 4 x 8 m hangar so its metal floor reflects the walls.</summary>
-    public static void UseReflectionCapture(Entity entity, in Tick tick)
+    #region types/ReflectionProbe
+    /// <summary>Fit a reflection probe to a 12 x 4 x 8 m hangar so its metal floor reflects the walls.</summary>
+    public static void UseReflectionProbe(Entity entity, in Tick tick)
     {
-        ref var capture = ref World.Get<ReflectionCapture>(entity);
-        capture.Extents = new Vector3(6, 2, 4);
-        capture.ProjectionExtents = new Vector3(6, 2, 4);
-        capture.CaptureOffset = new Vector3(0, 1.5f, 0);
-        capture.Priority = 1;
+        ref var probe = ref World.Get<ReflectionProbe>(entity);
+        probe.Bounds = new Vector3(12, 4, 8);
+        probe.ProjectionBounds = new Vector3(12, 4, 8);
+        probe.CaptureOffset = new Vector3(0, 1.5f, 0);
+        probe.Priority = 1;
     }
     #endregion
 
@@ -596,7 +596,7 @@ public static class ComponentExamples
         UsePhysicsPose2d(entity, in tick);
         UsePlayerControl(entity, in tick);
         UsePostProcessVolume(entity, playerInside: true, in tick);
-        UseReflectionCapture(entity, in tick);
+        UseReflectionProbe(entity, in tick);
         UseReverbZone(entity, in tick);
         UseRigidBody(entity, in tick);
         UseRigidBody2d(entity, in tick);
