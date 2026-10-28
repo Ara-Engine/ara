@@ -2375,10 +2375,10 @@ fn route_event(
         shell.note_pointer_chord();
     }
     if shell.game_captured && (shell.modal_active() || shell.choice_open()) {
-        game_input(&Event::FocusLost, editor, shell, 1.);
+        game_input(&Event::FocusLost, editor, shell, 1., None);
     }
     if matches!(event, Event::FileDropBegin) && shell.game_captured {
-        game_input(&Event::FocusLost, editor, shell, 1.);
+        game_input(&Event::FocusLost, editor, shell, 1., None);
     }
     if import_drops.event(&event, sdl, editor, shell, window, dpi, floats)? {
         for float in &mut floats.windows {
@@ -2402,9 +2402,22 @@ fn route_event(
         && !shell.content_pending()
         && !shell.modal_active()
         && !shell.choice_open()
-        && let Some(handled) = game_input(&event, editor, shell, captured_input_scale)
     {
-        return Ok((handled, false, false));
+        let handled = game_input(
+            &event,
+            editor,
+            shell,
+            captured_input_scale,
+            floats
+                .windows
+                .iter()
+                .find(|float| float.sdl == sdl)
+                .map(|float| float.id.as_str()),
+        );
+        if let Some(handled) = handled {
+            shell.leave();
+            return Ok((handled, false, false));
+        }
     }
     if shell.content_pending() {
         match &event {
@@ -2732,11 +2745,33 @@ fn game_input(
     editor: &mut Editor,
     shell: &mut Shell,
     points_to_logical: f32,
+    surface: Option<&str>,
 ) -> Option<bool> {
-    use ara_play_host::embed::DeviceEvent;
     if !shell.game_captured {
         return None;
     }
+    if let Some(surface) = surface {
+        if !shell.enter(surface) {
+            let result = game_input_current(&Event::FocusLost, editor, shell, points_to_logical);
+            shell.leave();
+            return result;
+        }
+    } else {
+        shell.leave();
+    }
+    let result = game_input_current(event, editor, shell, points_to_logical);
+    shell.leave();
+    result
+}
+
+/// Capture hit testing and raw player forwarding on the already selected surface.
+fn game_input_current(
+    event: &Event,
+    editor: &mut Editor,
+    shell: &mut Shell,
+    points_to_logical: f32,
+) -> Option<bool> {
+    use ara_play_host::embed::DeviceEvent;
     if matches!(
         event,
         Event::Key { pressed: true, .. }
