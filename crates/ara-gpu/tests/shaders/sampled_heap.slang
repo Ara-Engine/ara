@@ -14,7 +14,9 @@ BIND(2) SamplerState samplers[3] : register(s0,space0);
 void sampleMain(uint3 id : SV_DispatchThreadID) {
     if(id.x >= root.count) return;
     uint slot = buffers[NonUniformResourceIndex(root.indices)].Load((root.a+id.x)*4);
-    float4 color = textures[NonUniformResourceIndex(slot)].SampleLevel(samplers[0], float2(0.5), asfloat(root.lod));
+    // The trilinear clamp sampler: the material sampler (0) is anisotropic, and NVIDIA's
+    // anisotropic path picks mips differently even at explicit LODs.
+    float4 color = textures[NonUniformResourceIndex(slot)].SampleLevel(samplers[2], float2(0.5), asfloat(root.lod));
     uint4 bytes = uint4(round(saturate(color)*255));
     buffers[NonUniformResourceIndex(root.output)].Store(id.x*4, bytes.x | (bytes.y<<8) | (bytes.z<<16) | (bytes.w<<24));
 }

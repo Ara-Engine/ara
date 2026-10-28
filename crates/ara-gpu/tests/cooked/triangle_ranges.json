@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "1438c0a69d54f8e07062840e4beae055ae438dbac15e324c6c3a8a4773acb7c1",
+  "key": "8add08ddd516ded1471fe6173d584543c5d78910c164add835c52862acb57c93",
   "stages": [
     {
-      "dxil": "1438c0a69d54f8e07062840e4beae055ae438dbac15e324c6c3a8a4773acb7c1/rangeProbe.dxil",
+      "dxil": "8add08ddd516ded1471fe6173d584543c5d78910c164add835c52862acb57c93/triangle_ranges/rangeProbe.dxil",
       "dxil_hash": "1e90b762c385b744a89085a216a870706dd420fd7be334862313ac2867411e74",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "1438c0a69d54f8e07062840e4beae055ae438dbac15e324c6c3a8a4773acb7c1/rangeProbe.metallib",
+        "metallib": "8add08ddd516ded1471fe6173d584543c5d78910c164add835c52862acb57c93/triangle_ranges/rangeProbe.metallib",
         "metallib_hash": "8a68de83ab8378d4d379b6ed345df201415420db612545c26f7393a66c8727a7",
-        "reflection": "1438c0a69d54f8e07062840e4beae055ae438dbac15e324c6c3a8a4773acb7c1/rangeProbe.metal.json",
+        "reflection": "8add08ddd516ded1471fe6173d584543c5d78910c164add835c52862acb57c93/triangle_ranges/rangeProbe.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "rangeProbe",
-      "spirv": "1438c0a69d54f8e07062840e4beae055ae438dbac15e324c6c3a8a4773acb7c1/rangeProbe.spv",
+      "spirv": "8add08ddd516ded1471fe6173d584543c5d78910c164add835c52862acb57c93/triangle_ranges/rangeProbe.spv",
       "spirv_entry": "main",
       "spirv_hash": "85dee2dce28d44d1c4692a6b2733d7f634f32a70bea08f80a01c36a291848b15",
       "stage": "compute"
