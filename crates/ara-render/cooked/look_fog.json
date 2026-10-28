@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "64a7e2a5c9663aeb3a4d5170af02b96515025c88ca7cfb09d85852371e6e2371",
+  "key": "c2aba8bbd9f9c65c5e290643c5884eecd46f5890d1a75b6df7730f123ca53425",
   "stages": [
     {
-      "dxil": "64a7e2a5c9663aeb3a4d5170af02b96515025c88ca7cfb09d85852371e6e2371/fogMain.dxil",
+      "dxil": "c2aba8bbd9f9c65c5e290643c5884eecd46f5890d1a75b6df7730f123ca53425/look_fog/fogMain.dxil",
       "dxil_hash": "f9bf35e2ff3e1b5f3d9c47c45cf5c2b2e4a5b28e6e01ad9a42ae1bf7145b78ea",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "64a7e2a5c9663aeb3a4d5170af02b96515025c88ca7cfb09d85852371e6e2371/fogMain.metallib",
+        "metallib": "c2aba8bbd9f9c65c5e290643c5884eecd46f5890d1a75b6df7730f123ca53425/look_fog/fogMain.metallib",
         "metallib_hash": "d41053cc5604be490ad11b6d0157189e1678441e0eb4dda4cf0437eeb39e05d2",
-        "reflection": "64a7e2a5c9663aeb3a4d5170af02b96515025c88ca7cfb09d85852371e6e2371/fogMain.metal.json",
+        "reflection": "c2aba8bbd9f9c65c5e290643c5884eecd46f5890d1a75b6df7730f123ca53425/look_fog/fogMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "fogMain",
-      "spirv": "64a7e2a5c9663aeb3a4d5170af02b96515025c88ca7cfb09d85852371e6e2371/fogMain.spv",
+      "spirv": "c2aba8bbd9f9c65c5e290643c5884eecd46f5890d1a75b6df7730f123ca53425/look_fog/fogMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "2b8190589e63f668c09c6580a5acf050178d71f882461b05424ebbf4f5b56209",
       "stage": "compute"
