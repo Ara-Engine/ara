@@ -47,6 +47,7 @@ fn main() -> ara_ui::Result<()> {
                 options.verify_behaviours = true;
                 options.behaviour_asset_ops = false;
             }
+            "--verify-profiler" => options.verify_profiler = true,
             "--verify-assets" => options.verify_assets = true,
             "--verify-journey" => options.verify_journey = true,
             "--verify-monkey" => options.verify_monkey = true,

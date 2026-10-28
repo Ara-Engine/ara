@@ -333,10 +333,49 @@ impl Shell {
     pub(crate) fn profiler_targets_busy(&self) -> bool {
         self.profiler_targets.pending.is_some() || self.profiler_targets.editor_job.is_some()
     }
+    /// Bounded read-only evidence; aggregate frame/span work happens only when
+    /// verification or a report explicitly asks for it, never during UI polling.
     pub(crate) fn profiler_targets_report(&self) -> Value {
-        let capture = |capture: &Capture| json!({"target":capture.target.value(),"name":capture.name,"serial":capture.serial,"frames":capture.profile.frames.len(),"frozen":capture.frozen});
+        let capture = |capture: &Capture| {
+            let frames: Vec<_> = capture.profile.frames.iter().map(|frame| {
+                json!({"id":frame.id,"durationNs":frame.duration_ns,"cpuSpans":frame.spans.len(),"gpuPasses":frame.gpu.len()})
+            }).collect();
+            let digest = blake3::hash(ara_json::to_canonical_string(&json!(frames)).as_bytes())
+                .to_hex()
+                .to_string();
+            let display = self
+                .profiler_targets
+                .frame
+                .and_then(|id| {
+                    capture
+                        .profile
+                        .frames
+                        .iter()
+                        .find(|frame| frame.id == id && frame.duration_ns > 0)
+                })
+                .or_else(|| {
+                    capture
+                        .profile
+                        .frames
+                        .iter()
+                        .rev()
+                        .find(|frame| frame.duration_ns > 0)
+                });
+            json!({"target":capture.target.value(),"name":capture.name,"serial":capture.serial,"frames":capture.profile.frames.len(),"frozen":capture.frozen,
+                "closedFrames":capture.profile.frames.iter().filter(|frame|frame.duration_ns>0).count(),
+                "minDurationNs":capture.profile.frames.iter().map(|frame|frame.duration_ns).min(),
+                "maxDurationNs":capture.profile.frames.iter().map(|frame|frame.duration_ns).max(),
+                "cpuSpanCount":capture.profile.frames.iter().map(|frame|frame.spans.len()).sum::<usize>(),
+                "hasPlayerFrameScope":capture.profile.frames.iter().flat_map(|frame|&frame.spans).any(|span|capture.profile.labels.get(span.label as usize).is_some_and(|label|label=="player.frame")),
+                "threads":capture.profile.threads.iter().map(|thread|thread.name.as_str()).collect::<Vec<_>>(),
+                "frameDigest":digest,"displayFrame":display.map(|frame|json!({"id":frame.id,"durationNs":frame.duration_ns,
+                    "gpuTimings":(!frame.gpu.is_empty()).then(||json!({"passes":frame.gpu.len(),"durationNs":frame.gpu.iter().fold(0_u64,|total,pass|total.saturating_add(pass.duration_ns))}))}))})
+        };
         json!({"selected":self.profiler_targets.selected.value(),"transport":self.profiler_targets.transport,
-            "pending":self.profiler_targets.pending.as_ref().map(|pending|json!({"ticket":pending.ticket.0,"target":pending.target,"session":pending.session})),
+            "rows":self.profiler_targets.rows.iter().map(|row|json!({"target":row.target,"name":row.name,"processId":row.process_id,"recording":row.recording,"available":row.available,"reason":row.reason})).collect::<Vec<_>>(),
+            "recording":self.profiler_targets.recording(),"follow":self.profiler_targets.follow,"compare":self.profiler_targets.compare,"frame":self.profiler_targets.frame,
+            "pending":self.profiler_targets.pending.as_ref().map(|pending|json!({"ticket":pending.ticket.0,"target":pending.target,"session":pending.session,
+                "purpose":match pending.purpose {Purpose::Record=>"record",Purpose::Snapshot=>"snapshot",Purpose::Freeze=>"freeze",Purpose::Baseline=>"baseline"}})),
             "editorCaptureJob":self.profiler_targets.editor_job,"current":self.profiler_targets.current.as_ref().map(capture),
             "baseline":self.profiler_targets.baseline.as_ref().map(capture),"error":self.profiler_targets.error,"refreshError":self.profiler_targets.refresh_error})
     }

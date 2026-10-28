@@ -32,6 +32,8 @@ pub struct Options {
     pub verify_docking: bool,
     /// Run native content drag/drop, reference, component and OS-import behaviour journeys.
     pub verify_behaviours: bool,
+    /// Verify real Play-client Profiler selection and captures through raw SDL.
+    pub verify_profiler: bool,
     /// Include extended import and filesystem lifecycle checks in the behaviour run.
     pub behaviour_asset_ops: bool,
     /// Right-click Create → C# Script → rename → compile → attach, offscreen.
@@ -96,6 +98,7 @@ impl Options {
             || self.verify_ux
             || self.verify_docking
             || self.verify_behaviours
+            || self.verify_profiler
             || self.verify_assets
             || self.verify_journey
             || self.verify_monkey
@@ -147,6 +150,7 @@ impl Default for Options {
             verify_ux: false,
             verify_docking: false,
             verify_behaviours: false,
+            verify_profiler: false,
             behaviour_asset_ops: true,
             verify_assets: false,
             scene: None,

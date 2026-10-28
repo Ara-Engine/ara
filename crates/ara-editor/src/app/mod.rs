@@ -35,6 +35,7 @@ mod play_verify;
 mod prefab_verify;
 mod probe_verify;
 mod probes;
+mod profiler_verify;
 mod qa;
 mod reachability_verify;
 mod responsiveness;
@@ -91,7 +92,7 @@ pub static LAUNCHED: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
 /// False means Cancel; bounded runs report ARA1914 without showing a window.
 pub fn before_open_project(options: &Options) -> ara_ui::Result<bool> {
     // This route replaces the supplied project with a fresh checked fixture in run.
-    if options.verify_behaviours {
+    if options.verify_behaviours || options.verify_profiler {
         return Ok(true);
     }
     open_project::before_open(options)
@@ -99,6 +100,28 @@ pub fn before_open_project(options: &Options) -> ara_ui::Result<bool> {
 
 /// Open the SDL3 editor, host the project authority and serve authenticated EP/MCP.
 pub fn run(mut options: Options) -> ara_ui::Result<()> {
+    if options.verify_profiler {
+        if options.verify_behaviours
+            || options.verify_monkey
+            || options.verify_journey
+            || options.verify_assets
+            || options.verify
+            || options.verify_panels
+            || options.verify_ux
+            || options.verify_docking
+            || options.verify_first_hour
+            || options.verify_responsiveness
+            || options.verify_unpresentable
+            || options.verify_scene_quality
+            || options.verify_loading
+            || options.headless
+        {
+            return Err(
+                "Run --verify-profiler independently from other verification/headless modes".into(),
+            );
+        }
+        profiler_verify::prepare(&mut options)?;
+    }
     if options.verify_behaviours {
         content_drags::fixture(&mut options)?;
         hierarchy_verify::prepare(&options)?;
@@ -187,6 +210,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         || options.verify_ux
         || options.verify_docking
         || options.verify_behaviours
+        || options.verify_profiler
         || options.screenshot
     {
         native.verification_extent(options.size)?;
@@ -204,6 +228,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         || options.verify_ux
         || options.verify_docking
         || options.verify_behaviours
+        || options.verify_profiler
     {
         eprintln!("Verification extent {physical:?}; logical {logical:?}; DPI {dpi}");
     }
@@ -408,6 +433,15 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     if let (Some(runner), Some(seed)) = (&mut monkey, host_seed) {
         runner.record_host_seed(seed)?;
     }
+    let mut profiler_check = if options.verify_profiler {
+        Some(profiler_verify::ProfilerCheck::new(
+            &mut editor,
+            &mut shell,
+            &options.output,
+        )?)
+    } else {
+        None
+    };
     let mut content_drags = if options.verify_behaviours {
         Some(content_drags::ContentDrags::new(
             &mut editor,
@@ -539,6 +573,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     scale,
                     &mut events,
                 )?;
+            }
+            if let Some(check) = &mut profiler_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                let ready =
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events, ready)?;
             }
             if let Some(check) = &mut content_drags {
                 let scale = crate::native::points_to_logical(window.raw(), main_dpi);
@@ -2243,6 +2283,15 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 }
                 check.end(&mut editor, &mut shell, &mut gpu, ready)?;
             }
+            if let Some(check) = &mut profiler_check {
+                let ready =
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
+                check.end(&editor, &mut shell, &mut gpu, ready)?;
+                if check.finished() {
+                    game.close(&mut editor, &mut gpu)?;
+                    break;
+                }
+            }
             if let Some(check) = &mut bookmarks_check {
                 check.end(&editor, &mut shell, &mut gpu)?;
             }
@@ -2332,6 +2381,10 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         }
         if ux_verification.as_ref().is_some_and(|v| !v.finished()) {
             return Err("UX verification did not finish".into());
+        }
+        if let Some(check) = &profiler_check {
+            check.write()?;
+            check.validate()?;
         }
         if let Some(check) = &drag_check {
             check.write()?;
