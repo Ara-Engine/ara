@@ -83,6 +83,11 @@ fn unchanged_revision_reads_once_and_a_real_diagnostic_revision_enables_the_next
     let emitter = Emitter::default();
     editor.action("diag.report",json!({"engine":true,"diagnostics":[emitter.marker(0,"bound"),emitter.marker(1,"started"),emitter.row(1,"diagnostic",900,Severity::Error,"new compile diagnostic")]})).unwrap();
     editor.tick();
+    for (connection, notification) in editor.host.drain_outbox() {
+        if connection == ara_proto::ConnId::LOCAL {
+            editor.notified(&notification);
+        }
+    }
     assert_ne!(
         editor.panels_revision, revision,
         "real bus notifications invalidate the projection"
