@@ -743,6 +743,18 @@ pub fn request_compile(world: &World, module: &str, paths: &[PathBuf]) -> bool {
         .is_some_and(|s| s.host.request_compile(module, paths, EditOrigin::Agent))
 }
 
+/// Forward a private source job's exact prepared/materialized/cancelled revision.
+pub fn source_claim(
+    world: &World,
+    module: &str,
+    paths: &[PathBuf],
+    claim: &ara_script::SourceClaim,
+) -> bool {
+    world
+        .get_resource::<Scripts>()
+        .is_some_and(|scripts| scripts.host.source_claim(module, paths, claim))
+}
+
 /// Queue an engine-private recovery without advancing simulation or waiting for compilation.
 /// False means no reloadable host accepted the request; the caller reports the failure.
 pub fn request_recovery(world: &mut World, ticket: u64) -> bool {

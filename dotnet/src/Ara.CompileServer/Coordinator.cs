@@ -30,8 +30,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
 {
     /// <summary>Agent edits to a module are coalesced until it has been quiet this long.</summary>
     internal TimeSpan AgentQuiet = TimeSpan.FromMilliseconds(150);
-    /// <summary>How long watcher events on a path an agent claimed count as agent edits.</summary>
-    static readonly long ClaimTicks = 2 * Stopwatch.Frequency;
+    readonly Func<long> _clock;
 
     enum WorkKind { Initial, Change, Heat, Rebuild, Recover }
 
@@ -56,7 +55,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     readonly Dictionary<string, ModuleSession> _byName = new(StringComparer.Ordinal);
     readonly LinkedList<Work> _human = new();
     readonly Dictionary<uint, Work> _agent = [];
-    readonly Dictionary<string, long> _claims = new(ModuleState.Paths);
+    readonly SourceClaims _claims = new();
     readonly Dictionary<string, Guid> _references = new(ModuleState.Paths);
     readonly List<FileSystemWatcher> _referenceWatchers = [];
     readonly AutoResetEvent _wake = new(false);
@@ -78,8 +77,9 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     /// <inheritdoc/>
     public EncCapabilities Caps { get; private set; } = EncCapabilities.BodiesOnly;
 
-    internal Coordinator(IMessageSink output, IAnalysis? analysis)
+    internal Coordinator(IMessageSink output, IAnalysis? analysis, Func<long>? clock = null)
     {
+        _clock = clock ?? Stopwatch.GetTimestamp;
         _out = output;
         _analysis = analysis;
         _watcher = new ModuleWatcher(OnWatcher);
@@ -130,29 +130,42 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     }
 
     /// <summary>
-    /// Files of a module changed (or are about to). Agent changes also claim their paths, so
-    /// the watcher's events for them count as agent edits.
+    /// Compile changed bytes, or register/retire a source.replace version before/after materialization.
     /// </summary>
-    internal void Change(uint slot, IReadOnlyCollection<string> paths, uint origin, long tEvent)
+    internal void Change(uint slot, IReadOnlyCollection<string> paths, uint origin, long tEvent, SourceClaim? claim = null)
     {
-        if (origin == AbiConst.OriginAgent)
+        var canonical = paths.Select(ProjectInventory.ProjectPath).ToArray();
+        if (origin == AbiConst.OriginAgent && claim is not null)
         {
-            var until = Stopwatch.GetTimestamp() + ClaimTicks;
+            var completed = new List<string>();
+            foreach (var path in canonical)
+            {
+                var hash = claim.Phase == "materialized" ? SourceClaims.Hash(path) : null;
+                lock (_lock) if (_claims.Update(path, claim, hash)) completed.Add(path);
+            }
+            if (completed.Count == 0) return;
+            canonical = completed.ToArray();
+        }
+        else if (origin == AbiConst.OriginAgent)
+        {
+            var current = canonical.Select(path => (Path: path, Hash: SourceClaims.Hash(path))).ToArray();
             lock (_lock)
-                foreach (var p in paths) _claims[ProjectInventory.ProjectPath(p)] = until;
+                foreach (var (path, hash) in current) _claims.Current(path, hash);
         }
         var w = new Work(WorkKind.Change, slot, origin, tEvent);
-        w.Paths.UnionWith(paths.Select(ProjectInventory.ProjectPath));
+        w.Paths.UnionWith(canonical);
         Enqueue(w);
     }
 
-    void OnWatcher(uint slot, IReadOnlyCollection<string> paths, long tEvent)
+    internal void OnWatcher(uint slot, IReadOnlyCollection<string> paths, long tEvent)
     {
         uint origin;
+        var current = paths.Select(ProjectInventory.ProjectPath).Select(path => (Path: path, Hash: SourceClaims.Hash(path))).ToArray();
         lock (_lock)
         {
-            var now = Stopwatch.GetTimestamp();
-            origin = paths.Any(p => _claims.TryGetValue(p, out var until) && until > now) ? AbiConst.OriginAgent : AbiConst.OriginHuman;
+            // Evaluate every path, including a human overwrite that invalidates an old echo.
+            var matches = current.Select(p => _claims.Matches(p.Path, p.Hash)).ToArray();
+            origin = matches.Length > 0 && matches.All(match => match) ? AbiConst.OriginAgent : AbiConst.OriginHuman;
         }
         var w = new Work(WorkKind.Change, slot, origin, tEvent);
         w.Paths.UnionWith(paths);
@@ -170,6 +183,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     {
         lock (_lock)
         {
+            w.LastRequest = _clock();
             if (w.Kind == WorkKind.Change && w.Origin == AbiConst.OriginAgent)
             {
                 var queuedHuman = _human.FirstOrDefault(h => h.Kind == WorkKind.Change && h.Slot == w.Slot);
@@ -177,7 +191,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 else if (_agent.TryGetValue(w.Slot, out var a))
                 {
                     a.Paths.UnionWith(w.Paths);
-                    a.LastRequest = Stopwatch.GetTimestamp();
+                    a.LastRequest = _clock();
                 }
                 else _agent[w.Slot] = w;
             }
@@ -230,7 +244,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 }
                 else if (_agent.Count > 0)
                 {
-                    var now = Stopwatch.GetTimestamp();
+                    var now = _clock();
                     var ready = _agent.Values.Where(a => now - a.LastRequest >= quiet).MinBy(a => a.TEvent);
                     if (ready is not null)
                     {

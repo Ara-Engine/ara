@@ -14,6 +14,8 @@ mod ctx;
 mod register;
 mod registry;
 mod scene;
+mod source_claim;
+pub use source_claim::{SourceClaim, SourceClaimPhase};
 
 use std::collections::BTreeMap;
 use std::mem::{ManuallyDrop, MaybeUninit};
@@ -437,6 +439,22 @@ impl ScriptHost {
     /// outcome arrives as a staged reload (or diagnostics) at a later tick boundary.
     /// Returns false if no compile server runs or the module is unknown.
     pub fn request_compile(&self, module: &str, paths: &[PathBuf], origin: EditOrigin) -> bool {
+        self.compile_request(module, paths, origin, None)
+    }
+
+    /// Register/retire the exact byte revision of an engine-private source write.
+    /// Uses the existing JSON compile entry point; no ABI slot is added.
+    pub fn source_claim(&self, module: &str, paths: &[PathBuf], claim: &SourceClaim) -> bool {
+        self.compile_request(module, paths, EditOrigin::Agent, Some(claim))
+    }
+
+    fn compile_request(
+        &self,
+        module: &str,
+        paths: &[PathBuf],
+        origin: EditOrigin,
+        claim: Option<&SourceClaim>,
+    ) -> bool {
         let json = json!({
             "module": module,
             "paths": paths.iter().map(|p| p.display().to_string()).collect::<Vec<_>>(),
@@ -444,6 +462,7 @@ impl ScriptHost {
                 EditOrigin::Human => abi::ORIGIN_HUMAN,
                 EditOrigin::Agent => abi::ORIGIN_AGENT,
             },
+            "sourceClaim": claim,
         })
         .to_string();
         // SAFETY: the JSON span is valid for the call; the runtime only enqueues it.

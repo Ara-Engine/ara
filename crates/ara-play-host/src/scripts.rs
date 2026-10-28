@@ -106,19 +106,21 @@ impl PlayService {
     /// `script.write`: an agent writes a C# source. Every running world's players
     /// claim the path as an agent edit first (coalesced, compiled behind human edits),
     /// then the file is written; the reload applies at a tick boundary.
-    fn claim_source(&mut self, path: &Path, agent: bool) -> Result<usize, Vec<Diagnostic>> {
+    fn claim_source(
+        &mut self,
+        path: &Path,
+        claim: &ara_script::SourceClaim,
+    ) -> Result<usize, Vec<Diagnostic>> {
         let mut claimed = 0;
-        if agent {
-            let ids: Vec<String> = self.worlds.keys().cloned().collect();
-            for id in ids {
-                let result = self.call(
-                    &id,
-                    method::COMPILE,
-                    json!({"paths": [claim_path(path).to_string_lossy()]}),
-                    true,
-                )?;
-                claimed += usize::from(result["claimed"].as_bool().unwrap_or(false));
-            }
+        let ids: Vec<String> = self.worlds.keys().cloned().collect();
+        for id in ids {
+            let result = self.call(
+                &id,
+                method::COMPILE,
+                json!({"paths": [claim_path(path).to_string_lossy()], "sourceClaim":claim}),
+                true,
+            )?;
+            claimed += usize::from(result["claimed"].as_bool().unwrap_or(false));
         }
         Ok(claimed)
     }
