@@ -70,6 +70,7 @@ mod log_panels;
 mod material_panel;
 mod memo;
 mod names;
+mod probes;
 mod scene_panel;
 pub(crate) use animation_panel::LiveChange;
 pub(crate) use log_panels::LogView;
@@ -304,6 +305,7 @@ pub struct Shell {
     ide_request: Option<scripts::IdeRequest>,
     compile_problems: log_panels::CompilationView,
     lighting: lighting::View,
+    probe_ui: probes::State,
     pilot: pilot::Pilot,
     pub(crate) viewport_diagnostics: overlay::diagnostics::Diagnostics,
     pub(crate) drag: Option<Drag>,
@@ -640,6 +642,7 @@ impl Shell {
             ide_request: None,
             compile_problems: Default::default(),
             lighting: Default::default(),
+            probe_ui: Default::default(),
             pilot: Default::default(),
             viewport_diagnostics: Default::default(),
             drag: None,
@@ -835,6 +838,7 @@ impl Shell {
     pub fn rebuild_if_stale(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
         let compiled = self.poll_script_job(editor)?;
         let modules_changed = self.poll_script_modules(editor)?;
+        let probes_changed = self.poll_probes(editor)?;
         let play_changed = match self.poll_play_job(editor) {
             Ok(changed) => changed,
             Err(error) => {
@@ -844,6 +848,7 @@ impl Shell {
         };
         if !compiled
             && !modules_changed
+            && !probes_changed
             && !play_changed
             && self.built == (editor.panels_revision, editor.host.store().revision())
         {
@@ -961,6 +966,7 @@ impl Shell {
         css.push_str(ara_ui::select::CSS);
         css.push_str(history_panel::CSS);
         css.push_str(lighting::CSS);
+        css.push_str(probes::CSS);
         css.push_str(palette::FORM_CSS);
         if self.toolkit_verify.is_some() {
             css.push_str(toolkit_verify::CSS);

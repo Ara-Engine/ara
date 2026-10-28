@@ -82,6 +82,10 @@ pub(crate) struct Ctx<'a> {
     pub starting: bool,
     /// The Scene view is explicitly piloting one authored Camera.
     pub pilot: bool,
+    /// Cached renderer/UI reason why the targeted probe cannot be captured.
+    pub probe_capture_blocker: Option<&'a str>,
+    /// Cached reason why no owned capture request can be cancelled.
+    pub probe_cancel_blocker: Option<&'a str>,
     /// Build menu state.
     pub build: BuildState,
 }
@@ -227,7 +231,7 @@ pub(crate) fn keymap(state: &EditorState, extensions: &crate::extensions::Catalo
 }
 impl Shell {
     /// Availability inputs for the current editor state and a target.
-    pub(crate) fn ctx<'a>(&self, editor: &'a Editor, target: &'a Target) -> Ctx<'a> {
+    pub(crate) fn ctx<'a>(&'a self, editor: &'a Editor, target: &'a Target) -> Ctx<'a> {
         Ctx {
             state: &editor.state,
             extensions: &editor.extensions,
@@ -244,6 +248,8 @@ impl Shell {
             assets_show_all: self.assets_show_all,
             game: (self.game_stats, self.game_aspect, self.game_live),
             pilot: self.pilot_active(),
+            probe_capture_blocker: self.probe_capture_blocker(editor, target),
+            probe_cancel_blocker: self.probe_cancel_blocker(editor, target),
             starting: editor.state.playing.is_none()
                 && (self.game_start.is_some() || editor.play_world.is_some()),
             build: BuildState {

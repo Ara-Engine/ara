@@ -597,6 +597,15 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("hierarchy.reveal"),
             C("lighting.inspect"),
             Sub(
+                "Reflection Probe",
+                &[
+                    C("lighting.probe.recapture"),
+                    C("lighting.probe.cancel"),
+                    C("lighting.probe.refresh"),
+                    C("lighting.probe.copy"),
+                ],
+            ),
+            Sub(
                 "Create Child",
                 &[
                     C("create.empty_child"),

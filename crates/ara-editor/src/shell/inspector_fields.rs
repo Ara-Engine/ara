@@ -70,7 +70,11 @@ impl Shell {
         } else {
             label
         };
-        let scrub = matches!(field.widget, Widget::Number { .. }) && !field.read_only && !inactive;
+        let probe_resolution = field.path == "ReflectionProbe.captureResolution";
+        let scrub = matches!(field.widget, Widget::Number { .. })
+            && !probe_resolution
+            && !field.read_only
+            && !inactive;
         let tag = if scrub { "button" } else { "panel" };
         if scrub {
             self.bindings.insert(
@@ -217,6 +221,7 @@ impl Shell {
                     ));
                 }
             }
+            Widget::Number { .. } if probe_resolution => self.probe_resolution_select(field, out),
             Widget::Enum { options } => {
                 self.choice_button(
                     &format!("enum-{id}"),

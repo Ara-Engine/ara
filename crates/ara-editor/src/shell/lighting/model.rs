@@ -6,7 +6,12 @@ use ara_doc::prefab::Resolved;
 pub(super) fn component(name: &str) -> bool {
     matches!(
         name,
-        "Light" | "Environment" | "SkyAtmosphere" | "HeightFog" | "PostProcessVolume"
+        "Light"
+            | "Environment"
+            | "SkyAtmosphere"
+            | "HeightFog"
+            | "PostProcessVolume"
+            | "ReflectionProbe"
     )
 }
 pub(super) fn lighting(record: &ara_doc::Record) -> bool {
@@ -116,6 +121,22 @@ pub(super) fn rows(entities: &Resolved, editor: &Editor, query: &str) -> Vec<Row
                         .into(),
                     Some(0.),
                     "sliders-horizontal",
+                ),
+            }
+        } else if let Some(value) = row.record.get("ReflectionProbe") {
+            match serde::Deserialize::deserialize(value) {
+                Ok(probe) => {
+                    let probe: ara_components::render::ReflectionProbe = probe;
+                    let detail=probe.invalid().map_or_else(||format!(
+                        "Reflection probe · authored bounds {:.1} × {:.1} × {:.1} m · priority {} · blend {:.1} m · {} px per face{}",
+                        probe.bounds[0],probe.bounds[1],probe.bounds[2],probe.priority,probe.blend_distance,probe.capture_resolution,
+                        if probe.enabled {""}else{" · disabled contribution"}),|reason|format!("Invalid Reflection Probe · {reason}"));
+                    (detail, Some(probe.priority as f32), "box")
+                }
+                Err(_) => (
+                    "Reflection Probe values could not be read; inspect its fields".into(),
+                    None,
+                    "box",
                 ),
             }
         } else if row.record.contains_key("HeightFog") {

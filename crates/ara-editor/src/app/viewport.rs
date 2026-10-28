@@ -12,6 +12,7 @@ mod convergence;
 mod diagnostics;
 mod picking;
 mod preview;
+mod probes;
 mod recovery;
 #[cfg(test)]
 mod scene_switch;

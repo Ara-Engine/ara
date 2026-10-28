@@ -2,6 +2,7 @@
 #![allow(clippy::unwrap_used)]
 use super::*;
 use crate::{Host, HostConfig, Project};
+use serde_json::json;
 use std::{
     path::PathBuf,
     sync::{

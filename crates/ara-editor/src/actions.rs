@@ -342,6 +342,12 @@ impl EditorService {
                 game: (true, "free", false),
                 starting: false,
                 pilot: false,
+                probe_capture_blocker: Some(
+                    "Probe availability is reported by the active editor window",
+                ),
+                probe_cancel_blocker: Some(
+                    "Capture cancellation requires the owning editor window",
+                ),
                 // The window's build job is not visible here; the project's state is.
                 build: crate::shell::commands::BuildState {
                     running: false,

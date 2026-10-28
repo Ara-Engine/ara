@@ -23,11 +23,14 @@ impl Project {
         std::fs::write(
             root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),
             ara_json::to_canonical_string(&json!({
-                "$schema":"ara://schema/scene/1","id":"sc_rename_focus","records":{}
+                "$schema":"ara://schema/scene/1","id":ara_doc::AssetId::parse("sc_renamefocus").unwrap(),"records":{}
             })),
         )
         .unwrap();
         Self(root)
+    }
+    fn open(&self) -> Editor {
+        Editor::open_with(&self.0, Some(self.0.join(".ara/test-user.json"))).unwrap()
     }
 }
 impl Drop for Project {
@@ -77,7 +80,7 @@ fn click(shell: &mut Shell, editor: &mut Editor, id: &str) {
 #[test]
 fn script_rename_rebuild_defers_to_modal_and_select_then_restores_after_hide_move_and_resize() {
     let project = Project::new();
-    let mut editor = Editor::open(&project.0).unwrap();
+    let mut editor = project.open();
     editor
         .action(
             "editor.layout.move",
@@ -151,7 +154,7 @@ fn script_rename_rebuild_defers_to_modal_and_select_then_restores_after_hide_mov
 #[test]
 fn asset_file_rename_requested_behind_a_dialog_is_focused_only_after_the_decision_closes() {
     let project = Project::new();
-    let mut editor = Editor::open(&project.0).unwrap();
+    let mut editor = project.open();
     editor
         .action(
             "editor.layout.move",

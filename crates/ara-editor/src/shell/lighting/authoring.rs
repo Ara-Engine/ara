@@ -9,6 +9,7 @@ pub(crate) enum Create {
     Box,
     Sphere,
     HeightFog,
+    Probe,
 }
 /// Explicit override groups appended in a single normal content transaction.
 #[derive(Clone, Copy, Debug)]
@@ -32,6 +33,7 @@ fn components(kind: Create) -> (&'static str, Value) {
             json!({"PostProcessVolume":{"shape":"sphere","blendDistance":2,"priority":10},"Transform":{"scale":[8,8,8]}}),
         ),
         Create::HeightFog => ("Height fog", json!({"HeightFog":{}})),
+        Create::Probe => ("Reflection probe", json!({"ReflectionProbe":{}})),
     }
 }
 

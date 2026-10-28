@@ -23,14 +23,17 @@ mod import_drops;
 mod import_verify;
 mod input_verify;
 mod journey;
+mod lighting_verify;
 mod monkey;
 mod monkey_route;
 mod navigation_verify;
 mod open_project;
 mod panels_verify;
 mod pilot;
+mod pilot_verify;
 mod play_verify;
 mod prefab_verify;
+mod probes;
 mod qa;
 mod reachability_verify;
 mod responsiveness;
@@ -314,6 +317,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         Some(unsafe { gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &window)? })
     };
     let mut scene_view = viewport::SceneView::default();
+    let mut probe_owner = probes::Owner::default();
     let mut verification = options
         .verify
         .then(|| verify::Verification::new(&options.output));
@@ -418,6 +422,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     let mut hierarchy_check = None;
     let mut collection_check = None;
     let mut bookmarks_check = None;
+    let mut lighting_check = None;
+    let mut pilot_check = None;
     let mut snapping_check = None;
     let mut input_check = None;
     let mut boundary_check = None;
@@ -698,6 +704,45 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if bookmarks_check
                 .as_ref()
                 .is_some_and(bookmarks_verify::BookmarksCheck::finished)
+                && lighting_check.is_none()
+            {
+                lighting_check = Some(lighting_verify::LightingCheck::new(
+                    &mut editor,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut lighting_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+            }
+            if lighting_check
+                .as_ref()
+                .is_some_and(lighting_verify::LightingCheck::finished)
+                && pilot_check.is_none()
+            {
+                pilot_check = Some(pilot_verify::PilotCheck::new(
+                    &mut editor,
+                    &mut shell,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut pilot_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                let ready =
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
+                check.inject(
+                    &mut editor,
+                    &mut shell,
+                    &window,
+                    scale,
+                    &scene_view,
+                    &mut events,
+                    ready,
+                )?;
+            }
+            if pilot_check
+                .as_ref()
+                .is_some_and(pilot_verify::PilotCheck::finished)
                 && input_check.is_none()
             {
                 input_check = Some(input_verify::InputCheck::new(&options.output));
@@ -856,6 +901,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 {
                     check.clipboard()
                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
+                    check.clipboard()
+                } else if let Some(check) = pilot_check.as_mut().filter(|check| !check.finished()) {
                     check.clipboard()
                 } else {
                     &mut clipboard
@@ -1075,6 +1122,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     check.clipboard()
                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
                     check.clipboard()
+                } else if let Some(check) = pilot_check.as_mut().filter(|check| !check.finished()) {
+                    check.clipboard()
                 } else {
                     &mut clipboard
                 };
@@ -1086,6 +1135,11 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let fly_dt = navigation_check
                 .as_ref()
                 .and_then(navigation_verify::NavigationCheck::fly_dt)
+                .or_else(|| {
+                    pilot_check
+                        .as_ref()
+                        .and_then(pilot_verify::PilotCheck::fly_dt)
+                })
                 .unwrap_or(dt);
             let pilot_before = pilot::update(&controller, &mut editor, &mut shell, false);
             dirty |= pilot_before;
@@ -1681,11 +1735,23 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     // A Scene that cannot render yet (models still publishing, a missing
                     // source) keeps its last frame and is reported; the next change or
                     // publication retries. It never closes the editor.
-                    if scene_dirty
-                        && !defer_scene
-                        && let Err(error) = scene_view.render(&mut renderer, &editor, &view, 1)
-                    {
-                        editor.report_failure(&*error);
+                    if scene_dirty && !defer_scene {
+                        let mut safe = probe_owner.prepare_scene_change(
+                            &mut editor,
+                            &mut scene_view,
+                            &mut renderer,
+                        )?;
+                        if safe
+                            && probe_owner.busy()
+                            && scene_view.probe_replacement_required(&renderer, &editor)?
+                        {
+                            safe = probe_owner.prepare_replacement(&mut editor);
+                        }
+                        if safe
+                            && let Err(error) = scene_view.render(&mut renderer, &editor, &view, 1)
+                        {
+                            editor.report_failure(&*error);
+                        }
                     }
                     scene_view.attach(&mut gpu, &renderer, editor.state.quality)?;
                     if renderer.presentation_ready() {
@@ -2030,6 +2096,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     probe.end(&editor, &mut shell, sample);
                 }
             }
+            let probe_update = probe_owner.poll(&mut editor, &mut scene_view, &mut renderer)?;
+            dirty |= probe_update.changed || probe_update.busy;
+            scene_dirty |= probe_update.scene_dirty;
             if let Some(check) = &mut drag_check {
                 check.end(&editor, &mut shell, &mut gpu, &floats)?;
             } else if ux_verification.as_ref().is_some_and(|v| v.finished())
@@ -2105,6 +2174,16 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             }
             if let Some(check) = &mut collection_check {
                 check.end(&editor, &mut shell, &mut gpu)?;
+            }
+            if let Some(check) = &mut lighting_check {
+                let ready =
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
+                check.end(&editor, &mut shell, &mut gpu, &scene_view, ready)?;
+            }
+            if let Some(check) = &mut pilot_check {
+                let ready =
+                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
+                check.end(&editor, &shell, &mut gpu, ready)?;
             }
             if let Some(check) = &mut bookmarks_check {
                 check.end(&editor, &mut shell, &mut gpu)?;
@@ -2309,6 +2388,22 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 .ok_or("The native C# iteration journey did not start")?;
             check.write()?;
             check.validate()?;
+            let check = lighting_check
+                .as_ref()
+                .ok_or("The native Lighting journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native Lighting journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
+            let check = pilot_check
+                .as_ref()
+                .ok_or("The native Pilot journey did not start")?;
+            check.write()?;
+            check.validate()?;
             let check = input_check
                 .as_ref()
                 .ok_or("The native input journey did not start")?;
@@ -2409,6 +2504,33 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         }
         Ok(())
     })();
+    // Keep the exact retained view alive while derived probe work retires, even
+    // after a verification route or an error leaves the ordinary frame loop.
+    probe_owner.begin_drain(&mut editor);
+    let probe_drain_result = (|| -> ara_ui::Result<()> {
+        let began = Instant::now();
+        loop {
+            server.pump(&mut editor);
+            editor.tick();
+            probe_owner.poll(&mut editor, &mut scene_view, &mut renderer)?;
+            // Owner delivery is queued; publish its final job state before a
+            // successful resource check can leave this retained-owner loop.
+            editor.tick();
+            if !probe_owner.busy() && !editor.probe_captures.busy() {
+                return Ok(());
+            }
+            let _ = Window::poll_tagged()?;
+            if began.elapsed() >= Duration::from_secs(90) {
+                return Err(format!(
+                    "Probe retirement did not complete: {}",
+                    ara_json::to_canonical_string(&probe_owner.resource_report())
+                )
+                .into());
+            }
+            native.wait(Duration::from_millis(8))?;
+        }
+    })();
+    probe_drain_result?;
     let monkey_result = if let Some(runner) = &mut monkey {
         runner.finish_with(&mut editor)?;
         let accepted = if runner.is_soak() {

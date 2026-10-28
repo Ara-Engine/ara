@@ -44,8 +44,10 @@ impl Controller {
     }
     /// A native camera gesture, distinct from selection and transform capture.
     pub fn camera_navigation_active(&self) -> bool {
-        self.gizmo.is_none() && self.marquee.is_none()
-            && (self.buttons[2] || (self.buttons[3] && self.fly_capture)
+        self.gizmo.is_none()
+            && self.marquee.is_none()
+            && (self.buttons[2]
+                || (self.buttons[3] && self.fly_capture)
                 || (self.buttons[1] && (self.keys.contains(&226) || self.keys.contains(&230))))
     }
     /// A held native pointer or staged viewport operation still owns capture.

@@ -56,6 +56,42 @@ pub(crate) struct Controls {
 }
 
 impl Shell {
+    /// ReflectionProbe resolutions are a discrete numeric engine contract, not a
+    /// free scrub range. Values remain JSON numbers through the normal field command.
+    pub(super) fn probe_resolution_select(
+        &mut self,
+        field: &crate::inspector::Field,
+        out: &mut String,
+    ) {
+        let current = if field.mixed {
+            Value::Null
+        } else {
+            field
+                .value
+                .as_f64()
+                .filter(|value| {
+                    value.is_finite()
+                        && value.fract() == 0.
+                        && *value >= 0.
+                        && *value <= u32::MAX as f64
+                })
+                .map_or(Value::Null, |value| json!(value as u32))
+        };
+        self.choice_button(
+            "enum-ReflectionProbe-captureResolution",
+            &field.label,
+            Select {
+                destination: Destination::Field(field.path.clone()),
+                current,
+                options: ara_components::render::ReflectionProbe::RESOLUTIONS
+                    .iter()
+                    .map(|resolution| (json!(resolution), format!("{resolution} px per face")))
+                    .collect(),
+            },
+            out,
+        );
+    }
+
     /// Open an already mounted Select on its owning surface, then mount its popup.
     pub(super) fn open_choice(&mut self, editor: &mut Editor, id: &str) -> ara_ui::Result<()> {
         let key = (self.current.clone(), id.to_owned());

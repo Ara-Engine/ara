@@ -302,13 +302,14 @@ impl Monkey {
                     // may retire later than in the original run. Pump normally
                     // and observe them; never synthesize cleanup commands.
                     shell.cancel_script_module_intent();
+                    editor.probe_captures.begin_drain();
                     let since = self.draining_since.get_or_insert_with(Instant::now);
                     if since.elapsed() >= DRAIN {
                         self.cleanup_incomplete = true;
                         self.stopped = true;
                     }
                     self.play.poll(editor)?;
-                    self.resources.shell(shell.monkey_background_work());
+                    self.resources.shell(background_work(editor, shell));
                     self.refresh_end_inventory(editor)?;
                     return Ok(false);
                 };
@@ -317,6 +318,7 @@ impl Monkey {
                 // Cancelling presentation never pretends discovery has retired;
                 // its worker remains part of the resource drain until joined.
                 shell.cancel_script_module_intent();
+                editor.probe_captures.begin_drain();
                 if self.is_soak() {
                     self.shell_catalog.begin_drain();
                 }
@@ -748,7 +750,7 @@ impl Monkey {
         if self.is_soak() {
             self.shell_catalog.begin_drain();
         }
-        self.resources.shell(shell.monkey_background_work());
+        self.resources.shell(background_work(editor, shell));
         self.play.poll(editor)?;
         self.refresh_end_inventory(editor)
     }
@@ -1037,6 +1039,14 @@ impl Monkey {
             "incomplete"
         }
     }
+}
+
+fn background_work(editor: &mut Editor, shell: &Shell) -> Value {
+    let mut report = shell.monkey_background_work();
+    let probes = editor.probe_captures.resource_report();
+    report["busy"] = json!(report["busy"] == true || probes["retired"] != true);
+    report["probeCaptures"] = probes;
+    report
 }
 
 fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {

@@ -58,6 +58,7 @@ impl Shell {
                 "Local sphere",
             ),
             ("lighting-create-fog", "create.fog", "Height fog"),
+            ("lighting-create-probe", "create.probe", "Reflection probe"),
         ] {
             self.bind_command(id, command, Target::None);
             out.push_str(&format!(
@@ -65,6 +66,7 @@ impl Shell {
             ));
         }
         out.push_str("</panel><text id='lighting-create-help' class='lighting-help' text='Post volumes start without overrides. Select a volume, then add override groups in Inspector. Height Fog is scene-wide; the first visible fog entity in ID order wins.' /></panel>");
+        self.probe_section(editor, out);
         if let Some(post) = model::blended(&resolved, editor) {
             out.push_str(&format!("<panel id='lighting-camera-blend' class='lighting-card'><text id='lighting-camera-title' class='lighting-title' text='Authored blend at Scene camera' /><text id='lighting-camera-values' class='lighting-help' text='{} exposure · EV100 {:.2} · compensation {:+.2} stops · bloom {:.1}% · vignette {:.2}' /><text id='lighting-camera-help' class='lighting-help' text='Volumes blend in ascending priority; equal priorities use entity ID order.' /></panel>",if post.exposure==ara_components::render::ExposureMode::Manual {"Manual"}else{"Automatic"},post.ev100,post.compensation,post.bloom*100.,post.vignette));
         }
