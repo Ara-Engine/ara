@@ -10,11 +10,11 @@ pub(crate) const FORM_CSS: &str = "
 .palette-vector { gap:4px;min-width:0px; }
 .palette-axis { flex-direction:row;gap:4px;min-width:0px; }
 .palette-axis-label { width:16px;flex-shrink:0; }
-.palette-axis field { min-width:0px;flex-grow:1;flex-basis:0px; }
+.palette-axis-input { min-width:0px;flex-grow:1;flex-basis:0px; }
 .palette-parameter-help { white-space:normal;font-size:11px;color:var(--muted-foreground); }
 .palette-parameter-error { white-space:normal;font-size:11px;color:var(--destructive); }
 .palette-form-actions { flex-direction:row;flex-wrap:wrap;min-width:0px;flex-shrink:0;gap:4px; }
-.palette-form-actions button { height:auto;min-height:28px;max-width:100%;white-space:normal; }
+.palette-form-button { height:auto;min-height:28px;max-width:100%;white-space:normal; }
 ";
 
 #[derive(Clone)]
@@ -382,7 +382,7 @@ impl Shell {
                                     value.get(axis).map(display_value).unwrap_or_default()
                                 });
                         let label = ["X", "Y", "Z", "W"][axis];
-                        out.push_str(&format!("<panel id='{axis_id}-row' class='palette-axis'><text id='{axis_id}-label' class='palette-axis-label' text='{label}' /><field id='{axis_id}' class='number' step='{step}' {} {} text='{}' label='{} {label}' description='{}' action='Dispatch' /></panel>",min.map(|value|format!("min='{value}'")).unwrap_or_default(),max.map(|value|format!("max='{value}'")).unwrap_or_default(),escape(&text),escape(&field.label),escape(&field.description)));
+                        out.push_str(&format!("<panel id='{axis_id}-row' class='palette-axis'><text id='{axis_id}-label' class='palette-axis-label' text='{label}' /><field id='{axis_id}' class='number palette-axis-input' step='{step}' {} {} text='{}' label='{} {label}' description='{}' action='Dispatch' /></panel>",min.map(|value|format!("min='{value}'")).unwrap_or_default(),max.map(|value|format!("max='{value}'")).unwrap_or_default(),escape(&text),escape(&field.label),escape(&field.description)));
                     }
                     out.push_str("</panel>");
                 }
@@ -455,12 +455,17 @@ impl Shell {
             ));
         }
         out.push_str("<panel id='palette-form-actions' class='palette-form-actions'>");
-        out.push_str(&self.bind_button("palette-back", "Back", Binding::PaletteBack, "ghost"));
+        out.push_str(&self.bind_button(
+            "palette-back",
+            "Back",
+            Binding::PaletteBack,
+            "ghost palette-form-button",
+        ));
         out.push_str(&self.bind_button(
             "palette-run",
             "Run command",
             Binding::PaletteRun,
-            "primary",
+            "primary palette-form-button",
         ));
         out.push_str("</panel>");
         Ok(())
