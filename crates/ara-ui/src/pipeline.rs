@@ -99,12 +99,13 @@ impl Ui {
                 node.dirty.style = false;
                 node.dirty.paint = true;
                 work.restyled += 1;
-                if color_changed || message && typography_changed {
+                let message_typography = message && (typography_changed || node.dirty.layout);
+                if color_changed || message_typography {
                     let count = node.element.children.len();
                     for position in 0..count {
                         let child = self.nodes[index].element.children[position];
                         if (color_changed && self.nodes[child].computed.inherit_color)
-                            || (message && self.nodes[child].element.tag == "text")
+                            || (message_typography && self.nodes[child].element.tag == "text")
                         {
                             self.nodes[child].dirty.style = true;
                         }

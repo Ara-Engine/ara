@@ -348,13 +348,15 @@ pub(crate) fn build_node(
         .filter(|hint| !hint.is_empty())
         .map(|hint| Text::new(hint.clone()));
     let layout_id = tree.new_leaf_with_context(computed.layout.clone(), index)?;
+    let resolve_style =
+        computed.inherit_color || matches!(element.tag.as_str(), "feedback" | "banner");
     Ok(Node {
         virtual_extent: None,
         paint_offset: [0.0; 2],
         visible: true,
         element,
         dirty: Dirty {
-            style: computed.inherit_color,
+            style: resolve_style,
             layout: true,
             paint: true,
         },
