@@ -390,7 +390,10 @@ impl QualityPreset {
             },
             Self::High => Quality {
                 shadows: shadows(4, 2048, 150., (2048, 1500.)),
-                ambient_occlusion: ao(2, 6),
+                // Three steps per slice side, with far samples occluding less
+                // (look-ao.slang aoBitmaskMain): six steps over-darkened against Cycles
+                // and cost 0.07 ms more at 1440p.
+                ambient_occlusion: ao(2, 3),
                 reflections: ssr(0.5, 30., 24),
                 gi_budget: 2048,
                 bloom: true,

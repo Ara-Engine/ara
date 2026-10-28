@@ -156,10 +156,13 @@ void aoBitmaskMain(uint3 tid:SV_DispatchThreadID){
                 float2 q=centre+direction*sign*offset;if(any(q<0)||any(q>=float2(f.extent.xy)))break;
                 int2 at=int2(q);float sampleDepth=pixel(f.extra.x,at).x;if(sampleDepth<=0)continue;
                 float3 delta=worldAtDepth(f,floor(q)+0.5,sampleDepth)-P;float len2=dot(delta,delta);
-                // Samples past the radius hide nothing; arcs shrink to their front over its last fifth.
+                // Samples past the radius hide nothing; arcs shrink to their front over its
+                // outer half (far occluders hid too much against Cycles).
                 if(len2>=radius2)continue;
-                float len=max(sqrt(len2),1e-5),reach=saturate((l.ao.x-len)/(0.2*l.ao.x));
-                float3 back=delta-V*thickness;float front=dot(delta,V)/len;
+                float len=max(sqrt(len2),1e-5),reach=saturate((l.ao.x-len)/(0.5*l.ao.x));
+                // Assumed thickness tapers from half the radius to none at the radius:
+                // a far sample stands for a thin silhouette, not a solid slab.
+                float3 back=delta-V*(thickness*saturate(2-2*len/l.ao.x));float front=dot(delta,V)/len;
                 float rear=lerp(front,dot(back,V)*rsqrt(max(dot(back,back),1e-10)),reach);
                 float a=aoShare(front,sign,n,sn,cn,lower,total),b=aoShare(rear,sign,n,sn,cn,lower,total);
                 uint fresh=aoSectors(min(a,b),max(a,b))&~hidden;if(fresh==0)continue;
