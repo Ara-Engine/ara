@@ -718,7 +718,10 @@ fn import_settings_are_typed_attributed_and_undoable() {
     .unwrap();
     let mut editor = project.open();
     let result = editor
-        .action("editor.asset.import", json!({"path":"paint.png"}))
+        .action(
+            "editor.asset.import",
+            json!({"path":format!("{}/paint.png",ara_doc::AUTHORING_ROOT)}),
+        )
         .unwrap();
     editor
         .action("jobs.cancel", json!({"job":result["job"]}))
