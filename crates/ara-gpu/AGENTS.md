@@ -60,9 +60,8 @@ Owns the native GPU boundary. Vulkan uses ash revision
 The v3 heap uses runtime image/buffer arrays at bindings 5/1: up to 65,536 sampled
 images and 128 storage buffers, clamped jointly to set/stage/pool limits (minimum
 128 images/64 buffers), plus 64 storage images and optional 16 acceleration structures.
-`DeviceInfo` records both selected capacities. Binding 0 mirrors
-the first 128 slots for cached editor material previews only. All engine pipelines
-must be recooked; only `previewVertex`/`previewFragment` caches accept the old ABI.
+`DeviceInfo` records both selected capacities. Binding 0 mirrors the first 128 slots for cached editor
+material previews only. All engine pipelines must be recooked; only `previewVertex`/`previewFragment` caches accept the old ABI.
 Binding 2 has three fixed samplers: material repeat (up to 16x anisotropic where the
 device allows; native materials sample it with gradients), environment U repeat/V clamp
 and temporal clamp (both trilinear), with native mip LODs enabled. Anisotropy changes
@@ -94,7 +93,7 @@ lifetime/layout requirements. Never reset a pending native command buffer.
 
 Interactive Scene frames can use `begin_deferred_completion` / `end_deferred_completion`:
 retain the returned `Completion`, poll it before reusing resources, and keep showing
-the last completed color/ID pair. One frame is admitted at a time. `upload_queued`
+the last completed color/ID pair. `FRAMES_IN_FLIGHT` (2) ended scopes may stay unconsumed; a third begin is refused. `upload_queued`
 writes busy constants through ordered GPU updates; ordinary `upload` still rejects
 overwrites. A second graphics-family queue isolates Scene work from the native UI
 queue where available; completion publishes a GPU memory dependency to that UI queue.
@@ -130,19 +129,15 @@ Adopt ready pipeline handles on the owner and retire normally. Keep the last pre
 
 ## Verification
 
-Optional `tracy` enables literal `cpu_scope!` zones for submission, recording and
-timeline waits. The executable starts the client (`ara-player --features tracy`);
-without a running client library zones do nothing. Default builds erase them.
+Optional `tracy` enables literal `cpu_scope!` zones for submission, recording and timeline waits; the
+executable starts the client (`ara-player --features tracy`), zones are no-ops without it, default builds erase them.
 
-Set `CARGO_BUILD_JOBS=2`. Use `../ara-render/run.ps1 -Mode Check` for all gates,
-or `cargo check -p ara-gpu`, `cargo test -p ara-gpu`,
-`cargo clippy -p ara-gpu --all-targets -- -D warnings`,
-`cargo fmt -p ara-gpu -- --check`.
+Set `CARGO_BUILD_JOBS=2`. All gates: `../ara-render/run.ps1 -Mode Check`; or `cargo check`, `test`,
+`clippy --all-targets -- -D warnings` and `fmt -- --check`, each with `-p ara-gpu`.
 GPU tests need Vulkan 1.3, validation layers, a dedicated compute family and
 process-local `VK_IMPLICIT_LAYER_PATH` pointing at an empty directory on this PC.
-They verify malformed-copy rejection, stale handles and real BLAS/TLAS lifetime.
-The triangle-range probe checks pooled geometry, overflow/alignment rejection
-and real rays hitting three transformed instances of two shared BLAS identities.
+They verify malformed-copy rejection, stale handles, real BLAS/TLAS lifetime and (triangle-range probe)
+pooled geometry, overflow/alignment rejection and real rays hitting three instances of two shared BLASes.
 The sampled-heap probe reads 257 nonuniform slots on GPU, publishes an unused slot
 before completion, and checks native mip interpolation. Explicit offline fixture
 updates: `cargo run -p ara-gpu --example heap_probe_manifest`, then

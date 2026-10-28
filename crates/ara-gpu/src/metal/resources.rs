@@ -74,7 +74,17 @@ pub(super) fn image(
     let info = format(format_id)?;
     let [width, height] = size;
     let full = 32 - width.max(height).max(1).leading_zeros();
-    if width == 0 || height == 0 || levels == 0 || levels > full || usage.is_empty() {
+    // Like Vulkan, an extent past the reported `max_image_dimension` is an error here
+    // rather than whatever the driver does with it.
+    let largest = super::info::MAX_IMAGE_DIMENSION;
+    if width == 0
+        || height == 0
+        || width > largest
+        || height > largest
+        || levels == 0
+        || levels > full
+        || usage.is_empty()
+    {
         return Err(GpuError::Contract(format!(
             "Invalid image {width}x{height}, {levels} levels"
         )));
