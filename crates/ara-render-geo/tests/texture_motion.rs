@@ -1,3 +1,5 @@
+mod support;
+
 use anyhow::{Result, ensure};
 use ara_geo::{SourceMesh, Vertex};
 use ara_gpu::{GpuDevice, cooked::write_json};
@@ -160,7 +162,7 @@ fn moving_camera_measures_resident_mip_lag_and_same_uv_transitions() -> Result<(
         image::save_buffer(&golden, &pixels, size[0], size[1], image::ColorType::Rgba8)?;
     }
     ensure!(
-        pixels == image::open(&golden)?.to_rgba8().into_raw(),
+        support::matches_golden(&pixels, &image::open(&golden)?.to_rgba8().into_raw()),
         "textured golden differs; inspect before deliberate update"
     );
     gpu.assert_clean()?;

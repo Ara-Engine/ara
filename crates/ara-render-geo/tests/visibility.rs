@@ -1,3 +1,5 @@
+mod support;
+
 use anyhow::{Result, ensure};
 use ara_geo::{Settings, cook, sample};
 use ara_gpu::GpuDevice;
@@ -145,7 +147,7 @@ fn hybrid_mesh_and_indirect_goldens_and_full_resolution_error() -> Result<()> {
     }
     let expected = image::open(golden)?.to_rgba8();
     ensure!(
-        expected.as_raw() == &pixels,
+        support::matches_golden(&pixels, expected.as_raw()),
         "geometry golden differs; inspect captures before deliberate update"
     );
     draw(&mut gpu, &mut mesh, &camera, false, false)?;

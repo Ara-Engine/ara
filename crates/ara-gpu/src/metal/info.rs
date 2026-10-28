@@ -20,6 +20,14 @@ pub(super) fn hardware_ray_tracing(device: &ProtocolObject<dyn MTLDevice>) -> bo
     device.supportsRaytracing() && device.supportsFamily(MTLGPUFamily::Apple9)
 }
 
+/// 64-bit buffer atomics: unsigned min/max on `ulong` in device memory, which Metal
+/// Shader Converter maps DXIL's `InterlockedMax64`/`InterlockedMin64` onto, on Apple9
+/// (M3) and later. Other 64-bit atomic operations have no Metal equivalent; Ara's
+/// shaders use only max (the geometry visibility buffer).
+fn buffer_int64_atomics(device: &ProtocolObject<dyn MTLDevice>) -> bool {
+    device.supportsFamily(MTLGPUFamily::Apple9)
+}
+
 /// Capabilities recorded once at device creation; `ray_tracing` is set by the
 /// RT-tier constructor ([`hardware_ray_tracing`]).
 pub(super) fn device_info(device: &ProtocolObject<dyn MTLDevice>) -> DeviceInfo {
@@ -42,7 +50,7 @@ pub(super) fn device_info(device: &ProtocolObject<dyn MTLDevice>) -> DeviceInfo 
         task_dispatch: [0; 4],
         geometry_shader: false,
         hdr_metadata: false,
-        buffer_int64_atomics: false,
+        buffer_int64_atomics: buffer_int64_atomics(device),
         shader_integer_dot_product: false,
         packed_integer_dot_accelerated: false,
         max_image_dimension: MAX_IMAGE_DIMENSION,
