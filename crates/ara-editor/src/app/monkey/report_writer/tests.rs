@@ -69,3 +69,44 @@ fn background_errors_remain_failures_even_when_the_final_write_succeeds() -> io:
     assert_eq!(reports.report()["completedWrites"], 2);
     Ok(())
 }
+
+#[test]
+fn final_acceptance_observes_a_late_checkpoint_failure_before_serialization() -> io::Result<()> {
+    let (started, began) = mpsc::channel();
+    let (release, wait) = mpsc::channel();
+    let (saved, observed) = mpsc::channel();
+    let mut first = true;
+    let mut reports = Reports::spawn(PathBuf::new(), move |_, text| {
+        if std::mem::take(&mut first) {
+            let _ = started.send(());
+            wait.recv().map_err(io::Error::other)?;
+            Err(io::Error::other("late checkpoint failure"))
+        } else {
+            saved.send(text.to_owned()).map_err(io::Error::other)
+        }
+    })?;
+    reports.checkpoint("checkpoint".into())?;
+    began
+        .recv_timeout(Duration::from_secs(5))
+        .map_err(io::Error::other)?;
+    assert!(
+        reports.report()["error"].is_null(),
+        "The write is still in flight"
+    );
+    release.send(()).map_err(io::Error::other)?;
+    let drained = reports.drain_checkpoints();
+    let snapshot = json!({"accepted":drained.is_ok(),"reportWriter":reports.report()});
+    let final_write = reports.finish(ara_json::to_canonical_string(&snapshot));
+    assert!(drained.is_err() && final_write.is_err());
+    let bytes = observed
+        .recv_timeout(Duration::from_secs(5))
+        .map_err(io::Error::other)?;
+    let saved: Value = serde_json::from_str(&bytes).map_err(io::Error::other)?;
+    assert_eq!(saved["accepted"], false);
+    assert!(
+        saved["reportWriter"]["error"]
+            .as_str()
+            .is_some_and(|error| error.contains("late checkpoint failure"))
+    );
+    Ok(())
+}

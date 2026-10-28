@@ -88,6 +88,19 @@ impl Reports {
         Ok(())
     }
 
+    /// After input stops, observe every prior write before constructing final acceptance.
+    pub fn drain_checkpoints(&mut self) -> io::Result<()> {
+        self.collect();
+        while self.written < self.submitted {
+            let done = self
+                .completed
+                .recv()
+                .map_err(|_| io::Error::other("Monkey report worker disconnected"))?;
+            self.record(done);
+        }
+        self.check_error()
+    }
+
     /// After the frame loop, wait for the final authoritative snapshot in write order.
     pub fn finish(&mut self, text: String) -> io::Result<()> {
         self.sender()?
@@ -114,14 +127,18 @@ impl Reports {
     }
 
     fn collect(&mut self) {
-        for done in self.completed.try_iter() {
-            let ms = done.elapsed.as_secs_f64() * 1000.;
-            self.total_ms += ms;
-            self.max_ms = self.max_ms.max(ms);
-            self.written += 1;
-            if let Err(error) = done.result {
-                self.error.get_or_insert_with(|| error.to_string());
-            }
+        while let Ok(done) = self.completed.try_recv() {
+            self.record(done);
+        }
+    }
+
+    fn record(&mut self, done: Completed) {
+        let ms = done.elapsed.as_secs_f64() * 1000.;
+        self.total_ms += ms;
+        self.max_ms = self.max_ms.max(ms);
+        self.written += 1;
+        if let Err(error) = done.result {
+            self.error.get_or_insert_with(|| error.to_string());
         }
     }
 

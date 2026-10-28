@@ -626,9 +626,12 @@ impl Monkey {
     pub fn finish(&mut self) -> ara_ui::Result<()> {
         self.flush_journal()?;
         self.watchdog.finish();
+        let prior_writes = self.reports.drain_checkpoints();
+        self.report_io_failed |= prior_writes.is_err();
         let text = self.report_text(true)?;
         let result = self.reports.finish(text);
         self.report_io_failed |= result.is_err();
+        prior_writes?;
         result?;
         Ok(())
     }
