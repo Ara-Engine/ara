@@ -15,7 +15,7 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 fn scratch(name: &str) -> PathBuf {
     let target = std::env::var_os("CARGO_TARGET_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(std::env::temp_dir()).join("ara-migration-tests"));
+        .unwrap_or_else(|| std::env::temp_dir().join("ara-migration-tests"));
     let root = target.join("migration-v4").join(format!(
         "{name}-{}-{}",
         std::process::id(),
