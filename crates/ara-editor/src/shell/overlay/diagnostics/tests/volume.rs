@@ -255,6 +255,9 @@ fn reflection_probe_cages_use_runtime_world_pose_abs_scale_and_actual_capture_po
         priority: 0,
         resolution: 256,
         intensity: 1.,
+        // Identity and bake policy don't affect the box geometry checked here.
+        key: 0,
+        explicit: true,
     };
     expected.validate().unwrap();
     // Dash endpoints include every projection corner, even though interior dash
