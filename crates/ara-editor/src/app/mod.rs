@@ -288,9 +288,13 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             },
         )?;
     }
-    // SAFETY: Both native owners are retained until explicit idle/destroy after the loop, including errors.
-    let mut present =
-        unsafe { gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &window)? };
+    // Offscreen runs keep native input windows but render only into GPU textures.
+    let mut present = if offscreen {
+        None
+    } else {
+        // SAFETY: Native owners live until the explicit idle/destroy after the loop.
+        Some(unsafe { gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &window)? })
+    };
     let mut scene_view = viewport::SceneView::default();
     let mut verification = options
         .verify
@@ -1340,11 +1344,14 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             };
             let dpi = options.dpi.unwrap_or_else(|| native.dpi()) * windows::ui_scale(&editor);
             if main_drawable && (physical != last_physical || dpi != last_dpi) {
-                // SAFETY: Wait before destroying a swapchain referenced by the presentation queue.
-                unsafe {
-                    renderer.gpu().wait_idle()?;
-                    gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), &mut present);
-                    present = gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &window)?;
+                if let Some(present) = &mut present {
+                    // SAFETY: Wait before replacing a live native swapchain.
+                    unsafe {
+                        renderer.gpu().wait_idle()?;
+                        gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), present);
+                        *present =
+                            gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &window)?;
+                    }
                 }
                 last_physical = physical;
                 last_dpi = dpi;
@@ -1487,6 +1494,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     || shell.drafts() != &edit_before.1);
             dirty |= scene_dirty;
             let mut scene_overlays = None;
+            let mut gpu_surface_submissions = 0;
+            let mut native_presentations = 0;
             // A window that cannot show anything (minimized, occluded; the probe's
             // unpresentable scenario) renders and presents nothing: a driver's present
             // path may stall until it shows. Offscreen verification windows render.
@@ -1505,7 +1514,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             // SAFETY: `present` was created on this renderer's device.
             let ui_ready = showable
                 && gpu.wait_previous_for(UI_STALL_WAIT)?
-                && (!main_showable || unsafe { present.settled(renderer.gpu(), UI_STALL_WAIT)? });
+                && (!main_showable
+                    || match &mut present {
+                        // SAFETY: This native presentation belongs to the renderer device.
+                        Some(present) => unsafe { present.settled(renderer.gpu(), UI_STALL_WAIT)? },
+                        None => true,
+                    });
             if !ui_ready {
                 std::thread::sleep(std::time::Duration::from_millis(10));
             }
@@ -1618,15 +1632,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                         shell.ui.size.map(|v| v.round() as u32),
                         TextMode::Raster,
                     )?;
+                    gpu_surface_submissions += 1;
                 }
                 render_ms = render_at.elapsed().as_secs_f64() * 1000.;
                 let graph_gpu = graph_start.map(|start| start.elapsed().as_secs_f64() * 1000.);
                 let present_at = Instant::now();
-                if main_showable {
+                if main_showable && let Some(present) = &mut present {
                     // SAFETY: UI submission is complete or GPU-ordered before the blit
                     // (one queue), image is CopySource and all native owners are live.
                     unsafe {
-                        gpu.present(crate::gpu::ui_device(renderer.gpu()), &mut present)?;
+                        gpu.present(crate::gpu::ui_device(renderer.gpu()), present)?;
+                        native_presentations += 1;
                     }
                 }
                 present_ms = present_at.elapsed().as_secs_f64() * 1000.;
@@ -1695,9 +1711,11 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 // As the main window: nothing to show, or a stalled UI frame or blit,
                 // waits.
                 let showable = offscreen || float.window.presentable();
-                // SAFETY: each float's presentation was created on this device.
-                let mut settled =
-                    || unsafe { float.present.settled(renderer.gpu(), UI_STALL_WAIT) };
+                let mut settled = || match &mut float.present {
+                    // SAFETY: Each native presentation was created on this device.
+                    Some(present) => unsafe { present.settled(renderer.gpu(), UI_STALL_WAIT) },
+                    None => Ok(true),
+                };
                 if !showable || !gpu.wait_previous_for(UI_STALL_WAIT)? || !settled()? {
                     continue;
                 }
@@ -1725,9 +1743,13 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     surface.ui.size.map(|v| v.round() as u32),
                     TextMode::Raster,
                 )?;
-                // SAFETY: UI submission is complete, image is CopySource and both native owners are live.
-                unsafe {
-                    gpu.present(crate::gpu::ui_device(renderer.gpu()), &mut float.present)?;
+                gpu_surface_submissions += 1;
+                if let Some(present) = &mut float.present {
+                    // SAFETY: UI output and both native owners remain live.
+                    unsafe {
+                        gpu.present(crate::gpu::ui_device(renderer.gpu()), present)?;
+                    }
+                    native_presentations += 1;
                 }
                 if focused_float.as_deref() == Some(float.id.as_str()) {
                     native.text_input(
@@ -1806,6 +1828,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     Default::default()
                 };
                 let sample = responsiveness::Sample {
+                    offscreen_output: offscreen,
+                    gpu_surface_submissions,
+                    native_presentations,
                     cpu_ms,
                     host_wait_ms,
                     work_ms: host_wait_ms.map(|waited| (cpu_ms - waited - ui_wait_ms).max(0.)),
@@ -2208,10 +2233,14 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     };
     game_preview.destroy(&mut renderer, &mut gpu)?;
     scene_view.destroy(&mut renderer)?;
-    // SAFETY: Complete all presentation/UI submissions before native swapchain/surface destruction.
-    unsafe {
-        renderer.gpu().wait_idle()?;
-        gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), &mut present);
+    if let Some(present) = &mut present {
+        // SAFETY: Complete native presentation before destroying its owners.
+        unsafe {
+            renderer.gpu().wait_idle()?;
+            gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), present);
+        }
+    } else {
+        gpu.wait_previous()?;
     }
     floats.destroy(&renderer, &gpu);
     result.and(monkey_result)
@@ -2580,12 +2609,14 @@ fn route_event(
                 return Ok((false, false, false));
             }
             float.physical = size;
-            // SAFETY: Wait before replacing a swapchain referenced by presentation.
-            unsafe {
-                renderer.gpu().wait_idle()?;
-                gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), &mut float.present);
-                float.present =
-                    gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &float.window)?;
+            if let Some(present) = &mut float.present {
+                // SAFETY: Wait before replacing a live native swapchain.
+                unsafe {
+                    renderer.gpu().wait_idle()?;
+                    gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), present);
+                    *present =
+                        gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &float.window)?;
+                }
             }
             shell.resize_surface(&id, size.map(|v| v as f32 / float_dpi))?;
             shell.rebuild(editor)?;

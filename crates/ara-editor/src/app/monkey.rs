@@ -68,6 +68,9 @@ pub(super) struct Monkey {
     held_buttons: BTreeSet<u8>,
     held_keys: BTreeSet<i32>,
     frames: u64,
+    offscreen_output: Option<bool>,
+    gpu_surface_submissions: u64,
+    native_presentations: u64,
     rejected: u64,
     panics: Vec<Value>,
     hangs: u64,
@@ -134,6 +137,9 @@ impl Monkey {
             held_buttons: BTreeSet::new(),
             held_keys: BTreeSet::new(),
             frames: 0,
+            offscreen_output: None,
+            gpu_surface_submissions: 0,
+            native_presentations: 0,
             rejected: 0,
             panics: Vec::new(),
             hangs: 0,
@@ -445,6 +451,11 @@ impl Monkey {
         stages: Option<&super::responsiveness::Sample>,
     ) {
         self.frames += 1;
+        if let Some(stages) = stages {
+            self.offscreen_output = Some(stages.offscreen_output);
+            self.gpu_surface_submissions += u64::from(stages.gpu_surface_submissions);
+            self.native_presentations += u64::from(stages.native_presentations);
+        }
         self.watchdog.progress(self.actions, None);
         let ms = elapsed.as_secs_f64() * 1000.;
         self.max_frame_ms = self.max_frame_ms.max(ms);
@@ -755,6 +766,8 @@ impl Monkey {
                 "durationCompleted":self.started.elapsed()>=self.budget,
                 "termination":self.termination(),
                 "actions":self.actions,"frames":self.frames,"rejectedInputs":self.rejected,
+                "offscreenGpuOutput":self.offscreen_output,"gpuSurfaceSubmissions":self.gpu_surface_submissions,
+                "nativePresentations":self.native_presentations,
                 "requestedSteps":self.max_steps,"workloadActions":self.workload_actions,"cleanupActions":self.cleanup_actions,
                 "cleanupIncomplete":self.cleanup_incomplete||!self.resources_drained(),
                 "endDrain":{"actions":self.drain_actions,"limitSeconds":DRAIN.as_secs(),"seconds":self.draining_since.map(|since|since.elapsed().as_secs_f64()),

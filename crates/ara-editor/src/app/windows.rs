@@ -1,5 +1,6 @@
-//! Floating OS windows for torn-off panels (D23): one SDL window, swapchain and
-//! UI target each, on the shared device. The layout owns them; this module keeps
+//! Floating OS windows for torn-off panels (D23): one SDL window and UI target
+//! each, plus presentation for visible hosts, on the shared device. The layout
+//! owns them; this module keeps
 //! the OS windows in step with it, routes their input through the shell's
 //! surfaces, tracks cross-window tab drags and persists moved window rects.
 use super::*;
@@ -8,7 +9,8 @@ use super::*;
 pub(super) struct Float {
     pub id: String,
     pub window: Window,
-    pub present: Present,
+    /// Hidden offscreen hosts render to their UI target without presentation.
+    pub present: Option<Present>,
     pub sdl: u32,
     /// `NativeUi` render-target key; the main window is 0.
     pub key: u32,
@@ -112,10 +114,15 @@ impl Floats {
             .collect();
         for index in closing {
             let mut float = self.windows.remove(index);
-            // SAFETY: Wait for presentation before destroying its swapchain and surface.
-            unsafe {
-                renderer.gpu().wait_idle()?;
-                gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), &mut float.present);
+            if let Some(present) = float.present.as_mut() {
+                // SAFETY: Wait for presentation before destroying its swapchain and surface.
+                unsafe {
+                    renderer.gpu().wait_idle()?;
+                    gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), present);
+                }
+            } else {
+                // Offscreen targets have UI submissions, but no native presentation to retire.
+                gpu.wait_previous()?;
             }
             gpu.release_target(float.key);
             changed = true;
@@ -144,9 +151,12 @@ impl Floats {
                 "../../../../assets/brand/icons/engine/ara-engine-64.png"
             ));
             crate::native::frame::style(window.raw(), editor.state.light);
-            // SAFETY: The shared device and the new window outlive this presentation.
-            let present =
-                unsafe { gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &window)? };
+            let present = if self.hidden {
+                None
+            } else {
+                // SAFETY: The shared device and the new window outlive this presentation.
+                Some(unsafe { gpu.create_present(crate::gpu::ui_device(renderer.gpu()), &window)? })
+            };
             self.next_key += 1;
             let physical = window.size()?;
             let scale = window.display_scale().max(0.25) * ui_scale(editor);
@@ -219,9 +229,11 @@ impl Floats {
     /// Destroy every window's presentation after the device is idle.
     pub fn destroy(&mut self, renderer: &Renderer, gpu: &NativeUi) {
         for float in &mut self.windows {
-            // SAFETY: Called after device idle, before the windows are dropped.
-            unsafe {
-                gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), &mut float.present);
+            if let Some(present) = float.present.as_mut() {
+                // SAFETY: Called after device idle, before the windows are dropped.
+                unsafe {
+                    gpu.retire_present(crate::gpu::ui_device(renderer.gpu()), present);
+                }
             }
         }
         self.windows.clear();

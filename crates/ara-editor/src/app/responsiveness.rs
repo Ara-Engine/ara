@@ -186,7 +186,14 @@ pub(super) struct Sample {
     /// `None` when the device waits are unavailable. Another thread's waits on the
     /// same device count too, so this can understate, never overstate, the work.
     pub work_ms: Option<f64>,
+    /// Main UI output was submitted, either to an offscreen texture or native blit.
     pub presented: bool,
+    /// Offscreen output draws into GPU textures without creating native swapchains.
+    pub offscreen_output: bool,
+    /// UI render submissions across the main and floating surface targets.
+    pub gpu_surface_submissions: u32,
+    /// Actual native window presentations, separate from offscreen GPU output.
+    pub native_presentations: u32,
     /// A new embedded Game frame was shown (`GameView::update`).
     pub game_frame: bool,
     pub rebuilds: u32,
@@ -197,7 +204,7 @@ pub(super) struct Sample {
     pub frame_ms: f64,
     pub rows_ms: f64,
     pub work: ara_ui::Work,
-    /// Injected input to the end of present, when this frame carried input.
+    /// Injected input to the end of output submission, when this frame carried input.
     pub input_to_present_ms: Option<f64>,
     /// The renderer holds a completed Scene frame (`Renderer::presentation_ready`).
     pub presentation_ready: bool,

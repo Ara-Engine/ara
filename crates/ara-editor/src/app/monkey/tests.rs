@@ -5,6 +5,32 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
+#[test]
+fn offscreen_output_evidence_counts_gpu_submissions_separately_from_native_presentation() {
+    let project = Project::new();
+    let output = project.0.join("output-counters");
+    let mut runner = Monkey::new(42, Duration::from_secs(60), Some(1), &output).unwrap();
+    let sample = super::super::responsiveness::Sample {
+        offscreen_output: true,
+        gpu_surface_submissions: 3,
+        native_presentations: 0,
+        presented: true,
+        ..Default::default()
+    };
+    runner.record_frame_with_stages(Duration::from_millis(2), &sample);
+    runner.finish().unwrap();
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(output.join("monkey.json")).unwrap())
+            .unwrap();
+    assert_eq!(report["offscreenGpuOutput"], true);
+    assert_eq!(report["gpuSurfaceSubmissions"], 3);
+    assert_eq!(report["nativePresentations"], 0);
+    assert_eq!(
+        report["accepted"], false,
+        "Output counters alone never establish acceptance"
+    );
+}
+
 struct Project(PathBuf);
 impl Project {
     fn new() -> Self {
