@@ -93,6 +93,25 @@ impl TextInput {
     pub fn value(&self) -> &str {
         &self.value
     }
+    /// Acknowledge the current value only after the host accepts its model edit.
+    /// Clears draft Undo/Redo while preserving value, selection and caret. Active
+    /// IME composition is left intact and returns false instead of being accepted.
+    pub fn accept_current(&mut self) -> bool {
+        if self.composition.is_some() {
+            return false;
+        }
+        self.undo.clear();
+        self.redo.clear();
+        true
+    }
+    /// Whether an unaccepted local edit can be undone before host history.
+    pub fn can_undo(&self) -> bool {
+        !self.undo.is_empty()
+    }
+    /// Whether a locally undone draft can be redone before host history.
+    pub fn can_redo(&self) -> bool {
+        !self.redo.is_empty()
+    }
     /// Selected committed UTF-8 range.
     pub fn selection(&self) -> Range<usize> {
         self.anchor.min(self.caret)..self.anchor.max(self.caret)
