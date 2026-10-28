@@ -57,7 +57,7 @@ fn offline_file_preparation_finishes_before_the_cli_exits_including_undo_and_red
     assert_eq!(ara_in(&root, &["init"]).0, 0);
     fs::create_dir_all(root.join("content/scripts/Game")).expect("scripts");
     fs::write(root.join("content/scripts/Game/Door.cs"), "before\n").expect("source");
-    let args = r#"{"path":"scripts/Game/Door.cs","baseHash":"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb","text":"after\n"}"#;
+    let args = r#"{"path":"content/scripts/Game/Door.cs","baseHash":"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb","text":"after\n"}"#;
     let (code, stdout, stderr) = ara_in(&root, &["do", "source.replace", "--args", args, "--json"]);
     assert_eq!(code, 0, "{stdout}{stderr}");
     assert!(

@@ -2,7 +2,8 @@
 //!
 //! Writes `ara.project.json` (name and main scene), `AGENTS.md` (engine conventions), `.gitattributes`
 //! (`ara merge` as the merge driver for documents), `.gitignore` (`.ara/` local
-//! state), `.mcp.json` (the MCP server for Claude Code / Codex) and a starter scene.
+//! state and `builds/` output), `.mcp.json`, project settings, export presets and
+//! a starter scene in the shared `content/` authored root (D30).
 //! Existing files are kept; `.gitignore`/`.gitattributes` get missing lines
 //! appended. The `merge.ara` driver is configured at the git work-tree root, or
 //! with an explicit `--configure-git` opt-in for a nested project.

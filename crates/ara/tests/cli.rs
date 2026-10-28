@@ -45,7 +45,7 @@ fn sample_project_checks_clean_and_is_canonical() {
         "prefabs/crate.prefab",
         "prefabs/stack.prefab",
     ]
-    .map(|d| fixtures().join("project").join(d));
+    .map(|d| fixtures().join("project/content").join(d));
     let args: Vec<&str> = ["fmt", "--check"]
         .into_iter()
         .chain(docs.iter().map(|d| path(d)))

@@ -108,7 +108,7 @@ fn source_replace_has_offline_undo_redo_and_rejects_external_changes() {
     let _ = fs::remove_dir_all(&dir);
     copy_dir(&fixtures(), &dir);
     fs::create_dir_all(dir.join("content/scripts/Game")).expect("module directory");
-    let path = "scripts/Game/Door.cs";
+    let path = "content/scripts/Game/Door.cs";
     fs::write(dir.join(path), "before\n").expect("source");
     let mut h = open(&dir, 2041);
     let session = begin(&mut h, "agent:fixer");

@@ -34,11 +34,11 @@ fn source_job_waits_for_materialization_and_reports_restore_failures() {
         let response = call(
             &mut host,
             "cmd.apply",
-            json!({"session":session,"doc":"levels/arena.scene","why":"replace source", "commands":[{"cmd":"source.replace","args":{"path":"Source.cs","baseHash":FileState::bytes(before).hash,"text":after}}]}),
+            json!({"session":session,"doc":"levels/arena.scene","why":"replace source", "commands":[{"cmd":"source.replace","args":{"path":"content/Source.cs","baseHash":FileState::bytes(before).hash,"text":after}}]}),
         );
         let job = response["job"].as_str().expect("preparation job");
         let deadline = Instant::now() + Duration::from_secs(30);
-        while host.store().workspace().file_state("Source.cs")
+        while host.store().workspace().file_state("content/Source.cs")
             != Some(&FileState::bytes(after.as_bytes()))
         {
             host.tick();
