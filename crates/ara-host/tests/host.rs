@@ -908,12 +908,13 @@ fn external_edits_merge_in_or_are_reported_without_overwriting() {
 #[test]
 fn equivalent_default_spelling_after_undo_keeps_redo_but_real_external_edits_are_journaled() {
     let dir = project("default-echo");
-    fs::remove_file(dir.join("types/render.types.json"))
+    let content = dir.join(ara_doc::AUTHORING_ROOT);
+    fs::remove_file(content.join("types/render.types.json"))
         .expect("replace fixture schemas with runtime schemas");
     let mut disk: Value = serde_json::from_str(&scene(&dir)).expect("scene JSON");
     disk["records"]["e_flr1"]["MeshRenderer"] = json!({"materialOverrides":[{"primitive":0,"material":"@prefabs/stack.prefab#pf_stack001"}]});
     fs::write(
-        dir.join("levels/arena.scene"),
+        content.join("levels/arena.scene"),
         ara_json::to_canonical_string(&disk),
     )
     .expect("renderer defaults");
@@ -956,7 +957,7 @@ fn equivalent_default_spelling_after_undo_keeps_redo_but_real_external_edits_are
     disk["records"]["e_flr1"]["Transform"]["scale"] = json!([40.0, 0.5, 40.0]);
     disk["records"]["e_flr1"]["MeshRenderer"]["materialOverrides"][0]["primitive"] = json!(0);
     fs::write(
-        dir.join("levels/arena.scene"),
+        content.join("levels/arena.scene"),
         serde_json::to_string_pretty(&disk).expect("equivalent JSON"),
     )
     .expect("default spelling");
@@ -981,7 +982,7 @@ fn equivalent_default_spelling_after_undo_keeps_redo_but_real_external_edits_are
     let mut disk: Value = serde_json::from_str(&scene(&dir)).expect("saved scene");
     disk["records"]["e_flr1"]["Transform"]["position"] = json!([4, 0, 0]);
     fs::write(
-        dir.join("levels/arena.scene"),
+        content.join("levels/arena.scene"),
         ara_json::to_canonical_string(&disk),
     )
     .expect("real external edit");
