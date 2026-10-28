@@ -376,8 +376,8 @@ public static class ComponentExamples
     public static void UseReflectionProbe(Entity entity, in Tick tick)
     {
         ref var probe = ref World.Get<ReflectionProbe>(entity);
-        probe.Bounds = new Vector3(6, 2, 4);
-        probe.ProjectionBounds = new Vector3(6, 2, 4);
+        probe.Bounds = new Vector3(12, 4, 8);
+        probe.ProjectionBounds = new Vector3(12, 4, 8);
         probe.CaptureOffset = new Vector3(0, 1.5f, 0);
         probe.Priority = 1;
     }

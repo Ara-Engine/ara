@@ -1,4 +1,4 @@
-//! Fourteen native PSOs are retained by the renderer across content generations.
+//! Fifteen native PSOs are retained by the renderer across content generations.
 use super::*;
 use ara_gpu::vulkan::{PipelinePreparation, PipelinePreparationId};
 
@@ -41,6 +41,9 @@ pub(in crate::renderer) struct NativePipelines {
     pub forward_lit_front: Pipeline,
     /// The front faces of double-sided blended volumes with the High/Epic tier's code.
     pub forward_high_front: Pipeline,
+    /// The overdraw view's fragment count (`ViewMode::Overdraw`): the camera draws
+    /// again without the depth test, adding one per kept fragment.
+    pub overdraw: Pipeline,
 }
 
 impl NativePipelines {
@@ -56,7 +59,7 @@ impl NativePipelines {
 }
 
 /// Cooked recipe names, in `NativePipelines` field order.
-const RECIPES: [&str; 14] = [
+const RECIPES: [&str; 15] = [
     "native_shadow",
     "native_gbuffer",
     "native_forward",
@@ -71,6 +74,7 @@ const RECIPES: [&str; 14] = [
     "native_shadow_translucent",
     "native_forward_lit_front",
     "native_forward_high_front",
+    "native_overdraw",
 ];
 
 #[derive(Default)]
@@ -124,6 +128,7 @@ impl Renderer {
                     translucent,
                     forward_lit_front,
                     forward_high_front,
+                    overdraw,
                 ]: [Pipeline; RECIPES.len()] = handles
                     .try_into()
                     .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
@@ -142,6 +147,7 @@ impl Renderer {
                     translucent,
                     forward_lit_front,
                     forward_high_front,
+                    overdraw,
                 }));
             }
         }

@@ -923,6 +923,14 @@ impl Native {
         }
     }
 
+    /// Records the camera's opaque and forward draws (passes 4 and 5) into the
+    /// overdraw count (`ViewMode::Overdraw`).
+    pub(super) fn record_overdraw(&self, recorder: &mut Recorder, root: RootConstants) {
+        for pass in [4, 5] {
+            self.record_with(recorder, root, pass, self.pipelines.overdraw);
+        }
+    }
+
     /// Records the sorted forward draws (pass 5). Lit frames write colour, ids and
     /// motion only (nothing reads the G-buffer after them) and switch to the
     /// refractive PSOs for transmissive draws (`Culling::refract`); `high` selects

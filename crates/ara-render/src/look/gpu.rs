@@ -148,6 +148,8 @@ pub(crate) struct LookGpu {
     /// This frame draws triangle edges (`ViewMode::wire`): the renderer composites
     /// them after the post chain, here or in a deferred frame's `finish`.
     pub frame_wire: bool,
+    /// This frame counts fragments for the overdraw view (`ViewMode::Overdraw`).
+    pub frame_overdraw: bool,
     /// Frames are not shown (`Renderer::set_unseen`); probe volumes inherit it.
     pub unseen: bool,
     /// The renderer history slot a deferred frame left for `finish` to resolve into.
@@ -309,6 +311,7 @@ impl LookGpu {
             frame_dof: false,
             frame_motion: false,
             frame_wire: false,
+            frame_overdraw: false,
             unseen: false,
             deferred_history: None,
             settle: 0,

@@ -311,7 +311,9 @@ float3 specularDirection(float3 n,float3 v,float roughness){
 // visibility-bitmask pass's occlusion and near-field bounce (screenAmbient).
 // `rays`: the hybrid High/Epic variant (lighting_high_rt, D29) reads ray-traced
 // reflections composited over screen-space ones (rtReflection) instead.
-float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false) {
+// `diffuseOnly`: the diffuse share alone (the gi_diffuse view, lighting_gi and
+// lighting_high_gi), a compile-time constant like `high`.
+float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false,bool diffuseOnly=false) {
     // Material occlusion policy (dynamicOcclusion) for forward surfaces and ray hits,
     // which have no screen-space occlusion of their own; deferred pixels arrive with it.
     if(!gathered && dynamicOcclusion(l))s.ao=1;
@@ -349,7 +351,7 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
         [branch]if(r.a<0.999||debug!=0){
             uint mask=gathered?captureTileMask(f,l,p):l.captureInfo[1].z;
             float4 c=captureReflection(l,world,s.normal,v,(debug&CAPTURE_DEBUG_MIRROR)!=0?0:s.roughness,mask);
-            if((debug&CAPTURE_DEBUG_MIRROR)!=0)return c.rgb;
+            if(!diffuseOnly&&(debug&CAPTURE_DEBUG_MIRROR)!=0)return c.rgb;
             spec=lerp(spec,c.rgb,c.a);
             // Under a capture, SSR's low-confidence fringe fades into it smoothly.
             if(!rays&&(debug&CAPTURE_DEBUG_ONLY)==0)r.a=lerp(r.a,smoothstep(0.2,0.9,r.a),c.a);
@@ -376,7 +378,7 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
         // already see their surroundings, then ambient occlusion again).
         incident=ambient*multiBounce(s.ao,s.albedo);specular=lerp(spec*multiBounce(specularOcclusion(o.nv,s.ao,s.roughness),o.f0),r.rgb,gathered?r.a:0);
     }
-    return incident*o.diffuse+specular*o.albedo;
+    return diffuseOnly?incident*o.diffuse:incident*o.diffuse+specular*o.albedo;
 }
 // ibl with the surface's own specularLobes.
 float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false){

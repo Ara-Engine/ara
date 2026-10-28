@@ -38,10 +38,10 @@ device and per-view upload state; no simulation, window or process code.
   fade over 12 presented frames using material rows only; captures finish the fade.
 - Probe GI is enabled by default, acquired asynchronously and disk-cached; its early layout lets `preallocate_startup_resources` reserve and prime the volume/staging behind loading.
   Live frames poll; initial GI bounces use bounded 4096-probe windows, then relight at the preset budget. Readiness still waits for all bounces/fade. `wait_probe_gi` drains pending clears at an explicit capture boundary.
-- `prepare_with(&frame, resolver)` / `present_with`: native local geometry, compressed
-  textures, instance poses and changed skin palettes. The resolver reads published
-  terrain/material/prefab assets only on structural changes. Model-only callers can
-  use `prepare` / `present` without a resolver.
+- `prepare_with(&frame, resolver)` / `present_with`: native local geometry, compressed textures, instance poses and changed skin palettes.
+  The resolver reads published terrain/material/prefab assets only on structural changes; model-only callers use `prepare` / `present`.
+- `probes::ProbeCaptures` (J7; `RasterView::probes`/`probes_mut`, `Presenter::set_probe_scene`): authored `ReflectionProbe` capture jobs (`recapture`, `cancel`, `job`, `snapshot`; derived work, no ops), ticked in `prepare`: bounded bake steps, readbacks without waits, `<sourceHash>.capture` written and read off-thread under `.ara/cache/probes`.
+  `sourceHash` is portable (content, lighting, probe settings and pose). A job completes on its hashed receipt; the cache file follows (a write failure is a row diagnostic); an image that never arrives is read back again after 120 frames and fails the generation after 240. Editors request; presenter views (Play, exports) capture what the cache lacks. `poll_probe_retirement` retires a replaced view's work. Authored probes always bake at High/Epic; `ARA_REFLECTION_CAPTURES=1` gates only automatic placement (`captures.rs`). Tests: `raster/tests/probes.rs`; `raster/tests/views.rs` checks the gi_diffuse and overdraw views (overdraw against CPU ray counts).
 - `output()` is a completed CopySource image independent of view targets; always
   pair it with `output_size()`. `size()` is the requested extent, which can differ
   while a failed replacement retains the last good output. The raster `renderer()`
@@ -71,8 +71,7 @@ device and per-view upload state; no simulation, window or process code.
   GI follows edits: `gi::Mobility` keeps instances that moved within 30 frames (and
   deforming geometry) out of the surfaces; when that set changes, or a new
   generation fits the lattice, the worker's persistent CPU tracer re-traces only
-  nearby probes (`gi_cpu::affected`), which `Renderer::update_probe_surfaces` blends in.
-  `tests/gi_edits.rs` checks a moved block's old spot against a fresh view.
+  nearby probes (`gi_cpu::affected`), which `Renderer::update_probe_surfaces` blends in. `tests/gi_edits.rs` checks a moved block's old spot against a fresh view.
   Emissive surfaces (`emitters.rs`, above 5 cd/m2) light the scene directly. A
   worker thread samples each emitter's triangles through its emissive map into
   0.75 m patches and casts rays against its own mesh: the flux escaping the

@@ -1,6 +1,7 @@
 //! Reflection captures for the raster renderer (`ara_render::look::captures`): the
 //! frame's enabled authored `ReflectionProbe` components in world space, or, without
-//! any, automatic placement over the published content (computed once per generation).
+//! any and when the quality opts in, automatic placement over the published content
+//! (computed once per generation).
 use ara_render::instanced::Scene;
 use ara_render::look::captures::{CaptureSpec, auto_place};
 use ara_runtime::extract::{ProbeView, RenderFrame};
@@ -16,13 +17,14 @@ pub(crate) struct Placement {
 impl Placement {
     /// The captures the renderer should bake for `frame` over content `scene`
     /// (generation `key`): authored ones when the frame has any, else at most
-    /// `limit` automatic ones (zero: the quality bakes none).
+    /// `limit` automatic ones when `automatic` (zero: the quality bakes none).
     pub(crate) fn specs(
         &mut self,
         frame: &RenderFrame,
         scene: &Scene,
         key: u64,
         limit: usize,
+        automatic: bool,
     ) -> Vec<CaptureSpec> {
         if limit == 0 {
             return Vec::new();
@@ -34,6 +36,9 @@ impl Placement {
                 .filter(|v| v.probe.enabled && v.probe.invalid().is_none())
                 .map(authored)
                 .collect();
+        }
+        if !automatic {
+            return Vec::new();
         }
         if self.key != Some((key, limit)) {
             self.automatic = auto_place(scene, limit);
@@ -71,6 +76,9 @@ pub(crate) fn authored(view: &ProbeView) -> CaptureSpec {
         priority: c.priority,
         resolution: c.capture_resolution,
         intensity: c.intensity.max(0.),
+        key: view.entity,
+        // Authored probes bake through capture jobs (`crate::probes`) or cache loads.
+        explicit: true,
     }
 }
 

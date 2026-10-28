@@ -262,6 +262,7 @@ fn fork_look(
         frame_dof: false,
         frame_motion: false,
         frame_wire: false,
+        frame_overdraw: false,
         unseen: false,
         deferred_history: None,
         settle: 0,

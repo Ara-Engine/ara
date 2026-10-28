@@ -29,8 +29,22 @@ impl Renderer {
         } else {
             capabilities.reflection_probes = true;
         }
-        deny("giDiffuse", "the gi_diffuse view is not in this build yet");
-        deny("overdraw", "the overdraw view is not in this build yet");
+        if self.is_native() {
+            capabilities.gi_diffuse = true;
+        } else {
+            deny(
+                "giDiffuse",
+                "the gi_diffuse view shades on the native raster renderer only",
+            );
+        }
+        if self.is_native() {
+            capabilities.overdraw = true;
+        } else {
+            deny(
+                "overdraw",
+                "the overdraw view counts the native raster renderer's draws only",
+            );
+        }
         capabilities
     }
 

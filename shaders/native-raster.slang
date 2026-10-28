@@ -291,6 +291,14 @@ GBuffer nativeGeometryFragment(Varying v,bool front:SV_IsFrontFace){return geome
 GBuffer nativeGeometryTopFragment(Varying v,bool front:SV_IsFrontFace){return geometry<0>(v,front);}
 [shader("fragment")]
 void nativeShadowFragment(ShadowVarying shadow){Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);if(m.pbr.flags.x==1 && sampleMap(m,0,v).a*m.pbr.color.a<m.pbr.surface.w)discard;}
+// The overdraw view (ViewMode::Overdraw, Renderer `Overdraw.Count`): the camera's
+// draws again without the depth test, each fragment adding one to the count target
+// through premultiplied blending (alpha 0). Masked materials discard by the casters'
+// alpha test, so only fragments the raster keeps count.
+[shader("vertex")]
+ShadowVarying nativeOverdrawVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){Varying v=nativeVertex(vertex,instance,false,true);ShadowVarying s;s.clip=v.clip;s.uv=v.uv;s.uv1=v.uv1;s.material=v.material;return s;}
+[shader("fragment")]
+float4 nativeOverdrawFragment(ShadowVarying shadow):SV_Target0{Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);if(m.pbr.flags.x==1 && sampleMap(m,0,v).a*m.pbr.color.a<m.pbr.surface.w)discard;return float4(1,0,0,0);}
 // Translucent sun casters' film opacity (look-translucent.slangh): coverage times the
 // share the film stops, blended ONE, ONE_MINUS_SRC_ALPHA from a zero colour over a
 // map cleared to one, so the map keeps the product of (1 - opacity) over every film.

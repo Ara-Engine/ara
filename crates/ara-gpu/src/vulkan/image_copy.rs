@@ -16,6 +16,7 @@ fn block(format: vk::Format) -> Result<(u32, u64)> {
         | vk::Format::R8G8B8A8_SRGB
         | vk::Format::D32_SFLOAT
         | vk::Format::R32_SFLOAT => (1, 4),
+        vk::Format::R16_SFLOAT => (1, 2),
         _ => return Err(GpuError::Contract("Unsupported image copy format".into())),
     })
 }

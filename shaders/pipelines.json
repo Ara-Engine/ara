@@ -73,10 +73,44 @@
       "vertex_stride": 0
     }
   },
+  "lighting_gi": {
+    "entries": {
+      "fullscreenVertex": "vertex",
+      "lightingGiFragment": "fragment"
+    },
+    "source": "baseline.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        97
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "lighting_high": {
     "entries": {
       "fullscreenVertex": "vertex",
       "lightingHighFragment": "fragment"
+    },
+    "source": "baseline.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        97
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "lighting_high_gi": {
+    "entries": {
+      "fullscreenVertex": "vertex",
+      "lightingHighGiFragment": "fragment"
     },
     "source": "baseline.slang",
     "state": {
@@ -849,6 +883,23 @@
       "vertex_stride": 0
     }
   },
+  "native_overdraw": {
+    "entries": {
+      "nativeOverdrawFragment": "fragment",
+      "nativeOverdrawVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": true,
+      "color_formats": [
+        76
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "native_shadow": {
     "entries": {
       "nativeShadowFragment": "fragment",
@@ -890,7 +941,7 @@
     "state": {
       "blend": false,
       "color_formats": [
-        9
+        76
       ],
       "depth_format": 126,
       "depth_test": true,
