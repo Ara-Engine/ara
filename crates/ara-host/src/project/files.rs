@@ -63,7 +63,13 @@ pub struct AuthoredFile {
 /// Derived roots are skipped only at the project root, so settings/builds/ is authored.
 pub fn authored_files(root: &Path, db: &SchemaDb) -> Result<Vec<AuthoredFile>, Diagnostic> {
     let mut out = Vec::new();
-    let authored = authored_root(root);
+    // Explicit subdirectory scans (for example editor layouts) have no marker.
+    // Marked projects always use the current authored boundary.
+    let authored = if root.join(super::MARKER).is_file() {
+        authored_root(root)
+    } else {
+        root.to_path_buf()
+    };
     if authored == root {
         walk(root, root, root, AuthoredScope::Authored, db, &mut out)?;
     } else {

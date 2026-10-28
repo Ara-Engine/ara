@@ -21,6 +21,14 @@ impl Project {
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
+        std::fs::create_dir_all(root.join("settings")).unwrap();
+        std::fs::write(
+            root.join("settings/ara.imports"),
+            ara_asset::ProjectImportSettings::default()
+                .canonical_text()
+                .unwrap(),
+        )
+        .unwrap();
         std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("models")).unwrap();
         write(
             &root.join("ara.project.json"),

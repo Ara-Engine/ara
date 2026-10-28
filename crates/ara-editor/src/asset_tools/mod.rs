@@ -29,8 +29,8 @@ pub(crate) fn prepare(project: &mut ara_host::Project) -> anyhow::Result<()> {
     // and material/VFX commands. Only generic canvas commands are editor additions.
     ara_graph::commands::register(&mut project.registry, &mut project.db);
     let mut files = Vec::new();
-    ara_host::project::walk_documents(&project.root, &project.db, &mut files);
-    import_files(&project.root, &mut files)?;
+    ara_host::project::walk_documents(&project.authored_root, &project.db, &mut files);
+    import_files(&project.authored_root, &mut files)?;
     let editor_layouts = project.root.join(".ara/editor");
     if editor_layouts.is_dir() {
         ara_host::project::walk_documents(&editor_layouts, &project.db, &mut files);
@@ -46,11 +46,11 @@ pub(crate) fn prepare(project: &mut ara_host::Project) -> anyhow::Result<()> {
                     id.to_string(),
                     if kind == "import" {
                         project
-                            .rel(&file)
+                            .reference_path(&project.rel(&file))
                             .trim_end_matches(".import.json")
                             .to_owned()
                     } else {
-                        project.rel(&file)
+                        project.reference_path(&project.rel(&file)).to_owned()
                     },
                     Some(kind),
                 );
@@ -149,7 +149,10 @@ impl Service for AssetService {
         {
             return Err(vec![crate::invalid("source path must stay in the project")]);
         }
-        let sidecar = format!("{}.import.json", p.path);
+        let sidecar = cx
+            .store()
+            .workspace()
+            .storage_path(&format!("{}.import.json", p.path));
         if method == "editor.asset.import"
             && !cx
                 .store()

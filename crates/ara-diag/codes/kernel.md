@@ -1040,10 +1040,12 @@ A malformed `.ara/journal` line is skipped with a warning. If a decoded transact
 Causes:
 - A truncated or malformed journal line.
 - A transaction's revision or operations no longer fit the restored store or available documents.
+- Layout migration found committed native edits newer than a confirmed on-disk document save; migration stops before changing files so it cannot hide those edits.
 
 Fixes:
 - Preserve a copy of `.ara/journal` before investigating the reported line or transaction; compare `ara history`, `ara logs` and current documents to identify what was recovered.
 - Restore missing documents or recover the intended changes from a valid backup, then verify them with `ara check`; do not assume skipped or later transactions were applied.
+- For migration blocked by unsaved native edits, recover and save the journal with the Ara version that authored it, close that authority, and preview migration again. Keep `.ara/journal` and `.ara/file-history` intact.
 
 ## ARA1906 JOURNAL_REPLAYED: Unsaved transactions recovered
 owner: ara-host

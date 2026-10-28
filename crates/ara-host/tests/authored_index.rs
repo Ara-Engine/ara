@@ -21,6 +21,21 @@ fn scratch() -> PathBuf {
 }
 
 #[test]
+fn explicit_directory_scan_does_not_append_another_authored_root() {
+    let root = scratch();
+    let layouts = root.join(".ara/editor");
+    fs::create_dir_all(&layouts).expect("editor layouts");
+    let graph = layouts.join("animation.graph");
+    fs::write(&graph, "{}").expect("private layout");
+    let entries =
+        authored_files(&layouts, &ara_schema::SchemaDb::new()).expect("directory inventory");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].path, "animation.graph");
+    assert_eq!(entries[0].storage_path, "animation.graph");
+    assert_eq!(entries[0].scope, AuthoredScope::Authored);
+}
+
+#[test]
 fn modern_index_separates_scope_and_storage_and_preserves_free_nested_folders() {
     let scratch = scratch();
     let root = scratch.as_path();

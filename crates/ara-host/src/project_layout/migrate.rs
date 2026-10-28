@@ -260,7 +260,12 @@ impl Migration {
                     .map_err(|error| problem(error.to_string()))?
                     .to_string_lossy()
                     .replace('\\', "/");
-                let logical = relative
+                let target_relative = target
+                    .strip_prefix(&migration.root)
+                    .map_err(|error| problem(error.to_string()))?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                let logical = target_relative
                     .strip_prefix(&format!("{}/", super::AUTHORING_ROOT))
                     .map(str::to_owned)
                     .unwrap_or_else(|| references::path(&relative, &mappings));

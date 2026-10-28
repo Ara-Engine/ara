@@ -577,9 +577,9 @@ impl PlayService {
         let wanted = scene
             .map(str::to_owned)
             .ok_or_else(|| fail(codes::REQUEST, "no scene given and no project main scene"))?;
-        let (_, doc) = workspace
-            .docs()
-            .find(|(path, doc)| *path == wanted || doc.id.as_str() == wanted)
+        let doc = workspace
+            .find(&wanted)
+            .and_then(|id| workspace.doc(id.as_str()))
             .ok_or_else(|| {
                 fail(
                     codes::REQUEST,

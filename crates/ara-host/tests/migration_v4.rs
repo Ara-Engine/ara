@@ -342,6 +342,14 @@ fn preview3_directory_policy_paths_follow_converted_editor_modules() {
     )
     .expect("legacy manifest");
     fs::write(root.join("game/scripts/Tools/Tool.cs"), "class Tool {}\n").expect("source");
+    fs::create_dir_all(root.join("game/feature")).expect("custom UI resource folder");
+    fs::write(
+        root.join("settings/project.json"),
+        r#"{"ui":{"resources":"feature/media.json"}}"#,
+    )
+    .expect("configured resource owner");
+    fs::write(root.join("game/feature/media.json"), r#"{"images":{"icon":"scripts/Tools/icon.png"},"fonts":["scripts/Tools/font.ttf"],"click":"scripts/Tools/click.wav","label":"scripts/Tools/display"}"#)
+        .expect("bare resource references");
     fs::write(root.join("settings/builds/tools.export.json"),r#"{"content":"game","scriptProject":"scripts/Tools","name":"Tools","version":"2.0.0","templates":[]}"#).expect("authored preset");
     let plan = migration_plan(&root).expect("reviewed plan");
     migrate_project(
@@ -357,6 +365,14 @@ fn preview3_directory_policy_paths_follow_converted_editor_modules() {
     .expect("JSON");
     assert_eq!(preset["scriptProject"], "editor/scripts/Tools");
     assert_eq!(preset["version"], "2.0.0");
+    let resources: Value = serde_json::from_slice(
+        &fs::read(root.join("content/feature/media.json")).expect("migrated custom resources"),
+    )
+    .expect("resource JSON");
+    assert_eq!(resources["images"]["icon"], "editor/scripts/Tools/icon.png");
+    assert_eq!(resources["fonts"][0], "editor/scripts/Tools/font.ttf");
+    assert_eq!(resources["click"], "editor/scripts/Tools/click.wav");
+    assert_eq!(resources["label"], "scripts/Tools/display");
     assert!(
         root.join("content/editor/scripts/Tools/tools.module.json")
             .is_file()
@@ -365,5 +381,233 @@ fn preview3_directory_policy_paths_follow_converted_editor_modules() {
         fs::read_to_string(root.join("content/scenes/main.scene"))
             .expect("scene")
             .contains("@game/box.prefab#pf_box")
+    );
+}
+
+/// Simulate a committed native scene edit whose canonical save may be interrupted.
+fn committed_scene_edit(root: &std::path::Path) -> (ara_ops::Transaction, String, String) {
+    let before = fs::read_to_string(root.join("game/scenes/main.scene")).expect("original scene");
+    let mut db = ara_schema::SchemaDb::new();
+    ara_doc::register(&mut db);
+    let registry = ara_cmd::Registry::builtin(&mut db);
+    let scene = ara_host::project::read_document(&before, "game/scenes/main.scene", &db, None)
+        .doc
+        .expect("native scene");
+    let mut workspace = ara_doc::Workspace::default();
+    workspace.insert("game/scenes/main.scene", scene);
+    let mut store = ara_ops::Store::new(db, workspace);
+    let result = registry
+        .apply(
+            &mut store,
+            &ara_cmd::Batch::new(
+                "sc_main",
+                [(
+                    "property.set",
+                    json!({"entity":"e_instance","path":"name","value":"Committed before crash"}),
+                )],
+            ),
+            &ara_cmd::Session::human(),
+        )
+        .expect("typed committed scene edit");
+    let txn = store
+        .txn(&result.txn.expect("transaction"))
+        .expect("stored transaction")
+        .clone();
+    let after = ara_host::project::write_document(
+        store.workspace().doc("sc_main").expect("scene"),
+        store.schema(),
+    )
+    .expect("canonical edited scene");
+    (txn, before, after)
+}
+
+#[test]
+fn unflushed_committed_native_edit_blocks_migration_without_hiding_or_changing_bytes() {
+    let root = preview3();
+    let (txn, before, after) = committed_scene_edit(&root);
+    assert_ne!(before, after);
+    let (mut journal, _, _) =
+        ara_host::journal::Journal::open(&root.join(".ara")).expect("journal");
+    journal
+        .append(&ara_host::journal::Entry::Flush {
+            doc: "sc_main".into(),
+            rev: 0,
+            hash: ara_host::journal::hash(&before),
+        })
+        .expect("old scene baseline");
+    journal
+        .append(&ara_host::journal::Entry::Txn {
+            untracked: false,
+            session: None,
+            txn,
+        })
+        .expect("commit reached journal before save");
+    // Another document reaching the same revision cannot confirm this scene.
+    journal
+        .append(&ara_host::journal::Entry::Flush {
+            doc: "pj_project".into(),
+            rev: 1,
+            hash: ara_host::journal::hash(
+                &fs::read_to_string(root.join("ara.project.json")).expect("marker"),
+            ),
+        })
+        .expect("other document saved");
+    drop(journal);
+    let original_journal = fs::read(root.join(".ara/journal")).expect("original journal");
+    let original_marker = fs::read(root.join("ara.project.json")).expect("marker");
+    let error = migration_plan(&root)
+        .expect_err("migration cannot supersede pending committed native edits");
+    assert!(
+        error
+            .iter()
+            .any(|d| d.code == ara_diag::codes::JOURNAL_CORRUPT
+                && d.message.contains("sc_main")
+                && d.message.contains("Recover and save")),
+        "{error:?}"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("game/scenes/main.scene")).expect("unchanged scene"),
+        before
+    );
+    assert_eq!(
+        fs::read(root.join(".ara/journal")).expect("unchanged journal"),
+        original_journal
+    );
+    assert_eq!(
+        fs::read(root.join("ara.project.json")).expect("unchanged marker"),
+        original_marker
+    );
+    assert!(!root.join(".ara/lock").exists());
+    assert!(!root.join(".ara/file-history").exists());
+    assert!(!root.join("content").exists());
+    // Once the originating authority has saved that exact commit, migration is safe.
+    fs::write(root.join("game/scenes/main.scene"), &after).expect("old authority canonical save");
+    let (mut journal, _, _) =
+        ara_host::journal::Journal::open(&root.join(".ara")).expect("journal");
+    journal
+        .append(&ara_host::journal::Entry::Flush {
+            doc: "sc_main".into(),
+            rev: 1,
+            hash: ara_host::journal::hash(&after),
+        })
+        .expect("confirmed saved edit");
+    drop(journal);
+    let plan = migration_plan(&root).expect("recovered native edit is confirmed");
+    migrate_project(
+        &root,
+        &plan.plan_token,
+        &MigrationControl::default(),
+        &mut |_, _| {},
+    )
+    .expect("migrate recovered bytes");
+    assert!(
+        fs::read_to_string(root.join("content/scenes/main.scene"))
+            .expect("migrated scene")
+            .contains("Committed before crash")
+    );
+}
+
+#[test]
+fn exact_file_flush_confirms_native_snapshot_without_a_second_canonical_save() {
+    let root = preview3();
+    let (mut txn, before, after) = committed_scene_edit(&root);
+    let history = ara_host::file_state::FileHistory::new(&root);
+    let before_state = history.put(before.as_bytes()).expect("old native snapshot");
+    let after_state = history.put(after.as_bytes()).expect("new native snapshot");
+    let path = "game/scenes/main.scene";
+    txn.ops.push(ara_doc::Op::File {
+        doc: ara_doc::AssetId::parse("sc_main").expect("ID"),
+        id: ara_doc::file_state::record_id(path),
+        path: path.into(),
+        state: Some(after_state.clone()),
+        prev: Some(before_state),
+    });
+    let (mut journal, _, _) =
+        ara_host::journal::Journal::open(&root.join(".ara")).expect("journal");
+    journal
+        .append(&ara_host::journal::Entry::Flush {
+            doc: "sc_main".into(),
+            rev: 0,
+            hash: ara_host::journal::hash(&before),
+        })
+        .expect("old native baseline");
+    journal
+        .append(&ara_host::journal::Entry::Txn {
+            untracked: false,
+            session: None,
+            txn,
+        })
+        .expect("typed native and file commit");
+    fs::write(root.join(path), &after).expect("materialized native bytes");
+    journal
+        .append(&ara_host::journal::Entry::FileFlush {
+            path: path.into(),
+            rev: 1,
+            state: Some(after_state),
+        })
+        .expect("physical snapshot acknowledgement");
+    drop(journal);
+    let plan = migration_plan(&root).expect("exact file receipt confirms native state");
+    migrate_project(
+        &root,
+        &plan.plan_token,
+        &MigrationControl::default(),
+        &mut |_, _| {},
+    )
+    .expect("migration");
+    assert!(
+        fs::read_to_string(root.join("content/scenes/main.scene"))
+            .expect("scene")
+            .contains("Committed before crash")
+    );
+}
+
+#[test]
+fn migration_can_be_reapplied_after_closed_undo_with_exact_file_receipts() {
+    let root = preview3();
+    let plan = migration_plan(&root).expect("preview");
+    migrate_project(
+        &root,
+        &plan.plan_token,
+        &MigrationControl::default(),
+        &mut |_, _| {},
+    )
+    .expect("first migration");
+    let mut host = Host::open(
+        Project::open(&root).expect("project"),
+        HostConfig::default(),
+    )
+    .expect("host");
+    let session = host
+        .call(
+            ConnId::LOCAL,
+            "session.begin",
+            json!({"client":"test","author":"human"}),
+        )
+        .expect("session")["session"]
+        .clone();
+    let undo = host
+        .call(ConnId::LOCAL, "history.undo", json!({"session":session}))
+        .expect("undo");
+    await_job(&mut host, &session, undo);
+    host.flush();
+    drop(host);
+    let plan = migration_plan(&root).expect("Undo's exact file receipts confirm old native marker");
+    migrate_project(
+        &root,
+        &plan.plan_token,
+        &MigrationControl::default(),
+        &mut |_, _| {},
+    )
+    .expect("second explicit migration");
+    let host = Host::open(
+        Project::open(&root).expect("current layout"),
+        HostConfig::default(),
+    )
+    .expect("reopen");
+    assert_eq!(
+        host.store().history().len(),
+        3,
+        "both explicit migrations and Undo remain in history"
     );
 }

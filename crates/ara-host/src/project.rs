@@ -426,7 +426,8 @@ pub(crate) fn is_document(path: &Path, extensions: &HashSet<String>) -> bool {
 /// Whether `walk` visits the file at `rel` (relative to `root`): no hidden or
 /// skipped directory on the way, and no nested project.
 pub(crate) fn walked(root: &Path, rel: &Path) -> bool {
-    if crate::project_layout::authored_root(root) != root
+    if root.join(MARKER).is_file()
+        && crate::project_layout::authored_root(root) != root
         && rel != Path::new(MARKER)
         && rel != Path::new(crate::project_layout::PREFERENCES)
         && rel != Path::new("settings/ara.imports")

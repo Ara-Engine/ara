@@ -53,7 +53,7 @@ pub fn create_directories(root: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// Physical authored root; legacy projects remain readable until migrated.
+/// Physical authored root for projects that passed the current-layout open check.
 /// Cache this result when opening a project rather than calling it in frame code.
 pub use crate::project::authored_root;
 

@@ -21,6 +21,14 @@ impl Project {
         )
         .unwrap();
         std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
+        std::fs::create_dir_all(root.join("settings")).unwrap();
+        std::fs::write(
+            root.join("settings/ara.imports"),
+            ara_asset::ProjectImportSettings::default()
+                .canonical_text()
+                .unwrap(),
+        )
+        .unwrap();
         std::fs::write(
             root.join("ara.project.json"),
             ara_json::to_canonical_string(

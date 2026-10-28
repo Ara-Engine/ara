@@ -122,6 +122,11 @@ history is retained unchanged. Success waits for physical writes and journal
 acknowledgement. The marker records `layoutVersion: 4`. A subsequent dry run reports
 no changes. Run `ara check` to validate the result.
 
+If the old journal contains committed native edits not yet saved to their files,
+migration stops with ARA1905 and leaves everything unchanged. Recover and save that
+project with its originating Ara version before retrying; retain the journal and
+file-history snapshots throughout recovery.
+
 Hub and editor opening an older project show the move preview and Migrate / Cancel.
 Cancel keeps it closed and unchanged. Other opens report ARA1914 with the migration
 action, before compilation or import. Undo restores the old layout and exact bytes;

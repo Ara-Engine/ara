@@ -373,58 +373,10 @@ fn validate_command(
     Ok(())
 }
 
-/// A migration cannot claim preservation while silently skipping corrupt history.
+#[path = "journal_safety.rs"]
+mod journal_safety;
+
+/// Migration cannot hide committed native edits behind a newer file baseline.
 fn validate_history(root: &Path, history: &FileHistory) -> Result<(), Vec<Diagnostic>> {
-    for relative in [".ara", ".ara/journal"] {
-        match fs::symlink_metadata(root.join(relative)) {
-            Ok(metadata) => {
-                #[cfg(windows)]
-                let reparse = {
-                    use std::os::windows::fs::MetadataExt;
-                    metadata.file_attributes() & 0x400 != 0
-                };
-                #[cfg(not(windows))]
-                let reparse = false;
-                if metadata.file_type().is_symlink() || reparse {
-                    return Err(err(format!(
-                        "migration refuses linked history path {relative}"
-                    )));
-                }
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-            Err(error) => return Err(err(error)),
-        }
-    }
-    let text = fs::read_to_string(root.join(".ara/journal")).map_err(err)?;
-    for (index, line) in text
-        .lines()
-        .enumerate()
-        .filter(|(_, line)| !line.trim().is_empty())
-    {
-        let entry: crate::journal::Entry = serde_json::from_str(line).map_err(|error| {
-            vec![
-                Diagnostic::error(
-                    codes::JOURNAL_CORRUPT,
-                    format!(
-                        "repair journal line {} before migrating: {error}",
-                        index + 1
-                    ),
-                )
-                .file(".ara/journal"),
-            ]
-        })?;
-        if let crate::journal::Entry::Txn { txn, .. } = entry {
-            for op in txn.ops {
-                if let ara_doc::Op::File { state, prev, .. } = op {
-                    for state in [state, prev].into_iter().flatten() {
-                        state.validate().map_err(|d| vec![d])?;
-                        if state.kind == FileKind::File {
-                            history.read(&state).map_err(|d| vec![d])?;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
+    journal_safety::validate(root, history)
 }

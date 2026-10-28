@@ -23,6 +23,14 @@ impl Project {
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
+        std::fs::create_dir_all(root.join("settings")).unwrap();
+        std::fs::write(
+            root.join("settings/ara.imports"),
+            ara_asset::ProjectImportSettings::default()
+                .canonical_text()
+                .unwrap(),
+        )
+        .unwrap();
         write(
             &root.join("ara.project.json"),
             json!({"name":"Editor test","layoutVersion":ara_host::project_layout::VERSION,"main":"levels/main.scene"}),
@@ -715,12 +723,17 @@ fn import_settings_are_typed_attributed_and_undoable() {
     editor
         .action("jobs.cancel", json!({"job":result["job"]}))
         .unwrap();
+    let sidecar = editor
+        .host
+        .store()
+        .workspace()
+        .storage_path("paint.png.import.json");
     let doc = editor
         .host
         .store()
         .workspace()
         .docs()
-        .find_map(|(path, doc)| (path == "paint.png.import.json").then(|| doc.id.to_string()))
+        .find_map(|(path, doc)| (path == sidecar).then(|| doc.id.to_string()))
         .unwrap();
     assert_eq!(
         editor.host.store().workspace().index().path_of(&doc),
@@ -728,7 +741,7 @@ fn import_settings_are_typed_attributed_and_undoable() {
     );
     assert_eq!(
         editor.host.store().workspace().path_of(&doc),
-        Some("paint.png.import.json")
+        Some(sidecar.as_str())
     );
     editor.apply_to(&doc,vec![json!({"cmd":"import.configure","args":{"source":"paint.png","settings":{"usage":"normal","mipmaps":false},"preset":"balanced"}})],"Use a normal map").unwrap();
     assert_eq!(
