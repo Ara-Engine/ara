@@ -108,14 +108,21 @@ fn package_inner(root: &Path, version: &str, build_required: bool) -> Result<()>
             &fs::read(zip)?,
         )?,
     )?;
-    fs::write(
-        dist.join("HUB_RELEASE_NOTES.md"),
-        format!(
-            "# Ara Hub {version}\n\nDownload and run the per-user installer. Browse and install engine versions in Installs. Stable excludes GitHub prereleases; Preview includes them. Signed manifests and SHA-256 protect updates.\n\nNo Authenticode code signing yet. Windows SmartScreen warns when running the installer.\n"
-        ),
-    )?;
+    fs::write(dist.join("HUB_RELEASE_NOTES.md"), notes(root, version))?;
     println!("{}", output.display());
     Ok(())
+}
+
+/// The Hub's release notes: the reviewed root `HUB_RELEASE_NOTES.md` when its first
+/// line is `# Ara Hub <version>`, otherwise a generic install note.
+fn notes(root: &Path, version: &str) -> String {
+    let heading = format!("# Ara Hub {version}\n");
+    match fs::read_to_string(root.join("HUB_RELEASE_NOTES.md")) {
+        Ok(reviewed) if reviewed.starts_with(&heading) => reviewed,
+        _ => format!(
+            "{heading}\nDownload and run the per-user installer. Browse and install engine versions in Installs. Stable excludes GitHub prereleases; Preview includes them. Signed manifests and SHA-256 protect updates.\n\nNo Authenticode code signing yet. Windows SmartScreen warns when running the installer.\n"
+        ),
+    }
 }
 
 /// Both distributions carry the same ordered source identity, not just semver.
@@ -160,4 +167,23 @@ pub(crate) fn verify_binary(root: &Path, stage: &Path, version: &str, dist: &Pat
         "ara-hub.exe is from a different source build; rebuild before packaging"
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn notes_keep_reviewed_hub_notes_for_this_version_only() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/release-hub-notes-test")
+            .join(std::process::id().to_string());
+        fs::create_dir_all(&root).expect("test root");
+        assert!(notes(&root, "0.0.2-alpha.4").starts_with("# Ara Hub 0.0.2-alpha.4\n\nDownload"));
+        let reviewed = "# Ara Hub 0.0.2-alpha.4\n\nReviewed.\n";
+        fs::write(root.join("HUB_RELEASE_NOTES.md"), reviewed).expect("reviewed notes");
+        assert_eq!(notes(&root, "0.0.2-alpha.4"), reviewed);
+        assert!(notes(&root, "0.0.2-alpha.5").starts_with("# Ara Hub 0.0.2-alpha.5\n\nDownload"));
+        fs::remove_dir_all(&root).expect("test cleanup");
+    }
 }
