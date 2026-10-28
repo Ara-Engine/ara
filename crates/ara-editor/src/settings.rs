@@ -503,6 +503,8 @@ pub struct Settings {
     observed_project: Map<String, Value>,
     /// Content revision consumed by the live projection; idle ticks do no work.
     observed_host_revision: Option<u64>,
+    /// Exact Host commit of each private project edit and its local inverses.
+    project_host_commits: std::collections::BTreeMap<ara_ops::TxnId, project_commit::HostCommit>,
     failures: Vec<String>,
     /// Writes the preferences file off the UI thread; `None` keeps them in memory.
     user_writer: Option<crate::persist::BackgroundWriter<Value>>,
@@ -583,6 +585,7 @@ impl Settings {
             user,
             observed_project: project.clone(),
             observed_host_revision: None,
+            project_host_commits: Default::default(),
             project,
             failures: Vec::new(),
             user_writer,
@@ -1107,6 +1110,7 @@ mod tests {
             "rendering":{"quality":"high"},"input":{"actions":{"Jump":"Space"}},"physics":{"gravity":[0,-9.81,0]},"look":{"sensitivity":0.8},"ui":{"main":"ui/main.ui"}});
         let project = Project::new(marker.clone(), Some(json!({})));
         let mut settings = project.authority(None);
+        let authored_root_existed = project.0.join(ara_doc::AUTHORING_ROOT).exists();
         set(&mut settings, "play.tickHz", None);
         set(&mut settings, "rendering.quality", None);
         let policy = project.read(ara_host::project_policy::PREFERENCES);
@@ -1130,7 +1134,25 @@ mod tests {
             Some(json!({}))
         );
         assert!(!settings.host.unsaved());
-        assert!(!project.0.join(ara_doc::AUTHORING_ROOT).exists());
+        assert_eq!(
+            project.0.join(ara_doc::AUTHORING_ROOT).exists(),
+            authored_root_existed,
+            "Settings must not create or remove the authored root opened by the editor"
+        );
+        assert!(
+            project
+                .0
+                .join(ara_host::project_policy::PREFERENCES)
+                .is_file()
+        );
+        assert!(
+            !project
+                .0
+                .join(ara_doc::AUTHORING_ROOT)
+                .join(ara_host::project_policy::PREFERENCES)
+                .exists(),
+            "Project policy stays at the project root, outside authored content"
+        );
     }
 
     #[test]

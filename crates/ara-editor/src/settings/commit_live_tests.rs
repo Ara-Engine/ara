@@ -94,14 +94,67 @@ fn another_authors_round_trip_still_reports_an_undo_conflict_without_advancing_h
         )
         .unwrap();
     }
+    assert_settings_history_conflict(&mut editor, false);
+}
+
+#[test]
+fn direct_command_round_trip_still_blocks_settings_undo_without_private_agent_history() {
+    let project = Project::new();
+    let mut editor = open(&project);
+    editor
+        .action(
+            "editor.settings.set",
+            json!({"key":"play.clients","value":4}),
+        )
+        .unwrap();
+    let session = agent(&mut editor);
+    super::live_tests::apply(
+        &mut editor,
+        &session,
+        &[
+            ("settings.settings[play.clients]", json!(8)),
+            ("settings.settings[play.clients]", json!(4)),
+        ],
+    );
+    assert_settings_history_conflict(&mut editor, false);
+}
+
+#[test]
+fn direct_command_round_trip_still_blocks_settings_redo_at_the_undo_revision() {
+    let project = Project::new();
+    let mut editor = open(&project);
+    editor
+        .action(
+            "editor.settings.set",
+            json!({"key":"build.profile","value":"human"}),
+        )
+        .unwrap();
+    editor.action("editor.settings.undo", json!({})).unwrap();
+    let session = agent(&mut editor);
+    super::live_tests::apply(
+        &mut editor,
+        &session,
+        &[
+            (
+                "settings.settings[build.profile]",
+                json!("agent intermediate"),
+            ),
+            ("settings.settings[build.profile]", json!("initial")),
+        ],
+    );
+    assert_settings_history_conflict(&mut editor, true);
+}
+
+fn assert_settings_history_conflict(editor: &mut crate::Editor, is_redo: bool) {
     editor.action("editor.settings", json!({})).unwrap();
     let revision = editor.host.store().revision();
     let history = editor.host.store().history().len();
+    let canonical = policy(editor.host.store().workspace(), "settings").cloned();
     let settings = editor.state.settings.clone();
     let undo = editor.state.settings_undo.clone();
     let redo = editor.state.settings_redo.clone();
     let error = editor
-        .action("editor.settings.undo", json!({}))
+        .action("editor.settings.undo", json!({"redo":is_redo}))
         .unwrap_err();
     assert!(
         error.0.data.as_ref().unwrap()["diagnostics"]
@@ -114,9 +167,137 @@ fn another_authors_round_trip_still_reports_an_undo_conflict_without_advancing_h
     editor.action("editor.settings", json!({})).unwrap();
     assert_eq!(editor.host.store().revision(), revision);
     assert_eq!(editor.host.store().history().len(), history);
+    assert_eq!(
+        policy(editor.host.store().workspace(), "settings"),
+        canonical.as_ref()
+    );
     assert_eq!(editor.state.settings, settings);
     assert_eq!(editor.state.settings_undo, undo);
     assert_eq!(editor.state.settings_redo, redo);
+}
+
+#[test]
+fn project_settings_undo_redo_link_each_inverse_to_its_own_host_revision() {
+    let project = Project::new();
+    let mut editor = open(&project);
+    editor
+        .action(
+            "editor.settings.set",
+            json!({"key":"build.profile","value":"human"}),
+        )
+        .unwrap();
+    let title = editor.state.settings_undo.clone();
+    for redo in [false, true, false, true] {
+        let base = editor.host.store().revision();
+        editor
+            .action("editor.settings.undo", json!({"redo":redo}))
+            .unwrap();
+        let transaction = editor.host.store().history().last().unwrap();
+        assert_eq!(
+            transaction.base, base,
+            "Each private inverse uses its linked Host transaction, not the original Set"
+        );
+        assert_eq!(transaction.result, base + 1);
+        assert_eq!(
+            editor.state.settings["build.profile"],
+            if redo { "human" } else { "initial" }
+        );
+        assert_eq!(
+            if redo {
+                &editor.state.settings_undo
+            } else {
+                &editor.state.settings_redo
+            },
+            &title
+        );
+    }
+}
+
+#[test]
+fn sequential_project_settings_undo_redo_skips_its_cancelled_local_pairs() {
+    let project = Project::new();
+    let mut editor = open(&project);
+    for value in [2, 4] {
+        editor
+            .action(
+                "editor.settings.set",
+                json!({"key":"play.clients","value":value}),
+            )
+            .unwrap();
+    }
+    for (redo, expected) in [(false, 2), (false, 1), (true, 2), (true, 4)] {
+        let base = editor.host.store().revision();
+        editor
+            .action("editor.settings.undo", json!({"redo":redo}))
+            .unwrap();
+        assert_eq!(editor.state.settings["play.clients"], expected);
+        let transaction = editor.host.store().history().last().unwrap();
+        assert_eq!(transaction.base, base);
+        assert_eq!(transaction.result, base + 1);
+    }
+}
+
+#[test]
+fn direct_same_value_intent_still_blocks_older_undo_after_a_later_local_edit_is_undone() {
+    let project = Project::new();
+    let mut editor = open(&project);
+    editor
+        .action(
+            "editor.settings.set",
+            json!({"key":"play.clients","value":2}),
+        )
+        .unwrap();
+    let session = agent(&mut editor);
+    let before = editor.host.store().revision();
+    super::live_tests::apply(
+        &mut editor,
+        &session,
+        &[("settings.settings[play.clients]", json!(2))],
+    );
+    let intent = editor.host.store().since(before);
+    assert_eq!(
+        intent.len(),
+        1,
+        "The fixture requires a recorded equal-value command"
+    );
+    assert!(intent[0].ops.iter().any(|op| matches!(op,
+        ara_doc::Op::Set { value:Some(value),prev:Some(previous),.. } if value==previous && value==&json!(2))));
+    editor
+        .action(
+            "editor.settings.set",
+            json!({"key":"play.clients","value":4}),
+        )
+        .unwrap();
+    editor.action("editor.settings.undo", json!({})).unwrap();
+    assert_eq!(editor.state.settings["play.clients"], 2);
+    assert_settings_history_conflict(&mut editor, false);
+}
+
+#[test]
+fn host_native_cancelled_command_pairs_do_not_block_older_settings_undo() {
+    let project = Project::new();
+    let mut editor = open(&project);
+    editor
+        .action(
+            "editor.settings.set",
+            json!({"key":"play.clients","value":2}),
+        )
+        .unwrap();
+    let session = agent(&mut editor);
+    super::live_tests::apply(
+        &mut editor,
+        &session,
+        &[("settings.settings[play.clients]", json!(4))],
+    );
+    Endpoint::call(&mut editor.host, "history.undo", json!({"session":session})).unwrap();
+    editor.action("editor.settings.undo", json!({})).unwrap();
+    assert_eq!(editor.state.settings["play.clients"], 1);
+    assert!(
+        policy(editor.host.store().workspace(), "settings")
+            .unwrap()
+            .get("play.clients")
+            .is_none()
+    );
 }
 
 #[test]

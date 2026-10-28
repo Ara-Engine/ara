@@ -6,6 +6,12 @@ use ara_host::{
     project_policy::{PREFERENCES, PREFERENCES_ID},
 };
 
+/// A no-op has a revision but no owned transaction to exclude during Undo.
+pub(super) struct HostCommit {
+    revision: u64,
+    transaction: Option<ara_ops::TxnId>,
+}
+
 impl Settings {
     /// Commit project policy to the calling Host before advancing local history.
     /// User preferences remain private and use their existing background writer.
@@ -60,10 +66,16 @@ impl Settings {
         if !errors.is_empty() {
             return Err(errors);
         }
-        commit(cx, &self.project, &desired, &label)?;
+        let host_commit = commit(cx, &self.project, &desired, &label, None)?;
         // The held private transaction cannot change between check and commit.
         // A rejected Host edit drops it without advancing either local history.
-        pending.commit()?;
+        let private_id = pending
+            .commit()?
+            .txn()
+            .map(|transaction| transaction.id.clone());
+        if let Some(private_id) = private_id {
+            self.project_host_commits.insert(private_id, host_commit);
+        }
         self.reload(Some(Project));
         self.reconcile_project(cx.store());
         Ok(label)
@@ -97,7 +109,7 @@ impl Settings {
                 .apply(op.inverse().to_edit())
                 .map_err(|error| vec![error])?;
         }
-        let errors = pending.check();
+        let errors = undo_conflicts(pending.check());
         if !errors.is_empty() {
             return Err(errors);
         }
@@ -112,18 +124,100 @@ impl Settings {
             .cloned()
             .unwrap_or_default();
         drop(pending.rollback());
-        if desired != self.project {
-            commit(
-                cx,
-                &self.project,
-                &desired,
-                &format!("{} {label}", if redo { "Redo" } else { "Undo" }),
-            )?;
-        }
+        let host_commit = if desired != self.project {
+            self.check_project_inverse(cx.store(), &target, &desired)?;
+            // The service call owns the authority between this overlap check
+            // and commit. Rebase past only the cancelled/unrelated edits checked.
+            let base = cx.store().revision();
+            Some(
+                commit(
+                    cx,
+                    &self.project,
+                    &desired,
+                    &format!("{} {label}", if redo { "Redo" } else { "Undo" }),
+                    Some(base),
+                )
+                .map_err(undo_conflicts)?,
+            )
+        } else {
+            None
+        };
         self.undo(&author, redo)?;
+        if let Some(host_commit) = host_commit {
+            let private_id = self
+                .store
+                .history()
+                .last()
+                .expect("successful settings Undo/Redo records its inverse")
+                .id
+                .clone();
+            self.project_host_commits.insert(private_id, host_commit);
+        }
         self.reconcile_project(cx.store());
         Ok(label)
     }
+
+    /// Check active canonical intent, including direct commands which never
+    /// create private settings entries. Cancelled pairs obey Store's Undo rules.
+    fn check_project_inverse(
+        &self,
+        host: &Store,
+        target: &ara_ops::Transaction,
+        desired: &Map<String, Value>,
+    ) -> Result<(), Vec<Diagnostic>> {
+        let linked = self.project_host_commits.get(&target.id).ok_or_else(|| {
+            vec![Diagnostic::error(
+                codes::UNDO_CONFLICT,
+                "This settings edit cannot be safely undone; set the value explicitly instead",
+            )]
+        })?;
+        let cancelled_local: std::collections::BTreeSet<_> = self
+            .project_host_commits
+            .iter()
+            .filter(|(private_id, _)| {
+                self.store
+                    .txn(private_id)
+                    .is_some_and(|transaction| cancelled(&self.store, transaction, target.result))
+            })
+            .filter_map(|(_, commit)| commit.transaction.as_ref())
+            .collect();
+        let changed: Vec<_> = DEFS
+            .iter()
+            .filter(|definition| {
+                definition.scope == Project
+                    && self.project.get(definition.key) != desired.get(definition.key)
+            })
+            .collect();
+        for transaction in host.since(linked.revision) {
+            if cancelled(host, transaction, linked.revision)
+                || cancelled_local.contains(&transaction.id)
+            {
+                continue;
+            }
+            for definition in &changed {
+                if super::project_live::project_touched(
+                    host.workspace(),
+                    std::slice::from_ref(transaction),
+                    definition,
+                ) {
+                    return Err(vec![Diagnostic::error(codes::UNDO_CONFLICT, format!("Settings Undo/Redo would overwrite `{}`, edited later by `{}`", definition.key, transaction.id))
+                        .data(json!({"setting":definition.key,"settingsTxn":target.id,"laterHostTxn":transaction.id,"afterHostRevision":linked.revision}))]);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Mirror Store::cancelled through its public history API. An inverse cancels
+/// an intervening edit only when that edit was itself newer than this target.
+fn cancelled(store: &Store, transaction: &ara_ops::Transaction, base: u64) -> bool {
+    store.reverted_by(&transaction.id).is_some()
+        || transaction
+            .reverts
+            .as_ref()
+            .and_then(|id| store.txn(id))
+            .is_some_and(|original| original.result > base)
 }
 
 fn caller(cx: &Cx<'_>) -> Result<Author, Vec<Diagnostic>> {
@@ -142,7 +236,8 @@ fn commit(
     before: &Map<String, Value>,
     after: &Map<String, Value>,
     label: &str,
-) -> Result<(), Vec<Diagnostic>> {
+    base: Option<u64>,
+) -> Result<HostCommit, Vec<Diagnostic>> {
     if !cx
         .session()
         .is_some_and(|session| session.allows(ara_proto::Scope::EditAssets))
@@ -169,10 +264,40 @@ fn commit(
     }
     let edits =
         project_edits(cx.store().workspace(), before, after).map_err(|error| vec![error])?;
-    cx.transact(Some(label.into()), |store, mut meta| {
+    let result = cx.transact(Some(label.into()), |store, mut meta| {
         meta.label = Some(label.into());
-        store.transact(meta, edits).map(|_| ())
-    })?
+        meta.base = base;
+        store.transact(meta, edits).map(|commit| {
+            commit
+                .txn()
+                .map(|transaction| (transaction.id.clone(), transaction.result))
+        })
+    })??;
+    Ok(match result {
+        Some((transaction, revision)) => HostCommit {
+            revision,
+            transaction: Some(transaction),
+        },
+        None => HostCommit {
+            revision: cx.store().revision(),
+            transaction: None,
+        },
+    })
+}
+
+/// Both checks are preflights of a known settings inverse. Their Staged
+/// transactions have no `reverts` flag, but overlap still means Undo conflict.
+fn undo_conflicts(mut diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
+    for diagnostic in &mut diagnostics {
+        if diagnostic.code == codes::STALE_BASE {
+            diagnostic.code = codes::UNDO_CONFLICT;
+            diagnostic.message = format!(
+                "Settings Undo/Redo would overwrite a later edit: {}",
+                diagnostic.message
+            );
+        }
+    }
+    diagnostics
 }
 
 const POLICY: &[&str] = &["settings", "rendering", "input", "physics", "look", "ui"];

@@ -143,7 +143,7 @@ impl Settings {
 
 /// Only mutations of the effective policy source replace local settings. A
 /// canonical section also owns its deletion/reset, exposing legacy fallback.
-fn project_touched(
+pub(super) fn project_touched(
     workspace: &Workspace,
     transactions: &[ara_ops::Transaction],
     definition: &Def,
