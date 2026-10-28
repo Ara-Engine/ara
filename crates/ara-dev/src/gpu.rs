@@ -172,6 +172,13 @@ pub(crate) fn locked_unmeasured<T>(
 pub(crate) struct VisualLease {
     _file: File,
 }
+impl Drop for VisualLease {
+    fn drop(&mut self) {
+        // A forked child can hold the description until exec; closing our copy
+        // must not extend visual admission beyond its owner's lifetime.
+        let _ = self._file.unlock();
+    }
+}
 pub(crate) fn visual(timeout: u64) -> Result<VisualLease> {
     let local = std::env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
@@ -348,6 +355,9 @@ mod visual_tests {
             ));
         let first = visual_at(&root, 1).unwrap();
         let second = visual_at(&root, 1).unwrap();
+        // Model a descriptor inherited by an unrelated fork before exec.
+        #[cfg(unix)]
+        let inherited = first._file.try_clone().unwrap();
         let gpu = open(&root.join("ara/gpu.lock")).unwrap();
         assert!(matches!(
             gpu.try_lock(),
@@ -364,7 +374,13 @@ mod visual_tests {
         assert!(visual_at(&root, 0).is_err());
         drop(ticket);
         drop(first);
+        assert!(matches!(
+            gpu.try_lock(),
+            Err(std::fs::TryLockError::WouldBlock)
+        ));
         drop(second);
         assert!(gpu.try_lock().is_ok());
+        #[cfg(unix)]
+        drop(inherited);
     }
 }

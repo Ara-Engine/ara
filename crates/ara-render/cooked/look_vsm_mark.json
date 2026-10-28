@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "3f2eace35b986a7e9a8bab35cb40613c8790bd48685d897224a17a5b9d45b94c",
+  "key": "320574cb5cd77d465ffe190f1349ab0f428a214c8e26c37a54547b0c3cf23354",
   "stages": [
     {
-      "dxil": "3f2eace35b986a7e9a8bab35cb40613c8790bd48685d897224a17a5b9d45b94c/look_vsm_mark/vsmMarkMain.dxil",
-      "dxil_hash": "0f62dd55542f29ce4ea0f208114bcc55b18c42f35ae4c6aae85b2cb2c70c4661",
+      "dxil": "688ea9288056f53ef66598c9f377a9ad5f43771495716f19fe315b2de9204c25/vsmMarkMain.dxil",
+      "dxil_hash": "8d6ba55b8948d38c3ee235e0cc00fc0c02c41b146b9b891af63daa4fc4e50cb5",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "3f2eace35b986a7e9a8bab35cb40613c8790bd48685d897224a17a5b9d45b94c/look_vsm_mark/vsmMarkMain.metallib",
-        "metallib_hash": "5994c0fc10505b982d758dfaa45f7266b773d4a45b6aec4fe1efa1ef272fa5c6",
-        "reflection": "3f2eace35b986a7e9a8bab35cb40613c8790bd48685d897224a17a5b9d45b94c/look_vsm_mark/vsmMarkMain.metal.json",
+        "metallib": "688ea9288056f53ef66598c9f377a9ad5f43771495716f19fe315b2de9204c25/vsmMarkMain.metallib",
+        "metallib_hash": "7e33051648d4370c7322a9433e5a765c7d128e3124a3bd8bca60b57864c53318",
+        "reflection": "688ea9288056f53ef66598c9f377a9ad5f43771495716f19fe315b2de9204c25/vsmMarkMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "vsmMarkMain",
-      "spirv": "3f2eace35b986a7e9a8bab35cb40613c8790bd48685d897224a17a5b9d45b94c/look_vsm_mark/vsmMarkMain.spv",
+      "spirv": "688ea9288056f53ef66598c9f377a9ad5f43771495716f19fe315b2de9204c25/vsmMarkMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "30d09c4c5a6ea7db54c55c0de74601b527486fa733dafe15893e1a882ea5159b",
+      "spirv_hash": "2248aa80fb77db85be3ed89b9ff1e7baa049934eaede99332a267ddc499c7ce1",
       "stage": "compute"
     }
   ],

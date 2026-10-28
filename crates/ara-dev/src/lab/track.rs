@@ -43,7 +43,7 @@ enum Work {
         args: Value,
         reply: TcpStream,
     },
-    Restart(PathBuf, Option<std::fs::File>, u64),
+    Restart(PathBuf, Option<super::generations::Lease>, u64),
 }
 pub(super) struct Track {
     pub selection: Selection,

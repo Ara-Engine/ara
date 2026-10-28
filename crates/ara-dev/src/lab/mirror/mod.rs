@@ -187,8 +187,6 @@ fn sync(
         )?;
         return Ok(());
     }
-    let power = transport::ssh(&config, base, "/usr/bin/pmset -g batt\n", 20)?;
-    super::mac::require_ac(&power)?;
     let began = std::time::Instant::now();
     let previous = super::session::read(&base.join("mirror/status.json")).unwrap_or(json!({}));
     let source_update = source_update || !base.join("mirror/peer.json").is_file();
@@ -201,6 +199,8 @@ fn sync(
         )
     };
     if source_update {
+        let power = transport::ssh(&config, base, "/usr/bin/pmset -g batt\n", 20)?;
+        super::mac::require_ac(&power)?;
         progress("source_snapshot")?;
         let revision = snapshot::create(root, base, &config.source_ref)?;
         let fetch = format!(
@@ -220,13 +220,13 @@ fn sync(
         commit = json!(revision);
     }
     progress("cooked_transfer")?;
-    bundle::push(root, base, &config, activity)?;
+    let transfer = bundle::push(root, base, &config, activity, !source_update)?;
     if source_update {
         progress("peer_bootstrap")?;
         let output = transport::ssh(&config, base, &peer::bootstrap(&config), 1200)?;
         status = serde_json::from_str(output.trim())?;
     }
-    if let Some(import) = super::session::read(&base.join("mirror/incoming-local.json")) {
+    if let Some(import) = transfer.staged_import {
         transport::rpc(&config, base, "_lab_import", import)?;
     }
     if let Some(pending) = super::session::read(&base.join("mirror/selections.json"))
@@ -257,7 +257,7 @@ fn sync(
     )?;
     super::session::write(
         &base.join("mirror/status.json"),
-        &json!({"phase":"ready","snapshot":commit,"peer":status,"source_sync":source_update,"transport_seconds":began.elapsed().as_secs_f64(),"cook_host":"pc","at":crate::d26::validity::unix_ms().unwrap_or_default()}),
+        &json!({"phase":"ready","snapshot":commit,"peer":status,"source_sync":source_update,"transfer":transfer.timing,"transport_seconds":began.elapsed().as_secs_f64(),"cook_host":"pc","at":crate::d26::validity::unix_ms().unwrap_or_default()}),
     )
 }
 
@@ -324,6 +324,16 @@ mod tests {
             &super::super::track::Activity::default(),
             true,
         )?;
+        assert!(!base.join("mirror/jobs").exists());
+        assert!(
+            transport::stream(
+                &Config::load(&base)?,
+                &base,
+                &base.join("absent.tar"),
+                "exit 0"
+            )
+            .is_err()
+        );
         assert!(!base.join("mirror/jobs").exists());
         assert!(!base.join("mirror/git").exists());
         assert_eq!(

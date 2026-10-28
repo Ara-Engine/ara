@@ -30,6 +30,8 @@ struct Compiled {
     key: String,
     values: Vec<Replacement>,
     sources: Vec<(Pipeline, CookedPipeline)>,
+    load_ms: f64,
+    pso_ms: f64,
 }
 enum Reply {
     Started,
@@ -40,6 +42,8 @@ enum Reply {
         key: String,
         values: Vec<Replacement>,
         milliseconds: f64,
+        load_ms: f64,
+        pso_ms: f64,
     },
     Failed {
         directory: PathBuf,
@@ -93,6 +97,7 @@ fn compile(
     directory: &Path,
     entries: &[&Entry],
 ) -> Result<Compiled> {
+    let metadata_started = Instant::now();
     let mut sources = Vec::new();
     for entry in entries {
         let source: CookedPipeline = serde_json::from_slice(&std::fs::read(&entry.manifest)?)?;
@@ -104,6 +109,8 @@ fn compile(
         sources.iter().all(|s| s.key == key),
         "partially cooked shader cohort; retaining last good pipelines"
     );
+    let mut load_ms = metadata_started.elapsed().as_secs_f64() * 1000.;
+    let mut pso_ms = 0.;
     let mut values = Vec::new();
     for (entry, source) in entries.iter().zip(&sources) {
         if entry
@@ -118,7 +125,20 @@ fn compile(
         {
             continue;
         }
-        match native::pool(|| pipeline::create(device, compiler, source, directory)) {
+        let prepared = native::pool(|| -> crate::Result<_> {
+            let started = Instant::now();
+            let libraries = source
+                .stages
+                .iter()
+                .map(|stage| pipeline::load(device, source, stage, directory))
+                .collect::<crate::Result<Vec<_>>>()?;
+            load_ms += started.elapsed().as_secs_f64() * 1000.;
+            let started = Instant::now();
+            let result = pipeline::build_loaded(device, compiler, &libraries, &source.state);
+            pso_ms += started.elapsed().as_secs_f64() * 1000.;
+            result
+        });
+        match prepared {
             Ok(native) => values.push(Replacement {
                 handle: entry.handle,
                 native,
@@ -137,6 +157,8 @@ fn compile(
             .zip(sources)
             .map(|(entry, source)| (entry.handle, source))
             .collect(),
+        load_ms,
+        pso_ms,
     })
 }
 
@@ -211,6 +233,8 @@ impl Worker {
                                     key: compiled.key,
                                     values: compiled.values,
                                     milliseconds: started.elapsed().as_secs_f64() * 1000.,
+                                    load_ms: compiled.load_ms,
+                                    pso_ms: compiled.pso_ms,
                                 }
                             }
                             Err(error) => Reply::Failed {
@@ -368,6 +392,8 @@ impl MetalDevice {
                     key,
                     values,
                     milliseconds,
+                    load_ms,
+                    pso_ms,
                 } => {
                     for value in values {
                         if let Ok(slot) = self.pipelines.get_mut(value.handle) {
@@ -384,6 +410,8 @@ impl MetalDevice {
                     worker.failures.remove(&directory);
                     worker.status.cohorts.insert(directory, key);
                     worker.status.compile_ms = milliseconds;
+                    worker.status.load_ms = Some(load_ms);
+                    worker.status.pso_ms = Some(pso_ms);
                     worker.status.last_error = worker.failures.values().next().cloned();
                     eprintln!(
                         "Shader epoch {} published ({milliseconds:.1} ms background compile)",

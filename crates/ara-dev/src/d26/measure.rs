@@ -386,10 +386,16 @@ mod pass_tests {
         let scene = &SCENES[0];
         let evidence = folder.join(scene.project).join(scene.look).join("evidence");
         fs::create_dir_all(&evidence).unwrap();
-        fs::write(evidence.join(format!("{}-timings.json",scene.look)), br#"{"completed":false,"status":"invalid","diagnostic":"ARA6093: timed frame lost RT.Reflect"}"#).unwrap();
+        let code = ara_bench::passes::INVALID_PASS_SET;
+        fs::write(evidence.join(format!("{}-timings.json",scene.look)), format!(r#"{{"completed":false,"status":"invalid","diagnostic":"{code}: timed frame lost RT.Reflect"}}"#)).unwrap();
         let reason = timings(&folder, scene).err().unwrap();
         let mut results = Results::default();
         results.flip.insert(scene.name, Err(reason));
-        assert!(results.pass_failure().unwrap().starts_with("ARA6093:"));
+        assert!(
+            results
+                .pass_failure()
+                .unwrap()
+                .starts_with(&format!("{code}:"))
+        );
     }
 }
