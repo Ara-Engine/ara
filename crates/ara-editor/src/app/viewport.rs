@@ -9,6 +9,7 @@ use ara_runtime_render::fidelity::native::{self, FrameChange, NativeConfig, Prep
 use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 mod content;
 mod convergence;
+mod diagnostics;
 mod picking;
 mod preview;
 mod recovery;

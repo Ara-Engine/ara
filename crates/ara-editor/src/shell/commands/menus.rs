@@ -132,6 +132,7 @@ const PLAY: &[Item] = &[
 /// Tools, under Window › Tools.
 const TOOLS: &[Item] = &[
     C("window.profiler"),
+    C("window.lighting"),
     C("tools.gpu_capture"),
     C("tools.why"),
     C("tools.references"),
@@ -401,6 +402,17 @@ pub(crate) const MENUS: &[Menu] = &[
                     C("create.light.spot"),
                     C("create.light.sky"),
                     C("create.light.probe"),
+                    C("create.fog"),
+                ],
+            ),
+            Sub(
+                "Post-processing",
+                &[
+                    C("create.post.global"),
+                    C("create.post.box"),
+                    C("create.post.sphere"),
+                    S,
+                    C("window.lighting"),
                 ],
             ),
             C("create.camera"),
@@ -469,6 +481,7 @@ pub(crate) const MENUS: &[Menu] = &[
             C("window.problems"),
             C("window.agents"),
             C("window.profiler"),
+            C("window.lighting"),
             C("window.history"),
             S,
             Sub("Tools", TOOLS),
@@ -582,6 +595,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
         Context::Entity => &[
             C("create.group"),
             C("hierarchy.reveal"),
+            C("lighting.inspect"),
             Sub(
                 "Create Child",
                 &[

@@ -52,6 +52,7 @@ pub(super) fn title(panel: &str) -> &str {
         "vfx" => "VFX",
         "animation" => "Animation",
         "profiler" => "Profiler",
+        "lighting" => "Lighting",
         "scene" => "Scene",
         "game" => "Game",
         "hierarchy" => "Hierarchy",
@@ -79,6 +80,7 @@ pub(super) fn keep_alive(panel: &str) -> bool {
             | "problems"
             | "agents"
             | "settings"
+            | "lighting"
             | "history"
     )
 }
@@ -91,6 +93,7 @@ pub(super) fn panel_icon(panel: &str) -> &'static str {
         "vfx" => "sparkles",
         "animation" => "person-standing",
         "profiler" => "gauge",
+        "lighting" => "sun",
         "hierarchy" => "list-tree",
         "inspector" => "sliders-horizontal",
         "assets" => "folder",
@@ -327,6 +330,7 @@ impl Shell {
             "material" => self.material_panel(editor, out)?,
             "vfx" => self.vfx_panel(editor, out)?,
             "profiler" => self.profiler_panel(editor, out)?,
+            "lighting" => self.lighting_panel(editor, out)?,
             "animation" => self.animation_panel(editor, out)?,
             "inspector" => self.inspector_panel(editor, out)?,
             "assets" => {

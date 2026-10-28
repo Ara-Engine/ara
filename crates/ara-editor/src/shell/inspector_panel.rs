@@ -61,6 +61,9 @@ impl Shell {
         if editor.state.focus == "vfx" {
             return self.vfx_inspector(editor, out);
         }
+        if editor.state.focus == "lighting" {
+            return self.lighting_inspector(editor, out);
+        }
         if editor.state.asset_path.is_some() {
             return self.import_panel(editor, out);
         }

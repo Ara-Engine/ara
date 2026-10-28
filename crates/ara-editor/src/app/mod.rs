@@ -472,6 +472,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         // converges at once instead.
         let mut last_navigation: Option<Instant> = None;
         let mut previous = Instant::now();
+        let mut previous_cpu_loop_ms = None;
         #[cfg(feature = "hotpatch")]
         let mut rust_patches = ara_hotpatch::Hotpatch::connect();
         loop {
@@ -497,7 +498,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             // Host waits on the renderer's device so far (timeline, upload idle,
             // present): the probe subtracts this frame's share from its wall time.
             let waits_before = renderer.gpu().host_wait_stats();
-            let interval = frame_start.duration_since(previous).as_secs_f64() * 1000.;
+            let frame_interval = frame_start.duration_since(previous);
+            let interval = frame_interval.as_secs_f64() * 1000.;
             let mut camera_start = None;
             let mut graph_start = None;
             let dt = frame_start.duration_since(previous).as_secs_f32().min(0.05);
@@ -1133,6 +1135,29 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 Ok(changed)
             })?;
             let shell_ms = measure_authority.then(|| tick_at.elapsed().as_secs_f64() * 1000.);
+            if shell.viewport_diagnostics.observe_stats(frame_interval, || {
+                let source = scene_view.diagnostic_source(&editor);
+                let mut sample = crate::shell::overlay::diagnostics::StatsSample::read(
+                    &renderer,
+                    previous_cpu_loop_ms,
+                    source.scene.map(|scene| scene.instances.len()),
+                    Some(renderer.size()),
+                );
+                for timing in scene_view.timings() {
+                    if timing.milliseconds.is_finite() && timing.milliseconds >= 0. {
+                        sample.gpu_longest_pass_ms = Some(
+                            sample.gpu_longest_pass_ms.map_or(timing.milliseconds, |value| {
+                                value.max(timing.milliseconds)
+                            }),
+                        );
+                        sample.gpu_pass_samples = Some(sample.gpu_pass_samples.unwrap_or(0) + 1);
+                    }
+                }
+                sample
+            }) {
+                shell.rebuild(&mut editor)?;
+                dirty = true;
+            }
             match shell.poll_play_job(&mut editor) {
                 Ok(true) => {
                     shell.rebuild(&mut editor)?;
@@ -1642,7 +1667,16 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                         for id in view.ghosts().keys() {
                             changed.insert(crate::world::render_id(id), "destructive-foreground");
                         }
-                        let mut overlays = overlay::build(
+                        let mut overlays = Vec::new();
+                        let diagnostic_markup_changed = shell.viewport_diagnostics.append(
+                            &mut overlays,
+                            &view,
+                            &editor.state,
+                            rect,
+                            scene_view.diagnostic_source(&editor),
+                            &shell.ui.sheet,
+                        )?;
+                        overlays.extend(overlay::build(
                             &view,
                             &editor.state,
                             rect,
@@ -1652,7 +1686,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                             &mut shell.outlines,
                             editor.host.store().revision(),
                             &shell.ui.sheet,
-                        )?;
+                        )?);
                         shell.outlines.upload(&mut ui_renderer, &mut gpu)?;
                         if rect.contains(shell.pointer[0], shell.pointer[1])
                             && !editor.state.palette
@@ -1682,6 +1716,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                         }
                         scene_overlays = Some((host.target, rect, overlays));
                         shell.leave();
+                        if diagnostic_markup_changed {
+                            shell.rebuild(&mut editor)?;
+                        }
                     }
                 }
                 // Outside Play the Game view shows the gameplay camera; its image is
@@ -2116,6 +2153,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 game.close(&mut editor, &mut gpu)?;
                 break;
             }
+            previous_cpu_loop_ms = Some(frame_start.elapsed().as_secs_f64() * 1000.);
             if let Some(remaining) = frame_budget.checked_sub(frame_start.elapsed()) {
                 native.wait(remaining)?;
             }

@@ -1,0 +1,13 @@
+.lighting-overview { flex-grow:1; min-width:0px; min-height:0px; }
+.lighting-toolbar { flex-direction:row; flex-wrap:wrap; gap:6px; min-width:0px; min-height:28px; flex-shrink:0; padding:6px; }
+.lighting-scroll { flex-grow:1; flex-basis:0px; min-height:0px; min-width:0px; padding:8px; gap:8px; }
+.lighting-card { flex-shrink:0; min-width:0px; padding:8px; gap:6px; background:var(--background); border-width:1px; border-color:var(--border); border-radius:6px; }
+.lighting-title { font-size:13px; color:var(--foreground); white-space:normal; flex-shrink:0; }
+.lighting-help { font-size:11px; color:var(--muted-foreground); white-space:normal; flex-shrink:0; }
+.lighting-identity { font-size:10px; color:var(--muted-foreground); white-space:normal; flex-shrink:0; }
+.lighting-button { height:auto; min-height:26px; min-width:0px; max-width:100%; white-space:normal; }
+.lighting-entry { flex-direction:column; align-items:start; justify-content:start; min-width:0px; min-height:56px; height:auto; white-space:normal; padding:8px; gap:4px; flex-shrink:0; }
+.lighting-selected { border-color:var(--ring); }
+.lighting-pages { border-top-width:1px; border-color:var(--border); }
+.lighting-heading { padding:8px; gap:6px; flex-shrink:0; }
+.lighting-component-title { font-size:12px; color:var(--foreground); padding:6px; white-space:normal; flex-shrink:0; }

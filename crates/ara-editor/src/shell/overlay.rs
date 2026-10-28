@@ -1,5 +1,6 @@
 //! Grid/handle projection and picking use the actual renderer camera and ID channel.
 mod gizmo;
+pub(crate) mod diagnostics;
 #[cfg(test)]
 mod tests;
 use crate::{

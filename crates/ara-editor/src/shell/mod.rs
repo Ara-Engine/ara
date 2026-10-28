@@ -65,6 +65,7 @@ mod inspector_fields;
 mod inspector_panel;
 mod inspector_sections;
 mod live_styles;
+mod lighting;
 mod log_panels;
 mod material_panel;
 mod memo;
@@ -301,6 +302,8 @@ pub struct Shell {
     script_modules: scripts::ModuleList,
     ide_request: Option<scripts::IdeRequest>,
     compile_problems: log_panels::CompilationView,
+    lighting: lighting::View,
+    pub(crate) viewport_diagnostics: overlay::diagnostics::Diagnostics,
     pub(crate) drag: Option<Drag>,
     scrub: Option<scrub::Scrub>,
     motion: motion::Motion,
@@ -634,6 +637,8 @@ impl Shell {
             script_modules: Default::default(),
             ide_request: None,
             compile_problems: Default::default(),
+            lighting: Default::default(),
+            viewport_diagnostics: Default::default(),
             drag: None,
             scrub: None,
             motion: Default::default(),
@@ -952,6 +957,7 @@ impl Shell {
         css.push_str(ara_ui::dialogs::CSS);
         css.push_str(ara_ui::select::CSS);
         css.push_str(history_panel::CSS);
+        css.push_str(lighting::CSS);
         css.push_str(palette::FORM_CSS);
         if self.toolkit_verify.is_some() {
             css.push_str(toolkit_verify::CSS);
