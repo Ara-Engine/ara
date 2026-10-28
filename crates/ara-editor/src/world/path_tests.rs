@@ -28,7 +28,9 @@ fn missing_model_checks_use_storage_paths_and_current_asset_identity() -> ara_ui
         for (id, reference) in [
             ("e_modelone", "@models/old-name.glb#as_modelpath"),
             ("e_modeltwo", "@models/rock.glb#as_modelpath"),
+            ("e_modelthree", "@models/old-name.glb#as_modelpath"),
             ("e_missingone", "@models/missing.glb"),
+            ("e_missingtwo", "@models/missing.glb"),
         ] {
             entities.insert(
                 id.into(),

@@ -89,6 +89,7 @@ impl DocumentView {
     ) -> Vec<(String, Option<String>)> {
         // One disk check per path, not per entity: scenes reuse a few models widely.
         let mut checked: BTreeMap<String, Option<String>> = BTreeMap::new();
+        let mut references: BTreeSet<&str> = BTreeSet::new();
         for (id, entity) in self.entities.iter() {
             let Some(reference) = entity
                 .record
@@ -98,6 +99,11 @@ impl DocumentView {
             else {
                 continue;
             };
+            // Repeated instances share a raw reference. Borrow it for this call
+            // before parsing or resolving identities; the first entity still wins.
+            if !references.insert(reference) {
+                continue;
+            }
             let Some(path) = ara_schema::grammar::parse_ref(reference)
                 .ok()
                 .and_then(|r| {

@@ -4,7 +4,7 @@ use serde_json::json;
 use std::{hint::black_box, time::Instant};
 
 const BASELINE: &str = "19701f3889c47638eb32589bdaa5d33e329868f3";
-const CURRENT: &str = "18df2fd3";
+const CURRENT: &str = "production with per-call borrowed raw-reference deduplication";
 const SAMPLES: usize = 16;
 const ROUNDS: usize = 5;
 const SOURCES: usize = 16;
@@ -102,6 +102,9 @@ fn median(values: &[u128; ROUNDS]) -> u128 {
 #[test]
 #[ignore = "Explicit missing-source CPU benchmark; writes canonical timing evidence under target"]
 fn missing_sources_cached_references_cpu_benchmark() -> ara_ui::Result<()> {
+    let production_source = blake3::hash(include_str!("mod.rs").as_bytes())
+        .to_hex()
+        .to_string();
     let output = crate::test_target().join("editor-path-benchmarks");
     let root = output.join(format!("no-source-files-{}", std::process::id()));
     assert!(
@@ -161,7 +164,7 @@ fn missing_sources_cached_references_cpu_benchmark() -> ara_ui::Result<()> {
         let production = median(&current) / SAMPLES as u128;
         results.push(json!({"entities":count,"uniqueSources":SOURCES,"knownSources":known.len(),"equalOutputs":true,"sourceFilesRequired":false,
             "baseline":{"commit":BASELINE,"nanosecondsPerCall":per_call(previous),"medianNanosecondsPerCall":baseline},
-            "current":{"commit":CURRENT,"nanosecondsPerCall":per_call(current),"medianNanosecondsPerCall":production},
+            "current":{"implementation":CURRENT,"sourceModule":"crates/ara-editor/src/world/mod.rs","sourceDigestAlgorithm":"blake3","sourceDigest":production_source,"nanosecondsPerCall":per_call(current),"medianNanosecondsPerCall":production},
             "currentOverBaseline":production as f64/baseline.max(1) as f64}));
     }
     assert!(
