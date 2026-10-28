@@ -15,6 +15,8 @@ use std::{
 const INTERVAL: Duration = Duration::from_millis(250);
 const QUEUE: usize = 1024;
 enum Outgoing {
+    Prepared(String),
+    Request(u64, String, Value),
     Notify(String, Value),
     Respond(Value, Result<Value, Value>),
 }
@@ -28,18 +30,30 @@ pub struct Pump {
     stop: Arc<AtomicBool>,
     heartbeat: Arc<AtomicBool>,
     task: Option<JoinHandle<()>>,
+    next_id: u64,
 }
 impl Pump {
     /// Transfers the connected socket to a dedicated IO/liveness thread.
-    pub fn new(mut link: Link) -> std::io::Result<Self> {
+    pub fn new(link: Link) -> std::io::Result<Self> {
+        Self::with_heartbeat(link, true)
+    }
+
+    /// Owner-side IO keeps large control-result parsing off the host tick. It
+    /// sends no heartbeat and preserves the socket's existing request sequence.
+    pub fn owner(link: Link) -> std::io::Result<Self> {
+        Self::with_heartbeat(link, false)
+    }
+
+    fn with_heartbeat(mut link: Link, enabled: bool) -> std::io::Result<Self> {
+        let next_id = link.next_id;
         let (outgoing, requests) = mpsc::sync_channel(QUEUE);
         let (messages, incoming) = mpsc::sync_channel(QUEUE);
         let stop = Arc::new(AtomicBool::new(false));
-        let heartbeat = Arc::new(AtomicBool::new(true));
+        let heartbeat = Arc::new(AtomicBool::new(enabled));
         let worker_stop = Arc::clone(&stop);
         let worker_heartbeat = Arc::clone(&heartbeat);
         let task = thread::Builder::new()
-            .name("ara-play-heartbeat".into())
+            .name(if enabled {"ara-play-heartbeat"} else {"ara-play-owner-io"}.into())
             .spawn(move || {
                 let mut last = Instant::now() - INTERVAL;
                 let mut pending = None;
@@ -53,6 +67,8 @@ impl Pump {
                                     link.notify(&method, params)?
                                 }
                                 Ok(Outgoing::Respond(id, result)) => link.respond(id, result)?,
+                                Ok(Outgoing::Prepared(message)) => link.send_text(message)?,
+                                Ok(Outgoing::Request(id,method,params))=>link.send(&serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))?,
                                 Err(_) => break,
                             }
                         }
@@ -94,6 +110,7 @@ impl Pump {
             stop,
             heartbeat,
             task: Some(task),
+            next_id,
         })
     }
     /// Receive one command without waiting on IO or simulation work.
@@ -122,10 +139,30 @@ impl Pump {
                 mpsc::TrySendError::Disconnected(_) => LinkError::Closed,
             })
     }
+    /// Queues an ordinary JSON-RPC request without waiting for the socket.
+    pub fn request(&mut self, method: &str, params: impl Serialize) -> Result<u64, LinkError> {
+        let id = self.next_id;
+        let next = id
+            .checked_add(1)
+            .ok_or_else(|| LinkError::Io("player request sequence exhausted".into()))?;
+        let params =
+            serde_json::to_value(params).map_err(|error| LinkError::Io(error.to_string()))?;
+        self.send(Outgoing::Request(id, method.to_owned(), params))?;
+        self.next_id = next;
+        Ok(id)
+    }
     /// Queue a notification for the sole socket owner.
     pub fn notify(&mut self, method: &str, params: impl Serialize) -> Result<(), LinkError> {
         let params = serde_json::to_value(params).map_err(|e| LinkError::Io(e.to_string()))?;
         self.send(Outgoing::Notify(method.to_owned(), params))
+    }
+
+    /// Owned send-only endpoint for control workers. Serialization runs on the
+    /// caller's worker, preserving the ordinary JSON-RPC notification framing.
+    pub fn notifications(&self) -> Notifications {
+        Notifications {
+            outgoing: self.outgoing.clone(),
+        }
     }
     /// Queue a response, preserving the caller's request identifier.
     pub fn respond(&mut self, id: Value, result: Result<Value, Value>) -> Result<(), LinkError> {
@@ -143,6 +180,29 @@ impl Pump {
     /// hangs. Ordinary heavy work must leave the independent heartbeat enabled.
     pub fn suspend_heartbeat(&self) {
         self.heartbeat.store(false, Ordering::Release);
+    }
+}
+
+/// Bounded send-only mailbox for worker-prepared notifications; owns no socket.
+#[derive(Clone)]
+pub struct Notifications {
+    outgoing: SyncSender<Outgoing>,
+}
+impl Notifications {
+    /// Serializes off the simulation/IO thread and queues the existing notification.
+    pub fn notify(&self, method: &str, params: impl Serialize) -> Result<(), LinkError> {
+        let message = serde_json::to_string(
+            &serde_json::json!({"jsonrpc":"2.0","method":method,"params":params}),
+        )
+        .map_err(|error| LinkError::Io(error.to_string()))?;
+        self.outgoing
+            .try_send(Outgoing::Prepared(message))
+            .map_err(|error| match error {
+                mpsc::TrySendError::Full(_) => {
+                    LinkError::Io("player transport queue is full".into())
+                }
+                mpsc::TrySendError::Disconnected(_) => LinkError::Closed,
+            })
     }
 }
 impl Drop for Pump {

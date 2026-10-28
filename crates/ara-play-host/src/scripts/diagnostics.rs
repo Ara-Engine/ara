@@ -39,9 +39,20 @@ impl DiagnosticSources {
         world: &str,
         player: usize,
         source: &str,
-        mut diagnostic: Diagnostic,
+        diagnostic: Diagnostic,
     ) -> Result<Diagnostic, Diagnostic> {
         let binding = self.binding(world, player, source)?;
+        Ok(Self::bound(world, player, source, binding, diagnostic))
+    }
+
+    /// Applies a previously allocated, authority-validated incarnation binding.
+    pub(crate) fn bound(
+        world: &str,
+        player: usize,
+        source: &str,
+        binding: u64,
+        mut diagnostic: Diagnostic,
+    ) -> Diagnostic {
         let mut data = match diagnostic.data.take().map(|data| *data) {
             Some(Value::Object(data)) => data,
             Some(original) => Map::from_iter([("original".into(), original)]),
@@ -57,7 +68,7 @@ impl DiagnosticSources {
         diagnostic.subjects.push(Subject::system(format!(
             "play/{world}/{player}/{binding}/{source}"
         )));
-        Ok(diagnostic)
+        diagnostic
     }
 }
 
