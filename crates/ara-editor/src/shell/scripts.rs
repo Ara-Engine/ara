@@ -13,6 +13,9 @@ pub(crate) use ide::IdeRequest;
 #[cfg(test)]
 #[path = "scripts/focus_tests.rs"]
 mod focus_tests;
+#[cfg(test)]
+#[path = "scripts/job_poll_tests.rs"]
+mod job_poll_tests;
 
 struct NoClipboard;
 impl ara_ui_text::Clipboard for NoClipboard {
