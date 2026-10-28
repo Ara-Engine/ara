@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "3f2eace35b986a7e9a8bab35cb40613c8790bd48685d897224a17a5b9d45b94c",
+  "key": "320574cb5cd77d465ffe190f1349ab0f428a214c8e26c37a54547b0c3cf23354",
   "stages": [
     {
-      "dxil": "3f2eace35b986a7e9a8bab35cb40613c8790bd48685d897224a17a5b9d45b94c/tile/tileMain.dxil",
-      "dxil_hash": "bdf510df2f79a3387b782d0ecae4687c9c0d788110abd2f60d114c8a512ba7ac",
+      "dxil": "688ea9288056f53ef66598c9f377a9ad5f43771495716f19fe315b2de9204c25/tileMain.dxil",
+      "dxil_hash": "d3108bd1a402de4809ce191271f82dbf7403c86118abba9edaa8a7ad1f3af7df",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "3f2eace35b986a7e9a8bab35cb40613c8790bd48685d897224a17a5b9d45b94c/tile/tileMain.metallib",
-        "metallib_hash": "607d2b8e59e11bcb93b765a8cd6e505b91169c99df99d736ed3f444631f17119",
-        "reflection": "3f2eace35b986a7e9a8bab35cb40613c8790bd48685d897224a17a5b9d45b94c/tile/tileMain.metal.json",
+        "metallib": "688ea9288056f53ef66598c9f377a9ad5f43771495716f19fe315b2de9204c25/tileMain.metallib",
+        "metallib_hash": "bf7630f1ba6e2bee6ffb29cfe3a466b2212ad16f5740003267b20eb69120d59c",
+        "reflection": "688ea9288056f53ef66598c9f377a9ad5f43771495716f19fe315b2de9204c25/tileMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "tileMain",
-      "spirv": "3f2eace35b986a7e9a8bab35cb40613c8790bd48685d897224a17a5b9d45b94c/tile/tileMain.spv",
+      "spirv": "688ea9288056f53ef66598c9f377a9ad5f43771495716f19fe315b2de9204c25/tileMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "796d40ec5d1ac83154656986f724abfc393b0e1dd2f53fa5bad91838e4b29865",
+      "spirv_hash": "d37ab3efc7a536aa784d8dfa40f3a5bd6732336e8860f9a4bc27d5f0e47eced3",
       "stage": "compute"
     }
   ],
