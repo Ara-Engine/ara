@@ -29,7 +29,7 @@ impl Hub {
             validate_managed(&trash, &version)?;
         } else {
             let engine = self.registry.engine(&version)?;
-            if engine.executable != root.join("ara.exe") {
+            if !same_executable(engine, &root) {
                 return Err(invalid(
                     "only Hub-managed installations can be uninstalled; remove registration for external builds",
                 ));
@@ -91,7 +91,10 @@ impl Hub {
                 "close projects using this engine before uninstalling",
             ));
         }
-        if self.config.engine.executable.starts_with(root) {
+        let executable = fs::canonicalize(&self.config.engine.executable)
+            .unwrap_or_else(|_| dunce::simplified(&self.config.engine.executable).to_path_buf());
+        let root = fs::canonicalize(root).unwrap_or_else(|_| dunce::simplified(root).to_path_buf());
+        if executable.starts_with(&root) {
             return Err(invalid(
                 "this engine hosts the running Hub service; restart the service from the standalone Hub before uninstalling",
             ));
@@ -187,25 +190,45 @@ fn update_error(error: RpcError) -> ara_update::Error {
     }
 }
 
-fn validate_managed(root: &Path, version: &str) -> Result<(), RpcError> {
-    if fs::symlink_metadata(root)
-        .map_err(io_error)?
-        .file_type()
-        .is_symlink()
-    {
+pub(super) fn validate_managed(root: &Path, version: &str) -> Result<(), RpcError> {
+    let metadata = fs::symlink_metadata(root).map_err(io_error)?;
+    if linked(&metadata) || !metadata.is_dir() {
         return Err(invalid(
-            "refusing to uninstall a linked installation directory",
+            "refusing to inspect or uninstall a linked or invalid installation directory",
+        ));
+    }
+    let ownership = root.join(".ara-managed.json");
+    let metadata = fs::symlink_metadata(&ownership).map_err(io_error)?;
+    if linked(&metadata) || !metadata.is_file() {
+        return Err(invalid(
+            "managed installation ownership proof must be a local regular file",
         ));
     }
     let marker: Value =
-        serde_json::from_slice(&fs::read(root.join(".ara-managed.json")).map_err(io_error)?)
-            .map_err(io_error)?;
+        serde_json::from_slice(&fs::read(ownership).map_err(io_error)?).map_err(io_error)?;
     if marker["version"] != version {
         return Err(invalid(
             "only Hub-managed installations with a matching version can be uninstalled",
         ));
     }
     Ok(())
+}
+
+pub(super) fn linked(metadata: &fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        // FILE_ATTRIBUTE_REPARSE_POINT includes junctions and other reparse tags,
+        // not only the symbolic-link tag exposed by FileType::is_symlink.
+        metadata.file_attributes() & 0x400 != 0
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 
 fn inspect_files(root: &Path, cancel: &Cancel) -> Result<(), ara_update::Error> {

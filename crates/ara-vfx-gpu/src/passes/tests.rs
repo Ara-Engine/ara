@@ -63,7 +63,13 @@ fn indirect_sort_uses_the_compacted_live_prefix_and_matches_depth_order() -> Res
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let effect = ara_vfx::samples::smoke();
     let mut gpu = GpuDevice::new_raster(&[], root.join("../../target/ara-vfx-gpu/live-sort"))?;
-    let mut system = GpuSystem::new(&mut gpu, &effect, &root.join("cooked/smoke"), [64, 48])?;
+    let mut system = GpuSystem::new(
+        &mut gpu,
+        &effect,
+        &root.join("cooked/smoke"),
+        [64, 48],
+        crate::LINEAR_HDR,
+    )?;
     let view = View::default();
     let c = system.layout.configs[0];
     assert!(c.render[3] != 0 && c.atlas[3] >= 64);
@@ -165,8 +171,8 @@ fn direct_hdr_matches_the_background_copy_without_backdrop_or_tonemap() -> Resul
     let effect = ara_vfx::samples::campfire();
     let mut gpu = GpuDevice::new_raster(&[], root.join("../../target/ara-vfx-gpu/direct-hdr"))?;
     let cooked = root.join("cooked/campfire");
-    let mut copied = GpuSystem::new(&mut gpu, &effect, &cooked, size)?;
-    let mut direct = GpuSystem::new(&mut gpu, &effect, &cooked, size)?;
+    let mut copied = GpuSystem::new(&mut gpu, &effect, &cooked, size, crate::LINEAR_HDR)?;
+    let mut direct = GpuSystem::new(&mut gpu, &effect, &cooked, size, crate::LINEAR_HDR)?;
     let usage = vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED;
     let color = gpu.create_image(size[0], size[1], vk::Format::R32G32B32A32_SFLOAT, usage)?;
     let depth = gpu.create_image(size[0], size[1], vk::Format::R32_SFLOAT, usage)?;

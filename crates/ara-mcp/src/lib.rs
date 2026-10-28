@@ -1,6 +1,6 @@
 //! The MCP adapter (A5, R03 §4.5): a thin, generated view of the Engine Protocol.
 //!
-//! - Thirteen tools in a fixed order ([`tools::TOOLS`]); their input schemas are
+//! - Project tools in a fixed order ([`tools::TOOLS`]); their input schemas are
 //!   generated from the live method catalog (`rpc.discover`), so they follow the
 //!   Schema DB and its doc comments. A tool lights up as soon as a service
 //!   registers methods bound to it; until then calls return the host's `ARA1806`.

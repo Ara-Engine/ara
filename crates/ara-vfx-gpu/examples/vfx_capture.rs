@@ -9,12 +9,13 @@ fn main() -> Result<()> {
     std::fs::create_dir_all(output.join("sequences"))?;
     let mut gpu = GpuDevice::new(&[], root.join(".cache/gallery"))?;
     let selected = std::env::args().nth(1);
+    let tier = support::golden_tier(&gpu)?;
     for (effect, tick) in ara_vfx::samples::all() {
         if selected.as_ref().is_some_and(|name| name != &effect.name) {
             continue;
         }
         let sequence = support::sequence_ticks(&effect.name);
-        let mut frames = support::capture_frames(&mut gpu, &effect, &sequence, [960, 540])?;
+        let mut frames = support::capture_frames(&mut gpu, &effect, &sequence, [960, 540], tier)?;
         let strip = support::sequence_strip(&frames);
         for (i, (capture, stats)) in frames.iter_mut().enumerate() {
             capture.write(

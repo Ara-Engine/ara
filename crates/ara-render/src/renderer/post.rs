@@ -88,6 +88,12 @@ impl ToneMap {
     }
     /// Records the pass. Declare HDR sampled input and output Storage in the graph.
     pub fn record(&self, recorder: &mut Recorder, hdr: u32, size: [u32; 2]) {
+        #[cfg(feature = "hotpatch")]
+        ara_hotpatch::call!(Self::record_pass, self, recorder, hdr, size);
+        #[cfg(not(feature = "hotpatch"))]
+        self.record_pass(recorder, hdr, size);
+    }
+    fn record_pass(&self, recorder: &mut Recorder, hdr: u32, size: [u32; 2]) {
         recorder.push(Command::Pipeline(self.pipeline));
         recorder.push(Command::Constants(RootConstants {
             words: [self.frame_index, hdr, 0, 0, 0, 0, 0, 0],

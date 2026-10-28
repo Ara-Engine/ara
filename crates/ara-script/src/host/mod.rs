@@ -13,6 +13,7 @@ mod command;
 mod ctx;
 mod register;
 mod registry;
+mod scene;
 
 use std::collections::BTreeMap;
 use std::mem::{ManuallyDrop, MaybeUninit};

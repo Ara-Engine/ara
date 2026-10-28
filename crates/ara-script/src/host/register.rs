@@ -274,6 +274,16 @@ impl Registry {
                 match type_from_json(name, def) {
                     Ok(mut desc) => {
                         desc.module = d.module.clone();
+                        // Initial scene validation may already hold this exact
+                        // module's published schema. Adopt it when the assembly
+                        // supplies the matching runtime registration and layout.
+                        if !self.modules.contains_key(&d.slot)
+                            && let Some(published) = schema.get(name)
+                            && published.module == d.module
+                            && schema.type_json(published) == schema.type_json(&desc)
+                        {
+                            schema.remove(name);
+                        }
                         match schema.add(desc) {
                             Ok(()) => type_names.push(name.clone()),
                             Err(e) => problems.push(e.record(name)),

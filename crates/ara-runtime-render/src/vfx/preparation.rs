@@ -57,6 +57,7 @@ impl Effects {
                         size,
                         warmup: ara_vfx_gpu::PipelineWarmup::new(
                             &cooked_root().join(&definition.name),
+                            ara_vfx_gpu::RASTER_HDR,
                         )?,
                     });
                 }
@@ -74,6 +75,7 @@ impl Effects {
                     &definition,
                     &cooked_root().join(&definition.name),
                     size,
+                    ara_vfx_gpu::RASTER_HDR,
                     pipelines,
                 )?;
                 self.live.insert(

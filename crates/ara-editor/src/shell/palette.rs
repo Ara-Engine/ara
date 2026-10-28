@@ -1,7 +1,7 @@
 //! Command palette v2: human titles first, then the menu path and dimmed id, with
 //! keycaps. Prefixes: `@` entities and assets, `#` scenes and assets, `?` help.
 //! Engine (content) commands keep their generated parameter form.
-use super::commands::{Avail, Target, all, menu_path};
+use super::commands::{Avail, Target, entries, registered_menu_path};
 use super::panels::display;
 use super::*;
 
@@ -50,7 +50,7 @@ impl Shell {
         };
         let score = |text: &str| fuzzy(&text.to_lowercase(), &term).map(|(s, _)| s);
         if mode == '>' || mode == '?' {
-            for spec in all() {
+            for spec in entries(&editor.extensions) {
                 if matches!(
                     spec.id,
                     "file.open_scene"
@@ -64,7 +64,7 @@ impl Shell {
                 }
                 let cx = self.ctx(editor, &Target::None);
                 let title = spec.title(&cx);
-                let path = menu_path(spec.id);
+                let path = registered_menu_path(&editor.extensions, spec.id);
                 let haystack = if mode == '?' {
                     format!("{title} {} {}", spec.summary, spec.id)
                 } else {
@@ -89,7 +89,7 @@ impl Shell {
                     } else {
                         "command"
                     },
-                    binding: Binding::Command(spec.id, Target::None),
+                    binding: spec.binding(Target::None),
                     keys: self
                         .keymap
                         .chords(spec.id)

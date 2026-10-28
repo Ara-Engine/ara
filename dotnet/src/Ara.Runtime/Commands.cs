@@ -32,6 +32,14 @@ public readonly unsafe struct Commands
     /// <summary>Despawns the entity at the sync point.</summary>
     public void Despawn(Entity entity) => Host.CmdPush(_buf, AbiConst.CmdDespawn, 0, entity.Bits, null, 0);
 
+    /// <summary>Reparent in the ECS at the sync point, keeping the local transform.
+    /// Entity.Null makes a root. Missing parents and cycles are rejected by the host.</summary>
+    public void SetParent(Entity entity, Entity parent)
+    {
+        var bits = parent.Bits;
+        Host.CmdPush(_buf, AbiConst.CmdParent, 0, entity.Bits, &bits, sizeof(ulong));
+    }
+
     /// <summary>Adds (or replaces) a component at the sync point.</summary>
     public void Add<T>(Entity entity, in T value) where T : IComponent<T> => T.Insert(in this, entity, in value);
 

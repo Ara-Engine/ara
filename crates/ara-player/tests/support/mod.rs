@@ -25,6 +25,31 @@ pub fn copy(from: &Path, to: &Path) {
     }
 }
 
+/// Migrate the legacy demo module into the shared authored root in scratch only.
+/// Generated schemas stay private; the checked fixture is a comparison, never an input.
+pub fn outpost_module(project: &Path) -> PathBuf {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-scripts/Outpost");
+    let module = project
+        .join(ara_doc::AUTHORING_ROOT)
+        .join("scripts/Outpost");
+    std::fs::create_dir_all(&module).unwrap();
+    for entry in std::fs::read_dir(source).unwrap().flatten() {
+        if entry
+            .path()
+            .extension()
+            .is_some_and(|extension| extension == "cs")
+        {
+            std::fs::copy(entry.path(), module.join(entry.file_name())).unwrap();
+        }
+    }
+    std::fs::write(
+        module.join("outpost.module.json"),
+        ara_json::to_canonical_string(&json!({"name":"Outpost","hot":true})),
+    )
+    .unwrap();
+    module
+}
+
 /// Reuse the gate's current Cargo artifact; standalone tests build the worker.
 pub fn import_worker() -> PathBuf {
     if let Some(path) = std::env::var_os("CARGO_BIN_EXE_ara-import-worker")
@@ -88,7 +113,27 @@ impl Agent {
             t.elapsed(),
             result["content"]
         );
-        result["structuredContent"].clone()
+        let mut value = result["structuredContent"].clone();
+        while value["preparing"] == true {
+            let job = value["job"]
+                .as_str()
+                .expect("preparation job handle")
+                .to_owned();
+            let mut finished = None;
+            self.until("the preparation job", |agent| {
+                let status = agent.tool("ara_jobs", json!({"action":"status","job":job}));
+                match status["status"].as_str() {
+                    Some("done") => {
+                        finished = Some(status["result"].clone());
+                        true
+                    }
+                    Some("failed" | "cancelled") => panic!("preparation failed: {status}"),
+                    _ => false,
+                }
+            });
+            value = finished.expect("completed preparation result");
+        }
+        value
     }
     pub fn raw(&mut self, name: &str, mut args: Value) -> Value {
         if name != "ara_session" {
@@ -161,7 +206,7 @@ impl Agent {
         }
         config.import_worker = worker;
         configure(&mut config);
-        let mut play = PlayService::new(dir, config);
+        let mut play = PlayService::new(dir, config).with_headless_automation();
         service(&mut play);
         host.register(Box::new(play)).unwrap();
         let mut agent = Agent {
@@ -200,18 +245,31 @@ pub fn build_dotnet() {
     if std::env::var_os("ARA_DOTNET_PREBUILT").is_some() {
         return;
     }
-    let out = std::process::Command::new("dotnet")
-        .args(["build", "Ara.slnx", "-c", "Release", "--nologo", "-v", "q"])
-        .current_dir(repo().join("dotnet"))
-        .output()
-        .expect("run `dotnet build` (is the .NET 10 SDK installed?)");
-    assert!(
-        out.status.success(),
-        "dotnet build failed:
-{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    );
+    static BUILT: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    BUILT.get_or_init(|| {
+        let out = std::process::Command::new("dotnet")
+            .args([
+                "build",
+                "Ara.slnx",
+                "-c",
+                "Release",
+                "--nologo",
+                "-v",
+                "q",
+                "-m:2",
+                "-nr:false",
+            ])
+            .env("MSBUILDDISABLENODEREUSE", "1")
+            .current_dir(repo().join("dotnet"))
+            .output()
+            .expect("run `dotnet build` (is the .NET 10 SDK installed?)");
+        assert!(
+            out.status.success(),
+            "dotnet build failed:\n{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+    });
 }
 
 /// Posts the real native window-close event to this harness's player only.

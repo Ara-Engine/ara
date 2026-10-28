@@ -34,26 +34,6 @@ const ICON_SLOTS: [(&[u8; 4], u32); 11] = [
     (b"ic14", 512),
 ];
 
-/// The app's name: the project's display name, without characters a bundle folder
-/// cannot hold; `Game` when the project has none.
-pub(crate) fn app_name(project: &Path) -> String {
-    let name = std::fs::read(project.join("ara.project.json"))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-        .and_then(|value| value.get("name")?.as_str().map(str::to_owned))
-        .unwrap_or_default();
-    let name: String = name
-        .chars()
-        .filter(|c| !c.is_control() && !matches!(c, '/' | ':' | '\\'))
-        .collect();
-    let name = name.trim().trim_start_matches('.');
-    if name.is_empty() {
-        "Game".into()
-    } else {
-        name.into()
-    }
-}
-
 /// Lays out `staged`, the desktop build folder (player, launch file, pack, resources,
 /// gameplay image, icon), as `<name>.app` in `build`.
 pub(crate) fn bundle(
@@ -71,7 +51,9 @@ pub(crate) fn bundle(
     for entry in std::fs::read_dir(staged)? {
         let entry = entry?;
         let target = if entry.file_name() == EXECUTABLE {
-            contents.join("MacOS").join(EXECUTABLE)
+            contents.join("MacOS").join(name)
+        } else if crate::layout::notices(&entry.file_name().to_string_lossy()) {
+            build.join(entry.file_name())
         } else {
             contents.join("Resources").join(entry.file_name())
         };
@@ -81,12 +63,12 @@ pub(crate) fn bundle(
             tools::copy(&entry.path(), &target)?;
         }
     }
-    let player = contents.join("MacOS").join(EXECUTABLE);
+    let player = contents.join("MacOS").join(name);
     ensure!(player.is_file(), "the build has no {EXECUTABLE}");
     executable(&player)?;
     std::fs::write(
         contents.join("Info.plist"),
-        info_plist(name, &preset.package, preset.version_code),
+        info_plist(name, &preset.package, &preset.version, preset.version_code),
     )?;
     Ok(app)
 }
@@ -105,7 +87,7 @@ fn executable(path: &Path) -> Result<()> {
 
 /// The bundle's `Info.plist`: identity from the preset's application ID and version
 /// code, Metal 4's minimum macOS, and the template's icon.
-pub(crate) fn info_plist(name: &str, identifier: &str, version: u32) -> String {
+pub(crate) fn info_plist(name: &str, identifier: &str, version: &str, build: u32) -> String {
     let escape = |text: &str| {
         text.replace('&', "&amp;")
             .replace('<', "&lt;")
@@ -122,7 +104,7 @@ pub(crate) fn info_plist(name: &str, identifier: &str, version: u32) -> String {
 	<key>CFBundleDisplayName</key>
 	<string>{name}</string>
 	<key>CFBundleExecutable</key>
-	<string>{EXECUTABLE}</string>
+	<string>{name}</string>
 	<key>CFBundleIconFile</key>
 	<string>{ICON}</string>
 	<key>CFBundleIdentifier</key>
@@ -136,7 +118,7 @@ pub(crate) fn info_plist(name: &str, identifier: &str, version: u32) -> String {
 	<key>CFBundleShortVersionString</key>
 	<string>{version}</string>
 	<key>CFBundleVersion</key>
-	<string>{version}</string>
+	<string>{build}</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.games</string>
 	<key>LSMinimumSystemVersion</key>
@@ -227,12 +209,12 @@ fn codesign(command: &mut Command, log: &Path) -> Result<()> {
 /// Launches the bundle's player headless with its capture, crash folder, profile and
 /// working directory outside the bundle, so the signed contents never change, then
 /// re-checks the seal. Evidence lands in the export root (`output`).
-pub(crate) fn verify(app: &Path, work: &Path, output: &Path) -> Result<VerifyReport> {
+pub(crate) fn verify(app: &Path, name: &str, work: &Path, output: &Path) -> Result<VerifyReport> {
     let run = work.join("verify");
     std::fs::create_dir_all(&run)?;
     let capture = output.join("verify.png");
-    let text = tools::run(
-        Command::new(app.join("Contents/MacOS").join(EXECUTABLE))
+    let text = crate::verify::run_desktop(
+        Command::new(app.join("Contents/MacOS").join(name))
             .arg("--headless")
             .arg("--capture")
             .arg(&capture)
@@ -261,8 +243,8 @@ pub(crate) fn verify(app: &Path, work: &Path, output: &Path) -> Result<VerifyRep
         method: "macos_app".into(),
         passed: true,
         runtime_executed: true,
-        logs: "verify.log".into(),
-        screenshot: Some("verify.png".into()),
+        logs: "report/verify.log".into(),
+        screenshot: Some("report/verify.png".into()),
         perf: json!({"gpuMs":result.get("gpu_ms"),"quality":result.get("quality"),"elapsedMs":result.get("elapsed_ms")}),
         evidence: result,
         unavailable: Vec::new(),
@@ -310,10 +292,10 @@ mod tests {
 
     #[test]
     fn the_plist_names_the_player_icon_and_metal_4_minimum() {
-        let plist = info_plist("Salvage & Co", "dev.ara.outpost", 7);
+        let plist = info_plist("Salvage & Co", "dev.ara.outpost", "1.2.3", 7);
         for line in [
             "<string>Salvage &amp; Co</string>",
-            "<string>ara-player</string>",
+            "<string>1.2.3</string>",
             "<string>AppIcon.icns</string>",
             "<string>dev.ara.outpost</string>",
             "<string>26.0</string>",

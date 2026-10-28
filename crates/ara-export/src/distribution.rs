@@ -172,12 +172,46 @@ pub fn appimage(build: &Path, runtime: &Path, output: &Path) -> Result<()> {
         let mode = if executable(&path)? { 0o755 } else { 0o644 };
         fs.push_file_from_path(path, name, backhand::NodeHeader::new(mode, 0, 0, 0))?;
     }
-    fs.push_file(std::io::Cursor::new(b"#!/bin/sh\nHERE=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\"\nexec \"$HERE/ara-player\" --root \"$HERE\" \"$@\"\n"), "AppRun", backhand::NodeHeader::new(0o755, 0, 0, 0))?;
-    fs.push_file(std::io::Cursor::new(b"[Desktop Entry]\nType=Application\nName=Ara Game\nExec=AppRun\nIcon=ara-game\nCategories=Game;\n"), "ara-game.desktop", backhand::NodeHeader::new(0o644, 0, 0, 0))?;
-    let icon = include_bytes!("../../../assets/brand/icons/game/ara-game.svg");
+    let players = files(build)?
+        .into_iter()
+        .filter(|(name, _)| !name.contains('/'))
+        .filter_map(|(name, path)| match executable(&path) {
+            Ok(true) => Some(Ok(name)),
+            Ok(false) => None,
+            Err(e) => Some(Err(e)),
+        })
+        .collect::<Result<Vec<_>>>()?;
+    ensure!(
+        players.len() == 1,
+        "ARA-EXP-APPIMAGE-003: build must contain exactly one game executable"
+    );
+    let name = &players[0];
+    crate::layout::validate_name(name)?;
+    let quoted = name.replace('\'', "'\\''");
+    let launch = format!(
+        "#!/bin/sh\nHERE=\"$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)\"\nexec \"$HERE\"/'{quoted}' \"$@\"\n"
+    );
+    fs.push_file(
+        std::io::Cursor::new(launch.into_bytes()),
+        "AppRun",
+        backhand::NodeHeader::new(0o755, 0, 0, 0),
+    )?;
+    let desktop = format!(
+        "[Desktop Entry]\nType=Application\nName={name}\nExec=AppRun\nIcon=ara-game\nCategories=Game;\n"
+    );
+    fs.push_file(
+        std::io::Cursor::new(desktop.into_bytes()),
+        "ara-game.desktop",
+        backhand::NodeHeader::new(0o644, 0, 0, 0),
+    )?;
+    let icon = if build.join("data/icon.svg").is_file() {
+        std::fs::read(build.join("data/icon.svg"))?
+    } else {
+        include_bytes!("../../../assets/brand/icons/game/ara-game.svg").to_vec()
+    };
     for name in ["ara-game.svg", ".DirIcon"] {
         fs.push_file(
-            std::io::Cursor::new(icon),
+            std::io::Cursor::new(icon.clone()),
             name,
             backhand::NodeHeader::new(0o644, 0, 0, 0),
         )?;

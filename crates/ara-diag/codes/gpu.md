@@ -3,6 +3,21 @@
 `ara-gpu` reports problems with named codes. They keep their names on the bus;
 the numbers are internal slots.
 
+## ARA6091 CPU_FOREIGN_LOAD: Invalid timing under background CPU load
+owner: ara-dev
+shown as: ARA_CPU_FOREIGN_LOAD
+
+The GPU queue, timing guard, Fidelity Lab and D26 share this accounting.
+
+Causes:
+- Machine-normalized total CPU occupancy minus the protected process tree exceeded the configured threshold for a sustained sampling window. BelowNormal builds still consume CPU and are counted.
+- CPU sampling failed, so the measurement cannot be certified.
+
+Fixes:
+- Wait for other builds and jobs to finish, or use `--wait-for-quiet`.
+- Use `--no-wait` to refuse a busy baseline. Configure `--foreign-cpu-percent` and `--foreign-cpu-samples` deliberately; recorded samples retain the original load.
+- Rerun contaminated timing windows; do not interpret their tails or startup as a regression.
+
 ## ARA6090 GPU_FOREIGN_LOAD: Invalid GPU timing reading
 owner: ara-dev
 shown as: ARA_GPU_FOREIGN_LOAD
@@ -126,3 +141,17 @@ Fixes:
 - On the canonical cook host (Windows), install Metal Shader Converter for Windows from https://developer.apple.com/download/all/?q=metal%20shader%20converter, then recook.
 - Point `ARA_METAL_SHADERCONVERTER` at `metal-shaderconverter` if it lives elsewhere.
 - Never commit cooked artifacts produced on a Mac; recook on the canonical host instead (docs/dev/macos.md).
+
+## ARA6092 LAB_MAC_BATTERY: Mac lab job requires AC power
+owner: ara-dev
+shown as: ARA_LAB_MAC_BATTERY
+
+The Fidelity Lab refused a build or player job because the Mac is on battery or its charger state could not be verified.
+
+Causes:
+- `pmset -g batt` does not report AC Power.
+- The charger is disconnected, or the power query failed.
+
+Fixes:
+- Connect the Mac to a charger, verify AC Power with `pmset -g batt`, then retry.
+- Keep `caffeinate` scoped to active jobs; an idle lab holds no sleep assertion.

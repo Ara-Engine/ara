@@ -8,6 +8,7 @@
 pub mod assets;
 pub mod embed;
 mod game_ui;
+mod headless;
 mod keep;
 mod lifecycle;
 mod package;
@@ -19,6 +20,8 @@ mod published;
 mod rendering;
 pub use published::{ImportProgress, PublishedAssets, PublishedGeneration, PublishedSnapshot};
 mod scripts;
+mod source_fixes;
+pub use source_fixes::{SourceFixParams, SourceFixService};
 mod spec;
 mod starting;
 
@@ -178,6 +181,10 @@ pub struct PlayService {
     channel: Option<embed::Channel>,
     /// Warm a bounded headless graphics view only for an attached Game surface.
     graphics_prewarm: bool,
+    /// The daemon owns headless tools; editors retain their render-boundary capture service.
+    headless_automation: bool,
+    headless_capture: bool,
+    source_writes: scripts::SourceWrites,
 }
 
 impl PlayService {
@@ -210,7 +217,24 @@ impl PlayService {
             next: 0,
             channel: None,
             graphics_prewarm: false,
+            headless_automation: false,
+            headless_capture: false,
+            source_writes: scripts::SourceWrites::default(),
         }
+    }
+
+    /// Enables the daemon's one-shot run/capture tools.
+    pub fn with_headless_automation(mut self) -> Self {
+        self.headless_automation = true;
+        self.headless_capture = true;
+        self
+    }
+
+    /// Enable headless execution while the native editor supplies its own capture
+    /// service at the rendering boundary. Both use the same command registry.
+    pub fn with_headless_run(mut self) -> Self {
+        self.headless_automation = true;
+        self
     }
 
     /// Starts building the player pool on a background thread, unless it exists, is
@@ -588,6 +612,14 @@ impl PlayService {
         let cache = self.assets()?.cache.to_string_lossy().into_owned();
         let mut types = Vec::new();
         types_files(&self.root, &self.root, &mut types);
+        let inventory = ara_script::project::inventory(&self.root).map_err(|d| vec![d])?;
+        types.extend(
+            inventory
+                .modules
+                .into_iter()
+                .filter(|m| m.profile == ara_script::ModuleProfile::Gameplay)
+                .filter_map(|m| m.schema),
+        );
         let scene = PlayScene {
             ui: game_ui::read(&self.root).map_err(|error| fail(codes::REQUEST, error))?,
             rendering: rendering::read(workspace).map_err(|error| fail(codes::REQUEST, error))?,
@@ -1098,31 +1130,33 @@ fn collect_refs(value: &Value, out: &mut BTreeSet<String>) {
     }
 }
 
-fn types_files(root: &Path, dir: &Path, out: &mut Vec<Value>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
+fn types_files(root: &Path, _dir: &Path, out: &mut Vec<Value>) {
+    use ara_host::project::{AuthoredRole, AuthoredScope, authored_files};
+    let Ok(files) = authored_files(root, &SchemaDb::new()) else {
         return;
     };
-    // A C# module's folder (the project root can be one) holds its generated types,
-    // which the player's host registers itself.
-    let module = dir.join("ara.module.toml").exists();
-    let mut entries: Vec<_> = entries.flatten().collect();
-    entries.sort_by_key(|e| e.path());
-    for entry in entries {
-        let path = entry.path();
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if path.is_dir() {
-            // C# module folders hold generated types the player's host registers itself.
-            if !(name.starts_with('.') || name == "target" || name == "node_modules")
-                && !(path != root && path.join("ara.project.json").exists())
-                && !path.join("ara.module.toml").exists()
-            {
-                types_files(root, &path, out);
-            }
-        } else if name.ends_with(".types.json")
-            && !module
-            && let Some(value) = std::fs::read_to_string(&path)
-                .ok()
-                .and_then(|t| serde_json::from_str(&t).ok())
+    // Legacy generated module schemas are registered by the script host, not twice.
+    let modules: std::collections::BTreeSet<_> = files
+        .iter()
+        .filter(|file| {
+            file.scope == AuthoredScope::Authored
+                && (file.role == AuthoredRole::ScriptModule
+                    || file.path.ends_with("ara.module.toml"))
+        })
+        .filter_map(|file| Path::new(&file.storage_path).parent().map(Path::to_owned))
+        .collect();
+    for file in files {
+        if file.scope != AuthoredScope::Authored
+            || file.role != AuthoredRole::Schema
+            || Path::new(&file.storage_path)
+                .parent()
+                .is_some_and(|parent| modules.contains(parent))
+        {
+            continue;
+        }
+        if let Some(value) = std::fs::read_to_string(root.join(file.storage_path))
+            .ok()
+            .and_then(|text| serde_json::from_str(&text).ok())
         {
             out.push(value);
         }
@@ -1137,6 +1171,8 @@ impl Service for PlayService {
     fn methods(&self, db: &mut SchemaDb) -> Vec<Method> {
         let play = |m: Method, action: &str| m.scope(Scope::Play).action("ara_play", action);
         vec![
+            Method::new::<headless::HeadlessRunParams>(db, "run", "Run a project or scene headless for exact fixed ticks or simulated seconds; returns results, logs and diagnostics.").scope(Scope::Play).tool("ara_run"),
+            Method::new::<headless::SceneCaptureParams>(db, "capture", "Render a scene or named camera offscreen to PNG at a resolution and quality preset; no windows.").scope(Scope::Play).tool("ara_capture"),
             play(Method::new::<PlayStartParams>(db, "play.start", "Start the scene in pooled player processes (local, host+N or dedicated+N; windowed or headless)."), "start"),
             play(Method::new::<WorldParams>(db, "play.stop", "Stop a play world; its single-use players exit."), "stop"),
             play(Method::new::<WorldParams>(db, "play.pause", "Freeze host-time ticking (explicit steps still work)."), "pause"),
@@ -1171,7 +1207,11 @@ impl Service for PlayService {
             Method::new::<TestRunParams>(db, "test.run", "Run a playtest (inputs, steps, tick-level assertions) in a fresh headless player; optionally twice for determinism.")
                 .scope(Scope::Play)
                 .tool("ara_test"),
-        ]
+        ].into_iter().filter(|m| match m.name.as_str() {
+            "run" => self.headless_automation,
+            "capture" => self.headless_capture,
+            _ => true,
+        }).collect()
     }
 
     fn call(
@@ -1187,6 +1227,16 @@ impl Service for PlayService {
                 .map_or_else(|| latest.clone(), str::to_owned)
         };
         match method {
+            "run" => {
+                let p = parse(params)?;
+                let result = self.run_scene(cx, p);
+                self.with_notes(cx, result)
+            }
+            "capture" => {
+                let p = parse(params)?;
+                let result = self.capture_scene(cx, p);
+                self.with_notes(cx, result)
+            }
             "play.start" => {
                 let p: PlayStartParams = parse(params)?;
                 if p.background == Some(true) {
@@ -1236,7 +1286,7 @@ impl Service for PlayService {
             }
             "script.write" => {
                 let p: ScriptWriteParams = parse(params)?;
-                self.script_write(cx, p)
+                self.queue_script_write(cx, p)
             }
             "play.events" => {
                 let world = self.world(&world_of(&params))?;
@@ -1302,6 +1352,7 @@ impl Service for PlayService {
     }
 
     fn tick(&mut self, cx: &mut Cx<'_>) {
+        self.poll_script_writes(cx);
         self.poll_starting(cx);
         for problem in self.collect_stopped() {
             cx.log(problem);
@@ -1463,12 +1514,38 @@ impl Service for PlayService {
 /// `.world`…) load, project types build on engine types, and the host (CLI, daemon,
 /// editor) validates documents exactly as its players do. Clashes become diagnostics.
 pub fn open_project(root: &Path) -> Result<ara_host::Project, Diagnostic> {
-    ara_host::Project::open_with(root, |db, registry| {
+    let root = &std::fs::canonicalize(root)
+        .map_err(|error| Diagnostic::error(ara_diag::codes::IO, error.to_string()))?;
+    let published = ara_script::project::publish(root, ara_script::ModuleProfile::Gameplay);
+    let mut generated_paths = Vec::new();
+    let mut project = ara_host::Project::open_with(root, |db, registry| {
         let mut problems = ara_runtime::engine::register_schemas(db);
         ara_runtime::engine::register_commands(registry, db);
         if let Err(d) = ara_importers::commands::register(registry, db) {
             problems.push(d);
         }
+        match published {
+            Ok(inventory) => {
+                problems.extend(inventory.diagnostics);
+                for module in inventory
+                    .modules
+                    .iter()
+                    .filter(|m| m.profile == ara_script::ModuleProfile::Gameplay)
+                {
+                    if let Some(schema) = &module.schema {
+                        problems.extend(db.add_json_types(schema));
+                        match std::fs::canonicalize(root.join(&module.schema_path)) {
+                            Ok(path) => generated_paths.push(path),
+                            Err(error) => problems
+                                .push(Diagnostic::error(ara_diag::codes::IO, error.to_string())),
+                        }
+                    }
+                }
+            }
+            Err(diagnostic) => problems.push(diagnostic),
+        }
         problems
-    })
+    })?;
+    project.type_files.extend(generated_paths);
+    Ok(project)
 }

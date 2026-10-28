@@ -128,9 +128,18 @@ pub(super) fn run(env: &Environment, project: &Path) -> Result<()> {
         thread::sleep(Duration::from_millis(25));
     }
     let game = output.join("build");
+    let distribution: Value = serde_json::from_slice(&fs::read(output.join("distribution.json"))?)?;
+    let entry = distribution["entryPoint"]
+        .as_str()
+        .context("distribution entry point")?;
+    validate_shipped_layout(&game, entry)?;
+    ensure!(
+        output.join("report/verify.png").is_file(),
+        "export verification capture is missing from the private report directory"
+    );
     let log = env.directory.join("exported-game.log");
     super::run(
-        env.command(game.join("ara-player.exe"))
+        env.command(game.join(entry))
             .current_dir(&game)
             .arg("--root")
             .arg(&game)
@@ -141,6 +150,57 @@ pub(super) fn run(env: &Environment, project: &Path) -> Result<()> {
     let result = runtime_result(&fs::read_to_string(log)?)?;
     support::json(&env.directory.join("exported-game-result.json"), &result)?;
     Ok(())
+}
+
+/// The store upload root contains only the branded launcher, its data and notices.
+fn validate_shipped_layout(game: &Path, entry: &str) -> Result<()> {
+    ensure!(
+        Path::new(entry).components().count() == 1
+            && Path::new(entry)
+                .extension()
+                .is_some_and(|extension| extension == "exe")
+            && entry != "ara-player.exe",
+        "export must use the game's Windows executable name: {entry}"
+    );
+    for file in fs::read_dir(game)? {
+        let file = file?;
+        let name = file.file_name();
+        ensure!(
+            name == entry
+                || name == "data"
+                || name == "THIRD_PARTY_NOTICES.txt"
+                || name == "NOTICES.txt"
+                || name == "LICENSE.txt",
+            "unexpected file in shipped folder: {}",
+            file.path().display()
+        );
+    }
+    ensure!(
+        game.join(entry).is_file()
+            && game.join("data").is_dir()
+            && game.join("THIRD_PARTY_NOTICES.txt").is_file(),
+        "shipped game is missing its launcher, data folder or notices"
+    );
+    fn private_files(path: &Path) -> Result<()> {
+        for file in fs::read_dir(path)? {
+            let file = file?;
+            let name = file.file_name().to_string_lossy().to_lowercase();
+            ensure!(
+                !name.starts_with("verify.")
+                    && name != "logs"
+                    && name != "symbols"
+                    && !name.ends_with(".pdb")
+                    && !name.ends_with(".render_ids.bin"),
+                "private export artifact leaked into shipped game: {}",
+                file.path().display()
+            );
+            if file.file_type()?.is_dir() {
+                private_files(&file.path())?;
+            }
+        }
+        Ok(())
+    }
+    private_files(game)
 }
 
 fn hash(path: &Path) -> Result<String> {
@@ -167,6 +227,36 @@ fn runtime_result(output: &str) -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shipped_layout_rejects_private_artifacts_and_an_unbranded_launcher() -> Result<()> {
+        let parent =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/release-layout-tests");
+        fs::create_dir_all(&parent)?;
+        let root = tempfile::tempdir_in(parent)?;
+        fs::create_dir(root.path().join("data"))?;
+        fs::write(root.path().join("Outpost.exe"), b"launcher")?;
+        fs::write(root.path().join("THIRD_PARTY_NOTICES.txt"), b"notices")?;
+        validate_shipped_layout(root.path(), "Outpost.exe")?;
+        assert!(validate_shipped_layout(root.path(), "ara-player.exe").is_err());
+        assert!(validate_shipped_layout(root.path(), "../Outpost.exe").is_err());
+        for name in [
+            "verify.png",
+            "verify.json",
+            "verify.legend.json",
+            "verify.render_ids.bin",
+            "ara_player.pdb",
+        ] {
+            let artifact = root.path().join("data").join(name);
+            fs::write(&artifact, b"private")?;
+            assert!(
+                validate_shipped_layout(root.path(), "Outpost.exe").is_err(),
+                "{name}"
+            );
+            fs::remove_file(artifact)?;
+        }
+        Ok(())
+    }
 
     #[test]
     fn smoke_requires_a_verified_runtime_result_with_the_requested_ticks() {

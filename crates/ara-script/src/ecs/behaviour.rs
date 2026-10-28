@@ -13,7 +13,7 @@ use bevy_ecs::world::World;
 use bevy_ecs::world::unsafe_world_cell::UnsafeWorldCell;
 use nonmax::NonMaxU32;
 
-use crate::abi::{BehaviourCall, Frame, PHASE_FRAME, ScriptApi, Tick};
+use crate::abi::{BehaviourCall, Frame, PHASE_FRAME, PHASE_SWEEP, ScriptApi, Tick};
 use crate::ecs::cmdbuf::CmdBuf;
 
 /// One behaviour type, resolved to its data component.
@@ -115,6 +115,22 @@ pub(crate) fn run_phase(
             };
             // SAFETY: the call describes live rows of the data column; no structural
             // change happens until the phase ends (ops are buffered in `buf`).
+            unsafe { (api.run_behaviours)(host, &call) };
+        }
+        if phase != PHASE_FRAME {
+            let call = BehaviourCall {
+                behaviour: plan.id,
+                phase: PHASE_SWEEP,
+                len: 0,
+                reserved: 0,
+                entities: std::ptr::null(),
+                data: std::ptr::null_mut(),
+                tick,
+                frame: std::ptr::null(),
+                commands: std::ptr::from_mut(&mut *buf).cast::<c_void>(),
+            };
+            // SAFETY: the zero-row sweep uses only the live tick and command buffer;
+            // exclusive world access remains published for lifecycle cleanup.
             unsafe { (api.run_behaviours)(host, &call) };
         }
     }

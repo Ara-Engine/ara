@@ -83,6 +83,75 @@ fn a_popover_shifts_inside_the_window_and_submenus_flip_left() {
     assert_eq!(wide.size[0], WINDOW[0] - 2. * MARGIN);
 }
 
+#[test]
+fn signed_gaps_overlap_anchor_edges_and_stay_bounded_when_flipped() {
+    let right: Placement = "right-start".parse().expect("placement");
+    let overlap = place(anchor(40., 30., 80., 24.), [120., 60.], WINDOW, right, -2.);
+    assert_eq!(overlap.side, Side::Right);
+    assert_eq!(overlap.origin, [118., 30.]);
+    let flipped = place(anchor(300., 30., 80., 24.), [120., 60.], WINDOW, right, -2.);
+    assert_eq!(flipped.side, Side::Left);
+    assert_eq!(flipped.origin, [182., 30.]);
+    for offset in [-2., -10_000., f32::MIN] {
+        for placement in ["bottom-start", "top-end", "left-center", "right-start"] {
+            for window in [[2., 2.], WINDOW] {
+                let placed = place(
+                    anchor(390., 280., 80., 24.),
+                    [900., 600.],
+                    window,
+                    placement.parse().expect("placement"),
+                    offset,
+                );
+                assert!(
+                    placed
+                        .origin
+                        .iter()
+                        .chain(&placed.size)
+                        .all(|value| value.is_finite() && *value >= 0.)
+                );
+                assert!(
+                    placed.origin[0] + placed.size[0] <= window[0] + 0.5,
+                    "{placed:?}"
+                );
+                assert!(
+                    placed.origin[1] + placed.size[1] <= window[1] + 0.5,
+                    "{placed:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn frame_accepts_native_submenu_overlap_but_rejects_nonfinite_gaps() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let markup = |offset| {
+        format!(
+            "<ui id='root'><button id='row' text='Submenu' style='position:absolute;left:300px;top:30px;width:80px;height:24px;padding:0px' /><popover id='submenu' anchor='row' placement='right-start' offset='{offset}' style='width:120px'><button id='child' text='Child' style='height:60px;padding:0px' /></popover></ui>"
+        )
+    };
+    let mut ui = Ui::editor(&markup("-2"), EDITOR_CSS, WINDOW)?;
+    ui.frame(&mut text)?;
+    let submenu = ui.nodes[ui.find("submenu").expect("submenu")].rect;
+    assert_eq!(
+        [submenu.x, submenu.y, submenu.w, submenu.h],
+        [182., 30., 120., 60.]
+    );
+    assert_eq!(
+        ui.frame(&mut text)?.layout_passes,
+        0,
+        "overlap placement is stable while idle"
+    );
+    for offset in ["NaN", "inf", "-inf"] {
+        ui.reconcile(&markup(offset))?;
+        let error = ui
+            .frame(&mut text)
+            .expect_err("nonfinite authored gap must be diagnosed");
+        assert!(error.to_string().contains("ARA4046"), "{error}");
+    }
+    Ok(())
+}
+
 fn rows(prefix: &str, n: usize) -> String {
     (0..n)
         .map(|i| {
@@ -214,6 +283,239 @@ fn popovers_keep_css_sizes_until_clamped() -> Result<()> {
     // 400 px tall in a 300 px window: below the point there are 300 - 100 - 4 = 196 px,
     // above it 96; it opens below, clamped.
     assert_eq!([palette.y, palette.h], [100., 196.]);
+    assert_eq!(ui.frame(&mut text)?.layout_passes, 0);
+    Ok(())
+}
+
+#[test]
+fn transient_width_limits_wrap_long_copy_and_fit_short_copy() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let mut ui = Ui::editor(
+        "<ui id='root'><tooltip id='short' at='20,20'><text id='short-copy' text='Save' /></tooltip><popover id='long' at='390,260'><text id='long-copy' text='A longer explanation of this property and the available recovery actions that must wrap within the shared width limit rather than extend beyond the edge of the editor window.' /></popover></ui>",
+        EDITOR_CSS,
+        WINDOW,
+    )?;
+    ui.frame(&mut text)?;
+    let short = ui.nodes[ui.find("short").expect("short")].rect;
+    assert!(short.w < 100., "short hint should fit its text: {short:?}");
+    let long = ui.nodes[ui.find("long").expect("long")].rect;
+    let copy = ui.nodes[ui.find("long-copy").expect("copy")].rect;
+    assert!(long.w <= MAX_WIDTH + 0.5, "{long:?}");
+    assert!(
+        long.x >= MARGIN && long.x + long.w <= WINDOW[0] - MARGIN + 0.5,
+        "{long:?}"
+    );
+    assert!(copy.h > 20., "long copy wraps before placement: {copy:?}");
+    assert_eq!(
+        ui.frame(&mut text)?.layout_passes,
+        0,
+        "limits must not create idle relayout"
+    );
+    Ok(())
+}
+
+#[test]
+fn retained_tooltip_intrinsic_width_does_not_round_down_and_wrap_short_copy() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let mut ui = Ui::editor(
+        "<ui id='root'><tooltip id='tip' at='20,20' style='padding:8px;border-width:1px;max-width:360px'><text id='copy' text='' style='font-size:12px;white-space:normal' /></tooltip></ui>",
+        EDITOR_CSS,
+        WINDOW,
+    )?;
+    for value in [
+        "Play · F5",
+        "Project · scenes/main.scene",
+        "Collapse Hierarchy",
+        "إعدادات العرض · éclairage",
+        "Play · F5",
+    ] {
+        let mut reference = ara_ui_text::Text::new(value.into());
+        let natural = text.measure(&mut reference, None, 12.);
+        assert!(natural.width + 18. < MAX_WIDTH);
+        let copy = ui.find("copy").expect("copy");
+        ui.set_text(copy, value)?;
+        ui.frame(&mut text)?;
+        let copy = &ui.nodes[copy];
+        let tip = &ui.nodes[ui.find("tip").expect("tip")];
+        let paragraph = copy.text.as_ref().expect("paragraph");
+        assert_eq!(
+            paragraph.layout.len(),
+            reference.layout.len(),
+            "intrinsic width must keep short copy on its natural line: {value:?}, natural={natural:?}, copy={:?}",
+            copy.rect
+        );
+        assert!(
+            tip.rect.w >= natural.width + 18. - 0.5 && tip.rect.w <= natural.width + 19.,
+            "tooltip fits its unbroken text plus padding and borders: {value:?}, natural={natural:?}, tip={:?}",
+            tip.rect
+        );
+        assert!(copy.rect.h + 0.5 >= natural.height);
+        assert_eq!(ui.frame(&mut text)?.layout_passes, 0);
+    }
+    Ok(())
+}
+
+#[test]
+fn explicit_large_surface_override_still_clamps_to_the_viewport() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let mut ui = Ui::editor(
+        "<ui id='root'><popover id='palette' at='0,0' style='width:640px;max-width:640px'><text id='copy' text='Commands' /></popover></ui>",
+        EDITOR_CSS,
+        [800., 600.],
+    )?;
+    ui.frame(&mut text)?;
+    assert_eq!(ui.nodes[ui.find("palette").expect("palette")].rect.w, 640.);
+    ui.resize([300., 200.])?;
+    ui.frame(&mut text)?;
+    assert!(ui.nodes[ui.find("palette").expect("palette")].rect.w <= 292.5);
+    Ok(())
+}
+
+#[test]
+fn hover_delay_tracks_stable_targets_and_restarts_after_clock_reset() {
+    let mut delay = HoverDelay::default();
+    assert!(!delay.update(Some(1), 100));
+    assert!(!delay.update(Some(1), 599));
+    assert!(delay.update(Some(1), 600));
+    assert!(!delay.update(Some(2), 601));
+    assert!(!delay.update(Some(2), 3));
+    assert!(delay.update(Some(2), 503));
+    assert!(!delay.update(None, 900));
+    assert!(!delay.update(Some(2), 901));
+}
+
+#[test]
+fn placement_is_finite_and_inside_small_or_detached_surfaces() {
+    for window in [[2., 2.], [400., 300.], [0., 0.]] {
+        for placement in ["bottom-start", "top-end", "left-center", "right-start"] {
+            let placed = place(
+                anchor(-10_000., 10_000., 0., 0.),
+                [200., 100.],
+                window,
+                placement.parse().expect("placement"),
+                4.,
+            );
+            assert!(
+                placed
+                    .origin
+                    .iter()
+                    .chain(&placed.size)
+                    .all(|v| v.is_finite() && *v >= 0.)
+            );
+            assert!(
+                placed.origin[0] + placed.size[0] <= window[0] + 0.5,
+                "{placed:?}"
+            );
+            assert!(
+                placed.origin[1] + placed.size[1] <= window[1] + 0.5,
+                "{placed:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn horizontally_clamped_popover_recovers_width_when_its_anchor_moves() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let markup = |x| {
+        format!(
+            "<ui id='root'><button id='anchor' text='A' style='position:absolute;left:{x}px;top:40px;width:20px;height:20px;padding:0px' /><popover id='menu' anchor='anchor' placement='right-start' style='width:160px'><text id='copy' text='A wrapping menu explanation with enough text to change its height when the available width changes.' /></popover></ui>"
+        )
+    };
+    let mut ui = Ui::editor(&markup(90), EDITOR_CSS, [200., 300.])?;
+    ui.frame(&mut text)?;
+    let narrow = ui.nodes[ui.find("menu").expect("menu")].rect;
+    assert!(
+        narrow.w < 100.,
+        "both sides should constrain the first opening: {narrow:?}"
+    );
+    ui.reconcile(&markup(5))?;
+    ui.frame(&mut text)?;
+    let wide = ui.nodes[ui.find("menu").expect("menu")].rect;
+    assert_eq!(wide.w, 160., "old clamp must not stick: {wide:?}");
+    assert!(
+        wide.y >= MARGIN && wide.y + wide.h <= 300. - MARGIN + 0.5,
+        "{wide:?}"
+    );
+    assert_eq!(ui.frame(&mut text)?.layout_passes, 0);
+    Ok(())
+}
+
+#[test]
+fn final_wrapped_tooltip_text_keeps_its_measured_height_and_bottom_padding() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let mut ui = Ui::editor(
+        "<ui id='root'><button id='anchor' text='Resume' /><tooltip id='tip' class='card' anchor='anchor' style='min-height:48px;max-width:200px'><text id='copy' text='[Cômpôñëñt prëvïëw~~~~~~]' /></tooltip></ui>",
+        EDITOR_CSS,
+        [320., 360.],
+    )?;
+    ui.frame(&mut text)?;
+    let tip = &ui.nodes[ui.find("tip").expect("tip")];
+    let copy = &ui.nodes[ui.find("copy").expect("copy")];
+    let lines = copy.text.as_ref().expect("paragraph");
+    assert!(
+        copy.rect.h + 0.5 >= lines.layout.height(),
+        "final paragraph must fit its own row"
+    );
+    assert!(
+        tip.rect.y + tip.rect.h - copy.rect.y - lines.layout.height() >= 12.0 - 0.5,
+        "wrapped copy must keep the authored bottom padding"
+    );
+    assert_eq!(ui.frame(&mut text)?.layout_passes, 0);
+    Ok(())
+}
+
+#[test]
+fn flex_scroll_popup_keeps_intrinsic_height_when_clamped_then_recovers_and_shrinks_to_content()
+-> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let markup = |count| {
+        format!(
+            "<ui id='root'><button id='anchor' text='Open' style='position:absolute;left:8px;top:90px;width:60px;height:20px;padding:0px' /><popover id='popup' anchor='anchor' offset='0' style='display:flex;width:220px;max-height:180px;padding:4px;gap:4px'><field id='search' text='' style='height:26px;padding:0px' /><scroll id='list' style='min-height:0px;max-height:240px;flex-basis:auto;flex-shrink:1'>{}</scroll><button id='footer' text='Close' style='height:20px;padding:0px' /></popover></ui>",
+            rows("option", count)
+        )
+    };
+    let mut ui = Ui::editor(&markup(20), EDITOR_CSS, [320., 240.])?;
+    ui.frame(&mut text)?;
+    let bounded = |ui: &Ui| {
+        let popup = &ui.nodes[ui.find("popup").expect("popup")];
+        let list = &ui.nodes[ui.find("list").expect("list")];
+        let footer = &ui.nodes[ui.find("footer").expect("footer")];
+        assert!(
+            popup.rect.y >= 0. && popup.rect.y + popup.rect.h <= ui.size[1] + 0.5,
+            "{:?}",
+            popup.rect
+        );
+        assert!(list.clip.h > 0., "list remains pointer-reachable");
+        assert!(
+            footer.rect.y + footer.rect.h <= popup.rect.y + popup.rect.h + 0.5,
+            "footer must stay inside the clamped flex popup"
+        );
+    };
+    bounded(&ui);
+    let clamped = ui.nodes[ui.find("popup").expect("popup")].rect.h;
+    assert!(clamped < 180.);
+    assert_eq!(
+        ui.frame(&mut text)?.layout_passes,
+        0,
+        "height clamp must not oscillate"
+    );
+    ui.resize([320., 400.])?;
+    ui.frame(&mut text)?;
+    bounded(&ui);
+    assert_eq!(
+        ui.nodes[ui.find("popup").expect("popup")].rect.h,
+        180.,
+        "authored maximum height remains effective"
+    );
+    assert_eq!(ui.frame(&mut text)?.layout_passes, 0);
+    ui.reconcile(&markup(1))?;
+    ui.frame(&mut text)?;
+    bounded(&ui);
+    assert!(
+        ui.nodes[ui.find("popup").expect("popup")].rect.h < clamped,
+        "a filtered list fits its remaining content"
+    );
     assert_eq!(ui.frame(&mut text)?.layout_passes, 0);
     Ok(())
 }

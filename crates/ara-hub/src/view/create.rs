@@ -3,8 +3,8 @@
 use super::{Ctx, Page, columns, shell, tracks};
 use crate::model::{Hub, Intent, Pick, Template, text};
 
-/// Sidebar, padding, settings column and gap.
-const CHROME: f32 = 317. + 380. + 28.;
+/// Page padding, settings column and gap; creation uses the full window.
+const CHROME: f32 = 80. + 380. + 28.;
 
 pub(super) fn body(p: &mut Page, hub: &Hub, ctx: &Ctx) {
     p.panel("create", |p| {
@@ -170,24 +170,26 @@ fn settings(p: &mut Page, hub: &Hub) {
         });
         p.panel("form-row", |p| {
             p.text("label", "Engine version");
-            p.panel("row", |p| {
-                p.panel("segment", |p| {
-                    for engine in &hub.engines {
-                        let on = form.engine.as_deref() == Some(engine.version.as_str());
-                        let class = if on { "seg seg-on" } else { "seg" };
-                        p.action(
-                            &format!("create-engine-{}", engine.version),
-                            class,
-                            "",
-                            &engine.version,
-                            Some(Intent::CreateEngine(engine.version.clone())),
-                        );
-                    }
-                    if hub.engines.is_empty() {
-                        p.text("small muted", "No engines installed");
-                    }
-                });
-            });
+            if hub.engines.is_empty() {
+                p.text("small muted", "No engines installed");
+            } else {
+                p.dropdown(
+                    "create-engine",
+                    "Engine version",
+                    hub.engines
+                        .iter()
+                        .map(|engine| {
+                            (
+                                engine.version.clone(),
+                                Intent::CreateEngine(engine.version.clone()),
+                            )
+                        })
+                        .collect(),
+                    form.engine
+                        .as_ref()
+                        .map(|version| Intent::CreateEngine(version.clone())),
+                );
+            }
             problems(p, hub, "engineVersion");
         });
         for diagnostic in form.general() {
@@ -199,13 +201,7 @@ fn settings(p: &mut Page, hub: &Hub) {
         p.leaf("divider");
         p.panel("row", |p| {
             p.leaf("fill");
-            p.action(
-                "create-cancel",
-                "",
-                "",
-                "Cancel",
-                Some(Intent::Navigate(crate::model::View::Projects)),
-            );
+            p.action("create-cancel", "", "", "Cancel", Some(Intent::Back));
             let label = if form.submitting {
                 "Creating…"
             } else {

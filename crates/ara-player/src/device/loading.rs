@@ -213,12 +213,20 @@ impl Windowed {
         hidden: bool,
         mode: ara_platform::GameWindowMode,
     ) -> Result<(Self, Vec<std::ffi::CString>, [u32; 2])> {
-        let title = format!("Ara | {name}");
+        let installed = ara_gpu::cooked::install_root();
+        let title = installed
+            .as_ref()
+            .and_then(|root| std::fs::read(root.join("ara-launch.json")).ok())
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .and_then(|launch| launch.get("name")?.as_str().map(str::to_owned))
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or_else(|| format!("Ara | {name}"));
         let window = Window::game(&title, size, mode, hidden)?;
         // Native icons are cosmetic; Wayland may not support them.
-        let _ = window.set_icon_png(include_bytes!(
+        let icon = installed.and_then(|root| std::fs::read(root.join("icon.png")).ok());
+        let _ = window.set_icon_png(icon.as_deref().unwrap_or(include_bytes!(
             "../../../../assets/brand/icons/game/ara-game-64.png"
-        ));
+        )));
         let size = window.size()?;
         let extensions = window.extensions()?;
         Ok((
@@ -232,6 +240,9 @@ impl Windowed {
                 frame_times: Vec::new(),
                 window_start: Instant::now(),
                 present_enabled: true,
+                hidden,
+                presentable_override: None,
+                skip_2d: false,
             },
             extensions,
             size,

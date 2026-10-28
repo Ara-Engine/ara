@@ -6,7 +6,7 @@
 mod support;
 use ara_hub::{
     connection::Connection,
-    model::{Hub, Intent, Prefs, State, View},
+    model::{Call, Hub, Intent, Prefs, State, View},
 };
 use std::{
     fs,
@@ -30,8 +30,23 @@ struct Driver {
     hub: Hub,
     connection: Connection,
     config: PathBuf,
+    editor_open_requests: usize,
 }
 impl Driver {
+    /// Exercise the real service without opening a desktop editor. The native
+    /// model test separately checks the exact automatic editor-open request.
+    fn send(&mut self) {
+        let mut calls = self.hub.take_calls();
+        for call in &mut calls {
+            if let Call::Open { headless, .. } = call
+                && !*headless
+            {
+                self.editor_open_requests += 1;
+                *headless = true;
+            }
+        }
+        self.connection.send(calls);
+    }
     /// Apply intents, then pump calls and events until `done` holds and nothing is
     /// in flight.
     fn run(&mut self, what: &str, intents: Vec<Intent>, done: impl Fn(&Hub) -> bool) {
@@ -40,14 +55,14 @@ impl Driver {
         }
         let until = Instant::now() + Duration::from_secs(90);
         loop {
-            self.connection.send(self.hub.take_calls());
+            self.send();
             if let Some(event) = self.connection.wait(Duration::from_millis(50)) {
                 self.hub.event(event);
             }
             for event in self.connection.poll() {
                 self.hub.event(event);
             }
-            self.connection.send(self.hub.take_calls());
+            self.send();
             if done(&self.hub) && self.hub.idle() {
                 return;
             }
@@ -81,6 +96,7 @@ fn create_open_headless_close_and_remove_through_the_view_model() {
         hub: Hub::new(Prefs::default(), root.clone(), None),
         connection: Connection::start(config.clone(), PathBuf::from(env!("CARGO_BIN_EXE_ara"))),
         config,
+        editor_open_requests: 0,
     };
     driver.run("initial load", Vec::new(), Hub::ready);
     let hub = &driver.hub;
@@ -180,12 +196,11 @@ fn create_open_headless_close_and_remove_through_the_view_model() {
     assert_eq!(driver.hub.highlight.as_deref(), Some(project.id.as_str()));
     let id = project.id.clone();
 
-    // Open headless: busy while starting, then the status badge from hub.status.
-    driver.hub.intent(Intent::OpenHeadless(id.clone()));
-    assert!(driver.hub.busy.contains_key(&id), "progress while starting");
-    driver.run("open headless", Vec::new(), |hub| {
-        hub.state(&id) == State::Headless
-    });
+    assert_eq!(
+        driver.editor_open_requests, 1,
+        "creation requests one automatic open"
+    );
+    assert_eq!(driver.hub.state(&id), State::Headless);
     assert!(
         driver.hub.notices.iter().all(|n| !n.is_error()),
         "{:#?}",

@@ -71,6 +71,113 @@ fn begin(h: &mut Host, author: &str) -> String {
 }
 
 #[test]
+fn source_replace_has_offline_undo_redo_and_rejects_external_changes() {
+    fn complete(h: &mut Host, method: &str, params: Value) -> Result<Value, Vec<Diagnostic>> {
+        let session = params["session"].clone();
+        let result = h
+            .call(ConnId::LOCAL, method, params)
+            .map_err(|e| e.diagnostics())?;
+        let Some(job) = result["job"].as_str() else {
+            return Ok(result);
+        };
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            h.tick();
+            let status = call(h, "jobs.status", json!({"session":session,"job":job}));
+            if status["status"] == "done" {
+                return Ok(status["result"].clone());
+            }
+            if status["status"] == "failed" {
+                return Err(
+                    serde_json::from_value(status["diagnostics"].clone()).expect("diagnostics")
+                );
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "source job timed out: {status}"
+            );
+            std::thread::yield_now();
+        }
+    }
+    let dir = std::env::var_os("ARA_TEST_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/authoring-tests")
+        })
+        .join(format!("source-replace-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    copy_dir(&fixtures(), &dir);
+    fs::create_dir_all(dir.join("scripts/Game")).expect("module directory");
+    let path = "scripts/Game/Door.cs";
+    fs::write(dir.join(path), "before\n").expect("source");
+    let mut h = open(&dir, 2041);
+    let session = begin(&mut h, "agent:fixer");
+    let base = "9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb";
+    let request = json!({"session":session,"why":"Fix the script","commands":[
+        {"cmd":"source.replace","args":{"path":path,"baseHash":base,"text":"after\n"}}
+    ]});
+    let result = complete(&mut h, "cmd.apply", request).expect("source applied");
+    assert!(result["txn"].is_string(), "{result}");
+    h.flush();
+    assert_eq!(
+        fs::read_to_string(dir.join(path)).expect("replaced"),
+        "after\n"
+    );
+    drop(h);
+    // A crash after the journal entry but before the byte write leaves this state.
+    let journal = dir.join(".ara/journal");
+    let interrupted = fs::read_to_string(&journal)
+        .expect("journal")
+        .lines()
+        .filter(|line| !line.contains("\"t\":\"fileFlush\""))
+        .map(|line| format!("{line}\n"))
+        .collect::<String>();
+    fs::write(journal, interrupted).expect("simulate crash before file flush acknowledgment");
+    fs::write(dir.join(path), "before\n").expect("simulate interrupted materialization");
+    let mut h = open(&dir, 2042);
+    assert_eq!(
+        fs::read_to_string(dir.join(path)).expect("recovered bytes"),
+        "after\n"
+    );
+    let session = begin(&mut h, "agent:fixer");
+    complete(&mut h, "history.undo", json!({"session":session})).expect("undo");
+    h.flush();
+    assert_eq!(
+        fs::read_to_string(dir.join(path)).expect("undone"),
+        "before\n"
+    );
+    drop(h);
+    let mut h = open(&dir, 2043);
+    let session = begin(&mut h, "agent:fixer");
+    complete(&mut h, "history.redo", json!({"session":session})).expect("redo");
+    h.flush();
+    assert_eq!(
+        fs::read_to_string(dir.join(path)).expect("redone"),
+        "after\n"
+    );
+    fs::write(dir.join(path), "external\n").expect("external editor");
+    let errors =
+        complete(&mut h, "history.undo", json!({"session":session})).expect_err("stale file");
+    assert_eq!(errors[0].code, codes::STALE_BASE);
+    assert_eq!(
+        fs::read_to_string(dir.join(path)).expect("preserved"),
+        "external\n"
+    );
+    fs::write(dir.join(path), "before\n").expect("external editor restores an earlier revision");
+    drop(h);
+    let mut reopened = open(&dir, 2044);
+    assert_eq!(
+        fs::read_to_string(dir.join(path)).expect("external known bytes"),
+        "before\n",
+        "a completed flush must never be replayed over an intentional external restoration"
+    );
+    let session = begin(&mut reopened, "agent:fixer");
+    let errors = complete(&mut reopened, "history.undo", json!({"session":session}))
+        .expect_err("external restoration is a stale undo base");
+    assert_eq!(errors[0].code, codes::STALE_BASE);
+}
+
+#[test]
 fn native_ui_creation_and_source_ops_preserve_xml_across_restart_and_undo() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/authoring-tests")
@@ -459,6 +566,125 @@ fn dry_run_equals_apply_and_symbols_map_to_real_ids() {
 }
 
 #[test]
+fn entity_revert_works_for_human_authored_cli_history_too() {
+    let dir = project("human-entity-revert");
+    let mut h = open(&dir, 414);
+    let human = begin(&mut h, "human");
+    let change = call(
+        &mut h,
+        "cmd.apply",
+        json!({"session":human,"commands":[
+            {"cmd":"property.set","args":{"entity":"e_flr1","path":"name","value":"Ground"}}
+        ]}),
+    );
+    let result = call(
+        &mut h,
+        "review.revert",
+        json!({"session":human,"entity":"e_flr1"}),
+    );
+    assert_eq!(result["reverted"][0]["txn"], change["txn"]);
+    assert_eq!(result["reverted"][0]["author"], "human");
+    assert_eq!(name_of(&mut h, &human, "e_flr1"), "Floor");
+}
+
+#[test]
+fn partial_entity_reverts_do_not_become_new_agent_turns_after_restart() {
+    for (index, who) in ["agent:builder", "human"].into_iter().enumerate() {
+        let dir = project(&format!("partial-revert-restart-{index}"));
+        let mut h = open(&dir, 412);
+        let agent = begin(&mut h, who);
+        let made = call(
+            &mut h,
+            "cmd.apply",
+            json!({"session":agent,"why":"two entity turn","commands":[
+                {"cmd":"property.set","args":{"entity":"e_flr1","path":"name","value":"Ground"}},
+                {"cmd":"entity.create","as":"marker","args":{"name":"Marker"}}
+            ]}),
+        );
+        let marker = made["ids"]["$marker"].as_str().expect("marker").to_owned();
+        call(
+            &mut h,
+            "review.revert",
+            json!({"session":agent,"entity":marker}),
+        );
+        drop(h);
+        let mut h = open(&dir, 413);
+        let agent = begin(&mut h, who);
+        assert_eq!(
+            fail(
+                &mut h,
+                "review.revert",
+                json!({"session":agent,"entity":marker})
+            )
+            .code,
+            codes::NOT_REVIEWABLE,
+            "a compensating transaction is not another authoring turn"
+        );
+        assert_eq!(name_of(&mut h, &agent, "e_flr1"), "Ground");
+    }
+}
+
+#[test]
+fn entity_revert_selects_the_calling_agents_latest_turn_and_reports_attribution() {
+    let dir = project("entity-latest-turn");
+    let mut h = open(&dir, 410);
+    let agent = begin(&mut h, "agent:builder");
+    let other = begin(&mut h, "agent:lighting");
+    let edit = |h: &mut Host, session: &str, name: &str| {
+        call(
+            h,
+            "cmd.apply",
+            json!({
+                "session":session,"why":name,"commands":[{"cmd":"property.set","args":{
+                    "entity":"e_flr1","path":"name","value":name
+                }}]
+            }),
+        )
+    };
+    edit(&mut h, &agent, "Ground");
+    let latest = edit(&mut h, &agent, "Recent ground");
+    call(
+        &mut h,
+        "cmd.apply",
+        json!({"session":other,"why":"light separately","commands":[
+            {"cmd":"property.set","args":{"entity":"e_flr1","path":"Transform.position","value":[1,0,0]}}
+        ]}),
+    );
+    call(&mut h, "review.accept", json!({"session":agent,"all":true}));
+    drop(h);
+    let mut h = open(&dir, 411);
+    let agent = begin(&mut h, "agent:builder");
+    let result = call(
+        &mut h,
+        "review.revert",
+        json!({"session":agent,"entity":"e_flr1"}),
+    );
+    assert_eq!(
+        result["reverted"].as_array().map(Vec::len),
+        Some(1),
+        "{result}"
+    );
+    assert_eq!(result["reverted"][0]["txn"], latest["txn"]);
+    assert_eq!(result["reverted"][0]["author"], "agent:builder");
+    assert!(
+        result["text"]
+            .as_str()
+            .is_some_and(|s| s.contains("Recent ground"))
+    );
+    assert_eq!(name_of(&mut h, &agent, "e_flr1"), "Ground");
+    let inspected = call(
+        &mut h,
+        "inspect",
+        json!({"session":agent,"entities":["e_flr1"],"format":"json"}),
+    );
+    assert!(
+        inspected.to_string().contains("1.0") || inspected.to_string().contains("[1,0,0]"),
+        "{inspected}"
+    );
+    call(&mut h, "review.accept", json!({"session":agent,"all":true}));
+}
+
+#[test]
 fn review_accepts_and_reverts_per_transaction_and_entity() {
     let dir = project("review");
     let mut h = open(&dir, 4);
@@ -676,6 +902,97 @@ fn external_edits_merge_in_or_are_reported_without_overwriting() {
     );
     assert_eq!(logs["total"], 1);
     assert_eq!(name_of(&mut h, &s, "e_flr1"), "Agent");
+}
+
+#[test]
+fn equivalent_default_spelling_after_undo_keeps_redo_but_real_external_edits_are_journaled() {
+    let dir = project("default-echo");
+    fs::remove_file(dir.join("types/render.types.json"))
+        .expect("replace fixture schemas with runtime schemas");
+    let mut disk: Value = serde_json::from_str(&scene(&dir)).expect("scene JSON");
+    disk["records"]["e_flr1"]["MeshRenderer"] = json!({"materialOverrides":[{"primitive":0,"material":"@prefabs/stack.prefab#pf_stack001"}]});
+    fs::write(
+        dir.join("levels/arena.scene"),
+        ara_json::to_canonical_string(&disk),
+    )
+    .expect("renderer defaults");
+    let project = Project::open_with(&dir, |db, _| {
+        ara_runtime::components::register_schemas(db);
+        Vec::new()
+    })
+    .expect("runtime project");
+    let mut host = Host::open(
+        project,
+        HostConfig {
+            debounce: Duration::from_secs(3600),
+            watch_every: Duration::ZERO,
+            scan_every: Duration::ZERO,
+            seed: Some(701),
+            ..HostConfig::default()
+        },
+    )
+    .expect("runtime host");
+    let session = begin(&mut host, "human");
+    call(
+        &mut host,
+        "cmd.apply",
+        json!({"session":session,"doc":"levels/arena.scene","commands":[
+            {"cmd":"property.set","args":{"entity":"e_flr1","path":"Transform.position","value":[2,0,0]}}
+        ]}),
+    );
+    host.flush();
+    call(&mut host, "history.undo", json!({"session":session}));
+    host.flush();
+    let revision = host.store().revision();
+    let mut disk: Value = serde_json::from_str(&scene(&dir)).expect("scene JSON");
+    assert!(
+        disk["records"]["e_flr1"]["MeshRenderer"]["materialOverrides"][0]
+            .get("primitive")
+            .is_none(),
+        "canonical native save elides the primitive slot default"
+    );
+    disk["records"]["e_flr1"]["Transform"]["position"] = json!([0, 0, 0]);
+    disk["records"]["e_flr1"]["Transform"]["scale"] = json!([40.0, 0.5, 40.0]);
+    disk["records"]["e_flr1"]["MeshRenderer"]["materialOverrides"][0]["primitive"] = json!(0);
+    fs::write(
+        dir.join("levels/arena.scene"),
+        serde_json::to_string_pretty(&disk).expect("equivalent JSON"),
+    )
+    .expect("default spelling");
+    host.tick();
+    assert_eq!(
+        host.store().revision(),
+        revision,
+        "default spelling must not become an external-edit transaction"
+    );
+    call(&mut host, "history.redo", json!({"session":session}));
+    assert_eq!(
+        host.store()
+            .workspace()
+            .doc("sc_arena001")
+            .expect("scene")
+            .record("e_flr1")
+            .expect("floor")["Transform"]["position"],
+        json!([2, 0, 0])
+    );
+    host.flush();
+    let revision = host.store().revision();
+    let mut disk: Value = serde_json::from_str(&scene(&dir)).expect("saved scene");
+    disk["records"]["e_flr1"]["Transform"]["position"] = json!([4, 0, 0]);
+    fs::write(
+        dir.join("levels/arena.scene"),
+        ara_json::to_canonical_string(&disk),
+    )
+    .expect("real external edit");
+    host.tick();
+    assert_eq!(host.store().revision(), revision + 1);
+    let history = call(
+        &mut host,
+        "history.list",
+        json!({"session":session,"limit":1}),
+    );
+    assert_eq!(history["items"][0]["label"], "external edit");
+    assert_eq!(history["items"][0]["author"], "human");
 }
 
 /// Tick until `done`, failing after ten seconds.

@@ -109,7 +109,7 @@ namespace Ara.Hosting
         /// </summary>
         [FieldOffset(0)] public uint Behaviour;
         /// <summary>
-        /// <c>PHASE_TICK</c> or <c>PHASE_FRAME</c>.
+        /// <c>PHASE_TICK</c>, <c>PHASE_FRAME</c>, or the zero-row <c>PHASE_SWEEP</c> after a tick.
         /// </summary>
         [FieldOffset(4)] public uint Phase;
         /// <summary>
@@ -294,7 +294,7 @@ namespace Ara.Hosting
     /// <summary>
     /// Passed to <c>ara_script_init</c>: ABI identity, the host context and the host table.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 168)]
+    [StructLayout(LayoutKind.Explicit, Size = 176)]
     public unsafe partial struct HostInit
     {
         /// <summary>
@@ -322,7 +322,7 @@ namespace Ara.Hosting
     /// <summary>
     /// Functions the Rust host offers C#. Each takes the opaque <c>ctx</c> from <c>HostInit</c>.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit, Size = 144)]
+    [StructLayout(LayoutKind.Explicit, Size = 152)]
     public unsafe partial struct HostApi
     {
         /// <summary>
@@ -397,31 +397,37 @@ namespace Ara.Hosting
         // (void* ctx, uint component, ulong* out, uint cap)
         [FieldOffset(96)] public delegate* unmanaged<void*, uint, ulong*, uint, uint> QueryEntities;
         /// <summary>
+        /// Scene identity/hierarchy query (SCENE_*). Returns the required count and
+        /// writes nothing when cap is too small. Exclusive gameplay phases only.
+        /// </summary>
+        // (void* ctx, uint op, ulong entity, byte* name, uint len, ulong* out, uint cap)
+        [FieldOffset(104)] public delegate* unmanaged<void*, uint, ulong, byte*, uint, ulong*, uint, uint> SceneEntities;
+        /// <summary>
         /// Reads a fixed-tick action axis (button = axis 0). Missing actions are zero.
         /// Exclusive phases only; the embedding runtime publishes the tick's input snapshot.
         /// </summary>
         // (void* ctx, ulong player, byte* name, uint len, uint axis)
-        [FieldOffset(104)] public delegate* unmanaged<void*, ulong, byte*, uint, uint, float> InputAxis;
+        [FieldOffset(112)] public delegate* unmanaged<void*, ulong, byte*, uint, uint, float> InputAxis;
         /// <summary>
         /// Authored input owner for an entity, or zero. Exclusive gameplay phases only.
         /// </summary>
         // (void* ctx, ulong entity)
-        [FieldOffset(112)] public delegate* unmanaged<void*, ulong, ulong> InputPlayer;
+        [FieldOffset(120)] public delegate* unmanaged<void*, ulong, ulong> InputPlayer;
         /// <summary>
         /// Queues a navmesh destination after the exclusive gameplay phase; enabled=0 stops.
         /// </summary>
         // (void* ctx, ulong entity, float x, float y, float z, uint enabled)
-        [FieldOffset(120)] public delegate* unmanaged<void*, ulong, float, float, float, uint, void> Navigate;
+        [FieldOffset(128)] public delegate* unmanaged<void*, ulong, float, float, float, uint, void> Navigate;
         /// <summary>
         /// Suppresses locomotion during this fixed tick (downed actors or completed runs).
         /// </summary>
         // (void* ctx, ulong entity)
-        [FieldOffset(128)] public delegate* unmanaged<void*, ulong, void> CharacterStop;
+        [FieldOffset(136)] public delegate* unmanaged<void*, ulong, void> CharacterStop;
         /// <summary>
         /// Queues a named boolean animator parameter after exclusive gameplay callbacks.
         /// </summary>
         // (void* ctx, ulong entity, byte* name, uint len, uint value)
-        [FieldOffset(136)] public delegate* unmanaged<void*, ulong, byte*, uint, uint, void> AnimationBool;
+        [FieldOffset(144)] public delegate* unmanaged<void*, ulong, byte*, uint, uint, void> AnimationBool;
     }
 
     /// <summary>
@@ -613,6 +619,10 @@ namespace Ara.Hosting
         /// </summary>
         public const uint PhaseFrame = 2u;
         /// <summary>
+        /// End-of-tick lifecycle sweep, even when a behaviour has no remaining chunks.
+        /// </summary>
+        public const uint PhaseSweep = 3u;
+        /// <summary>
         /// Command-buffer op: make the reserved entity real.
         /// </summary>
         public const uint CmdSpawn = 1u;
@@ -632,6 +642,26 @@ namespace Ara.Hosting
         /// Command-buffer op: emit a presentation cue (type index + bytes).
         /// </summary>
         public const uint CmdCue = 5u;
+        /// <summary>
+        /// Queue a ChildOf relationship change; payload is the parent's u64 handle (zero unparents).
+        /// </summary>
+        public const uint CmdParent = 6u;
+        /// <summary>
+        /// Find entities by exact name, name path or stable scene ID.
+        /// </summary>
+        public const uint SceneFind = 0u;
+        /// <summary>
+        /// Read the direct ECS parent.
+        /// </summary>
+        public const uint SceneParent = 1u;
+        /// <summary>
+        /// Read direct ECS children in authored sibling order.
+        /// </summary>
+        public const uint SceneChildren = 2u;
+        /// <summary>
+        /// Read other ECS children of the same parent, including roots.
+        /// </summary>
+        public const uint SceneSiblings = 3u;
         /// <summary>
         /// Status: ok.
         /// </summary>
@@ -686,9 +716,9 @@ namespace Ara.Hosting
     public static class AbiInfo
     {
         /// <summary>Must equal the host's <c>ABI_VERSION</c>.</summary>
-        public const uint Version = 3;
+        public const uint Version = 4;
         /// <summary>Hash of every ABI layout and the engine components this file was generated from.</summary>
-        public const ulong LayoutHash = 0xA97C40065C14C028UL;
+        public const ulong LayoutHash = 0x55E989CFAA337A63UL;
 
         /// <summary>Checks that the C# layouts agree with the generated sizes; returns an error or null.</summary>
         public static string? VerifySizes()
@@ -699,7 +729,7 @@ namespace Ara.Hosting
             if (Unsafe.SizeOf<global::Ara.Hosting.BehaviourCall>() != 56) return "global::Ara.Hosting.BehaviourCall: expected 56 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.BehaviourCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.CommandCall>() != 112) return "global::Ara.Hosting.CommandCall: expected 112 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.CommandCall>();
             if (Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>() != 120) return "global::Ara.Hosting.ReloadReport: expected 120 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.ReloadReport>();
-            if (Unsafe.SizeOf<global::Ara.Hosting.HostInit>() != 168) return "global::Ara.Hosting.HostInit: expected 168 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.HostInit>();
+            if (Unsafe.SizeOf<global::Ara.Hosting.HostInit>() != 176) return "global::Ara.Hosting.HostInit: expected 176 bytes, got " + Unsafe.SizeOf<global::Ara.Hosting.HostInit>();
             if (Unsafe.SizeOf<global::Ara.Transform>() != 36) return "global::Ara.Transform: expected 36 bytes, got " + Unsafe.SizeOf<global::Ara.Transform>();
             return null;
         }

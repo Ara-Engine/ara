@@ -7,6 +7,8 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+blake3.workspace = true
+ara-hotpatch = { path = "../ara-hotpatch" }
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 quote.workspace = true
@@ -20,7 +22,12 @@ toml_edit = { version = "0.25", features = ["serde"] }
 libc.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+object = { version = "0.37", features = ["write"] }
+cc.workspace = true
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_System_Performance", "Win32_System_Diagnostics_ToolHelp", "Win32_Security"] }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

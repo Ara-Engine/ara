@@ -40,9 +40,7 @@
 //! - `ARA_TSR_SHADING_CHANGE` (0: the pyramid pass skipped, equal fidelity and
 //!   steadier in the Showcase sweep; 1 re-enables FSR's), `ARA_TSR_LUMA_INSTABILITY`
 //!   (1; 0 skips the luma instability pass, clearly less stable);
-//! - `ARA_TSR_IDS` (1; 0 drops the entity-ID signal and its scratch traffic);
-//! - `ARA_TSR_PREEXPOSED` (0): the HDR input already holds radiance × the applied
-//!   exposure (the pre-exposure contract); otherwise TSR applies it.
+//! - `ARA_TSR_IDS` (1; 0 drops the entity-ID signal and its scratch traffic).
 //!
 //! Images are allocated on first use at the view's render and display sizes,
 //! reallocated (with a history reset) when either size or the path changes, and
@@ -511,11 +509,10 @@ impl Tsr {
                 constants::FRAME_SECONDS,
                 1.,
             ],
-            // The one pre-exposure switch: 0 multiplies the linear HDR input by the
-            // look's applied exposure; 1 reads it as already pre-exposed (VQ's
-            // contract). Output and history are pre-exposed by the applied exposure
-            // either way, history decoded with last frame's.
-            exposure: [f32::from(u8::from(t.pre_exposed)), inputs.exposure, 0., 0.],
+            // The scene HDR input is pre-exposed by the applied exposure (look.slangh
+            // exposeHdr), as are output and history (history decoded with last
+            // frame's); x = 1 tells the shader not to apply it again.
+            exposure: [1., inputs.exposure, 0., 0.],
             rcas: constants::rcas(t.sharpness),
             inputs: [
                 0,

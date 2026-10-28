@@ -17,7 +17,8 @@ pub(super) fn request(render: [u32; 2], display: [u32; 2]) -> ResourcePreparatio
                 OUTPUT => vk::Format::R8G8B8A8_UNORM,
                 MOTION => vk::Format::R16G16_SFLOAT,
                 WIRE => vk::Format::R8_UNORM,
-                HISTORY0 | HISTORY1 => vk::Format::R16G16B16A16_SFLOAT,
+                // HDR is pre-exposed (`HdrExposure`), so half floats keep its range.
+                HDR | HISTORY0 | HISTORY1 => vk::Format::R16G16B16A16_SFLOAT,
                 _ => vk::Format::R32G32B32A32_SFLOAT,
             };
             ImagePreparation {

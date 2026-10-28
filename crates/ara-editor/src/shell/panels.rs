@@ -291,6 +291,23 @@ impl Shell {
         editor: &mut Editor,
         out: &mut String,
     ) -> ara_ui::Result<()> {
+        #[cfg(feature = "hotpatch")]
+        {
+            ara_hotpatch::call!(Self::draw_panel, self, panel, editor, out)
+        }
+        #[cfg(not(feature = "hotpatch"))]
+        {
+            self.draw_panel(panel, editor, out)
+        }
+    }
+
+    /// Build one panel through the current Rust generation, retaining its authoring state.
+    fn draw_panel(
+        &mut self,
+        panel: &str,
+        editor: &mut Editor,
+        out: &mut String,
+    ) -> ara_ui::Result<()> {
         match panel {
             "hierarchy" => self.hierarchy_panel(editor, out)?,
             "scene" => self.scene_panel(editor, out),

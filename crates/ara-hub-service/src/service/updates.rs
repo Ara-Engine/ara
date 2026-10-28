@@ -1,4 +1,5 @@
 //! Release I/O workers never hold the serialized registry authority.
+mod removal_preflight;
 mod repair;
 mod uninstall;
 use super::*;
@@ -52,6 +53,10 @@ enum Message {
     Phase(String, &'static str),
     UninstallPrepared(String, Result<PathBuf, ara_update::Error>),
     Uninstalled(String, Result<PathBuf, ara_update::Error>),
+    UninstallInspected(
+        String,
+        Result<removal_preflight::Inspection, ara_update::Error>,
+    ),
     RepairReady(String, Result<PathBuf, ara_update::Error>),
     RepairCleaned(String, Result<(), ara_update::Error>),
     Done(String, Result<PathBuf, ara_update::Error>),
@@ -154,6 +159,9 @@ impl Hub {
                 }
                 Message::UninstallPrepared(id, result) => self.commit_uninstall(id, result),
                 Message::Uninstalled(id, result) => self.finish_uninstall(id, result),
+                Message::UninstallInspected(id, result) => {
+                    self.finish_uninstall_preflight(id, result)
+                }
                 Message::RepairReady(id, result) => self.commit_repair(id, result),
                 Message::RepairCleaned(id, result) => self.finish_repair(id, result),
                 Message::Done(id, result) => {
@@ -306,7 +314,9 @@ impl Hub {
                     ));
                 }
                 job.cancel.cancel();
-                if job.state == "failed" || job.state == "cancelled" {
+                if job.kind != "uninstall-preflight"
+                    && (job.state == "failed" || job.state == "cancelled")
+                {
                     let stage = self.updates.staging.join(&id);
                     if stage.exists() {
                         fs::remove_dir_all(stage).map_err(io_error)?;
@@ -315,6 +325,9 @@ impl Hub {
                 Ok(json!({"cancelling":id}))
             }
             "hub.engine.preflight" => self.engine_preflight(required(p.version, "version")?),
+            "hub.engine.uninstall.preflight" => {
+                self.begin_uninstall_preflight(required(p.version, "version")?)
+            }
             "hub.engine.install" | "hub.engine.repair" | "hub.update.prepare" => {
                 if self.updates.status["state"] == "error"
                     && let Ok(diagnostic) = serde_json::from_value::<ara_diag::Diagnostic>(

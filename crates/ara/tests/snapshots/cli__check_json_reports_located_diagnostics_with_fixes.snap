@@ -3,7 +3,7 @@ source: crates/ara/tests/cli.rs
 expression: out
 ---
 {
-  "files": 1,
+  "files": 2,
   "errors": 5,
   "warnings": 0,
   "diagnostics": [

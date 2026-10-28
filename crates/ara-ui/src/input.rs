@@ -4,7 +4,9 @@ use crate::focus::directional_where;
 pub use crate::focus::{directional, focus_graph, next_tab, tab_order};
 use crate::{Result, Ui, runtime::is_focusable, source::stable_id};
 use ara_ui_text::{Clipboard, EditEvent};
+pub(crate) mod numeric;
 mod scroll;
+use numeric::NumericDrag;
 use scroll::ScrollDrag;
 /// Gamepad/keyboard spatial direction.
 #[derive(Clone, Copy, Debug)]
@@ -74,6 +76,7 @@ pub struct InputState {
     capture_rect: Option<crate::paint::Box2>,
     drag: Option<(u64, serde_json::Value)>,
     scroll_drag: Option<ScrollDrag>,
+    numeric_drag: Option<NumericDrag>,
 }
 impl InputState {
     /// Whether a scrollbar currently owns pointer capture.
@@ -92,13 +95,31 @@ impl InputState {
     pub fn captured(&self) -> Option<u64> {
         self.capture
     }
+    /// Cancel held native gestures and hover after focus/capture loss, preserving
+    /// screen/modal scopes and keyboard focus for return to this window.
+    pub fn cancel_interaction(&mut self, ui: &mut Ui) {
+        self.cancel_numeric(ui);
+        if let Some(index) = self.capture.take().and_then(|id| ui.by_id(id)) {
+            let mut state = ui.nodes[index].state;
+            state.active = false;
+            ui.set_state(index, state);
+        }
+        if let Some(index) = self.hover.take().and_then(|id| ui.by_id(id)) {
+            let mut state = ui.nodes[index].state;
+            state.hover = false;
+            ui.set_state(index, state);
+        }
+        self.capture_rect = None;
+        self.scroll_drag = None;
+        self.drag = None;
+    }
     /// Inspect navigation within the active screen/modal, using the same scope rules as input.
     pub fn focus_graph(&self, ui: &Ui) -> serde_json::Value {
         let order: Vec<_> = tab_order(ui)
             .into_iter()
             .filter(|i| self.in_scope(ui, *i))
             .collect();
-        serde_json::json!(ui.paint_order.iter().filter(|i| is_focusable(&ui.nodes[**i]) && self.in_scope(ui, **i)).map(|i| {
+        serde_json::json!(ui.paint_order.iter().filter(|i| is_focusable(&ui.nodes[**i]) && ui.accepts_input(**i) && self.in_scope(ui, **i)).map(|i| {
             let id = |j: Option<usize>| j.map(|j| ui.nodes[j].element.id.as_str());
             let neighbor = |direction| id(directional_where(ui, *i, direction, |j| self.in_scope(ui, j)));
             serde_json::json!({
@@ -137,6 +158,7 @@ impl InputState {
         if ui.by_id(root).is_none() {
             return Err("ARA4045: input scope root not found".into());
         }
+        self.cancel_numeric(ui);
         if let Some(s) = self.scopes.last_mut() {
             s.focus = self.focus;
         }
@@ -178,6 +200,7 @@ impl InputState {
     }
     /// Pop a screen/modal and restore surviving focus, falling back within its parent scope.
     pub fn pop(&mut self, ui: &mut Ui) -> Option<u64> {
+        self.cancel_numeric(ui);
         self.scopes.pop();
         self.capture = None;
         self.scroll_drag = None;
@@ -196,6 +219,20 @@ impl InputState {
         self.focus_to(ui, restored);
         restored
     }
+    /// Remove the most recent scope owned by a stable root. Removing an underlying
+    /// popup leaves the active modal's focus and capture untouched; removing the
+    /// top scope uses normal focus restoration and cancellation through pop.
+    pub fn remove_scope(&mut self, ui: &mut Ui, root: u64) -> bool {
+        let Some(index) = self.scopes.iter().rposition(|scope| scope.root == root) else {
+            return false;
+        };
+        if index + 1 == self.scopes.len() {
+            self.pop(ui);
+        } else {
+            self.scopes.remove(index);
+        }
+        true
+    }
     /// Explicitly focus a control in the active scope and reveal it in containing scroll views.
     pub fn focus(&mut self, ui: &mut Ui, id: u64) -> Result<()> {
         if ui.by_id(id).is_none_or(|i| !self.can_focus(ui, i)) {
@@ -211,6 +248,9 @@ impl InputState {
         Ok(())
     }
     fn focus_to(&mut self, ui: &mut Ui, id: Option<u64>) {
+        if self.focus != id {
+            self.cancel_numeric(ui);
+        }
         if let Some(i) = self.focus.and_then(|id| ui.by_id(id)) {
             let mut s = ui.nodes[i].state;
             s.focus = false;
@@ -241,10 +281,26 @@ impl InputState {
         event: InputEvent,
         clipboard: &mut dyn Clipboard,
     ) -> Result<()> {
+        let finite = match &event {
+            InputEvent::PointerMove(p) | InputEvent::PointerDown(p) | InputEvent::PointerUp(p) => {
+                p.iter().all(|v| v.is_finite())
+            }
+            InputEvent::Wheel { position, delta } => {
+                position.iter().chain(delta).all(|v| v.is_finite())
+            }
+            _ => true,
+        };
+        if !finite {
+            self.cancel_numeric(ui);
+            return Err("ARA4044: pointer coordinates and wheel deltas must be finite".into());
+        }
         if let InputEvent::PointerMove(p) | InputEvent::PointerDown(p) | InputEvent::PointerUp(p) =
             &event
         {
             ui.pointer_at(*p);
+        }
+        if self.numeric_event(ui, &event, clipboard)? {
+            return Ok(());
         }
         if self.scroll_event(ui, &event)? {
             return Ok(());

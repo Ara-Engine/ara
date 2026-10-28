@@ -10,6 +10,7 @@ publish.workspace = true
 ara-asset = { path = "../ara-asset" }
 ara-update = { path = "../ara-update" }
 ara-diag.workspace = true
+ara-doc.workspace = true
 ara-host.workspace = true
 ara-json.workspace = true
 ara-proto.workspace = true

@@ -78,8 +78,17 @@ pub struct PresentStats {
     pub updated: usize,
     /// CPU time spent preparing and uploading (excludes GPU rendering).
     pub prepare: Duration,
-    /// Time inside `Renderer::render` (records, submits and waits for the GPU).
+    /// Time inside `Renderer::render`: records and submits, and waits for the GPU
+    /// unless frames are in flight (`Presenter::set_frames_in_flight`).
     pub render: Duration,
+    /// Time this present waited for the previous frame in flight to complete.
+    pub in_flight_wait: Duration,
+    /// This present has no new completed image: an earlier frame (with frames in
+    /// flight) or, synchronously, its own did not complete within
+    /// `Presenter::STALL_WAIT` (a stalled present path: minimized, occluded or
+    /// undisplayed window). Hosts skip the UI, the blit or the publish for it and
+    /// keep pumping events.
+    pub skipped: bool,
 }
 
 /// Owns the renderer and the per-draw upload state.
@@ -133,6 +142,10 @@ pub struct Presenter {
     ray_queries: bool,
     /// The colour lookup table the baseline renderer holds (`apply_lut`).
     lut: Option<std::sync::Arc<ara_components::post::ColorLut>>,
+    /// Raster frames return once submitted (`set_frames_in_flight`).
+    frames_in_flight: bool,
+    /// Submitted raster frames not yet waited, oldest first (at most two).
+    in_flight: std::collections::VecDeque<raster::Submitted>,
 }
 
 fn fnv(hash: u64, bytes: &[u8]) -> u64 {
@@ -230,6 +243,8 @@ impl Presenter {
             render_scale: None,
             ray_queries: std::env::var_os("ARA_RAY_QUERIES").is_none_or(|v| v != "0"),
             lut: None,
+            frames_in_flight: false,
+            in_flight: std::collections::VecDeque::new(),
         }
     }
 
@@ -248,6 +263,7 @@ impl Presenter {
 
     /// The renderer, mutably: development tools read live frames through
     /// `Renderer::capture_completed` without a capture reset.
+    /// Callers that submit or read back through it first `drain` a frame in flight.
     pub fn renderer_mut(&mut self) -> Option<&mut Renderer> {
         self.renderer.as_mut()
     }
@@ -405,8 +421,9 @@ impl Presenter {
             }
             let composite = self.composite.as_mut().context("compositor initialized")?;
             if let Some(terrain) = terrain {
+                let state = Some(renderer.hdr_exposure().state);
                 (color, depth) =
-                    composite.merge(renderer.gpu_mut(), color, depth, terrain, exposure)?;
+                    composite.merge(renderer.gpu_mut(), color, depth, terrain, exposure, state)?;
             }
             color = self
                 .effects

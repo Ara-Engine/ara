@@ -166,9 +166,9 @@ void tsrBegin(){
 }
 FfxFloat32 Exposure(){return 1.0f;}
 FfxFloat32 DeltaPreExposure(){float2 e=tsrPreExposure();return e.x/e.y;}
-// The single input-exposure parameter: the HDR input is linear (scaled here by the
-// applied exposure) unless `exposure.x` gives its pre-exposure factor directly
-// (1 once the scene writes pre-exposed HDR).
+// The single input-exposure parameter: `exposure.x` is the factor still to apply to
+// the HDR input, 1 since the scene writes pre-exposed HDR (look.slangh exposeHdr);
+// 0 would scale linear input by the applied exposure.
 float tsrInputScale(){TsrConstants c=tsr();return c.exposure.x>0?c.exposure.x:tsrPreExposure().x;}
 
 // --- Helpers ---

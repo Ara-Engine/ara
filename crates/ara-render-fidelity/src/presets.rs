@@ -344,7 +344,9 @@ impl QualityPreset {
             // LOD error and the cull size are in render pixels (about two
             // display pixels each at Low's scale).
             Self::Low => Quality {
-                shadows: shadows(2, 512, 60., (1024, 600.)),
+                // 1024-texel cascades: at 512 the near cascade's texels (several
+                // centimetres) left floor shadows blobby next to the references.
+                shadows: shadows(2, 1024, 60., (1024, 600.)),
                 ambient_occlusion: None,
                 reflections: None,
                 gi_budget: 256,

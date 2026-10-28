@@ -277,14 +277,42 @@ public sealed unsafe class ScriptRuntime
         var id = call->Behaviour;
         if (SlotOf(id >> 16)?.Tables.Behaviours is not { } all || (id & 0xFFFF) >= all.Length) return AbiConst.RunBadId;
         var entry = all[id & 0xFFFF];
-        if (Volatile.Read(ref entry.Faulted) != 0) return AbiConst.RunDisabled;
         var tick = call->Phase == AbiConst.PhaseTick;
         var frame = call->Tick->Frame;
+        if (call->Phase != AbiConst.PhaseSweep && Volatile.Read(ref entry.Faulted) != 0)
+        {
+            // Disabled code still observes membership so cleanup does not destroy
+            // wrappers whose ECS data remains alive while the type is faulted.
+            if (tick) for (int r = 0; r < (int)call->Len; r++)
+                if (entry.Live.TryGetValue(call->Entities[r], out var live)) entry.Live[call->Entities[r]] = (live.Obj, frame);
+            return AbiConst.RunDisabled;
+        }
         var data = (byte*)call->Data;
         var previous = Host.EnterExclusive();
         try
         {
-            if (tick) entry.Sweep(frame);
+            if (call->Phase == AbiConst.PhaseSweep)
+            {
+                var status = AbiConst.RunOk;
+                foreach (var bits in entry.Sweep(frame))
+                {
+                    var obj = entry.Live[bits].Obj;
+                    entry.Live.Remove(bits); // exactly once, including a throwing callback
+                    obj.CommandBuffer = call->Commands;
+                    obj.SetRng(Rng.For(in *call->Tick, entry.RngKey, obj.Entity));
+                    try { obj.OnDestroy(); EngineAccess.Flush(); }
+                    catch (Exception error)
+                    {
+                        Interlocked.Exchange(ref entry.Faulted, 1);
+                        Interlocked.Increment(ref _faults);
+                        Diag.Fault(AraCodes.BehaviourFault, $"behaviour `{entry.Name}` OnDestroy ({obj.Entity})", error);
+                        EngineAccess.Discard();
+                        status = AbiConst.RunFaulted;
+                    }
+                    finally { obj.DataPtr = null; obj.CommandBuffer = null; }
+                }
+                return status;
+            }
             for (int r = 0; r < (int)call->Len; r++)
             {
                 var bits = call->Entities[r];

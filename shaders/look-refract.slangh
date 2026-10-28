@@ -12,9 +12,9 @@
 //
 // Exposure: refraction composes in the HDR target's space, which the copy holds;
 // absolute radiance (shading, the environment) is scaled into it by this one factor.
-// Today the HDR target is linear radiance (1); with the pre-exposed HDR contract it
-// is the exposure the target stores, E = hdrExposure(f, l).
-float refractExposure(Frame f,Look l){return 1;}
+// The HDR target holds pre-exposed radiance (look.slangh exposeHdr), so this is the
+// exposure it stores, E = hdrExposure(f, l).
+float refractExposure(Frame f,Look l){return hdrExposure(f,l);}
 uint2 refractLevelSize(Frame f,uint level){return max(f.extent.xy>>level,uint2(1));}
 uint2 refractLevelOrigin(Frame f,uint level){
     if(level==0)return uint2(0,0);
@@ -167,5 +167,5 @@ float4 refractColour(Frame f,Look l,Surface s,uint2 volume,float scale,float3 wo
         float3 traced=refractTrace(f,l,exit,t2,reach,spread,chord,s.roughness,uv);
         transmitted=traced*exp(-m.absorption*chord)*s.albedo*s.albedo*leave;
     }
-    return forwardOutput(f,reflected+tau*through*transmitted,s.alpha,s.alpha);
+    return forwardOutput(f,reflected+tau*through*transmitted,s.alpha,s.alpha,refractExposure(f,l));
 }

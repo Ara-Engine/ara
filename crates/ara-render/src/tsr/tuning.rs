@@ -39,9 +39,6 @@ pub(crate) struct Tuning {
     pub luma_instability: bool,
     /// `ARA_TSR_IDS` (0 drops the entity-ID signal and its scratch traffic).
     pub ids: bool,
-    /// `ARA_TSR_PREEXPOSED`: the HDR input already holds radiance × the applied
-    /// exposure (the pre-exposure contract); otherwise TSR applies it.
-    pub pre_exposed: bool,
 }
 
 impl Default for Tuning {
@@ -61,7 +58,6 @@ impl Default for Tuning {
             factors: [1., 1., 0.],
             luma_instability: true,
             ids: true,
-            pre_exposed: false,
         }
     }
 }
@@ -119,7 +115,6 @@ impl Tuning {
             ],
             luma_instability: number("ARA_TSR_LUMA_INSTABILITY", 1.) > 0.,
             ids: number("ARA_TSR_IDS", 1.) > 0.,
-            pre_exposed: number("ARA_TSR_PREEXPOSED", 0.) > 0.,
         }
     }
 

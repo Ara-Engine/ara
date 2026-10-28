@@ -1,15 +1,15 @@
-//! The Win32 window: a borderless, DWM-framed 480 × 200 card centred on the
+//! The Win32 window: a borderless, DWM-framed 560 × 240 dialog centred on the
 //! monitor under the pointer, per-monitor DPI aware, dragged by any empty area.
 //! The install runs on a worker thread that sends [`View`]s; its questions block
 //! it until a button answers. Closing is ignored while setup is busy.
 use super::{
-    Action, View,
+    Action, View, brand,
     canvas::RectF,
     paint::{self, Frame, Pointer, Surface},
 };
 use crate::{
     args::Args,
-    flow::{self, Host, Outcome, Plan, Resolution, Step},
+    flow::{self, Host, Kind, Outcome, Plan, Resolution, Step},
     processes::Blocker,
 };
 use std::{
@@ -48,13 +48,13 @@ use windows_sys::Win32::{
         WindowsAndMessaging::{
             CREATESTRUCTW, CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW,
             GWLP_USERDATA, GetClientRect, GetCursorPos, GetMessageW, GetWindowLongPtrW, HTCAPTION,
-            HTCLIENT, IDC_ARROW, KillTimer, LoadCursorW, LoadIconW, MSG, PostMessageW,
+            HTCLIENT, ICON_BIG, ICON_SMALL, IDC_ARROW, KillTimer, LoadCursorW, MSG, PostMessageW,
             PostQuitMessage, RegisterClassExW, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE,
-            SWP_NOZORDER, SetTimer, SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage,
-            WM_APP, WM_CLOSE, WM_DESTROY, WM_DPICHANGED, WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDOWN,
-            WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCCALCSIZE, WM_NCCREATE, WM_NCHITTEST, WM_PAINT,
-            WM_TIMER, WNDCLASSEXW, WS_CAPTION, WS_EX_APPWINDOW, WS_MINIMIZEBOX, WS_POPUP,
-            WS_SYSMENU,
+            SWP_NOZORDER, SendMessageW, SetTimer, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
+            ShowWindow, TranslateMessage, WM_APP, WM_CLOSE, WM_DESTROY, WM_DPICHANGED,
+            WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCCALCSIZE,
+            WM_NCCREATE, WM_NCHITTEST, WM_PAINT, WM_SETICON, WM_TIMER, WNDCLASSEXW, WS_CAPTION,
+            WS_EX_APPWINDOW, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU,
         },
     },
 };
@@ -137,6 +137,8 @@ struct App {
     tracking: bool,
     events: Receiver<Event>,
     answers: Sender<Action>,
+    kind: Kind,
+    icons: Option<(brand::Icon, brand::Icon)>,
 }
 
 /// Shows the window and installs on a worker thread, or shows `fixed` (an error
@@ -156,6 +158,8 @@ pub fn run(exe: PathBuf, args: Args, fixed: Option<View>) -> bool {
         tracking: false,
         events: receive,
         answers: answer,
+        kind: fixed.as_ref().and_then(View::kind).unwrap_or(Kind::Engine),
+        icons: None,
     }));
     // SAFETY: `app` stays valid until it is reclaimed below, after the message
     // loop ends and the window (the only other user) is destroyed.
@@ -215,8 +219,6 @@ unsafe fn create(app: *mut App) -> Option<HWND> {
         let instance = GetModuleHandleW(std::ptr::null());
         let class = wide("AraSetupWindow");
         let title = wide("Ara Setup");
-        // Resource 1 is the Ara icon embedded by build.rs.
-        let icon = LoadIconW(instance, std::ptr::without_provenance(1));
         let registered = RegisterClassExW(&WNDCLASSEXW {
             cbSize: size_of::<WNDCLASSEXW>() as u32,
             style: 0,
@@ -224,12 +226,12 @@ unsafe fn create(app: *mut App) -> Option<HWND> {
             cbClsExtra: 0,
             cbWndExtra: 0,
             hInstance: instance,
-            hIcon: icon,
+            hIcon: std::ptr::null_mut(),
             hCursor: LoadCursorW(std::ptr::null_mut(), IDC_ARROW),
             hbrBackground: std::ptr::null_mut(),
             lpszMenuName: std::ptr::null(),
             lpszClassName: class.as_ptr(),
-            hIconSm: icon,
+            hIconSm: std::ptr::null_mut(),
         });
         if registered == 0 {
             return None;
@@ -275,6 +277,8 @@ unsafe fn create(app: *mut App) -> Option<HWND> {
             SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
         );
         (*app).frame = style(window);
+        let kind = (*app).kind;
+        (*app).sync_brand(window, kind);
         sync_timer(window, &(*app).view);
         ShowWindow(window, SW_SHOW);
         Some(window)
@@ -341,6 +345,41 @@ fn point(lparam: LPARAM) -> (f32, f32) {
 }
 
 impl App {
+    /// Keep taskbar and title identity aligned with the verified payload kind.
+    fn sync_brand(&mut self, window: HWND, kind: Kind) {
+        if self.icons.is_some() && self.kind == kind {
+            return;
+        }
+        if let (Some(big), Some(small)) = (brand::Icon::load(kind, 64), brand::Icon::load(kind, 32))
+        {
+            // SAFETY: both owned icons remain in this App until replaced or the
+            // window is destroyed. Window messages do not take their ownership.
+            unsafe {
+                SendMessageW(
+                    window,
+                    WM_SETICON,
+                    ICON_BIG as WPARAM,
+                    big.handle() as LPARAM,
+                );
+                SendMessageW(
+                    window,
+                    WM_SETICON,
+                    ICON_SMALL as WPARAM,
+                    small.handle() as LPARAM,
+                );
+            }
+            self.icons = Some((big, small));
+        }
+        self.kind = kind;
+        let title = wide(match kind {
+            Kind::Engine => "Ara Setup",
+            Kind::Hub => "Ara Hub Setup",
+        });
+        // SAFETY: the live window reads the local NUL-terminated string in the call.
+        unsafe {
+            SetWindowTextW(window, title.as_ptr());
+        }
+    }
     fn hit(&self, (x, y): (f32, f32)) -> Option<Action> {
         self.hits
             .iter()
@@ -350,6 +389,9 @@ impl App {
 
     /// Shows `view`, keeping the latest progress for answered questions.
     fn show(&mut self, window: HWND, view: View) {
+        if let Some(kind) = view.kind() {
+            self.sync_brand(window, kind);
+        }
         if matches!(view, View::Busy(_)) {
             self.busy = view.clone();
         }

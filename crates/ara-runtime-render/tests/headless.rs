@@ -279,3 +279,68 @@ fn demo_renders_moves_skins_and_relights_headless() {
     }
     presenter.renderer().unwrap().gpu().assert_clean().unwrap();
 }
+
+/// Frames in flight: a present returns once submitted, reporting the previous
+/// frame's GPU costs and pass timings; turning it off drains the last frame.
+#[test]
+fn frames_in_flight_report_the_previous_frame() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/renderer-unification/frames-in-flight");
+    let mut rt = runtime();
+    let mut frame = RenderFrame::default();
+    rt.extract(&mut frame);
+    let mut presenter = Presenter::new([480, 270], Vec::new(), root.join("gpu"));
+    presenter.present(&frame).unwrap();
+    assert!(
+        presenter.stats().gpu.is_some(),
+        "a synchronous present completes"
+    );
+    presenter.set_frames_in_flight(true).unwrap();
+    presenter.present(&frame).unwrap();
+    assert!(
+        presenter.stats().gpu.is_none(),
+        "the first frame in flight has no completed predecessor"
+    );
+    presenter.present(&frame).unwrap();
+    let stats = presenter.stats();
+    assert!(stats.gpu.is_some_and(|c| c.raster_ms > 0.), "{stats:?}");
+    assert!(stats.gpu_span_ms.is_some(), "{stats:?}");
+    assert!(!presenter.pass_timings().is_empty());
+    presenter.set_frames_in_flight(false).unwrap();
+    assert!(presenter.stats().gpu.is_some(), "turning it off drains");
+    presenter.renderer().unwrap().gpu().assert_clean().unwrap();
+}
+
+#[cfg(feature = "fidelity-lab")]
+#[test]
+fn lab_readbacks_drain_frames_and_keep_overlap_enabled() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/renderer-unification/lab-readback");
+    let mut rt = runtime();
+    let mut frame = RenderFrame::default();
+    rt.extract(&mut frame);
+    let mut presenter = Presenter::new([480, 270], Vec::new(), root.join("gpu"));
+    presenter.present(&frame).unwrap();
+    presenter.set_frames_in_flight(true).unwrap();
+
+    presenter.present(&frame).unwrap();
+    assert!(presenter.stats().gpu.is_none());
+    let (size, radiance) = presenter.lab_radiance().unwrap();
+    assert_eq!(radiance.len(), size[0] as usize * size[1] as usize);
+    assert!(radiance.iter().flatten().all(|v| v.is_finite()));
+    assert!(presenter.stats().gpu.is_some(), "radiance drains the frame");
+
+    presenter.present(&frame).unwrap();
+    assert!(presenter.stats().gpu.is_none(), "overlap remains enabled");
+    let display = presenter.lab_display(&frame).unwrap();
+    assert_eq!(display.dimensions(), (480, 270));
+    assert!(presenter.stats().gpu.is_some(), "display drains the frame");
+
+    presenter.present(&frame).unwrap();
+    assert!(
+        presenter.stats().gpu.is_none(),
+        "readbacks preserve overlap"
+    );
+    presenter.set_frames_in_flight(false).unwrap();
+    presenter.renderer().unwrap().gpu().assert_clean().unwrap();
+}

@@ -389,11 +389,12 @@ float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered,bool hig
 // FORWARD_PEAK times display white at the frame's exposure. Forward geometry is often
 // thinner than a pixel (rims, lenses, wires): a glint on the sample the jitter lands
 // on would otherwise outshine what the area-filtered pixel holds, flicker against the
-// history and bloom into a smear.
+// history and bloom into a smear. `c` carries `exposure` (1: radiance; refraction
+// composes in the HDR target's pre-exposed space, look-refract.slangh refractExposure).
 static const float FORWARD_PEAK=64;
-float4 forwardOutput(Frame f,float3 c,float coverage,float stop){
+float4 forwardOutput(Frame f,float3 c,float coverage,float stop,float exposure=1){
     if(any(isnan(c))||any(isinf(c))||isnan(coverage)||isnan(stop))return 0;
-    c=max(c,0);float peak=FORWARD_PEAK/exposureScale(f,0),y=luminance(c);
+    c=max(c,0);float peak=FORWARD_PEAK*exposure/exposureScale(f,0),y=luminance(c);
     return float4((y>peak?c*(peak/y):c)*saturate(coverage),saturate(stop));
 }
 // Premultiplied forward colour of a transparent or transmissive surface: alpha is
@@ -401,7 +402,9 @@ float4 forwardOutput(Frame f,float3 c,float coverage,float stop){
 // over what it transmits (blending ONE, ONE_MINUS_SRC_ALPHA).
 float4 forwardColour(Frame f,Look l,Surface s,float3 world,int2 p,bool high=false){
     float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
-    return forwardOutput(f,applyFog(f,l,shade(f,l,s,world,p,false,high),world,uv),s.alpha,s.alpha*(1-s.transmission));
+    // Clamped in radiance (forwardOutput), then pre-exposed like every HDR writer.
+    float4 o=forwardOutput(f,applyFog(f,l,shade(f,l,s,world,p,false,high),world,uv),s.alpha,s.alpha*(1-s.transmission));
+    return float4(exposeHdr(f,l,o.rgb),o.a);
 }
 // World-space view ray through pixel centre `p`.
 float3 viewRay(Frame f,float2 p){

@@ -31,6 +31,8 @@ pub(crate) struct Surface {
     values: Vec<Option<Value>>,
     renderer: Renderer,
     gpu: Option<ara_editor_gpu::NativeUi>,
+    /// The composite returns without waiting (`set_frames_in_flight`).
+    frames_in_flight: bool,
     screen: Screen,
     diagnostics: Vec<ara_diag::Diagnostic>,
     reported_images: std::collections::BTreeSet<u32>,
@@ -40,6 +42,16 @@ pub(crate) struct Surface {
 }
 
 impl Surface {
+    /// Lets the composite return once submitted and wait at the start of the next
+    /// `render` (NativeUi deferred completion). Only for window presentation, whose
+    /// blit is GPU-ordered after it; embedded publication keeps waiting.
+    pub(crate) fn set_frames_in_flight(&mut self, enabled: bool) -> Result<()> {
+        self.frames_in_flight = enabled;
+        if let Some(gpu) = &mut self.gpu {
+            gpu.set_deferred_completion(enabled)?;
+        }
+        Ok(())
+    }
     /// Lay out for a target of `size` physical pixels at `scale` pixels per UI unit.
     pub(crate) fn resize(&mut self, size: [u32; 2], scale: f32) -> Result<()> {
         ensure!(
@@ -97,6 +109,7 @@ impl Surface {
             values: vec![None; source.bindings.len()],
             renderer,
             gpu: None,
+            frames_in_flight: false,
             screen: Screen::Game,
             diagnostics,
             reported_images: Default::default(),
@@ -179,9 +192,24 @@ impl Surface {
         Ok(())
     }
 
+    /// Order the renderer's next work after this UI's composites (Metal runs them on
+    /// queues of their own; Vulkan's one queue already orders them).
+    pub(crate) fn order_before(&self, gpu: &mut ara_gpu::GpuDevice) {
+        if let Some(ui) = &self.gpu {
+            ui.order_before(gpu);
+        }
+    }
     /// Composites directly from the completed scene image; no scene readback or CPU upload.
     /// Show the composite with [`Self::present`] or [`Self::publish`].
-    pub(crate) fn render(&mut self, presenter: &Presenter) -> Result<()> {
+    /// False when the previous composite is still running after
+    /// `Presenter::STALL_WAIT` (a stalled present path): nothing rendered this frame.
+    pub(crate) fn render(&mut self, presenter: &Presenter) -> Result<bool> {
+        // The previous composite reads the UI storage this frame rewrites.
+        if let Some(gpu) = &self.gpu
+            && !gpu.wait_previous_for(Presenter::STALL_WAIT)?
+        {
+            return Ok(false);
+        }
         self.resize(presenter.size(), self.scale)?;
         self.ui.frame(&mut self.text).map_err(ui_error)?;
         decoration::apply(&mut self.ui, self.screen);
@@ -193,9 +221,11 @@ impl Surface {
             self.renderer.device_lost();
             // SAFETY: the window drops this surface before its presenter's device;
             // all UI and scene submissions occur sequentially on this thread.
-            self.gpu = Some(unsafe {
+            let mut gpu = unsafe {
                 ara_editor_gpu::NativeUi::new(ara_editor_gpu::ui_device(renderer.gpu()))?
-            });
+            };
+            gpu.set_deferred_completion(self.frames_in_flight)?;
+            self.gpu = Some(gpu);
         }
         let gpu = self.gpu.as_mut().context("native UI allocated")?;
         // Lay out in window points; draw and rasterize text at physical pixels.
@@ -203,9 +233,12 @@ impl Surface {
         self.renderer
             .set_raster_scale(self.scale)
             .map_err(ui_error)?;
+        // The scene of a frame in flight may still be rendering into this image.
+        gpu.order_after(renderer.gpu());
         let id = stable_id("game-scene") as u32 & 0x7fff_ffff;
         // SAFETY: scene image/view and NativeUi share this presenter's live device.
-        // The UI submission completes before the presenter can replace this image.
+        // The presenter replaces this image only after an idle wait (resize); its
+        // per-frame publication copies are GPU-ordered after this submission.
         unsafe {
             gpu.external_image(
                 id,
@@ -242,7 +275,7 @@ impl Surface {
         self.ui.display.commands.remove(0);
         rendered?;
         self.report_missing_images();
-        Ok(())
+        Ok(true)
     }
 
     /// Presents the last composite into the window.
@@ -254,7 +287,8 @@ impl Surface {
         present: &mut ara_platform::Present,
     ) -> Result<()> {
         let ui = self.gpu.as_ref().context("game UI has not rendered")?;
-        // SAFETY: forwarded caller contract; the UI submission completed.
+        // SAFETY: forwarded caller contract; the UI submission precedes the blit on
+        // this queue (completed, unless frames are in flight).
         unsafe { ui.present(ara_editor_gpu::ui_device(gpu), present) }
     }
 

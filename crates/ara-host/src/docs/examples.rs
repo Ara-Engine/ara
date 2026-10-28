@@ -3,6 +3,14 @@ use serde::{Deserialize, Serialize};
 
 const SOURCES: &[(&str, &str)] = &[
     (
+        "Ara.Examples/EntityExamples.cs",
+        include_str!("../../../../dotnet/examples/Ara.Examples/EntityExamples.cs"),
+    ),
+    (
+        "Ara.EditorExamples/editor/SceneTools.cs",
+        include_str!("../../../../dotnet/examples/Ara.EditorExamples/editor/SceneTools.cs"),
+    ),
+    (
         "Ara.Examples/ComponentExamples.cs",
         include_str!("../../../../dotnet/examples/Ara.Examples/ComponentExamples.cs"),
     ),

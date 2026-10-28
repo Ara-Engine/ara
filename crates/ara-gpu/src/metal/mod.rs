@@ -27,7 +27,7 @@
 //! Acceleration structures and inline ray queries run on GPUs with hardware ray
 //! tracing (Apple9, M3 and later; D29) on the RT-tier device ([`acceleration`]).
 //!
-//! Not yet available: mesh/task stages, shader hot reload and HDR output.
+//! Not yet available: mesh/task stages and HDR output.
 mod abi;
 mod acceleration;
 mod cache;
@@ -81,6 +81,9 @@ unsafe extern "C" {}
 
 /// Timeline waits give up after this long: a faulted command buffer never signals.
 const WAIT_TIMEOUT_MS: u64 = 20_000;
+
+/// Another queue's timeline event and the value a commit waits for.
+type EventWait = (Retained<ProtocolObject<dyn MTLSharedEvent>>, u64);
 
 struct Owned<V> {
     raw: V,
@@ -155,6 +158,9 @@ pub struct MetalDevice {
     flushed: [u64; 2],
     /// Recorded command buffers of one queue, committed together by `flush`.
     batch: Vec<Batched>,
+    /// Other queues' timeline values each queue's next commit waits for
+    /// (`wait_for`), one entry per event.
+    device_waits: [Vec<EventWait>; 2],
     retired: Vec<Retired>,
     pending: Vec<Pending>,
     info: vulkan::DeviceInfo,
@@ -164,8 +170,8 @@ pub struct MetalDevice {
     deferred: Option<Vec<TimelinePoint>>,
     /// Submitted values when the scope began; every scoped submission waits on them.
     deferred_waits: [u64; 2],
-    /// An ended scope awaits poll/wait.
-    completion_pending: bool,
+    /// Ended deferred scopes not yet consumed (at most `FRAMES_IN_FLIGHT`).
+    pending_completions: usize,
     resource_worker: Option<prepare::ResourceWorker>,
     pipeline_worker: Option<prepare::PipelineWorker>,
     timestamp_pool: timestamps::Pool,
@@ -174,11 +180,13 @@ pub struct MetalDevice {
     /// Pass timings of completed submissions, oldest first, until resolved.
     timings: std::collections::VecDeque<(TimelinePoint, Vec<PassTiming>)>,
     timing_window: crate::vulkan::timestamps::Window,
+    recent_spans: std::collections::VecDeque<(TimelinePoint, commands::TimestampSpan)>,
     waits: crate::vulkan::waits::Counter,
     /// The cooked `ClearDepth` pipeline, loaded on first use.
     clear: Option<clear::Clear>,
-    /// Shader reload provenance (no hot reload on Metal yet, see `reload`).
-    shader_status: vulkan::ShaderStatus,
+    shader_worker: Option<reload::Worker>,
+    #[cfg(feature = "fidelity-lab")]
+    pub(crate) lab_params: crate::tunables::Registry,
     submission_stats: vulkan::SubmissionStats,
     /// Last: released after the workers joined, so the archive flush races no compile.
     _cache: cache::Lease,
@@ -252,6 +260,11 @@ impl MetalDevice {
         info.ray_tracing = ray_tracing && info::hardware_ray_tracing(&device);
         // Joined last: a failed creation above never counts as a live device.
         let (compiler, cache) = cache::acquire(&device, cache_dir)?;
+        let shader_worker = if std::env::var_os("ARA_SHADER_DIR").is_some() {
+            Some(reload::Worker::new(device.clone(), compiler.clone())?)
+        } else {
+            None
+        };
         Ok(Self {
             device,
             queues,
@@ -270,6 +283,7 @@ impl MetalDevice {
             submitted: [0; 2],
             flushed: [0; 2],
             batch: Vec::new(),
+            device_waits: Default::default(),
             retired: Vec::new(),
             pending: Vec::new(),
             info,
@@ -279,16 +293,19 @@ impl MetalDevice {
             },
             deferred: None,
             deferred_waits: [0; 2],
-            completion_pending: false,
+            pending_completions: 0,
             resource_worker: None,
             pipeline_worker: None,
             timestamp_pool: timestamps::Pool::default(),
             pass_timing: true,
             timings: std::collections::VecDeque::new(),
             timing_window: Default::default(),
+            recent_spans: Default::default(),
             waits: Default::default(),
             clear: None,
-            shader_status: Default::default(),
+            shader_worker,
+            #[cfg(feature = "fidelity-lab")]
+            lab_params: Default::default(),
             submission_stats: Default::default(),
             _cache: cache,
         })
@@ -490,10 +507,20 @@ impl MetalDevice {
     ) -> Result<Pipeline> {
         let created =
             native::pool(|| pipeline::create(&self.device, &self.compiler, cooked, artifacts))?;
-        self.pipelines.insert(created)
+        let handle = self.pipelines.insert(created)?;
+        if let Some(worker) = &mut self.shader_worker
+            && let Err(error) = worker.track(handle, cooked, artifacts)
+        {
+            self.retire_pipeline(handle)?;
+            return Err(error.into());
+        }
+        Ok(handle)
     }
     /// Invalidate a pipeline identity; release it after all queues complete.
     pub fn retire_pipeline(&mut self, pipeline: Pipeline) -> Result<()> {
+        if let Some(worker) = &self.shader_worker {
+            worker.forget(pipeline);
+        }
         let native = self.pipelines.remove(pipeline)?;
         self.retired.push(Retired::Pipeline {
             _native: native,
@@ -689,6 +716,9 @@ impl MetalDevice {
                     .waitForEvent_value(ProtocolObject::from_ref(&*self.events[index]), value);
             }
         }
+        for (event, value) in self.device_waits[queue.index()].drain(..) {
+            native_queue.waitForEvent_value(ProtocolObject::from_ref(&*event), value);
+        }
         let buffers: Vec<_> = batch.iter().map(|b| NonNull::from(&*b.cmd)).collect();
         // SAFETY: ended, never-committed command buffers in recording order; the pointer
         // array lives across the call and the queue retains them until they complete.
@@ -724,6 +754,34 @@ impl MetalDevice {
     /// frame in Outpost) turning them off measured no win on the M5 Pro.
     pub fn set_pass_timing(&mut self, enabled: bool) {
         self.pass_timing = enabled;
+    }
+    /// Order this device's next commit after all work `other` has committed: a
+    /// queue-level wait on `other`'s timeline events. For devices of one GPU that
+    /// share images without completing first, e.g. a UI adapter compositing a scene
+    /// whose frame is still in flight. Vulkan hosts share one queue instead.
+    pub fn wait_for(&mut self, other: &MetalDevice) {
+        for (event, &value) in other.events.iter().zip(&other.flushed) {
+            self.wait_event(event, value);
+        }
+    }
+    /// Order both queues' next commits after `event` reaches `value`.
+    pub(super) fn wait_event(
+        &mut self,
+        event: &Retained<ProtocolObject<dyn MTLSharedEvent>>,
+        value: u64,
+    ) {
+        if value == 0 {
+            return;
+        }
+        for waits in &mut self.device_waits {
+            match waits
+                .iter_mut()
+                .find(|(e, _)| Retained::as_ptr(e) == Retained::as_ptr(event))
+            {
+                Some((_, waited)) => *waited = (*waited).max(value),
+                None => waits.push((event.clone(), value)),
+            }
+        }
     }
     /// Start a measurement boundary: only later, resolved submissions contribute.
     pub fn reset_timing_window(&mut self) {
@@ -781,6 +839,7 @@ impl MetalDevice {
                 self.timestamp_pool.recycle(&timing);
                 let (passes, span) = resolved?;
                 self.timing_window.observe(point, span);
+                crate::vulkan::timestamps::remember(&mut self.recent_spans, point, span);
                 if self.timings.len() == RESOLVED_TIMINGS {
                     self.timings.pop_front();
                 }

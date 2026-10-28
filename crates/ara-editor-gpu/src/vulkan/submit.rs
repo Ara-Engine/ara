@@ -1,7 +1,10 @@
 use super::*;
 use resources::barrier;
+/// Longest a non-deferred submission waits for its fence (`finish`).
+const STALL_WAIT: std::time::Duration = std::time::Duration::from_millis(100);
+// Transfer reads of a CopySource image: copies, and the window's blit (BLIT stage).
 const COPY: (vk::PipelineStageFlags2, vk::AccessFlags2) = (
-    vk::PipelineStageFlags2::COPY,
+    vk::PipelineStageFlags2::ALL_TRANSFER,
     vk::AccessFlags2::TRANSFER_READ,
 );
 const SAMPLE: (vk::PipelineStageFlags2, vk::AccessFlags2) = (
@@ -14,7 +17,9 @@ const COLOR: (vk::PipelineStageFlags2, vk::AccessFlags2) = (
 );
 impl NativeUi {
     fn start(&self) -> Result<()> {
-        // SAFETY: Every submit waits for this fence before returning; command buffer is idle here.
+        self.wait_previous()?;
+        // SAFETY: Every submission's fence is waited (in `finish`, or deferred in
+        // `wait_previous` above); the command buffer is idle here.
         unsafe {
             self.memory
                 .device
@@ -41,10 +46,75 @@ impl NativeUi {
                 ])],
                 self.fence,
             )?;
-            let waited = std::time::Instant::now();
-            device.wait_for_fences(&[self.fence], true, u64::MAX)?;
-            self.gpu_wait.set(self.gpu_wait.get() + waited.elapsed());
         }
+        self.in_flight.set(true);
+        if !self.deferred {
+            // Bounded: a queue stalled behind a window's presentation (minimized,
+            // occluded, locked) leaves the submission in flight instead of blocking
+            // the event pump; the host's `wait_previous_for` skips frames until it
+            // completes. The window blit is GPU-ordered after it on this queue.
+            self.wait_previous_for(STALL_WAIT)?;
+        }
+        Ok(())
+    }
+    /// Lets submissions return without waiting their fence: the host calls
+    /// [`Self::wait_previous`] at the start of its next UI frame, before any other
+    /// call writes UI storage, so the frame overlaps CPU work. Only for hosts whose
+    /// later use of the target is GPU work on the same queue (the window blit).
+    /// Off (the default) waits each submission, at most `STALL_WAIT`; turning it off
+    /// waits now.
+    pub fn set_deferred_completion(&mut self, deferred: bool) -> Result<()> {
+        self.deferred = deferred;
+        if !deferred {
+            self.wait_previous()?;
+        }
+        Ok(())
+    }
+    /// Metal's adapter has its own queues and orders its next submission after the
+    /// renderer's; this one shares the renderer's queue, so nothing is needed.
+    pub fn order_after(&mut self, _gpu: &ara_gpu::GpuDevice) {}
+    /// Metal's counterpart orders the renderer's next work after this adapter's;
+    /// one shared queue already does here.
+    pub fn order_before(&self, _gpu: &mut ara_gpu::GpuDevice) {}
+    /// `wait_previous`, waiting at most `timeout`: false while the last submission is
+    /// still running (a stalled present path), so an event pump can skip this frame.
+    pub fn wait_previous_for(&self, timeout: std::time::Duration) -> Result<bool> {
+        if !self.in_flight.get() {
+            return Ok(true);
+        }
+        let waited = std::time::Instant::now();
+        let nanos = timeout.as_nanos().min(u128::from(u64::MAX)) as u64;
+        // SAFETY: the fence belongs to this adapter's live device and was submitted.
+        let result = unsafe {
+            self.memory
+                .device
+                .wait_for_fences(&[self.fence], true, nanos)
+        };
+        self.gpu_wait.set(self.gpu_wait.get() + waited.elapsed());
+        match result {
+            Ok(()) => {
+                self.in_flight.set(false);
+                Ok(true)
+            }
+            Err(vk::Result::TIMEOUT) => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    }
+    /// Waits the last submission's fence if it has not been waited.
+    pub fn wait_previous(&self) -> Result<()> {
+        if !self.in_flight.get() {
+            return Ok(());
+        }
+        ara_gpu::cpu_scope!("UI.wait_previous");
+        let waited = std::time::Instant::now();
+        // SAFETY: the fence belongs to this adapter's live device and was submitted.
+        unsafe {
+            self.memory
+                .device
+                .wait_for_fences(&[self.fence], true, u64::MAX)?;
+        }
+        self.gpu_wait.set(self.gpu_wait.get() + waited.elapsed());
+        self.in_flight.set(false);
         Ok(())
     }
     /// Time spent waiting for UI submissions (uploads and draws) since the last call.
@@ -151,6 +221,8 @@ impl NativeUi {
         Ok(())
     }
     pub(super) fn submit(&mut self) -> Result<()> {
+        // The previous submission reads the storage written below.
+        self.wait_previous()?;
         let instance_size = (self.instances.len().max(1) * 64) as u64;
         let mask_size = (self.masks.len().max(1) * 16) as u64;
         if self

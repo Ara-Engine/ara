@@ -18,6 +18,17 @@ use crate::{AssetId, OrderKey, RecordId};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Edit {
+    /// Replace a host-prepared filesystem entry through the ordinary transaction history.
+    File {
+        /// Anchor document for attribution and revision ordering.
+        doc: AssetId,
+        /// Canonical relative path, preserving casing.
+        path: String,
+        /// Expected state; absent means the entry must not exist.
+        base: Option<crate::file_state::FileState>,
+        /// Replacement snapshot; absent removes the entry.
+        state: Option<crate::file_state::FileState>,
+    },
     /// Create an empty document (`kind` present) or remove an empty document.
     Document {
         /// Document asset ID.
@@ -78,6 +89,19 @@ pub enum Edit {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum Op {
+    /// An attributed filesystem transition; bytes live in the host's immutable history.
+    File {
+        /// Anchor document.
+        doc: AssetId,
+        /// Pseudo-record key for per-path conflict checks.
+        id: RecordId,
+        /// Canonical relative path, preserving casing.
+        path: String,
+        /// Replacement snapshot; absent means deleted.
+        state: Option<crate::file_state::FileState>,
+        /// Previous snapshot; absent means newly created.
+        prev: Option<crate::file_state::FileState>,
+    },
     /// A document identity was created or removed. Record edits remain separate ops.
     Document {
         /// Document asset ID.
@@ -159,6 +183,7 @@ impl Op {
     /// The document the op changed.
     pub fn doc(&self) -> &AssetId {
         match self {
+            Op::File { doc, .. } => doc,
             Op::Document { doc, .. } => doc,
             Op::Create { doc, .. }
             | Op::Set { doc, .. }
@@ -170,6 +195,7 @@ impl Op {
     /// The record the op changed.
     pub fn id(&self) -> &RecordId {
         match self {
+            Op::File { id, .. } => id,
             Op::Document { .. } => {
                 static ID: std::sync::OnceLock<RecordId> = std::sync::OnceLock::new();
                 ID.get_or_init(|| {
@@ -186,6 +212,19 @@ impl Op {
     /// The op that undoes this one.
     pub fn inverse(&self) -> Op {
         match self.clone() {
+            Op::File {
+                doc,
+                id,
+                path,
+                state,
+                prev,
+            } => Op::File {
+                doc,
+                id,
+                path,
+                state: prev,
+                prev: state,
+            },
             Op::Document {
                 doc,
                 path,
@@ -241,6 +280,18 @@ impl Op {
     /// The edit that performs this op again.
     pub fn to_edit(&self) -> Edit {
         match self.clone() {
+            Op::File {
+                doc,
+                path,
+                state,
+                prev,
+                ..
+            } => Edit::File {
+                doc,
+                path,
+                base: prev,
+                state,
+            },
             Op::Document {
                 doc, path, kind, ..
             } => Edit::Document { doc, path, kind },
@@ -276,6 +327,7 @@ impl Op {
     /// The paths inside the record the op touched; `None` means the whole record.
     pub fn touches(&self) -> Vec<Option<FieldPath>> {
         match self {
+            Op::File { .. } => vec![None],
             Op::Document { .. } => vec![None],
             Op::Create { .. } | Op::Delete { .. } => vec![None],
             Op::Set { path, .. } => vec![Some(path.clone())],
@@ -291,6 +343,7 @@ impl Edit {
     /// The document the edit targets.
     pub fn doc(&self) -> &AssetId {
         match self {
+            Edit::File { doc, .. } => doc,
             Edit::Document { doc, .. } => doc,
             Edit::Create { doc, .. }
             | Edit::Set { doc, .. }
@@ -335,7 +388,7 @@ impl Document {
             )
         })?;
         match edit {
-            Edit::Document { .. } => Err(Diagnostic::error(
+            Edit::Document { .. } | Edit::File { .. } => Err(Diagnostic::error(
                 codes::INVALID_PARAMS,
                 "document lifecycle edits must be applied to a workspace",
             )),
@@ -442,7 +495,7 @@ impl Document {
     /// back a failed transaction; undo proper applies inverse edits instead.
     pub fn revert(&mut self, op: &Op, db: &SchemaDb) {
         match op {
-            Op::Document { .. } => {}
+            Op::Document { .. } | Op::File { .. } => {}
             Op::Create { id, .. } => {
                 self.records.remove(id);
             }

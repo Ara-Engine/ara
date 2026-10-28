@@ -53,8 +53,11 @@ fn allocate(
 }
 
 pub(super) type ResourceWorker = Worker<PreparationKind, ResourcePreparation, Prepared>;
-pub(super) type PipelineWorker =
-    Worker<PipelinePreparationKind, Vec<PipelinePreparation>, Vec<NativePipeline>>;
+pub(super) type PipelineWorker = Worker<
+    PipelinePreparationKind,
+    Vec<PipelinePreparation>,
+    Vec<(NativePipeline, PipelinePreparation)>,
+>;
 
 impl MetalDevice {
     /// Queue allocation and initial host copies off-thread. At most two requests are
@@ -117,8 +120,11 @@ impl MetalDevice {
                 move |batch: Vec<PipelinePreparation>| {
                     pool(|| {
                         batch
-                            .iter()
-                            .map(|p| pipeline::create(&device, &compiler, &p.cooked, &p.artifacts))
+                            .into_iter()
+                            .map(|p| {
+                                pipeline::create(&device, &compiler, &p.cooked, &p.artifacts)
+                                    .map(|native| (native, p))
+                            })
                             .collect()
                     })
                 },
@@ -138,11 +144,20 @@ impl MetalDevice {
         let Some(result) = worker.poll(id)? else {
             return Ok(None);
         };
-        result?
-            .into_iter()
-            .map(|native| self.pipelines.insert(native))
-            .collect::<Result<_>>()
-            .map(Some)
+        let mut handles = Vec::new();
+        for (native, source) in result? {
+            let handle = self.pipelines.insert(native)?;
+            handles.push(handle);
+            if let Some(worker) = &mut self.shader_worker
+                && let Err(error) = worker.track(handle, &source.cooked, &source.artifacts)
+            {
+                for handle in handles {
+                    self.retire_pipeline(handle)?;
+                }
+                return Err(error.into());
+            }
+        }
+        Ok(Some(handles))
     }
     /// Cancel without waiting; a running batch finishes and is dropped unseen.
     pub fn cancel_prepared_pipelines(&mut self, id: PipelinePreparationId) -> Result<()> {

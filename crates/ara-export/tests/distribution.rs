@@ -64,9 +64,9 @@ fn package_configuration_rejects_platform_and_release_signing_mismatches() {
 fn appimage_embeds_and_verifies_nested_payloads_on_the_build_host() {
     let root = tempfile::tempdir().unwrap();
     let build = root.path().join("build");
-    std::fs::create_dir_all(build.join("game")).unwrap();
-    std::fs::write(build.join("ara-player"), b"\x7fELF player").unwrap();
-    std::fs::write(build.join("game/Game.so"), b"\x7fELF script").unwrap();
+    std::fs::create_dir_all(build.join("data/game")).unwrap();
+    std::fs::write(build.join("Outpost"), b"\x7fELF player").unwrap();
+    std::fs::write(build.join("data/game/Game.so"), b"\x7fELF script").unwrap();
     let mut header = vec![0u8; 4096];
     header[..4].copy_from_slice(b"\x7fELF");
     header[8..11].copy_from_slice(b"AI\x02");
@@ -103,4 +103,19 @@ fn appimage_embeds_and_verifies_nested_payloads_on_the_build_host() {
             include_bytes!("../../../assets/brand/icons/game/ara-game.svg")
         );
     }
+    let node = fs
+        .files()
+        .find(|node| node.fullpath == std::path::Path::new("/AppRun"))
+        .unwrap();
+    let backhand::InnerNode::File(file) = &node.inner else {
+        panic!("AppRun must be a file")
+    };
+    let mut launch = String::new();
+    fs.file(file)
+        .reader_checked()
+        .unwrap()
+        .read_to_string(&mut launch)
+        .unwrap();
+    assert!(launch.contains("/'Outpost'"));
+    assert!(!launch.contains("ara-player"));
 }

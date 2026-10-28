@@ -743,6 +743,86 @@ fn a_loading_split_is_an_independent_device_on_the_same_gpu() {
     assert!(matches!(refused, Err(GpuError::Contract(_))));
 }
 
+/// A long dependent loop, so work queued behind it stays unfinished for a while.
+const SPIN: &str = r#"
+kernel void spin(constant TopLevel& top [[buffer(2)]], uint id [[thread_position_in_grid]]) {
+    uint x = id;
+    for (uint i = 0; i < top.root[1]; i++) {
+        x = x * 1664525u + 1013904223u;
+    }
+    top.buffers[top.root[0]].data[id] = x;
+}
+"#;
+
+#[test]
+fn wait_for_orders_another_devices_reads_after_unfinished_work() {
+    let mut owner = device();
+    let mut borrower = device();
+    let spin = owner.msl_pipeline_from(
+        SPIN,
+        &[(Stage::Compute, "spin")],
+        &RenderState::default(),
+        Some([64, 1, 1]),
+    );
+    let scratch = storage(&mut owner, 64);
+    let slot = owner.storage_buffer(scratch).expect("slot");
+    let image = owner
+        .create_image(
+            4,
+            2,
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+        )
+        .expect("image");
+    // The owner clears the image only after a long spin, and nobody waits for it.
+    let mut rec = owner.begin(Queue::Graphics);
+    rec.push(Command::Pipeline(spin));
+    rec.push(Command::Constants(RootConstants {
+        words: [slot.index, 20_000_000, 0, 0, 0, 0, 0, 0],
+    }));
+    rec.push(Command::Dispatch([1, 1, 1]));
+    rec.barriers([Barrier {
+        resource: Resource::Buffer(scratch),
+        before: Access::Storage,
+        after: Access::Storage,
+        handoff: None,
+    }]);
+    rec.push(Command::BeginRendering {
+        colors: vec![Attachment {
+            image,
+            clear: Some([1., 0., 0., 1.]),
+        }],
+        depth: None,
+        size: [4, 2],
+    });
+    rec.push(Command::EndRendering);
+    let point = owner.submit(rec.finish(), &[]).expect("spin and clear");
+    let adopted = borrower
+        .adopt_texture(
+            owner.native_image(image).expect("native texture"),
+            vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::SAMPLED,
+        )
+        .expect("adopt");
+    let readback = borrower
+        .create_readback_buffer(4 * 2 * 4)
+        .expect("readback");
+    borrower.wait_for(&owner);
+    let mut rec = borrower.begin(Queue::Graphics);
+    rec.push(Command::ReadImage {
+        source: adopted,
+        destination: readback,
+    });
+    let read = borrower.submit(rec.finish(), &[]).expect("read");
+    borrower.resolve(read).expect("resolve");
+    let pixels = words(&borrower.read(readback).expect("pixels"));
+    assert!(
+        pixels.iter().all(|&p| p == 0xff00_00ff),
+        "the read ran before the owner's clear: {:08x}",
+        pixels[0]
+    );
+    owner.resolve(point).expect("owner");
+}
+
 #[test]
 fn another_device_adopts_and_reads_a_texture_of_the_same_gpu() {
     let mut owner = device();

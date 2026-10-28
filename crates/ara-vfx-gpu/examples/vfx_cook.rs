@@ -66,6 +66,7 @@ fn main() -> Result<()> {
                     source: "effect.slang".into(),
                     entries: BTreeMap::from([((*entry).into(), Stage::Compute)]),
                     state: RenderState::default(),
+                    defines: BTreeMap::new(),
                 },
             );
         }
@@ -92,6 +93,7 @@ fn main() -> Result<()> {
                         blend,
                         ..RenderState::default()
                     },
+                    defines: BTreeMap::new(),
                 },
             );
         }

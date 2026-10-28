@@ -87,6 +87,7 @@ pub(super) struct Judged {
 #[serde(rename_all = "snake_case")]
 pub(super) enum InvalidReason {
     ForeignGpuLoad,
+    ForeignCpuLoad,
     Unmonitored,
 }
 
@@ -804,7 +805,9 @@ fn editor(results: &Results, rows: &mut Vec<Row>) {
         (false, "after imports (warm)"),
     ] {
         let subject = format!("Editor · Outpost, {label}");
-        let interaction = |name: &str| name != "warmup" && name != "settle";
+        // The editor probe's unpresentable scenario presents nothing: not interaction.
+        let interaction =
+            |name: &str| name != "warmup" && name != "settle" && name != "unpresentable";
         for (metric, keep) in [
             (
                 "Click → present p95",

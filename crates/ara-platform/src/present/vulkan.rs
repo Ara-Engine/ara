@@ -12,12 +12,30 @@ use ara_gpu::{
     vulkan::{Context as Gpu, image_barrier},
 };
 use sdl3_sys::vulkan::SDL_Vulkan_CreateSurface;
+use std::time::{Duration, Instant};
+/// Presentations that may be in flight at once (`Present::set_frames_in_flight`).
+const SLOTS: usize = 2;
+/// Longest a presentation waits to acquire an image or reuse a slot before it skips
+/// the frame: a stalled presentation engine (minimized, occluded or undisplayed
+/// window) must never block the caller's event pump.
+const PRESENT_WAIT_NS: u64 = 100_000_000;
+/// One presentation's acquire semaphore, and its blit and the fence that retires it.
+struct Slot {
+    acquire: vk::Semaphore,
+    fence: vk::Fence,
+    /// The submitted blit, freed once `fence` signals.
+    command: Option<vk::CommandBuffer>,
+}
 /// Swapchain, surface and per-image presentation semaphore ownership.
 pub struct Present {
     surface: vk::SurfaceKHR,
     swapchain: vk::SwapchainKHR,
     loader: ash::khr::swapchain::Device,
-    acquire: vk::Semaphore,
+    slots: [Slot; SLOTS],
+    /// The slot the next presentation uses.
+    next: usize,
+    /// Presentations return without idling the queue (`set_frames_in_flight`).
+    frames_in_flight: bool,
     rendered: Vec<vk::Semaphore>,
     images: Vec<vk::Image>,
     initialized: Vec<bool>,
@@ -72,6 +90,7 @@ impl Present {
                 surface,
                 swapchain: vk::SwapchainKHR::null(),
                 semaphores: Vec::new(),
+                fences: Vec::new(),
                 armed: true,
             };
             let surface_loader = ash::khr::surface::Instance::load(&gpu._entry, &gpu.instance);
@@ -151,10 +170,22 @@ impl Present {
                     .set_hdr_metadata(&[swapchain], &[metadata]);
             }
             let images = loader.get_swapchain_images(swapchain)?;
-            let acquire = gpu
-                .device
-                .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?;
-            guard.semaphores.push(acquire);
+            let mut slot = || -> Result<Slot> {
+                let acquire = gpu
+                    .device
+                    .create_semaphore(&vk::SemaphoreCreateInfo::default(), None)?;
+                guard.semaphores.push(acquire);
+                let fence = gpu
+                    .device
+                    .create_fence(&vk::FenceCreateInfo::default(), None)?;
+                guard.fences.push(fence);
+                Ok(Slot {
+                    acquire,
+                    fence,
+                    command: None,
+                })
+            };
+            let slots = [slot()?, slot()?];
             let rendered = (0..images.len())
                 .map(|_| {
                     let semaphore = gpu
@@ -170,7 +201,9 @@ impl Present {
                 surface,
                 swapchain,
                 loader,
-                acquire,
+                slots,
+                next: 0,
+                frames_in_flight: false,
                 rendered,
                 images,
                 initialized,
@@ -181,18 +214,88 @@ impl Present {
             })
         }
     }
-    /// Acquire the next image; OUT_OF_DATE is returned for caller recreation.
-    fn acquire(&self, gpu: &Gpu) -> Result<u32> {
+    /// Acquire the next image, signalling `semaphore`; OUT_OF_DATE is returned for
+    /// caller recreation.
+    /// None when no image is available within `PRESENT_WAIT_NS` (the frame is skipped;
+    /// a timed-out acquire signals nothing, so `semaphore` stays reusable).
+    fn acquire(&self, gpu: &Gpu, semaphore: vk::Semaphore) -> Result<Option<u32>> {
         ara_gpu::cpu_scope!("Platform.acquire");
-        gpu.measure_host_wait(|| {
-            // SAFETY: The prior frame completed, so acquire is reusable.
+        let result = gpu.measure_host_wait(|| {
+            // SAFETY: The blit that last waited this semaphore completed (`retire_slot`).
             unsafe {
-                Ok(self
-                    .loader
-                    .acquire_next_image(self.swapchain, u64::MAX, self.acquire, vk::Fence::null())?
-                    .0)
+                self.loader.acquire_next_image(
+                    self.swapchain,
+                    PRESENT_WAIT_NS,
+                    semaphore,
+                    vk::Fence::null(),
+                )
             }
-        })
+        });
+        match result {
+            Ok((index, _)) => Ok(Some(index)),
+            Err(vk::Result::TIMEOUT | vk::Result::NOT_READY) => Ok(None),
+            Err(error) => Err(error.into()),
+        }
+    }
+    /// Lets presentations return once the blit is submitted instead of idling the
+    /// graphics queue: each presentation waits only the blit that last used its
+    /// slot, `SLOTS` presentations back. Only for hosts whose later writes to the
+    /// source are GPU-ordered after the blit on this queue, and that wait the device
+    /// before destroying it (the player window). Off by default; turning it off
+    /// waits every slot.
+    /// # Safety
+    /// `gpu` created this presentation and is live.
+    pub unsafe fn set_frames_in_flight(&mut self, gpu: &GpuDevice, enabled: bool) -> Result<()> {
+        if !enabled {
+            for slot in 0..SLOTS {
+                // SAFETY: forwarded caller contract.
+                unsafe { self.retire_slot(gpu.context(), slot, u64::MAX)? };
+            }
+        }
+        self.frames_in_flight = enabled;
+        Ok(())
+    }
+    /// Waits, at most `timeout` in all, for every presentation still reading its source:
+    /// false while one is pending (a stalled presentation engine left a synchronous
+    /// `display` unfinished). The caller must not rewrite or free that source until true.
+    /// # Safety
+    /// `gpu` created this presentation and is live.
+    pub unsafe fn settled(&mut self, gpu: &GpuDevice, timeout: Duration) -> Result<bool> {
+        let deadline = Instant::now() + timeout;
+        for slot in 0..SLOTS {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let nanos = u64::try_from(left.as_nanos()).unwrap_or(u64::MAX);
+            // SAFETY: forwarded caller contract.
+            if !unsafe { self.retire_slot(gpu.context(), slot, nanos)? } {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+    /// Waits (at most `timeout_ns`) for the blit that last used `slot` and frees its
+    /// command buffer; false while it is still pending (the slot stays busy).
+    /// # Safety
+    /// `gpu` created this presentation and is live.
+    unsafe fn retire_slot(&mut self, gpu: &Gpu, slot: usize, timeout_ns: u64) -> Result<bool> {
+        let Some(command) = self.slots[slot].command else {
+            return Ok(true);
+        };
+        let fence = self.slots[slot].fence;
+        ara_gpu::cpu_scope!("Platform.present_slot_wait");
+        // SAFETY: the fence was submitted with `command` on this device; once it
+        // signals, the command buffer and the slot's acquire semaphore are idle.
+        unsafe {
+            match gpu.measure_host_wait(|| gpu.device.wait_for_fences(&[fence], true, timeout_ns)) {
+                Ok(()) => {}
+                Err(vk::Result::TIMEOUT) => return Ok(false),
+                Err(error) => return Err(error.into()),
+            }
+            gpu.device.reset_fences(&[fence])?;
+            gpu.device
+                .free_command_buffers(gpu.graphics_pool, &[command]);
+        }
+        self.slots[slot].command = None;
+        Ok(true)
     }
     /// Per-image binary semaphore, reused only after image reacquisition.
     pub fn rendered(&self, index: u32) -> vk::Semaphore {
@@ -303,9 +406,19 @@ impl Present {
     pub unsafe fn destroy(&mut self, gpu: &Gpu) {
         // SAFETY: Called after device idle (including present), before window/instance drop.
         unsafe {
-            if self.acquire != vk::Semaphore::null() {
-                gpu.device.destroy_semaphore(self.acquire, None);
-                self.acquire = vk::Semaphore::null();
+            for slot in &mut self.slots {
+                if let Some(command) = slot.command.take() {
+                    gpu.device
+                        .free_command_buffers(gpu.graphics_pool, &[command]);
+                }
+                if slot.acquire != vk::Semaphore::null() {
+                    gpu.device.destroy_semaphore(slot.acquire, None);
+                    slot.acquire = vk::Semaphore::null();
+                }
+                if slot.fence != vk::Fence::null() {
+                    gpu.device.destroy_fence(slot.fence, None);
+                    slot.fence = vk::Fence::null();
+                }
             }
             for semaphore in &self.rendered {
                 gpu.device.destroy_semaphore(*semaphore, None);
@@ -323,7 +436,9 @@ impl Present {
     }
 }
 impl Present {
-    /// Blit one completed Ara frame to the acquired image and wait for presentation work.
+    /// Blit one completed Ara frame to the acquired image and wait for the blit, at most
+    /// `PRESENT_WAIT_NS`: a stalled presentation engine leaves it pending, later displays
+    /// skip until it completes, and [`Self::settled`] gates the caller's next write.
     /// The serialized v0 path keeps native command and semaphore ownership inspectable.
     /// # Safety
     /// Source must be a completed CopySource image owned by the creating device.
@@ -365,7 +480,15 @@ impl Present {
             self.swapchain != vk::SwapchainKHR::null(),
             "Presentation has been destroyed"
         );
-        let index = self.acquire(gpu)?;
+        let slot = self.next;
+        // A stalled presentation engine skips frames rather than blocking the caller.
+        // SAFETY: this presentation was created on `gpu`.
+        if !unsafe { self.retire_slot(gpu, slot, PRESENT_WAIT_NS)? } {
+            return Ok(());
+        }
+        let Some(index) = self.acquire(gpu, self.slots[slot].acquire)? else {
+            return Ok(());
+        };
         let cmd = gpu.commands(false)?;
         // SAFETY: Fresh command buffer, never submitted.
         unsafe {
@@ -377,7 +500,7 @@ impl Present {
             gpu.device.end_command_buffer(cmd)?;
             let commands = [vk::CommandBufferSubmitInfo::default().command_buffer(cmd)];
             let waits = [vk::SemaphoreSubmitInfo::default()
-                .semaphore(self.acquire)
+                .semaphore(self.slots[slot].acquire)
                 .stage_mask(vk::PipelineStageFlags2::ALL_COMMANDS)];
             let signals = [vk::SemaphoreSubmitInfo::default()
                 .semaphore(self.rendered(index))
@@ -388,16 +511,20 @@ impl Present {
                     .command_buffer_infos(&commands)
                     .wait_semaphore_infos(&waits)
                     .signal_semaphore_infos(&signals)],
-                vk::Fence::null(),
+                self.slots[slot].fence,
             )?;
         }
         let result = self.present(gpu, index);
-        // SAFETY: Waiting includes the blit/present queue operations before command reuse/free.
-        unsafe {
-            ara_gpu::cpu_scope!("Platform.present_queue_idle");
-            gpu.measure_host_wait(|| gpu.device.queue_wait_idle(gpu.graphics))?;
-            gpu.device.free_command_buffers(gpu.graphics_pool, &[cmd]);
+        // The slot's next use waits its fence (`retire_slot`).
+        self.slots[slot].command = Some(cmd);
+        if self.frames_in_flight {
+            self.next = (slot + 1) % SLOTS;
+            return result;
         }
+        // Synchronous: the blit completes before returning, unless the presentation
+        // engine stalls; then the slot stays busy rather than blocking the caller.
+        // SAFETY: this presentation was created on `gpu`.
+        unsafe { self.retire_slot(gpu, slot, PRESENT_WAIT_NS)? };
         result
     }
 }
@@ -407,6 +534,7 @@ struct Construction<'a> {
     surface: vk::SurfaceKHR,
     swapchain: vk::SwapchainKHR,
     semaphores: Vec<vk::Semaphore>,
+    fences: Vec<vk::Fence>,
     armed: bool,
 }
 impl Drop for Construction<'_> {
@@ -418,6 +546,9 @@ impl Drop for Construction<'_> {
         unsafe {
             for semaphore in &self.semaphores {
                 self.gpu.device.destroy_semaphore(*semaphore, None);
+            }
+            for fence in &self.fences {
+                self.gpu.device.destroy_fence(*fence, None);
             }
             if self.swapchain != vk::SwapchainKHR::null() {
                 ash::khr::swapchain::Device::load(&self.gpu.instance, &self.gpu.device)
@@ -449,6 +580,9 @@ impl Present {
         // SAFETY: forwarded caller contract.
         unsafe { Self::new_with_output(gpu.context(), window, output) }
     }
+    /// Metal's presentation copies run on a queue of their own, so the next frame's
+    /// work waits for them there; this blit shares the renderer's queue already.
+    pub fn order_before(&self, _gpu: &mut GpuDevice) {}
     /// Blit a completed engine image of `size` ([`Self::display`]).
     /// # Safety
     /// `image` is a completed CopySource image on `gpu`; both owners are live.

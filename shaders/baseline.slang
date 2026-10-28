@@ -47,9 +47,9 @@ FullscreenVarying fullscreenVertex(uint id:SV_VertexID){FullscreenVarying o;floa
 // `rays` the hybrid path's ray-traced reflections (renderer::rt, D29).
 float4 lighting(FullscreenVarying v,bool high,bool rays=false){
     Frame f=frame();Look l=look(f);int2 p=int2(v.clip.xy);float2 uv=(float2(p)+0.5)/float2(f.extent.xy);bool covered;float3 world=gbufferWorld(f,p,covered);
-    if(!covered)return float4(background(f,l,viewRay(f,float2(p)+0.5),uv),1);
+    if(!covered)return float4(exposeHdr(f,l,background(f,l,viewRay(f,float2(p)+0.5),uv)),1);
     Surface s;float4 a=gbufferAlbedo(f,p);float2 m=gbufferMaterial(f,p);s.albedo=a.rgb;s.alpha=1;s.transmission=0;s.ao=min(a.a,screenOcclusion(f,l,p,length(world-f.camera.xyz),high));s.normal=gbufferNormal(f,p);s.roughness=m.x;s.metal=m.y;s.emissive=gbufferEmissive(f,p);
-    return float4(applyFog(f,l,shade(f,l,s,world,p,true,high,rays),world,uv),1);
+    return float4(exposeHdr(f,l,applyFog(f,l,shade(f,l,s,world,p,true,high,rays),world,uv)),1);
 }
 [shader("fragment")]
 float4 lightingFragment(FullscreenVarying v):SV_Target0 {return lighting(v,false);}
@@ -118,6 +118,8 @@ float3 historyCatmullRom(Frame f,float2 uv){
 // wide in area, so render-pixel steps do not show; pixels at rest keep the long
 // accumulation.
 // History is RGBA16F, pre-exposed (look.slangh exposureState); w keeps the depth.
+// The input (HDR, or the DoF composite) is pre-exposed too (exposeHdr): its loads
+// divide by the exposure, so the resolve itself runs on radiance.
 [shader("compute")]
 [numthreads(8,8,1)]
 void taaMain(uint3 t:SV_DispatchThreadID){
@@ -128,7 +130,8 @@ void taaMain(uint3 t:SV_DispatchThreadID){
     // sample lies nearest it (the pixel itself when native).
     float2 uv=(float2(p)+0.5)/float2(f.extent.xy),at=uv*float2(size),toDisplay=float2(f.extent.xy)/float2(size);
     int2 c=clamp(int2(floor(at-f.upscale.xy)),int2(0),size-1);
-    float3 current=pixel(input,c).rgb;float depth=pixel(f.extra.x,c).x;float3 result=current;
+    float unexpose=1/exposure;
+    float3 current=pixel(input,c).rgb*unexpose;float depth=pixel(f.extra.x,c).x;float3 result=current;
     bool temporal=f.temporal.x!=0 && f.temporal.y==0;
     if(temporal || upscaled){
         // History position first: how far this pixel moved shapes both blends below.
@@ -150,7 +153,7 @@ void taaMain(uint3 t:SV_DispatchThreadID){
         float moving=valid?saturate(length((uv-hv)*float2(f.extent.xy))/4):1;
         float3 mean=0,square=0,sum=0;float total=0;float spread=lerp(5.56,2.78,moving);
         for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
-            int2 q=clamp(c+int2(x,y),int2(0),size-1);float3 s=pixel(input,q).rgb,v=toYCoCg(s);mean+=v;square+=v*v;
+            int2 q=clamp(c+int2(x,y),int2(0),size-1);float3 s=pixel(input,q).rgb*unexpose,v=toYCoCg(s);mean+=v;square+=v*v;
             float2 d=(float2(q)+0.5+f.upscale.xy-at)*toDisplay;float w=exp(-spread*dot(d,d))/(1+luminance(s)*exposure);sum+=s*w;total+=w;
         }
         mean/=9;float3 sigma=sqrt(max(square/9-mean*mean,0));

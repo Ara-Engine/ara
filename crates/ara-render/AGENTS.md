@@ -83,8 +83,8 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   completes, cached in world space, drawn under a per-frame budget; `VSM.Project` resolves them, contact-hardening (PCSS for the sun disc), into a mask lighting reads, GI relight
   has its own pipeline, and no other shader inlines page lookups, which would cost every preset registers; moved casters re-dirty pages). Look images are allocated lazily; probe GI is gathered at half resolution. Reflection captures (`look::captures`; `set_reflection_captures`, `auto_place`): faces bake through a square deferred view (a face or the prefilter per live frame, all at once in captures, only once probe GI settles), relit per frame by an ambient ratio, read by High/Epic `ibl` under SSR. Hybrid ray queries (D29, `renderer::rt`, `Quality::ray_queries`; `new_hybrid` devices): High/Epic on RT GPUs trace one deterministic reflection ray per pixel below the roughness cut against a TLAS over native content (LOD 0 BLAS per entry, fresh TLAS on change, skin BLASes amortised), cone-blurred and composited over SSR for `lighting_high_rt`; `shaders/look-rt.slangh` is the reusable trace/surface/shade API.
 - `set_deferred_post` + `finish(color, sampled, state)`: temporally resolve and grade
-  an externally composited HDR frame (landscape, particles) with the same look post.
-  TAA reprojects with native motion (Frame.look.w) when present.
+  an externally composited HDR frame (landscape, particles) with the same look post; TAA reprojects with native motion
+  (Frame.look.w). HDR is RGBA16F, pre-exposed (`hdr_exposure`, look.slangh `exposeHdr`): writers multiply, readers divide.
 - `CaptureRequest`, `Capture`: fixed tick/seed, settle frames, modes, PNG, picking,
   numbered marks, visible-pixel boxes, legends, content/compiler/driver provenance.
 - `compare`: local RGB SSIM, explicit tolerance and an amplified diff image.

@@ -397,10 +397,9 @@ impl VulkanDevice {
         let valid = self.context.info.timestamp_valid_bits[point.queue.index()];
         let reference = self.clock.reference(point.queue, valid, stamps[0])?;
         let period = self.context.info.timestamp_period_ns;
-        self.timing_window.observe(
-            point,
-            reference.interval(stamps[0], stamps[stamps.len() - 1], period),
-        );
+        let interval = reference.interval(stamps[0], stamps[stamps.len() - 1], period);
+        self.timing_window.observe(point, interval);
+        timestamps::remember(&mut self.recent_spans, point, interval);
         Ok(pending
             .labels
             .into_iter()

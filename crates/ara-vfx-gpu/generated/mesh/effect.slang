@@ -412,6 +412,14 @@ float4 sheet(uint kind,float2 uv,float frameIndex){
 // Henyey-Greenstein phase (g = 0.35) for light propagating along a direction whose
 // cosine with the outgoing (toward-camera) direction is `cosine`.
 float hgPhase(float cosine){float g=.35;return (1-g*g)/(12.56637*pow(max(1+g*g-2*g*cosine,1e-3),1.5));}
+// The scene HDR's pre-exposure (ara_render::HdrExposure): the exposure state's
+// applied multiplier (visuals.w, index + 1), else the fallback in sunColor.w; 1 when
+// the attachment holds linear radiance.
+float sceneExposure(Frame f){
+    if(f.visuals.w==0)return 1;
+    float x=buffers[NonUniformResourceIndex(f.visuals.w-1)].Load<float4>(0).x,fallback=f.sunColor.w;
+    return x>0&&x<1e30?x:fallback>0&&fallback<1e30?fallback:1;
+}
 struct ParticleOutput {float4 color:SV_Target0;float id:SV_Target1;};
 [shader("fragment")]
 ParticleOutput particleFragment(ParticleVarying input){
@@ -446,10 +454,11 @@ ParticleOutput particleFragment(ParticleVarying input){
     else color=s.color*input.color.rgb;
     if(kind==1){float heat=pow(texel.r,.6);color*=lerp(float3(.7,.08,.005),float3(1.6,1.1,.35),heat);}
     float alpha=saturate(input.color.a*s.opacity*coverage*fade);if(alpha<.001)discard;
-    ParticleOutput o;o.color=float4(color*alpha*f.ambient.w,c.appearance.y==1?0:alpha);o.id=1;return o;
+    ParticleOutput o;o.color=float4(min(color*alpha*f.ambient.w*sceneExposure(f),60000),c.appearance.y==1?0:alpha);o.id=1;return o;
 }
 [shader("fragment")]
 float4 tonemapFragment(Screen input):SV_Target0{
-    float3 c=textures[NonUniformResourceIndex(root.sortK)].Load(int3(uint2(input.uv*frame().extent.xy),0)).rgb*frame().clock.y;
+    Frame f=frame();
+    float3 c=textures[NonUniformResourceIndex(root.sortK)].Load(int3(uint2(input.uv*f.extent.xy),0)).rgb/sceneExposure(f)*f.clock.y;
     c=(c*(2.51*c+.03))/(c*(2.43*c+.59)+.14);return float4(pow(saturate(c),1./2.2),1);
 }

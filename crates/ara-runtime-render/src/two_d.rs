@@ -18,6 +18,30 @@ pub fn camera(world: &mut World) -> Option<Camera2d> {
     world.query::<&Camera2d>().iter(world).next().cloned()
 }
 
+/// Resolves a capture camera without modifying any gameplay component.
+fn named_camera(world: &mut World, selector: &str) -> Result<Camera2d> {
+    let selector = selector.strip_prefix("name:").unwrap_or(selector);
+    let mut found = None;
+    for (identity, metadata, camera) in world
+        .query::<(
+            &ara_sim::Identity,
+            Option<&ara_sim::SceneMetadata>,
+            &Camera2d,
+        )>()
+        .iter(world)
+    {
+        if identity.0 != selector && metadata.is_none_or(|m| m.name != selector) {
+            continue;
+        }
+        anyhow::ensure!(
+            found.is_none(),
+            "camera `{selector}` is ambiguous; use its entity ID"
+        );
+        found = Some(camera.clone());
+    }
+    found.with_context(|| format!("no Camera2d matches `{selector}`"))
+}
+
 /// Loads every atlas the world's sprites and tilemaps reference from their published
 /// import generations (`atlas.json` + `atlas.rgba`), keyed by reference text. Normal
 /// atlases decode linear.
@@ -174,6 +198,7 @@ impl Presenter2d {
     }
 
     /// A deterministic capture of the world at `tick` through its `Camera2d`.
+    #[allow(clippy::too_many_arguments)]
     pub fn capture(
         &mut self,
         world: &mut World,
@@ -182,8 +207,12 @@ impl Presenter2d {
         size: [u32; 2],
         marks: Option<usize>,
         seed: u64,
+        selector: Option<&str>,
     ) -> Result<Capture> {
-        let camera = camera(world).context("the world has no Camera2d")?;
+        let camera = match selector {
+            Some(selector) => named_camera(world, selector)?,
+            None => camera(world).context("the world has no Camera2d")?,
+        };
         let scene = Scene2d::extract(world, atlases, tick)?;
         if self.renderer.as_ref().is_some_and(|r| r.size() != size) {
             self.renderer = None;
@@ -218,6 +247,31 @@ impl Presenter2d {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn captures_resolve_2d_cameras_by_name_or_id_and_reject_ambiguity() {
+        let mut world = World::new();
+        world.spawn((
+            ara_sim::Identity("e_camera".into()),
+            ara_sim::SceneMetadata {
+                name: "Map".into(),
+                ..Default::default()
+            },
+            Camera2d::default(),
+        ));
+        assert!(named_camera(&mut world, "Map").is_ok());
+        assert!(named_camera(&mut world, "e_camera").is_ok());
+        assert!(named_camera(&mut world, "missing").is_err());
+        world.spawn((
+            ara_sim::Identity("e_camera2".into()),
+            ara_sim::SceneMetadata {
+                name: "Map".into(),
+                ..Default::default()
+            },
+            Camera2d::default(),
+        ));
+        assert!(named_camera(&mut world, "Map").is_err());
+        assert!(named_camera(&mut world, "e_camera").is_ok());
+    }
     #[test]
     fn missing_atlas_keeps_sprite_and_flipbook_regions_drawable() {
         let mut world = World::new();

@@ -3,6 +3,9 @@
 use super::*;
 use ara_ui_text::{Clipboard, EditEvent};
 use std::path::Path;
+fn source_path(file: &str) -> String {
+    format!("{}/Assets/Gameplay/{file}", ara_doc::AUTHORING_ROOT)
+}
 #[derive(Default)]
 pub(super) struct Clip(String);
 impl Clipboard for Clip {
@@ -20,6 +23,8 @@ pub(super) struct AssetsVerification {
     output: PathBuf,
     entity: String,
     attach_job: Option<String>,
+    created: bool,
+    renamed: bool,
 }
 impl AssetsVerification {
     pub(super) fn new(editor: &mut Editor, output: &Path) -> ara_ui::Result<Self> {
@@ -40,6 +45,8 @@ impl AssetsVerification {
             output: output.into(),
             entity,
             attach_job: None,
+            created: false,
+            renamed: false,
         })
     }
     pub(super) fn finished(&self) -> bool {
@@ -100,45 +107,56 @@ impl AssetsVerification {
                 capture.screenshot("02-create-menu", editor, shell, gpu, ui, renderer, scene)?;
             }
             2 => {
-                let id = shell
-                    .ui
-                    .nodes
-                    .iter()
-                    .find(|n| {
-                        n.element.tag == "button"
-                            && n.element
-                                .attrs
-                                .get("label")
-                                .is_some_and(|l| l == "C# Script")
-                    })
-                    .ok_or("Create menu has no C# Script")?
-                    .element
-                    .id
-                    .clone();
-                shell.click(&id, &mut clip)?;
-                shell.dispatch(editor)?;
+                if !self.created {
+                    let id = shell
+                        .ui
+                        .nodes
+                        .iter()
+                        .find(|n| {
+                            n.element.tag == "button"
+                                && n.element
+                                    .attrs
+                                    .get("label")
+                                    .is_some_and(|l| l == "C# Script")
+                        })
+                        .ok_or("Create menu has no C# Script")?
+                        .element
+                        .id
+                        .clone();
+                    shell.click(&id, &mut clip)?;
+                    shell.dispatch(editor)?;
+                    self.created = true;
+                }
                 if !editor
                     .host
                     .root()
-                    .join("Assets/Gameplay/NewBehaviour.cs")
+                    .join(source_path("NewBehaviour.cs"))
                     .exists()
                 {
-                    return Err("Script creation did not write its selected folder".into());
+                    return Ok(false);
                 }
                 capture.screenshot("03-inline-rename", editor, shell, gpu, ui, renderer, scene)?;
             }
             3 => {
-                shell.event(
-                    InputEvent::Edit(EditEvent::Insert("PlayerController".into())),
-                    &mut clip,
-                )?;
-                shell.dispatch(editor)?;
-                shell.key(editor, 40, true, &mut clip)?;
+                if !self.renamed {
+                    shell.event(
+                        InputEvent::Edit(EditEvent::Insert("PlayerController".into())),
+                        &mut clip,
+                    )?;
+                    shell.dispatch(editor)?;
+                    shell.key(editor, 40, true, &mut clip)?;
+                    self.renamed = true;
+                }
+                if !editor
+                    .host
+                    .root()
+                    .join(source_path("PlayerController.cs"))
+                    .exists()
+                {
+                    return Ok(false);
+                }
                 let source = std::fs::read_to_string(
-                    editor
-                        .host
-                        .root()
-                        .join("Assets/Gameplay/PlayerController.cs"),
+                    editor.host.root().join(source_path("PlayerController.cs")),
                 )?;
                 if !source.contains("class PlayerController : Behaviour") {
                     return Err("Class name did not follow inline file rename".into());
@@ -201,8 +219,8 @@ impl AssetsVerification {
                 )?;
             }
             6 => {
-                let path = "Assets/Gameplay/PlayerController.cs";
-                let source = std::fs::read_to_string(editor.host.root().join(path))?;
+                let path = source_path("PlayerController.cs");
+                let source = std::fs::read_to_string(editor.host.root().join(&path))?;
                 let text=source.replace("    /// <inheritdoc/>","    /// <summary>Hit points stored in ECS.</summary>\n    [Property] public partial int Health { get; set; }\n\n    /// <inheritdoc/>");
                 editor.action("script.write", json!({"path":path,"text":text}))?;
             }
@@ -237,7 +255,7 @@ impl AssetsVerification {
                 std::fs::write(
                     self.output.join("assets-scripts.json"),
                     ara_json::to_canonical_string(
-                        &json!({"compiled":true,"attached":true,"hotCompiled":true,"entity":self.entity,"path":"Assets/Gameplay/PlayerController.cs","createAndAttachJob":self.attach_job,"sidebarWidth":editor.state.asset_sidebar_width}),
+                        &json!({"compiled":true,"attached":true,"hotCompiled":true,"entity":self.entity,"path":source_path("PlayerController.cs"),"createAndAttachJob":self.attach_job,"sidebarWidth":editor.state.asset_sidebar_width}),
                     ),
                 )?;
             }

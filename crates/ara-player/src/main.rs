@@ -71,6 +71,15 @@ struct Args {
 }
 
 fn main() {
+    #[cfg(feature = "hotpatch")]
+    // SAFETY: No threads or native runtimes have started at process entry.
+    let native_args = match unsafe { ara_hotpatch::args_os() } {
+        Ok(args) => args,
+        Err(error) => {
+            eprintln!("ARA7600: {error:#}");
+            std::process::exit(2);
+        }
+    };
     let launched = Instant::now();
     match ara_crash::monitor_from_args() {
         Ok(true) => return,
@@ -86,11 +95,9 @@ fn main() {
     let directory = std::env::var_os("ARA_CRASH_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| {
-            // A macOS app runs from `/` with signed contents: use the user's folder.
-            cfg!(target_os = "macos")
-                .then(|| ara_crash::desktop::directory().ok())
-                .flatten()
-                .unwrap_or_else(|| PathBuf::from(".ara/crashes"))
+            // Installed game folders are immutable, including on Windows/Linux.
+            ara_crash::desktop::directory()
+                .unwrap_or_else(|_| std::env::temp_dir().join("ara-player-crashes"))
         });
     let build_id = std::env::var("ARA_BUILD_ID")
         .ok()
@@ -104,11 +111,15 @@ fn main() {
     let _capture = match ara_crash::Capture::start(&directory, &build_id) {
         Ok(capture) => Some(capture),
         Err(error) => {
-            eprintln!("ARA-EXP-CRASH-004: {error:#}");
+            eprintln!("{error:#}");
             None
         }
     };
-    if let Err(error) = run(Args::parse(), launched) {
+    #[cfg(feature = "hotpatch")]
+    let args = Args::parse_from(native_args);
+    #[cfg(not(feature = "hotpatch"))]
+    let args = Args::parse();
+    if let Err(error) = run(args, launched) {
         eprintln!("ara-player: {error:#}");
         std::process::exit(2);
     }
@@ -178,6 +189,10 @@ struct Player {
 
 fn run(args: Args, launched: Instant) -> Result<()> {
     ara_gpu::cpu_scope!("Player.run");
+    // Probes need no pack: they open their own hidden window on this main thread.
+    if let Some(name) = &args.standalone.probe {
+        return standalone::probes::run(name);
+    }
     if args.owner.is_none() {
         if args.game.game || game_app::has_menu(&args)? {
             return game_app::run(args);
@@ -278,7 +293,11 @@ fn run(args: Args, launched: Instant) -> Result<()> {
 
 impl Player {
     fn run(&mut self) -> Result<()> {
+        #[cfg(feature = "hotpatch")]
+        let mut rust_patches = ara_hotpatch::Hotpatch::connect();
         while !self.stop {
+            #[cfg(feature = "hotpatch")]
+            rust_patches.frame_boundary();
             // Idle pool state: block on the link without spinning.
             let idle = self.world.is_none();
             let message = if idle {
@@ -893,6 +912,9 @@ impl Player {
                 let presenter2d = self
                     .presenter2d
                     .get_or_insert_with(|| Presenter2d::new(&self.args.gpu_cache));
+                if let Some(presenter) = &mut self.presenter {
+                    presenter.set_quality(params.preset.map(Into::into).unwrap_or(self.quality));
+                }
                 serde_json::to_value(world.capture(
                     &params,
                     self.presenter.as_mut(),

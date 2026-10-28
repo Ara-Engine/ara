@@ -33,8 +33,9 @@ impl PreparedPipelines {
     }
 }
 impl PipelineWarmup {
-    /// Read the immutable cook once. No GPU or shader compiler is needed here.
-    pub fn new(cooked: &Path) -> Result<Self> {
+    /// Read the immutable cook once, for systems drawing into an `hdr` attachment
+    /// (`LINEAR_HDR` or `RASTER_HDR`). No GPU or shader compiler is needed here.
+    pub fn new(cooked: &Path, hdr: ara_gpu::vk::Format) -> Result<Self> {
         let mut recipes = Vec::new();
         let mut key = None;
         for name in
@@ -51,7 +52,7 @@ impl PipelineWarmup {
                 key = Some(source.key.to_owned());
             }
             recipes.push(PipelinePreparation {
-                cooked: source,
+                cooked: crate::with_hdr_format(name, source, hdr),
                 artifacts: cooked.to_owned(),
             });
         }

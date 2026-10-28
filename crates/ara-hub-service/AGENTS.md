@@ -54,6 +54,7 @@ Connect using `ara_rpc::Client::for_project(config_dir.join("hub"))`; discovery 
 | `hub.engine.preflight` | `{version}` | Read-only destination, channel, download bytes and estimated required/available space; exact expansion checked before extraction |
 | `hub.engine.repair` | `{version,hubVersion?}` | Signed same-version reinstall job (`kind:repair`); close pinned projects first; stage, swap and register with rollback |
 | `hub.engine.uninstall` | `{version}` | Job (`kind:uninstall`); prepares off-thread, commits removal, cleans off-thread; Hub-managed files only, rejects open pins |
+| `hub.engine.uninstall.preflight` | `{version}` | Cancellable read-only job (`kind:uninstall-preflight`, phase `inspecting`); complete result `{version,destination,bytes,files}` estimates regular-file logical size from background metadata traversal; no uninstall or registry mutation |
 | `hub.downloads` | `{}` | `{jobs:[job]}`; state is `running|complete|failed|cancelled`, error is a catalogued diagnostic |
 | `hub.download.cancel` | `{job:id}` | `{cancelling:id}`; removes partial data before commit |
 | `hub.releases.check` | `{}` | `{checking:true}`; refresh per-page ETags and signed cache |
@@ -85,6 +86,9 @@ unchanged snapshots emit nothing. GUI clients run all calls off their input thre
 Jobs include `phase`, `cancellable` and optional `disk {availableBytes,requiredBytes}`.
 Uninstall cancels before commit; `removing` has committed and cannot be cancelled.
 Retry the same uninstall to clean a retained managed tombstone after cleanup fails.
+Uninstall preflight rejects external builds, open pins and the service's own engine.
+It parses only the ownership marker, never follows links/reparse points or reads payloads; `bytes` estimates logical size (allocation/compression/hardlinks differ).
+Cancellation only stops inspection. Actual Uninstall revalidates ownership/pins at commit.
 `hub.engines` adds `managed:bool` (external registrations are unregister-only).
 Offline/rate-limited feeds carry a clear status; signatures are reverified on cache
 reads. Install roots: LOCALAPPDATA/Ara/Engines/version. Cancelled/tampered extraction
@@ -126,23 +130,19 @@ A failed custom template can leave its newly created destination for inspection.
 
 `ara hub install-mcp --client claude|codex` prints Claude JSON / Codex TOML using the current executable's absolute path and `args:["mcp"]`; PATH is unnecessary. Hub displays/copies it without editing client config files.
 Register with `ara hub add <absolute-path>`; create with `ara hub create <absolute-path> --name Name --template blank`.
-Use `ara_projects {action:"list"}` then `ara_session {action:"open",project:"Name"}`
-or give `project` on any existing tool. Sessions never cross projects.
-Per-project compatibility: `ara mcp --root <project>` and optional `.mcp.json`
-(`args:["mcp","--root","."]`) retain the standalone project daemon behavior.
+Use `ara_projects {action:"list"}` then `ara_session {action:"open",project:"Name"}`, or give `project` on any tool. Sessions never cross projects.
+Per-project `ara mcp --root <project>` and optional `.mcp.json` (`args:["mcp","--root","."]`) retain standalone daemon behavior.
 
 ## Tests and gates
 
 Every test/capture/manual check uses a scratch ARA_CONFIG_DIR under target/: the
 tracked `.cargo/config.toml` sets `target/ara-config` for `cargo test`/`cargo run`
 (an explicit value wins). Config-isolation tests fail if it resolves elsewhere. Test cleanup
-closes projects, shuts down the owned service and waits for discovery removal.
-Do not stop or alter another user's/service's profile.
+closes projects, shuts down the owned service and waits for discovery removal. Never alter another profile.
 
 `CARGO_BUILD_JOBS=2 cargo test -p ara-hub-service` covers registry/templates and release jobs.
-`cargo test -p ara --test hub` runs real user Hub + global stdio MCP + two project
-daemons, concurrent clients, registry metadata, subscriptions, and install output.
-`cargo test -p ara --test engine` retains per-project MCP/HTTP coverage.
+`cargo test -p ara --test hub` covers a real Hub, global stdio MCP, two daemons, concurrent clients, registry metadata, subscriptions and install output.
+`cargo test -p ara --test engine` covers per-project MCP/HTTP.
 `tests/process_exit.rs` uses windowless editor-authority processes to cover all
 four exit paths, including stale discovery after crash/kill. Watcher cancellation
 joins its thread and never terminates the observed editor when the Hub stops.

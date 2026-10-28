@@ -126,6 +126,17 @@ pub(crate) fn apply_text(
         };
         let here = current.and_then(|d| d.record(id));
         match op {
+            Op::File { path, state, .. } => modified.push((
+                id,
+                format!(
+                    "{path} ({})",
+                    if state.is_some() {
+                        "source/file bytes"
+                    } else {
+                        "removed file"
+                    }
+                ),
+            )),
             Op::Document {
                 kind: Some(kind),
                 path,
@@ -178,6 +189,11 @@ pub(crate) fn diff_summary(ops: &[Op]) -> Value {
     for op in ops {
         let id = op.id().to_string();
         match op {
+            Op::File { .. } => {
+                if !modified.contains(&id) {
+                    modified.push(id);
+                }
+            }
             Op::Document { kind: Some(_), .. } => created.push(id),
             Op::Document { kind: None, .. } => deleted.push(id),
             Op::Create { .. } => created.push(id),
@@ -215,7 +231,17 @@ impl State {
             && p.commands.iter().all(|c| {
                 matches!(
                     c.cmd.as_str(),
-                    "doc.create" | "project.setMain" | "import.initialize" | "import.configure"
+                    "doc.create"
+                        | "project.setMain"
+                        | "import.initialize"
+                        | "import.configure"
+                        | "asset.move"
+                        | "asset.rename"
+                        | "asset.duplicate"
+                        | "asset.delete"
+                        | "asset.import"
+                        | "folder.create"
+                        | "build_profile.create"
                 )
             });
         let doc = if workspace_command && p.doc.is_none() {
@@ -286,6 +312,13 @@ impl State {
     /// get an automatic checkpoint at the revision before them. With `branch`, the
     /// batch runs in that branch session instead (`collab`).
     pub(crate) fn apply(&mut self, sid: &str, p: ApplyParams) -> R {
+        if p.commands.iter().any(|c| c.cmd == "source.replace") {
+            let params = serde_json::to_value(&p)
+                .map_err(|e| vec![Diagnostic::error(codes::INVALID_PARAMS, e.to_string())])?;
+            if let Some(preparing) = self.prepare_file_call(sid, "cmd.apply", &params)? {
+                return Ok(preparing);
+            }
+        }
         if let Some(branch) = p.branch.clone() {
             return crate::collab::branch_apply(self, sid, &branch, &p);
         }

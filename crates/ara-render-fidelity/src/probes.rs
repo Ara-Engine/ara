@@ -98,6 +98,20 @@ pub struct BakedProbes {
     pub data: Vec<[f32; 4]>,
 }
 impl BakedProbes {
+    /// Unbaked probes for `scene`: explicitly uninitialized records, which
+    /// classification keeps out of shading, on the automatic lattice an RT view of
+    /// the scene would use and under its provenance. For Raster/Mobile views of scenes
+    /// no RT view baked, such as goldens on devices without RT-tier fidelity.
+    pub fn unbaked(scene: &ara_render::scene::Scene) -> Result<Self> {
+        let (scene_hash, [min, max]) = crate::scene::fingerprint(scene)?;
+        let volume = ProbeVolume::automatic(min, max)?;
+        Ok(Self {
+            version: 1,
+            volume,
+            scene_hash,
+            data: volume.empty_data(),
+        })
+    }
     /// Check shape, finite radiance and scene provenance.
     pub fn validate(&self, hash: &str) -> Result<()> {
         ensure!(self.version == 1, "Unsupported baked probe version");

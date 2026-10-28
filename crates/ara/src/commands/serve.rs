@@ -97,17 +97,20 @@ fn run_daemon(
     )
     .map_err(|d| d.to_string())?;
     let root = host.root().to_path_buf();
+    crate::assets::register(&mut host).map_err(|diagnostic| diagnostic.to_string())?;
     // "Why can't I hear X?" next to the built-in explainers.
     ara_audio_why::register(host.why());
     // "Why is this NPC stuck?": brain, perception and navigation causes.
     host.why().register(Box::new(ara_ai::why::NpcExplainer));
     // World cells, spatial queries and attributed multi-document cell moves.
     ara_world::service::register(&mut host).map_err(|d| d.to_string())?;
+    host.register(Box::new(ara_play_host::SourceFixService::new(&root)))
+        .map_err(|d| d.to_string())?;
     // Play and test run in pooled ara-player processes owned by this daemon.
-    host.register(Box::new(ara_play_host::PlayService::new(
-        &root,
-        ara_play_host::PlayConfig::for_project(&root),
-    )))
+    host.register(Box::new(
+        ara_play_host::PlayService::new(&root, ara_play_host::PlayConfig::for_project(&root))
+            .with_headless_automation(),
+    ))
     .map_err(|d| d.to_string())?;
     let token = project_token(&root).map_err(|e| format!("cannot create `.ara/token`: {e}"))?;
     let listener = TcpListener::bind(("127.0.0.1", port))

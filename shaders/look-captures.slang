@@ -36,10 +36,10 @@ float3 captureScratchAlong(uint k,float3 d){
     float3 c00=captureScratch(k,b),c10=captureScratch(k,b+int2(1,0)),c01=captureScratch(k,b+int2(0,1)),c11=captureScratch(k,b+int2(1,1));
     return lerp(lerp(c00,c10,w.x),lerp(c01,c11,w.x),w.y);
 }
-// The exposure the HDR target stores (look-refract.slangh refractExposure): 1 while
-// it holds linear radiance; with the pre-exposed HDR contract, hdrExposure(f, l).
-// Faces are divided by it, so the atlas stays absolute radiance.
-float captureHdrExposure(Frame f,Look l){return 1;}
+// The exposure the pre-exposed HDR target stores (look.slangh hdrExposure; as
+// look-refract.slangh refractExposure). Faces are divided by it, so the atlas stays
+// absolute radiance.
+float captureHdrExposure(Frame f,Look l){return hdrExposure(f,l);}
 // Projects the rendered face `root.entity` (0..5: +x, -x, +y, -y, +z, -z) into
 // the scratch column's level 0 with four samples per texel; faces after the first
 // add to what earlier faces wrote. Open sky is re-evaluated without the sun disk:

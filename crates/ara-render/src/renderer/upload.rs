@@ -109,6 +109,7 @@ impl Renderer {
             artifacts: artifacts.to_path_buf(),
             shader_metadata,
             last_timings: Vec::new(),
+            exposure: 1.,
             look,
             native: None,
             native_pipelines: Default::default(),

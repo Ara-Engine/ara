@@ -43,14 +43,16 @@ Depends on ara-diag and ara-material (material compile checks).
 Cause codes: visibility uses ARA3301–3312 (`RENDER_*`), ARA2102/2202/2203; fixes
 are `property.set` / `component.add` commands agents pass to `ara_apply` as is.
 
-## Conventions the visibility explainer reads (by field name)
+## Visibility sources
 
-Renderers: `MeshRenderer`, `SkinnedMeshRenderer`, `SpriteRenderer`, `Sprite`,
-`*Renderer` with `mesh`/`sprite`, `material`/`materials`, `tint`/`color`, `layer`,
+Geometry uses the registered schema's asset fields and procedural-selection hints
+(the MeshRenderer shape/model contract), including Sprite/Tilemap atlases, terrain
+and generated VFX. Legacy project renderer types without schema facts retain the
+`mesh`/`sprite` convention. Other checks use `material`/`materials`, `tint`/`color`, `layer`,
 `enabled`/`visible`, `maxDistance`/`drawDistance`/`cullDistance`. Flags: record
 keys `enabled`/`active`/`visible`/`hidden`, components named `*Visib*`/`*Hidden*`.
 Cameras: `Camera { cullingMask (names, indices or bitmask; absent = all), far,
-enabled }`. When the engine's render components land, update these lists.
+enabled }`; native scenes without a camera use the renderer's overview fallback.
 
 ## Gotchas
 

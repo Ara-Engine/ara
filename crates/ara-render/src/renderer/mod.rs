@@ -3,6 +3,8 @@ mod edit;
 mod frame;
 mod gi;
 mod hash;
+#[cfg(feature = "fidelity-lab")]
+mod lab;
 mod live;
 mod native;
 mod passes;
@@ -85,6 +87,18 @@ struct Pipelines {
     wire_composite: Pipeline,
 }
 
+/// Pre-exposure of the raster HDR target (look.slangh `hdrExposure`): radiance is
+/// stored multiplied by the exposure state's applied multiplier, or by `fallback`
+/// while that state is unset. External writers into `feature_color` (VFX) apply
+/// the same multiplier; readers that need radiance divide by it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HdrExposure {
+    /// Bindless storage-buffer index of the look's exposure state (float4; `.x`).
+    pub state: u32,
+    /// The frame's manual exposure, used while the state is zero or invalid.
+    pub fallback: f32,
+}
+
 /// Vulkan renderer with persistent extracted scene resources and per-view histories.
 /// Calls are serialized for v0 diagnostics; logical queue transfers remain explicit.
 pub struct Renderer {
@@ -114,6 +128,8 @@ pub struct Renderer {
     artifacts: PathBuf,
     shader_metadata: crate::capture::ShaderMetadata,
     last_timings: Vec<PassTiming>,
+    /// The last frame's manual exposure (`HdrExposure::fallback`).
+    exposure: f32,
     /// Sky, fog, exposure, bloom and display grading after the G-buffer.
     look: crate::look::gpu::LookGpu,
     native: Option<native::Native>,
@@ -209,6 +225,8 @@ impl Renderer {
     /// window integrations can retain their swapchain while this runs on a worker.
     pub fn with_device(scene: Scene, size: [u32; 2], mut gpu: GpuDevice) -> Result<Self> {
         ensure!(!size.contains(&0), "Render extent is zero");
+        #[cfg(feature = "fidelity-lab")]
+        crate::lab::declare(gpu.lab_params_mut())?;
         let artifacts = ara_gpu::cooked::resource_dir(
             env!("CARGO_PKG_NAME"),
             concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),
@@ -321,10 +339,22 @@ impl Renderer {
         &self.last_timings
     }
 
+    /// The pre-exposure of `feature_color` for external HDR writers (VFX).
+    pub fn hdr_exposure(&self) -> HdrExposure {
+        HdrExposure {
+            state: self.look.state_index,
+            fallback: self.exposure,
+        }
+    }
     /// Install the view's completed pass timings after a presenter-owned deferred
     /// scope. Feature passes are accounted by their owner, not added to this view.
     pub fn set_completed_timings(&mut self, timings: Vec<PassTiming>) {
         self.last_timings = timings;
+    }
+    /// Takes the last completed timings, so a presenter can keep showing them
+    /// while it records a frame that will complete later (rendering clears them).
+    pub fn take_timings(&mut self) -> Vec<PassTiming> {
+        std::mem::take(&mut self.last_timings)
     }
     /// Apply a changed display extent at native resolution. An unchanged window
     /// notification preserves its active render size and temporal history; use

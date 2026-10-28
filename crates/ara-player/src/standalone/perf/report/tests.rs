@@ -85,3 +85,45 @@ fn keepalive_and_new_requests_retain_cpu_hitches_until_stop_without_changing_gpu
     assert_eq!(report["run"]["hitches"]["omitted"], 0);
     Ok(())
 }
+
+#[test]
+#[cfg(feature = "fidelity-lab")]
+fn lab_reload_draws_until_ready_without_starting_an_unguarded_timing_window() -> Result<()> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-player/perf-reload")
+        .join(std::process::id().to_string());
+    let control = root.join("control");
+    std::fs::create_dir_all(&control)?;
+    let output = root.join("player.json");
+    let args = crate::Args::try_parse_from([
+        "ara-player",
+        "--perf-output",
+        output.to_str().context("output")?,
+        "--perf-control",
+        control.to_str().context("control")?,
+        "--keep-alive",
+        "--lab-idle",
+    ])?;
+    let mut presenter = Presenter::new([32, 24], Vec::new(), root.join("cache"));
+    let mut window = Window::new(args.standalone.perf, true, Instant::now());
+    let request = control.join("reload.json");
+    std::fs::write(
+        &request,
+        br#"{"reload_shaders":true,"measure":false,"request_id":"reload"}"#,
+    )?;
+    window.control(&mut presenter)?;
+    assert!(!window.idle());
+    assert!(!window.collecting);
+    let frame = CpuFrame {
+        total_ms: 1.,
+        wait_ms: Some(0.),
+        first_presented: true,
+        phases: [0.; 4],
+    };
+    window.frame(&presenter, &BTreeMap::new(), Value::Null, frame)?;
+    assert!(window.idle());
+    assert!(!output.exists());
+    let reply: Value = serde_json::from_slice(&std::fs::read(request.with_extension("reply"))?)?;
+    assert_eq!(reply["reloaded"], true);
+    Ok(())
+}
