@@ -12,6 +12,7 @@ mod emit;
 mod focus;
 pub mod input;
 pub mod layers;
+pub mod native_input;
 pub mod paint;
 mod pipeline;
 pub mod popover;

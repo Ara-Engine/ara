@@ -315,6 +315,47 @@ fn transient_width_limits_wrap_long_copy_and_fit_short_copy() -> Result<()> {
 }
 
 #[test]
+fn retained_tooltip_intrinsic_width_does_not_round_down_and_wrap_short_copy() -> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let mut ui = Ui::editor(
+        "<ui id='root'><tooltip id='tip' at='20,20' style='padding:8px;border-width:1px;max-width:360px'><text id='copy' text='' style='font-size:12px;white-space:normal' /></tooltip></ui>",
+        EDITOR_CSS,
+        WINDOW,
+    )?;
+    for value in [
+        "Play · F5",
+        "Project · scenes/main.scene",
+        "Collapse Hierarchy",
+        "إعدادات العرض · éclairage",
+        "Play · F5",
+    ] {
+        let mut reference = ara_ui_text::Text::new(value.into());
+        let natural = text.measure(&mut reference, None, 12.);
+        assert!(natural.width + 18. < MAX_WIDTH);
+        let copy = ui.find("copy").expect("copy");
+        ui.set_text(copy, value)?;
+        ui.frame(&mut text)?;
+        let copy = &ui.nodes[copy];
+        let tip = &ui.nodes[ui.find("tip").expect("tip")];
+        let paragraph = copy.text.as_ref().expect("paragraph");
+        assert_eq!(
+            paragraph.layout.len(),
+            reference.layout.len(),
+            "intrinsic width must keep short copy on its natural line: {value:?}, natural={natural:?}, copy={:?}",
+            copy.rect
+        );
+        assert!(
+            tip.rect.w >= natural.width + 18. - 0.5 && tip.rect.w <= natural.width + 19.,
+            "tooltip fits its unbroken text plus padding and borders: {value:?}, natural={natural:?}, tip={:?}",
+            tip.rect
+        );
+        assert!(copy.rect.h + 0.5 >= natural.height);
+        assert_eq!(ui.frame(&mut text)?.layout_passes, 0);
+    }
+    Ok(())
+}
+
+#[test]
 fn explicit_large_surface_override_still_clamps_to_the_viewport() -> Result<()> {
     let mut text = TextSystem::bundled()?;
     let mut ui = Ui::editor(
@@ -419,6 +460,61 @@ fn final_wrapped_tooltip_text_keeps_its_measured_height_and_bottom_padding() -> 
     assert!(
         tip.rect.y + tip.rect.h - copy.rect.y - lines.layout.height() >= 12.0 - 0.5,
         "wrapped copy must keep the authored bottom padding"
+    );
+    assert_eq!(ui.frame(&mut text)?.layout_passes, 0);
+    Ok(())
+}
+
+#[test]
+fn flex_scroll_popup_keeps_intrinsic_height_when_clamped_then_recovers_and_shrinks_to_content()
+-> Result<()> {
+    let mut text = TextSystem::bundled()?;
+    let markup = |count| {
+        format!(
+            "<ui id='root'><button id='anchor' text='Open' style='position:absolute;left:8px;top:90px;width:60px;height:20px;padding:0px' /><popover id='popup' anchor='anchor' offset='0' style='display:flex;width:220px;max-height:180px;padding:4px;gap:4px'><field id='search' text='' style='height:26px;padding:0px' /><scroll id='list' style='min-height:0px;max-height:240px;flex-basis:auto;flex-shrink:1'>{}</scroll><button id='footer' text='Close' style='height:20px;padding:0px' /></popover></ui>",
+            rows("option", count)
+        )
+    };
+    let mut ui = Ui::editor(&markup(20), EDITOR_CSS, [320., 240.])?;
+    ui.frame(&mut text)?;
+    let bounded = |ui: &Ui| {
+        let popup = &ui.nodes[ui.find("popup").expect("popup")];
+        let list = &ui.nodes[ui.find("list").expect("list")];
+        let footer = &ui.nodes[ui.find("footer").expect("footer")];
+        assert!(
+            popup.rect.y >= 0. && popup.rect.y + popup.rect.h <= ui.size[1] + 0.5,
+            "{:?}",
+            popup.rect
+        );
+        assert!(list.clip.h > 0., "list remains pointer-reachable");
+        assert!(
+            footer.rect.y + footer.rect.h <= popup.rect.y + popup.rect.h + 0.5,
+            "footer must stay inside the clamped flex popup"
+        );
+    };
+    bounded(&ui);
+    let clamped = ui.nodes[ui.find("popup").expect("popup")].rect.h;
+    assert!(clamped < 180.);
+    assert_eq!(
+        ui.frame(&mut text)?.layout_passes,
+        0,
+        "height clamp must not oscillate"
+    );
+    ui.resize([320., 400.])?;
+    ui.frame(&mut text)?;
+    bounded(&ui);
+    assert_eq!(
+        ui.nodes[ui.find("popup").expect("popup")].rect.h,
+        180.,
+        "authored maximum height remains effective"
+    );
+    assert_eq!(ui.frame(&mut text)?.layout_passes, 0);
+    ui.reconcile(&markup(1))?;
+    ui.frame(&mut text)?;
+    bounded(&ui);
+    assert!(
+        ui.nodes[ui.find("popup").expect("popup")].rect.h < clamped,
+        "a filtered list fits its remaining content"
     );
     assert_eq!(ui.frame(&mut text)?.layout_passes, 0);
     Ok(())

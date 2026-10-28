@@ -182,6 +182,92 @@ impl Ui {
                     &mut self.display,
                 );
             }
+            if let Some(hint) = &node.placeholder
+                && matches!(self.widgets.get(&id),Some(crate::widgets::Widget::Input(input)) if input.value().is_empty() && input.preedit_range().is_none())
+            {
+                let origin = [
+                    rect.x + l.padding.left + l.border.left,
+                    rect.y + l.padding.top + l.border.top,
+                ];
+                self.display.commands.push(Draw::PushClip {
+                    rect: Box2 {
+                        x: origin[0],
+                        y: origin[1],
+                        w: (rect.w
+                            - l.padding.left
+                            - l.padding.right
+                            - l.border.left
+                            - l.border.right
+                            - grip_width)
+                            .max(0.),
+                        h: (rect.h
+                            - l.padding.top
+                            - l.padding.bottom
+                            - l.border.top
+                            - l.border.bottom)
+                            .max(0.),
+                    },
+                });
+                let color = self
+                    .sheet
+                    .color_token("--muted-foreground")
+                    .unwrap_or(c.color);
+                for line in hint.layout.lines() {
+                    for item in line.items() {
+                        if let PositionedLayoutItem::GlyphRun(run) = item {
+                            let start = self.display.glyphs.len();
+                            self.display
+                                .glyphs
+                                .extend(run.positioned_glyphs().map(|g| Glyph {
+                                    id: g.id,
+                                    x: g.x,
+                                    y: g.y,
+                                }));
+                            self.display.commands.push(Draw::GlyphRun {
+                                node: id,
+                                font: text_system.handle(run.run().font()),
+                                size: run.run().font_size(),
+                                origin,
+                                glyphs: start..self.display.glyphs.len(),
+                                color,
+                            });
+                        }
+                    }
+                }
+                self.display.commands.push(Draw::PopClip);
+            }
+            if node.element.tag == "dropdown"
+                && node.element.attrs.get("class").is_some_and(|classes| {
+                    classes
+                        .split_whitespace()
+                        .any(|class| class == "kit-select")
+                })
+                && rect.w >= 24.
+                && rect.h >= 16.
+            {
+                // Native geometry keeps the affordance independent of font coverage.
+                let open = matches!(
+                    self.widgets.get(&id),
+                    Some(crate::widgets::Widget::Choice { open: true, .. })
+                );
+                let x = rect.x + rect.w - 14.;
+                let y = rect.y + rect.h * 0.5;
+                let direction = if open { -1. } else { 1. };
+                let points = [
+                    [x - 4., y - 2. * direction],
+                    [x, y + 2. * direction],
+                    [x + 4., y - 2. * direction],
+                ];
+                for ends in points.windows(2) {
+                    self.display.commands.push(Draw::Line {
+                        node: id,
+                        from: ends[0],
+                        to: ends[1],
+                        width: 1.5,
+                        color: c.color,
+                    });
+                }
+            }
         }
         if node.text.is_none() {
             crate::widget_paint::decorations(
