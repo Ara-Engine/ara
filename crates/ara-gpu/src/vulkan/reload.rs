@@ -23,7 +23,7 @@ pub struct ShaderStatus {
     pub last_error: Option<String>,
     /// Background compilation time of the last successful cohort.
     pub compile_ms: f64,
-    /// Metadata, SPIR-V validation and shader-module load time; absent on unsplit backends.
+    /// Metadata validation and shader module/library load time; absent on unsplit backends.
     pub load_ms: Option<f64>,
     /// Native PSO construction time, separate from artifact loading.
     pub pso_ms: Option<f64>,

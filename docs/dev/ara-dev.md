@@ -586,6 +586,14 @@ snapshot, fetch or tool bootstrap. Rust changes use the source lane. Coalesced
 notifications retain a pending Rust update, and snapshots preserve Git's stat cache
 for unchanged files. Slot grants do not invalidate the already uploaded scene and
 reference inventory. Mirror status reports source, transfer and bootstrap phases.
+Hot shader imports stream the changed artifacts, durable metadata and import request
+through one SSH connection. The receiver checks AC power before extracting, holds
+`caffeinate` only for that job, then asks the warm peer to publish; source updates
+still bootstrap before importing. Unchanged notices do not contact the Mac.
+`mirror.transfer` records inventory/archive/wire/total milliseconds, changed file
+count and bytes; each transport job also retains its duration. Metal shader status
+separates library loading (`load_ms`) and PSO creation (`pso_ms`). The inventory
+captures each artifact's metadata once, keeping reference and scene changes visible.
 The Mac publishes complete imports under its visual lock, signals
 cohorts last, and hot-swaps native Metal PSOs in a background worker. Layout/state
 changes or failed compilation retain the last good cohort. The Mac never cooks
