@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "bd30c9700e0cb0f8d980a89d4ae4fe36885065bbeadc8d2397e69b0f348f19bc",
+  "key": "f395b3f815dfec417953d549a0acd2cceb5398d3827519dbee0bb4473192b89c",
   "stages": [
     {
-      "dxil": "bd30c9700e0cb0f8d980a89d4ae4fe36885065bbeadc8d2397e69b0f348f19bc/look_gi_relight_vsm/giRelightVsmMain.dxil",
+      "dxil": "f395b3f815dfec417953d549a0acd2cceb5398d3827519dbee0bb4473192b89c/look_gi_relight_vsm/giRelightVsmMain.dxil",
       "dxil_hash": "5ea952ea273654be49a7aa4bc537f8d4e4f75919c84b98ca9f99b9a96de76c16",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "bd30c9700e0cb0f8d980a89d4ae4fe36885065bbeadc8d2397e69b0f348f19bc/look_gi_relight_vsm/giRelightVsmMain.metallib",
+        "metallib": "f395b3f815dfec417953d549a0acd2cceb5398d3827519dbee0bb4473192b89c/look_gi_relight_vsm/giRelightVsmMain.metallib",
         "metallib_hash": "b0fc443202046617e372109aabb6a85e9ec76040e1d9069a374481b1ab4a7091",
-        "reflection": "bd30c9700e0cb0f8d980a89d4ae4fe36885065bbeadc8d2397e69b0f348f19bc/look_gi_relight_vsm/giRelightVsmMain.metal.json",
+        "reflection": "f395b3f815dfec417953d549a0acd2cceb5398d3827519dbee0bb4473192b89c/look_gi_relight_vsm/giRelightVsmMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "giRelightVsmMain",
-      "spirv": "bd30c9700e0cb0f8d980a89d4ae4fe36885065bbeadc8d2397e69b0f348f19bc/look_gi_relight_vsm/giRelightVsmMain.spv",
+      "spirv": "f395b3f815dfec417953d549a0acd2cceb5398d3827519dbee0bb4473192b89c/look_gi_relight_vsm/giRelightVsmMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "a4b490c5b451b1faac55b6f203d44889fc02a99a8599582aff5e22461586fac0",
       "stage": "compute"

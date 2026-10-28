@@ -191,6 +191,15 @@ float3 brdf(Surface s,float3 v,float3 l,Lobes o){
 }
 // brdf for a single light.
 float3 brdf(Surface s,float3 v,float3 l){return brdf(s,v,l,specularLobes(s,v));}
+// Material occlusion policy: whether the frame computes dynamic occlusion for ambient
+// light, screen-space occlusion (the look's AO at a non-zero power: Medium's GTAO,
+// High/Epic's visibility bitmask) together with the probes' visibility. Then the
+// material's occlusion map no longer scales ambient light: it would count occlusion
+// twice, and Cycles and the path tracer ignore glTF occlusion. Otherwise (Low, or a
+// scene that turns AO or GI off) the map is the fallback, applied to indirect light as
+// glTF specifies. Deferred lighting folds it into Surface::ao; ibl applies it to
+// forward surfaces and ray hits.
+bool dynamicOcclusion(Look l){return (l.flags.y&LOOK_AMBIENT_OCCLUSION)!=0 && l.ao.w>0 && giEnabled(l);}
 // The High/Epic tier's screen-space ambient light at full-resolution pixel `p`
 // (look-ao.slang aoBitmaskMain): the denoised half-resolution visibility (returned,
 // with the volume intensity's power) and one-bounce irradiance from geometry within
@@ -300,6 +309,9 @@ float3 specularDirection(float3 n,float3 v,float roughness){
 // `rays`: the hybrid High/Epic variant (lighting_high_rt, D29) reads ray-traced
 // reflections composited over screen-space ones (rtReflection) instead.
 float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false) {
+    // Material occlusion policy (dynamicOcclusion) for forward surfaces and ray hits,
+    // which have no screen-space occlusion of their own; deferred pixels arrive with it.
+    if(!gathered && dynamicOcclusion(l))s.ao=1;
     uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x,prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;
     float3 reflected=specularDirection(s.normal,v,s.roughness);float2 uv=environmentUv(reflected);float level=s.roughness*4;float low=floor(level);float upper=min(low+1,4);
     float3 spec=lerp(envTex(prefilter,float2(uv.x,(uv.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(uv.x,(uv.y*127+0.5+upper*128)/640)).rgb,frac(level));
