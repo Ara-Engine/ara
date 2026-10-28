@@ -4,6 +4,9 @@ use ara_ui_text::Clipboard;
 #[cfg(test)]
 #[path = "input/dock_resize_tests.rs"]
 mod dock_resize_tests;
+#[cfg(test)]
+#[path = "input/text_acceptance_tests.rs"]
+mod text_acceptance_tests;
 impl Shell {
     /// Read-only native semantic state for diagnostics and offscreen verification.
     pub(crate) fn native_input_state(&self) -> &ara_ui::native_input::Router {
@@ -871,6 +874,26 @@ impl Shell {
     }
     /// Commit pending inspector text and slider values as one transaction.
     pub fn commit_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        let focused = self.input.focused();
+        let revision = editor.host.store().revision();
+        let committed = self.commit_fields_inner(editor)?;
+        // Reconciliation also echoes unaccepted drafts, so it cannot establish
+        // this boundary. Only a successful, actual authoring commit may do so.
+        if committed
+            && editor.host.store().revision() > revision
+            && let Some(index) = focused.and_then(|id| self.ui.by_id(id))
+            && matches!(
+                self.ui
+                    .widgets
+                    .get(&ara_ui::source::stable_id(&self.ui.nodes[index].element.id)),
+                Some(ara_ui::widgets::Widget::Input(_))
+            )
+        {
+            self.ui.accept_text(index)?;
+        }
+        Ok(committed)
+    }
+    fn commit_fields_inner(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
         if self.commit_play_fields(editor)? {
             self.rebuild(editor)?;
             return Ok(true);

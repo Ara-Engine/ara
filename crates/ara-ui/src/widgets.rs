@@ -274,6 +274,16 @@ impl Ui {
         }
         Ok(())
     }
+    /// Acknowledge a host-accepted authoring value without moving its caret/focus.
+    /// Draft echoes and failed/asynchronous-only submissions must not call this.
+    /// Returns false while the input still has active IME composition.
+    pub fn accept_text(&mut self, index: usize) -> Result<bool> {
+        let id = self.node_id(index)?;
+        let Some(Widget::Input(input)) = self.widgets.get_mut(&id) else {
+            return Err("ARA4044: accepted text requires a text input".into());
+        };
+        Ok(input.accept_current())
+    }
     /// Move a text caret visually through bidi runs, preserving logical UTF-8 selection.
     pub fn move_caret(
         &mut self,
