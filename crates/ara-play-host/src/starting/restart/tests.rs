@@ -240,7 +240,7 @@ impl Fixture {
             .call(
                 ConnId::LOCAL,
                 "session.begin",
-                json!({"author":"human:restart-test","client":"test"}),
+                json!({"author":"human","client":"test"}),
             )
             .unwrap()["session"]
             .clone();
