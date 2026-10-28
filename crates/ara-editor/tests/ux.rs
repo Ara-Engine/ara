@@ -117,7 +117,10 @@ fn import_panel_overlays_live_dependencies_and_applies_settings_with_one_content
     // The scene's browser snapshot predates this live authored edge.
     editor.apply(vec![json!({"cmd":"property.set","args":{"entity":"e_crate001","path":"MeshRenderer.model","value":"@models/crate.gltf#as_crate001"}})], "Use the crate model", None).unwrap();
     editor
-        .action("editor.workspace", json!({"asset":"levels/main.scene"}))
+        .action(
+            "editor.workspace",
+            json!({"asset":format!("{}/levels/main.scene",ara_doc::AUTHORING_ROOT)}),
+        )
         .unwrap();
     shell.rebuild(&mut editor).unwrap();
     let label = |shell: &Shell, id: &str| {
@@ -1213,7 +1216,10 @@ fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
         "{root_files:?}"
     );
     editor
-        .action("editor.workspace", json!({"folder":"models"}))
+        .action(
+            "editor.workspace",
+            json!({"folder":format!("{}/models",ara_doc::AUTHORING_ROOT)}),
+        )
         .unwrap();
     shell.rebuild(&mut editor).unwrap();
     assert_eq!(names(&shell), ["crate"]);
@@ -1236,7 +1242,10 @@ fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
     // (every `cargo test`) a rebuild that reuses markup an input made stale fails.
     for (action, params) in [
         ("editor.search", json!({"panel":"assets","query":""})),
-        ("editor.workspace", json!({"asset":"models/crate.gltf"})),
+        (
+            "editor.workspace",
+            json!({"asset":format!("{}/models/crate.gltf",ara_doc::AUTHORING_ROOT)}),
+        ),
         ("editor.workspace", json!({"grid":false})),
         (
             "editor.settings.set",

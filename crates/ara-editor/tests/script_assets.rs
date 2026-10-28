@@ -62,7 +62,10 @@ fn loaded(editor: &mut Editor) -> Shell {
         .action("editor.layout.show", json!({"panel":"assets"}))
         .unwrap();
     editor
-        .action("editor.workspace", json!({"folder":"Assets/Gameplay"}))
+        .action(
+            "editor.workspace",
+            json!({"folder":format!("{}/Assets/Gameplay",ara_doc::AUTHORING_ROOT)}),
+        )
         .unwrap();
     let mut shell = Shell::new(editor, [1440., 900.]).unwrap();
     for _ in 0..100 {
