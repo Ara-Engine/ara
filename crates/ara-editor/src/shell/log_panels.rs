@@ -17,6 +17,7 @@ use super::commands::Target;
 use super::*;
 use std::collections::BTreeMap;
 mod compile;
+mod stack;
 pub(crate) use compile::CompilationView;
 
 /// Console and Problems filters: panel-local view state (neither navigation nor undo).
@@ -462,6 +463,7 @@ impl Shell {
     /// subjects, the catalog's explanation and the fixes as buttons.
     fn log_details(&mut self, out: &mut String, id: &str, d: &ara_diag::Diagnostic) {
         out.push_str(&format!("<panel id='{id}-details' class='log-details'><text id='{id}-code' class='mono caption' text='{}' />",escape(&d.code.to_string())));
+        self.log_stack_details(out, id, d);
         if let Some(doc) = d.code.doc() {
             out.push_str(&format!("<text id='{id}-title' class='fg' text='{}' /><text id='{id}-explain' class='dialog-text' text='{}' />",escape(doc.title),escape(doc.explanation)));
             if !doc.causes.is_empty() {

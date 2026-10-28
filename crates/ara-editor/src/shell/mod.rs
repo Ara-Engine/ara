@@ -71,6 +71,7 @@ mod material_panel;
 mod memo;
 mod names;
 mod probes;
+mod project_actions;
 mod scene_panel;
 pub(crate) use animation_panel::LiveChange;
 pub(crate) use log_panels::LogView;
@@ -306,6 +307,7 @@ pub struct Shell {
     compile_problems: log_panels::CompilationView,
     lighting: lighting::View,
     probe_ui: probes::State,
+    project_request: Option<project_actions::LaunchRequest>,
     pilot: pilot::Pilot,
     pub(crate) viewport_diagnostics: overlay::diagnostics::Diagnostics,
     pub(crate) drag: Option<Drag>,
@@ -643,6 +645,7 @@ impl Shell {
             compile_problems: Default::default(),
             lighting: Default::default(),
             probe_ui: Default::default(),
+            project_request: None,
             pilot: Default::default(),
             viewport_diagnostics: Default::default(),
             drag: None,
@@ -1706,7 +1709,7 @@ impl Shell {
     }
     /// Compact agent layout report; glyph shaping internals stay out of capture jobs.
     pub fn layout_report(&self) -> Value {
-        json!({"pilot":self.pilot_report(),"viewportDiagnostics":self.viewport_diagnostics.report(),"nativeFileDrag":self.file_drag_report(),"assetImports":self.asset_import_report(),"assetOperations":self.asset_operation_report(),"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
+        json!({"projectLaunch":self.project_launch_request(),"pilot":self.pilot_report(),"viewportDiagnostics":self.viewport_diagnostics.report(),"nativeFileDrag":self.file_drag_report(),"assetImports":self.asset_import_report(),"assetOperations":self.asset_operation_report(),"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
     }
     /// Cached authoring prefix; empty identifies a still-readable legacy project.
     pub(crate) fn asset_reference_root(&self) -> &str {

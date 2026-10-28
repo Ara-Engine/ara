@@ -549,9 +549,9 @@ fn build() -> Vec<Spec> {
     // File
     c.extend([
         cmd("file.new_scene", "New Scene…", "file", "Ctrl+N", "Create an empty scene in the selected authored folder and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_scene(e)}),
-        later("file.new_project", "New Project…", "folder", "", "Create projects with `ara init <dir>`; the in-editor project wizard comes with the launcher."),
+        cmd("file.new_project", "New Project…", "folder", "", "Open Ara Hub's project creation wizard, preserving this editor.", |s,e,_|s.open_project_hub(e,true)),
         cmd("file.open", "Open Scene…", "clapperboard", "Ctrl+O", "Pick a scene to open (recent first), or type to find any scene or asset.", |s, e, _| s.open_palette(e, "#")),
-        later("file.open_project", "Open Project…", "folder", "", "One editor process owns one project; start `ara-editor <project>` for another."),
+        cmd("file.open_project", "Open Project…", "folder", "", "Open Projects in Ara Hub; its existing open and migration workflow preserves this editor.", |s,e,_|s.open_project_hub(e,false)),
         cmd("file.open_scene", "Open Scene", "clapperboard", "", "Open a scene document in the Scene view.", |_, e, t| {
             let Target::Doc(doc) = t else { return Err("choose a scene".into()) };
             act(e, "editor.scene.open", json!({"scene": doc}))?;
