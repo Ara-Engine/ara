@@ -4,6 +4,10 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 
+#[path = "scripts/modules.rs"]
+mod module_discovery;
+pub(super) use module_discovery::ModuleList;
+
 struct NoClipboard;
 impl ara_ui_text::Clipboard for NoClipboard {
     fn read(&mut self) -> ara_ui_text::Result<String> {
@@ -17,64 +21,6 @@ impl ara_ui_text::Clipboard for NoClipboard {
 /// Published C# module inputs from the shared D30 inventory; graph errors propagate.
 pub(crate) fn modules(root: &Path) -> Result<Vec<PathBuf>, Vec<ara_diag::Diagnostic>> {
     ara_play_host::script_modules(root)
-}
-
-#[derive(Default)]
-pub(super) struct ModuleList {
-    paths: Vec<PathBuf>,
-}
-impl ModuleList {
-    fn update(
-        &mut self,
-        result: Result<Vec<PathBuf>, Vec<ara_diag::Diagnostic>>,
-    ) -> Vec<ara_diag::Diagnostic> {
-        match result {
-            Ok(paths) => {
-                self.paths = paths;
-                Vec::new()
-            }
-            Err(diagnostics) => diagnostics,
-        }
-    }
-}
-
-impl Shell {
-    pub(crate) fn script_modules(&mut self, editor: &mut Editor) -> Vec<PathBuf> {
-        let diagnostics = self.script_modules.update(modules(editor.host.root()));
-        if !diagnostics.is_empty() {
-            self.status_note = Some(
-                "C# module discovery failed; showing the last good module list. See Problems."
-                    .into(),
-            );
-            editor.report_failure(&crate::editor::EditorError(
-                ara_proto::RpcError::from_diagnostics(diagnostics),
-            ));
-        }
-        self.script_modules.paths.clone()
-    }
-}
-
-#[cfg(test)]
-mod module_tests {
-    use super::*;
-    #[test]
-    fn failed_discovery_reports_diagnostics_and_keeps_the_last_good_module_list() {
-        let mut modules = ModuleList::default();
-        let good = vec![PathBuf::from(".ara/scripts/game")];
-        assert!(modules.update(Ok(good.clone())).is_empty());
-        let error = ara_diag::Diagnostic::error(
-            ara_script::codes::UNKNOWN_MODULE,
-            "combat references missing core",
-        );
-        let diagnostics = modules.update(Err(vec![error.clone()]));
-        assert_eq!(diagnostics, vec![error]);
-        assert_eq!(modules.paths, good);
-        assert!(modules.update(Ok(vec![])).is_empty());
-        assert!(
-            modules.paths.is_empty(),
-            "a successful empty inventory replaces the last good list"
-        );
-    }
 }
 
 /// Open in VS Code when available, otherwise use the system's file association.

@@ -179,10 +179,10 @@ impl Shell {
                         Binding::DialogAction(action) => Some(*action),
                         _ => None,
                     })
-                    .unwrap_or(if matches!(self.dialog, Some(Dialog::SaveLayout { .. })) {
-                        "save"
-                    } else {
-                        "close"
+                    .unwrap_or(match self.dialog {
+                        Some(Dialog::SaveLayout { .. }) => "save",
+                        Some(Dialog::ScriptModules { .. }) => "script-open",
+                        _ => "close",
                     });
                 self.dispatch(editor)?;
                 self.dialog_action(editor, action)?;

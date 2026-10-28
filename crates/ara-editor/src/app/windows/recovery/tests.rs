@@ -4,8 +4,15 @@ use super::*;
 fn failed_window_restores_only_its_tabs_and_keeps_authoring_and_other_floats() {
     let root = crate::test_target().join("failed-window-recovery");
     std::fs::create_dir_all(&root).unwrap();
-    let directory = tempfile::tempdir_in(&root).unwrap();
-    let project = directory.path();
+    let directory = root.join(format!(
+        "{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let project = directory.as_path();
     std::fs::create_dir_all(project.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
     std::fs::write(project.join("ara.project.json"), ara_json::to_canonical_string(&json!({
         "layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Window recovery","main":"levels/main.scene"

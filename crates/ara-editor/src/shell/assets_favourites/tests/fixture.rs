@@ -1,5 +1,6 @@
 use super::*;
 use crate::shell::assets::scan_fixture::controlled;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub(super) fn storage(path: &str) -> String {

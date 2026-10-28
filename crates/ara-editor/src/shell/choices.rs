@@ -27,6 +27,7 @@ pub(crate) enum Destination {
     PlayField(play_controls::FieldTarget),
     AssetType,
     AssetBookmark,
+    ScriptModule,
     HierarchySavedFilter,
     AnimationOperation {
         doc: String,
@@ -126,6 +127,7 @@ impl Shell {
             }
             Destination::AssetType => self.choose_asset_types(editor, value)?,
             Destination::AssetBookmark => self.choose_asset_bookmark(editor, value)?,
+            Destination::ScriptModule => self.choose_script_module(value)?,
             Destination::AnimationOperation { doc, record, key } => {
                 self.choose_pose_operation(editor, doc, record, key, value)?
             }

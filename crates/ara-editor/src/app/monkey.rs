@@ -303,6 +303,9 @@ impl Monkey {
                 };
                 action
             } else if self.budget_reached() {
+                // Cancelling presentation never pretends discovery has retired;
+                // its worker remains part of the resource drain until joined.
+                shell.cancel_script_module_intent();
                 if self.is_soak() {
                     self.shell_catalog.begin_drain();
                 }

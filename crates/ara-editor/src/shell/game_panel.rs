@@ -220,6 +220,8 @@ pub(crate) struct StartProgress {
     pub tenths: u64,
     /// Stop was pressed; the start is being cancelled.
     pub stopping: bool,
+    /// Replacing a previous world rather than starting a new one.
+    pub restarting: bool,
 }
 impl StartProgress {
     /// From a `play.status` world row that is starting or stopping.
@@ -231,6 +233,16 @@ impl StartProgress {
             total: progress["total"].as_u64().unwrap_or(0),
             tenths: (progress["elapsedMs"].as_f64().unwrap_or(0.) / 100.) as u64,
             stopping: row["status"] == "stopping",
+            restarting: row["restart"] == true,
+        }
+    }
+    fn title(&self) -> &'static str {
+        if self.stopping {
+            "Stopping Play…"
+        } else if self.restarting {
+            "Restarting Play…"
+        } else {
+            "Starting Play…"
         }
     }
     /// What the phase is doing, for people.
@@ -296,12 +308,7 @@ impl Shell {
     /// toolbar's.
     fn starting_hint(&self, out: &mut String) {
         let start = self.game_start.as_ref();
-        let stopping = start.is_some_and(|s| s.stopping);
-        let title = if stopping {
-            "Stopping Play…"
-        } else {
-            "Starting Play…"
-        };
+        let title = start.map_or("Starting Play…", StartProgress::title);
         let detail = start
             .filter(|s| !s.stopping)
             .map(StartProgress::label)
@@ -333,11 +340,8 @@ impl Shell {
             );
             return;
         };
-        let (title, detail) = if start.stopping {
-            ("Stopping Play…", String::new())
-        } else {
-            ("Starting Play…", start.label())
-        };
+        let title = start.title();
+        let detail = if start.stopping { String::new() } else { start.label() };
         let seconds = format!("{:.1} s", start.tenths as f64 / 10.);
         out.push_str(&format!("<panel id='game-starting' class='empty'>{}<text id='game-starting-title' class='empty-title' text='{title}' /><text id='game-starting-phase' class='empty-hint' style='white-space:nowrap' text='{}' />",icons::icon_in("game-starting","gamepad-2","icon-lg"),escape(&detail)));
         // A phase with a total: a bar and its count on one line.
@@ -388,6 +392,7 @@ impl Shell {
             now.label()
         };
         let texts = [
+            ("game-starting-title", now.title().to_owned()),
             ("game-starting-phase", detail),
             (
                 "game-starting-count",

@@ -1238,7 +1238,7 @@ fn build() -> Vec<Spec> {
             "Restart the world from tick 0.",
             |s, e, _| {
                 s.reset_play_transients(e);
-                play(e, "play.restart", json!({}))
+                play(e, "play.restart", json!({"background":true}))
             },
         )
         .when(|c| {
@@ -1461,11 +1461,7 @@ fn build() -> Vec<Spec> {
         later("tools.physics_debugger", "Physics Debugger", "", "", "Needs an ara-physics debug-draw feed into the editor."),
         later("tools.terrain", "Terrain Tools", "", "", "Terrain sculpting and painting tools are not built yet."),
         later("tools.ui_designer", "UI Designer", "", "", "The UI designer over ara-ui-document ops is not built yet."),
-        cmd("tools.cs.solution", "Open Scripts in IDE", "file-code", "", "Open the project's C# module in VS Code (or the OS default editor).", |s, e, _| {
-            let dir = s.script_modules(e).into_iter().next().ok_or("This project has no usable C# module; see Problems, or use Assets > Create > C# Script")?;
-            let path=dir.strip_prefix(e.host.root()).unwrap_or(&dir).to_string_lossy().replace('\\',"/");
-            s.open_script_ide(e,&path)
-        }).when(|_| Avail::Ready),
+        cmd("tools.cs.solution", "Open Scripts in IDE", "file-code", "", "Discover modules in the background, then choose which one to open in the configured IDE.", |s, e, _|s.open_script_solution(e)).when(|_| Avail::Ready),
         later("tools.cs.reload", "Reload Scripts", "refresh-cw", "Ctrl+R", "C# reloads automatically when sources change; a manual trigger is not exposed yet."),
         cmd("window.agents", "Agents Panel", "bot", "Alt+6", "Agent activity and undo per turn.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "agents"}))).when(|c| panel_open(c, "agents")),
         cmd("agents.view", "View What the Agent Sees", "eye", "", "Jump once to the agent's scene, selection and camera; your view stays yours afterwards.", |_, e, t| {
