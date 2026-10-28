@@ -179,7 +179,16 @@ fn preview3_migration_is_readonly_until_consent_and_one_undo_restores_original_b
     await_job(&mut host, &session, redo);
     host.flush();
     drop(host);
-    Project::open(&root).expect("redo restores current open contract");
+    let reopened = Host::open(
+        Project::open(&root).expect("redo restores current open contract"),
+        HostConfig::default(),
+    )
+    .expect("redo journal reopens as a normal authority");
+    assert_eq!(reopened.store().history().len(), 3);
+    assert_eq!(
+        reopened.store().workspace().index().id_of("ui/game.ui"),
+        Some(old_id.as_str())
+    );
 }
 #[test]
 fn changed_preview_collision_and_cancel_leave_source_untouched() {
