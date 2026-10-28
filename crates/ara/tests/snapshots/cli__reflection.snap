@@ -1766,25 +1766,6 @@ expression: out
         }
       }
     },
-    "CaptureResolution": {
-      "kind": "enum",
-      "doc": "Texels per side of a reflection capture's map.",
-      "module": "render",
-      "variants": {
-        "auto": {
-          "doc": "The quality preset's (512 texels on High and Epic)."
-        },
-        "low": {
-          "doc": "128 texels: soft, distant or rough reflections."
-        },
-        "medium": {
-          "doc": "256 texels."
-        },
-        "high": {
-          "doc": "512 texels: mirrors and polished metal seen up close."
-        }
-      }
-    },
     "Cell": {
       "kind": "record",
       "doc": "One grid/layer partition, with a scene plus optional per-entity scene files.",
@@ -6606,63 +6587,64 @@ expression: out
         }
       }
     },
-    "ReflectionCapture": {
+    "ReflectionProbe": {
       "kind": "component",
-      "doc": "A local reflection capture (High and Epic): the renderer bakes the lit scene around `captureOffset` and smooth surfaces inside the influence box reflect it, so mirrors and metals show the room around them, including what is off screen. Reflected directions are corrected against the projection box: match it to the room's walls and floor. Bakes refresh when content or lighting changes. Without any, the renderer places captures over the scene's content automatically.",
+      "doc": "An authored reflection probe (High and Epic): the renderer captures the lit scene around the entity into a six-face map, and smooth surfaces inside its box of influence reflect it, so mirrors and metals show the room around them, including what is off screen. The entity's Transform places the capture origin and orients and scales the box. Captures are derived runtime data (a recapture job; cached under `.ara/cache/probes`), never authored edits: a change to these settings, the geometry, materials, lighting or environment marks the capture stale, and the last valid capture stays in use until its replacement is published. Without any probe, the renderer places captures over the scene's content automatically.",
       "module": "render",
       "fields": {
-        "extents": {
-          "type": "vec3",
-          "doc": "Half-size of the influence box along the entity's axes (scaled by its transform): surfaces inside it reflect this capture.",
-          "default": [5, 3, 5],
-          "unit": "m",
-          "range": [0.01, null]
+        "enabled": {
+          "type": "bool",
+          "doc": "Whether this probe contributes reflections. A disabled probe keeps its last valid capture but contributes nothing.",
+          "default": true
         },
-        "blend": {
+        "bounds": {
+          "type": "vec3",
+          "doc": "Full size of the box of influence along the entity's axes, centred on its origin and scaled by its transform: surfaces inside reflect this probe.",
+          "default": [10, 10, 10],
+          "unit": "m",
+          "range": [0.01, 100000]
+        },
+        "priority": {
+          "type": "i32",
+          "doc": "Selection among overlapping probes: a larger priority wins; equal priorities blend by influence (ties ordered by document and entity identity).",
+          "default": 0,
+          "range": [-1000, 1000]
+        },
+        "blendDistance": {
           "type": "f32",
-          "doc": "Distance inside the influence box over which the capture fades into its neighbours and the sky.",
+          "doc": "Distance outside the box over which the probe's contribution fades to zero. Zero is a hard boundary.",
           "default": 1,
           "unit": "m",
-          "range": [0, null]
+          "range": [0, 1000]
         },
-        "projectionExtents": {
+        "captureResolution": {
+          "type": "u32",
+          "doc": "Texels per side of each captured face: one of 64, 128, 256, 512 or 1024 ([`ReflectionProbe::RESOLUTIONS`]).",
+          "default": 256,
+          "range": [64, 1024]
+        },
+        "projectionBounds": {
           "type": "vec3",
-          "doc": "Half-size of the projection box reflections land on; match the room's walls. Zero uses `extents`.",
+          "doc": "Advanced: full size of the box reflections are projected onto (match the room's walls and floor). Zero uses `bounds`.",
           "default": [0, 0, 0],
           "unit": "m",
-          "range": [0, null]
+          "range": [0, 100000]
         },
         "projectionOffset": {
           "type": "vec3",
-          "doc": "Centre of the projection box relative to the entity.",
+          "doc": "Advanced: centre of the projection box relative to the entity.",
           "default": [0, 0, 0],
           "unit": "m"
         },
         "captureOffset": {
           "type": "vec3",
-          "doc": "Where the capture is taken, relative to the entity. Keep it in open space, near the reflective surfaces it serves.",
+          "doc": "Advanced: where the capture is taken, relative to the entity. Keep it in open space, near the reflective surfaces it serves.",
           "default": [0, 0, 0],
           "unit": "m"
         },
-        "priority": {
-          "type": "i32",
-          "doc": "Overlapping captures blend in priority order (higher first), then smaller boxes first.",
-          "default": 0
-        },
-        "resolution": {
-          "type": "CaptureResolution",
-          "doc": "Texels per side of the captured map.",
-          "default": "auto",
-          "options": [
-            "auto",
-            "low",
-            "medium",
-            "high"
-          ]
-        },
         "intensity": {
           "type": "f32",
-          "doc": "Brightness multiplier of the reflection.",
+          "doc": "Advanced: brightness multiplier of the reflection.",
           "default": 1,
           "range": [0, 8]
         }

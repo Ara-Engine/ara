@@ -65,6 +65,10 @@ impl Renderer {
         mode: ViewMode,
         capture: bool,
     ) -> Result<()> {
+        // A debug view this renderer cannot draw fails instead of drawing Lit.
+        if let Some(reason) = self.view_mode_unavailable(mode) {
+            anyhow::bail!(reason);
+        }
         #[cfg(feature = "hotpatch")]
         {
             ara_hotpatch::call!(
