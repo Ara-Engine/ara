@@ -111,9 +111,14 @@ fn player_fixture() -> Result<(), Box<dyn std::error::Error>> {
 
 struct Fixture {
     root: tempfile::TempDir,
+    _process_lease: std::sync::MutexGuard<'static, ()>,
 }
 impl Fixture {
     fn new() -> Self {
+        // Keep owned child lifetimes together: another test's SIGCHLD can
+        // interrupt a blocking WebSocket handshake on Linux.
+        static PROCESSES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let process_lease = PROCESSES.lock().unwrap_or_else(|error| error.into_inner());
         let target = std::env::var_os("CARGO_TARGET_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target"))
@@ -131,7 +136,10 @@ impl Fixture {
             })),
         )
         .unwrap();
-        Self { root }
+        Self {
+            root,
+            _process_lease: process_lease,
+        }
     }
     fn player(&self, name: &str, held: bool) -> Player {
         let root = self.root.path().join(name);
