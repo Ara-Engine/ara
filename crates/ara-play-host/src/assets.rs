@@ -512,6 +512,11 @@ impl Assets {
             .collect()
     }
 
+    /// The error of `asset`'s newest import, if that import failed.
+    pub fn failure(&self, asset: &str) -> Option<&str> {
+        self.failures.get(asset).map(String::as_str)
+    }
+
     /// The live generation digest of `asset` as hex.
     pub fn digest(&self, asset: &str) -> Option<String> {
         let slot = self.pipeline.reload.slot(asset)?;

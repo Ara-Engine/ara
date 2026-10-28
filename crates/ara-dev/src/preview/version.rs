@@ -105,15 +105,23 @@ pub(super) fn stale_local_entries(lock: &str, old: &Version) -> Result<Vec<Strin
         .collect())
 }
 
+/// Sets the workspace version. `RELEASE_NOTES.md` is kept when it already carries
+/// reviewed notes for this version (first line `# Ara <version>`); otherwise it is
+/// replaced by a generic note naming `source`.
 pub(super) fn bump(root: &Path, version: &Version, source: &str) -> Result<()> {
     let path = root.join("Cargo.toml");
     let mut document = fs::read_to_string(&path)?.parse::<DocumentMut>()?;
     document["workspace"]["package"]["version"] = toml_edit::value(version.to_string());
     fs::write(path, document.to_string())?;
+    let notes_path = root.join("RELEASE_NOTES.md");
+    let heading = format!("# Ara {version}\n");
+    if fs::read_to_string(&notes_path).is_ok_and(|notes| notes.starts_with(&heading)) {
+        return Ok(());
+    }
     let notes = format!(
-        "# Ara {version}\n\nPreview of source commit `{source}`.\n\nThis Preview-channel build includes the changes in that committed source.\nUse Hub's Preview channel to receive it.\n"
+        "{heading}\nPreview of source commit `{source}`.\n\nThis Preview-channel build includes the changes in that committed source.\nUse Hub's Preview channel to receive it.\n"
     );
-    fs::write(root.join("RELEASE_NOTES.md"), notes)?;
+    fs::write(notes_path, notes)?;
     Ok(())
 }
 
@@ -151,6 +159,35 @@ mod tests {
                 .is_err()
             );
         }
+    }
+    #[test]
+    fn bump_keeps_reviewed_notes_for_this_version_and_replaces_others() {
+        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-dev/tests/bump-notes")
+            .join(std::process::id().to_string());
+        fs::create_dir_all(&root).unwrap();
+        fs::write(
+            root.join("Cargo.toml"),
+            "[workspace.package]\nversion = \"0.0.2-alpha.3\"\n",
+        )
+        .unwrap();
+        let version = Version::parse("0.0.2-alpha.4").unwrap();
+        let reviewed = "# Ara 0.0.2-alpha.4\n\nReviewed notes.\n";
+        fs::write(root.join("RELEASE_NOTES.md"), reviewed).unwrap();
+        bump(&root, &version, "abc").unwrap();
+        assert_eq!(
+            fs::read_to_string(root.join("RELEASE_NOTES.md")).unwrap(),
+            reviewed
+        );
+        fs::write(
+            root.join("RELEASE_NOTES.md"),
+            "# Ara 0.0.2-alpha.3\n\nOld.\n",
+        )
+        .unwrap();
+        bump(&root, &version, "abc").unwrap();
+        let generic = fs::read_to_string(root.join("RELEASE_NOTES.md")).unwrap();
+        assert!(generic.starts_with("# Ara 0.0.2-alpha.4\n") && generic.contains("`abc`"));
+        fs::remove_dir_all(&root).unwrap();
     }
     #[test]
     fn lock_resolution_comparison_ignores_only_workspace_packages() {

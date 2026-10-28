@@ -1,6 +1,7 @@
 //! A real protocol worker holds one import pending while the reader consumes others,
 //! the import-progress feed follows each source through pending, done and failed, and
-//! export packaging's own pipeline (Build in the editor) never publishes into it.
+//! export packaging's own pipeline (Build in the editor) never publishes into it, and
+//! an export that references a failed import reports the importer's own error.
 use ara_asset::{
     Artifact, ArtifactKind, ImportContext, ImportInput, ImportOutput, Importer, ImporterRegistry,
 };
@@ -260,8 +261,24 @@ fn driver() -> Result<(), Box<dyn std::error::Error>> {
     assert!(same(&reader), "export packaging published into the feed");
     assets.poll(false, true);
     assert!(same(&reader), "the feed changed after export packaging");
+    // An export that needs the broken asset names the importer's error, not just the
+    // missing generation.
+    fs::write(
+        authored.join("main.scene"),
+        ara_json::to_canonical_string(&serde_json::json!({"$schema":"ara://schema/scene/1",
+            "id":"sc_feed0001","records":{"e_use":{"name":"Use",
+            "MeshRenderer":{"model":"@broken.bin#as_broken"}}}})),
+    )?;
+    let refused =
+        ara_play_host::package_scene_for_export(&root, &std::env::current_exe()?, None, |_| Ok(()))
+            .expect_err("an export cannot ship a failed import");
+    assert!(
+        refused.contains("export requires cooked generation as_broken")
+            && refused.contains("broken fixture"),
+        "{refused}"
+    );
     println!(
-        "completed imports publish immutable snapshots; pending imports never block readers; progress follows each source; export packaging leaves the feed alone"
+        "completed imports publish immutable snapshots; pending imports never block readers; progress follows each source; export packaging leaves the feed alone; exports name failed imports"
     );
     Ok(())
 }

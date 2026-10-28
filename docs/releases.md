@@ -7,6 +7,10 @@ Run the `ara-hub-<version>-windows-x64-setup.exe` per-user installer, then use
 There is **no Authenticode code signing yet**: Windows SmartScreen warns.
 Manifest signing authenticates updates; it does not remove SmartScreen warnings.
 
+Preview 4 drafts: [engine notes](../RELEASE_NOTES.md),
+[Hub notes](../HUB_RELEASE_NOTES.md), and the
+[source ledger, pending measurements and packaging handoff](releases/preview-4-draft.md).
+
 ## One-command previews
 
 From a clean committed checkout, with `ARA_RELEASE_SIGNING_KEY` pointing to a
