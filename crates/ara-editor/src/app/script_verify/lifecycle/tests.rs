@@ -3,7 +3,7 @@
 use super::*;
 
 fn target(producer: &str) -> Target {
-    let diagnostic = ara_diag::Diagnostic::error(ara_diag::Code(903),MARKER).data(
+    let diagnostic = ara_diag::Diagnostic::error(ara_script::codes::MODULE_TOO_LARGE,MARKER).data(
         json!({"module":"Gameplay","play":{"world":"world-a","player":0,"source":"opaque-z","binding":4},
         "compile":{"schema":1,"phase":"diagnostic","channel":"compiler","producer":producer,
             "profile":"gameplay","instance":"instance-z","binding":2,"attempt":3}}));

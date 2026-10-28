@@ -447,7 +447,11 @@ impl Owner {
                 || !scene.probe_source_matches(editor, &sub.binding)
             {
                 safe = false;
-                editor.probe_captures.request_cancel(job);
+                if sub.binding.doc != editor.state.doc {
+                    editor.probe_captures.cancel_scene(&sub.binding.doc);
+                } else {
+                    editor.probe_captures.request_cancel(job);
+                }
             }
         }
         Ok(safe && (!self.jobs.is_empty() || !self.retirement_pending))

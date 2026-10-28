@@ -90,12 +90,12 @@ impl Metadata {
         }
         if phase != Phase::Diagnostic
             && (channel != "compiler"
-                || diagnostic.code != ara_diag::Code(906)
+                || diagnostic.code != ara_script::codes::COMPILE_RESULT
                 || diagnostic.severity != ara_diag::Severity::Info)
         {
             return None;
         }
-        if phase == Phase::Diagnostic && diagnostic.code == ara_diag::Code(906) {
+        if phase == Phase::Diagnostic && diagnostic.code == ara_script::codes::COMPILE_RESULT {
             return None;
         }
         let (world, player, source, play_binding) = match data.get("play") {

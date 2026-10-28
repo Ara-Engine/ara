@@ -49,6 +49,29 @@ fn open_decision(shell: &mut Shell, editor: &mut Editor) {
     shell.rebuild(editor).unwrap();
     shell.frame().unwrap();
 }
+fn await_scene_index(shell: &mut Shell, editor: &mut Editor) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        shell.poll_assets();
+        if shell
+            .browser
+            .items
+            .iter()
+            .any(|asset| asset.kind == "scene")
+        {
+            shell.rebuild(editor).unwrap();
+            shell.frame().unwrap();
+            return;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "real authored scene index did not publish: {:?}",
+            shell.browser.error
+        );
+        editor.tick();
+        std::thread::yield_now();
+    }
+}
 fn click(shell: &mut Shell, editor: &mut Editor, id: &str) {
     let index = shell.shown_node(id).unwrap();
     let node = &shell.ui.nodes[index];
@@ -91,9 +114,16 @@ fn script_rename_rebuild_defers_to_modal_and_select_then_restores_after_hide_mov
     shell.offscreen = true;
     // This is the production post-create presentation state, without launching a
     // compiler or writing source as part of the measured restoration interactions.
-    shell.browser.insert_path("content/NewSystem.cs", "cs");
+    let path = format!("{}/NewSystem.cs", ara_doc::AUTHORING_ROOT);
+    shell.browser.insert_path(&path, "cs");
+    editor
+        .action(
+            "editor.workspace",
+            json!({"folder":ara_doc::AUTHORING_ROOT,"asset":path}),
+        )
+        .unwrap();
     shell.asset_rename = Some(Rename {
-        path: "content/NewSystem.cs".into(),
+        path,
         name: "NewSystem".into(),
         attach_to: vec![],
     });
@@ -129,6 +159,27 @@ fn script_rename_rebuild_defers_to_modal_and_select_then_restores_after_hide_mov
         assert_eq!(shell.input.focused(), Some(search));
         assert_eq!(shell.asset_rename.as_ref().unwrap().name, "NewSystem");
     }
+    // A short bottom drawer may clip the card's name. Reveal that actual input
+    // while the decision still owns focus; deferred restoration must not focus
+    // an offscreen field merely because its retained node exists.
+    editor
+        .action("editor.view", json!({"maximized":"assets"}))
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    shell.frame().unwrap();
+    assert_eq!(shell.input.focused(), Some(search));
+    let field = &shell.ui.nodes[shell.shown_node("asset-rename-value").unwrap()];
+    assert!(
+        field.rect.intersection(field.clip).w > 0.
+            && field.rect.intersection(field.clip).h >= field.rect.h - 0.5,
+        "rename fixture must be visible before restoration: {:?}, clip {:?}",
+        field.rect,
+        field.clip
+    );
+    assert!(
+        shell.input.focus(&mut shell.ui, rename).is_err(),
+        "revealing the background rename must not bypass the active Select/modal trap"
+    );
     shell.key(&mut editor, 41, true, &mut NoClipboard).unwrap();
     shell.frame().unwrap();
     assert!(
@@ -163,6 +214,7 @@ fn asset_file_rename_requested_behind_a_dialog_is_focused_only_after_the_decisio
         .unwrap();
     let mut shell = Shell::new(&mut editor, [900., 650.]).unwrap();
     shell.offscreen = true;
+    await_scene_index(&mut shell, &mut editor);
     let asset = shell
         .browser
         .items

@@ -77,7 +77,7 @@ fn unavailable_restore_does_not_scroll_or_consume_the_hosts_intent() -> Result<(
         "",
         "<field id='rename' disabled='true' text='Draft' style='width:120px;height:28px'/>",
         "<field id='rename' style='display:none;width:120px;height:28px' text='Draft'/>",
-        "<scroll id='scroll' style='width:140px;height:50px'><panel style='height:200px;flex-shrink:0'/><field id='rename' text='Draft' style='height:28px;flex-shrink:0'/></scroll>",
+        "<scroll id='scroll' style='width:140px;height:50px'><panel id='spacer' style='height:200px;flex-shrink:0'/><field id='rename' text='Draft' style='height:28px;flex-shrink:0'/></scroll>",
     ] {
         let mut ui = Ui::editor(&markup(target), EDITOR_CSS, [640., 480.])?;
         ui.frame(&mut text)?;

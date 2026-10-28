@@ -137,7 +137,7 @@ impl CompilationView {
 
     fn observe(&mut self, entry: Entry, gap: bool) {
         let owned_fault = !compile_kind(&entry.diagnostic)
-            && entry.diagnostic.code != ara_diag::Code(906)
+            && entry.diagnostic.code != ara_script::codes::COMPILE_RESULT
             && entry.diagnostic.data.as_deref().is_some_and(|data| {
                 data["module"].as_str().is_some() || data.get("play").is_some()
             })

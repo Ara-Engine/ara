@@ -182,9 +182,7 @@ impl LightingCheck {
                 "editor.settings.set",
                 json!({"key":"viewport.cameraSpeed","value":4.}),
             )?;
-        } else if act == Act::Cage {
-            editor.action("editor.camera",json!({"target":[0.,0.,0.],"yaw":0.45,"pitch":0.3,"distance":17.,"projection":"perspective"}))?;
-        } else if act.creation() {
+        } else if act == Act::Cage || act.creation() {
             editor.action("editor.camera",json!({"target":[0.,0.,0.],"yaw":0.45,"pitch":0.3,"distance":17.,"projection":"perspective"}))?;
         }
         shell.rebuild(editor)?;
@@ -249,11 +247,11 @@ impl LightingCheck {
                             && command == "window.lighting"
                             && rect(shell, id).is_some()
                     });
-                    if let Some((id, _)) = row {
-                        if click(shell, &id, window, scale, events)? {
-                            self.pending = Some("after");
-                            return Ok(());
-                        }
+                    if let Some((id, _)) = row
+                        && click(shell, &id, window, scale, events)?
+                    {
+                        self.pending = Some("after");
+                        return Ok(());
                     }
                     return Ok(());
                 }

@@ -2,6 +2,7 @@
 use super::*;
 use glam::Mat4;
 use std::collections::BTreeMap;
+mod probe;
 pub(super) fn collect(
     wires: &mut Vec<Segment>,
     volumes: &mut Vec<(String, f32)>,
@@ -14,29 +15,30 @@ pub(super) fn collect(
         if state.hidden.contains(id) {
             continue;
         }
-        let Some(entity) = view
-            .entities()
-            .get(id)
-            .filter(|entity| entity.record.contains_key("PostProcessVolume"))
-        else {
+        let Some(entity) = view.entities().get(id).filter(|entity| {
+            entity.record.contains_key("PostProcessVolume")
+                || entity.record.contains_key("ReflectionProbe")
+        }) else {
             continue;
         };
         let world = transforms
             .and_then(|transforms| transforms.get(id).copied())
             .or_else(|| crate::world::world_transform(view.entities(), id));
         let Some(world) = world else { continue };
-        let Some(volume) = crate::shell::lighting::bounds::from_entity(id, &entity.record, world)
-        else {
-            continue;
-        };
-        for [from, to] in volume.segments() {
-            wires.push(Segment {
-                from,
-                to,
-                tint: Tint::Volume,
-            });
+        if let Some(volume) = crate::shell::lighting::bounds::from_entity(id, &entity.record, world)
+        {
+            for [from, to] in volume.segments() {
+                wires.push(Segment {
+                    from,
+                    to,
+                    tint: Tint::Volume,
+                });
+            }
+            counts.volumes += 1;
+            volumes.push((volume.entity, volume.blend_distance));
         }
-        counts.volumes += 1;
-        volumes.push((volume.entity, volume.blend_distance));
+        // Probe wires share this selected-geometry cache, but do not inflate the
+        // PostProcessVolume count or selectedVolumes/blend-distance report.
+        probe::collect(wires, &entity.record, world);
     }
 }

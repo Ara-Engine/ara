@@ -140,7 +140,8 @@ fn verified_success_retires_only_matching_compile_errors_and_console_history_sta
     );
     push(
         &mut store,
-        Diagnostic::error(ara_diag::Code(910), "runtime fault").data(json!({"module":"Gameplay"})),
+        Diagnostic::error(ara_script::codes::SYSTEM_FAULT, "runtime fault")
+            .data(json!({"module":"Gameplay"})),
     );
     push(&mut store, emitter.marker(2, "started"));
     push(
@@ -485,7 +486,7 @@ fn console_collapse_keeps_context_but_groups_repeat_attempts_and_invalid_metadat
     }
     let view = CompilationView::default();
     let invalid = as_entry(
-        Diagnostic::error(ara_diag::Code(900), "legacy compiler error")
+        Diagnostic::error(ara_script::codes::COMPILE_ERROR, "legacy compiler error")
             .data(json!({"module":"Gameplay","compile":{"schema":99}})),
     );
     assert!(view.fallback(&invalid));
@@ -502,7 +503,7 @@ fn scoped_runtime_fault_survives_500_record_tail_and_matching_compile_success() 
         .find(|entry| entry.diagnostic.message == "broken source")
         .unwrap()
         .seq;
-    let runtime=store.push(Diagnostic::error(ara_diag::Code(910),"world-owned runtime fault").data(json!({"module":"Gameplay","play":{"world":"play:outside","player":3,"source":"opaque-player","binding":1}})),Meta::default()).seq;
+    let runtime=store.push(Diagnostic::error(ara_script::codes::SYSTEM_FAULT,"world-owned runtime fault").data(json!({"module":"Gameplay","play":{"world":"play:outside","player":3,"source":"opaque-player","binding":1}})),Meta::default()).seq;
     poll(&mut view, &store);
     let other = Emitter {
         module: "Other",
