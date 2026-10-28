@@ -20,6 +20,7 @@ pub(super) fn step(
     scene_view: &viewport::SceneView,
     import_drops: &mut import_drops::ImportDrops,
 ) -> ara_ui::Result<bool> {
+    let setup_at = Instant::now();
     let main = monkey::native::Surface {
         id: None,
         sdl: window.id(),
@@ -39,6 +40,7 @@ pub(super) fn step(
             }
         })
         .collect::<Vec<_>>();
+    let surface_setup = setup_at.elapsed();
     let mut routed_events = 0;
     let result = runner.step_with(editor, shell, |action, editor, shell, clipboard| {
         let result = (|| {
@@ -78,6 +80,7 @@ pub(super) fn step(
             .map_or(Ok(()), |text| clipboard.write(&text));
         result.and(copied)
     });
+    runner.record_surface_setup(surface_setup);
     runner.record_native_events(routed_events);
     result
 }

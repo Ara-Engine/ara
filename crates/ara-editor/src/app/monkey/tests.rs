@@ -475,6 +475,10 @@ fn production_stage_measurements_are_retained_only_for_spikes_and_count_each_fra
         host_wait_ms: Some(80.),
         ..Default::default()
     };
+    runner.measurements.record(
+        measurements::Stage::ReportFileWrite,
+        Duration::from_millis(110),
+    );
     runner.record_frame_with_stages(Duration::from_millis(4), &stages);
     assert!(runner.slowest.is_empty());
     runner.record_frame_with_stages(Duration::from_millis(125), &stages);
@@ -484,6 +488,22 @@ fn production_stage_measurements_are_retained_only_for_spikes_and_count_each_fra
     assert_eq!(runner.slowest.len(), 1);
     assert_eq!(runner.slowest[0]["stages"]["tick_ms"], 7.);
     assert_eq!(runner.slowest[0]["stages"]["host_wait_ms"], 80.);
+    assert_eq!(
+        runner.slowest[0]["harnessStages"]["reportFileWriteMs"],
+        110.
+    );
+    runner.write_report().unwrap();
+    let report: Value =
+        serde_json::from_str(&std::fs::read_to_string(runner.output.join("monkey.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        report["harnessTimings"]["stages"]["reportFileWriteMs"]["calls"],
+        1
+    );
+    assert_eq!(
+        report["harnessTimings"]["stages"]["reportFileWriteMs"]["totalMs"],
+        110.
+    );
 }
 
 #[test]

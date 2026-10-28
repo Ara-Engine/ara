@@ -3,6 +3,7 @@
 //! Every action is flushed before it runs. If the process stops responding, the last
 //! `begin` without an `end` identifies the exact action, seed and sequence to replay.
 mod actions;
+mod measurements;
 pub(super) mod native;
 mod play;
 mod resources;
@@ -84,6 +85,7 @@ pub(super) struct Monkey {
     stopped: bool,
     last_action: Option<Value>,
     boundary_failures: usize,
+    measurements: measurements::Measurements,
     watchdog: watchdog::Watchdog,
 }
 
@@ -144,6 +146,7 @@ impl Monkey {
             stopped: false,
             last_action: None,
             boundary_failures: 0,
+            measurements: measurements::Measurements::default(),
             watchdog: watchdog::Watchdog::new(output.into(), HANG)?,
         })
     }
@@ -204,6 +207,7 @@ impl Monkey {
         shell: &mut Shell,
         mut run: impl FnMut(&Action, &mut Editor, &mut Shell, &mut dyn Clipboard) -> ara_ui::Result<()>,
     ) -> ara_ui::Result<bool> {
+        self.measurements.begin_step();
         if self.finished() {
             return Ok(false);
         }
@@ -413,7 +417,7 @@ impl Monkey {
         self.max_frame_ms = self.max_frame_ms.max(ms);
         if elapsed >= SPIKE {
             self.spikes += 1;
-            self.slowest.push(json!({"frame":self.frames,"step":self.actions.saturating_sub(1),"milliseconds":ms,"action":self.last_action,"stages":stages}));
+            self.slowest.push(json!({"frame":self.frames,"step":self.actions.saturating_sub(1),"milliseconds":ms,"action":self.last_action,"stages":stages,"harnessStages":self.measurements.step()}));
             self.slowest.sort_by(|a, b| {
                 b["milliseconds"]
                     .as_f64()
@@ -524,6 +528,12 @@ impl Monkey {
         self.native_events += events;
     }
 
+    /// Surface queries precede step_with; attach their elapsed time after its reset.
+    pub fn record_surface_setup(&mut self, elapsed: Duration) {
+        self.measurements
+            .record(measurements::Stage::SurfaceSetup, elapsed);
+    }
+
     /// End-of-budget verification after shell polling catches jobs launched by a
     /// ready modal or build callback later in the frame. Normal frames do no work.
     pub fn observe_shell_resources(
@@ -559,7 +569,7 @@ impl Monkey {
 
     /// Persist the final summary even when an enclosing frame limit ended the run.
     pub fn finish(&mut self) -> ara_ui::Result<()> {
-        self.journal.flush()?;
+        self.flush_journal()?;
         self.write_report()
     }
 
@@ -579,19 +589,38 @@ impl Monkey {
         // JSONL frames use the same compact serializer as the host journal;
         // standalone report documents use Ara's canonical document writer.
         let line = serde_json::to_string(&event)?;
-        self.journal.write_all(line.as_bytes())?;
-        if !line.ends_with('\n') {
-            self.journal.write_all(b"\n")?;
-        }
-        self.journal.flush()?;
+        let at = Instant::now();
+        let result = (|| {
+            self.journal.write_all(line.as_bytes())?;
+            if !line.ends_with('\n') {
+                self.journal.write_all(b"\n")?;
+            }
+            std::io::Result::Ok(())
+        })();
+        self.measurements
+            .record(measurements::Stage::JournalWrite, at.elapsed());
+        result?;
+        self.flush_journal()
+    }
+
+    fn flush_journal(&mut self) -> ara_ui::Result<()> {
+        let at = Instant::now();
+        let result = self.journal.flush();
+        self.measurements
+            .record(measurements::Stage::JournalFlush, at.elapsed());
+        result?;
         Ok(())
     }
 
     fn read_diagnostics(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        let at = Instant::now();
         let logs = editor.action(
             "logs",
             json!({"since":self.log_cursor,"severity":"warning","group":false,"limit":1000}),
-        )?;
+        );
+        self.measurements
+            .record(measurements::Stage::DiagnosticsRead, at.elapsed());
+        let logs = logs?;
         let returned = logs["entries"].as_array().map_or(0, Vec::len) as u64;
         let total = logs["total"].as_u64().unwrap_or(returned);
         if total > returned {
@@ -621,7 +650,8 @@ impl Monkey {
         Ok(())
     }
 
-    fn write_report(&self) -> ara_ui::Result<()> {
+    fn write_report(&mut self) -> ara_ui::Result<()> {
+        let snapshot_at = Instant::now();
         let unvisited: Vec<_> = commands::all()
             .iter()
             .filter(|spec| !self.commands.contains_key(spec.id))
@@ -652,6 +682,7 @@ impl Monkey {
                 "longFrames":self.hangs,"watchdogStalls":self.watchdog.count(),
                 "frameSpikes":self.spikes,"spikeThresholdMs":SPIKE.as_millis(),"maxFrameMs":self.max_frame_ms,
                 "slowestFrames":self.slowest,"panelFailures":self.boundary_failures,
+                "harnessTimings":self.measurements.summary(),
                 "errorDiagnosticsBefore":self.baseline_diagnostics,"errorDiagnosticsDuring":self.diagnostics,"registryCommands":self.commands,
                 "baselineDiagnosticsCollected":self.actions>0,"diagnosticBusLoss":self.diagnostic_bus_loss,
                 "finalDiagnosticsCollected":self.final_diagnostics,"diagnosticRecordsOmitted":self.diagnostics_truncated,
@@ -680,10 +711,20 @@ impl Monkey {
             };
             report.extend(fields);
         }
-        std::fs::write(
-            self.output.join("monkey.json"),
-            ara_json::to_canonical_string(&Value::Object(report)),
-        )?;
+        let report = Value::Object(report);
+        self.measurements.record(
+            measurements::Stage::ReportSnapshotBuild,
+            snapshot_at.elapsed(),
+        );
+        let at = Instant::now();
+        let text = ara_json::to_canonical_string(&report);
+        self.measurements
+            .record(measurements::Stage::ReportCanonicalSerialize, at.elapsed());
+        let at = Instant::now();
+        let result = std::fs::write(self.output.join("monkey.json"), text);
+        self.measurements
+            .record(measurements::Stage::ReportFileWrite, at.elapsed());
+        result?;
         Ok(())
     }
 
