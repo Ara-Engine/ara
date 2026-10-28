@@ -117,7 +117,9 @@ fn editor_exit_notifies_without_discovery_polling() {
         fs::create_dir(&project).expect("project");
         fs::write(
             project.join("ara.project.json"),
-            ara_json::to_canonical_string(&json!({"name":"Fixture","engineVersion":"fixture"})),
+            ara_json::to_canonical_string(
+                &json!({"name":"Fixture","layoutVersion":4,"engineVersion":"fixture"}),
+            ),
         )
         .expect("marker");
         let registered = hub

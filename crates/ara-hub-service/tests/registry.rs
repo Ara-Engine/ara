@@ -47,7 +47,11 @@ fn new_templates_get_balanced_import_policy_and_authored_policy_is_preserved() {
     );
     let custom = templates.0.join("custom");
     fs::create_dir_all(&custom).expect("template");
-    fs::write(custom.join("ara.project.json"), "{\"name\":\"Custom\"}").expect("marker");
+    fs::write(
+        custom.join("ara.project.json"),
+        "{\"name\":\"Custom\",\"layoutVersion\":4}",
+    )
+    .expect("marker");
     let text = ProjectImportSettings {
         preset: CookPreset::HighQuality,
     }
@@ -163,14 +167,18 @@ fn bootstrap_service_uses_registered_engine_templates_and_their_pins() {
             .expect("Hub");
     for version in ["0.0.9", "0.0.10"] {
         let install = root.join(version);
-        fs::create_dir_all(install.join("templates/starter")).expect("templates");
+        fs::create_dir_all(install.join("templates/starter/content")).expect("templates");
         fs::write(install.join("ara.exe"), version).expect("exe");
         fs::write(
             install.join("templates/starter/ara.project.json"),
-            r#"{"name":"Starter"}"#,
+            r#"{"name":"Starter","layoutVersion":4}"#,
         )
         .expect("project");
-        fs::write(install.join("templates/starter/source.txt"), version).expect("source");
+        fs::write(
+            install.join("templates/starter/content/source.txt"),
+            version,
+        )
+        .expect("source");
         hub.call("hub.engine.register", json!({"engine":{"version":version,"executable":install.join("ara.exe"),"editor":null}})).expect("register");
     }
     let templates = hub.call("hub.templates", json!({})).expect("templates");
@@ -190,7 +198,7 @@ fn bootstrap_service_uses_registered_engine_templates_and_their_pins() {
         let expected = version.unwrap_or("0.0.10");
         assert_eq!(created["engineVersion"], expected);
         assert_eq!(
-            fs::read_to_string(root.join(name).join("source.txt")).expect("source"),
+            fs::read_to_string(root.join(name).join("content/source.txt")).expect("source"),
             expected
         );
     }
@@ -382,10 +390,15 @@ fn template_directory_copies_sources_and_excludes_machine_state() {
     let templates = root.join("templates");
     let sample = templates.join("sample");
     fs::create_dir_all(&sample).expect("sample");
-    fs::write(sample.join("ara.project.json"), "{\"name\":\"Sample\"}").expect("marker");
+    fs::write(
+        sample.join("ara.project.json"),
+        "{\"name\":\"Sample\",\"layoutVersion\":4}",
+    )
+    .expect("marker");
     fs::create_dir(sample.join(".ara")).expect("state");
     fs::write(sample.join(".ara/token"), "private").expect("token");
-    fs::write(sample.join("lesson.txt"), "Learn Ara").expect("lesson");
+    fs::create_dir(sample.join("content")).expect("authored content");
+    fs::write(sample.join("content/lesson.txt"), "Learn Ara").expect("lesson");
     let source = DirectoryTemplates(templates);
     let list = source.list().expect("list");
     assert_eq!(
@@ -395,15 +408,14 @@ fn template_directory_copies_sources_and_excludes_machine_state() {
     let destination = root.join("copy");
     fs::create_dir(&destination).expect("destination");
     source.instantiate("sample", &destination).expect("copy");
-    assert!(destination.join("lesson.txt").is_file());
+    assert!(destination.join("content/lesson.txt").is_file());
     assert!(
         !destination.join(".ara/token").exists(),
         "template credentials must never be copied"
     );
     assert!(
-        fs::read_dir(destination.join(".ara"))
-            .expect("migration state")
-            .all(|entry| entry.expect("state entry").file_name() == "lock")
+        !destination.join(".ara").exists(),
+        "current templates never copy or initialize machine state"
     );
     assert!(source.instantiate("../sample", &destination).is_err());
 }
@@ -421,7 +433,7 @@ impl TemplateSource for CustomSource {
     fn instantiate(&self, _: &str, destination: &Path) -> Result<(), RpcError> {
         fs::write(
             destination.join("ara.project.json"),
-            "{\"name\":\"Packaged\"}",
+            "{\"name\":\"Packaged\",\"layoutVersion\":4}",
         )
         .expect("marker");
         Ok(())
@@ -464,7 +476,7 @@ fn templates_read_their_marker_and_report_unfetched_sample_art() {
     fs::create_dir_all(sample.join("evidence")).expect("sample");
     fs::write(
         sample.join("ara.project.json"),
-        r#"{"name":"Outpost","main":"levels/outpost.scene","description":"Dusk compound"}"#,
+        r#"{"name":"Outpost","layoutVersion":4,"main":"levels/outpost.scene","description":"Dusk compound"}"#,
     )
     .expect("marker");
     fs::write(sample.join("evidence/outpost-player.png"), "png").expect("preview");
@@ -493,7 +505,7 @@ fn templates_read_their_marker_and_report_unfetched_sample_art() {
     assert_eq!(setup.command, "ara-samples fetch outpost");
     assert!(setup.message.contains("2 of 2"), "{}", setup.message);
 
-    let art = sample.join("assets/third_party/barrel");
+    let art = sample.join("content/third_party/barrel");
     fs::create_dir_all(&art).expect("art");
     fs::write(art.join("barrel.gltf"), "{}").expect("gltf");
     fs::write(art.join("barrel.bin"), "").expect("bin");
@@ -540,11 +552,15 @@ fn missing_generated_kits_block_creation_even_after_third_party_art_is_fetched()
     let root = scratch("missing-kits");
     let templates = root.join("templates");
     let sample = templates.join("outpost");
-    let kit = sample.join("assets/kit");
+    let kit = sample.join("content/kit");
     fs::create_dir_all(&kit).expect("kit descriptors");
-    fs::create_dir_all(sample.join("assets/third_party/art")).expect("fetched art");
-    fs::write(sample.join("assets/third_party/art/palette.png"), "image").expect("art");
-    fs::write(sample.join("ara.project.json"), r#"{"name":"Outpost"}"#).expect("marker");
+    fs::create_dir_all(sample.join("content/third_party/art")).expect("fetched art");
+    fs::write(sample.join("content/third_party/art/palette.png"), "image").expect("art");
+    fs::write(
+        sample.join("ara.project.json"),
+        r#"{"name":"Outpost","layoutVersion":4}"#,
+    )
+    .expect("marker");
     fs::write(
         templates.join("assets.lock.json"),
         r#"{"assets":[{"id":"art","projects":["outpost"],"files":[{"path":"palette.png"}]}]}"#,
@@ -652,7 +668,11 @@ fn create_dry_run_reports_every_field_problem_with_its_field() {
     let mut config = config(&directory);
     let templates = directory.join("templates/sample");
     fs::create_dir_all(&templates).expect("templates");
-    fs::write(templates.join("ara.project.json"), "{\"name\":\"Sample\"}").expect("marker");
+    fs::write(
+        templates.join("ara.project.json"),
+        "{\"name\":\"Sample\",\"layoutVersion\":4}",
+    )
+    .expect("marker");
     fs::write(
         directory.join("templates/assets.lock.json"),
         r#"{"assets":[{"id":"art","projects":["sample"],"files":[{"path":"a.png"}]}]}"#,

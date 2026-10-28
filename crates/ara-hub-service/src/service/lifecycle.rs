@@ -17,6 +17,12 @@ impl Hub {
         project: &ProjectEntry,
         headless: bool,
     ) -> Result<Value, RpcError> {
+        if self.migrations.running_for(&project.id) {
+            return Err(invalid(
+                "this project's layout migration is still saving files and history; wait for it to finish before opening",
+            ));
+        }
+        ara_host::project_layout::require_current_layout(&project.path)?;
         self.discover_process(project)?;
         let mut status = self.status_of(project);
         if status["state"] == "open" && (headless || status["headless"] == false) {
@@ -166,6 +172,7 @@ impl Hub {
         }
         let p: Call = parse(value)?;
         let project = self.registry.resolve(&p.project)?.clone();
+        ara_host::project_layout::require_current_layout(&project.path)?;
         self.open_project(&project, true)?;
         let key = (conn, project.id.clone());
         if !self.routes.contains_key(&key) {

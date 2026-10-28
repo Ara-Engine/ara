@@ -5,6 +5,7 @@
 mod call;
 mod create;
 pub mod engines;
+pub mod migration;
 mod notifications;
 pub mod text;
 pub mod updates;
@@ -175,6 +176,10 @@ pub enum Link {
 /// approval (D24: lifecycle calls just run).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Busy {
+    /// Read-only project layout inspection before migration consent.
+    Inspecting,
+    /// An explicitly authorized project migration is preparing/saving.
+    Migrating,
     /// `hub.open` in the editor.
     Opening,
     /// `hub.open` headless.
@@ -190,6 +195,8 @@ impl Busy {
     /// Progress label.
     pub fn label(self) -> &'static str {
         match self {
+            Busy::Inspecting => "Checking layout…",
+            Busy::Migrating => "Updating layout…",
             Busy::Opening => "Opening…",
             Busy::Starting => "Starting…",
             Busy::Closing => "Closing…",
@@ -257,6 +264,12 @@ pub enum Effect {
 /// Everything a person can do in the Hub.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Intent {
+    /// Show the read-only preview needed to open an old-layout project.
+    ReviewMigration { project: String, headless: bool },
+    /// Start the typed migration explicitly accepted in the current preview.
+    MigrateProject,
+    /// Cancel the open attempt or a migration before its commit boundary.
+    CancelMigration,
     /// Open a focused dialog without starting its operation.
     Dialog(Dialog),
     /// Close a dialog and restore the previous focus.
@@ -382,6 +395,8 @@ pub enum Intent {
 /// A dialog owns the decision, while background transfers continue independently.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Dialog {
+    /// Read-only preview, explicit consent and typed progress for this project.
+    Migration(String),
     /// Release notes, download progress and the explicit restart step.
     Update,
     /// Confirm a published engine installation.
@@ -449,6 +464,8 @@ impl List {
 
 /// The Hub's whole UI state.
 pub struct Hub {
+    /// A project open paused at migration consent/progress.
+    pub migration: Option<migration::Flow>,
     /// Technical release-source controls are explicitly disclosed.
     pub advanced: bool,
     /// Current input-trapping dialog.
@@ -507,12 +524,14 @@ pub struct Hub {
     notice_times: BTreeMap<u64, std::time::Instant>,
     dismissed_banners: BTreeSet<String>,
     create_origin: View,
+    next_migration: u64,
 }
 
 impl Hub {
     /// A disconnected model. `home` seeds the Create destination.
     pub fn new(prefs: Prefs, home: PathBuf, local_engine: Option<Engine>) -> Self {
         Self {
+            migration: None,
             advanced: false,
             dialog: None,
             releases: updates::Releases::default(),
@@ -547,6 +566,7 @@ impl Hub {
             notice_times: BTreeMap::new(),
             dismissed_banners: BTreeSet::new(),
             create_origin: View::Projects,
+            next_migration: 0,
         }
     }
 
@@ -631,7 +651,7 @@ impl Hub {
             // A background reply must not replace a decision while it is being made.
             if !matches!(
                 self.dialog,
-                Some(Dialog::Confirm { .. } | Dialog::UninstallEngine(_))
+                Some(Dialog::Confirm { .. } | Dialog::UninstallEngine(_) | Dialog::Migration(_))
             ) {
                 self.dialog = Some(Dialog::Error(id));
             }
@@ -649,6 +669,11 @@ impl Hub {
     /// Apply one user intent.
     pub fn intent(&mut self, intent: Intent) {
         match intent {
+            Intent::ReviewMigration { project, headless } => {
+                self.review_migration(project, headless)
+            }
+            Intent::MigrateProject => self.migrate_project(),
+            Intent::CancelMigration => self.cancel_migration(),
             Intent::Dialog(dialog) => {
                 match self.dialog.take() {
                     Some(Dialog::Error(id)) => self.notices.retain(|notice| notice.id != id),
@@ -665,6 +690,9 @@ impl Hub {
                     self.inspect_removal(engine.version.clone());
                 }
                 self.dialog = Some(dialog);
+            }
+            Intent::DismissDialog if matches!(self.dialog, Some(Dialog::Migration(_))) => {
+                self.cancel_migration()
             }
             Intent::DismissDialog => match self.dialog.take() {
                 Some(Dialog::Error(id)) => self.notices.retain(|notice| notice.id != id),
@@ -925,6 +953,11 @@ impl Hub {
             }
         }
         if self.dialog.is_none()
+            && let Some(flow) = &self.migration
+        {
+            self.dialog = Some(Dialog::Migration(flow.project.clone()));
+        }
+        if self.dialog.is_none()
             && let Some(notice) = self.notices.iter().rev().find(|notice| notice.is_error())
         {
             self.dialog = Some(Dialog::Error(notice.id));
@@ -947,7 +980,7 @@ impl Hub {
             Busy::Removing => Call::Remove {
                 project: project.clone(),
             },
-            Busy::Saving => return,
+            Busy::Saving | Busy::Inspecting | Busy::Migrating => return,
         };
         self.busy.insert(project, busy);
         self.send(call);
@@ -1020,6 +1053,7 @@ impl Hub {
                 self.stale.clear();
             }
             Event::Changed { kind, .. } => match kind.as_str() {
+                "migration" => self.refresh_migration(),
                 "releases" => self.refresh_releases(),
                 "progress" => self.release_call("hub.downloads", serde_json::json!({})),
                 "engine" => self.refresh([List::Engines, List::Templates]),
@@ -1031,6 +1065,16 @@ impl Hub {
     }
 
     fn reply(&mut self, call: Call, result: Result<Value, RpcError>) {
+        if let Call::Migration {
+            project,
+            request,
+            method,
+            ..
+        } = call
+        {
+            self.migration_reply(project, request, method, result);
+            return;
+        }
         if let Call::Release { method, params } = &call {
             if *method == "hub.download.cancel"
                 && result.is_err()
@@ -1096,7 +1140,7 @@ impl Hub {
             return;
         }
         match call {
-            Call::Release { .. } => unreachable!("handled above"),
+            Call::Release { .. } | Call::Migration { .. } => unreachable!("handled above"),
             Call::Create { dry_run: true, .. } => {
                 let next = self.create.checked(&call, result);
                 self.calls.extend(next);
@@ -1123,6 +1167,13 @@ impl Hub {
             Call::Open { project, headless } => {
                 self.busy.remove(&project);
                 match result {
+                    Err(error)
+                        if error.diagnostics().iter().any(|diagnostic| {
+                            diagnostic.code == codes::PROJECT_MIGRATION_REQUIRED
+                        }) =>
+                    {
+                        self.review_migration(project, headless)
+                    }
                     Ok(value) => self.set_status(&value),
                     Err(error) => {
                         let what = if headless { "start" } else { "open" };

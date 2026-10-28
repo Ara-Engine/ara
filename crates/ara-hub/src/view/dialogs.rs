@@ -1,6 +1,7 @@
 //! Decisions and errors share one focused, accessible dialog surface.
 mod engine;
 mod error;
+mod migration;
 mod update;
 
 use super::{Ctx, Page};
@@ -11,11 +12,27 @@ pub(super) fn body(p: &mut Page, hub: &Hub, ctx: &Ctx) {
     let Some(dialog) = &hub.dialog else { return };
     let width = (ctx.size[0] - 48.).min(560.);
     let height = ctx.size[1] - 48.;
+    let preview = matches!(dialog, Dialog::Migration(_))
+        && hub
+            .migration
+            .as_ref()
+            .is_some_and(|flow| flow.phase == crate::model::migration::Phase::Decision);
+    let class = if preview {
+        "dialog-card migration-card"
+    } else {
+        "dialog-card"
+    };
+    let card_height = if preview {
+        format!(";height:{}px", height.min(640.))
+    } else {
+        String::new()
+    };
     let _ = write!(
         p.markup,
-        "<modal id='hub-dialog' class='dialog-layer' label='Ara Hub dialog'><scroll id='dialog-frame' class='dialog-frame' style='width:{width}px;max-height:{height}px'><panel id='dialog-card' class='dialog-card' style='width:{width}px'>"
+        "<modal id='hub-dialog' class='dialog-layer' label='Ara Hub dialog'><scroll id='dialog-frame' class='dialog-frame' style='width:{width}px;max-height:{height}px'><panel id='dialog-card' class='{class}' style='width:{width}px{card_height}'>"
     );
     match dialog {
+        Dialog::Migration(project) => migration::body(p, hub, project),
         Dialog::Update => update::body(p, hub),
         Dialog::InstallEngine(version) => engine::install(p, hub, version, false),
         Dialog::RepairEngine(version) => engine::install(p, hub, version, true),
@@ -60,6 +77,10 @@ pub(super) fn body(p: &mut Page, hub: &Hub, ctx: &Ctx) {
 }
 
 fn heading(p: &mut Page, icon: &str, title: &str) {
+    heading_with_close(p, icon, title, true);
+}
+
+fn heading_with_close(p: &mut Page, icon: &str, title: &str, close: bool) {
     p.panel("dialog-heading", |p| {
         if matches!(icon, "brand-hub" | "brand-engine") {
             p.image(icon, "brand-icon-lg");
@@ -71,7 +92,7 @@ fn heading(p: &mut Page, icon: &str, title: &str) {
             "dialog-close",
             "ghost icon-compact",
             "Close dialog",
-            Some(Intent::DismissDialog),
+            close.then_some(Intent::DismissDialog),
             |p| p.icon("x", "inherit"),
         );
     });

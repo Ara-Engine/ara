@@ -3,6 +3,7 @@ mod background;
 mod create;
 mod installation;
 mod lifecycle;
+mod migration;
 mod observed;
 mod process;
 mod templates;
@@ -15,6 +16,7 @@ use crate::{
 use ara_proto::{ConnId, Endpoint, Incoming, RpcError, jsonrpc};
 use ara_rpc::{Client, DaemonInfo, Handler, ServeOptions};
 pub use installation::{EngineRegistration, update_installed_engine};
+pub use migration::MigrationJob;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -73,6 +75,7 @@ impl HubConfig {
 
 /// User-level project authority. Every engine daemon remains in its own process.
 pub struct Hub {
+    migrations: migration::Migrations,
     updates: updates::Updates,
     config: HubConfig,
     registry: Registry,
@@ -180,6 +183,7 @@ impl Hub {
         config.templates =
             Layered::with_checkout_samples(config.templates, &config.engine.executable);
         let mut hub = Self {
+            migrations: migration::Migrations::default(),
             updates: updates::Updates::new(updates, &config.directory),
             config,
             registry,
@@ -231,6 +235,16 @@ impl Hub {
     ) -> Result<Value, RpcError> {
         self.poll_updates();
         self.poll_processes();
+        self.poll_migrations();
+        if matches!(
+            method,
+            "hub.project.migration.plan"
+                | "hub.project.migrate"
+                | "hub.project.migration.status"
+                | "hub.project.migration.cancel"
+        ) {
+            return self.migration_call(method, value);
+        }
         if matches!(
             method,
             "hub.engines.available"
@@ -259,6 +273,7 @@ impl Hub {
             "hub.catalog" => {
                 if let Some(project) = p.project {
                     let entry = self.registry.resolve(&project)?;
+                    ara_host::project_layout::require_current_layout(&entry.path)?;
                     if let Some(mut client) = Client::for_project(&entry.path) {
                         return client.call("rpc.discover", json!({}));
                     }
@@ -480,6 +495,15 @@ impl Hub {
                     {
                         continue;
                     }
+                    if let Err(diagnostic) =
+                        ara_host::project_layout::require_current_layout(&entry.path)
+                    {
+                        if p.project.is_some() {
+                            return Err(diagnostic.into());
+                        }
+                        self.activity_clients.remove(&entry.id);
+                        continue;
+                    }
                     if let Some(running) = self.processes.running.get(&entry.id) {
                         if running.watch.exited() {
                             continue;
@@ -526,6 +550,7 @@ impl Hub {
                         .iter()
                         .any(|project| self.status_of(project)["state"] == "open")
                         || self.updates.busy()
+                        || self.migrations.busy()
                     {
                         return Ok(json!({"stopping":false,"reason":"busy"}));
                     }

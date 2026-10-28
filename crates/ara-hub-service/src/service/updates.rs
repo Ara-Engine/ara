@@ -548,7 +548,7 @@ fn validate_payload(staging: &Path, version: &str) -> Result<(), ara_update::Err
     Ok(())
 }
 
-fn background_priority() {
+pub(super) fn background_priority() {
     #[cfg(windows)]
     {
         use windows_sys::Win32::System::Threading::{

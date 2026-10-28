@@ -44,6 +44,10 @@ Connect using `ara_rpc::Client::for_project(config_dir.join("hub"))`; discovery 
 | `hub.templates` | `{}` | `{templates:[{id,name,thumbnail,description?,setup?,engineVersion?}]}`; source engine pins for Create |
 | `hub.create` | `{template,name,path,engineVersion?,dryRun?}` | New registered project card; path must be absolute and not exist; missing parents are created. Every problem is one diagnostic whose `location.path` is the field (`name`, `path`, `template`, `engineVersion`); `dryRun` returns `{valid,path}` without creating |
 | `hub.open` | `{project,headless?}` | Status; false/default opens native editor, true starts headless |
+| `hub.project.migration.plan` | `{project}` | Read-only background `MigrationJob`; complete `result` has `{needsMigration,fromVersion,toVersion,authoredRoot,planToken,operations,previewTree}` |
+| `hub.project.migrate` | `{project,planToken}` | Explicit typed migration job; complete only after files/history persist and the bootstrap authority closes |
+| `hub.project.migration.status` | `{project,job}` | Latest `{id,project,kind,state,phase,cancellable,progress,result,diagnostics}`; `kind:plan|migrate`, `state:running|complete|failed|cancelled` |
+| `hub.project.migration.cancel` | `{project,job}` | Cancel before the typed commit; refusal means keep waiting for files/history to finish |
 | `hub.close` | `{project}` | Closed status after graceful flush/shutdown |
 | `hub.status` | `{project?}` | One status or `{projects:[status],revision,build}`; build is the service executable's SHA-256 |
 | `hub.engines` | `{}` | `{engines:[{version,executable,editor,managed}]}`; installed builds for each project's pin picker; managed builds support Uninstall |
@@ -65,14 +69,13 @@ Connect using `ara_rpc::Client::for_project(config_dir.join("hub"))`; discovery 
 | `hub.subscribe` | `{}` | `{revision}`; subsequent `hub.changed {revision,kind,project}` notifications |
 | `hub.unsubscribe` | `{}` | `{ok:true}`; also automatic on socket close |
 
-`project` accepts an exact ID/path or one case-insensitive name. Ambiguous names
-list IDs/paths for disambiguation. Global MCP only targets registered projects. Status:
+`project` accepts an exact ID/path or one case-insensitive name; ambiguous names list IDs/paths. Global MCP targets registered projects. Status:
 `{project:card,state:"open"|"closed",pid,port,headless}`; closed fields are null.
 Use state, not stale discovery files, for the open indicator. A change notification
 invalidates the appropriate view: refresh projects/status/activity; revision is a
 monotonic counter within this Hub run, not an on-disk revision. Subscribe before
 initial reads to avoid missing a change. No replay history is promised; refresh
-all views after reconnect. Do not render lifecycle calls as approval or review.
+all views after reconnect. Old layouts return ARA1914 before normal open/attach. The Hub shows a read-only migration preview and Migrate/Cancel; Cancel leaves the project closed. `hub.changed {kind:"migration"}` refreshes migration status. Workers use shared typed `migration_plan`/`migrate_project`, never side-channel filesystem apply.
 
 `hub.changed {kind:"closed",project:id,revision}` is emitted when the authority
 process exits (Hub Close, window X, crash or kill). Windows observers block on
@@ -97,10 +100,7 @@ never registers. Imported project pins may name a missing semantic version.
 Render projects, Create, lifecycle, installed engines and activity. Errors are
 standard RpcError diagnostics: show messages and fixes. UI: `crates/ara-hub`.
 
-`hub.resolve {project}` returns a card. `hub.catalog {project?}` returns the running project catalog or the core method
-catalog without opening any project. `hub.call {project,method,params}` opens a
-registered project headless on demand and forwards to its authority. Each Hub
-socket/project pair has a distinct downstream socket and session attribution.
+`hub.resolve {project}` returns a card. `hub.catalog {project?}` returns a guarded running-project or core catalog without opening. `hub.call {project,method,params}` opens a current-layout registered project headless and forwards to its authority. Each socket/project pair has distinct downstream attribution.
 MCP responses include `notices` from participant-specific conflict events;
 normal replica op streams are filtered so idle agents do not accumulate them.
 `hub.shutdown {onlyIfIdle?:true}` returns `{stopping:false,reason:"busy"}` if projects

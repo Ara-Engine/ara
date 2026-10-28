@@ -49,7 +49,7 @@ installation dialogs use the engine SVG family; update dialogs use the Hub icon.
 - `capture.rs`: `ara-hub --capture DIR` seeds a fixed fixture through the model's
   reply paths and writes every page, dark and light, from the real GPU target.
   No window opens: a headless Vulkan device drives the same `NativeUi` adapter.
-  `capture/flows.rs` adds update/install/error states in both themes.
+  `capture/flows.rs` adds update/install/error states; `capture/migration.rs` adds migration consent/progress in both themes.
 
 ## Behavior worth knowing
 
@@ -78,8 +78,7 @@ This feature stays off in shipping builds; see ara-release's rehearsal command.
 - Create validation is the service's: every edit sends `hub.create {dryRun:true}`;
   diagnostics carry `location.path` = `name|path|template|engineVersion` and render
   under that field. One dry run in flight; a stale reply re-checks.
-- Lifecycle calls show progress (`Opening…`), never approval (D24). Open failures
-  link `.ara/hub-process.log`; service startup failures link `hub-start.log`.
+- Lifecycle calls show progress (`Opening…`). ARA1914 opens a kit migration modal with move/tree preview and Migrate/Cancel; Cancel stays closed, while successful typed persistence continues the requested open. Other open failures link `.ara/hub-process.log`; service startup failures link `hub-start.log`.
 - Remove keeps files and its toast offers Undo (re-register). Diagnostic fixes run
   only `hub.*` `Call` fixes; `Cli` fixes are copied as `ara …`.
 - First run of an installed build (an `engine.json` beside the exe) registers that
