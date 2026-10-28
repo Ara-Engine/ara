@@ -98,7 +98,8 @@ impl Track {
                 let _activity = activity.gpu.read().expect("lab activity");
                 #[cfg(target_os = "macos")]
                 let _activity = activity.gpu.write().expect("lab activity");
-                let _visual = crate::gpu::visual(600)?;
+                let _visual =
+                    crate::gpu::visual_cancellable(600, || stopped.load(Ordering::Acquire))?;
                 ensure!(
                     !stopped.load(Ordering::Acquire),
                     "track cancelled before player startup"
@@ -189,7 +190,9 @@ impl Track {
                             let _activity = activity.gpu.read().expect("lab activity");
                             #[cfg(target_os = "macos")]
                             let _activity = activity.gpu.write().expect("lab activity");
-                            let _visual = crate::gpu::visual(600)?;
+                            let _visual = crate::gpu::visual_cancellable(600, || {
+                                stopped.load(Ordering::Acquire)
+                            })?;
                             super::daemon::vram()?;
                             Session::launch(
                                 &root,
@@ -218,7 +221,9 @@ impl Track {
                     Work::Control(request) => {
                         let result = (|| -> Result<Value> {
                             let _activity = activity.gpu.read().expect("lab activity");
-                            let _visual = crate::gpu::visual(600)?;
+                            let _visual = crate::gpu::visual_cancellable(600, || {
+                                stopped.load(Ordering::Acquire)
+                            })?;
                             pending_shaders.store(false, Ordering::Release);
                             let result = if let Some(name) = request["lab_variant"].as_str() {
                                 player.variant(&base, name)
@@ -364,7 +369,9 @@ impl Track {
                                 }
                                 "lab_capture" => {
                                     let _activity = activity.gpu.read().expect("lab activity");
-                                    let _visual = crate::gpu::visual(600)?;
+                                    let _visual = crate::gpu::visual_cancellable(600, || {
+                                        stopped.load(Ordering::Acquire)
+                                    })?;
                                     if pending_shaders.swap(false, Ordering::AcqRel) {
                                         player.control(
                                             json!({"reload_shaders":true,"frames":1}),
@@ -392,7 +399,9 @@ impl Track {
                                 }
                                 "lab_set" => {
                                     let _activity = activity.gpu.read().expect("lab activity");
-                                    let _visual = crate::gpu::visual(600)?;
+                                    let _visual = crate::gpu::visual_cancellable(600, || {
+                                        stopped.load(Ordering::Acquire)
+                                    })?;
                                     player.set(
                                         &root,
                                         args.get("values").cloned().unwrap_or_else(|| json!({})),
