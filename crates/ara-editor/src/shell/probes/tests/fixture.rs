@@ -20,7 +20,7 @@ impl Project {
         std::fs::write(
             root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),
             ara_json::to_canonical_string(
-                &json!({"$schema":"ara://schema/scene/1","id":"sc_probe_ui","records":{}}),
+                &json!({"$schema":"ara://schema/scene/1","id":"sc_probeui","records":{}}),
             ),
         )
         .unwrap();
@@ -40,7 +40,10 @@ pub(super) struct Fixture {
 impl Fixture {
     pub fn new() -> Self {
         let project = Project::new();
-        let mut editor = Editor::open(&project.0).unwrap();
+        let profile = project.0.join(".ara/test-profile");
+        std::fs::create_dir_all(&profile).unwrap();
+        let mut editor = Editor::open_with(&project.0, Some(profile.join("editor-settings.json")))
+            .unwrap();
         editor
             .action(
                 "editor.layout.move",
