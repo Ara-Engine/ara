@@ -87,18 +87,28 @@ pub(super) fn run(env: &Environment, project: &Path) -> Result<()> {
         });
         let builds = project.join("builds");
         if finished && builds.is_dir() {
+            // The editor publishes each build as builds/<preset>/<id>/.
             let mut ready = None;
-            for entry in fs::read_dir(&builds)? {
-                let output = entry?.path();
-                if output.join("report.json").is_file() {
-                    let report: Value =
-                        serde_json::from_slice(&fs::read(output.join("report.json"))?)?;
-                    ensure!(
-                        report["verify"]["passed"] == true
-                            && report["verify"]["runtime_executed"] == true,
-                        "export did not execute the runtime: {report}"
-                    );
-                    ready = Some(output);
+            for preset in fs::read_dir(&builds)? {
+                let preset = preset?.path();
+                if !preset.is_dir() {
+                    continue;
+                }
+                for entry in fs::read_dir(&preset)? {
+                    let output = entry?.path();
+                    if output.join("report.json").is_file() {
+                        let report: Value =
+                            serde_json::from_slice(&fs::read(output.join("report.json"))?)?;
+                        ensure!(
+                            report["verify"]["passed"] == true
+                                && report["verify"]["runtime_executed"] == true,
+                            "export did not execute the runtime: {report}"
+                        );
+                        ready = Some(output);
+                        break;
+                    }
+                }
+                if ready.is_some() {
                     break;
                 }
             }
