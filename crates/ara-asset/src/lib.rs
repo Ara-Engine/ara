@@ -47,6 +47,9 @@ pub enum Error {
     /// Source content, settings, or cooked data are invalid.
     #[error("{0}")]
     Invalid(String),
+    /// A project layout check failed before source discovery or cooking.
+    #[error("{0}")]
+    ProjectLayout(ara_diag::Diagnostic),
     /// The job was cancelled before publication.
     #[error("import cancelled")]
     Cancelled,
@@ -72,6 +75,7 @@ impl Error {
             format!("@{asset}")
         };
         let d = match self {
+            Error::ProjectLayout(diagnostic) => diagnostic.clone(),
             Error::Cancelled => Diagnostic::info(
                 codes::ASSET_IMPORT_CANCELLED,
                 format!("import of `{asset}` was cancelled or superseded"),

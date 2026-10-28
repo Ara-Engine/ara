@@ -40,7 +40,7 @@ See README.md for template bootstrapping, integration and Apple handoff.
 Exports output `build/<Game>.exe` (Linux: `<Game>`), one `build/data/` and notices;
 macOS uses `<Game>.app` with `Contents/Resources` as its data root.
 The D30 authored root is `content/`; export reads it through `project::authored_root`.
-Keep authored references root-relative and runtime `data/game/` paths distinct.
+Keep authored references content-relative and runtime `data/game/` paths distinct.
 `distribution.json`, packages, `report/`, logs and `symbols/<build-id>` sit outside `build/`.
 Never package symbols, verification logs or crash artifacts with the player.
 Windows pins require a matching PDB pin; ELF pins must retain DWARF until export.

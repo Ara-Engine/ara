@@ -32,7 +32,7 @@ pub(super) fn write_project(root: &Path) {
     fs::create_dir_all(authored.join("props")).expect("props directory");
     fs::write(
         root.join("ara.project.json"),
-        r#"{"layoutVersion":3,"name":"Asset service test","main":"scenes/main.scene"}"#,
+        ara_json::to_canonical_string(&json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Asset service test","main":"scenes/main.scene"})),
     )
     .expect("marker");
     fs::write(

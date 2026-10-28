@@ -105,7 +105,8 @@ documentation become authored-root-relative while retaining IDs. Relative source
 media companion URIs retain their meaning. Legacy TOML modules become lowercase
 JSON manifests with names, references and hot behavior preserved; an old editor
 profile outside an editor folder moves beneath an editor subtree. Generated
-legacy module type output moves to `.ara/scripts/<module>/`.
+legacy module output is retained under `migration-support/generated-scripts/<module>/`;
+the compiler regenerates current schemas and assemblies under `.ara/scripts/<module>/`.
 
 Migration moves import defaults into `settings/`, old presets into
 `settings/builds/`, and marker policy into `settings/project.json`. Existing export
