@@ -190,6 +190,8 @@ pub(super) struct Sample {
     pub presented: bool,
     /// Offscreen output draws into GPU textures without creating native swapchains.
     pub offscreen_output: bool,
+    /// A positive-size UI surface needed GPU output, even if its queue was still busy.
+    pub output_requested: bool,
     /// UI render submissions across the main and floating surface targets.
     pub gpu_surface_submissions: u32,
     /// Actual native window presentations, separate from offscreen GPU output.

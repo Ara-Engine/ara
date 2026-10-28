@@ -7,6 +7,7 @@ mod catalog;
 mod journal;
 mod measurements;
 pub(super) mod native;
+mod output_health;
 mod play;
 mod report_writer;
 mod resources;
@@ -94,6 +95,7 @@ pub(super) struct Monkey {
     last_action: Option<Value>,
     boundary_failures: usize,
     measurements: measurements::Measurements,
+    output_health: output_health::Health,
     watchdog: watchdog::Watchdog,
 }
 
@@ -163,6 +165,7 @@ impl Monkey {
             last_action: None,
             boundary_failures: 0,
             measurements: measurements::Measurements::default(),
+            output_health: output_health::Health::new(HANG),
             watchdog: watchdog::Watchdog::new(output.into(), HANG)?,
         })
     }
@@ -451,6 +454,15 @@ impl Monkey {
         stages: Option<&super::responsiveness::Sample>,
     ) {
         self.frames += 1;
+        self.output_health.record(
+            elapsed,
+            stages.map(|sample| output_health::Sample {
+                requested: sample.output_requested,
+                submissions: sample.gpu_surface_submissions,
+                presentations: sample.native_presentations,
+                offscreen: sample.offscreen_output,
+            }),
+        );
         if let Some(stages) = stages {
             self.offscreen_output = Some(stages.offscreen_output);
             self.gpu_surface_submissions += u64::from(stages.gpu_surface_submissions);
@@ -539,7 +551,11 @@ impl Monkey {
     pub fn succeeded(&self) -> bool {
         self.finished()
             && self.panics.is_empty()
-            && self.hangs.max(self.watchdog.count()) == 0
+            && self
+                .hangs
+                .max(self.watchdog.count())
+                .max(self.output_health.stalls())
+                == 0
             && self.boundary_failures == 0
             && !self.cleanup_incomplete
             && self.resources_drained()
@@ -774,8 +790,9 @@ impl Monkey {
                     "cleanupIncomplete":self.cleanup_incomplete||!self.resources_drained(),"heldKeys":self.held_keys,"heldButtons":self.held_buttons},
             }),
             json!({
-                "panics":self.panics,"hangs":self.hangs.max(self.watchdog.count()),"hangThresholdMs":HANG.as_millis(),
+                "panics":self.panics,"hangs":self.hangs.max(self.watchdog.count()).max(self.output_health.stalls()),"hangThresholdMs":HANG.as_millis(),
                 "longFrames":self.hangs,"watchdogStalls":self.watchdog.count(),
+                "gpuOutputStalls":self.output_health.stalls(),"gpuOutputHealth":self.output_health.report(),
                 "frameSpikes":self.spikes,"spikeThresholdMs":SPIKE.as_millis(),"maxFrameMs":self.max_frame_ms,
                 "slowestFrames":self.slowest,"panelFailures":self.boundary_failures,
                 "harnessTimings":self.measurements.summary(),
@@ -797,7 +814,7 @@ impl Monkey {
                 "watchdog":"monkey-watchdog.json",
                 "replay":format!("--verify-monkey --monkey-seed {} --monkey-seconds {} --monkey-steps {}",self.seed,self.budget.as_secs(),self.workload_actions.max(1)),
                 "exactReplay":"--monkey-replay <original-output>/monkey-events.jsonl --output <new-output>",
-                "limits":["Command coverage counts attempted edge targets; disabled or deferred commands can reject before their implementation runs. Accepted callbacks are counted separately.","Protocol method probes include malformed envelopes and stale sessions; a method attempt is not complete implementation coverage.","The watchdog persists permanent stalls independently; an external process timeout is required to end a permanently stalled editor.","Long frames and watchdog stalls are reported separately; hangs is their lower bound because their intervals can overlap.","NaN and infinity reach numeric controls as text because JSON cannot represent non-finite numbers."]
+                "limits":["Command coverage counts attempted edge targets; disabled or deferred commands can reject before their implementation runs. Accepted callbacks are counted separately.","Protocol method probes include malformed envelopes and stale sessions; a method attempt is not complete implementation coverage.","The watchdog persists permanent stalls independently; an external process timeout is required to end a permanently stalled editor.","Long frames, watchdog stalls and GPU-output starvation intervals are reported separately; hangs is their max-based lower bound because intervals can overlap.","NaN and infinity reach numeric controls as text because JSON cannot represent non-finite numbers."]
             }),
             self.typed.report(),
             self.shell_catalog.report(),

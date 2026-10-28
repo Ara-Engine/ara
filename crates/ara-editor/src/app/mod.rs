@@ -1509,6 +1509,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     .windows
                     .iter()
                     .any(|float| offscreen || float.window.presentable());
+            let mut output_requested = dirty && main_showable;
             // The previous UI frame or window blit still running after the bound (a
             // stalled present path) skips this one instead of blocking the event pump.
             // SAFETY: `present` was created on this renderer's device.
@@ -1711,6 +1712,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 // As the main window: nothing to show, or a stalled UI frame or blit,
                 // waits.
                 let showable = offscreen || float.window.presentable();
+                output_requested |= showable;
                 let mut settled = || match &mut float.present {
                     // SAFETY: Each native presentation was created on this device.
                     Some(present) => unsafe { present.settled(renderer.gpu(), UI_STALL_WAIT) },
@@ -1829,6 +1831,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 };
                 let sample = responsiveness::Sample {
                     offscreen_output: offscreen,
+                    output_requested,
                     gpu_surface_submissions,
                     native_presentations,
                     cpu_ms,
