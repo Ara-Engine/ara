@@ -1060,8 +1060,11 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             }
             let authority_scope = profile_frame.map(|_| ara_profile::scope("editor.authority"));
             let tick_at = Instant::now();
+            let measure_authority = monkey.is_some() || probe.is_some();
             server.pump(&mut editor);
+            let server_ms = measure_authority.then(|| tick_at.elapsed().as_secs_f64() * 1000.);
             editor.tick();
+            let editor_ms = measure_authority.then(|| tick_at.elapsed().as_secs_f64() * 1000.);
             dirty |= shell.coalesce_rebuilds(&mut editor, |shell, editor| {
                 let mut changed = false;
                 for result in [
@@ -1086,6 +1089,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 }
                 Ok(changed)
             })?;
+            let shell_ms = measure_authority.then(|| tick_at.elapsed().as_secs_f64() * 1000.);
             match shell.poll_play_job(&mut editor) {
                 Ok(true) => {
                     shell.rebuild(&mut editor)?;
@@ -1098,6 +1102,16 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 }
             }
             let tick_ms = tick_at.elapsed().as_secs_f64() * 1000.;
+            let authority_costs =
+                server_ms
+                    .zip(editor_ms)
+                    .zip(shell_ms)
+                    .map(|((server, editor), shell)| responsiveness::AuthorityCosts {
+                        server_pump_ms: server,
+                        editor_tick_ms: (editor - server).max(0.),
+                        shell_jobs_ms: (shell - editor).max(0.),
+                        play_jobs_ms: (tick_ms - shell).max(0.),
+                    });
             // The Game view, in the main window or a floating one: its size (physical
             // pixels, at its window's scale) is where embedded Play starts, what it
             // resizes to and what the camera preview renders at; new frames redraw.
@@ -1872,6 +1886,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     input_ms,
                     ui_ms,
                     tick_ms,
+                    authority_costs,
                     geometry_ms,
                     view_ms,
                     extract_ms: stages.extract_ms,

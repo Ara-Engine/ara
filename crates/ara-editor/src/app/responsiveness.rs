@@ -151,6 +151,15 @@ struct Pending {
 
 /// One frame's measurements, filled in by the loop.
 #[derive(Default, serde::Serialize)]
+pub(super) struct AuthorityCosts {
+    pub server_pump_ms: f64,
+    pub editor_tick_ms: f64,
+    pub shell_jobs_ms: f64,
+    pub play_jobs_ms: f64,
+}
+
+/// One frame's measurements, filled in by the loop.
+#[derive(Default, serde::Serialize)]
 pub(super) struct Sample {
     pub cpu_ms: f64,
     /// Running the injected command (theme rows), before routing.
@@ -159,6 +168,8 @@ pub(super) struct Sample {
     pub ui_ms: f64,
     /// The authority's tick (server pump, `Editor::tick`).
     pub tick_ms: f64,
+    /// Optional probe-only breakdown of the aggregate authority phase.
+    pub authority_costs: Option<AuthorityCosts>,
     /// Scene updates after document changes, and typed or gizmo previews.
     pub geometry_ms: f64,
     /// Of `geometry_ms`, for a document change: `Editor::view` (resolve), extraction
