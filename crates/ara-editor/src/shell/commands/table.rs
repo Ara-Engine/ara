@@ -599,7 +599,9 @@ fn build() -> Vec<Spec> {
             BuildState { built: false, .. } => Avail::Blocked("Build the project first (Build Current Profile)".into()),
             _ => Avail::Ready,
         }),
-        later("build.package", "Package…", "package", "", "Run `ara pack` for now; packaging from the editor is not built yet."),
+        cmd("build.package", "Package…", "package", "", "Choose an export profile, package format and output envelope.", |s,e,_|s.open_package_options(e)),
+        cmd("build.package.confirm", "Create Package", "package", "", "Save the authored project, then export the selected package format.", |s,e,_|s.package_selected(e)).when(|c|if c.build.running {Avail::Blocked("A build is running".into())} else {Avail::Ready}),
+        cmd("build.package.reveal", "Reveal Package", "folder", "", "Reveal an actual artifact from the completed export manifest.", |s,_,t|s.reveal_package(t)),
         cmd("build.open_folder", "Open Build Folder", "folder", "", "Show the last build's folder (or builds/).", |s, e, _| {
             let folder = s.last_build.clone().unwrap_or_else(|| e.host.root().join("builds"));
             std::fs::create_dir_all(&folder)?;

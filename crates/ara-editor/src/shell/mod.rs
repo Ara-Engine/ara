@@ -230,6 +230,7 @@ pub struct Shell {
     pub(crate) build: Option<build::BuildJob>,
     /// The last finished build's game folder (Build > Run Build, Open Build Folder).
     pub(crate) last_build: Option<std::path::PathBuf>,
+    last_packages: Vec<build::PackageArtifact>,
     /// A running headless Run Build (offscreen runs).
     pub(crate) run: Option<std::sync::mpsc::Receiver<build::RunResult>>,
     /// The capture the last headless Run Build wrote.
@@ -575,6 +576,7 @@ impl Shell {
             assets_show_all: false,
             build: None,
             last_build: None,
+            last_packages: Vec::new(),
             run: None,
             last_run: None,
             offscreen: false,
@@ -1721,7 +1723,7 @@ impl Shell {
     }
     /// Compact agent layout report; glyph shaping internals stay out of capture jobs.
     pub fn layout_report(&self) -> Value {
-        json!({"projectLaunch":self.project_launch_request(),"pilot":self.pilot_report(),"viewportDiagnostics":self.viewport_diagnostics.report(),"nativeFileDrag":self.file_drag_report(),"assetImports":self.asset_import_report(),"assetOperations":self.asset_operation_report(),"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
+        json!({"packageResult":self.package_result(),"projectLaunch":self.project_launch_request(),"pilot":self.pilot_report(),"viewportDiagnostics":self.viewport_diagnostics.report(),"nativeFileDrag":self.file_drag_report(),"assetImports":self.asset_import_report(),"assetOperations":self.asset_operation_report(),"size":self.ui.size,"focus":self.input.focused(),"graph":self.ui.find(&graph_panel::canvas_id(self.graph_page)).and_then(|i|self.active_graph().map(|g|g.canvas.report(self.ui.nodes[i].rect))),"nodes":self.ui.paint_order.iter().map(|i|{let n=&self.ui.nodes[*i];json!({"id":n.element.id,"stableId":ara_ui::source::stable_id(&n.element.id),"tag":n.element.tag,"box":n.rect,"clip":n.clip,"text":n.text.as_ref().map(|t|t.value.as_str()),"disabled":n.state.disabled})}).collect::<Vec<_>>()})
     }
     /// Cached authoring prefix; empty identifies a still-readable legacy project.
     pub(crate) fn asset_reference_root(&self) -> &str {

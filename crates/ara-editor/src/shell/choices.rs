@@ -22,6 +22,7 @@ pub(crate) enum Destination {
         key: String,
     },
     ImportGroup,
+    PackageFormat,
     Field(String),
     Append {
         field: String,
@@ -198,6 +199,7 @@ impl Shell {
                 self.commit_import_fields(editor)?;
                 self.choose_import_group(value)?;
             }
+            Destination::PackageFormat => self.choose_package_format(value)?,
             Destination::Field(path) => {
                 editor.apply(
                     self.field_commands(editor, &editor.state.selection, path, value)?,

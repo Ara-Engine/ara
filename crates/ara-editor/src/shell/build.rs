@@ -40,6 +40,22 @@ pub(crate) struct Built {
     pub seconds: f64,
     /// The export's own verification ran the game (not only static checks).
     pub executed: bool,
+    /// Actual package files listed by the completed distribution manifest.
+    pub packages: Vec<PackageArtifact>,
+}
+
+/// One package emitted by the exporter, with its authoritative content identity.
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PackageArtifact {
+    /// Full path after the staged export has reached its final envelope.
+    pub path: PathBuf,
+    /// BLAKE3 declared by the completed distribution manifest.
+    pub hash: String,
+    /// Complete package byte length.
+    pub bytes: u64,
+    /// Whether delivery must preserve executable permission.
+    pub executable: bool,
 }
 
 /// A running export.
@@ -323,7 +339,48 @@ fn export(
         game: output.join("build"),
         seconds: started.elapsed().as_secs_f64(),
         executed: summary.verify.runtime_executed,
+        packages: package_artifacts(&output)?,
     })
+}
+
+/// Runs on the export worker. Package names come from its manifest, never guesses
+/// based on a format or application name; canonical containment also rejects escapes.
+fn package_artifacts(output: &Path) -> anyhow::Result<Vec<PackageArtifact>> {
+    let manifest: ara_export::distribution::DistributionManifest =
+        serde_json::from_slice(&std::fs::read(output.join("distribution.json"))?)?;
+    anyhow::ensure!(
+        manifest.format == "ara.distribution/1",
+        "unsupported distribution manifest"
+    );
+    manifest
+        .packages
+        .into_iter()
+        .map(|(name, identity)| {
+            let path = ara_export::tools::project_path(output, &name)?;
+            let metadata = std::fs::metadata(&path)?;
+            anyhow::ensure!(
+                metadata.is_file() && metadata.len() == identity.bytes,
+                "the completed package {name} is missing or has a different byte length"
+            );
+            Ok(PackageArtifact {
+                path,
+                hash: identity.hash,
+                bytes: identity.bytes,
+                executable: identity.executable,
+            })
+        })
+        .collect()
+}
+
+fn package_preset(
+    mut preset: ara_export::ExportPreset,
+    format: ara_export::preset::PackageFormat,
+) -> anyhow::Result<ara_export::ExportPreset> {
+    preset.packaging = format;
+    // Runtime pins are supplied by this engine on the existing export worker.
+    // All platform/package/tooling rules still apply to the authored profile.
+    preset.to_unpinned_text()?;
+    Ok(preset)
 }
 
 /// Claim a new content-identified developer folder; an existing build is preserved.
@@ -429,8 +486,31 @@ impl Shell {
         profile: &str,
         destination: Option<PathBuf>,
     ) -> ara_ui::Result<()> {
+        self.start_profile(editor, profile, destination, None)
+    }
+
+    /// Package a profile through the same saved-file boundary and export worker.
+    /// The selected format belongs to this job; authored profiles stay unchanged.
+    pub(crate) fn package_profile(
+        &mut self,
+        editor: &mut Editor,
+        profile: &str,
+        destination: Option<PathBuf>,
+        format: ara_export::preset::PackageFormat,
+    ) -> ara_ui::Result<()> {
+        self.start_profile(editor, profile, destination, Some(format))
+    }
+
+    fn start_profile(
+        &mut self,
+        editor: &mut Editor,
+        profile: &str,
+        destination: Option<PathBuf>,
+        package: Option<ara_export::preset::PackageFormat>,
+    ) -> ara_ui::Result<()> {
         if let Some(job) = &mut self.build {
             if job.preset == profile
+                && package.is_none()
                 && let Some(creation) = &mut job.profile_creation
             {
                 creation.build_after = true;
@@ -452,6 +532,10 @@ impl Shell {
         let text = std::fs::read_to_string(profile_path(&root, &preset))?;
         let parsed =
             ara_export::ExportPreset::from_unpinned_text(&text).map_err(|e| format!("{e:#}"))?;
+        let parsed = match package {
+            Some(format) => package_preset(parsed, format).map_err(|error| format!("{error:#}"))?,
+            None => parsed,
+        };
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
@@ -721,8 +805,21 @@ impl Shell {
                     } else {
                         ""
                     };
+                    let packages = if built.packages.is_empty() {
+                        String::new()
+                    } else {
+                        format!(
+                            "; packages: {}",
+                            built
+                                .packages
+                                .iter()
+                                .map(|artifact| artifact.path.display().to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    };
                     self.status_note = Some(format!(
-                        "Built {preset} in {:.0} s{ran}: {}",
+                        "Built {preset} in {:.0} s{ran}: {}{packages}",
                         built.seconds,
                         built.game.display()
                     ));
@@ -731,12 +828,14 @@ impl Shell {
                         ara_diag::Diagnostic::info(
                             crate::codes::BUILD,
                             format!(
-                                "Built {preset} in {:.0} s{ran}: {}",
+                                "Built {preset} in {:.0} s{ran}: {}{packages}",
                                 built.seconds,
                                 built.game.display()
                             ),
-                        ),
+                        )
+                        .data(json!({"packages":built.packages})),
                     );
+                    self.last_packages = built.packages;
                     self.last_build = Some(built.game);
                 }
                 Err(error) => {
@@ -752,6 +851,32 @@ impl Shell {
             }
         }
         changed
+    }
+
+    /// Read-only artifact proof for the last successfully completed build/package.
+    pub(crate) fn package_result(&self) -> Value {
+        json!({"game":self.last_build,"packages":self.last_packages})
+    }
+
+    /// Reveal only a path present in the last actual package receipt.
+    pub(crate) fn reveal_package(&mut self, target: &commands::Target) -> ara_ui::Result<()> {
+        let commands::Target::Text(path) = target else {
+            return Err("Choose a completed package file".into());
+        };
+        let artifact = self
+            .last_packages
+            .iter()
+            .find(|artifact| artifact.path.to_str() == Some(path.as_str()))
+            .ok_or("That package is no longer the current build result")?;
+        let directory = artifact
+            .path
+            .parent()
+            .ok_or("The package has no output folder")?;
+        if !self.offscreen {
+            open_external(directory)?;
+        }
+        self.status_note = Some(format!("Package: {}", artifact.path.display()));
+        Ok(())
     }
 }
 
@@ -922,6 +1047,165 @@ mod tests {
         assert!(scripts.is_file());
         assert_eq!(scripts, launch.data.join("game/scripts.json"));
         assert!(!game.join("game/scripts.json").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn completed_package_receipt_reaches_the_retained_shell_without_authoring_changes()
+    -> anyhow::Result<()> {
+        let scratch = Scratch::new()?;
+        std::fs::create_dir_all(scratch.0.join(ara_doc::AUTHORING_ROOT).join("levels"))?;
+        std::fs::write(
+            scratch.0.join("ara.project.json"),
+            ara_json::to_canonical_string(&json!({
+                "layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Package receipt","main":"levels/main.scene"
+            })),
+        )?;
+        std::fs::write(
+            scratch
+                .0
+                .join(ara_doc::AUTHORING_ROOT)
+                .join("levels/main.scene"),
+            ara_json::to_canonical_string(&json!({
+                "$schema":"ara://schema/scene/1","id":"sc_packagereceipt","records":{}
+            })),
+        )?;
+        let mut editor =
+            Editor::open_with(&scratch.0, Some(scratch.0.join(".ara/test-settings.json")))
+                .map_err(|error| anyhow::anyhow!("{error}"))?;
+        let mut shell =
+            Shell::new(&mut editor, [900., 650.]).map_err(|error| anyhow::anyhow!("{error}"))?;
+        shell.offscreen = true;
+        let revision = editor.host.store().revision();
+        let package = PackageArtifact {
+            path: scratch.0.join("Custom result.zip"),
+            hash: "b".repeat(64),
+            bytes: 47,
+            executable: false,
+        };
+        let (send, events) = channel();
+        shell.build = Some(BuildJob {
+            events,
+            profile_creation: None,
+            saving: None,
+            preset: "windows".into(),
+            stage: "packaging".into(),
+            cooking: None,
+        });
+        send.send(BuildEvent::Finished(Ok(Built {
+            game: scratch.0.join("build"),
+            seconds: 2.,
+            executed: false,
+            packages: vec![package.clone()],
+        })))?;
+        assert!(shell.poll_build(&mut editor));
+        assert!(shell.build.is_none());
+        assert_eq!(shell.package_result()["packages"], json!([package]));
+        assert_eq!(editor.host.store().revision(), revision);
+        assert!(
+            shell
+                .status_note
+                .as_deref()
+                .is_some_and(|note| note.contains("Custom result.zip"))
+        );
+        shell
+            .reveal_package(&commands::Target::Text(
+                package
+                    .path
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("fixture UTF-8 path"))?
+                    .into(),
+            ))
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        assert!(
+            shell
+                .reveal_package(&commands::Target::Text("unrelated.zip".into()))
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn package_override_validates_real_formats_without_requiring_runtime_pins_early()
+    -> anyhow::Result<()> {
+        use ara_export::preset::{AndroidSigning, ArtifactPin, Configuration, PackageFormat};
+        let scratch = Scratch::new()?;
+        let original = default_profile(&scratch.0)?;
+        for format in [
+            PackageFormat::Folder,
+            PackageFormat::WindowsPortable,
+            PackageFormat::WindowsInstaller,
+            PackageFormat::LinuxAppimage,
+            PackageFormat::LinuxTar,
+            PackageFormat::AndroidPlay,
+        ] {
+            let mut profile = original.clone();
+            let pin = ArtifactPin {
+                hash: "a".repeat(64),
+                source: "tools/package-runtime".into(),
+            };
+            match format {
+                PackageFormat::WindowsInstaller => profile.installer_stub = Some(pin),
+                PackageFormat::LinuxAppimage => {
+                    profile.platform = ara_export::Platform::Linux;
+                    profile.appimage_runtime = Some(pin);
+                }
+                PackageFormat::LinuxTar => profile.platform = ara_export::Platform::Linux,
+                PackageFormat::AndroidPlay => {
+                    profile.platform = ara_export::Platform::Android;
+                    profile.config = Configuration::Release;
+                    profile.signing = Some(AndroidSigning {
+                        keystore: "release.keystore".into(),
+                        alias: "game".into(),
+                        store_password_env: "TEST_STORE_PASSWORD".into(),
+                        key_password_env: "TEST_KEY_PASSWORD".into(),
+                    });
+                }
+                _ => {}
+            }
+            let lowered = package_preset(profile, format)?;
+            assert_eq!(
+                serde_json::to_value(lowered.packaging)?,
+                serde_json::to_value(format)?
+            );
+            assert!(
+                lowered.templates.is_empty(),
+                "the worker still owns engine runtime pinning"
+            );
+        }
+        assert_eq!(serde_json::to_value(original.packaging)?, "folder");
+        assert!(package_preset(original.clone(), PackageFormat::LinuxTar).is_err());
+        assert!(package_preset(original.clone(), PackageFormat::WindowsInstaller).is_err());
+        assert!(package_preset(original, PackageFormat::AndroidPlay).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn completed_packages_use_manifest_paths_and_reject_missing_or_escaping_artifacts()
+    -> anyhow::Result<()> {
+        let scratch = Scratch::new()?;
+        let name = "Localized package 玩家.zip";
+        let bytes = b"complete package";
+        std::fs::write(scratch.0.join(name), bytes)?;
+        let hash = blake3::hash(bytes).to_string();
+        let mut manifest = json!({"format":"ara.distribution/1","buildId":"fixture","platform":"windows",
+            "entryPoint":"Game.exe","files":{},"packages":{name:{"hash":hash,"bytes":bytes.len(),"executable":false}},
+            "symbols":"symbols/fixture.zip","signing":"unsigned"});
+        ara_export::tools::write_json(&scratch.0.join("distribution.json"), &manifest)?;
+        let artifacts = package_artifacts(&scratch.0)?;
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(
+            artifacts[0].path,
+            dunce::canonicalize(scratch.0.join(name))?
+        );
+        assert_eq!(artifacts[0].hash, hash);
+        assert_eq!(artifacts[0].bytes, bytes.len() as u64);
+        manifest["packages"][name]["bytes"] = json!(bytes.len() + 1);
+        ara_export::tools::write_json(&scratch.0.join("distribution.json"), &manifest)?;
+        assert!(package_artifacts(&scratch.0).is_err());
+        manifest["packages"] = json!({"../outside.zip":{"hash":hash,"bytes":0,"executable":false}});
+        ara_export::tools::write_json(&scratch.0.join("distribution.json"), &manifest)?;
+        assert!(package_artifacts(&scratch.0).is_err());
         Ok(())
     }
 
