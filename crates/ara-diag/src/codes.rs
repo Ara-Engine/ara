@@ -211,6 +211,8 @@ codes! {
     TYPES_CHANGED = 1912,
     /// A Hub project template is missing pinned files (sample art not fetched yet).
     TEMPLATE_INCOMPLETE = 1913,
+    /// An old project must be explicitly migrated before any authoring/runtime open.
+    PROJECT_MIGRATION_REQUIRED = 1914,
 
     /// Diagnostics were dropped because an emitting thread's bus ring was full.
     DIAG_DROPPED = 2001,

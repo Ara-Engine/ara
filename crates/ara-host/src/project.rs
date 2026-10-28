@@ -108,6 +108,7 @@ impl Project {
         if !root.join(MARKER).is_file() {
             return Err(no_project(&root));
         }
+        crate::project_layout::require_current_layout(&root)?;
         let mut db = SchemaDb::new();
         ara_doc::register(&mut db);
         ara_components::register(&mut db);

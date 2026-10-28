@@ -26,6 +26,8 @@ fn path_xml(path: &Path) -> String {
 
 /// Finds module folders, excluding build outputs and editor-only modules.
 pub fn modules(root: &Path) -> Result<Vec<ModuleSpec>> {
+    ara_host::project_layout::require_current_layout(root)
+        .map_err(|diagnostic| anyhow::anyhow!("{diagnostic}"))?;
     let inventory = ara_script::project::publish(root, ModuleProfile::Gameplay)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
     let mut specs = inventory.gameplay_specs(root).map_err(|errors| {

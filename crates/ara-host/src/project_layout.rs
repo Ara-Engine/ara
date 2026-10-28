@@ -2,6 +2,8 @@
 mod mapping;
 mod migrate;
 mod references;
+mod check;
+pub use check::require_current_layout;
 
 pub use crate::project_policy::{PREFERENCES, PREFERENCES_ID, policy};
 pub use ara_doc::AUTHORING_ROOT;
@@ -27,7 +29,7 @@ pub(crate) const POLICY_KEYS: &[&str] = &[
 /// Export output; ignored by git and project discovery.
 pub const BUILDS: &str = "builds";
 /// The current on-disk layout version in `ara.project.json`.
-pub const VERSION: u64 = 3;
+pub const VERSION: u64 = ara_doc::PROJECT_LAYOUT_VERSION;
 /// Instructions installed at the project root for humans and coding agents.
 pub const AGENT_GUIDE: &str = include_str!("project_layout/agents.md");
 

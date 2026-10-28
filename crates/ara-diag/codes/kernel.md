@@ -1145,3 +1145,18 @@ Fixes:
 - In an Ara source checkout, run the command in the message (`ara-samples fetch <sample>`), then create the project again.
 - After fetching art, run `cargo run -p ara-samples -- kits <sample>` for missing kits, then create the project again. Installed templates ship their generated kits.
 - Pick another template, such as `blank`.
+
+## ARA1914 PROJECT_MIGRATION_REQUIRED: Project layout needs migration
+owner: ara-host
+
+The project uses the provisional preview-3 `game/` layout or an earlier layout
+with authored folders at its root. Opening is refused before C# discovery,
+imports, Play or export so an old project cannot silently lose content.
+
+Causes:
+- The marker has `layoutVersion: 3`, an earlier version, or no layout version.
+
+Fixes:
+- Preview with `ara project migrate --dry-run`, then explicitly run `ara project migrate`.
+- Open in the Hub or editor and review the migration preview, then choose Migrate.
+- Choose Cancel to leave the project untouched and closed.

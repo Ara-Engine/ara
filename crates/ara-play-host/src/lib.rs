@@ -1514,6 +1514,7 @@ impl Service for PlayService {
 /// `.world`…) load, project types build on engine types, and the host (CLI, daemon,
 /// editor) validates documents exactly as its players do. Clashes become diagnostics.
 pub fn open_project(root: &Path) -> Result<ara_host::Project, Diagnostic> {
+    ara_host::project_layout::require_current_layout(root)?;
     let root = &std::fs::canonicalize(root)
         .map_err(|error| Diagnostic::error(ara_diag::codes::IO, error.to_string()))?;
     let published = ara_script::project::publish(root, ara_script::ModuleProfile::Gameplay);
