@@ -7,6 +7,7 @@
 pub(crate) mod asset_import;
 mod asset_ops;
 mod assets;
+mod assets_favourites;
 mod axis;
 pub(crate) mod build;
 mod build_options;
@@ -124,6 +125,7 @@ pub struct Shell {
     history_view: history_panel::View,
     asset_import: asset_import::State,
     asset_ops: asset_ops::State,
+    assets_favourites: assets_favourites::View,
     build_options: build_options::State,
     file_drag: file_drag::State,
     pub(crate) import_picker_folder: Option<String>,
@@ -509,6 +511,7 @@ impl Shell {
             history_view: Default::default(),
             asset_import: Default::default(),
             asset_ops: Default::default(),
+            assets_favourites: Default::default(),
             build_options: Default::default(),
             hierarchy_filters: Default::default(),
             file_drag: Default::default(),

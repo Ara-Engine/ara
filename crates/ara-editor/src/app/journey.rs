@@ -8,6 +8,7 @@
 //! shipped (NativeAOT) and run that game too.
 //! Offscreen only (hidden window). Writes `NN-step.png` per step and, after every
 //! step, `journey.json` (what each step did, whether it worked and how long it took).
+mod script_reload;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -53,9 +54,7 @@ pub(super) struct Journey {
     placed: Option<String>,
     instance: Option<String>,
     script: Option<PathBuf>,
-    /// The working script while the failure step has it broken.
-    source: Option<String>,
-    log_cursor: u64,
+    reload: Option<script_reload::Proof>,
     explained: bool,
     /// The frame the Play step started holding W.
     walking: Option<u32>,
@@ -83,6 +82,10 @@ impl Journey {
         editor.action("editor.preferences", json!({"reduceMotion": true}))?;
         editor.action("editor.theme", json!({"light": false}))?;
         editor.action("editor.layout.reset", json!({}))?;
+        editor.action(
+            "editor.settings.set",
+            json!({"key":"play.tickHz","value":"60"}),
+        )?;
         std::fs::create_dir_all(output)?;
         Ok(Self {
             step: 0,
@@ -93,8 +96,7 @@ impl Journey {
             placed: None,
             instance: None,
             script: None,
-            source: None,
-            log_cursor: 0,
+            reload: None,
             explained: false,
             walking: None,
             hover: None,
@@ -150,7 +152,10 @@ impl Journey {
         } else {
             PATIENCE
         };
-        let timed_out = self.age > patience;
+        // Reload proof has its own real deadline; a fast offscreen loop must not
+        // manufacture a compile timeout by exhausting a frame count.
+        let timed_out =
+            !matches!(name, "hot-reload" | "failure" | "fix-script") && self.age > patience;
         if !(ready || timed_out) {
             return Ok(self.age <= 2);
         }
@@ -245,6 +250,17 @@ impl Journey {
             "frames": self.age,
             "atSeconds": self.started.elapsed().as_secs_f64(),
         }));
+        if matches!(name, "script" | "hot-reload" | "failure" | "fix-script") {
+            if let Some(reload) = &self.reload {
+                if let Some(step) = self.report.last_mut() {
+                    step["runtimeEffect"] = reload.report()
+                }
+                std::fs::write(
+                    self.output.join("script-reload.json"),
+                    ara_json::to_canonical_string(&reload.report()),
+                )?;
+            }
+        }
         self.after(editor, shell)?;
         self.note.clear();
         self.step += 1;
@@ -389,7 +405,11 @@ impl Journey {
             "script" => {
                 if first {
                     shell.open_ide = false;
-                    shell.run_command(editor, "assets.create.script", &Target::None)?;
+                    let entity = self
+                        .instance
+                        .clone()
+                        .ok_or("no prefab instance for Spinner")?;
+                    shell.run_command(editor, "component.new_script", &Target::Entity(entity))?;
                     let mut clipboard = super::assets_verify::Clip::default();
                     shell.event(
                         ara_ui::input::InputEvent::Edit(ara_ui_text::EditEvent::Insert(
@@ -405,10 +425,45 @@ impl Journey {
                         .as_deref()
                         .map(|p| editor.host.root().join(p));
                     self.note =
-                        "Create > C# Script, inline rename to Spinner.cs, background compile"
+                        "Inspector New Script registry ingress; retained-input inline rename/Enter to Spinner.cs, compile and attach job"
                             .into();
                 }
-                Ok(settled && editor.host.store().schema().get("Spinner").is_some())
+                if !settled || editor.host.store().schema().get("Spinner").is_none() {
+                    return Ok(false);
+                }
+                let entity = self.instance.clone().ok_or("no Spinner target")?;
+                let view = crate::world::resolve(editor.host.store(), &editor.state.doc)
+                    .map_err(|e| format!("{e:?}"))?;
+                if !view
+                    .get(&entity)
+                    .is_some_and(|e| e.record.contains_key("Spinner"))
+                {
+                    return Ok(false);
+                }
+                if self.reload.is_none() {
+                    let field = editor
+                        .host
+                        .store()
+                        .schema()
+                        .get("Spinner")
+                        .and_then(|ty| {
+                            ty.fields()
+                                .iter()
+                                .find(|f| f.name.eq_ignore_ascii_case("speed"))
+                        })
+                        .map(|field| field.name.clone())
+                        .ok_or("Spinner has no reflected Speed field")?;
+                    editor.apply(vec![json!({"cmd":"property.set","args":{"entity":entity,"path":format!("Spinner.{field}"),"value":script_reload::SPEED}})],"J10 fixture: known ECS Spinner speed",None)?;
+                    self.reload = Some(script_reload::Proof::new(
+                        editor,
+                        self.script.as_deref().ok_or("no Spinner source")?,
+                        &entity,
+                    )?);
+                    self.note.push_str(
+                        "; typed fixture sets Speed=30 before Play (not a native gesture)",
+                    );
+                }
+                Ok(true)
             }
             "stop-starting" => {
                 if first {
@@ -572,80 +627,61 @@ impl Journey {
             }
             "hot-reload" => {
                 if first {
-                    let logs = editor.action("logs", json!({"limit": 1}))?;
-                    self.log_cursor = logs["cursor"].as_u64().unwrap_or(0);
-                    let path = self.script.clone().ok_or("no script")?;
-                    let source = std::fs::read_to_string(&path)?;
-                    std::fs::write(
-                        &path,
-                        source.replace("Speed * tick.Dt", "(Speed + 240f) * tick.Dt"),
-                    )?;
-                    editor.action("editor.focus", json!({"panel": "console"}))?;
-                    self.note = "edited Spinner.cs while playing and saved".into();
-                    return Ok(false);
+                    editor.action("editor.focus", json!({"panel":"console"}))?;
                 }
-                let logs = editor.action(
-                    "logs",
-                    json!({"since": self.log_cursor, "group": false, "limit": 50}),
-                )?;
-                let reloaded = logs["entries"].as_array().into_iter().flatten().any(|e| {
-                    let text = e["diagnostic"]["message"]
-                        .as_str()
-                        .unwrap_or("")
-                        .to_lowercase();
-                    text.contains("reload") || text.contains("compil")
-                });
-                if reloaded && !self.note.contains("Console") {
-                    self.note.push_str("; the Console shows the reload");
-                }
-                Ok(reloaded && self.age > 30)
+                self.note = "Protocol proof: measure ECS baseline, commit typed source.replace, require structured in-place reload and 9x rotation per authority tick".into();
+                self.reload
+                    .as_mut()
+                    .ok_or("Spinner proof was not initialized")?
+                    .run(script_reload::Stage::Changed, editor)
             }
             "failure" => {
-                if first {
-                    let logs = editor.action("logs", json!({"limit": 1}))?;
-                    self.log_cursor = logs["cursor"].as_u64().unwrap_or(0);
-                    let path = self.script.clone().ok_or("no script")?;
-                    let source = std::fs::read_to_string(&path)?;
-                    // A missing semicolon: the hot reload fails to compile.
-                    std::fs::write(&path, source.replacen(';', "", 1))?;
-                    self.source = Some(source);
-                    self.note = "deleted a semicolon in Spinner.cs while playing".into();
-                    return Ok(false);
-                }
-                let errors = editor.action(
-                    "logs",
-                    json!({"since": self.log_cursor, "severity": "error", "group": false, "limit": 20}),
-                )?;
-                if errors["entries"].as_array().is_none_or(Vec::is_empty) {
+                let reload = self.reload.as_mut().ok_or("Spinner proof missing")?;
+                if !reload.run(script_reload::Stage::Broken, editor)? {
                     return Ok(false);
                 }
                 if !self.explained {
-                    self.explained = true;
                     editor.action("editor.layout.show", json!({"panel": "problems"}))?;
                     shell.rebuild(editor)?;
-                    let seq = shell
-                        .ui
-                        .nodes
-                        .iter()
-                        .filter_map(|n| n.element.id.strip_prefix("problem-"))
-                        .filter_map(|s| s.parse::<u64>().ok())
-                        .max()
-                        .ok_or("Problems shows nothing")?;
+                    let seq = reload
+                        .error_sequence()
+                        .ok_or("J10 compile error has no diagnostic sequence")?;
+                    let source = format!("problem-{seq}-go");
+                    if shell.shown_node(&source).is_none() {
+                        return Ok(false);
+                    }
+                    let mut clipboard = super::assets_verify::Clip::default();
+                    shell.click(&source, &mut clipboard)?;
+                    shell.dispatch(editor)?;
+                    if !shell
+                        .status_note
+                        .as_deref()
+                        .is_some_and(|note| note.contains("Spinner.cs:"))
+                    {
+                        return Err(
+                            "Problems source-line activation did not target Spinner.cs coordinates"
+                                .into(),
+                        );
+                    }
                     shell.run_command(
                         editor,
                         "problems.explain",
                         &Target::Text(seq.to_string()),
                     )?;
-                    self.note
-                        .push_str("; the compile error is in Problems, Why explains it");
+                    self.explained = true;
+                    self.note = "Typed invalid source produces a structured compile failure; real ECS retains last-good ticking; retained-input pointer activates its exact source line (external IDE suppressed offscreen), then registry Why explains it".into();
                 }
-                Ok(self.age > 30)
+                Ok(true)
+            }
+            "fix-script" => {
+                self.note = "Typed source.replace fixes Spinner; same-module structured error count returns to zero, ECS rate remains correct and the prior diagnostic stays in history".into();
+                self.reload
+                    .as_mut()
+                    .ok_or("Spinner proof missing")?
+                    .run(script_reload::Stage::Fixed, editor)
             }
             "stop" => {
                 if first {
-                    if let (Some(path), Some(source)) = (&self.script, self.source.take()) {
-                        std::fs::write(path, source)?;
-                    }
                     shell.run_command(editor, "play.stop", &Target::None)?;
                     editor.action("editor.focus", json!({"panel": "scene"}))?;
                     self.note = "fixed the script, stopped Play".into();
@@ -889,10 +925,17 @@ const STEPS: &[(&str, &str)] = &[
         "Play's first frames in the Game view match the camera preview",
     ),
     ("play", "Play inside the Game view, walking with W"),
-    ("hot-reload", "the edited script hot-reloads while playing"),
+    (
+        "hot-reload",
+        "typed source edit changes the real ECS rotation rate per fixed tick",
+    ),
     (
         "failure",
-        "a broken script: the compile error in Problems with its why",
+        "invalid source preserves last-good ECS ticking and shows its exact compile diagnostic",
+    ),
+    (
+        "fix-script",
+        "fixed source clears structured current module errors without deleting diagnostic history",
     ),
     ("stop", "the script fixed, Play stopped"),
     (

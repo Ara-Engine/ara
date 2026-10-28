@@ -39,6 +39,26 @@ pub(super) struct EditorWorkspace {
     pub asset: Option<String>,
     /// Folder to browse.
     pub folder: Option<String>,
+    /// Exact Assets query, including type filter tokens; navigation only.
+    pub asset_query: Option<String>,
+    /// Search recursively within the current folder instead of the whole project.
+    pub folder_only: Option<bool>,
+    /// Toggle a favourite project-relative storage path, or set `favouriteEnabled`.
+    pub favourite: Option<String>,
+    /// Whether `favourite` is a folder; false denotes a file.
+    pub favourite_folder: Option<bool>,
+    /// Explicit favourite membership; absent toggles the existing membership.
+    pub favourite_enabled: Option<bool>,
+    /// Open a stored favourite without changing scene/entity selection.
+    pub open_favourite: Option<String>,
+    /// Save the current Assets query/folder/scope under this name.
+    pub save_search: Option<String>,
+    /// Explicit saved entry for a scoped Restore operation; paired with `saveSearch`.
+    pub saved_search: Option<crate::state::SavedAssetSearch>,
+    /// Apply this saved query/folder/scope in one navigation transaction.
+    pub open_search: Option<String>,
+    /// Remove this saved entry while preserving the active browser query.
+    pub remove_search: Option<String>,
     /// Folder sidebar width in logical pixels (96–480).
     pub sidebar_width: Option<f32>,
     /// Toggle the expansion of one project-relative folder.

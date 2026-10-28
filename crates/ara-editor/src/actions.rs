@@ -466,11 +466,121 @@ impl EditorService {
             }
             "editor.workspace" => {
                 let p: EditorWorkspace = parse(params)?;
+                let open_assets = p.open_favourite.is_some() || p.open_search.is_some();
+                if let Some(query) = p.asset_query {
+                    if query.chars().count() > 4096 {
+                        return Err(vec![crate::invalid(
+                            "Use an Assets query up to 4096 characters",
+                        )]);
+                    }
+                    state.searches.insert("assets".into(), query);
+                }
+                if let Some(folder_only) = p.folder_only {
+                    state.asset_search_folder_only = folder_only;
+                }
                 if let Some(path) = p.asset {
                     state.asset_path = (!path.is_empty()).then_some(path);
                 }
                 if let Some(folder) = p.folder {
                     state.asset_folder = folder;
+                }
+                if let Some(path) = p.favourite {
+                    let folder = p.favourite_folder.unwrap_or(false);
+                    if !crate::state::valid_asset_bookmark_path(&path, folder) {
+                        return Err(vec![crate::invalid(
+                            "Choose a project-relative storage path for the favourite",
+                        )]);
+                    }
+                    let enabled = p
+                        .favourite_enabled
+                        .unwrap_or_else(|| !state.asset_favourites.contains_key(&path));
+                    if enabled {
+                        state.asset_favourites.insert(
+                            path,
+                            if folder {
+                                crate::state::AssetFavouriteKind::Folder
+                            } else {
+                                crate::state::AssetFavouriteKind::Asset
+                            },
+                        );
+                    } else {
+                        state.asset_favourites.remove(&path);
+                    }
+                }
+                if let Some(name) = p.save_search {
+                    let name = name.trim();
+                    if !crate::state::valid_asset_search_name(name) {
+                        return Err(vec![crate::invalid(
+                            "Use a saved search name from 1 to 80 characters",
+                        )]);
+                    }
+                    let search = p
+                        .saved_search
+                        .unwrap_or_else(|| crate::state::SavedAssetSearch {
+                            query: state.searches.get("assets").cloned().unwrap_or_default(),
+                            folder: state.asset_folder.clone(),
+                            folder_only: state.asset_search_folder_only,
+                        });
+                    if !crate::state::valid_asset_bookmark_path(&search.folder, true)
+                        || search.query.chars().count() > 4096
+                    {
+                        return Err(vec![crate::invalid(
+                            "Choose a project-relative search folder and a query up to 4096 characters",
+                        )]);
+                    }
+                    state.asset_saved_searches.insert(name.to_owned(), search);
+                } else if p.saved_search.is_some() {
+                    return Err(vec![crate::invalid(
+                        "Pair an explicit savedSearch with its saveSearch name",
+                    )]);
+                }
+                if let Some(name) = p.remove_search {
+                    if state.asset_saved_searches.remove(&name).is_none() {
+                        return Err(vec![crate::invalid(
+                            "That saved Assets search no longer exists",
+                        )]);
+                    }
+                }
+                if let Some(path) = p.open_favourite {
+                    let kind =
+                        state.asset_favourites.get(&path).copied().ok_or_else(|| {
+                            vec![crate::invalid("That favourite no longer exists")]
+                        })?;
+                    state.searches.insert("assets".into(), String::new());
+                    match kind {
+                        crate::state::AssetFavouriteKind::Folder => {
+                            state.asset_folder = path;
+                            state.asset_path = None;
+                        }
+                        crate::state::AssetFavouriteKind::Asset => {
+                            state.asset_folder = path
+                                .rsplit_once('/')
+                                .map_or("", |(folder, _)| folder)
+                                .into();
+                            state.asset_path = Some(path);
+                        }
+                    }
+                }
+                if let Some(name) = p.open_search {
+                    let search = state.asset_saved_searches.get(&name).ok_or_else(|| {
+                        vec![crate::invalid("That saved Assets search no longer exists")]
+                    })?;
+                    state.asset_folder = search.folder.clone();
+                    state.asset_search_folder_only = search.folder_only;
+                    state.searches.insert("assets".into(), search.query.clone());
+                }
+                if open_assets {
+                    let mut dock = state.dock().map_err(ui_error)?;
+                    crate::state::show_panel(&mut dock, "assets", None).map_err(ui_error)?;
+                    state.set_dock(&dock);
+                    state.focus = "assets".into();
+                    if state
+                        .maximized
+                        .as_deref()
+                        .is_some_and(|panel| panel != "assets")
+                    {
+                        state.maximized = None;
+                    }
                 }
                 if let Some(width) = p.sidebar_width {
                     state.asset_sidebar_width = width.clamp(96., 480.);

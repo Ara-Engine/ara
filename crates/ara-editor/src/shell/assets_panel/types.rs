@@ -52,7 +52,7 @@ impl Shell {
         if !options.iter().any(|(value, _)| value == &current) {
             options.push((current.clone(), "Custom type filter".into()));
         }
-        out.push_str("<panel id='asset-types' class='row' name='enum' style='height:auto;min-height:30px;flex-shrink:0;flex-wrap:wrap;gap:8px;padding:4px'><text id='asset-type-label' class='caption' text='Type' /><panel id='asset-type-value' style='width:180px;max-width:100%;min-width:0px'>");
+        out.push_str("<panel id='asset-types' class='row' name='enum' style='height:auto;min-height:30px;flex-shrink:0;flex-wrap:wrap;gap:8px;padding:4px'><text id='asset-type-label' class='caption' text='Type' /><panel id='asset-type-value' style='flex-basis:0px;flex-grow:1;min-width:0px;flex-shrink:1'>");
         self.choice_button(
             "asset-type-select",
             "Filter asset type",
@@ -63,7 +63,9 @@ impl Shell {
             },
             out,
         );
-        out.push_str("</panel></panel>");
+        out.push_str("</panel>");
+        self.asset_bookmarks_select(editor, out);
+        out.push_str("</panel>");
     }
     /// Update the navigation search through its ordinary typed command.
     pub(in crate::shell) fn choose_asset_types(

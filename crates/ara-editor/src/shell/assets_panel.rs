@@ -30,6 +30,10 @@ impl Shell {
                 &editor.state.asset_folder,
                 editor.state.asset_sidebar_width.to_bits(),
                 &editor.state.asset_expanded_folders,
+                &editor.state.asset_favourites,
+                &editor.state.asset_saved_searches,
+                editor.state.asset_search_folder_only,
+                self.assets_favourites.revision,
             ),
             editor.state.searches.get("assets"),
             editor.state.asset_grid,
@@ -105,6 +109,7 @@ impl Shell {
             out.push_str(&format!("<button id='{id}' class='{} icon-button' label='{label}' description='{label} view' action='Dispatch'>{}</button>",if on{"selected"}else{"ghost"},if on{icons::icon_in(id,icon,"on-selection")}else{icons::icon(id,icon)}));
         }
         self.bind_command("assets-refresh", "assets.refresh", commands::Target::None);
+        self.asset_favourites_toolbar(editor, out);
         out.push_str(&format!("<button id='assets-refresh' class='ghost icon-button' label='Refresh Assets' description='Refresh the semantic browser index; retry a failed or pending index scan' action='Dispatch'>{}</button>", icons::icon("assets-refresh", "refresh-cw")));
         let side = if narrow {
             0.
@@ -139,7 +144,8 @@ impl Shell {
             .get("assets")
             .map(String::as_str)
             .unwrap_or("");
-        // The current folder's subfolders, then its files; a search looks everywhere.
+        // Ordinary browsing lists direct children; queries can search the project
+        // or the current folder subtree according to the explicit scope toggle.
         let in_folder = |path: &str| {
             let rest = if editor.state.asset_folder.is_empty() {
                 Some(path)
@@ -193,7 +199,12 @@ impl Shell {
                     a.kind != "folder"
                         && (self.assets_show_all || !is_noise(a))
                         && matches_query(a, query)
-                        && (searching || in_folder(&a.path))
+                        && assets_favourites::in_scope(
+                            &a.path,
+                            &editor.state.asset_folder,
+                            searching,
+                            editor.state.asset_search_folder_only,
+                        )
                 })
                 .cloned(),
         );

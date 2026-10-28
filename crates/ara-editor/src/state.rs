@@ -255,6 +255,41 @@ impl Camera {
             && self.spec().resolve([1, 1]).is_ok()
     }
 }
+/// The kind of browser location retained by a project-local favourite.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum AssetFavouriteKind {
+    /// A project-relative storage folder, including the empty project root.
+    Folder,
+    /// A project-relative storage file inspected by the Assets browser.
+    Asset,
+}
+
+/// A named Assets query, including its type tokens and folder search scope.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Schema)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SavedAssetSearch {
+    /// Exact browser query; type filters remain ordinary `type:` query tokens.
+    pub query: String,
+    /// Project-relative storage folder captured when the search was saved.
+    pub folder: String,
+    /// Search recursively within the saved folder instead of the whole project.
+    pub folder_only: bool,
+}
+
+pub(crate) fn valid_asset_bookmark_path(path: &str, folder: bool) -> bool {
+    (folder && path.is_empty())
+        || (!path.is_empty()
+            && path.len() <= 4096
+            && !path.contains(['\\', ':'])
+            && !path.chars().any(char::is_control)
+            && path.split('/').all(|part| !matches!(part, "" | "." | "..")))
+}
+
+pub(crate) fn valid_asset_search_name(name: &str) -> bool {
+    !name.trim().is_empty() && name.chars().count() <= 80 && !name.chars().any(char::is_control)
+}
+
 /// Serializable editor navigation and dock state.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -349,6 +384,12 @@ pub struct EditorState {
     pub asset_sidebar_width: f32,
     /// Explicitly expanded asset folders; all other folders start closed.
     pub asset_expanded_folders: BTreeSet<String>,
+    /// Favourite storage paths and their kind, persisted with the project layout.
+    pub asset_favourites: BTreeMap<String, AssetFavouriteKind>,
+    /// Named query/type/folder scopes, persisted with the project layout.
+    pub asset_saved_searches: BTreeMap<String, SavedAssetSearch>,
+    /// Restrict nonempty Assets queries to the current folder and descendants.
+    pub asset_search_folder_only: bool,
     /// Show thumbnail cards instead of compact asset rows.
     pub asset_grid: bool,
     /// Active material, effect or animation document identity.
@@ -437,6 +478,9 @@ impl Default for EditorState {
             asset_folder: String::new(),
             asset_sidebar_width: 168.,
             asset_expanded_folders: BTreeSet::new(),
+            asset_favourites: BTreeMap::new(),
+            asset_saved_searches: BTreeMap::new(),
+            asset_search_folder_only: false,
             asset_grid: true,
             resource: None,
             canvas: Default::default(),
@@ -488,6 +532,9 @@ impl EditorState {
             || self.asset_folder != other.asset_folder
             || self.asset_sidebar_width != other.asset_sidebar_width
             || self.asset_expanded_folders != other.asset_expanded_folders
+            || self.asset_favourites != other.asset_favourites
+            || self.asset_saved_searches != other.asset_saved_searches
+            || self.asset_search_folder_only != other.asset_search_folder_only
             || self.asset_grid != other.asset_grid
             || self.resource != other.resource
             || self.canvas_add != other.canvas_add
@@ -933,6 +980,7 @@ impl Navigation {
                 {
                     state.asset_expanded_folders = folders;
                 }
+                layout_file::restore_asset_bookmarks(&saved, &mut state);
             }
             if let Ok((layout, migrated)) = restore_layout(&text) {
                 layout_migrated = migrated;
@@ -979,6 +1027,9 @@ impl Navigation {
         let layout_changed = candidate.layout != self.state.layout
             || candidate.asset_sidebar_width != self.state.asset_sidebar_width
             || candidate.asset_expanded_folders != self.state.asset_expanded_folders
+            || candidate.asset_favourites != self.state.asset_favourites
+            || candidate.asset_saved_searches != self.state.asset_saved_searches
+            || candidate.asset_search_folder_only != self.state.asset_search_folder_only
             || candidate.floating != self.state.floating
             || candidate.collapsed_areas != self.state.collapsed_areas;
         let value =

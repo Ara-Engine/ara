@@ -48,6 +48,19 @@ use Item::{Command as C, Separator as S, Sub};
 /// Asset commands, under File › Assets.
 const ASSETS: &[Item] = &[
     Sub(
+        "Bookmarks",
+        &[
+            C("assets.favourite.toggle"),
+            C("assets.favourite.open"),
+            S,
+            C("assets.search.save"),
+            C("assets.search.apply"),
+            C("assets.search.remove"),
+            C("assets.search.restore"),
+            C("assets.search.scope"),
+        ],
+    ),
+    Sub(
         "Create",
         &[
             C("assets.create.folder"),
@@ -660,6 +673,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
         ],
         Context::Asset => &[
             Sub("Create", ASSET_CREATE),
+            C("assets.favourite.toggle"),
             C("assets.refresh"),
             C("assets.open_ide"),
             C("assets.open"),
@@ -674,6 +688,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("assets.delete"),
         ],
         Context::Folder => &[
+            C("assets.favourite.toggle"),
             C("assets.refresh"),
             C("assets.open"),
             C("assets.reveal"),
@@ -687,6 +702,10 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
         ],
         Context::Assets => &[
             Sub("Create", ASSET_CREATE),
+            C("assets.favourite.toggle"),
+            C("assets.favourite.open"),
+            C("assets.search.save"),
+            C("assets.search.apply"),
             C("assets.refresh"),
             C("assets.import"),
             C("assets.reveal"),

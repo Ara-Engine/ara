@@ -993,6 +993,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 }
             }
             dirty |= shell.poll_dialogs(&mut editor)?;
+            dirty |= shell.poll_asset_favourites(&mut editor)?;
             if let Some(text) = shell.take_clipboard() {
                 use ara_ui_text::Clipboard;
                 let destination: &mut dyn Clipboard = if let Some(check) =

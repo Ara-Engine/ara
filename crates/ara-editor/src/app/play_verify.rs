@@ -6,6 +6,7 @@ use std::{
     path::Path,
 };
 mod configuration;
+mod dedicated;
 mod waits;
 const LIGHT: &str = "e_playprooflight";
 const ACTOR: &str = "e_playproofactor";
@@ -16,8 +17,15 @@ enum Act {
     MultiShared,
     Control,
     Runtime,
+    Dedicated,
 }
-const ACTS: &[Act] = &[Act::MultiShared, Act::Multi, Act::Control, Act::Runtime];
+const ACTS: &[Act] = &[
+    Act::MultiShared,
+    Act::Multi,
+    Act::Control,
+    Act::Runtime,
+    Act::Dedicated,
+];
 impl Act {
     fn label(self) -> &'static str {
         match self {
@@ -25,6 +33,7 @@ impl Act {
             Self::MultiShared => "shared-process-views-input",
             Self::Control => "simulate-spectator-possess-eject",
             Self::Runtime => "runtime-patch-keep-undo",
+            Self::Dedicated => "dedicated-three-clients-native-input-link-isolation",
         }
     }
     fn finish(self) -> u32 {
@@ -32,6 +41,7 @@ impl Act {
             Self::Multi | Self::MultiShared => 24,
             Self::Control => 36,
             Self::Runtime => 34,
+            Self::Dedicated => 30,
         }
     }
     fn multi(self) -> bool {
@@ -223,7 +233,7 @@ impl PlayCheck {
         &mut self,
         editor: &mut Editor,
         shell: &mut Shell,
-        _window: &Window,
+        window: &Window,
         scale: f32,
         events: &mut Vec<(u32, Event)>,
     ) -> ara_ui::Result<()> {
@@ -231,7 +241,12 @@ impl PlayCheck {
             return Ok(());
         };
         self.waiting = false;
-        if let Err(error) = self.input(act, editor, shell, scale, events) {
+        let input = if act == Act::Dedicated {
+            self.dedicated_input(editor, shell, window, scale, events)
+        } else {
+            self.input(act, editor, shell, scale, events)
+        };
+        if let Err(error) = input {
             if let Some((job, _)) = self.probe.take() {
                 let _ = editor.action("jobs.cancel", json!({"job":job}));
             }
@@ -858,6 +873,9 @@ impl PlayCheck {
             return Ok(());
         }
         let act = ACTS[self.index];
+        if act == Act::Dedicated {
+            return self.dedicated_end(editor, shell, gpu);
+        }
         let stage = if act.multi() {
             match self.age {
                 3 => Some("before"),

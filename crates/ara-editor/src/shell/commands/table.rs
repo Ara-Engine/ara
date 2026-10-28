@@ -1063,6 +1063,16 @@ fn build() -> Vec<Spec> {
     ]);
     // Assets
     c.extend([
+        cmd("assets.favourite.toggle", "Favourite Asset or Folder", "star", "", "Toggle a project-local bookmark for this asset or folder.", |s,e,t|s.toggle_asset_favourite(e,t)).when(|c| {
+            let path=match c.target {Target::Asset(path)|Target::Folder(path)|Target::Text(path)=>path.as_str(),_=>c.state.asset_path.as_deref().unwrap_or(&c.state.asset_folder)};
+            Avail::Checked(c.state.asset_favourites.contains_key(path))
+        }),
+        cmd("assets.favourite.open", "Open Favourite…", "star", "", "Search saved asset and folder bookmarks.", |s,e,t|s.open_asset_favourite(e,t)).when(|c|if c.state.asset_favourites.is_empty(){Avail::Blocked("Favourite an asset or folder first".into())}else{Avail::Ready}),
+        cmd("assets.search.save", "Save Assets Search…", "bookmark", "", "Name the current query, type filters and folder scope.", |s,e,t|s.save_asset_search(e,t)),
+        cmd("assets.search.apply", "Open Saved Assets Search…", "search", "", "Choose a named query with its saved folder scope and type filters.", |s,e,t|s.use_asset_search(e,t,false)).when(|c|if c.state.asset_saved_searches.is_empty(){Avail::Blocked("Save an Assets search first".into())}else{Avail::Ready}),
+        cmd("assets.search.remove", "Remove Saved Assets Search…", "trash", "", "Remove a named query; Restore Removed Search reverses only that removal.", |s,e,t|s.use_asset_search(e,t,true)).when(|c|if c.state.asset_saved_searches.is_empty(){Avail::Blocked("There are no saved Assets searches".into())}else{Avail::Ready}),
+        cmd("assets.search.restore", "Restore Removed Assets Search", "undo-2", "", "Restore the last query removed during this editor session; current folder, query and content Undo stay intact.", |s,e,_|s.restore_asset_search(e)),
+        cmd("assets.search.scope", "Search Within Current Folder", "folder", "", "Limit a non-empty Assets query to the current folder and its descendants.", |s,e,t|s.set_asset_search_scope(e,t)).when(|c|Avail::Checked(c.state.asset_search_folder_only)),
         cmd("assets.create.folder", "Folder", "folder", "", "Create an empty authored folder as one undoable transaction.", |s, e, t| s.create_asset_folder(e,t)),
         cmd("assets.create.scene", "Scene", "box", "", "Create an empty scene.", |s, e, t| {s.select_asset_folder(e,t)?;s.new_scene(e)}),
         cmd("assets.create.material", "Material", "circle", "", "Create a material graph and open it.", |s, e, t| {s.select_asset_folder(e,t)?;s.create_resource(e, "material")}),

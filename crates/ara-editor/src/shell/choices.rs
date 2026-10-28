@@ -26,6 +26,7 @@ pub(crate) enum Destination {
     PlayClient,
     PlayField(play_controls::FieldTarget),
     AssetType,
+    AssetBookmark,
     HierarchySavedFilter,
     AnimationOperation {
         doc: String,
@@ -54,6 +55,17 @@ pub(crate) struct Controls {
 }
 
 impl Shell {
+    /// Open an already mounted Select on its owning surface, then mount its popup.
+    pub(super) fn open_choice(&mut self, editor: &mut Editor, id: &str) -> ara_ui::Result<()> {
+        let key = (self.current.clone(), id.to_owned());
+        self.choice_controls
+            .controls
+            .get_mut(&key)
+            .ok_or("The requested choice is not mounted on this surface")?
+            .select
+            .open("");
+        self.rebuild(editor)
+    }
     pub(super) fn choice_button(
         &mut self,
         id: &str,
@@ -113,6 +125,7 @@ impl Shell {
                 self.use_hierarchy_filter(editor, &Target::Text(name.into()), false)?;
             }
             Destination::AssetType => self.choose_asset_types(editor, value)?,
+            Destination::AssetBookmark => self.choose_asset_bookmark(editor, value)?,
             Destination::AnimationOperation { doc, record, key } => {
                 self.choose_pose_operation(editor, doc, record, key, value)?
             }
