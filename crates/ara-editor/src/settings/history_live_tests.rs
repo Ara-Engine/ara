@@ -374,6 +374,119 @@ fn recorded_same_value_policy_ops_override_local_values_only_from_the_effective_
     assert_eq!(editor.host.store().revision(), revision);
 }
 
+#[test]
+fn late_local_policy_watch_cannot_overwrite_a_later_recorded_agent_round_trip() {
+    let project = Project::new();
+    let mut editor = crate::Editor::open_config(
+        &project.0,
+        None,
+        ara_host::HostConfig {
+            watch_every: std::time::Duration::ZERO,
+            debounce: std::time::Duration::from_secs(3600),
+            scan_every: std::time::Duration::from_secs(3600),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let effective = |editor: &crate::Editor| {
+        policy(editor.host.store().workspace(), "settings")
+            .and_then(|settings| settings.get("build.profile"))
+            .cloned()
+    };
+    assert_eq!(effective(&editor), Some(json!("initial")));
+    editor
+        .action(
+            "editor.settings.set",
+            json!({"key":"build.profile","value":"new human private value"}),
+        )
+        .unwrap();
+    let persisted: Value =
+        serde_json::from_str(&std::fs::read_to_string(project.0.join(PREFERENCES)).unwrap())
+            .unwrap();
+    assert_eq!(
+        persisted["settings"]["build.profile"],
+        "new human private value"
+    );
+    assert_eq!(
+        effective(&editor),
+        Some(json!("initial")),
+        "The local save must still be waiting for its first watch boundary"
+    );
+    assert_eq!(
+        editor.state.settings["build.profile"],
+        "new human private value"
+    );
+
+    let session = agent(&mut editor);
+    let before = editor.host.store().revision();
+    apply(
+        &mut editor,
+        &session,
+        &[
+            (
+                "settings.settings[build.profile]",
+                json!("intermediate agent value"),
+            ),
+            ("settings.settings[build.profile]", json!("initial")),
+        ],
+    );
+    let roundtrip_revision = editor.host.store().revision();
+    assert!(roundtrip_revision > before);
+    assert!(
+        editor
+            .host
+            .store()
+            .since(before)
+            .iter()
+            .flat_map(|transaction| &transaction.ops)
+            .any(|op| matches!(op,ara_doc::Op::Set{value,prev,..} if value!=prev)),
+        "The fixture requires recorded agent intent, not an elided RPC"
+    );
+    assert_eq!(effective(&editor), Some(json!("initial")));
+
+    // A service read reconciles the committed Ops without pumping the Host watcher.
+    let settings = editor.action("editor.settings", json!({})).unwrap();
+    let profile = settings["settings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|setting| setting["key"] == "build.profile")
+        .unwrap();
+    assert_eq!(profile["value"], "initial");
+    assert_eq!(editor.state.settings["build.profile"], "initial");
+    assert_eq!(editor.host.store().revision(), roundtrip_revision);
+    assert_eq!(
+        serde_json::from_str::<Value>(
+            &std::fs::read_to_string(project.0.join(PREFERENCES)).unwrap()
+        )
+        .unwrap()["settings"]["build.profile"],
+        "new human private value",
+        "A read must not rewrite the queued old local policy save"
+    );
+
+    // Zero-watch synchronously checks the real file thread before service ticks.
+    // No sleeps, retry loops or explicit 'keep disk' authoring changes are involved.
+    editor.tick();
+    assert_eq!(
+        effective(&editor),
+        Some(json!("initial")),
+        "A late observation of the earlier local save must not replace later agent intent; transactions after the roundtrip: {:?}",
+        editor.host.store().since(roundtrip_revision)
+    );
+    assert_eq!(editor.state.settings["build.profile"], "initial");
+    assert!(
+        editor
+            .host
+            .store()
+            .since(roundtrip_revision)
+            .iter()
+            .flat_map(|transaction| &transaction.ops)
+            .all(|op| op.doc().as_str() != PREFERENCES_ID),
+        "The delayed local-save observation must not invent another canonical policy mutation: {:?}",
+        editor.host.store().since(roundtrip_revision)
+    );
+}
+
 fn workspace(preferences: Option<Value>) -> Workspace {
     let mut workspace = Workspace::default();
     for (path, id, value) in [

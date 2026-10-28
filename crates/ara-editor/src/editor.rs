@@ -100,6 +100,15 @@ impl Editor {
         root: &Path,
         user_settings: Option<std::path::PathBuf>,
     ) -> anyhow::Result<Self> {
+        Self::open_config(root, user_settings, HostConfig::default())
+    }
+    /// Internal construction seam for deterministic authority/file-watch fixtures.
+    /// Public entry points retain the default Host persistence and watch policy.
+    pub(crate) fn open_config(
+        root: &Path,
+        user_settings: Option<std::path::PathBuf>,
+        host_config: HostConfig,
+    ) -> anyhow::Result<Self> {
         // One schema world: the editor validates exactly what the player runs.
         let mut project =
             ara_play_host::open_project(root).map_err(|d| anyhow::anyhow!(d.to_string()))?;
@@ -120,8 +129,8 @@ impl Editor {
         if let Some(d) = project.db.verify().into_iter().find(|d| d.is_error()) {
             return Err(anyhow::anyhow!(d.to_string()));
         }
-        let mut host = Host::open(project, HostConfig::default())
-            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        let mut host =
+            Host::open(project, host_config).map_err(|d| anyhow::anyhow!(d.to_string()))?;
         crate::asset_service::register(&mut host).map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let (asset_changed, asset_updates) = mpsc::channel();
         host.register(Box::new(crate::asset_tools::AssetService::new(
