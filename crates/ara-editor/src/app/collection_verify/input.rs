@@ -48,7 +48,7 @@ impl CollectionCheck {
                 if rect.w < 2. || rect.h < 2. {
                     return Err("Native collection source grip is clipped".into());
                 }
-                native::motion(window, proof::centre(rect), scale, events)?;
+                self.drag_motion(shell, window, proof::centre(rect), scale, events)?;
                 native::button(window, true, events)?;
             }
             2 => {
@@ -62,7 +62,7 @@ impl CollectionCheck {
                     .ok_or("Native captured collection is clipped")?;
                 self.start_offset = proof::offset(shell, act);
                 self.edge = [rect.x + rect.w * 0.6, rect.y + rect.h + 8.];
-                native::motion(window, self.edge, scale, events)?;
+                self.drag_motion(shell, window, self.edge, scale, events)?;
             }
             3 => {
                 if proof::row(shell, act, 100, true).is_none() {
@@ -96,7 +96,8 @@ impl CollectionCheck {
             5 if act.drag() => {
                 let row = proof::row(shell, act, 100, true)
                     .ok_or("Native drag destination item100 is no longer visible")?;
-                native::motion(
+                self.drag_motion(
+                    shell,
                     window,
                     [row.x + row.w * 0.6, row.y + row.h - 1.],
                     scale,
@@ -118,5 +119,26 @@ impl CollectionCheck {
             _ => {}
         }
         Ok(())
+    }
+
+    /// Raw SDL leaves the OS cursor untouched; keep its virtual desktop point
+    /// through held ages and release, as the native cross-window drag router expects.
+    fn drag_motion(
+        &mut self,
+        shell: &mut Shell,
+        window: &Window,
+        point: [f32; 2],
+        scale: f32,
+        events: &mut Vec<(u32, Event)>,
+    ) -> ara_ui::Result<()> {
+        if !scale.is_finite() || scale <= 0. || point.iter().any(|value| !value.is_finite()) {
+            return Err("Native collection drag coordinates must be finite and scaled".into());
+        }
+        let rect = window.rect();
+        shell.desktop_pointer = Some([
+            rect[0] as f32 + point[0] / scale,
+            rect[1] as f32 + point[1] / scale,
+        ]);
+        native::motion(window, point, scale, events)
     }
 }

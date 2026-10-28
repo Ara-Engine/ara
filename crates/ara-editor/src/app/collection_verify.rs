@@ -151,6 +151,7 @@ impl CollectionCheck {
         self.waiting = false;
         self.input_scale = scale;
         if self.index >= ACTS.len() {
+            shell.desktop_pointer = None;
             editor.action(
                 "editor.search",
                 json!({"panel":"inspector","query":self.search}),
