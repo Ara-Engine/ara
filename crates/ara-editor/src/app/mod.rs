@@ -4,6 +4,7 @@ mod assets_verify;
 mod boundary_verify;
 mod capture;
 mod chrome_verify;
+mod collection_verify;
 mod content_drags;
 mod controller;
 mod cursors;
@@ -398,6 +399,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     let mut asset_ops_check = None;
     let mut selection_check = None;
     let mut hierarchy_check = None;
+    let mut collection_check = None;
     let mut snapping_check = None;
     let mut input_check = None;
     let mut boundary_check = None;
@@ -647,6 +649,20 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if snapping_check
                 .as_ref()
                 .is_some_and(snap_verify::SnapCheck::finished)
+                && collection_check.is_none()
+            {
+                collection_check = Some(collection_verify::CollectionCheck::new(
+                    &mut editor,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut collection_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+            }
+            if collection_check
+                .as_ref()
+                .is_some_and(collection_verify::CollectionCheck::finished)
                 && input_check.is_none()
             {
                 input_check = Some(input_verify::InputCheck::new(&options.output));
@@ -1944,6 +1960,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if let Some(check) = &mut snapping_check {
                 check.end(&editor, &mut shell, &mut gpu, &floats)?;
             }
+            if let Some(check) = &mut collection_check {
+                check.end(&editor, &mut shell, &mut gpu)?;
+            }
             if let Some(check) = &mut input_check {
                 check.end(
                     &editor,
@@ -2115,6 +2134,17 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if !check.finished() || !check.failures().is_empty() {
                 return Err(format!(
                     "Native hierarchy workflow journey failed: {}",
+                    check.failures().join(", ")
+                )
+                .into());
+            }
+            let check = collection_check
+                .as_ref()
+                .ok_or("The collection journey did not start")?;
+            check.write()?;
+            if !check.finished() || !check.failures().is_empty() {
+                return Err(format!(
+                    "Native collection journey failed: {}",
                     check.failures().join(", ")
                 )
                 .into());

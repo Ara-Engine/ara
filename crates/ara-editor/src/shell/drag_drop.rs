@@ -109,6 +109,31 @@ const NO_GROUND: &str = "Point at a surface or the ground plane to place this as
 const NO_MATERIAL_TARGET: &str = "Drop this material onto a rendered mesh";
 
 impl Shell {
+    /// Resolve a mounted collection row or its grip by model identity, independently
+    /// of recycled indices and escaped control IDs. This does not reveal or edit it.
+    pub(crate) fn collection_item_node(
+        &self,
+        field: &str,
+        pointer: &str,
+        key: &ara_ui::collection::ItemKey,
+        grip: bool,
+    ) -> Option<usize> {
+        self.ui.paint_order.iter().copied().find(|index| {
+            let node = &self.ui.nodes[*index];
+            let control = if grip {
+                node.element.id.starts_with("collection-grip-")
+            } else {
+                node.element.id.starts_with("nest-")
+                    && node.element.attrs.get("class").is_some_and(|classes| {
+                        classes.split_whitespace().any(|class| class == "prop-row")
+                    })
+            };
+            control && self.ui.shown(*index) && self.bindings.get(&stable_id(&node.element.id))
+                .is_some_and(|binding| matches!(binding, Binding::Collection(action)
+                    if action.field == field && action.pointer == pointer
+                    && matches!(&action.intent, collection_adapter::Intent::Select(selected) if selected == key)))
+        })
+    }
     /// A content source is held, including the click phase before the shared threshold.
     pub fn content_pending(&self) -> bool {
         matches!(self.drag, Some(Drag::Content(_)))
@@ -241,6 +266,11 @@ impl Shell {
             return Ok(false);
         }
         let result = (|| -> ara_ui::Result<()> {
+            let collection_scrolling = if let Payload::Collection(source) = drag.session.payload() {
+                self.scroll_drag_collection(source, seconds)?
+            } else {
+                false
+            };
             for id in [
                 "hierarchy-rows",
                 "asset-rows",
@@ -248,6 +278,9 @@ impl Shell {
                 "asset-folders",
                 "inspector-scroll",
             ] {
+                if collection_scrolling {
+                    break;
+                }
                 let Some(i) = self.shown_node(id) else {
                     continue;
                 };
@@ -298,6 +331,44 @@ impl Shell {
         self.drag = Some(Drag::Content(drag));
         self.invalidate_content_drag();
         result.map(|()| true)
+    }
+    /// Scroll the captured collection rather than its enclosing Inspector. A small
+    /// vertical overshoot keeps a held edge drag usable past the final mounted row;
+    /// moving elsewhere or leaving this surface never scrolls a hidden collection.
+    fn scroll_drag_collection(
+        &mut self,
+        source: &collection_adapter::Action,
+        seconds: f32,
+    ) -> ara_ui::Result<bool> {
+        let id = collection_adapter::id(&source.field, &source.pointer);
+        let Some(index) = self.shown_node(&id) else {
+            return Ok(false);
+        };
+        let node = &self.ui.nodes[index];
+        let rect = node.rect.intersection(node.clip);
+        let [x, y] = self.pointer;
+        if ![rect.x, rect.y, rect.w, rect.h, x, y]
+            .into_iter()
+            .all(f32::is_finite)
+            || rect.w <= 0.
+            || rect.h < 1.
+            || x < rect.x
+            || x >= rect.x + rect.w
+            || y < rect.y - 24.
+            || y >= rect.y + rect.h + 24.
+        {
+            return Ok(false);
+        }
+        let point = [x, y.clamp(rect.y + 0.01, rect.y + rect.h - 0.01)];
+        let delta = kit::auto_scroll(rect, point, seconds)[1];
+        if delta != 0.
+            && let Some(offset) = self.ui.scroll_position(index)
+        {
+            self.ui.scroll_to(index, [offset[0], offset[1] + delta])?;
+        }
+        // dispatch synchronizes this virtual collection's window and rebuilds its
+        // rows before the next target query. Do not consume that change here.
+        Ok(true)
     }
     /// Replace a ground-plane fallback with a precise surface hit supplied by the viewport.
     pub fn content_surface_hit(&mut self, position: [f32; 3]) {

@@ -4,6 +4,272 @@ use super::*;
 use ara_ui::input::InputEvent;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+fn collection_value(editor: &Editor) -> Value {
+    json!(
+        editor
+            .host
+            .store()
+            .workspace()
+            .doc(&editor.state.doc)
+            .unwrap()
+            .record(IDS[0])
+            .unwrap()
+    )["MeshRenderer"]["emissiveMaterials"]
+        .clone()
+}
+
+#[test]
+fn held_collection_edge_scroll_reaches_item_one_hundred_and_reorders_once() {
+    let (mut editor, mut shell) = open();
+    let original: Vec<_> = (0..160).map(|index| format!("item{index}")).collect();
+    editor.apply(vec![json!({"cmd":"property.set","args":{"entity":IDS[0],"path":"MeshRenderer.emissiveMaterials","value":original}})], "Populate collection", None).unwrap();
+    editor
+        .action("editor.select", json!({"entities":[IDS[0]]}))
+        .unwrap();
+    editor
+        .action("editor.view", json!({"maximized":"inspector"}))
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    shell.frame().unwrap();
+    let scroll = collection_adapter::id("MeshRenderer.emissiveMaterials", "");
+    let scroll_index = shell.ui.find(&scroll).unwrap();
+    shell.ui.scroll_into_view(scroll_index).unwrap();
+    shell.frame().unwrap();
+    let grip = shell
+        .shown_node("collection-grip-MeshRenderer-emissiveMaterials-0")
+        .unwrap();
+    let start = centre(
+        shell.ui.nodes[grip]
+            .rect
+            .intersection(shell.ui.nodes[grip].clip),
+    );
+    let viewport = shell.ui.nodes[scroll_index]
+        .rect
+        .intersection(shell.ui.nodes[scroll_index].clip);
+    assert!(viewport.h >= 48.);
+    assert!(
+        shell
+            .shown_node("nest-MeshRenderer-emissiveMaterials-100")
+            .is_none()
+    );
+    let revision = editor.host.store().revision();
+    let mut clipboard = Clipboard::default();
+    shell.pointer = start;
+    shell
+        .event(InputEvent::PointerDown(start), &mut clipboard)
+        .unwrap();
+    shell.begin_drag();
+    let edge = [viewport.x + viewport.w * 0.6, viewport.y + viewport.h + 8.];
+    shell.pointer = edge;
+    shell
+        .event(InputEvent::PointerMove(edge), &mut clipboard)
+        .unwrap();
+    let mut target = None;
+    let mut max_pool = 0;
+    for _ in 0..120 {
+        // No more PointerMove events: the held edge itself must keep scrolling.
+        shell.content_drag_over(&editor, 0.1).unwrap();
+        shell.dispatch(&mut editor).unwrap();
+        shell.frame().unwrap();
+        assert_eq!(shell.pointer, edge);
+        assert_eq!(editor.host.store().revision(), revision);
+        max_pool = max_pool.max(
+            shell
+                .ui
+                .nodes
+                .iter()
+                .filter(|node| {
+                    node.element
+                        .id
+                        .starts_with("nest-MeshRenderer-emissiveMaterials-")
+                        && !node.element.id["nest-MeshRenderer-emissiveMaterials-".len()..]
+                            .contains('-')
+                })
+                .count(),
+        );
+        if let Some(index) = shell.shown_node("nest-MeshRenderer-emissiveMaterials-100") {
+            let row = shell.ui.nodes[index].rect;
+            let visible = row.intersection(shell.ui.nodes[index].clip);
+            if visible.h >= row.h - 1. {
+                target = Some([row.x + row.w * 0.6, row.y + row.h - 1.]);
+                break;
+            }
+        }
+    }
+    assert!(max_pool <= 14, "bounded collection pool: {max_pool}");
+    let target = target.expect("held native-style edge scroll reaches item 100");
+    assert!(
+        shell
+            .ui
+            .scroll_position(shell.ui.find(&scroll).unwrap())
+            .unwrap()[1]
+            > 2000.
+    );
+    shell.pointer = target;
+    shell
+        .event(InputEvent::PointerMove(target), &mut clipboard)
+        .unwrap();
+    shell.content_drag_over(&editor, 0.).unwrap();
+    let feedback = shell.content_drag_report();
+    assert_eq!(feedback["feedback"]["valid"], true, "{feedback}");
+    assert_eq!(feedback["feedback"]["target"]["after"], true);
+    assert!(shell.drop_at(&mut editor).unwrap());
+    shell
+        .event(InputEvent::PointerUp(target), &mut clipboard)
+        .unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    let mut expected = original.clone();
+    let moved = expected.remove(0);
+    expected.insert(100, moved);
+    assert_eq!(collection_value(&editor), json!(expected));
+    assert_eq!(editor.host.store().revision(), revision + 1);
+    editor.action("history.undo", json!({})).unwrap();
+    assert_eq!(collection_value(&editor), json!(original));
+    editor.action("history.redo", json!({})).unwrap();
+    assert_eq!(collection_value(&editor), json!(expected));
+}
+
+#[test]
+fn collection_edge_scroll_rejects_hidden_and_unrelated_pointer_geometry() {
+    let (mut editor, mut shell) = open();
+    editor.apply(vec![json!({"cmd":"property.set","args":{"entity":IDS[0],"path":"MeshRenderer.emissiveMaterials","value":(0..160).map(|index|format!("item{index}")).collect::<Vec<_>>()}})], "Populate collection", None).unwrap();
+    editor
+        .action("editor.select", json!({"entities":[IDS[0]]}))
+        .unwrap();
+    editor
+        .action("editor.view", json!({"maximized":"inspector"}))
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    shell.frame().unwrap();
+    let id = collection_adapter::id("MeshRenderer.emissiveMaterials", "");
+    let index = shell.ui.find(&id).unwrap();
+    shell.ui.scroll_into_view(index).unwrap();
+    shell.frame().unwrap();
+    let source = match shell.bindings.get(&stable_id(
+        "collection-grip-MeshRenderer-emissiveMaterials-0",
+    )) {
+        Some(Binding::Collection(action)) => action.clone(),
+        _ => panic!("Collection source binding missing"),
+    };
+    let rect = shell.ui.nodes[index]
+        .rect
+        .intersection(shell.ui.nodes[index].clip);
+    let before = shell.ui.scroll_position(index).unwrap();
+    for point in [
+        [f32::NAN, rect.y],
+        [rect.x + rect.w + 1., rect.y + rect.h + 8.],
+        [rect.x + rect.w * 0.5, rect.y + rect.h + 25.],
+    ] {
+        shell.pointer = point;
+        assert!(!shell.scroll_drag_collection(&source, 0.1).unwrap());
+        assert_eq!(shell.ui.scroll_position(index).unwrap(), before);
+    }
+    shell.pointer = [rect.x + rect.w * 0.5, rect.y + rect.h + 8.];
+    shell.ui.set_visible(index, false).unwrap();
+    assert!(!shell.scroll_drag_collection(&source, 0.1).unwrap());
+    assert_eq!(shell.ui.scroll_position(index).unwrap(), before);
+}
+
+#[test]
+#[ignore = "explicit before/after collection-drag CPU benchmark; writes only target evidence"]
+fn benchmark_collection_drag_scroll_adapter() {
+    use std::{hint::black_box, time::Instant};
+    let (mut editor, mut shell) = open();
+    editor.apply(vec![json!({"cmd":"property.set","args":{"entity":IDS[0],"path":"MeshRenderer.emissiveMaterials","value":(0..160).map(|index|format!("item{index}")).collect::<Vec<_>>()}})], "Populate collection", None).unwrap();
+    editor
+        .action("editor.select", json!({"entities":[IDS[0]]}))
+        .unwrap();
+    editor
+        .action("editor.view", json!({"maximized":"inspector"}))
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    shell.frame().unwrap();
+    let id = collection_adapter::id("MeshRenderer.emissiveMaterials", "");
+    let index = shell.ui.find(&id).unwrap();
+    shell.ui.scroll_into_view(index).unwrap();
+    shell.frame().unwrap();
+    let source = match shell.bindings.get(&stable_id(
+        "collection-grip-MeshRenderer-emissiveMaterials-0",
+    )) {
+        Some(Binding::Collection(action)) => action.clone(),
+        _ => panic!("Collection source binding missing"),
+    };
+    shell.pointer = centre(
+        shell.ui.nodes[index]
+            .rect
+            .intersection(shell.ui.nodes[index].clip),
+    );
+    let previous = |shell: &Shell| {
+        // Exact previous fixed scroll-target lookup/math, with zero elapsed time
+        // to keep this microbenchmark independent of layout and row rebuilding.
+        for id in [
+            "hierarchy-rows",
+            "asset-rows",
+            "asset-grid",
+            "asset-folders",
+            "inspector-scroll",
+        ] {
+            if let Some(index) = shell.shown_node(black_box(id)) {
+                let node = &shell.ui.nodes[index];
+                black_box(kit::auto_scroll(
+                    node.rect.intersection(node.clip),
+                    shell.pointer,
+                    black_box(0.),
+                ));
+            }
+        }
+    };
+    for _ in 0..1000 {
+        previous(&shell);
+        black_box(
+            shell
+                .scroll_drag_collection(&source, black_box(0.))
+                .unwrap(),
+        );
+    }
+    let mut old = Vec::new();
+    let mut current = Vec::new();
+    for round in 0..5 {
+        let mut measure = |after: bool| {
+            let start = Instant::now();
+            for _ in 0..10_000 {
+                if after {
+                    black_box(
+                        shell
+                            .scroll_drag_collection(black_box(&source), black_box(0.))
+                            .unwrap(),
+                    );
+                } else {
+                    previous(black_box(&shell));
+                }
+            }
+            start.elapsed().as_secs_f64() * 1e9 / 10_000.
+        };
+        if round % 2 == 0 {
+            old.push(measure(false));
+            current.push(measure(true));
+        } else {
+            current.push(measure(true));
+            old.push(measure(false));
+        }
+    }
+    let median = |values: &[f64]| {
+        let mut sorted = values.to_vec();
+        sorted.sort_by(f64::total_cmp);
+        sorted[sorted.len() / 2]
+    };
+    let output = crate::test_target().join("editor-drag-benchmarks");
+    std::fs::create_dir_all(&output).unwrap();
+    std::fs::write(output.join(format!("collection-scroll-{}.json",std::process::id())),ara_json::to_canonical_string(&json!({
+        "baseline":"68208897 fixed outer scroll target lookup/math (test-only reproduction)",
+        "current":"source collection viewport lookup/math and outer-scroll suppression",
+        "scope":"active collection drag adapter only; dt=0, unchanged retained UI; no I/O/layout in timed loops",
+        "moduleBlake3":blake3::hash(include_str!("drag_drop.rs").as_bytes()).to_hex().to_string(),
+        "warmup":1000,"rounds":5,"callsPerRound":10_000,"baselineNsPerCall":old,"currentNsPerCall":current,
+        "baselineMedianNs":median(&old),"currentMedianNs":median(&current),"debugAssertions":cfg!(debug_assertions),"arch":std::env::consts::ARCH,"os":std::env::consts::OS
+    }))).unwrap();
+}
+
 static NEXT: AtomicU64 = AtomicU64::new(0);
 const IDS: [&str; 5] = [
     "e_draga01",
