@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a",
+  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
   "stages": [
     {
-      "dxil": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a/look_horizon_sky/horizonSkyMain.dxil",
+      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_horizon_sky/horizonSkyMain.dxil",
       "dxil_hash": "c027785a4f5c5c750c3f2b251b1128dcbc210ab1095ede19cc7447c00f6f271e",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a/look_horizon_sky/horizonSkyMain.metallib",
+        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_horizon_sky/horizonSkyMain.metallib",
         "metallib_hash": "17ba50ba5a5aa69c1d9232c9523078989fba4170bcad07ef1d6263e3a8be5604",
-        "reflection": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a/look_horizon_sky/horizonSkyMain.metal.json",
+        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_horizon_sky/horizonSkyMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "horizonSkyMain",
-      "spirv": "1dd128d12882571fe1de1cba01649cb157ff137fb882adc7aea64fbf54c69c3a/look_horizon_sky/horizonSkyMain.spv",
+      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_horizon_sky/horizonSkyMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "5d64ceb7429b42fa1e867943e80ea3c42d860df9d5f1f55ffa946856f86dde17",
       "stage": "compute"
