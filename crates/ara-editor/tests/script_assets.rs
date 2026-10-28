@@ -180,11 +180,18 @@ fn folders_start_closed_expand_by_mouse_and_keyboard_and_persist_width() {
         let mut shell = loaded(&mut editor);
         let mut clip = Clip::default();
         assert!(editor.state.asset_expanded_folders.is_empty());
-        let id = format!("asset-folder-{:x}", ara_ui::source::stable_id("Assets"));
-        let child = format!(
+        let root = format!(
             "asset-folder-{:x}",
-            ara_ui::source::stable_id("Assets/Gameplay")
+            ara_ui::source::stable_id(ara_doc::AUTHORING_ROOT)
         );
+        let assets = format!("{}/Assets", ara_doc::AUTHORING_ROOT);
+        let gameplay = format!("{assets}/Gameplay");
+        let id = format!("asset-folder-{:x}", ara_ui::source::stable_id(&assets));
+        let child = format!("asset-folder-{:x}", ara_ui::source::stable_id(&gameplay));
+        assert!(shell.ui.find(&root).is_some());
+        assert!(shell.ui.find(&id).is_none());
+        shell.click(&format!("{root}-arrow"), &mut clip).unwrap();
+        shell.dispatch(&mut editor).unwrap();
         assert!(shell.ui.find(&id).is_some());
         assert!(shell.ui.find(&child).is_none());
         shell.click(&format!("{id}-arrow"), &mut clip).unwrap();
@@ -193,29 +200,14 @@ fn folders_start_closed_expand_by_mouse_and_keyboard_and_persist_width() {
         shell.click(&child, &mut clip).unwrap();
         shell.dispatch(&mut editor).unwrap();
         shell.key(&mut editor, 79, true, &mut clip).unwrap();
-        assert!(
-            editor
-                .state
-                .asset_expanded_folders
-                .contains("Assets/Gameplay")
-        );
+        assert!(editor.state.asset_expanded_folders.contains(&gameplay));
         shell.key(&mut editor, 80, true, &mut clip).unwrap();
-        assert!(
-            !editor
-                .state
-                .asset_expanded_folders
-                .contains("Assets/Gameplay")
-        );
+        assert!(!editor.state.asset_expanded_folders.contains(&gameplay));
         for _ in 0..2 {
             shell.click(&child, &mut clip).unwrap();
             shell.dispatch(&mut editor).unwrap();
         }
-        assert!(
-            editor
-                .state
-                .asset_expanded_folders
-                .contains("Assets/Gameplay")
-        );
+        assert!(editor.state.asset_expanded_folders.contains(&gameplay));
         let splitter = shell.ui.nodes[shell.ui.find("asset-sidebar-splitter").unwrap()].rect;
         let content = shell.ui.nodes[shell.ui.find("assets-content").unwrap()].rect;
         let start = [splitter.x + splitter.w * 0.5, splitter.y + splitter.h * 0.5];
@@ -232,7 +224,18 @@ fn folders_start_closed_expand_by_mouse_and_keyboard_and_persist_width() {
     }
     let editor = Editor::open(&project.0).unwrap();
     assert!((editor.state.asset_sidebar_width - 236.).abs() < 0.1);
-    assert!(editor.state.asset_expanded_folders.contains("Assets"));
+    assert!(
+        editor
+            .state
+            .asset_expanded_folders
+            .contains(&format!("{}/Assets", ara_doc::AUTHORING_ROOT))
+    );
+    assert!(
+        editor
+            .state
+            .asset_expanded_folders
+            .contains(ara_doc::AUTHORING_ROOT)
+    );
 }
 
 #[test]

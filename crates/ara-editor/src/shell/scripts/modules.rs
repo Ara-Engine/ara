@@ -234,7 +234,8 @@ impl Shell {
         {
             return Err("The module list changed; refresh it and choose a module again".into());
         }
-        self.open_script_ide(editor, path)?;
+        let path = path.clone();
+        self.open_script_ide(editor, &path)?;
         self.status_note = Some(if self.offscreen || !self.open_ide {
             format!("Selected C# module {path}; IDE launch is disabled for this session")
         } else {

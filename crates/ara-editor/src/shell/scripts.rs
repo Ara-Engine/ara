@@ -7,6 +7,9 @@ use super::*;
 #[path = "scripts/modules.rs"]
 mod module_discovery;
 pub(super) use module_discovery::ModuleList;
+#[path = "scripts/ide.rs"]
+mod ide;
+pub(crate) use ide::IdeRequest;
 
 struct NoClipboard;
 impl ara_ui_text::Clipboard for NoClipboard {
@@ -21,20 +24,6 @@ impl ara_ui_text::Clipboard for NoClipboard {
 /// Published C# module inputs from the shared D30 inventory; graph errors propagate.
 pub(crate) fn modules(root: &Path) -> Result<Vec<PathBuf>, Vec<ara_diag::Diagnostic>> {
     ara_play_host::script_modules(root)
-}
-
-/// Open in VS Code when available, otherwise use the system's file association.
-pub(crate) fn open_in_ide(folder: &Path, file: &Path) -> ara_ui::Result<()> {
-    let code = if cfg!(windows) { "code.cmd" } else { "code" };
-    if std::process::Command::new(code)
-        .arg(folder)
-        .arg(file)
-        .spawn()
-        .is_ok()
-    {
-        return Ok(());
-    }
-    ops::open_external(file)
 }
 
 #[derive(Clone)]
@@ -53,55 +42,11 @@ impl Shell {
         line: Option<u32>,
         column: Option<u32>,
     ) -> ara_ui::Result<()> {
-        let path = Path::new(path);
-        let file = if path.is_absolute() {
-            std::fs::canonicalize(path)?
-        } else {
-            crate::commands::project_path(editor.host.root(), &path.to_string_lossy())?
-        };
-        let root = std::fs::canonicalize(editor.host.root())?;
-        if !file.starts_with(&root) {
-            return Err("This diagnostic points outside the open project".into());
-        }
+        let (root, file) = ide::resolve_target(editor.host.root(), Path::new(path))?;
         let line = line.unwrap_or(1).max(1);
         let column = column.unwrap_or(1).max(1);
         self.status_note = Some(format!("{}:{line}:{column}", file.display()));
-        if !self.open_ide || self.offscreen {
-            return Ok(());
-        }
-        let configured = editor
-            .state
-            .settings
-            .get("scripts.ide")
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        if configured == "system" {
-            return ops::open_external(&file);
-        }
-        let code = if configured.is_empty() {
-            if cfg!(windows) { "code.cmd" } else { "code" }
-        } else {
-            configured
-        };
-        let mut command = std::process::Command::new(code);
-        if configured.is_empty()
-            || Path::new(code).file_name().is_some_and(|name| {
-                name.to_string_lossy()
-                    .to_ascii_lowercase()
-                    .starts_with("code")
-            })
-        {
-            command
-                .arg(&root)
-                .arg("--goto")
-                .arg(format!("{}:{line}:{column}", file.display()));
-        } else {
-            command.arg(&file);
-        }
-        if command.spawn().is_err() {
-            ops::open_external(&file)?;
-        }
-        Ok(())
+        self.request_script_ide(editor, &root, &file, Some((line, column)))
     }
 
     /// Create a script in the targeted folder, then focus its inline name before compiling.
@@ -256,29 +201,9 @@ impl Shell {
         Ok(true)
     }
 
-    pub(crate) fn open_script_ide(&self, editor: &Editor, path: &str) -> ara_ui::Result<()> {
-        if !self.open_ide || self.offscreen {
-            return Ok(());
-        }
-        let file = editor.host.root().join(path);
-        let configured = editor
-            .state
-            .settings
-            .get("scripts.ide")
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        if !configured.is_empty() && configured != "system" {
-            std::process::Command::new(configured)
-                .arg(editor.host.root())
-                .arg(&file)
-                .spawn()?;
-            return Ok(());
-        }
-        if configured == "system" {
-            ops::open_external(&file)
-        } else {
-            open_in_ide(editor.host.root(), &file)
-        }
+    pub(crate) fn open_script_ide(&mut self, editor: &Editor, path: &str) -> ara_ui::Result<()> {
+        let (root, file) = ide::resolve_target(editor.host.root(), Path::new(path))?;
+        self.request_script_ide(editor, &root, &file, None)
     }
 
     pub(super) fn poll_script_job(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
