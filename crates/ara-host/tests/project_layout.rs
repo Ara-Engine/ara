@@ -25,12 +25,12 @@ fn authored_index_classifies_policy_profiles_and_nested_content_consistently() {
     use ara_host::project::{AuthoredRole, authored_files};
     let root = scratch("index");
     for path in [
-        "game/target/kept.scene",
+        "content/target/kept.scene",
         "settings/project.json",
         "settings/builds/windows.export.json",
-        "game/scripts/game/game.module.json",
-        "game/scripts/game/Main.cs",
-        "game/models/box.glb.import.json",
+        "content/scripts/game/game.module.json",
+        "content/scripts/game/Main.cs",
+        "content/models/box.glb.import.json",
         "builds/old/copied.scene",
         ".ara/cache/copied.scene",
         "target/copied.scene",
@@ -39,7 +39,7 @@ fn authored_index_classifies_policy_profiles_and_nested_content_consistently() {
         fs::create_dir_all(path.parent().expect("parent")).expect("directory");
         fs::write(path, "{}").expect("file");
     }
-    fs::write(root.join("ara.project.json"), r#"{"layoutVersion":3}"#).expect("marker");
+    fs::write(root.join("ara.project.json"), r#"{"layoutVersion":4}"#).expect("marker");
     let mut db = ara_schema::SchemaDb::new();
     ara_doc::register(&mut db);
     let files = authored_files(&root, &db).expect("index");
@@ -98,7 +98,7 @@ fn copy(source: &Path, dest: &Path) {
 fn migrated_project_keeps_ids_references_and_round_trips() {
     let root = scratch("roundtrip").join("game");
     copy(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/project"),
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/project/content"),
         &root,
     );
     fs::write(root.join("ara.project.json"),r#"{"name":"sample","main":"levels/arena.scene","rendering":{"quality":"high"},"settings":{"play.mode":"host","customPolicy":{"keep":["authored"]}},"layers":{"names":["world","ui"]},"physics":{"gravity":[0,-9.81,0]},"input":{"actions":[]},"look":{"default":"@levels/arena.scene#sc_arena001"}}"#).expect("marker");
@@ -166,7 +166,7 @@ fn migrated_project_keeps_ids_references_and_round_trips() {
             .expect("write again");
         assert_eq!(written, again, "{path}");
     }
-    let scene = fs::read_to_string(root.join("game/levels/arena.scene")).expect("scene");
+    let scene = fs::read_to_string(root.join("content/levels/arena.scene")).expect("scene");
     assert!(scene.contains("@prefabs/"), "{scene}");
     assert!(
         Migration::plan(&root, None)
@@ -205,9 +205,9 @@ fn collisions_and_live_authorities_leave_authored_files_intact() {
     fs::create_dir_all(root.join("levels")).expect("old content");
     fs::create_dir_all(root.join("game/levels")).expect("collision");
     fs::write(root.join("levels/main.scene"), "legacy").expect("source");
-    fs::write(root.join("game/levels/main.scene"), "current").expect("target");
+    fs::write(root.join("content/levels/main.scene"), "current").expect("target");
     assert!(Migration::plan(&root, None).is_err());
-    fs::remove_file(root.join("game/levels/main.scene")).expect("remove collision file");
+    fs::remove_file(root.join("content/levels/main.scene")).expect("remove collision file");
     fs::remove_dir(root.join("game/levels")).expect("empty collision");
     fs::create_dir_all(root.join(".ara")).expect("state");
     let lock = fs::File::create(root.join(".ara/lock")).expect("lock");
@@ -222,7 +222,7 @@ fn collisions_and_live_authorities_leave_authored_files_intact() {
 }
 
 #[test]
-fn text_markup_and_journal_references_move_with_content() {
+fn text_markup_references_move_without_rewriting_existing_journal_lines() {
     let root = scratch("journal");
     fs::write(
         root.join("ara.project.json"),
@@ -231,34 +231,35 @@ fn text_markup_and_journal_references_move_with_content() {
     .expect("marker");
     fs::create_dir_all(root.join("levels")).expect("levels");
     fs::create_dir_all(root.join("ui")).expect("ui");
+    fs::create_dir_all(root.join("assets")).expect("assets");
     fs::create_dir_all(root.join(".ara")).expect("state");
-    let scene = "{\"id\":\"sc_main\",\"records\":{}}\n";
-    fs::write(root.join("levels/main.scene"), scene).expect("scene");
+    fs::write(
+        root.join("levels/main.scene"),
+        "{\"id\":\"sc_main\",\"records\":{}}\n",
+    )
+    .expect("scene");
     fs::write(
         root.join("ui/menu.ui"),
         r#"<ui id="ui_menu"><image id="logo" src="@assets/logo.png#as_logo" /></ui>"#,
     )
     .expect("native UI");
-    fs::create_dir_all(root.join("assets")).expect("assets");
-    fs::write(root.join(".ara/journal"),"{\"t\":\"txn\",\"txn\":{\"ops\":[{\"op\":\"document\",\"path\":\"levels/main.scene\",\"value\":\"@ui/menu.ui#ui_menu\"}]}}\n").expect("journal");
+    let old = "{\"t\":\"base\",\"revision\":0,\"version\":1}\n";
+    fs::write(root.join(".ara/journal"), old).expect("journal");
     Migration::plan(&root, None)
         .expect("plan")
         .apply()
         .expect("apply");
     assert!(
-        fs::read_to_string(root.join("game/ui/menu.ui"))
+        fs::read_to_string(root.join("content/ui/menu.ui"))
             .expect("UI")
             .contains("@logo.png#as_logo")
     );
+    assert!(!root.join("assets").exists());
     assert!(
-        !root.join("assets").exists(),
-        "the merged empty legacy root is removed"
+        fs::read_to_string(root.join(".ara/journal"))
+            .expect("journal")
+            .starts_with(old)
     );
-    let journal: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(root.join(".ara/journal")).expect("journal"))
-            .expect("one journal line");
-    assert_eq!(journal["txn"]["ops"][0]["path"], "game/levels/main.scene");
-    assert_eq!(journal["txn"]["ops"][0]["value"], "@ui/menu.ui#ui_menu");
 }
 
 #[test]
@@ -283,64 +284,6 @@ fn legacy_build_profiles_keep_every_authored_field_and_pin() {
         value["templates"][0]["source"],
         "settings/builds/runtime.zip"
     );
-}
-
-#[test]
-fn policy_history_stays_undoable_after_marker_policy_moves() {
-    let root = scratch("policy-history");
-    fs::write(root.join("ara.project.json"), "{\"name\":\"History\"}\n").expect("marker");
-    let mut host = ara_host::Host::open(
-        Project::open(&root).expect("project"),
-        ara_host::HostConfig::default(),
-    )
-    .expect("host");
-    let session = host
-        .call(
-            ara_proto::ConnId::LOCAL,
-            "session.begin",
-            serde_json::json!({"client":"test","author":"human"}),
-        )
-        .expect("begin")["session"]
-        .clone();
-    host.call(ara_proto::ConnId::LOCAL,"cmd.apply",serde_json::json!({"session":session,"doc":"ara.project.json","why":"Author a legacy policy","commands":[{"cmd":"property.set","args":{"entity":"p_settings","path":"settings.rendering","value":{"quality":"high"}}}]})).expect("legacy policy op");
-    host.flush();
-    drop(host);
-    Migration::plan(&root, None)
-        .expect("plan")
-        .apply()
-        .expect("migrate");
-    let mut host = ara_host::Host::open(
-        Project::open(&root).expect("project"),
-        ara_host::HostConfig::default(),
-    )
-    .expect("reopen");
-    let session = host
-        .call(
-            ara_proto::ConnId::LOCAL,
-            "session.begin",
-            serde_json::json!({"client":"test","author":"human"}),
-        )
-        .expect("begin")["session"]
-        .clone();
-    host.call(
-        ara_proto::ConnId::LOCAL,
-        "history.undo",
-        serde_json::json!({"session":session}),
-    )
-    .expect("undo legacy policy");
-    host.flush();
-    drop(host);
-    assert!(
-        ara_host::project_layout::preferences(&root)
-            .expect("policy")
-            .get("rendering")
-            .is_none()
-    );
-    let marker: serde_json::Value =
-        serde_json::from_slice(&fs::read(root.join("ara.project.json")).expect("marker"))
-            .expect("JSON");
-    assert!(marker.get("rendering").is_none());
-    assert_eq!(marker["name"], "History");
 }
 
 #[test]
@@ -391,7 +334,10 @@ fn overlapping_draft_roots_merge_and_modules_and_local_uris_migrate() {
         module,
         serde_json::json!({"name":"Tools","references":["Core"],"hot":true})
     );
-    assert!(root.join(".ara/scripts/Tools/Tools.types.json").is_file());
+    assert!(
+        root.join("migration-support/generated-scripts/Tools/Tools.types.json")
+            .is_file()
+    );
     let model: serde_json::Value =
         serde_json::from_slice(&fs::read(authored.join("models/box.gltf")).expect("model"))
             .expect("JSON");
@@ -426,7 +372,7 @@ fn authored_reference_paths_and_project_preferences_do_not_share_identity() {
     let root = scratch("path-bases");
     fs::write(
         root.join("ara.project.json"),
-        r#"{"layoutVersion":3,"main":"scenes/main.scene"}"#,
+        r#"{"layoutVersion":4,"main":"scenes/main.scene"}"#,
     )
     .expect("marker");
     ara_host::project_layout::write_support_files(&root, "Paths").expect("scaffold");
@@ -509,7 +455,7 @@ fn authored_reference_paths_and_project_preferences_do_not_share_identity() {
 #[test]
 fn imported_source_inside_a_same_named_feature_folder_keeps_its_reference_path() {
     let root = scratch("nested-root-name");
-    fs::write(root.join("ara.project.json"), r#"{"layoutVersion":3}"#).expect("marker");
+    fs::write(root.join("ara.project.json"), r#"{"layoutVersion":4}"#).expect("marker");
     let prefix = ara_doc::AUTHORING_ROOT;
     let source = format!("{prefix}/pixel.bin");
     let storage = format!("{prefix}/{source}");
@@ -547,7 +493,7 @@ fn imported_source_inside_a_same_named_feature_folder_keeps_its_reference_path()
 #[test]
 fn import_policy_scope_does_not_collide_with_same_named_authored_document() {
     let root = scratch("import-policy-scope");
-    fs::write(root.join("ara.project.json"), r#"{"layoutVersion":3}"#).expect("marker");
+    fs::write(root.join("ara.project.json"), r#"{"layoutVersion":4}"#).expect("marker");
     let policy = ara_asset::ProjectImportSettings::default()
         .canonical_text()
         .expect("policy");
@@ -635,12 +581,16 @@ fn migration_pins_legacy_ui_identity_before_storage_path_changes() {
     fs::create_dir_all(root.join("content/ui")).expect("folder");
     fs::write(root.join("ara.project.json"), r#"{"layoutVersion":2}"#).expect("marker");
     fs::write(root.join("content/ui/game.ui"), "<ui id='root'/>").expect("legacy UI");
-    let old = Project::open(&root)
-        .expect("old project")
-        .index
-        .id_of("content/ui/game.ui")
-        .expect("old UI identity")
-        .to_owned();
+    let old = ara_host::project::read_document(
+        "<ui id='root'/>",
+        "content/ui/game.ui",
+        &ara_schema::SchemaDb::new(),
+        None,
+    )
+    .doc
+    .expect("legacy UI")
+    .id
+    .to_string();
     fs::write(root.join("ara.project.json"),ara_json::to_canonical_string(&serde_json::json!({"layoutVersion":2,"uiReference":format!("@content/ui/game.ui#{old}")}))).expect("reference");
     Migration::plan(&root, None)
         .expect("plan")
@@ -679,11 +629,12 @@ fn outpost_native_ui_preserves_its_pristine_legacy_identity() {
         fs::write(root.join("ui").join(file), text).expect("bootstrap source");
     }
     assert_eq!(
-        Project::open(&root)
-            .expect("legacy project")
-            .index
-            .id_of("ui/game.ui"),
-        Some(BASELINE_ID)
+        ara_host::project::read_document(legacy, "ui/game.ui", &ara_schema::SchemaDb::new(), None)
+            .doc
+            .expect("legacy UI")
+            .id
+            .as_str(),
+        BASELINE_ID
     );
     Migration::plan(&root, None)
         .expect("plan")
@@ -763,55 +714,11 @@ fn migration_repairs_known_paths_and_references_without_renaming_labels() {
 }
 
 #[test]
-fn migration_relocates_file_history_storage_paths_and_keeps_blob_tokens() {
-    let root = scratch("file-history-paths");
-    fs::create_dir_all(root.join("assets")).expect("authored folder");
-    fs::write(root.join("ara.project.json"), "{}").expect("marker");
-    let bytes = b"class History {}";
-    fs::write(root.join("assets/History.cs"), bytes).expect("source");
-    let history = ara_host::file_state::FileHistory::new(&root);
-    let state = history.put(bytes).expect("immutable history");
-    let entries = [
-        serde_json::json!({"t":"txn","txn":{"ops":[{"op":"file","path":"assets/History.cs","state":state,"prev":null}]}}),
-        serde_json::json!({"t":"fileFlush","path":"assets/History.cs","rev":1,"state":state}),
-    ];
-    fs::write(
-        root.join(".ara/journal"),
-        entries
-            .iter()
-            .map(|entry| serde_json::to_string(entry).expect("journal entry") + "\n")
-            .collect::<String>(),
-    )
-    .expect("journal");
-    Migration::plan(&root, None)
-        .expect("plan")
-        .apply()
-        .expect("migrate");
-    let journal = fs::read_to_string(root.join(".ara/journal")).expect("journal");
-    let entries: Vec<serde_json::Value> = journal
-        .lines()
-        .map(|line| serde_json::from_str(line).expect("journal entry"))
-        .collect();
-    let expected = format!("{}/History.cs", ara_doc::AUTHORING_ROOT);
-    assert_eq!(entries[0]["txn"]["ops"][0]["path"], expected);
-    assert_eq!(entries[1]["path"], expected);
-    assert_eq!(
-        entries[0]["txn"]["ops"][0]["id"],
-        ara_doc::file_state::record_id(&expected).to_string()
-    );
-    assert_eq!(
-        entries[0]["txn"]["ops"][0]["state"],
-        serde_json::to_value(&state).expect("state")
-    );
-    assert_eq!(history.read(&state).expect("retained history bytes"), bytes);
-}
-
-#[test]
 fn modern_authored_folders_named_like_legacy_roots_keep_their_references() {
     let root = scratch("modern-root-names");
     fs::write(
         root.join("ara.project.json"),
-        r#"{"layoutVersion":3,"main":"game/level.scene"}"#,
+        r#"{"layoutVersion":4,"main":"game/level.scene"}"#,
     )
     .expect("marker");
     ara_host::project_layout::write_support_files(&root, "Names").expect("support");

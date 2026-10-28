@@ -475,6 +475,7 @@ impl Host {
         if !problems.is_empty() {
             return Err(problems);
         }
+        crate::project_layout::check_history_layout(&self.st, method, &params)?;
         self.st.calling = session.clone();
         // Origins preserve the participant identity of attributed transactions.
         self.st.store.set_origin(session.clone());
@@ -810,6 +811,25 @@ impl State {
                     }
                 }
             }
+            // Exact prepared bytes are already queued with this transaction.
+            // A second canonical save would change raw bytes restored by Undo.
+            let materialized: BTreeSet<_> = txn
+                .ops
+                .iter()
+                .filter_map(|op| {
+                    if let ara_doc::Op::File { path, .. } = op {
+                        Some(ara_doc::file_state::path_key(path))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            self.files.changed.retain(|id, _| {
+                self.store
+                    .workspace()
+                    .path_of(id.as_str())
+                    .is_none_or(|path| !materialized.contains(&ara_doc::file_state::path_key(path)))
+            });
             self.refresh_project_settings();
             self.track_review(&txn);
             let summary = self.txn_summary(&txn);

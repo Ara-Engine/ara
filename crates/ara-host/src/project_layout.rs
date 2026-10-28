@@ -1,5 +1,7 @@
 //! Shared project scaffold and offline layout migration, used by the CLI and Hub.
+mod epoch;
 mod mapping;
+pub(crate) use epoch::check as check_history_layout;
 mod migrate;
 mod references;
 mod transaction;

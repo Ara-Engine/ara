@@ -110,13 +110,23 @@ legacy module type output moves to `.ara/scripts/<module>/`.
 Migration moves import defaults into `settings/`, old presets into
 `settings/builds/`, and marker policy into `settings/project.json`. Existing export
 fields and pins are preserved; old sample helper literal presets are translated.
-Evidence, tests and obsolete machine-specific export helpers move to the sibling
-`<project>-support/`; `--support-dir` selects another directory outside the project.
+Evidence, tests and obsolete machine-specific export helpers are retained under
+project-local `migration-support/`, excluded from authored discovery. Keeping these
+files inside the authority lets the same transaction restore them on Undo.
 
-Apply takes the authority lock, rechecks planned source files, and rolls back
-completed moves and writes on failure. Journal reference paths, document storage
-paths and matching flush hashes are updated. The marker records `layoutVersion: 4`.
-A subsequent dry run reports no changes. Run `ara check` to validate the result.
+Apply takes the authority lock, rechecks the complete prepared inventory, and
+submits one typed `project.migrate` batch. The command emits reversible file states
+and a marker edit; one attributed transaction is appended to the journal. Existing
+history is retained unchanged. Success waits for physical writes and journal
+acknowledgement. The marker records `layoutVersion: 4`. A subsequent dry run reports
+no changes. Run `ara check` to validate the result.
+
+Hub and editor opening an older project show the move preview and Migrate / Cancel.
+Cancel keeps it closed and unchanged. Other opens report ARA1914 with the migration
+action, before compilation or import. Undo restores the old layout and exact bytes;
+ordinary commands then require migration again. Redo remains available in the same
+open authority. Older history cannot be applied across the migration boundary; Undo
+the migration first to restore its original path semantics.
 
 ## Exporting the worked project
 

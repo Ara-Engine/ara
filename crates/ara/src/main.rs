@@ -405,8 +405,8 @@ enum ProjectCommand {
         /// Preview all moves and reference rewrites without writing anything.
         #[arg(long)]
         dry_run: bool,
-        /// Destination for old evidence/tests/helpers (default: sibling <project>-support).
-        #[arg(long)]
+        /// Deprecated: support is retained project-locally for reversible history.
+        #[arg(long, hide = true)]
         support_dir: Option<PathBuf>,
     },
 }

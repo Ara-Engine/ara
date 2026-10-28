@@ -68,7 +68,17 @@ pub(super) fn plan(migration: &mut Migration) -> Result<Vec<(String, String)>, D
             && *editor
             && !relative.split('/').any(|part| part == "editor")
         {
-            mappings.push((physical, format!("editor/{relative}")));
+            // Preview-3 policy paths already use the authored reference base.
+            // Never treat an authored folder named game/ as a storage prefix.
+            let reference = if modern {
+                physical
+                    .strip_prefix(&format!("{}/", migration.reference_root))
+                    .unwrap_or(&physical)
+                    .to_owned()
+            } else {
+                physical
+            };
+            mappings.push((reference, format!("editor/{relative}")));
         }
     }
     for source in files {
@@ -205,8 +215,8 @@ fn relative_path(root: &Path, path: &Path) -> Result<String, Diagnostic> {
 }
 fn authored_path(path: &str, modern: bool) -> Option<String> {
     for prefix in [
-        format!("{}/", super::AUTHORING_ROOT),
         "content/assets/".into(),
+        format!("{}/", super::AUTHORING_ROOT),
         "game/".into(),
         "content/".into(),
         "assets/".into(),
