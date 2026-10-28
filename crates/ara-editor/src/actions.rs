@@ -348,6 +348,7 @@ impl EditorService {
                 probe_cancel_blocker: Some(
                     "Capture cancellation requires the owning editor window",
                 ),
+                probe_debug_capabilities: None,
                 profiler_target_blocker: None,
                 profiler_freeze_blocker: None,
                 profiler_compare_blocker: None,

@@ -112,6 +112,7 @@ impl Owner {
     ) -> ara_ui::Result<Update> {
         let mut update = Update::default();
         update.changed |= self.flush(editor);
+        self.cancel_eligible(editor, scene);
         if !self.outgoing.is_empty() {
             return Ok(self.update(scene, update));
         }
@@ -130,29 +131,10 @@ impl Owner {
             };
             self.request(editor, scene, request);
         }
-        if due {
-            self.cancel_eligible(editor, scene);
-        }
-        if due
-            && self.retirement_pending
-            && (self.draining
-                || self.jobs.is_empty()
-                || self.jobs.iter().any(|(job, sub)| {
-                    !sub.terminal_queued && editor.probe_captures.cancel_requested(job)
-                }))
-        {
-            match scene.probe_retirement_pending(renderer) {
-                Ok(false) => {
-                    self.blocker = None;
-                    self.retirement_pending = false;
-                    update.changed = true;
-                    update.scene_dirty = true;
-                }
-                Ok(true) => {
-                    self.blocker = Some("Probe GPU/cache retirement is still pending".into())
-                }
-                Err(diagnostic) => self.blocker = Some(diagnostic.message),
-            }
+        self.cancel_eligible(editor, scene);
+        if self.poll_retirement(editor, scene, renderer) {
+            update.changed = true;
+            update.scene_dirty = true;
         }
         if due && self.outgoing.len() < EVENTS {
             self.snapshot(editor, scene);
@@ -276,7 +258,7 @@ impl Owner {
         if self.bound_doc.as_deref() != Some(editor.state.doc.as_str())
             || !scene.probe_has_binding(root)
         {
-            if !self.jobs.is_empty() {
+            if !self.jobs.is_empty() || self.retirement_pending {
                 return Err(vec![Diagnostic::error(codes::PROBE_STALE,
                     "The previous probe owner is retiring; wait before binding a replacement Scene").doc(&editor.state.doc)]);
             }
@@ -330,6 +312,42 @@ impl Owner {
                     binding: sub.binding.clone(),
                     status,
                 });
+            }
+        }
+    }
+
+    /// Deliver cancel intent before the next Scene preparation can record work.
+    /// Progress stays rate-limited; cancellation and retirement never wait for it.
+    pub(super) fn poll_cancellations(
+        &mut self, editor: &mut Editor, scene: &mut SceneView, renderer: &mut Renderer,
+    ) -> bool {
+        self.cancel_eligible(editor, scene);
+        self.poll_retirement(editor, scene, renderer)
+    }
+
+    fn poll_retirement(
+        &mut self, editor: &mut Editor, scene: &mut SceneView, renderer: &mut Renderer,
+    ) -> bool {
+        if !self.retirement_pending || !(self.draining || self.jobs.is_empty()
+            || self.jobs.iter().any(|(job, sub)| {
+                !sub.terminal_queued && editor.probe_captures.cancel_requested(job)
+            }))
+        {
+            return false;
+        }
+        match scene.probe_retirement_pending(renderer) {
+            Ok(false) => {
+                self.blocker = None;
+                self.retirement_pending = false;
+                true
+            }
+            Ok(true) => {
+                self.blocker = Some("Probe GPU/cache retirement is still pending".into());
+                false
+            }
+            Err(diagnostic) => {
+                self.blocker = Some(diagnostic.message);
+                false
             }
         }
     }

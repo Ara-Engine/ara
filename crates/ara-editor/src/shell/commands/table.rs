@@ -239,6 +239,20 @@ fn is(c: &Ctx, key: &str, value: &str) -> Avail {
 fn mode(c: &Ctx, mode: &str) -> Avail {
     Avail::Checked(c.state.view_mode == mode)
 }
+fn renderer_debug_mode(c: &Ctx, name: &str) -> Avail {
+    let Some(caps) = c.probe_debug_capabilities else {
+        return Avail::Blocked("Waiting for this Scene renderer's debug-view capabilities".into());
+    };
+    let (available, key) = match name {
+        "gi_diffuse" => (caps.gi_diffuse, "giDiffuse"),
+        "overdraw" => (caps.overdraw, "overdraw"),
+        _ => return Avail::Blocked("Unknown renderer debug view".into()),
+    };
+    if available { mode(c, name) }
+    else { Avail::Blocked(caps.reasons.get(key).cloned().unwrap_or_else(||
+        "This renderer does not currently provide the requested debug view".into())) }
+}
+
 fn flag(c: &Ctx, key: &str) -> Avail {
     Avail::Checked(setting(c, key).as_bool().unwrap_or(false))
 }
@@ -949,8 +963,8 @@ fn build() -> Vec<Spec> {
         .when(|c| mode(c, "litWireframe")),
     ]);
     c.extend([
-        later("view.mode.overdraw", "Overdraw", "", "", "ara-render has no overdraw visualisation yet."),
-        later("view.mode.gi_debug", "GI Debug", "", "", "GI debug views live in ara-render-fidelity captures; live viewport output is not wired yet."),
+        cmd("view.mode.overdraw", "Overdraw", "", "", "Native opaque and alpha-tested fragments before depth rejection; transparent and VFX passes are excluded. Heat legend: 0 black, 1 blue, 2 green, 4 yellow, 8 orange, 16+ red.", |_,e,_|view(e,json!({"viewMode":"overdraw"}))).when(|c|renderer_debug_mode(c,"overdraw")),
+        cmd("view.mode.gi_debug", "GI Diffuse", "", "", "Native diffuse indirect light on opaque surfaces; background black. The actual renderer explains unavailable data instead of showing Lit.", |_,e,_|view(e,json!({"viewMode":"gi_diffuse"}))).when(|c|renderer_debug_mode(c,"gi_diffuse")),
         cmd("view.show.grid", "Grid", "grid-2x2", "", "Show the ground grid.", |_, e, _| toggle(e, "viewport.grid")).when(|c| flag(c, "viewport.grid")),
         cmd("view.show.outline", "Selection Outline", "", "", "Outline selected entities.", |_, e, _| toggle(e, "viewport.outline")).when(|c| flag(c, "viewport.outline")),
         cmd("view.show.gizmos", "Transform Gizmo", "move-3d", "", "Show transform handles on the selection.", |_, e, _| view(e, json!({"gizmos": e.state.hide_gizmos}))).when(|c| Avail::Checked(!c.state.hide_gizmos)),

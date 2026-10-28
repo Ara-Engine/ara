@@ -1191,6 +1191,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             server.pump(&mut editor);
             let server_ms = measure_authority.then(|| tick_at.elapsed().as_secs_f64() * 1000.);
             editor.tick();
+            // Cancellation reaches the retained bake before the next Scene GPU unit.
+            scene_dirty |= probe_owner.poll_cancellations(&mut editor, &mut scene_view, &mut renderer);
             let pilot_changed = pilot::update(&controller, &mut editor, &mut shell, false);
             dirty |= pilot_changed;
             scene_dirty |= pilot_changed;
