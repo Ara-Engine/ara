@@ -300,3 +300,59 @@ fn a_capture_whose_image_never_reaches_the_job_is_read_back_again() -> Result<()
     renderer.gpu().assert_clean()?;
     Ok(())
 }
+
+#[test]
+fn retirement_waits_for_a_cache_write_that_outlives_its_job() -> Result<()> {
+    let root = folder("probe-retire");
+    let plan = plan();
+    let (mut renderer, mut raster, frame) = open(&root, scene(1.))?;
+    let gate = std::sync::Arc::new(std::sync::Mutex::new(()));
+    let held = gate.lock().expect("write gate");
+    raster.probes_mut().write_gate = Some(gate.clone());
+    step(&mut raster, &mut renderer, &frame, plan)?;
+    let key = ProbeKey {
+        doc: DOC.into(),
+        entity: PROBE.into(),
+    };
+    let job = raster
+        .probes_mut()
+        .recapture(
+            &frame,
+            &RecaptureRequest {
+                probes: std::slice::from_ref(&key),
+                why: None,
+            },
+        )
+        .map_err(|d| anyhow::anyhow!("{d:?}"))?;
+    // The job completes on its receipt while its cache write is held open.
+    run_until(&mut raster, &mut renderer, &frame, plan, |r| {
+        r.probes().job(job).is_some_and(|j| j.finished)
+    })?;
+    let receipt = raster.probes().job(job).expect("job").receipts[0].clone();
+    let file = root
+        .join("project/.ara/cache/probes")
+        .join(format!("{}.capture", receipt.source_hash));
+    assert!(!file.exists());
+    assert!(raster.probes().is_busy() && raster.needs_frame());
+    for _ in 0..8 {
+        assert!(
+            raster.poll_probe_retirement(&mut renderer)?,
+            "a held write keeps the view"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    // Released: retirement drains the write and reports the view free.
+    drop(held);
+    let started = std::time::Instant::now();
+    while raster.poll_probe_retirement(&mut renderer)? {
+        anyhow::ensure!(
+            started.elapsed() < std::time::Duration::from_secs(60),
+            "the released write never drained"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    assert!(file.is_file() && !raster.probes().is_busy());
+    raster.destroy(&mut renderer)?;
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}

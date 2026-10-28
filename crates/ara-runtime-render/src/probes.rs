@@ -231,6 +231,12 @@ pub struct ProbeCaptures {
     auto: bool,
     io: std::sync::mpsc::Sender<Io>,
     landed: std::sync::mpsc::Receiver<Io>,
+    /// Cache writes started and not yet reported (`Io::Cached`): a job completes on
+    /// its receipt, but the view stays busy and retirement waits until these land.
+    writes: usize,
+    /// Tests hold cache writes open by locking this before a capture publishes.
+    #[cfg(test)]
+    pub(crate) write_gate: Option<std::sync::Arc<std::sync::Mutex<()>>>,
 }
 
 /// One probe of the frame and its capture lifecycle.
@@ -327,6 +333,9 @@ impl Default for ProbeCaptures {
             auto: false,
             io,
             landed,
+            writes: 0,
+            #[cfg(test)]
+            write_gate: None,
         }
     }
 }
@@ -365,9 +374,11 @@ impl ProbeCaptures {
     /// write): a view that otherwise stops redrawing keeps preparing frames
     /// (`RasterView::needs_frame`) until it settles.
     pub fn is_busy(&self) -> bool {
-        self.probes
-            .values()
-            .any(|p| p.flight.is_some() || p.loading)
+        self.writes > 0
+            || self
+                .probes
+                .values()
+                .any(|p| p.flight.is_some() || p.loading)
     }
 
     /// The probe cache folder.
@@ -686,26 +697,33 @@ impl ProbeCaptures {
                 flight.source_revision,
             );
             let sender = self.io.clone();
+            self.writes += 1;
+            #[cfg(test)]
+            let gate = self.write_gate.clone();
             std::thread::spawn(move || {
+                // Reports the write however this worker ends, so `writes` drains.
+                let mut report = CacheReport {
+                    sender,
+                    entity,
+                    source_hash,
+                    error: Some("the cache worker stopped before writing".into()),
+                };
                 let receipt = receipt(
                     &doc,
-                    &entity,
+                    &report.entity,
                     generation,
-                    &source_hash,
+                    &report.source_hash,
                     source_revision,
                     &image,
                 );
-                let _ = sender.send(Io::Hashed {
-                    entity: entity.clone(),
+                let _ = report.sender.send(Io::Hashed {
+                    entity: report.entity.clone(),
                     generation,
                     receipt: receipt.clone(),
                 });
-                let error = write_cache(&root, &receipt, &image).err();
-                let _ = sender.send(Io::Cached {
-                    entity,
-                    source_hash,
-                    error,
-                });
+                #[cfg(test)]
+                let _held = gate.as_ref().map(|g| g.lock());
+                report.error = write_cache(&root, &receipt, &image).err();
             });
             changed = true;
         }
@@ -960,6 +978,7 @@ impl ProbeCaptures {
     /// A published capture's cache file was written, or not: the probe's row
     /// carries the failure (the capture itself stays published).
     fn cached(&mut self, entity: &str, source_hash: &str, error: Option<String>) {
+        self.writes = self.writes.saturating_sub(1);
         let doc = self.doc.clone().unwrap_or_default();
         if let (Some(probe), Some(why)) = (self.probes.get_mut(entity), error)
             && probe
@@ -1014,8 +1033,9 @@ impl ProbeCaptures {
     /// generations as Cancelled, and drains finished cache IO. A generation already
     /// published but not yet read back cannot complete without the renderer's next
     /// primary frame: it ends Cancelled (ARA_PROBE_STALE). Never records GPU work,
-    /// waits or touches files on this thread. True while a published capture is
-    /// being hashed (its cache file is written afterwards, independently).
+    /// waits or touches files on this thread. True while capture IO is outstanding (a
+    /// published capture being hashed, its cache file being written, a cache read):
+    /// keep the view until it returns false.
     pub fn retire(&mut self, renderer: &mut ara_render::Renderer) -> bool {
         let mut changed = false;
         let entities: Vec<String> = self.probes.keys().cloned().collect();
@@ -1060,9 +1080,8 @@ impl ProbeCaptures {
         if changed {
             self.version += 1;
         }
-        self.probes
-            .values()
-            .any(|p| p.flight.as_ref().is_some_and(|f| f.writing))
+        // Unpublished generations ended above; what remains is IO.
+        self.is_busy()
     }
 
     /// Why captures cannot run now, or `None`.
@@ -1179,6 +1198,24 @@ fn source_hash(inputs: &str, view: &ara_runtime::extract::ProbeView) -> String {
         hash.update(v.to_le_bytes());
     }
     format!("{:x}", hash.finalize())
+}
+
+/// Sends a cache write's `Io::Cached` when dropped, however its worker ends.
+struct CacheReport {
+    sender: std::sync::mpsc::Sender<Io>,
+    entity: String,
+    source_hash: String,
+    error: Option<String>,
+}
+
+impl Drop for CacheReport {
+    fn drop(&mut self) {
+        let _ = self.sender.send(Io::Cached {
+            entity: std::mem::take(&mut self.entity),
+            source_hash: std::mem::take(&mut self.source_hash),
+            error: self.error.take(),
+        });
+    }
 }
 
 /// The receipt of a published image: its hash and where its cache file goes.
