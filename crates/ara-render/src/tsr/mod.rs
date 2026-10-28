@@ -80,9 +80,14 @@ impl Upscaler {
     /// The `ARA_UPSCALER` environment variable (`tsr` or `taau`, any case) for A/B
     /// runs; unset or anything else selects TAAU.
     pub fn from_env() -> Self {
+        Self::forced().unwrap_or_default()
+    }
+    /// The upscaler `ARA_UPSCALER` forces over the preset's (`Quality::upscaler`), if set.
+    pub fn forced() -> Option<Self> {
         match std::env::var("ARA_UPSCALER") {
-            Ok(value) if value.eq_ignore_ascii_case("tsr") => Self::Tsr,
-            _ => Self::Taau,
+            Ok(value) if value.eq_ignore_ascii_case("tsr") => Some(Self::Tsr),
+            Ok(value) if value.eq_ignore_ascii_case("taau") => Some(Self::Taau),
+            _ => None,
         }
     }
 }

@@ -280,8 +280,11 @@ impl QualityPreset {
         match self {
             Self::Low => 0.45,
             Self::Medium => 0.55,
-            Self::High => 2. / 3.,
-            Self::Epic => 0.77,
+            // Ara TSR (High/Epic) reconstructs from fewer pixels at TAAU's quality:
+            // 0.6 / 0.7 match TAAU at 2/3 / 0.77 within ~0.002 FLIP of supersampled
+            // truth, cost the same, and pass the no-visible-noise gate TAAU fails.
+            Self::High => 0.6,
+            Self::Epic => 0.7,
         }
     }
 
@@ -350,6 +353,7 @@ impl QualityPreset {
                 lod_pixels: 6.,
                 min_pixels: 6.,
                 high_tier: false,
+                upscaler: ara_render::Upscaler::Taau,
                 reflection_captures: None,
                 terrain_detail: 0.,
                 local_shadows: None,
@@ -369,6 +373,7 @@ impl QualityPreset {
                 lod_pixels: 3.,
                 min_pixels: 3.,
                 high_tier: false,
+                upscaler: ara_render::Upscaler::Taau,
                 reflection_captures: None,
                 terrain_detail: 40.,
                 local_shadows: Some(LocalShadows {
@@ -393,6 +398,7 @@ impl QualityPreset {
                 lod_pixels: 1.,
                 min_pixels: 1.5,
                 high_tier: true,
+                upscaler: ara_render::Upscaler::Tsr,
                 reflection_captures: reflection_captures(8),
                 terrain_detail: 150.,
                 local_shadows: Some(LocalShadows {
@@ -421,6 +427,7 @@ impl QualityPreset {
                 lod_pixels: 1.,
                 min_pixels: 1.,
                 high_tier: true,
+                upscaler: ara_render::Upscaler::Tsr,
                 reflection_captures: reflection_captures(16),
                 terrain_detail: 300.,
                 local_shadows: Some(LocalShadows {

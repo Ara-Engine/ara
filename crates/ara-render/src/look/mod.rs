@@ -55,6 +55,9 @@ pub struct Quality {
     /// ambient bounce) is compiled into those variants alone, so lower presets pay
     /// nothing for its code.
     pub high_tier: bool,
+    /// The temporal upscaler (`renderer::set_quality` applies it unless
+    /// `ARA_UPSCALER` forces one for A/B runs): Ara TSR on High and Epic, TAAU below.
+    pub upscaler: crate::tsr::Upscaler,
     /// Local reflection captures (`look::captures`), baked off the hot path and read
     /// by the High/Epic PSOs (`high_tier`) under screen-space reflections; `None`
     /// keeps probe and sky reflections.
@@ -129,6 +132,7 @@ impl Default for Quality {
             lod_pixels: 1.,
             min_pixels: 1.5,
             high_tier: false,
+            upscaler: crate::tsr::Upscaler::Taau,
             reflection_captures: None,
             terrain_detail: 150.,
             local_shadows: None,

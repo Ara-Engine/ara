@@ -455,6 +455,9 @@ impl Renderer {
         ara_gpu::cpu_scope!("Raster.set_quality");
         quality.validate()?;
         let previous = std::mem::replace(&mut self.look.quality, quality);
+        // The preset's upscaler, unless `ARA_UPSCALER` forces one (A/B runs).
+        self.tsr
+            .select(crate::tsr::Upscaler::forced().unwrap_or(quality.upscaler));
         if let Err(error) = self.ensure_cascades() {
             self.look.quality = previous;
             return Err(error);
@@ -540,8 +543,8 @@ impl Renderer {
     pub fn set_jitter_override(&mut self, jitter: Option<[f32; 2]>) {
         self.jitter_override = jitter;
     }
-    /// Selects the temporal upscaler from the next frame (`Upscaler::Taau` unless
-    /// `ARA_UPSCALER=tsr` was set when the renderer was created). TSR resolves
+    /// Selects the temporal upscaler from the next frame (`set_quality` applies the
+    /// preset's `Quality::upscaler`, or `ARA_UPSCALER` when set). TSR resolves
     /// perspective frames of the primary view; secondary views and orthographic
     /// cameras keep TAAU. Selecting TAAU releases TSR's images on the next frame.
     pub fn set_upscaler(&mut self, upscaler: crate::tsr::Upscaler) {
