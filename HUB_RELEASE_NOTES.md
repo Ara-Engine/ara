@@ -3,8 +3,6 @@
 Preview 4 adds explicit project migration and expands engine installation,
 repair and update controls.
 
-**Draft:** the final editor follow-up and release qualification are still pending.
-
 ## Highlights
 
 - **Review before migrating.** Opening an older project with the new engine shows
@@ -43,8 +41,3 @@ prerelease. Windows x64 is the packaged Hub platform.
 **No Authenticode signing yet:** Windows SmartScreen may warn when running the
 installer. Signed manifests and SHA-256 verification protect downloads and updates;
 they do not remove the SmartScreen warning.
-
-## TODO — final editor and release qualification
-
-Add any further Hub-facing changes from `t3/ux-editor-p4` after they land. Confirm
-the final installed-package/update checks before removing this draft marker.

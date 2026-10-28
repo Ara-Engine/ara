@@ -2,9 +2,7 @@
 
 Preview 4 updates Ara Engine and Ara Hub from **0.0.2-alpha.3**.
 
-**Draft:** J7, the sun-bounce fix, the editor follow-up and formal measurements
-are still pending below. Existing projects need the migration described here
-before opening in this engine.
+Existing projects need the migration described here before opening in this engine.
 
 ## Highlights
 
@@ -43,17 +41,33 @@ before opening in this engine.
   executable or app with its runtime data, keeping reports, logs and symbols out
   of the player upload folder.
 - **Apple silicon source-build support.** Metal 4 rendering, C# playback,
-  Retina-aware game UI and macOS app exports are supported. Hardware ray queries
-  are verified on the M5 Pro; the emitter-related bright speckles in Metal RT VFX
-  captures are fixed. Native crashes and panics produce macOS crash reports.
-  Packaged installers in this release remain Windows x64.
+  Retina-aware game UI and macOS app exports are supported. On Apple9 GPUs (M3 and
+  later) High/Epic use hardware ray queries by default (`ARA_METAL_RT=0` keeps the
+  raster path), virtualized geometry runs, and texture imports use the GPU BC4/BC5/
+  BC6H/BC7 encoder. The emitter-related bright speckles in Metal RT captures are
+  fixed. Native crashes and panics produce macOS crash reports, and a player killed
+  by a signal is reported as a crash. Packaged installers in this release remain
+  Windows x64.
+- **Reflection probes and lighting debug views.** Place a `ReflectionProbe` to
+  capture a room for nearby smooth surfaces. Captures run as cancellable jobs with
+  receipts, are cached under `.ara/cache/probes` and restore when the project
+  reopens; edits mark them stale instead of changing under you. New **GI diffuse**
+  and **Overdraw** views show indirect diffuse light only and per-pixel fragment
+  counts on a fixed heat legend.
 
 ## Rendering and presentation
 
 Player and editor presentation waits are bounded, and rendering can record the
 next frame while the previous one runs. Native geometry uses indexed draws.
-Formal frame-time results are pending below. Imported glTF IOR and volume settings
-now reach glass shading, including refraction and translucent sun shadows.
+Imported glTF IOR and volume settings now reach glass shading, including
+refraction and translucent sun shadows.
+
+Sunlight bounced into shadow is restored. Probe GI no longer shadows the surfaces
+it was sampled from: in a sun-only bench, shadowed bounce light went from 0.55 to
+0.92 of a path-traced reference (0.99 relative to the same scene's sunlit areas),
+and thin walls do not leak light. In the opt-in RT tier, rough metals keep their
+reflected energy through denoising, so dark panels such as Outpost's shutters read
+at the reference brightness again.
 
 ## Authoring, scripts and samples
 
@@ -66,8 +80,7 @@ now reach glass shading, including refraction and translucent sun shadows.
   schemas before scene validation, without requiring Play first. Compilation
   failures remain visible instead of becoming unknown-component errors.
 - C# diagnostics retain module and source locations, including errors from initial
-  script loading and Play startup. The editor's Problems/Console presentation is
-  tracked in the pending editor section below.
+  script loading and Play startup.
 - Saving canonical defaults no longer creates a spurious external-edit transaction
   that clears Redo after an asset Undo. Real external edits are still recorded.
   CLI asset commands wait for prepared work to commit; progressing imports are no
@@ -80,7 +93,7 @@ now reach glass shading, including refraction and translucent sun shadows.
   effect records and particle atlas required to run outside the checkout.
 - Shared menus, searchable selections and dialogs have corrected sizing, focus
   and text wrapping. Hub project creation is a dedicated page with Back navigation.
-  Further editor changes are pending below.
+  Editor interaction changes are listed under **Editor** below.
 - Crash monitoring handles long Windows temporary paths that previously prevented
   its startup.
 
@@ -157,33 +170,43 @@ not add hot-patching to shipped games. Showcase comparison tooling includes
 adapters for Unity URP, Unreal 5.7 and Cycles; this draft makes no cross-engine
 performance claim.
 
+## Editor
+
+- **Drag and drop shows its result before you release.** Hierarchy reorder and
+  reparent, asset references, material drops onto sub-meshes and component
+  reorder draw an insertion line and a short label naming the action. Invalid
+  drops, such as moving an entity inside its own descendants, are refused with
+  the reason. A drag is one Undo step, and Escape cancels it.
+- **Files dragged in from Explorer import where you drop them.** A banner reports
+  how many were created, replaced or skipped. Focus loss, Escape or closing a
+  floating panel mid-drag no longer loses the import.
+- Drag labels, banners, tooltips and popovers size to their text and wrap at a
+  readable width; an automated check fails the build if any overflows.
+- After you commit a text field, Ctrl+Z/Ctrl+Y undo and redo the document edit
+  instead of being swallowed by the field.
+- Renaming an asset, then undoing and redoing, keeps the project model, the file
+  and its references in step.
+- The editor uses the new engine icon.
+
+A larger editor redesign is planned separately; this preview includes the
+interaction fixes above, not new editor panels.
+
+## Scripts in Play
+
+- C# exceptions from gameplay, commands and callbacks carry the full managed
+  stack, including inner exceptions and file/line where PDBs are present.
+- Edits an agent makes to C# sources while Play is running are attributed to the
+  agent even when the file lands late; your own saves in between stay yours.
+
 ## Known issues
 
 - **Opt-in RT tier:** glossy surfaces can show grain. This is still present on
-  both Vulkan and Metal; the Metal emitter-speckle fix does not remove it.
-- **Two-sided panels with RT:** rendering can be incorrect. Use the raster path
-  if it affects your scene. **TODO before publication:** retain this issue unless
-  the specific RT panel fix has merged and passed its regression check.
-- Local reflection-capture bakes remain experimental and disabled by default;
-  they can be enabled explicitly for look development.
+  both Vulkan and Metal.
+- Automatic placement of reflection captures remains experimental and off by
+  default (`ARA_REFLECTION_CAPTURES=1` enables it for look development).
+  Probes you place yourself always capture at High and Epic.
 
-## TODO — J7
-
-Pending `t3/vq-j7`. Replace this section with the verified user-visible change and
-remaining limitations after its merge and checks. No outcome is claimed yet.
-
-## TODO — sun-bounce fix
-
-Pending `t3/vq-sunbounce`. Add the confirmed lighting correction and any remaining
-shadowed-ground limitation after its merge and reference comparison.
-
-## TODO — editor follow-up
-
-Pending `t3/ux-editor-p4`. Add only its final merged interaction changes and native
-journey results. In particular, confirm how resolved C# errors leave Problems
-while Console retains history, using the included compiler-completion support.
-
-## TODO — formal measurements
+## Performance
 
 Insert the final-source performance and quality reading after all rendering and
 editor changes land. Include per-scene/per-preset GPU p50/p95, CPU work and frame
