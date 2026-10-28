@@ -1,103 +1,193 @@
-# Ara 0.0.1-alpha
+# Ara 0.0.2-alpha.4
 
-Ara is a Rust game engine with a native editor, C# gameplay, and MCP tools for
-agents working alongside people. This first public alpha ships for **Windows x64**.
+Preview 4 updates Ara Engine and Ara Hub from **0.0.2-alpha.3**.
 
-## Install
-
-1. Download `ara-hub-0.0.1-alpha-windows-x64-setup.exe` from
-   [GitHub Releases](https://github.com/Ara-Engine/ara/releases) and install Ara Hub.
-2. Open **Installs**, select **Preview**, and install engine **0.0.1-alpha**.
-   Hub and engine releases are separate; the alpha is a prerelease.
-3. Create a Starter, Outpost or Material showcase project from **New project**.
-   Hub manages installed engines, project version pins and Hub updates.
-
-Alternatively, `ara-0.0.1-alpha-windows-x64-setup.exe` installs the engine and Hub
-together. Installations are per user and engine versions can live side by side.
-
-Windows 10/11 x64, a Vulkan 1.3 GPU with a current driver, and 16 GB RAM are the
-baseline. Install the x64 .NET 10 SDK/runtime and Microsoft VC++ v14 Redistributable.
-NativeAOT builds also need MSVC C++ Build Tools and the Windows SDK. Shader tools
-are bundled; running the installed engine does not require Rust or the Vulkan SDK.
-
-**Unsigned alpha:** neither setup has Authenticode signing. Windows SmartScreen
-may warn; check the download source before choosing **More info → Run anyway**.
-Signed release manifests and SHA-256 verification protect Hub downloads and updates;
-they do not remove the Windows warning.
+**Draft:** J7, the sun-bounce fix, the editor follow-up and formal measurements
+are still pending below. Existing projects need the migration described here
+before opening in this engine.
 
 ## Highlights
 
-- **Raster rendering on every preset:** probe global illumination, virtual sun
-  shadow maps on High/Epic, heightfield horizon shadows for distant terrain, and
-  temporal antialiasing/upscaling (TAAU). Hardware ray tracing remains experimental.
-- **Finer probe GI at no frame cost:** GI bakes a probe pool, the scene-wide lattice
-  plus a finer one over built-up content (Outpost: 32,768 + 16,250 probes), blended
-  by coverage without seams. Scenes are ready on the coarse lattice; the fine one
-  cross-fades in when its bake lands. The relight touches only its per-frame budget,
-  so its cost no longer grows with probe count (Outpost: 0.12–0.22 ms down to
-  0.02–0.09 ms). Outpost's ꟻLIP against the path tracer improves on every preset.
-- **Faster imports:** Outpost's 115 sources reached assets-ready in about
-  **20 seconds** on NVMe (19.83–20.10 s). These were fresh project content caches
-  through the real import/publication path; OS and driver caches were not flushed.
-  This measures import completion, not the time to the first fully rendered scene.
-- **A more responsive editor:** retained UI, asynchronous Scene presentation,
-  responsive menus and text editing, Scene/Game views, embedded Play, undoable
-  authoring, and material, VFX and animation tools.
-- **C# gameplay and shipping:** live code reload with state migration, in-editor
-  Build Current Profile, and standalone Windows exports with NativeAOT gameplay.
-  Installed-package smoke builds Starter and verifies an exported game's run.
-- **MCP agents:** one global connection can discover registered projects and
-  inspect, edit, play and capture them through the same engine commands as the
-  editor. Sessions stay isolated between projects. Hub provides setup instructions
-  with an absolute executable path; Ara does not need to be on the client's PATH.
+- **One place for your game content.** New projects and templates use `content/`
+  for scenes, scripts, models, materials, audio and UI, organized however you like.
+  Hub and the editor show a move preview before migrating an existing project;
+  **Cancel** leaves it unchanged and closed.
+- **A rendering and material update.** High/Epic use Ara TSR for the main view;
+  lower presets and secondary views retain TAAU. Rough reflections, grazing-angle
+  surfaces, ambient occlusion, glass refraction and translucent sun shadows receive
+  shading fixes. AgX display transforms and anisotropic material filtering are
+  available. High/Epic can use hardware ray queries on capable devices, with a
+  raster fallback; the separate ray-traced fidelity tier remains opt-in.
+  Unsupported RT requests report `ARA_GPU_RT_FALLBACK` (ARA6008) instead of
+  falling back silently.
+- **Undoable asset organization.** Import, move, rename, duplicate, safe delete
+  and folder creation use attributed transactions. Recognized references and model
+  companions are handled together; collisions and unsafe dependency changes are
+  diagnosed before committing. An asset batch is one Undo/Redo step, including
+  file bytes and empty folders.
+- **CLI and MCP workflows that survive reopening.** Offline Undo/Redo now retains
+  history between CLI invocations. Entity-only revert selects the caller's eligible
+  recent edits without requiring a transaction ID, and accept-all is idempotent.
+  `ara why` understands primitive and asset-backed geometry and resolves the new
+  content paths. Headless run and offscreen PNG capture work through CLI and MCP,
+  alongside the registered Play and test services.
+- **C# authoring and editor extensions.** Find entities by name or path, query and
+  change hierarchy, and receive deterministic destruction callbacks. Editor-only
+  extensions can register commands and menu items, read selection and scene
+  snapshots, and submit undoable authoring commands. The SDK ships analyzer fixes
+  for ARA0001, ARA0101 and ARA0506; CLI/MCP fixes use undoable source edits and reject
+  files that changed underneath them.
+- **Hub installation and export workflows.** Updates separate discovery, download,
+  verification and explicit restart. Engine installs show their phases; signed
+  Repair and cancellable removal are available. Exports produce a game-named
+  executable or app with its runtime data, keeping reports, logs and symbols out
+  of the player upload folder.
+- **Apple silicon source-build support.** Metal 4 rendering, C# playback,
+  Retina-aware game UI and macOS app exports are supported. Hardware ray queries
+  are verified on the M5 Pro; the emitter-related bright speckles in Metal RT VFX
+  captures are fixed. Native crashes and panics produce macOS crash reports.
+  Packaged installers in this release remain Windows x64.
 
-## Performance bar: D26
+## Rendering and presentation
 
-D26 sets UE5-class budgets at **2560×1440 on an RTX 4070 SUPER**, with release
-builds and validation disabled. Quality is checked against the path-traced reference.
-The GPU budgets are Low **2 ms**, Medium **3.5 ms**, High **6 ms**, Epic **10 ms**;
-the CPU budget is **4 ms**, with no frame over **16 ms** after the first frame.
-Startup targets are a presented loading frame within **2 s** cold and a complete
-first scene frame within **3 s** warm.
+Player and editor presentation waits are bounded, and rendering can record the
+next frame while the previous one runs. Native geometry uses indexed draws.
+Formal frame-time results are pending below. Imported glTF IOR and volume settings
+now reach glass shading, including refraction and translucent sun shadows.
 
-**Formal reading:** report `20261026-182821` on the release source, `perf` profile.
-Every D26 row is within its budget:
+## Authoring, scripts and samples
 
-| GPU p50 / p95 (ms) | Low (2) | Medium (3.5) | High (6) | Epic (10) |
-| --- | ---: | ---: | ---: | ---: |
-| Outpost | 1.52 / 1.64 | 3.04 / 3.26 | 3.81 / 4.28 | 5.39 / 5.79 |
-| Hangar | 1.26 / 1.52 | 1.88 / 1.98 | 3.14 / 3.48 | 3.96 / 4.21 |
-| Showcase | 0.83 / 1.10 | 1.26 / 1.43 | 1.77 / 1.95 | 2.69 / 3.07 |
+- C# modules use `<name>.module.json` manifests with named dependencies. Nested
+  modules compile their own sources; unknown dependencies and cycles are errors.
+  An exact lowercase `editor` folder anywhere in a source's ancestry makes it
+  editor-only, and those assemblies are excluded from player exports.
+- Generated projects, assemblies and component schemas live under `.ara/scripts/`.
+  Opening, checking or exporting a fresh project compiles and publishes its C#
+  schemas before scene validation, without requiring Play first. Compilation
+  failures remain visible instead of becoming unknown-component errors.
+- C# diagnostics retain module and source locations, including errors from initial
+  script loading and Play startup. The editor's Problems/Console presentation is
+  tracked in the pending editor section below.
+- Saving canonical defaults no longer creates a spurious external-edit transaction
+  that clears Redo after an asset Undo. Real external edits are still recorded.
+  CLI asset commands wait for prepared work to commit; progressing imports are no
+  longer stopped solely because a fixed overall timeout elapsed.
+- Outpost's five Kenney packs now have GitHub mirror URLs. Fetch tries the original
+  URL and then its mirrors, requiring the same pinned BLAKE3 and size throughout.
+  Total failures list every attempted URL and its failure. Credits are unchanged.
+- Export preflight identifies missing or mixed runtime resources before compiling
+  gameplay and offers installed-engine Repair. VFX exports include the cooked
+  effect records and particle atlas required to run outside the checkout.
+- Shared menus, searchable selections and dialogs have corrected sizing, focus
+  and text wrapping. Hub project creation is a dedicated page with Back navigation.
+  Further editor changes are pending below.
+- Crash monitoring handles long Windows temporary paths that previously prevented
+  its startup.
 
-- **CPU:** Play CPU work p95 is 2.41 ms (Outpost), 1.51 ms (Hangar) and 1.72 ms
-  (Showcase); the editor's Scene orbit is 2.07 ms.
-- **Frames over 16 ms after the first:** none, cold or warm, in every Play run.
-- **Startup:** the player's cold loading frame takes 0.72–0.99 s and its warm first
-  scene 1.24–1.91 s. The editor's cold loading frame takes 1.90 s and its warm
-  first scene 1.99 s.
-- **Quality:** Outpost ꟻLIP / RMSE against 256-sample path-traced references is
-  0.129 / 0.043 (Low), 0.130 / 0.043 (Medium), 0.128 / 0.041 (High) and
-  0.125 / 0.040 (Epic); lower is better.
+## Updating and migrating a project
 
-GPU readings use settled renderer windows after readiness. The run's foreign-GPU-load
-guard recorded no outside load (peak 4.9%, mean 0.2%, no contaminating process).
-Its counter sampler then failed with a transient read error in the run's final
-seconds, so the tool labels the report invalid. The values were accepted as the
-formal reading; the sampler fix ships in the next build.
+Install both **Hub 0.0.2-alpha.4** and **Engine 0.0.2-alpha.4** through the Preview
+channel. A preview-3 layout-v3 project can keep using its compatible old engine
+until you choose to migrate it.
+
+This engine requires **layout version 4**. Earlier root-level folders and the
+preview-3 `game/` layout are migrated into `content/`. Project policy moves into
+`settings/project.json`; build presets live in `settings/builds/`. Generated data
+stays in `.ara/`, export output in root `builds/`, and root `packages/` is reserved.
+References and the main scene are relative to `content/`, without that prefix:
+`@props/crate.prefab#pf_crate001` addresses `content/props/crate.prefab`.
+
+Back up the project, including its `.ara/` history. In Hub or the editor, review
+the move preview and choose **Migrate** or **Cancel**. Migration is explicit:
+Cancel keeps the project closed and unchanged. Destination collisions are reported
+before files move. Migration preserves IDs and history, converts legacy C# module
+manifests and editor-only placement, and pins the engine performing the migration.
+The move is one undoable transaction; undoing it restores the older layout, which
+must be migrated again before ordinary work in the new engine.
+
+For the CLI, close the project's editor and daemon first:
+
+```sh
+ara --root path/to/project project migrate --dry-run --json
+ara --root path/to/project project migrate
+ara --root path/to/project check
+```
+
+The dry run does not create a lock or cache. **ARA1914** means the old layout needs
+migration before open, check, import, Play or export. **ARA1915** means the pinned
+engine cannot open the new layout; Hub offers **Use current engine** or
+**Install current engine**, with **Cancel** to leave the pin and project unchanged.
+If migration reports unsaved journal edits (ARA1905), recover and save them with
+the originating engine before retrying. Do not rename the root folders by hand.
+
+See the [project layout and migration guide](https://github.com/Ara-Engine/ara/blob/main/docs/project-layout.md).
+Rebuild C# gameplay exports with the matching preview-4 SDK and player rather than
+mixing an older compiled gameplay image with the new runtime.
+
+## Install and distribute
+
+Download `ara-hub-0.0.2-alpha.4-windows-x64-setup.exe` from
+[GitHub Releases](https://github.com/Ara-Engine/ara/releases), then use
+**Installs → Preview** to install the matching engine. The combined
+`ara-0.0.2-alpha.4-windows-x64-setup.exe` is also available. Engine versions can
+live side by side.
+
+Windows 10/11 x64, a Vulkan 1.3 GPU with a current driver, 16 GB RAM, the x64 .NET 10
+SDK/runtime and Microsoft VC++ v14 Redistributable remain prerequisites. NativeAOT
+export also needs MSVC C++ Build Tools and the Windows SDK. Installed engine use
+does not require Rust or the Vulkan SDK. macOS source builds require Apple silicon,
+Metal 4 and macOS 26 or later; macOS app exports are built on a Mac.
+
+**Unsigned preview:** neither Windows setup has Authenticode signing. SmartScreen
+may warn. Signed release manifests and download hashes protect Hub installations
+and updates; they do not remove the Windows warning.
+
+For a game export, upload only the contents of `build/` (or its package): the
+game-named executable or macOS app, required data and notices. Keep sibling
+`report/`, `logs/` and `symbols/` folders private. Custom runtime templates must
+come from a matching, complete engine build.
+
+## For engine contributors
+
+Source builds include Fidelity Lab for warm scene tracks, shader updates,
+captures, reference comparisons and GPU measurements, with a coordinated Mac
+mirror. Dev-only Rust body hot-patching covers render passes, ECS systems and
+editor panels; incompatible changes require restart. These development tools do
+not add hot-patching to shipped games. Showcase comparison tooling includes
+adapters for Unity URP, Unreal 5.7 and Cycles; this draft makes no cross-engine
+performance claim.
 
 ## Known issues
 
-- The editor still exceeds **16.7 ms** on some frames while content publishes
-  during first imports: 40 frames in the formal cold run, with click and drag
-  latency p95 of 20.7 ms and 72.6 ms. After imports, 5 frames exceed it.
-  A renderer descriptor-heap fix for this is ready for the next build.
-- At dusk, shadowed Outpost ground is darker than the path-traced reference.
-- Game preview exposure can differ from Play's early frames; particles are not
-  composited into the stopped Game preview yet.
-- **macOS is not shipped** in this release.
-- **D27 record targets are not met yet:** whole-frame GPU targets are
-  Low/Medium/High/Epic **1 / 1.75 / 3 / 5 ms** on the same reference GPU and resolution.
+- **Opt-in RT tier:** glossy surfaces can show grain. This is still present on
+  both Vulkan and Metal; the Metal emitter-speckle fix does not remove it.
+- **Two-sided panels with RT:** rendering can be incorrect. Use the raster path
+  if it affects your scene. **TODO before publication:** retain this issue unless
+  the specific RT panel fix has merged and passed its regression check.
+- Local reflection-capture bakes remain experimental and disabled by default;
+  they can be enabled explicitly for look development.
 
-Import measurements are recorded in `crates/ara-importers/MEASUREMENTS.md`.
-D26/D27 budgets are in `docs/decisions.md`; the current sun-shadow comparison is
-`reports/vsm-shadow-proof.html`.
+## TODO — J7
+
+Pending `t3/vq-j7`. Replace this section with the verified user-visible change and
+remaining limitations after its merge and checks. No outcome is claimed yet.
+
+## TODO — sun-bounce fix
+
+Pending `t3/vq-sunbounce`. Add the confirmed lighting correction and any remaining
+shadowed-ground limitation after its merge and reference comparison.
+
+## TODO — editor follow-up
+
+Pending `t3/ux-editor-p4`. Add only its final merged interaction changes and native
+journey results. In particular, confirm how resolved C# errors leave Problems
+while Console retains history, using the included compiler-completion support.
+
+## TODO — formal measurements
+
+Insert the final-source performance and quality reading after all rendering and
+editor changes land. Include per-scene/per-preset GPU p50/p95, CPU work and frame
+outliers, cold/warm startup, editor interaction during imports, import completion,
+and reference-image error. Identify hardware, resolution, render path, build and
+validation settings. Do not reuse alpha.3's table or intermediate branch speedups;
+no preview-4 budget pass or percentage improvement is claimed in this draft.
