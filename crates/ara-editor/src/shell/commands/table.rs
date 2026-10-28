@@ -1078,6 +1078,7 @@ fn build() -> Vec<Spec> {
             act(e, "editor.asset.reimport", json!({"path": path}))
         }).when(has_asset),
         later("assets.reimport_changed", "Reimport All Changed", "refresh-cw", "", "Changed sources reimport automatically when the host sees them on disk."),
+        cmd("assets.refresh", "Refresh Assets", "refresh-cw", "", "Refresh the Assets view and retry file indexing.", |s, _, _| s.refresh_asset_browser()),
         cmd("assets.open", "Open", "external-link", "Enter", "Open the asset in its editor, or the folder.", |s, e, t| s.open_asset(e, t)).when(has_asset),
         cmd("assets.show", "Show in Assets", "folder", "Ctrl+B", "Reveal the selected entity's model, or the asset, in Assets.", |s, e, t| s.show_in_assets(e, t)),
         cmd("assets.reveal", "Show in Explorer", "folder", "", "Open the containing folder in the OS file manager.", |s, e, t| {

@@ -63,6 +63,7 @@ const ASSETS: &[Item] = &[
     C("assets.import"),
     C("assets.reimport"),
     C("assets.reimport_changed"),
+    C("assets.refresh"),
     S,
     C("assets.open"),
     C("assets.show"),
@@ -659,6 +660,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
         ],
         Context::Asset => &[
             Sub("Create", ASSET_CREATE),
+            C("assets.refresh"),
             C("assets.open_ide"),
             C("assets.open"),
             C("assets.reveal"),
@@ -672,6 +674,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("assets.delete"),
         ],
         Context::Folder => &[
+            C("assets.refresh"),
             C("assets.open"),
             C("assets.reveal"),
             C("assets.rename"),
@@ -684,6 +687,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
         ],
         Context::Assets => &[
             Sub("Create", ASSET_CREATE),
+            C("assets.refresh"),
             C("assets.import"),
             C("assets.reveal"),
             C("assets.rebuild_thumbnails"),
