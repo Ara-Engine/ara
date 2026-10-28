@@ -42,7 +42,7 @@ struct Marker<'a> {
 }
 impl<'a> Marker<'a> {
     fn parse(diagnostic: &'a ara_diag::Diagnostic) -> Option<Self> {
-        if diagnostic.code != ara_diag::Code(935) {
+        if diagnostic.code != ara_script::codes::RECOVERY_RESULT {
             return None;
         }
         let data = diagnostic.data.as_deref()?;
@@ -93,7 +93,7 @@ impl Recovery {
 
     /// Only broker-stamped data.play is trusted; subject string encodings are not an API.
     pub(super) fn observe(&mut self, entry: &Entry, gap: bool) -> bool {
-        if entry.diagnostic.code != ara_diag::Code(935) {
+        if entry.diagnostic.code != ara_script::codes::RECOVERY_RESULT {
             return false;
         }
         let Some(marker) = Marker::parse(&entry.diagnostic) else {
