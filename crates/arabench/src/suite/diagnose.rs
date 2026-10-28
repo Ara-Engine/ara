@@ -15,7 +15,7 @@ use ara_proto::ConnId;
 use serde_json::{Value, json};
 
 use super::{OUTPOST, at, clean, with_why};
-use crate::fixture::patch;
+use crate::fixture::{authored_path, patch};
 use crate::solve::Solver;
 use crate::task::{Area, Budget, Checks, Fixture, Task};
 use crate::world::World;
@@ -25,7 +25,7 @@ const BROKEN_RADIO: &str = "material Radio : surface budget 1 {\n  param paint :
 const FIXED_RADIO: &str = "material Radio : surface budget 1 {\n  param paint : ColorLinear = linear(0.1, 0.35, 0.12);\n  param roughness : float = 0.6;\n  output baseColor = paint;\n  output roughness = roughness;\n}\n";
 
 fn write(root: &Path, rel: &str, text: &str) -> Result<(), String> {
-    let path = root.join(rel);
+    let path = authored_path(root, rel);
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
@@ -86,7 +86,7 @@ pub const BAD_MATERIAL: Task = Task {
                 format!("{material:?}"),
             );
         }
-        let text = w.file(RADIO_MATERIAL).unwrap_or_default();
+        let text = w.authored_file(RADIO_MATERIAL).unwrap_or_default();
         let result = compiles(&text, "gr_radio001");
         c.check(
             "the radio material compiles",
@@ -107,7 +107,7 @@ pub const BAD_MATERIAL: Task = Task {
         if why["causes"][0]["code"] != "ARA3306" {
             return Err(format!("unexpected answer:\n{}", why["text"]));
         }
-        s.write(RADIO_MATERIAL, FIXED_RADIO)
+        s.write_authored(RADIO_MATERIAL, FIXED_RADIO)
     },
 };
 
@@ -120,7 +120,7 @@ pub const MISSING_MESH: Task = Task {
     fixture: Fixture::Outpost,
     setup: Some(|root: &Path| {
         add_camera(root)?;
-        fs::remove_file(root.join("meshes/generator.glb.import.json"))
+        fs::remove_file(authored_path(root, "meshes/generator.glb.import.json"))
             .map_err(|e| e.to_string())?;
         write(
             root,
@@ -229,7 +229,7 @@ pub const NAN_BARREL: Task = Task {
     setup: Some(|root: &Path| {
         add_camera(root)?;
         let barrel = "\"name\": \"Barrel.002\",";
-        let text = fs::read_to_string(root.join(OUTPOST)).map_err(|e| e.to_string())?;
+        let text = fs::read_to_string(authored_path(root, OUTPOST)).map_err(|e| e.to_string())?;
         let at = text.find(barrel).ok_or("no Barrel.002")?;
         let mass = text[at..].find("\"mass\": 30").ok_or("no barrel mass")? + at;
         let text = format!(
@@ -237,7 +237,7 @@ pub const NAN_BARREL: Task = Task {
             &text[..mass],
             &text[mass + "\"mass\": 30".len()..]
         );
-        fs::write(root.join(OUTPOST), text).map_err(|e| e.to_string())?;
+        fs::write(authored_path(root, OUTPOST), text).map_err(|e| e.to_string())?;
         report_playtest(root)
     }),
     budget: Budget::new(20, 6),

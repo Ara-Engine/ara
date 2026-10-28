@@ -11,7 +11,7 @@ use crate::world::World;
 pub const FLOOR_CRATE: Task = Task {
     id: "scene-floor-crate",
     area: Area::Assembly,
-    prompt: "Start building the main level (levels/main.scene). Add a floor entity called Floor with a 20 x 0.5 x 20 m box collider, and a Crate entity that sits on it: make the crate a child of the floor, at local position (2, 0.5, 3).",
+    prompt: "Start building the main level (content/scenes/main.scene). Add a floor entity called Floor with a 20 x 0.5 x 20 m box collider, and a Crate entity that sits on it: make the crate a child of the floor, at local position (2, 0.5, 3).",
     fixture: Fixture::Outpost,
     setup: None,
     budget: Budget::new(25, 6),

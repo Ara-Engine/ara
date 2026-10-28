@@ -149,10 +149,12 @@ fn host_registers_six_scoped_methods_and_bots_use_actions() -> Result<()> {
     use ara_host::{Host, HostConfig, Project};
     use ara_proto::{ConnId, Scope};
     let dir = std::env::temp_dir().join(format!("ara-net-host-{}", std::process::id()));
-    std::fs::create_dir_all(&dir)?;
+    std::fs::create_dir_all(dir.join(ara_doc::AUTHORING_ROOT))?;
     std::fs::write(
         dir.join("ara.project.json"),
-        ara_json::to_canonical_string(&json!({"name":"net-gate"})),
+        ara_json::to_canonical_string(
+            &json!({"name":"net-gate","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
+        ),
     )?;
     let mut host = Host::open(
         Project::open(&dir).map_err(|e| NetError(e.to_string()))?,

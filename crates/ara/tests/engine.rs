@@ -174,22 +174,27 @@ fn commands_need_a_project_marker_and_skip_nested_projects() {
     assert_eq!(d["fixes"][0]["action"], "cli");
     assert_eq!(d["fixes"][0]["args"][0], "init");
 
-    // A project whose subdirectories hold a nested project, spikes and hidden dirs:
-    // none of their (broken) documents belong to it.
+    // A nested project inside authored content and support directories at the
+    // project root: none of their broken documents belong to the outer project.
     let root = scratch("nested");
     let (code, _, err) = ara_in(&root, &["init", "--name", "outer"]);
     assert_eq!(code, 0, "{err}");
-    for dir in ["inner", "spikes/s9", ".refs/godot", "target/x"] {
-        fs::create_dir_all(root.join(dir)).expect("mkdir");
-        fs::write(root.join(dir).join("bad.scene"), "{ not json").expect("write");
+    let authored = root.join(ara_doc::AUTHORING_ROOT);
+    for dir in [
+        authored.join("inner"),
+        root.join("spikes/s9"),
+        root.join(".refs/godot"),
+        root.join("target/x"),
+    ] {
+        fs::create_dir_all(&dir).expect("mkdir");
+        fs::write(dir.join("bad.scene"), "{ not json").expect("write");
     }
-    fs::write(root.join("inner/ara.project.json"), "{}").expect("marker");
-    let (code, out, _) = ara_in(
-        &root
-            .join(ara_host::project_layout::AUTHORING_ROOT)
-            .join("scenes"),
-        &["check", "--json"],
-    );
+    fs::write(
+        authored.join("inner/ara.project.json"),
+        ara_json::to_canonical_string(&json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION})),
+    )
+    .expect("marker");
+    let (code, out, _) = ara_in(&authored.join("scenes"), &["check", "--json"]);
     let report = json_of(&out);
     assert_eq!(
         (code, report["files"].clone(), report["errors"].clone()),

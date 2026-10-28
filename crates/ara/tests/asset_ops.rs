@@ -58,19 +58,12 @@ fn apply(root: &Path, commands: Value) -> Value {
     )
 }
 
-fn journey(versioned: bool) {
+fn journey() {
     let scratch = scratch();
     let root = scratch.join("project");
-    let authored = if versioned {
-        root.join(ara_doc::AUTHORING_ROOT)
-    } else {
-        root.clone()
-    };
+    let authored = root.join(ara_doc::AUTHORING_ROOT);
     fs::create_dir_all(&authored).expect("authored root");
-    let mut marker = json!({"name":"Asset proof","main":"main.scene"});
-    if versioned {
-        marker["layoutVersion"] = json!(4);
-    }
+    let marker = json!({"name":"Asset proof","main":"main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION});
     fs::write(
         root.join("ara.project.json"),
         ara_json::to_canonical_string(&marker),
@@ -206,7 +199,7 @@ fn legacy_project_asset_journey_requires_explicit_migration() {
 
 #[test]
 fn versioned_project_asset_journey() {
-    journey(true);
+    journey();
 }
 
 #[test]

@@ -99,7 +99,7 @@ public sealed class ProjectInventoryTests
         Write("content/combat/editor/Tools.cs", "class Tools { }");
         Write("content/combat/parts/editor/Deep.cs", "class Deep { }");
         Write("content/editor/Global.cs", "class GlobalTools { }");
-        Write("content/nested/ara.project.json", "{}");
+        Write("content/nested/ara.project.json", "{\"layoutVersion\":4}");
         Write("content/nested/Wrong.cs", "this is not C#");
         Write("packages/Wrong.cs", "this is not C#");
         Write("settings/Wrong.cs", "this is not C#");
