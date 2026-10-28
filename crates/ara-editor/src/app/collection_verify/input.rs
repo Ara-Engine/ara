@@ -134,7 +134,7 @@ impl CollectionCheck {
         if !scale.is_finite() || scale <= 0. || point.iter().any(|value| !value.is_finite()) {
             return Err("Native collection drag coordinates must be finite and scaled".into());
         }
-        let rect = window.rect();
+        let rect = window.rect()?;
         shell.desktop_pointer = Some([
             rect[0] as f32 + point[0] / scale,
             rect[1] as f32 + point[1] / scale,

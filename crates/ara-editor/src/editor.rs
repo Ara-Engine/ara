@@ -52,6 +52,8 @@ pub struct Editor {
     pub(crate) captures: Receiver<CaptureTask>,
     /// GPU job results returned to the capture service.
     pub(crate) completed: mpsc::Sender<CaptureCompletion>,
+    /// Session-owned derived probe jobs bridged to the render-boundary owner.
+    pub(crate) probe_captures: crate::probe_capture::Bridge,
     updates: Receiver<EditorState>,
     controls: Receiver<Control>,
     pub(crate) command_schemas: BTreeMap<String, Value>,
@@ -208,6 +210,9 @@ impl Editor {
         let (completed, results) = mpsc::channel();
         host.register(Box::new(CaptureService::new(tasks, results)))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        let (probes, probe_captures) = crate::probe_capture::channel();
+        host.register(Box::new(probes))
+            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         host.register(Box::new(
             crate::shell::reachability::ValidationService::default(),
         ))
@@ -247,6 +252,7 @@ impl Editor {
             profile_baseline: None,
             captures,
             completed,
+            probe_captures,
             updates,
             controls,
             command_schemas,

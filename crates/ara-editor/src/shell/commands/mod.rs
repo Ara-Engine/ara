@@ -80,6 +80,8 @@ pub(crate) struct Ctx<'a> {
     pub game: (bool, &'static str, bool),
     /// Play was started and has no live world yet: Stop cancels the start.
     pub starting: bool,
+    /// The Scene view is explicitly piloting one authored Camera.
+    pub pilot: bool,
     /// Build menu state.
     pub build: BuildState,
 }
@@ -241,6 +243,7 @@ impl Shell {
             logs: self.log_view,
             assets_show_all: self.assets_show_all,
             game: (self.game_stats, self.game_aspect, self.game_live),
+            pilot: self.pilot_active(),
             starting: editor.state.playing.is_none()
                 && (self.game_start.is_some() || editor.play_world.is_some()),
             build: BuildState {

@@ -34,21 +34,25 @@ pub(crate) struct ProbeService {
     cached: Option<Cached>,
     unavailable: String,
     refresh_pending: bool,
+    owner_disconnected: bool,
 }
 
 impl ProbeService {
     pub(super) fn new(requests: SyncSender<Request>, events: Receiver<Event>) -> Self {
         Self { requests, events, pending: BTreeMap::new(), cached: None,
-            unavailable: "The Scene renderer has not published a probe snapshot".into(), refresh_pending: false }
+            unavailable: "The Scene renderer has not published a probe snapshot".into(), refresh_pending: false, owner_disconnected: false }
     }
 
     fn refresh(&mut self) {
-        if !self.refresh_pending && self.requests.try_send(Request::Refresh).is_ok() {
+        if !self.owner_disconnected && !self.refresh_pending && self.requests.try_send(Request::Refresh).is_ok() {
             self.refresh_pending = true;
         }
     }
 
     fn recapture(&mut self, cx: &mut Cx<'_>, params: RecaptureParams) -> Result<Value, Vec<Diagnostic>> {
+        if self.owner_disconnected {
+            return Err(vec![crate::invalid("The Scene probe owner has disconnected")]);
+        }
         validate_entities(&params.entities, false)?;
         if params.why.as_deref().is_some_and(|why| why.len() > 4096) {
             return Err(vec![crate::invalid("Probe capture explanation is limited to 4096 bytes")]);
@@ -111,6 +115,7 @@ impl ProbeService {
     }
 
     fn send_cancellations(&mut self, cx: &Cx<'_>) {
+        if self.owner_disconnected { return; }
         for (job, pending) in &mut self.pending {
             pending.cancel_requested |= cx.job_cancelled(job);
             if pending.cancel_requested && !pending.cancel_sent
@@ -159,7 +164,7 @@ impl ProbeService {
                 let Some(pending) = self.pending.get_mut(&job).filter(|pending| pending.session == session
                     && pending.backend == Some(status.job.0) && pending.binding.as_ref() == Some(&binding)) else { return; };
                 pending.cancellable &= status.cancellable;
-                cx.set_job_cancellable(&job, pending.cancellable);
+                if !status.finished { cx.set_job_cancellable(&job, pending.cancellable); }
                 if status.progress.is_some_and(|p| !p.is_finite() || !(0.0..=1.0).contains(&p)) {
                     pending.cancel_requested = true;
                     cx.finish_job(&job, Err(vec![failure(&pending.doc, None, "The probe owner reported invalid progress")]));
@@ -201,8 +206,13 @@ impl Service for ProbeService {
                 Err(TryRecvError::Disconnected) => {
                     // A closed owner has not proved GPU retirement. Keep the resource
                     // registry pending; report failed receipts without inventing drain.
-                    for (job, pending) in &self.pending {
-                        cx.finish_job(job, Err(vec![failure(&pending.doc, None, "The Scene probe owner disconnected before confirming retirement")]));
+                    if !self.owner_disconnected {
+                        self.owner_disconnected = true;
+                        self.cached = None;
+                        self.unavailable = "The Scene probe owner disconnected before confirming retirement".into();
+                        for (job, pending) in &self.pending {
+                            cx.finish_job(job, Err(vec![failure(&pending.doc, None, &self.unavailable)]));
+                        }
                     }
                     break;
                 }
@@ -253,10 +263,11 @@ fn finish(cx: &mut Cx<'_>, job: &str, pending: Pending, status: ProbeJobStatus) 
     let mut invalid = false;
     for receipt in &status.receipts {
         invalid |= receipt.doc != pending.doc || !pending.entities.contains(&receipt.entity)
-            || !covered.insert(receipt.entity.as_str()) || receipt.source_revision != binding.source_revision
+            || !covered.insert(receipt.entity.as_str()) || receipt.source_revision != binding.scene_revision
             || receipt.generation == 0 || receipt.faces != 6 || receipt.resolution == 0
             || !receipt.published || receipt.source_hash.is_empty() || receipt.capture_hash.is_empty()
-            || !receipt.cache_path.starts_with(".ara/cache/") || receipt.cache_path.split('/').any(|part| part == "..");
+            || !receipt.cache_path.starts_with(".ara/cache/") || receipt.cache_path.contains(['\\', '\0'])
+            || receipt.cache_path.split('/').any(|part| part == "..");
     }
     let mut cancelled = !status.failures.is_empty();
     for item in &status.failures {
@@ -276,8 +287,8 @@ fn finish(cx: &mut Cx<'_>, job: &str, pending: Pending, status: ProbeJobStatus) 
     if diagnostics.iter().any(Diagnostic::is_error) || !status.failures.is_empty() || invalid {
         if diagnostics.is_empty() { diagnostics.push(failure(&pending.doc, None, "Probe capture failed")); }
         if let Some(first) = diagnostics.first_mut() {
-            first.data = Some(json!({"probeCapture":{"receipts":status.receipts,"failures":status.failures,
-                "scene":binding,"sourceRevision":pending.source_revision},"detail":first.data.take()}));
+            first.data = Some(Box::new(json!({"probeCapture":{"receipts":status.receipts,"failures":status.failures,
+                "scene":binding,"sourceRevision":pending.source_revision},"detail":first.data.take()})));
         }
         cx.finish_job(job, Err(diagnostics));
     } else {

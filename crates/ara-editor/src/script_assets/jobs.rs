@@ -1,6 +1,9 @@
 //! Compile completion publishes the actual generated schema before attaching.
 use super::*;
 use std::sync::mpsc::{self, Receiver};
+#[cfg(test)]
+#[path = "jobs_tests.rs"]
+mod tests;
 
 pub(super) struct Compile {
     session: String,
@@ -36,9 +39,8 @@ impl ScriptService {
         let root = cx.root().to_owned();
         let (tx, result) = mpsc::channel();
         std::thread::spawn(move || {
-            let output =
-                super::worker::compile(&root).map(|types| json!({"ok":true,"types":types}));
-            let _ = tx.send(output);
+            let response=super::worker::response(super::worker::compile(&root));
+            let _ = tx.send(Ok(response));
         });
         self.jobs.insert(
             job.clone(),
@@ -84,21 +86,20 @@ impl ScriptService {
                     "C# compiler worker stopped unexpectedly",
                 )]),
             };
-            let result = result.and_then(|result| {
-                super::publish::complete(
+            let result = match result {
+                Ok(result)=>super::publish::complete(
                     cx,
                     &pending.session,
                     &pending.path,
                     pending.doc.as_deref(),
                     &pending.attach,
                     result,
-                )
-            });
-            if let Err(diagnostics) = &result {
-                for diagnostic in diagnostics {
-                    cx.log(diagnostic.clone());
+                ),
+                Err(diagnostics)=>{
+                    for diagnostic in &diagnostics {cx.log(diagnostic.clone());}
+                    Err(diagnostics)
                 }
-            }
+            };
             cx.finish_job(job, result);
             false
         });

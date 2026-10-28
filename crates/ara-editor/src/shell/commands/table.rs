@@ -852,7 +852,7 @@ fn build() -> Vec<Spec> {
         cmd("view.camera.bookmark.save", "Save Camera Bookmark…", "save", "", "Name and save this camera view in the scene.",|s,e,t|match t {Target::Text(name)=>act(e,"editor.camera.bookmark",json!({"action":"save","name":name})),_=>s.name_camera_bookmark(e)}),
         cmd("view.camera.bookmark.recall", "Recall Camera Bookmark…", "camera", "", "Choose a named camera view in the scene.",|s,e,t|match t {Target::Text(name)=>act(e,"editor.camera.bookmark",json!({"action":"recall","name":name})),_=>s.choose_camera_bookmark(e,false)}),
         cmd("view.camera.bookmark.delete", "Delete Camera Bookmark…", "trash", "", "Remove a saved view from this scene.",|s,e,t|match t {Target::Text(name)=>act(e,"editor.camera.bookmark",json!({"action":"delete","name":name})),_=>s.choose_camera_bookmark(e,true)}),
-        later("view.camera.pilot", "Pilot Selected Camera", "camera", "", "Piloting (moving the scene camera with the view) is not built yet; Align View to Selected Camera copies its pose and field of view."),
+        cmd("view.camera.pilot", "Pilot Selected Camera", "camera", "", "Move a selected perspective Camera with Scene navigation; each completed move is one undoable edit. Toggle again to stop.", |s,e,t|s.toggle_pilot(e,t)).when(|c|if c.pilot {Avail::Checked(true)} else {has_entity(c)}),
     ]);
     c.extend([
         cmd(

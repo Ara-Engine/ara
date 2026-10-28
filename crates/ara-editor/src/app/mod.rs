@@ -8,6 +8,7 @@ mod chrome_verify;
 mod collection_verify;
 mod content_drags;
 mod controller;
+mod pilot;
 mod cursors;
 mod diagnostics_verify;
 mod drags;
@@ -839,6 +840,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let routed_at = Instant::now();
             let mut quit = false;
             for (sdl, event) in events {
+                let pilot_before = pilot::before_event(
+                    &event, &mut controller, &mut editor, &mut shell,
+                );
+                dirty |= pilot_before;
+                scene_dirty |= pilot_before;
+                let camera_before = editor.state.camera;
                 let event_clipboard: &mut dyn ara_ui_text::Clipboard = if let Some(check) =
                     diagnostics_check.as_mut().filter(|check| !check.finished())
                 {
@@ -883,6 +890,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                         dirty = true;
                     }
                 }
+                let native_camera_change = editor.state.camera != camera_before;
+                let pilot_after = pilot::update(
+                    &controller, &mut editor, &mut shell, native_camera_change,
+                );
+                dirty |= pilot_after;
+                scene_dirty |= pilot_after;
             }
             drop(input_scope);
             if quit || exit_requested || editor.host.stopping() {
@@ -1076,6 +1089,10 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 .as_ref()
                 .and_then(navigation_verify::NavigationCheck::fly_dt)
                 .unwrap_or(dt);
+            let pilot_before = pilot::update(&controller, &mut editor, &mut shell, false);
+            dirty |= pilot_before;
+            scene_dirty |= pilot_before;
+            let camera_before = editor.state.camera;
             match controller.fly(&mut editor, &shell, fly_dt) {
                 Ok(changed) => {
                     dirty |= changed;
@@ -1083,6 +1100,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 }
                 Err(error) => editor.report_failure(&*error),
             }
+            let native_camera_change = editor.state.camera != camera_before;
+            let pilot_after = pilot::update(
+                &controller, &mut editor, &mut shell, native_camera_change,
+            );
+            dirty |= pilot_after;
+            scene_dirty |= pilot_after;
             if (verification.as_ref().is_some_and(|v| v.finished())
                 || ux_verification.as_ref().is_some_and(|v| v.finished()))
                 && frames >= 32
@@ -1109,6 +1132,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             server.pump(&mut editor);
             let server_ms = measure_authority.then(|| tick_at.elapsed().as_secs_f64() * 1000.);
             editor.tick();
+            let pilot_changed = pilot::update(&controller, &mut editor, &mut shell, false);
+            dirty |= pilot_changed;
+            scene_dirty |= pilot_changed;
             let editor_ms = measure_authority.then(|| tick_at.elapsed().as_secs_f64() * 1000.);
             dirty |= shell.coalesce_rebuilds(&mut editor, |shell, editor| {
                 let mut changed = false;

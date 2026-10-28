@@ -21,6 +21,7 @@ pub mod inspector;
 mod loading;
 mod native;
 mod persist;
+mod probe_capture;
 mod script_assets;
 pub mod settings;
 pub mod shell;

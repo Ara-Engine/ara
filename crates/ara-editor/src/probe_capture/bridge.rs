@@ -9,8 +9,11 @@ use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, TrySendError};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SceneBinding {
+    /// Canonical document ID of the retained Scene.
     pub doc: String,
+    /// Renderer content counter (ProbeSnapshot.scene_revision / receipt source_revision).
     pub scene_revision: u64,
+    /// Host Store revision used to build that retained Scene/frame.
     pub source_revision: u64,
 }
 
@@ -44,6 +47,7 @@ pub(crate) enum Event {
 
 struct Tracked {
     session: String,
+    doc: String,
     backend: Option<u64>,
     binding: Option<SceneBinding>,
     cancelled: bool,
@@ -65,11 +69,12 @@ pub(crate) struct Bridge {
     pending: VecDeque<Request>,
     tracked: BTreeMap<String, Tracked>,
     disconnected: bool,
+    draining: bool,
 }
 
 impl Bridge {
     pub(super) fn new(requests: Receiver<Request>, events: SyncSender<Event>) -> Self {
-        Self { requests, events, pending: VecDeque::new(), tracked: BTreeMap::new(), disconnected: false }
+        Self { requests, events, pending: VecDeque::new(), tracked: BTreeMap::new(), disconnected: false, draining: false }
     }
 
     fn collect(&mut self) {
@@ -77,10 +82,10 @@ impl Bridge {
             match self.requests.try_recv() {
                 Ok(request) => {
                     match &request {
-                        Request::Recapture { job, session, .. } => {
+                        Request::Recapture { job, session, doc, .. } => {
                             self.tracked.insert(job.clone(), Tracked {
-                                session: session.clone(), backend: None, binding: None,
-                                cancelled: false, cancellable: true,
+                                session: session.clone(), doc: doc.clone(), backend: None, binding: None,
+                                cancelled: self.draining, cancellable: true,
                             });
                         }
                         Request::Cancel { job, session } => {
@@ -106,9 +111,9 @@ impl Bridge {
 
     /// Publish a typed owner observation. Backpressure returns the unchanged event;
     /// retry it before further work. Invalid attribution also leaves tracking intact.
-    pub(crate) fn send(&mut self, event: Event) -> Result<(), Event> {
+    pub(crate) fn send(&mut self, event: Event) -> Result<(), Box<Event>> {
         self.collect();
-        if !self.valid(&event) { return Err(event); }
+        if !self.valid(&event) { return Err(Box::new(event)); }
         let update = match &event {
             Event::Started { job, binding, backend, .. } => TrackingUpdate::Started(job.clone(), binding.clone(), backend.0),
             Event::Status { job, status, .. } => TrackingUpdate::Status(job.clone(), status.cancellable, status.finished),
@@ -117,7 +122,7 @@ impl Bridge {
         };
         match self.events.try_send(event) {
             Ok(()) => {}
-            Err(TrySendError::Full(event) | TrySendError::Disconnected(event)) => return Err(event),
+            Err(TrySendError::Full(event) | TrySendError::Disconnected(event)) => return Err(Box::new(event)),
         }
         match update {
             TrackingUpdate::Started(job, binding, backend) => {
@@ -154,8 +159,9 @@ impl Bridge {
     pub(crate) fn cancel_target(&self, job: &str) -> Option<ProbeJob> {
         let tracked = self.tracked.get(job)?;
         let backend = tracked.backend?;
-        (tracked.cancelled && tracked.cancellable && self.tracked.values()
-            .filter(|t| t.backend == Some(backend)).all(|t| t.cancelled))
+        (tracked.cancelled && tracked.cancellable
+            && !self.tracked.values().any(|t| t.backend.is_none() && !t.cancelled)
+            && self.tracked.values().filter(|t| t.backend == Some(backend)).all(|t| t.cancelled && t.cancellable))
             .then_some(ProbeJob(backend))
     }
 
@@ -166,9 +172,20 @@ impl Bridge {
     /// Scene closure/drain cancels UI intent but retains every owner resource until
     /// its actual terminal Status (finished=true), including coalesced generations.
     pub(crate) fn begin_drain(&mut self) {
+        self.draining = true;
+        self.cancel_matching(None);
+    }
+
+    /// Call before replacing/closing a Scene owner. Keep polling its backend jobs
+    /// through retirement; a new Scene must not inherit the previous bindings.
+    pub(crate) fn cancel_scene(&mut self, doc: &str) {
+        self.cancel_matching(Some(doc));
+    }
+
+    fn cancel_matching(&mut self, doc: Option<&str>) {
         self.collect();
         for (job, tracked) in &mut self.tracked {
-            if !tracked.cancelled {
+            if !tracked.cancelled && doc.is_none_or(|doc| doc == tracked.doc) {
                 tracked.cancelled = true;
                 self.pending.push_back(Request::Cancel { job: job.clone(), session: tracked.session.clone() });
             }
@@ -187,6 +204,8 @@ impl Bridge {
             "unassigned":self.tracked.values().filter(|t|t.backend.is_none()).count(),
             "cancelRequested":self.tracked.values().filter(|t|t.cancelled).count(),
             "ownerGenerations":self.tracked.values().filter_map(|t|t.backend).collect::<std::collections::BTreeSet<_>>().len(),
-            "requestChannelClosed":self.disconnected,"retired":self.tracked.is_empty() && self.pending.is_empty()})
+            "jobs":self.tracked.iter().map(|(job,t)|json!({"job":job,"session":t.session,"doc":t.doc,
+                "backend":t.backend,"binding":t.binding,"cancelRequested":t.cancelled,"cancellable":t.cancellable})).collect::<Vec<_>>(),
+            "draining":self.draining,"requestChannelClosed":self.disconnected,"retired":self.tracked.is_empty() && self.pending.is_empty()})
     }
 }
