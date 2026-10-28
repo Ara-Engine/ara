@@ -78,10 +78,14 @@ fn force_buttons(shell: &Shell) -> Vec<String> {
         })
         .collect()
 }
-fn reference(snapshot: &Value, path: &str) -> Option<String> {
+/// Snapshots retain storage keys; command/reference inputs remain authored-relative.
+fn document<'a>(snapshot: &'a Value, workspace: &ara_doc::Workspace, path: &str) -> &'a Value {
+    &snapshot["documents"][workspace.storage_path(path)]
+}
+fn reference(snapshot: &Value, workspace: &ara_doc::Workspace, path: &str) -> Option<String> {
     Some(format!(
         "@{path}#{}",
-        snapshot["documents"][path]["id"].as_str()?
+        document(snapshot, workspace, path)["id"].as_str()?
     ))
 }
 fn has_reference(snapshot: &Value, value: &str) -> bool {
@@ -89,13 +93,47 @@ fn has_reference(snapshot: &Value, value: &str) -> bool {
         .as_array()
         .is_some_and(|references| references.iter().any(|reference| reference == value))
 }
-fn moved_document(before: &Value, after: &Value, source: &str, destination: &str) -> bool {
-    before["documents"][source].is_object()
-        && after["documents"][source].is_null()
-        && after["documents"][destination]["id"] == before["documents"][source]["id"]
-        && reference(before, source)
-            .zip(reference(after, destination))
-            .is_some_and(|(old, new)| !has_reference(after, &old) && has_reference(after, &new))
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MovedDocument {
+    source_storage_path: String,
+    destination_storage_path: String,
+    source_present: bool,
+    source_removed: bool,
+    id_preserved: bool,
+    old_reference_removed: bool,
+    new_reference_present: bool,
+}
+impl MovedDocument {
+    fn ok(&self) -> bool {
+        self.source_present
+            && self.source_removed
+            && self.id_preserved
+            && self.old_reference_removed
+            && self.new_reference_present
+    }
+}
+fn moved_document(
+    before: &Value,
+    after: &Value,
+    workspace: &ara_doc::Workspace,
+    source: &str,
+    destination: &str,
+) -> MovedDocument {
+    MovedDocument {
+        source_storage_path: workspace.storage_path(source),
+        destination_storage_path: workspace.storage_path(destination),
+        source_present: document(before, workspace, source).is_object(),
+        source_removed: document(after, workspace, source).is_null(),
+        id_preserved: document(before, workspace, source)["id"]
+            .as_str()
+            .zip(document(after, workspace, destination)["id"].as_str())
+            .is_some_and(|(old, new)| old == new),
+        old_reference_removed: reference(before, workspace, source)
+            .is_some_and(|old| !has_reference(after, &old)),
+        new_reference_present: reference(after, workspace, destination)
+            .is_some_and(|new| has_reference(after, &new)),
+    }
 }
 fn diagnostic_index(status: &Value, index: u64) -> bool {
     status["diagnostics"].as_array().is_some_and(|problems| {
@@ -256,29 +294,52 @@ impl AssetOpsCheck {
         } else {
             0
         };
+        let workspace = editor.host.store().workspace();
+        let mut content_checks = Value::Null;
         let content_ok = match act {
             Act::Rename => {
-                moved_document(
+                let moved = moved_document(
                     &self.before,
                     &after,
+                    workspace,
                     &act.source(),
                     &format!("{}/Renamed.prefab", act.path()),
-                ) && self.before["files"]["A.prefab"] == after["files"]["Renamed.prefab"]
+                );
+                let bytes_preserved =
+                    self.before["files"]["A.prefab"] == after["files"]["Renamed.prefab"];
+                content_checks = json!({"document":moved,"fileBytesPreserved":bytes_preserved});
+                moved.ok() && bytes_preserved
             }
-            Act::Move => ["A.prefab", "B.prefab"].into_iter().all(|file| {
-                moved_document(
-                    &self.before,
-                    &after,
-                    &format!("{}/{file}", act.path()),
-                    &format!("{}/Destination/{file}", act.path()),
-                ) && self.before["files"][file] == after["files"][format!("Destination/{file}")]
-            }),
+            Act::Move => {
+                let mut checks = Vec::new();
+                let mut valid = true;
+                for file in ["A.prefab", "B.prefab"] {
+                    let moved = moved_document(
+                        &self.before,
+                        &after,
+                        workspace,
+                        &format!("{}/{file}", act.path()),
+                        &format!("{}/Destination/{file}", act.path()),
+                    );
+                    let bytes_preserved =
+                        self.before["files"][file] == after["files"][format!("Destination/{file}")];
+                    valid &= moved.ok() && bytes_preserved;
+                    checks.push(
+                        json!({"file":file,"document":moved,"fileBytesPreserved":bytes_preserved}),
+                    );
+                }
+                content_checks = json!(checks);
+                valid
+            }
             Act::Duplicate => {
                 let ids: Option<Vec<_>> = ["A Copy.prefab", "B Copy.prefab"]
                     .into_iter()
-                    .map(|file| after["documents"][format!("{}/{file}", act.path())]["id"].as_str())
+                    .map(|file| {
+                        document(&after, workspace, &format!("{}/{file}", act.path()))["id"]
+                            .as_str()
+                    })
                     .collect();
-                ids.is_some_and(|ids| {
+                let fresh_ids = ids.is_some_and(|ids| {
                     ids.iter().copied().collect::<BTreeSet<_>>().len() == 2
                         && ids.iter().all(|id| {
                             self.before["documents"]
@@ -287,19 +348,28 @@ impl AssetOpsCheck {
                                     documents.values().all(|doc| doc["id"] != *id)
                                 })
                         })
-                }) && self.before["documents"]
-                    .as_object()
-                    .is_some_and(|documents| {
-                        documents
-                            .iter()
-                            .all(|(path, doc)| &after["documents"][path] == doc)
-                    })
+                });
+                let originals_unchanged =
+                    self.before["documents"]
+                        .as_object()
+                        .is_some_and(|documents| {
+                            documents
+                                .iter()
+                                .all(|(path, doc)| &after["documents"][path] == doc)
+                        });
+                content_checks = json!({"copyIdsFreshAndDistinct":fresh_ids,"originalDocumentsUnchanged":originals_unchanged});
+                fresh_ids && originals_unchanged
             }
             Act::Delete => {
-                after["files"]["A.prefab"].is_null()
-                    && after["files"]["B.prefab"].is_null()
-                    && after["documents"][act.source()].is_null()
-                    && after["documents"][format!("{}/B.prefab", act.path())].is_null()
+                let files_removed =
+                    after["files"]["A.prefab"].is_null() && after["files"]["B.prefab"].is_null();
+                let source_present = document(&self.before, workspace, &act.source()).is_object()
+                    && document(&self.before, workspace, &format!("{}/B.prefab", act.path()))
+                        .is_object();
+                let documents_removed = document(&after, workspace, &act.source()).is_null()
+                    && document(&after, workspace, &format!("{}/B.prefab", act.path())).is_null();
+                content_checks = json!({"filesRemoved":files_removed,"sourceDocumentsPresent":source_present,"documentsRemoved":documents_removed});
+                files_removed && source_present && documents_removed
             }
             Act::Folder => after["directories"].as_array().is_some_and(|directories| {
                 directories
@@ -336,14 +406,21 @@ impl AssetOpsCheck {
                     && unchanged
             }
         };
-        let ok = content_ok
-            && transactions == expected_transactions
-            && (!act.undo()
-                || self.undo.as_ref() == Some(&self.before)
-                    && self.committed.as_ref() == Some(&after));
-        self.results.push(json!({"journey":act.label(),"ok":ok,"transactions":transactions,"expectedTransactions":expected_transactions,"beforeRevision":self.before_revision,"afterRevision":editor.host.store().revision(),"before":self.before,"after":after,"terminal":self.terminal,"selectionBefore":self.selection,"selectionBeforePaths":self.selection_paths,"selectionCommitted":self.committed_selection,"selectionUndo":self.undo_selection,"selectionRedo":self.redo_selection,"laterHumanSelection":self.unrelated_selection,"selectionAfter":fixture::selection(editor,shell),"dragPreview":self.drag_preview,"cancelablePreparation":self.cancel_observed,"indexProjection":self.index_preview,"trace":self.trace,"events":self.events}));
+        let transactions_ok = transactions == expected_transactions;
+        let undo_ok = !act.undo() || self.undo.as_ref() == Some(&self.before);
+        let redo_ok = !act.undo() || self.committed.as_ref() == Some(&after);
+        let ok = content_ok && transactions_ok && undo_ok && redo_ok;
+        self.results.push(json!({"journey":act.label(),"ok":ok,"checks":{"content":content_ok,"transactions":transactions_ok,"undoRestoredExactSnapshot":undo_ok,"redoRestoredExactSnapshot":redo_ok,"contentPredicates":content_checks},"transactions":transactions,"expectedTransactions":expected_transactions,"beforeRevision":self.before_revision,"afterRevision":editor.host.store().revision(),"before":self.before,"after":after,"terminal":self.terminal,"selectionBefore":self.selection,"selectionBeforePaths":self.selection_paths,"selectionCommitted":self.committed_selection,"selectionUndo":self.undo_selection,"selectionRedo":self.redo_selection,"laterHumanSelection":self.unrelated_selection,"selectionAfter":fixture::selection(editor,shell),"dragPreview":self.drag_preview,"cancelablePreparation":self.cancel_observed,"indexProjection":self.index_preview,"trace":self.trace,"events":self.events}));
         self.advance();
-        self.write()
+        self.write()?;
+        if !ok {
+            return Err(format!(
+                "Native asset story {} failed its checks; inspect asset-operations.json",
+                act.label()
+            )
+            .into());
+        }
+        Ok(())
     }
     fn capture(
         &mut self,
@@ -403,3 +480,6 @@ fn index_ok(preview: &Value) -> bool {
             && !path.starts_with("builds/")
     })
 }
+
+#[cfg(test)]
+mod tests;

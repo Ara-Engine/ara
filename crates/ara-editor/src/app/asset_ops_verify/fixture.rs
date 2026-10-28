@@ -35,7 +35,8 @@ fn done(editor: &mut Editor, job: &str) -> ara_ui::Result<bool> {
 }
 impl Fixture {
     pub fn report(&self, editor: &Editor, shell: &Shell, act: Act) -> Value {
-        json!({"foldersJob":self.folders,"populated":self.populated,"cancelJob":self.cancel_job,"readyFolders":self.ready,"pendingSave":editor.host.unsaved(),"cachedFolder":storage(shell,&act.path()),"cachedSource":storage(shell,&act.source()),"cachedFiles":shell.asset_authored_files().len()})
+        let source = storage(shell, &act.source());
+        json!({"foldersJob":self.folders,"populated":self.populated,"cancelJob":self.cancel_job,"readyFolders":self.ready,"pendingSave":editor.host.unsaved(),"cachedFolder":storage(shell,&act.path()),"cachedSource":source,"cachedFiles":shell.asset_authored_files().len(),"browserFolder":editor.state.asset_folder,"sourceControl":input::source_control_probe(shell,source.as_deref())})
     }
     pub fn new(editor: &mut Editor, output: &Path) -> ara_ui::Result<Self> {
         // Resolve both real paths with the same Windows prefix policy before

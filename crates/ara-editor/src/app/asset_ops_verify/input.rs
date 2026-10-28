@@ -1,6 +1,7 @@
 //! Inject only production mouse/key/text events for the measured actions.
 use super::*;
 use crate::shell::Binding;
+mod cleanup;
 pub(super) fn tap(window: &Window, key: i32, events: &mut Vec<(u32, Event)>) {
     for pressed in [true, false] {
         events.push((
@@ -40,6 +41,19 @@ fn asset_point(shell: &Shell, storage: &str) -> Option<[f32; 2]> {
         if !shell.ui.shown(index) || !matches!(shell.bindings.get(&ara_ui::source::stable_id(&node.element.id)),Some(Binding::Asset(asset)) if asset.path==storage){return None;}
         let point=[node.rect.x+node.rect.w*0.5,node.rect.y+node.rect.h*0.5];node.clip.contains(point[0],point[1]).then_some(point)
     })
+}
+/// Report both the mounted card and the viewport that clips it when readiness waits.
+pub(super) fn source_control_probe(shell: &Shell, storage: Option<&str>) -> Value {
+    let geometry = |id: &str| {
+        shell.ui.find(id).map(|index| {
+            let node = &shell.ui.nodes[index];
+            json!({"id":id,"shown":shell.ui.shown(index),"rect":node.rect,"clip":node.clip})
+        })
+    };
+    let card=storage.and_then(|storage|shell.ui.nodes.iter().enumerate().find_map(|(index,node)| {
+        matches!(shell.bindings.get(&ara_ui::source::stable_id(&node.element.id)),Some(Binding::Asset(asset)) if asset.path==storage).then(||json!({"id":node.element.id,"shown":shell.ui.shown(index),"rect":node.rect,"clip":node.clip,"reachable":asset_point(shell,storage).is_some()}))
+    }));
+    json!({"source":storage,"card":card,"grid":geometry("asset-grid"),"content":geometry("assets-content")})
 }
 fn menu_control(shell: &Shell, command: &str) -> Option<String> {
     shell.ui.nodes.iter().enumerate().find_map(|(index,node)|{
@@ -179,6 +193,9 @@ impl AssetOpsCheck {
                 shell.rebuild(editor)?;
                 shell.input.blur(&mut shell.ui);
                 self.initialized = true;
+            }
+            if !self.dismiss_terminal_results(shell, window, scale, events)? {
+                return self.wait();
             }
             if !matches!(act, Act::Folder | Act::Index)
                 && fixture::storage(shell, &act.source())

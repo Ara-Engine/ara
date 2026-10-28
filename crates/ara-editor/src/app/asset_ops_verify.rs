@@ -188,7 +188,7 @@ impl AssetOpsCheck {
         })
     }
     pub fn finished(&self) -> bool {
-        self.index >= ACTS.len()
+        self.index >= ACTS.len() || self.results.iter().any(|row| row["ok"] != true)
     }
     pub fn failures(&self) -> Vec<String> {
         self.results
@@ -205,6 +205,13 @@ impl AssetOpsCheck {
         scale: f32,
         events: &mut Vec<(u32, Event)>,
     ) -> ara_ui::Result<()> {
+        if self.finished() {
+            return if self.failures().is_empty() {
+                Ok(())
+            } else {
+                Err("Native Assets verification stopped after its recorded failure; inspect asset-operations.json".into())
+            };
+        }
         let Some(&act) = ACTS.get(self.index) else {
             return Ok(());
         };
@@ -251,6 +258,7 @@ impl AssetOpsCheck {
             self.recovering = report["busy"] == true;
             self.failed_frame = true;
             self.write()?;
+            return Err(error);
         } else {
             self.events += (events.len() - initial) as u64;
             if events.len() > initial {
@@ -293,7 +301,7 @@ impl AssetOpsCheck {
         std::fs::write(
             self.output.join("asset-operations.json"),
             ara_json::to_canonical_string(
-                &json!({"completed":self.finished(),"journeys":self.results,"passed":self.results.iter().filter(|row|row["ok"]==true).count(),"failed":self.failures().len()}),
+                &json!({"completed":self.index>=ACTS.len()&&self.failures().is_empty(),"stoppedOnFailure":!self.failures().is_empty(),"attempted":self.results.len(),"expected":ACTS.len(),"journeys":self.results,"passed":self.results.iter().filter(|row|row["ok"]==true).count(),"failed":self.failures().len()}),
             ),
         )?;
         let mut html = String::from(
