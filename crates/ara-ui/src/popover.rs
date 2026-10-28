@@ -323,7 +323,6 @@ impl Ui {
         self.placed.retain(|id, _| open.contains(id));
         let mut moved = false;
         for i in popovers {
-            moved |= self.fit_overlay_text(i)?;
             let element = &self.nodes[i].element;
             let anchor = match (element.attrs.get("anchor"), element.attrs.get("at")) {
                 (Some(id), _) => match self.find(id).filter(|a| self.shown(*a)) {
@@ -408,65 +407,27 @@ impl Ui {
         }
         Ok(moved)
     }
-    /// Final text breaking can discover an extra line after an intrinsic-width
-    /// overlay was sized. Feed that measured height back into its auto-height
-    /// leaves before choosing the popup's box, preserving padding and fixed rows.
-    fn fit_overlay_text(&mut self, root: usize) -> Result<bool> {
-        let mut stack = vec![root];
-        let mut changed = false;
-        while let Some(index) = stack.pop() {
-            let node = &self.nodes[index];
-            stack.extend(node.element.children.iter().copied());
-            if index == root
-                || !self.shown(index)
-                || !node.element.children.is_empty()
-                || matches!(node.element.tag.as_str(), "field" | "input")
-                || !node.computed.layout.size.height.is_auto()
-            {
-                continue;
-            }
-            let Some(text) = &node.text else {
-                continue;
-            };
-            let layout = self.tree.layout(node.layout_id)?;
-            let measured = text.layout.height()
-                + layout.padding.top
-                + layout.padding.bottom
-                + layout.border.top
-                + layout.border.bottom;
-            let current = self.tree.style(node.layout_id)?;
-            let minimum = current
-                .min_size
-                .height
-                .resolve_to_option(self.size[1], |_, _| 0.0)
-                .unwrap_or(0.0);
-            let maximum = current
-                .max_size
-                .height
-                .resolve_to_option(self.size[1], |_, _| 0.0)
-                .unwrap_or(f32::MAX)
-                .max(minimum);
-            let height = measured.clamp(minimum, maximum);
-            if (layout.size.height - height).abs() <= 0.5 {
-                continue;
-            }
-            let mut style = current.clone();
-            style.size.height = taffy::Dimension::length(height);
-            let id = node.layout_id;
-            self.tree.set_style(id, style)?;
-            self.nodes[index].dirty.layout = true;
-            changed = true;
-        }
-        Ok(changed)
-    }
-    /// A popover's content size: its CSS width and height where it sets them (a fixed
-    /// palette), otherwise its laid-out width (it sizes to content) and the bottom of its
-    /// lowest child, which keeps its natural height in a block container even when the
-    /// popover is clamped.
+    /// Authored sizes/limits or natural content, retaining an auto-height scroll
+    /// view's full extent even after the flex viewport shrinks it.
     fn natural_size(&self, index: usize) -> Result<[f32; 2]> {
         let node = &self.nodes[index];
         let css = &node.computed.layout.size;
         let natural = self.content_size(index)?;
+        let minimum = node
+            .computed
+            .layout
+            .min_size
+            .height
+            .resolve_to_option(self.size[1], |_, _| 0.0)
+            .unwrap_or(0.0);
+        let maximum = node
+            .computed
+            .layout
+            .max_size
+            .height
+            .resolve_to_option(self.size[1], |_, _| 0.0)
+            .unwrap_or(f32::MAX)
+            .max(minimum);
         Ok([
             css.width
                 .into_option()
@@ -480,19 +441,72 @@ impl Ui {
                         .unwrap_or(MAX_WIDTH),
                 )
                 .min((self.size[0] - 2.0 * MARGIN).max(0.0)),
-            css.height.into_option().unwrap_or(natural[1]),
+            css.height
+                .into_option()
+                .unwrap_or(natural[1])
+                .clamp(minimum, maximum),
         ])
     }
-    /// The laid-out width and the bottom of the lowest child (see `natural_size`).
+    /// Laid-out width and intrinsic child height, before viewport flex shrinking.
     fn content_size(&self, index: usize) -> Result<[f32; 2]> {
         let node = &self.nodes[index];
         let layout = self.tree.layout(node.layout_id)?;
         let mut size = [layout.size.width, 0.0_f32];
+        let column = node.computed.layout.display == taffy::Display::Flex
+            && node.computed.layout.flex_direction == taffy::FlexDirection::Column;
+        let gap = taffy::LengthPercentageAuto::from(node.computed.layout.gap.height)
+            .resolve_to_option(layout.size.height, |_, _| 0.0)
+            .unwrap_or(0.0);
+        let mut column_height = layout.padding.top + layout.border.top;
+        let mut flow_children = 0;
+        let mut intrinsic_scroll = false;
         for child in &node.element.children {
-            let l = self.tree.layout(self.nodes[*child].layout_id)?;
+            let child_node = &self.nodes[*child];
+            if !self.shown(*child) {
+                continue;
+            }
+            let l = self.tree.layout(child_node.layout_id)?;
+            let mut height = l.size.height;
+            if child_node.element.tag == "scroll"
+                && child_node.computed.layout.size.height.is_auto()
+            {
+                let minimum = child_node
+                    .computed
+                    .layout
+                    .min_size
+                    .height
+                    .resolve_to_option(self.size[1], |_, _| 0.0)
+                    .unwrap_or(0.0);
+                let maximum = child_node
+                    .computed
+                    .layout
+                    .max_size
+                    .height
+                    .resolve_to_option(self.size[1], |_, _| 0.0)
+                    .unwrap_or(f32::MAX)
+                    .max(minimum);
+                let content = match child_node.virtual_extent {
+                    Some(extent) => extent[1],
+                    None => self.content_size(*child)?[1],
+                };
+                height = content.clamp(minimum, maximum);
+                intrinsic_scroll = true;
+            }
             size[0] = size[0]
                 .max(l.location.x + l.size.width + layout.padding.right + layout.border.right);
-            size[1] = size[1].max(l.location.y + l.size.height + l.margin.bottom);
+            size[1] = size[1].max(l.location.y + height + l.margin.bottom);
+            if column && child_node.computed.layout.position != taffy::Position::Absolute {
+                if flow_children > 0 {
+                    column_height += gap;
+                }
+                column_height += l.margin.top + height + l.margin.bottom;
+                flow_children += 1;
+            }
+        }
+        // Shrinking a flex scroll view must not erase its intrinsic extent: otherwise
+        // each placement alternates between a viewport clamp and oversized auto height.
+        if column && intrinsic_scroll {
+            size[1] = column_height;
         }
         size[1] += layout.padding.bottom + layout.border.bottom;
         if node.element.children.is_empty() {

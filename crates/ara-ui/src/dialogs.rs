@@ -1,22 +1,24 @@
-//! Host-independent native confirmations, prompts and alerts.
+//! Host-independent native confirmations, prompts, conflict choices and alerts.
 //!
 //! Append [`Dialogs::markup`] under the UI root, include [`CSS`] in the stylesheet,
 //! call [`Dialogs::sync`] after reconcile/frame and route input through
 //! [`Dialogs::event`] before host shortcuts. Requests return typed futures without
 //! blocking the editor, Hub or game loop. Content mutations remain host commands.
+mod choice;
 mod completion;
 use crate::{
     Result, Ui,
     input::{InputEvent, InputState},
     source::{escape, stable_id},
 };
+use choice::Choice;
 pub use completion::DialogFuture;
 use completion::Reply;
 
 /// Shared semantic styles; the host supplies theme tokens, including `--overlay`.
 pub const CSS: &str = include_str!("dialogs/dialogs.css");
 
-/// Copy and dismissal policy for a confirmation, prompt or alert.
+/// Copy and dismissal policy for a confirmation, prompt, choice or alert.
 #[derive(Clone, Debug)]
 pub struct DialogOptions {
     /// Short title announced with the dialog role.
@@ -51,6 +53,14 @@ enum Response {
     Confirm(Reply<bool>),
     Prompt(Reply<Option<String>>),
     Alert(Reply<()>),
+    Choose(Choice),
+}
+
+#[derive(Clone, Copy)]
+enum Outcome {
+    Accept,
+    Cancel,
+    Choice(usize),
 }
 
 struct Request {
@@ -61,13 +71,15 @@ struct Request {
 }
 
 impl Request {
-    fn finish(&mut self, accepted: bool) {
+    fn finish(&mut self, outcome: Outcome) {
+        let accepted = matches!(outcome, Outcome::Accept);
         match self.response.take() {
             Some(Response::Confirm(reply)) => reply.finish(accepted),
             Some(Response::Prompt(reply)) => {
                 reply.finish(accepted.then(|| self.text.take().unwrap_or_default()))
             }
             Some(Response::Alert(reply)) => reply.finish(()),
+            Some(Response::Choose(choice)) => choice.finish(outcome),
             None => {}
         }
     }
@@ -75,7 +87,7 @@ impl Request {
 
 impl Drop for Request {
     fn drop(&mut self) {
-        self.finish(false);
+        self.finish(Outcome::Cancel);
     }
 }
 
@@ -167,7 +179,11 @@ impl Dialogs {
             let id = escape(&request.id, b'\'');
             let options = &request.options;
             let esc = |s: &str| escape(s, b'\'');
-            out.push_str(&format!("<modal id='{id}' class='kit-dialog-layer' label='{}' default-action='{id}-accept'><panel id='{id}-backdrop' class='kit-dialog-backdrop' /><panel id='{id}-body' class='kit-dialog' style='width:{width}px;max-height:{height}px'><text id='{id}-title' class='kit-dialog-title' text='{}' /><scroll id='{id}-scroll' class='kit-dialog-body'><text id='{id}-message' class='kit-dialog-message' text='{}' /></scroll>", esc(&options.title), esc(&options.title), esc(&options.message)));
+            let primary = match &request.response {
+                Some(Response::Choose(choice)) => choice.default_id(&id),
+                _ => format!("{id}-accept"),
+            };
+            out.push_str(&format!("<modal id='{id}' class='kit-dialog-layer' label='{}' default-action='{primary}'><panel id='{id}-backdrop' class='kit-dialog-backdrop' /><panel id='{id}-body' class='kit-dialog' style='width:{width}px;max-height:{height}px'><text id='{id}-title' class='kit-dialog-title' text='{}' /><scroll id='{id}-scroll' class='kit-dialog-body'><text id='{id}-message' class='kit-dialog-message' text='{}' /></scroll>", esc(&options.title), esc(&options.title), esc(&options.message)));
             if let Some(text) = &request.text {
                 out.push_str(&format!(
                     "<field id='{id}-field' text='{}' label='{}' action='ara.dialog.text' />",
@@ -175,13 +191,19 @@ impl Dialogs {
                     esc(&options.title)
                 ));
             }
+            if let Some(Response::Choose(choice)) = &request.response {
+                out.push_str(&choice.markup(&id, options.destructive));
+            }
             out.push_str(&format!(
                 "<panel id='{id}-actions' class='kit-dialog-actions'>"
             ));
             if !matches!(&request.response, Some(Response::Alert(_))) {
                 out.push_str(&format!("<button id='{id}-cancel' class='kit-dialog-button' action='ara.dialog.cancel' text='{}' />", esc(&options.cancel_label)));
             }
-            out.push_str(&format!("<button id='{id}-accept' class='kit-dialog-button {}' action='ara.dialog.accept' text='{}' /></panel></panel></modal>", if options.destructive { "kit-dialog-destructive" } else { "kit-dialog-accept" }, esc(&options.accept_label)));
+            if !matches!(&request.response, Some(Response::Choose(_))) {
+                out.push_str(&format!("<button id='{id}-accept' class='kit-dialog-button {}' action='ara.dialog.accept' text='{}' />", if options.destructive { "kit-dialog-destructive" } else { "kit-dialog-accept" }, esc(&options.accept_label)));
+            }
+            out.push_str("</panel></panel></modal>");
         }
         out
     }
@@ -201,18 +223,27 @@ impl Dialogs {
             }
         }
         for request in &self.requests[common..] {
-            let initial = format!(
-                "{}-{}",
-                request.id,
-                if request.options.destructive {
-                    "cancel"
-                } else if request.text.is_some() {
-                    "field"
-                } else {
-                    "accept"
-                }
-            );
+            let initial = if request.options.destructive {
+                format!("{}-cancel", request.id)
+            } else if let Some(Response::Choose(choice)) = &request.response {
+                choice.default_id(&request.id)
+            } else {
+                format!(
+                    "{}-{}",
+                    request.id,
+                    if request.text.is_some() {
+                        "field"
+                    } else {
+                        "accept"
+                    }
+                )
+            };
             input.push(ui, stable_id(&request.id), Some(stable_id(&initial)), true)?;
+            if matches!(&request.response, Some(Response::Choose(_)))
+                && let Some(index) = ui.find(&initial)
+            {
+                ui.scroll_into_view(index)?;
+            }
             self.mounted.push(request.id.clone());
         }
         Ok(())
@@ -280,19 +311,29 @@ impl Dialogs {
     pub fn dispatch(&mut self, ui: &mut Ui, input: &mut InputState) -> Result<()> {
         let actions = std::mem::take(&mut ui.actions);
         for action in actions {
+            let choice = self
+                .requests
+                .last()
+                .and_then(|request| match &request.response {
+                    Some(Response::Choose(choice)) => choice.index(&request.id, action.node),
+                    _ => None,
+                });
             let own = self.requests.last().is_some_and(|r| {
                 ["accept", "cancel", "field"]
                     .iter()
                     .any(|suffix| action.node == stable_id(&format!("{}-{suffix}", r.id)))
-            });
+            }) || choice.is_some();
             if !own {
                 ui.actions.push(action);
                 continue;
             }
-            match action.name.as_str() {
-                "ara.dialog.accept" => self.resolve(ui, input, true)?,
-                "ara.dialog.cancel" => self.resolve(ui, input, false)?,
-                "ara.dialog.text" => {
+            match (action.name.as_str(), choice) {
+                ("ara.dialog.accept", _) => self.resolve(ui, input, true)?,
+                ("ara.dialog.cancel", _) => self.resolve(ui, input, false)?,
+                ("ara.dialog.choose", Some(index)) => {
+                    self.resolve_outcome(ui, input, Outcome::Choice(index))?
+                }
+                ("ara.dialog.text", _) => {
                     if let Some(text) = action.value.as_str()
                         && let Some(request) = self.requests.last_mut()
                     {
@@ -306,11 +347,28 @@ impl Dialogs {
     }
 
     fn resolve(&mut self, ui: &mut Ui, input: &mut InputState, accepted: bool) -> Result<()> {
+        self.resolve_outcome(
+            ui,
+            input,
+            if accepted {
+                Outcome::Accept
+            } else {
+                Outcome::Cancel
+            },
+        )
+    }
+
+    fn resolve_outcome(
+        &mut self,
+        ui: &mut Ui,
+        input: &mut InputState,
+        outcome: Outcome,
+    ) -> Result<()> {
         if let Some(mut request) = self.requests.pop() {
             if let Some(index) = ui.find(&request.id) {
                 ui.set_visible(index, false)?;
             }
-            request.finish(accepted);
+            request.finish(outcome);
         }
         self.sync(ui, input)
     }

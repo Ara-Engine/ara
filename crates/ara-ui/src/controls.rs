@@ -62,7 +62,9 @@ pub fn audit(elements: &[Element]) -> Vec<Violation> {
     for element in elements {
         let classes = element.attrs.get("class").map(String::as_str).unwrap_or("");
         let purpose = element.attrs.get("name").map(String::as_str);
-        let segment = classes.split_whitespace().any(|class| class == "segment");
+        let segment = classes
+            .split_whitespace()
+            .any(|class| class == "segment" || class.ends_with("-segment"));
         if segment {
             let labels: Vec<_> = element
                 .children

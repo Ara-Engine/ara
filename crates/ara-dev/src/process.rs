@@ -16,14 +16,39 @@ impl Outcome {
     }
 }
 
-struct Tree {
+pub(crate) struct Tree {
     child: Child,
     #[cfg(windows)]
     job: Option<windows::Job>,
 }
 
-impl Drop for Tree {
-    fn drop(&mut self) {
+impl Tree {
+    /// Spawn a long-lived owned child with the same crash-safe tree cleanup as a gate.
+    pub(crate) fn spawn(command: &mut Command) -> Result<Self> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            command.process_group(0);
+        }
+        #[cfg(windows)]
+        let job = windows::Job::new()?;
+        let child = command.spawn()?;
+        #[cfg(windows)]
+        job.assign(&child)?;
+        Ok(Self {
+            child,
+            #[cfg(windows)]
+            job: Some(job),
+        })
+    }
+    pub(crate) fn id(&self) -> u32 {
+        self.child.id()
+    }
+    pub(crate) fn try_wait(&mut self) -> std::io::Result<Option<ExitStatus>> {
+        self.child.try_wait()
+    }
+    /// Stop this exact owned tree before a resource lease is released on timeout.
+    pub(crate) fn stop(&mut self) {
         #[cfg(windows)]
         drop(self.job.take());
         if self.child.try_wait().ok().flatten().is_none() {
@@ -35,6 +60,12 @@ impl Drop for Tree {
             let _ = self.child.kill();
             let _ = self.child.wait();
         }
+    }
+}
+
+impl Drop for Tree {
+    fn drop(&mut self) {
+        self.stop();
     }
 }
 

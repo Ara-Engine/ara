@@ -62,6 +62,7 @@ pub struct Select<T> {
     id: String,
     control: String,
     label: String,
+    search_hint: String,
     options: Vec<SelectOption<T>>,
     selected: Option<T>,
     changed: Option<T>,
@@ -85,6 +86,7 @@ impl<T: Clone + PartialEq> Select<T> {
             control: format!("{id}-control"),
             id,
             label: label.into(),
+            search_hint: "Search…".into(),
             options,
             selected,
             changed: None,
@@ -101,6 +103,11 @@ impl<T: Clone + PartialEq> Select<T> {
     /// Preserve an existing form control's authored ID while namespacing its popup.
     pub fn with_control_id(mut self, id: impl Into<String>) -> Self {
         self.control = id.into();
+        self
+    }
+    /// Localize or clarify the empty search hint without changing the filter value.
+    pub fn with_search_hint(mut self, hint: impl Into<String>) -> Self {
+        self.search_hint = hint.into();
         self
     }
 

@@ -33,10 +33,11 @@ fn source_presence_hint_never_traverses_directory_links() {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
+        // mklink reads any `/` in a path as a switch, so pass normalized absolute paths.
         let result = std::process::Command::new("cmd")
             .args(["/C", "mklink", "/J"])
-            .arg(&link)
-            .arg(&external)
+            .arg(std::path::absolute(&link).expect("junction path"))
+            .arg(std::path::absolute(&external).expect("junction target"))
             .creation_flags(0x0800_0000)
             .output()
             .expect("create junction");

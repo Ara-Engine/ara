@@ -238,7 +238,7 @@ impl Drop for Sampler {
     }
 }
 
-fn processes() -> Result<Vec<Process>> {
+pub(super) fn processes() -> Result<Vec<Process>> {
     // SAFETY: process-only enumeration, no remote process mutation.
     let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) };
     ensure!(

@@ -7,7 +7,10 @@ use std::path::PathBuf;
     ignore = "Slang cannot load dxc for DXIL on macOS; Windows is the canonical cook host"
 )]
 fn cook_reuses_intact_artifacts_and_recovers_corruption() -> Result<()> {
-    let temporary = tempfile::tempdir()?;
+    let base =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-shader-cook/tests");
+    std::fs::create_dir_all(&base)?;
+    let temporary = tempfile::tempdir_in(base)?;
     let root = temporary.path();
     let source = root.join("test.slang");
     let manifest = root.join("pipelines.json");

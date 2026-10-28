@@ -19,6 +19,7 @@ serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"
 
 [dev-dependencies]
 ara-doc = { path = "../ara-doc" }
+ara-editor-gpu = { path = "../ara-editor-gpu" }
 
 [lints]
 workspace = true

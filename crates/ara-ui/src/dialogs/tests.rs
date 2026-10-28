@@ -33,11 +33,15 @@ fn mount(dialogs: &Dialogs, ui: &mut Ui, text: &mut TextSystem) -> Result<()> {
 }
 
 fn surface() -> Result<(Ui, TextSystem, InputState)> {
+    surface_with_styles([480., 320.], "")
+}
+
+fn surface_with_styles(size: [f32; 2], host_styles: &str) -> Result<(Ui, TextSystem, InputState)> {
     let mut text = TextSystem::bundled()?;
     let mut ui = Ui::editor(
         "<ui id='root'><button id='outside' text='Outside' /></ui>",
-        &format!("{EDITOR_CSS}{CSS}"),
-        [480., 320.],
+        &format!("{EDITOR_CSS}{host_styles}{CSS}"),
+        size,
     )?;
     ui.frame(&mut text)?;
     let mut input = InputState::default();
@@ -172,5 +176,76 @@ fn dialog_wraps_and_scrolls_in_a_small_viewport() -> Result<()> {
         ui.widgets.get(&stable_id("ara-dialog-1-scroll")),
         Some(Widget::Scroll(_))
     ));
+    Ok(())
+}
+
+#[test]
+fn host_scroll_and_button_resets_keep_long_notes_reachable_and_action_text_fitted() -> Result<()> {
+    let (mut ui, mut text, mut input) = surface_with_styles(
+        [280., 260.],
+        "scroll { flex-basis:0px; min-height:0px; } button { height:22px; }",
+    )?;
+    let mut dialogs = Dialogs::default();
+    let mut options = DialogOptions::new(
+        "A long diagnostic",
+        "Detailed recovery instructions with éclairage and إعدادات العرض. ".repeat(40),
+    );
+    options.accept_label = "Keep changes and return safely".into();
+    options.cancel_label = "Cancel and keep this project open".into();
+    let _future = dialogs.confirm(options);
+    mount(&dialogs, &mut ui, &mut text)?;
+    dialogs.sync(&mut ui, &mut input)?;
+    ui.frame(&mut text)?;
+    let body = &ui.nodes[ui.find("ara-dialog-1-body").expect("dialog body")];
+    assert!(
+        body.rect.y >= 0. && body.rect.y + body.rect.h <= 260.5,
+        "{:?}",
+        body.rect
+    );
+    let scroll = ui.find("ara-dialog-1-scroll").expect("notes scroll");
+    let visible = ui.nodes[scroll].rect.intersection(ui.nodes[scroll].clip);
+    assert!(
+        visible.h > 0.,
+        "long notes need a positive visible scroll area: {visible:?}"
+    );
+    for id in ["ara-dialog-1-cancel", "ara-dialog-1-accept"] {
+        let node = &ui.nodes[ui.find(id).expect("action")];
+        let layout = ui.tree.layout(node.layout_id)?;
+        let available = layout.size.height
+            - layout.padding.top
+            - layout.padding.bottom
+            - layout.border.top
+            - layout.border.bottom;
+        let paragraph = node.text.as_ref().expect("action label");
+        assert!(paragraph.layout.height() > 22., "action label wraps");
+        assert!(
+            paragraph.layout.height() <= available + 0.5,
+            "{id}: {} > {available}",
+            paragraph.layout.height()
+        );
+        assert!(
+            node.rect.y + node.rect.h <= 260.5,
+            "action remains reachable"
+        );
+    }
+    dialogs.event(
+        &mut ui,
+        &mut input,
+        InputEvent::Wheel {
+            position: [visible.x + visible.w * 0.5, visible.y + visible.h * 0.5],
+            delta: [0., 100_000.],
+        },
+        &mut Clip::default(),
+    )?;
+    ui.frame(&mut text)?;
+    assert!(ui.scroll_position(scroll).expect("notes scroll position")[1] > 0.);
+    let message = &ui.nodes[ui.find("ara-dialog-1-message").expect("message")];
+    let clip = ui.nodes[scroll].rect.intersection(ui.nodes[scroll].clip);
+    assert!(
+        message.rect.y + message.rect.h <= clip.y + clip.h + 0.5
+            && message.rect.y + message.rect.h >= clip.y,
+        "the final note line is reachable by real wheel input"
+    );
+    assert_eq!(ui.frame(&mut text)?.layout_passes, 0);
     Ok(())
 }

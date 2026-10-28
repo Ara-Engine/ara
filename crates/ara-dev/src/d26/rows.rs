@@ -87,6 +87,7 @@ pub(super) struct Judged {
 #[serde(rename_all = "snake_case")]
 pub(super) enum InvalidReason {
     ForeignGpuLoad,
+    ForeignCpuLoad,
     Unmonitored,
 }
 

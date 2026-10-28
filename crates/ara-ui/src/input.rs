@@ -95,6 +95,24 @@ impl InputState {
     pub fn captured(&self) -> Option<u64> {
         self.capture
     }
+    /// Cancel held native gestures and hover after focus/capture loss, preserving
+    /// screen/modal scopes and keyboard focus for return to this window.
+    pub fn cancel_interaction(&mut self, ui: &mut Ui) {
+        self.cancel_numeric(ui);
+        if let Some(index) = self.capture.take().and_then(|id| ui.by_id(id)) {
+            let mut state = ui.nodes[index].state;
+            state.active = false;
+            ui.set_state(index, state);
+        }
+        if let Some(index) = self.hover.take().and_then(|id| ui.by_id(id)) {
+            let mut state = ui.nodes[index].state;
+            state.hover = false;
+            ui.set_state(index, state);
+        }
+        self.capture_rect = None;
+        self.scroll_drag = None;
+        self.drag = None;
+    }
     /// Inspect navigation within the active screen/modal, using the same scope rules as input.
     pub fn focus_graph(&self, ui: &Ui) -> serde_json::Value {
         let order: Vec<_> = tab_order(ui)

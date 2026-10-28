@@ -181,6 +181,7 @@ impl Destination<'_> {
                 "executable":executable,
                 "binary_hash":crate::git::hash_file(root, executable)?,
                 "source_head":crate::git::text(root, ["rev-parse", "HEAD"])?,
+                "timing_guard":crate::gpu::last_reading(),
                 "source_dirty":!crate::git::text(root, ["status", "--porcelain"])?.is_empty()
             }),
             identity,

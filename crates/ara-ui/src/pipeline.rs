@@ -6,6 +6,8 @@ use crate::{
 };
 use ara_ui_text::TextSystem;
 use taffy::prelude::*;
+#[path = "text_fit.rs"]
+mod text_fit;
 impl Ui {
     /// Run restyle, cached Taffy/Parley layout and retained display-list emission.
     pub fn frame(&mut self, text_system: &mut TextSystem) -> Result<Work> {
@@ -26,16 +28,23 @@ impl Ui {
                     computed.color = color;
                 }
                 let color_changed = computed.color != node.computed.color;
-                let mut layout = computed.layout.clone();
-                if !node.visible {
-                    layout.display = Display::None;
-                }
-                if let Some(placed) = self.placed.get(&crate::source::stable_id(&node.element.id)) {
-                    placed.apply(&mut layout);
-                }
-                if layout != *self.tree.style(node.layout_id)? {
-                    self.tree.set_style(node.layout_id, layout)?;
-                    node.dirty.layout = true;
+                // Taffy's effective style also contains runtime placement and
+                // fitted auto-text height. A paint-only restyle must retain
+                // those results instead of resetting them to authored `auto`.
+                if computed.layout != node.computed.layout {
+                    let mut layout = computed.layout.clone();
+                    if !node.visible {
+                        layout.display = Display::None;
+                    }
+                    if let Some(placed) =
+                        self.placed.get(&crate::source::stable_id(&node.element.id))
+                    {
+                        placed.apply(&mut layout);
+                    }
+                    if layout != *self.tree.style(node.layout_id)? {
+                        self.tree.set_style(node.layout_id, layout)?;
+                        node.dirty.layout = true;
+                    }
                 }
                 if computed.font_family != node.computed.font_family {
                     if let Some(text) = &mut node.text {
@@ -72,6 +81,19 @@ impl Ui {
         }
         self.sync_choices()?;
         self.prepare_popovers()?;
+        // Hints share font caches but never take part in Taffy measurement.
+        // A color-only restyle repaints their cached glyphs without reshaping.
+        for node in &mut self.nodes {
+            if let Some(hint) = &mut node.placeholder
+                && (node.dirty.paint || node.dirty.layout || hint.dirty)
+            {
+                if hint.family != node.computed.font_family {
+                    hint.family.clone_from(&node.computed.font_family);
+                    hint.dirty = true;
+                }
+                text_system.measure(hint, None, node.computed.font_size);
+            }
+        }
         let layout = self.nodes.iter().any(|n| n.dirty.layout);
         let paint = layout || self.nodes.iter().any(|n| n.dirty.paint);
         if layout {
@@ -84,7 +106,9 @@ impl Ui {
             // Settle that dependency in this frame; ordinary popovers need one pass,
             // idle frames none. Bound the work even for pathological anchor cycles.
             for _ in 0..4 {
-                if !self.place_popovers()? {
+                let text_changed = work.layout_passes > 0 && self.fit_auto_text()?;
+                let overlays_changed = self.place_popovers()?;
+                if !text_changed && !overlays_changed {
                     break;
                 }
                 self.compute_layout(text_system)?;
@@ -142,7 +166,10 @@ impl Ui {
                             let measured =
                                 text_system.measure(text, width, node.computed.font_size);
                             Size {
-                                width: known.width.unwrap_or(measured.width),
+                                // Taffy rounds the final box to pixels. Rounding a
+                                // fractional intrinsic width down would rebreak a
+                                // naturally single-line label onto an extra line.
+                                width: known.width.unwrap_or(measured.width.ceil()),
                                 height: known.height.unwrap_or(measured.height),
                             }
                         },
