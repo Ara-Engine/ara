@@ -1,7 +1,7 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8",
+  "key": "9b250df16a9614cd34fa966dae58f1a5ca00e44d1ef39a11c348839224086cf3",
   "stages": [
     {
       "dxil": "f8b5d8dbd2c3bd7592057d1d00e76eb11ef1d6f1edf2ec3fc16bfb6c6815a5b8/spriteFragment.dxil",
