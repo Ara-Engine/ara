@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92",
+  "key": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835",
   "stages": [
     {
-      "dxil": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92/reservoir_specular_layers/specularTraceLayers.dxil",
+      "dxil": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835/reservoir_specular_layers/specularTraceLayers.dxil",
       "dxil_hash": "cff844ea089824b7effe5a84ccec732d3556a65a27c2d1a5fa2157cf4e12fc18",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92/reservoir_specular_layers/specularTraceLayers.metallib",
+        "metallib": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835/reservoir_specular_layers/specularTraceLayers.metallib",
         "metallib_hash": "28cb2dcccec9d717d9e9fa594c7fc6e83e4127aae527e60cadd5063ba081ee80",
-        "reflection": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92/reservoir_specular_layers/specularTraceLayers.metal.json",
+        "reflection": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835/reservoir_specular_layers/specularTraceLayers.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "specularTraceLayers",
-      "spirv": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92/reservoir_specular_layers/specularTraceLayers.spv",
+      "spirv": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835/reservoir_specular_layers/specularTraceLayers.spv",
       "spirv_entry": "main",
       "spirv_hash": "23bdc02abeaed60c5c44b4edb58dd078d1290aece7d4eae4fdab175ced061b49",
       "stage": "compute"

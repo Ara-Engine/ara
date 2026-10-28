@@ -3648,6 +3648,9 @@
         {
           "path": "pack.zip",
           "url": "https://kenney.nl/media/pages/assets/impact-sounds/87b4ddecda-1677589768/kenney_impact-sounds.zip",
+          "mirrors": [
+            "https://github.com/Ara-Engine/ara/releases/download/sample-assets-v1/kenney_impact-sounds.zip"
+          ],
           "size": 800850,
           "blake3": "5b0843c8b6f88e88f5421fc33681158db4816dcd6d727f59685a9d7565cb6bc7"
         }
@@ -3669,6 +3672,9 @@
         {
           "path": "pack.zip",
           "url": "https://kenney.nl/media/pages/assets/interface-sounds/fa43c1dd4d-1677589452/kenney_interface-sounds.zip",
+          "mirrors": [
+            "https://github.com/Ara-Engine/ara/releases/download/sample-assets-v1/kenney_interface-sounds.zip"
+          ],
           "size": 834536,
           "blake3": "37c6de155c2ecdf38983563ce5a5206e44b71124177f3fe77e77881f417a0cc7"
         }
@@ -3719,6 +3725,9 @@
         {
           "path": "pack.zip",
           "url": "https://kenney.nl/media/pages/assets/sci-fi-sounds/6b296f9ecf-1677589334/kenney_sci-fi-sounds.zip",
+          "mirrors": [
+            "https://github.com/Ara-Engine/ara/releases/download/sample-assets-v1/kenney_sci-fi-sounds.zip"
+          ],
           "size": 5875104,
           "blake3": "edc28a1cdf10c017d5bef17385304344c88039700d7078c2d26da37a84cc359a"
         }
@@ -3740,6 +3749,9 @@
         {
           "path": "pack.zip",
           "url": "https://kenney.nl/media/pages/assets/space-kit/20874c75ac-1677698978/kenney_space-kit.zip",
+          "mirrors": [
+            "https://github.com/Ara-Engine/ara/releases/download/sample-assets-v1/kenney_space-kit.zip"
+          ],
           "size": 6677531,
           "blake3": "d8727f9017ab8f73335ff07f4008f5b00ec52d8b32bcd64be4e70bfdf009de2d"
         }
@@ -3761,6 +3773,9 @@
         {
           "path": "pack.zip",
           "url": "https://kenney.nl/media/pages/assets/ui-pack-sci-fi/b67c2acd31-1724181109/kenney_ui-pack-space-expansion.zip",
+          "mirrors": [
+            "https://github.com/Ara-Engine/ara/releases/download/sample-assets-v1/kenney_ui-pack-space-expansion.zip"
+          ],
           "size": 768505,
           "blake3": "e4e954bd1725a529f5be39f7b56ec8dc1bda3382b084799cbec728ee3c98d6fc"
         }

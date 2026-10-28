@@ -68,6 +68,9 @@ pub struct File {
     pub path: String,
     /// Stable download URL.
     pub url: String,
+    /// Ordered fallback URLs for the same pinned bytes and size.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mirrors: Vec<String>,
     /// Size in bytes.
     pub size: u64,
     /// BLAKE3 of the content, lowercase hex.
@@ -171,6 +174,8 @@ fn safe(part: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+
     use super::*;
 
     fn asset(id: &str, path: &str) -> Asset {
@@ -186,6 +191,7 @@ mod tests {
             files: vec![File {
                 path: path.into(),
                 url: "https://example.invalid/f".into(),
+                mirrors: vec![],
                 size: 1,
                 blake3: "0".repeat(64),
             }],
@@ -209,5 +215,23 @@ mod tests {
             assets: vec![asset("a", "../outside.bin")],
         };
         assert!(escape.validate().is_err());
+    }
+
+    #[test]
+    fn mirrors_are_optional_and_preserve_order_and_attribution() {
+        let mut original = asset("a", "pack.zip");
+        let legacy = ara_json::to_value(&original).unwrap();
+        assert!(legacy["files"][0].get("mirrors").is_none());
+        let decoded: Asset = serde_json::from_value(legacy).unwrap();
+        assert!(decoded.files[0].mirrors.is_empty());
+        original.files[0].mirrors = vec!["file:///second.zip".into(), "file:///first.zip".into()];
+        let text = ara_json::to_canonical_string(&ara_json::to_value(&original).unwrap());
+        let decoded: Asset = serde_json::from_str(&text).unwrap();
+        assert_eq!(decoded.files[0].mirrors, original.files[0].mirrors);
+        assert_eq!(decoded.source, original.source);
+        assert_eq!(decoded.authors, original.authors);
+        assert_eq!(decoded.license, original.license);
+        assert_eq!(decoded.files[0].blake3, original.files[0].blake3);
+        assert_eq!(decoded.files[0].size, original.files[0].size);
     }
 }
