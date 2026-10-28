@@ -52,6 +52,8 @@ struct HumanContext {
     camera: Camera,
     asset_path: Option<String>,
     asset_folder: String,
+    canvas: crate::graph::Camera,
+    canvas_selection: std::collections::BTreeSet<String>,
 }
 
 impl HumanContext {
@@ -65,6 +67,8 @@ impl HumanContext {
             camera: state.camera,
             asset_path: state.asset_path.clone(),
             asset_folder: state.asset_folder.clone(),
+            canvas: state.canvas,
+            canvas_selection: state.canvas_selection.clone(),
         }
     }
 
@@ -77,6 +81,8 @@ impl HumanContext {
             && self.camera == state.camera
             && self.asset_path == state.asset_path
             && self.asset_folder == state.asset_folder
+            && self.canvas == state.canvas
+            && self.canvas_selection == state.canvas_selection
     }
 }
 

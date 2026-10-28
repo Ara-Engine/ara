@@ -28,7 +28,7 @@ fn continued_typing_in_the_same_field_invalidates_only_the_navigation_owner() {
 fn navigation_context_changes_suppress_without_an_authoring_revision_or_native_event() {
     let interaction = Interaction::default();
     let original = state();
-    let changes: [fn(&mut EditorState); 8] = [
+    let changes: [fn(&mut EditorState); 10] = [
         |s: &mut EditorState| s.doc = "sc_elsewhere".into(),
         |s: &mut EditorState| s.selection.clear(),
         |s: &mut EditorState| s.focus = "assets".into(),
@@ -37,6 +37,10 @@ fn navigation_context_changes_suppress_without_an_authoring_revision_or_native_e
         |s: &mut EditorState| s.camera.distance += 1.,
         |s: &mut EditorState| s.asset_path = Some("game/other.graph".into()),
         |s: &mut EditorState| s.asset_folder = "game/other".into(),
+        |s: &mut EditorState| s.canvas.pan[0] += 1.,
+        |s: &mut EditorState| {
+            s.canvas_selection.insert("n_elsewhere".into());
+        },
     ];
     for change in changes {
         let pending = interaction.capture(&original, "human", false);

@@ -199,6 +199,7 @@ impl Shell {
                     })
             })
         {
+            self.interaction.note();
             editor.action("editor.focus", json!({"panel": page}))?;
             self.follow_focus(editor)?;
             self.apply_canvas_view(editor);
@@ -212,6 +213,7 @@ impl Shell {
         let inside = rect.contains(self.pointer[0], self.pointer[1]);
         match event {
             Event::MouseMotion { position, .. } if self.canvas_dragging => {
+                self.interaction.note();
                 self.pointer = *position;
                 if let Some(canvas) = self.canvas_mut() {
                     canvas.motion(*position);
@@ -223,6 +225,7 @@ impl Shell {
                 button,
                 pressed: true,
             } if inside => {
+                self.interaction.note();
                 let (pointer, add) = (self.pointer, self.modifiers[0] || self.modifiers[1]);
                 if let Some(canvas) = self.canvas_mut() {
                     canvas.begin(pointer, *button, add, rect);
@@ -248,6 +251,7 @@ impl Shell {
                 Ok(true)
             }
             Event::Wheel(delta) if inside => {
+                self.interaction.note();
                 let pointer = self.pointer;
                 if let Some(canvas) = self.canvas_mut() {
                     canvas.zoom(pointer, delta[1], rect);
@@ -264,6 +268,7 @@ impl Shell {
                 pressed: true,
                 ..
             } if self.canvas_dragging => {
+                self.interaction.note();
                 self.canvas_dragging = false;
                 if let Some(canvas) = self.canvas_mut() {
                     canvas.cancel();
@@ -329,3 +334,7 @@ impl Shell {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod ownership_tests;
