@@ -42,9 +42,13 @@ fn document_diverged_distinguishes_observed_invalid_policy_from_a_clean_document
         NEXT.fetch_add(1, Ordering::Relaxed)
     ));
     std::fs::create_dir_all(root.join("settings")).expect("Create isolated policy fixture");
+    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT))
+        .expect("Create current authoring root");
     std::fs::write(
         root.join("ara.project.json"),
-        r#"{"name":"Divergence fixture"}"#,
+        ara_json::to_canonical_string(&serde_json::json!({
+            "name":"Divergence fixture", "layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION
+        })),
     )
     .expect("Write marker fixture");
     let preferences = root.join(crate::project_policy::PREFERENCES);
