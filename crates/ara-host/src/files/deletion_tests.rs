@@ -113,24 +113,29 @@ fn delayed_deleted_old_path_before_saved_keeps_relocated_document_model() {
     let prior_stamp = crate::file_io::stamp(&f.root.join(&old));
     let delayed = f
         .host
-        .st
+        .file_test_state()
         .files
         .io
         .deletion_observation(&old, prior_stamp.clone());
-    let held = f.host.st.files.io.hold();
+    let held = f.host.file_test_state().files.io.hold();
     f.host
         .call(ConnId::LOCAL, "history.redo", json!({"session":f.session}))
         .unwrap();
     f.assert_path("props/Renamed.prefab");
     let revision = f.host.store().revision();
     assert_eq!(revision, before + 3);
-    f.host.st.file_reply(Reply::Deleted {
+    f.host.file_test_state().file_reply(Reply::Deleted {
         path: old.clone(),
         observed: delayed,
     });
     // Even a current watch token for the old path cannot address its ID's new path.
-    let current_old = f.host.st.files.io.deletion_observation(&old, prior_stamp);
-    f.host.st.file_reply(Reply::Deleted {
+    let current_old = f
+        .host
+        .file_test_state()
+        .files
+        .io
+        .deletion_observation(&old, prior_stamp);
+    f.host.file_test_state().file_reply(Reply::Deleted {
         path: old,
         observed: current_old,
     });
@@ -149,14 +154,14 @@ fn stale_same_path_deletion_cannot_unload_recreated_identity_but_fresh_external_
     let path = Fixture::storage("props/A.prefab");
     let delayed = f
         .host
-        .st
+        .file_test_state()
         .files
         .io
         .deletion_observation(&path, crate::file_io::stamp(&f.root.join(&path)));
-    let held = f.host.st.files.io.hold();
+    let held = f.host.file_test_state().files.io.hold();
     f.recreate("props/A.prefab");
     let revision = f.host.store().revision();
-    f.host.st.file_reply(Reply::Deleted {
+    f.host.file_test_state().file_reply(Reply::Deleted {
         path: path.clone(),
         observed: delayed,
     });
@@ -165,7 +170,7 @@ fn stale_same_path_deletion_cannot_unload_recreated_identity_but_fresh_external_
     f.host.flush();
     f.assert_path("props/A.prefab");
     fs::remove_file(f.root.join(&path)).unwrap();
-    f.host.st.files.io.sync();
+    f.host.file_test_state().files.io.sync();
     let deadline = Instant::now() + Duration::from_secs(5);
     while f.host.store().workspace().doc("pf_prop").is_some() {
         f.host.tick();
