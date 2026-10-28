@@ -1,16 +1,13 @@
 //! Migration plans are explicit filesystem ops, validated before any source is moved.
 use std::{
-    collections::BTreeMap,
     fs, io,
     path::{Path, PathBuf},
 };
 
 use super::references::{self, Owner};
 use ara_diag::{Diagnostic, codes};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
-#[path = "history.rs"]
-mod history;
 
 pub(super) const CONTENT_DIRS: &[&str] = &[
     "anim",
@@ -38,7 +35,7 @@ pub(super) const CONTENT_DIRS: &[&str] = &[
 ];
 
 /// One reviewable operation in a project layout migration.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "camelCase")]
 pub enum MigrationOp {
     /// Move an existing file or directory, retaining its contents and identity.
@@ -64,7 +61,9 @@ pub struct Migration {
     /// Legacy evidence, tests and machine-specific export helpers are retained here.
     pub support: PathBuf,
     #[serde(skip)]
-    modern: bool,
+    pub(super) modern: bool,
+    #[serde(skip)]
+    pub(super) reference_root: String,
     /// Ordered operations, also returned by `ara project migrate --dry-run --json`.
     pub operations: Vec<MigrationOp>,
     #[serde(skip)]
@@ -105,25 +104,36 @@ impl Migration {
         if !marker.is_object() {
             return Err(problem("project marker must be a JSON object"));
         }
-        let support = support.map(Path::to_path_buf).unwrap_or_else(|| {
-            root.with_file_name(format!(
-                "{}-support",
-                root.file_name().unwrap_or_default().to_string_lossy()
-            ))
-        });
+        let support = support
+            .map(|path| {
+                if path.is_absolute() {
+                    path.to_path_buf()
+                } else {
+                    root.join(path)
+                }
+            })
+            .unwrap_or_else(|| root.join("migration-support"));
         let support = std::path::absolute(support).map_err(io_error)?;
-        reject_nested_support(&root, &support)?;
+        let relative = support.strip_prefix(&root).map_err(|_| {
+            problem("migration support must stay inside this project for reversible history")
+        })?;
+        ara_doc::file_state::check_path(&relative.to_string_lossy().replace('\\', "/"))?;
+        let layout = ara_doc::detect_project_layout(&marker);
         let mut migration = Self {
             root,
             support,
             modern: marker["layoutVersion"]
                 .as_u64()
-                .is_some_and(|version| version >= super::VERSION),
+                .is_some_and(|version| version >= 3),
+            reference_root: layout.authoring_root().to_owned(),
             operations: Vec::new(),
             moves: Vec::new(),
             cleanup: Vec::new(),
             rewrites: Vec::new(),
         };
+        if layout.is_current() {
+            return Ok(migration);
+        }
         let mut mappings = super::mapping::plan(&mut migration)?;
         migration.move_if_present("ara.imports", "settings/ara.imports")?;
         let presets = migration.root.join("presets");
@@ -368,7 +378,6 @@ impl Migration {
                 existed: false,
             });
         }
-        migration.rewrite_journal(&mappings)?;
         migration
             .operations
             .extend(migration.rewrites.iter().map(|r| MigrationOp::Rewrite {
@@ -455,327 +464,12 @@ impl Migration {
         }
         Ok(())
     }
-    fn rewrite_journal(&mut self, mappings: &[(String, String)]) -> Result<(), Diagnostic> {
-        let path = self.root.join(".ara/journal");
-        if !path.is_file() {
-            return Ok(());
-        }
-        let before = fs::read(&path).map_err(io_error)?;
-        let text = std::str::from_utf8(&before).map_err(|_| problem("journal must be UTF-8"))?;
-        let mut snapshots = history::Planner::new(self, mappings, text)?;
-        let hashes: BTreeMap<_, _> = self
-            .rewrites
-            .iter()
-            .filter_map(|r| {
-                Some((
-                    crate::journal::hash(std::str::from_utf8(&r.before).ok()?),
-                    crate::journal::hash(std::str::from_utf8(&r.after).ok()?),
-                ))
-            })
-            .collect();
-        let mut after = String::new();
-        let mut marker_flush = None;
-        let marker_before = self
-            .rewrites
-            .iter()
-            .find(|rewrite| rewrite.source == self.root.join(crate::project::MARKER))
-            .and_then(|rewrite| std::str::from_utf8(&rewrite.before).ok());
-        let legacy_policy = marker_before
-            .and_then(|text| ara_json::parse(text).ok())
-            .is_some_and(|marker| {
-                super::POLICY_KEYS
-                    .iter()
-                    .any(|key| marker.get(*key).is_some())
-            });
-        for line in text.lines() {
-            let mut value: Value = serde_json::from_str(line)
-                .map_err(|e| problem(format!("repair the journal before migrating: {e}")))?;
-            snapshots.rewrite_entry(&mut value)?;
-            if legacy_policy {
-                if value["t"] == "flush" && value["doc"] == "pj_project" {
-                    let matches = marker_before
-                        .is_some_and(|before| value["hash"] == crate::journal::hash(before));
-                    marker_flush = Some((value["rev"].clone(), matches, value["hash"].clone()));
-                }
-                rewrite_policy_history(&mut value, mappings);
-            }
-            references::references(&mut value, mappings);
-            if let Some(ops) = value
-                .get_mut("txn")
-                .and_then(|txn| txn.get_mut("ops"))
-                .and_then(Value::as_array_mut)
-            {
-                for op in ops {
-                    if matches!(op["op"].as_str(), Some("document" | "file"))
-                        && let Some(path) =
-                            op.get("path").and_then(Value::as_str).map(str::to_owned)
-                        && !path.starts_with("settings/")
-                        && path != crate::project::MARKER
-                    {
-                        let storage = self.history_storage_path(&path, mappings)?;
-                        if op["op"] == "file" {
-                            op["id"] = ara_doc::file_state::record_id(&storage).to_string().into();
-                        }
-                        op["path"] = storage.into();
-                    }
-                }
-            }
-            if value["t"] == "fileFlush"
-                && let Some(path) = value["path"].as_str().map(str::to_owned)
-            {
-                value["path"] = self.history_storage_path(&path, mappings)?.into();
-            }
-            if value["t"] == "flush"
-                && let Some(new) = value["hash"].as_str().and_then(|hash| hashes.get(hash))
-            {
-                value["hash"] = new.clone().into();
-            }
-            // Journal is JSON-lines; canonical key ordering is retained within each entry.
-            after.push_str(
-                &serde_json::to_string(&ara_json::sort_keys(&value))
-                    .map_err(|e| problem(e.to_string()))?,
-            );
-            after.push('\n');
-        }
-        let history_writes = snapshots.finish();
-        if legacy_policy {
-            let preferences = self
-                .rewrites
-                .iter()
-                .find(|rewrite| rewrite.target == self.root.join(super::PREFERENCES))
-                .and_then(|rewrite| std::str::from_utf8(&rewrite.after).ok());
-            if let Some(preferences) = preferences {
-                let (revision, matches, old_hash) =
-                    marker_flush.unwrap_or((Value::from(0), true, Value::Null));
-                let hash = if matches {
-                    crate::journal::hash(preferences).into()
-                } else {
-                    old_hash
-                };
-                let flush = serde_json::json!({"t":"flush","doc":super::PREFERENCES_ID,"rev":revision,"hash":hash});
-                after.push_str(
-                    &serde_json::to_string(&ara_json::sort_keys(&flush))
-                        .map_err(|e| problem(e.to_string()))?,
-                );
-                after.push('\n');
-            }
-        }
-        self.rewrites.extend(history_writes);
-        if after.as_bytes() != before {
-            self.rewrites.push(Rewrite {
-                source: path.clone(),
-                target: path,
-                before,
-                after: after.into_bytes(),
-                existed: true,
-            });
-        }
-        Ok(())
-    }
-
-    fn history_storage_path(
-        &self,
-        path: &str,
-        mappings: &[(String, String)],
-    ) -> Result<String, Diagnostic> {
-        let moved = moved_path(&self.root.join(path), &self.moves);
-        let original = self.root.join(path);
-        if moved != original {
-            return moved.strip_prefix(&self.root).map(|path| path.to_string_lossy().replace('\\', "/"))
-                .map_err(|_| problem(format!("history refers to support file `{path}` outside the migrated project; archive that history before migrating")));
-        }
-        if self.modern && path.starts_with(&format!("{}/", super::AUTHORING_ROOT)) {
-            return Ok(path.to_owned());
-        }
-        let logical = references::path(path, mappings);
-        if logical.starts_with("settings/")
-            || logical.starts_with(".ara/")
-            || logical == crate::project::MARKER
-        {
-            Ok(logical)
-        } else {
-            Ok(format!("{}/{logical}", super::AUTHORING_ROOT))
-        }
-    }
-
-    /// Applies the planned operations under the same lock used by the project authority.
-    /// A failed write rolls back earlier writes and moves; no original is discarded.
+    /// Submit the reviewed plan through the dedicated typed migration authority.
     pub fn apply(&self) -> Result<(), Diagnostic> {
-        if self.root.join(".ara").exists() {
-            reject_links(&self.root.join(".ara"))?;
-        }
-        fs::create_dir_all(self.root.join(".ara")).map_err(io_error)?;
-        let lock = fs::OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .open(self.root.join(".ara/lock"))
-            .map_err(io_error)?;
-        lock.try_lock().map_err(|e| {
-            Diagnostic::error(
-                codes::DAEMON_RUNNING,
-                format!("close the project before migrating: {e}"),
-            )
-        })?;
-        for rewrite in &self.rewrites {
-            let current = fs::read(&rewrite.source).unwrap_or_default();
-            if rewrite.source.exists() != rewrite.existed || current != rewrite.before {
-                return Err(problem(format!(
-                    "`{}` changed since the migration was planned; run again",
-                    rewrite.source.display()
-                )));
-            }
-        }
-        for (from, to) in &self.moves {
-            if !from.exists() || to.exists() {
-                return Err(problem(
-                    "project changed since the migration was planned; run again",
-                ));
-            }
-            reject_links(from)?;
-        }
-        let mut moved = Vec::new();
-        let mut written = Vec::new();
-        let apply = (|| -> io::Result<()> {
-            for (from, to) in &self.moves {
-                if let Some(parent) = to.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                fs::rename(from, to)?;
-                moved.push((from, to));
-            }
-            for rewrite in &self.rewrites {
-                if let Some(parent) = rewrite.target.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                written.push(rewrite);
-                fs::write(&rewrite.target, &rewrite.after)?;
-            }
-            for root in &self.cleanup {
-                remove_empty(root)?;
-            }
-            super::create_directories(&self.root)?;
-            Ok(())
-        })();
-        if let Err(error) = apply {
-            let mut rollback = Vec::new();
-            for rewrite in written.into_iter().rev() {
-                let result = if rewrite.existed {
-                    fs::write(&rewrite.target, &rewrite.before)
-                } else {
-                    fs::remove_file(&rewrite.target)
-                };
-                if let Err(e) = result {
-                    rollback.push(e.to_string());
-                }
-            }
-            for (from, to) in moved.into_iter().rev() {
-                if let Some(parent) = from.parent() {
-                    let _ = fs::create_dir_all(parent);
-                }
-                if let Err(e) = fs::rename(to, from) {
-                    rollback.push(e.to_string());
-                }
-            }
-            return Err(Diagnostic::error(
-                codes::IO,
-                format!(
-                    "migration failed: {error}; rollback {}",
-                    if rollback.is_empty() {
-                        "completed".into()
-                    } else {
-                        rollback.join("; ")
-                    }
-                ),
-            ));
-        }
-        Ok(())
+        super::transaction::apply_legacy_plan(self)
     }
 }
 
-/// Policy history follows its document, so undo cannot put migrated policy back in the marker.
-fn rewrite_policy_history(entry: &mut Value, mappings: &[(String, String)]) {
-    let Some(ops) = entry
-        .get_mut("txn")
-        .and_then(|txn| txn.get_mut("ops"))
-        .and_then(Value::as_array_mut)
-    else {
-        return;
-    };
-    let mut rewritten = Vec::with_capacity(ops.len());
-    for mut operation in std::mem::take(ops) {
-        if operation["op"] == "set"
-            && matches!(
-                operation["doc"].as_str(),
-                Some("pj_project" | super::PREFERENCES_ID)
-            )
-            && let Some(field) = operation["path"].as_str().map(str::to_owned)
-        {
-            for key in ["value", "prev"] {
-                if let Some(value) = operation.get_mut(key) {
-                    references::policy_history(value, &field, mappings);
-                }
-            }
-        }
-        if operation["op"] == "set"
-            && operation["doc"] == "pj_project"
-            && operation["id"] == "p_settings"
-        {
-            let path = operation["path"]
-                .as_str()
-                .and_then(|path| path.parse::<ara_schema::FieldPath>().ok());
-            if let Some(path) = path {
-                if path.head() == "settings"
-                    && path.segments().get(1).is_some_and(|segment| {
-                        let (ara_schema::Segment::Field(key) | ara_schema::Segment::Key(key)) =
-                            segment;
-                        super::POLICY_KEYS.contains(&key.as_str())
-                    })
-                {
-                    operation["doc"] = super::PREFERENCES_ID.into();
-                } else if path.to_string() == "settings" {
-                    let mut policy = operation.clone();
-                    policy["doc"] = super::PREFERENCES_ID.into();
-                    for field in ["value", "prev"] {
-                        if let Some(object) =
-                            operation.get_mut(field).and_then(Value::as_object_mut)
-                        {
-                            let mut policy_fields = serde_json::Map::new();
-                            for key in super::POLICY_KEYS {
-                                if let Some(value) = object.remove(*key) {
-                                    policy_fields.insert((*key).to_owned(), value);
-                                }
-                            }
-                            object.insert("layoutVersion".into(), super::VERSION.into());
-                            policy[field] = Value::Object(policy_fields);
-                        }
-                    }
-                    rewritten.push(policy);
-                }
-            }
-        }
-        rewritten.push(operation);
-    }
-    *ops = rewritten;
-}
-
-fn reject_nested_support(root: &Path, support: &Path) -> Result<(), Diagnostic> {
-    let ancestor = support
-        .ancestors()
-        .find(|p| p.exists())
-        .ok_or_else(|| problem("support directory has no existing ancestor"))?;
-    let resolved = ancestor.canonicalize().map_err(io_error)?;
-    if resolved.starts_with(root)
-        || support
-            .components()
-            .any(|c| c == std::path::Component::ParentDir)
-    {
-        return Err(problem(
-            "migration support directory must be outside the game project, with no '..' components",
-        ));
-    }
-    Ok(())
-}
 fn reject_links(path: &Path) -> Result<(), Diagnostic> {
     let metadata = path.symlink_metadata().map_err(io_error)?;
     if metadata.file_type().is_symlink() {
@@ -829,7 +523,7 @@ pub(super) fn collect(
     }
     Ok(())
 }
-fn moved_path(path: &Path, moves: &[(PathBuf, PathBuf)]) -> PathBuf {
+pub(super) fn moved_path(path: &Path, moves: &[(PathBuf, PathBuf)]) -> PathBuf {
     moves
         .iter()
         .find_map(|(from, to)| {
@@ -874,6 +568,7 @@ fn materialize_ui(migration: &Migration, preferences: &mut Value) -> Result<(), 
     let source_for = |filename: &str| {
         [
             format!("{}/ui/{filename}", super::AUTHORING_ROOT),
+            format!("game/ui/{filename}"),
             format!("content/ui/{filename}"),
             format!("assets/ui/{filename}"),
             format!("ui/{filename}"),
@@ -912,24 +607,6 @@ fn materialize_ui(migration: &Migration, preferences: &mut Value) -> Result<(), 
         }
     }
     Ok(())
-}
-
-/// Removes only emptied migration source directories; files left by concurrent writers survive.
-fn remove_empty(path: &Path) -> io::Result<()> {
-    if !path.is_dir() {
-        return Ok(());
-    }
-    for entry in fs::read_dir(path)? {
-        let entry = entry?;
-        if entry.file_type()?.is_dir() {
-            remove_empty(&entry.path())?;
-        }
-    }
-    match fs::remove_dir(path) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == io::ErrorKind::DirectoryNotEmpty => Ok(()),
-        Err(e) => Err(e),
-    }
 }
 
 /// Local glTF companions follow their actual moved file, including cross-folder URIs.

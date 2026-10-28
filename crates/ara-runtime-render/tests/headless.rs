@@ -22,7 +22,7 @@ fn runtime() -> Runtime {
         preset: ara_asset::CookPreset::Fast,
         thread_budget: 4,
         source_path: "assets/fox/Fox.glb".into(),
-        source: std::fs::read(demo().join("assets/fox/Fox.glb")).unwrap(),
+        source: std::fs::read(demo().join("content/assets/fox/Fox.glb")).unwrap(),
         importer: "ara.gltf".into(),
         version: registry.get("ara.gltf").unwrap().version().into(),
         settings: serde_json::Value::Null,
@@ -43,7 +43,7 @@ fn runtime() -> Runtime {
         output,
     };
     let schema = ara_runtime::schema(&[]).unwrap();
-    let text = std::fs::read_to_string(demo().join("levels/demo.scene")).unwrap();
+    let text = std::fs::read_to_string(demo().join("content/levels/demo.scene")).unwrap();
     let doc = ara_doc::read(&text, "levels/demo.scene", &schema, None)
         .doc
         .unwrap();

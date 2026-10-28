@@ -87,6 +87,32 @@ pub struct Project {
 }
 
 impl Project {
+    /// Metadata-only authority used exclusively by the explicit migration worker.
+    /// It does not discover authored files, compile C#, or bypass ordinary opens.
+    pub(crate) fn migration_bootstrap(root: &Path) -> Result<Project, Diagnostic> {
+        let root = fs::canonicalize(root)
+            .map_err(|error| Diagnostic::error(codes::IO, error.to_string()))?;
+        if !root.join(MARKER).is_file() {
+            return Err(no_project(&root));
+        }
+        let mut db = SchemaDb::new();
+        ara_doc::register(&mut db);
+        ara_components::register(&mut db);
+        let mut registry = Registry::builtin(&mut db);
+        let diags = crate::ui_document::register(&mut registry, &mut db);
+        Ok(Project {
+            authored_root: root.join(ara_doc::AUTHORING_ROOT),
+            root,
+            db,
+            registry,
+            index: AssetIndex::new(),
+            docs: Vec::new(),
+            type_files: Vec::new(),
+            diags,
+            project_files: HashSet::new(),
+        })
+    }
+
     /// Opens the project at `root`, which must contain `ara.project.json`.
     pub fn open(root: &Path) -> Result<Project, Diagnostic> {
         Self::open_with(root, |_, _| Vec::new())

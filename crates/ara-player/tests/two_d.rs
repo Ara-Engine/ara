@@ -22,18 +22,18 @@ fn sample() -> PathBuf {
 fn project() -> PathBuf {
     let dir = std::env::temp_dir().join(format!("ara-2d-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(dir.join("levels")).unwrap();
-    std::fs::create_dir_all(dir.join("art")).unwrap();
+    std::fs::create_dir_all(dir.join("content/levels")).unwrap();
+    std::fs::create_dir_all(dir.join("content/art")).unwrap();
     std::fs::write(
         dir.join("ara.project.json"),
         ara_json::to_canonical_string(
-            &json!({"name": "Platformer", "main": "levels/platformer.scene"}),
+            &json!({"name": "Platformer", "main": "levels/platformer.scene", "layoutVersion":4}),
         ),
     )
     .unwrap();
     std::fs::copy(
         sample().join("platformer.scene"),
-        dir.join("levels/platformer.scene"),
+        dir.join("content/levels/platformer.scene"),
     )
     .unwrap();
     let settings: Value = serde_json::from_str(
@@ -47,7 +47,7 @@ fn project() -> PathBuf {
         ("platformer.png", "as_platform1"),
         ("platformer-normal.png", "as_normal01"),
     ] {
-        std::fs::copy(sample().join(png), dir.join("art").join(png)).unwrap();
+        std::fs::copy(sample().join(png), dir.join("content/art").join(png)).unwrap();
         let id = ara_doc::AssetId::parse(id).unwrap();
         let mut workspace = ara_doc::Workspace::default();
         workspace.insert("sidecar", Sidecar::empty(id.clone()).into_document());
@@ -64,7 +64,7 @@ fn project() -> PathBuf {
             .transact(ara_ops::TxnMeta::by(ara_ops::Author::Human), [edit])
             .unwrap();
         let text = ara_doc::write(store.workspace().doc(id.as_str()).unwrap(), store.schema());
-        std::fs::write(dir.join("art").join(format!("{png}.import.json")), text).unwrap();
+        std::fs::write(dir.join("content/art").join(format!("{png}.import.json")), text).unwrap();
     }
     dir
 }

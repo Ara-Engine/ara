@@ -2,6 +2,10 @@
 mod mapping;
 mod migrate;
 mod references;
+mod transaction;
+pub use transaction::{
+    MigrationControl, MigrationOperation, MigrationPlan, migrate_project, migration_plan,
+};
 mod check;
 pub use check::require_current_layout;
 

@@ -617,7 +617,13 @@ mod tests {
     #[test]
     fn project_quality_is_loaded_as_a_host_document_before_import_synchronization() {
         let root = tempfile::tempdir().expect("project");
-        std::fs::write(root.path().join("ara.project.json"), "{}").expect("marker");
+        std::fs::write(
+            root.path().join("ara.project.json"),
+            ara_json::to_canonical_string(
+                &serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
+            ),
+        )
+        .expect("marker");
         std::fs::create_dir_all(root.path().join("settings")).expect("settings");
         let policy = ara_asset::ProjectImportSettings {
             preset: ara_asset::CookPreset::HighQuality,

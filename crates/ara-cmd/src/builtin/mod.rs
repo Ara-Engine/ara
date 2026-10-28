@@ -19,6 +19,7 @@ mod document_delete;
 mod entity;
 mod look_at;
 mod prefab;
+mod project_migrate;
 mod source;
 
 use ara_schema::SchemaDb;
@@ -57,6 +58,10 @@ pub use prefab::{
 };
 
 use crate::Registry;
+pub use project_migrate::{
+    MigrationFile, PROJECT_MIGRATION_METADATA, PreparedMigration, ProjectMigrate,
+    ProjectMigrateParams,
+};
 pub use source::{SourceReplace, SourceReplaceParams};
 
 /// Registers the starter set and its params types.
@@ -65,6 +70,7 @@ pub fn register(reg: &mut Registry, db: &mut SchemaDb) {
     document::register(reg, db);
     reg.command::<SourceReplace>(db);
     reg.command::<BuildProfileCreate>(db);
+    reg.command::<ProjectMigrate>(db);
     reg.command::<DocDelete>(db)
         .command::<EntityCreate>(db)
         .command::<EntityDelete>(db)

@@ -112,24 +112,3 @@ fn bare(value: &mut Value, mappings: &[(String, String)]) {
         *value = path(value, mappings);
     }
 }
-
-pub(super) fn policy_history(value: &mut Value, field: &str, mappings: &[(String, String)]) {
-    match field {
-        "settings" => document(value, mappings, Owner::Project),
-        "settings.main"
-        | "settings.look.default"
-        | "settings.ui.main"
-        | "settings.ui.stylesheet"
-        | "settings.ui.bindings"
-        | "settings.ui.resources" => bare(value, mappings),
-        "settings.look" | "settings.ui" => {
-            let key = field
-                .strip_prefix("settings.")
-                .expect("matched policy field");
-            let mut wrapped = serde_json::json!({key: value.clone()});
-            document(&mut wrapped, mappings, Owner::Project);
-            *value = wrapped[key].take();
-        }
-        _ => {}
-    }
-}

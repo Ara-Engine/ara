@@ -15,11 +15,14 @@ pub fn require_current_layout(root: &Path) -> Result<(), Diagnostic> {
     })?;
     let marker = ara_json::parse(&text).map_err(|error| {
         Diagnostic::error(codes::JSON_SYNTAX, error.message)
-            .file(file.display().to_string()).line_col(error.line, error.column)
+            .file(file.display().to_string())
+            .line_col(error.line, error.column)
     })?;
     if !marker.is_object() {
-        return Err(Diagnostic::error(codes::INVALID_PARAMS, "project marker must be an object")
-            .file(file.display().to_string()));
+        return Err(
+            Diagnostic::error(codes::INVALID_PARAMS, "project marker must be an object")
+                .file(file.display().to_string()),
+        );
     }
     let layout = ara_doc::detect_project_layout(&marker);
     if layout.is_current() {

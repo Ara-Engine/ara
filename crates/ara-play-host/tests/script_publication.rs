@@ -30,7 +30,13 @@ fn relative_open_tracks_absolute_canonical_schema_files_across_cwd_changes() {
     let parent = base.join(format!("relative-open-{}", std::process::id()));
     std::fs::create_dir_all(parent.join("project").join(ara_doc::AUTHORING_ROOT)).expect("project");
     std::fs::create_dir_all(parent.join("elsewhere")).expect("other cwd");
-    std::fs::write(parent.join("project/ara.project.json"), "{}").expect("marker");
+    std::fs::write(
+        parent.join("project/ara.project.json"),
+        ara_json::to_canonical_string(
+            &serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
+        ),
+    )
+    .expect("marker");
     std::fs::write(parent.join("project").join(ara_doc::AUTHORING_ROOT).join("Counter.cs"), "/// <summary>A counter.</summary>\n[Component] public partial struct Counter { /// <summary>Ticks.</summary>\n public int Value; }").expect("source");
     let child = std::process::Command::new(std::env::current_exe().expect("test executable"))
         .current_dir(parent)
@@ -63,7 +69,7 @@ fn fresh_open_publishes_and_repairs_private_schemas_before_validation() {
                 .as_nanos()
         ));
     std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT)).expect("scratch");
-    std::fs::write(root.join("ara.project.json"), "{}").expect("marker");
+    std::fs::write(root.join("ara.project.json"), ara_json::to_canonical_string(&serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"main.scene"}))).expect("marker");
     let source = root.join(ara_doc::AUTHORING_ROOT).join("Armour.cs");
     std::fs::write(&source, "using Ara; /// <summary>Protection.</summary>\n[Component] public partial struct Armour { /// <summary>Points.</summary>\n public float Points; }").expect("source");
     let opened = ara_play_host::open_project(&root).expect("open");

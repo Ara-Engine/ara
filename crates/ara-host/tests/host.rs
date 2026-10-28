@@ -355,7 +355,8 @@ fn explicit_document_deletion_flushes_recovers_and_undoes_with_history() {
         ]}),
     );
     host.flush();
-    let before = fs::read_to_string(dir.join("content/levels/generated.scene")).expect("saved scene");
+    let before =
+        fs::read_to_string(dir.join("content/levels/generated.scene")).expect("saved scene");
     call(
         &mut host,
         "cmd.apply",
@@ -882,7 +883,7 @@ fn external_edits_merge_in_or_are_reported_without_overwriting() {
     assert_eq!(scene(&dir), human_text, "the file is not overwritten");
     let status = call(&mut h, "session.status", json!({ "session": s }));
     assert_eq!(
-        status["files"]["diverged"]["levels/arena.scene"],
+        status["files"]["diverged"]["content/levels/arena.scene"],
         "conflict"
     );
 
@@ -1210,10 +1211,10 @@ fn calls_find_their_document_and_report_created_ids_plainly() {
                 ] }),
     );
     let pad = r["ids"]["$pad"].as_str().expect("pad").to_owned();
-    assert_eq!(r["doc"], "levels/arena.scene");
+    assert_eq!(r["doc"], "content/levels/arena.scene");
     let text = r["text"].as_str().expect("text");
     assert!(
-        text.starts_with("applied tx_") && text.contains("to levels/arena.scene"),
+        text.starts_with("applied tx_") && text.contains("to content/levels/arena.scene"),
         "{text}"
     );
     assert!(

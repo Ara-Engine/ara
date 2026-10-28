@@ -56,7 +56,7 @@ mod tests {
         let root = temporary.path();
         for enabled in [false, true] {
             std::fs::write(root.join("ara.project.json"),
-                ara_json::to_canonical_string(&serde_json::json!({"name":"GPU policy", "rendering":{"quality":"high", "rayTracing":enabled}}))).unwrap();
+                ara_json::to_canonical_string(&serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"GPU policy", "rendering":{"quality":"high", "rayTracing":enabled}}))).unwrap();
             assert_eq!(project(root).unwrap().ray_tracing, enabled);
             assert_eq!(
                 project(root).unwrap().quality,

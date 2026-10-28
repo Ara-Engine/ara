@@ -11,11 +11,7 @@ use std::{
 pub(super) fn plan(migration: &mut Migration) -> Result<Vec<(String, String)>, Diagnostic> {
     let mut files = Vec::new();
     collect(&migration.root, &migration.root, &mut files)?;
-    let modern = fs::read(migration.root.join(crate::project::MARKER))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
-        .and_then(|marker| marker["layoutVersion"].as_u64())
-        .is_some_and(|v| v >= super::VERSION);
+    let modern = migration.modern;
     let mut modules = Vec::new();
     for source in &files {
         if source
@@ -114,7 +110,7 @@ pub(super) fn plan(migration: &mut Migration) -> Result<Vec<(String, String)>, D
             if generated {
                 let target = migration
                     .root
-                    .join(".ara/scripts")
+                    .join("migration-support/generated-scripts")
                     .join(name)
                     .join(relative);
                 migration.add_move(source.clone(), target)?;
@@ -149,7 +145,7 @@ pub(super) fn plan(migration: &mut Migration) -> Result<Vec<(String, String)>, D
         }
         let old_reference = if modern {
             relative
-                .strip_prefix(&format!("{}/", super::AUTHORING_ROOT))
+                .strip_prefix(&format!("{}/", migration.reference_root))
                 .unwrap_or(&relative)
         } else {
             &relative
@@ -174,11 +170,12 @@ pub(super) fn plan(migration: &mut Migration) -> Result<Vec<(String, String)>, D
     // Prefixes also cover references in documentation, disabled records and missing media.
     for (from, to) in [
         ("content/assets", ""),
+        ("game", ""),
         ("content", ""),
         ("assets", ""),
         (super::AUTHORING_ROOT, ""),
     ] {
-        if !modern || migration.root.join(from).is_dir() && from != super::AUTHORING_ROOT {
+        if !modern {
             mappings.push((from.to_owned(), to.to_owned()));
         }
     }
@@ -187,7 +184,7 @@ pub(super) fn plan(migration: &mut Migration) -> Result<Vec<(String, String)>, D
     for directory in super::migrate::CONTENT_DIRS
         .iter()
         .copied()
-        .chain(["content", "scripts"])
+        .chain(["game", "content", "scripts"])
     {
         let path = migration.root.join(directory);
         if path.is_dir() && directory != super::AUTHORING_ROOT {
@@ -211,6 +208,7 @@ fn authored_path(path: &str, modern: bool) -> Option<String> {
     for prefix in [
         format!("{}/", super::AUTHORING_ROOT),
         "content/assets/".into(),
+        "game/".into(),
         "content/".into(),
         "assets/".into(),
     ] {
@@ -221,6 +219,7 @@ fn authored_path(path: &str, modern: bool) -> Option<String> {
     let first = path.split('/').next()?;
     if [
         "settings",
+        "migration-support",
         "presets",
         "evidence",
         "tests",
@@ -286,7 +285,13 @@ fn empty_directories(
         if name.to_string_lossy().starts_with('.')
             || (directory == migration.root.as_path()
                 && [
-                    "builds", "packages", "target", "settings", "evidence", "tests",
+                    "builds",
+                    "packages",
+                    "target",
+                    "settings",
+                    "evidence",
+                    "tests",
+                    "migration-support",
                 ]
                 .iter()
                 .any(|n| name == *n))
