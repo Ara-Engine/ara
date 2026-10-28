@@ -371,6 +371,18 @@ public static class ComponentExamples
     }
     #endregion
 
+    #region types/ReflectionCapture
+    /// <summary>Fit a reflection capture to a 12 x 4 x 8 m hangar so its metal floor reflects the walls.</summary>
+    public static void UseReflectionCapture(Entity entity, in Tick tick)
+    {
+        ref var capture = ref World.Get<ReflectionCapture>(entity);
+        capture.Extents = new Vector3(6, 2, 4);
+        capture.ProjectionExtents = new Vector3(6, 2, 4);
+        capture.CaptureOffset = new Vector3(0, 1.5f, 0);
+        capture.Priority = 1;
+    }
+    #endregion
+
     #region types/ReverbZone
     /// <summary>Increase the reverb blend inside a large room.</summary>
     public static void UseReverbZone(Entity entity, in Tick tick)
@@ -584,6 +596,7 @@ public static class ComponentExamples
         UsePhysicsPose2d(entity, in tick);
         UsePlayerControl(entity, in tick);
         UsePostProcessVolume(entity, playerInside: true, in tick);
+        UseReflectionCapture(entity, in tick);
         UseReverbZone(entity, in tick);
         UseRigidBody(entity, in tick);
         UseRigidBody2d(entity, in tick);

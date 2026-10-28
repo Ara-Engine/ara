@@ -29,6 +29,8 @@ codes! {
     COMPILE_SERVER = 904,
     /// The runtime rejected an EnC delta (L1/L2); the edit is rebuilt as a full module (L3).
     DELTA_REJECTED = 905,
+    /// A scoped C# compilation attempt started, bound its producer, or completed; application is reported separately.
+    COMPILE_RESULT = 906,
     /// A C# system threw; it is disabled until the next reload.
     SYSTEM_FAULT = 910,
     /// A behaviour callback threw; the behaviour type is disabled until the next reload.

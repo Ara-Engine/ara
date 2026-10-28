@@ -131,7 +131,13 @@ public sealed partial class Watcher : Behaviour
         Some(json!({"sequence":expected})),
         "destroy is exactly once"
     );
-    assert!(live.diagnostics.is_empty(), "{:?}", live.diagnostics);
+    assert!(
+        live.diagnostics
+            .iter()
+            .all(|d| d.code == ara_script::codes::COMPILE_RESULT),
+        "{:?}",
+        live.diagnostics
+    );
 }
 
 #[test]
@@ -204,5 +210,10 @@ public sealed partial class Probe : Behaviour
             .parent(),
         probe
     );
-    assert!(live.host.take_diagnostics().is_empty());
+    assert!(
+        live.host
+            .take_diagnostics()
+            .iter()
+            .all(|d| d.code == ara_script::codes::COMPILE_RESULT)
+    );
 }

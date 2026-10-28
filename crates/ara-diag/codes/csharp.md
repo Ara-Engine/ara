@@ -489,6 +489,24 @@ Fixes:
 - Remove long-lived references to module generations and release subscriptions or caches when retiring them.
 - Restart the play process from a snapshot to reclaim leaked generations; do not add gameplay `GC.Collect()` calls as a workaround.
 
+## ARA0906 script::COMPILE_RESULT: C# compilation lifecycle result
+owner: ara-script
+
+Informational lifecycle metadata for a module-owned compiler attempt. The private
+compile context identifies its producer lifetime, binding, attempt, profile,
+coverage and trusted Play source. Compilation and runtime application are separate.
+Only a completed success validated against current module inputs supersedes older
+compiler errors in the same active scope; Console retains the historical records.
+
+Causes:
+- A producer was bound, an input snapshot began evaluation, or an attempt completed.
+- Errors, cancellation, truncated output and partial warning coverage are explicit.
+
+Fixes:
+- Inspect the matching module's current compiler diagnostics when the result is errors.
+- Wait for a newer validated success after repairing source; cancellation does not resolve errors.
+- Check runtime/load diagnostics separately: compilation success does not prove application.
+
 ## ARA0930 script::NOT_BLITTABLE: Component has no blittable layout
 owner: ara-script
 

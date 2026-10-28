@@ -11,8 +11,8 @@ use objc2_metal::*;
 
 /// Apple's PCI vendor ID.
 const APPLE_VENDOR: u32 = 0x106b;
-/// Largest 2D texture extent on Apple silicon GPUs.
-const MAX_IMAGE_DIMENSION: u32 = 16_384;
+/// Largest 2D texture extent on Apple silicon GPUs; image creation enforces it.
+pub(super) const MAX_IMAGE_DIMENSION: u32 = 16_384;
 
 /// The RT tier (D29): ray queries on GPUs with hardware ray tracing, Apple9 (M3) and
 /// later. Earlier Apple GPUs trace in software and take the raster fallback.

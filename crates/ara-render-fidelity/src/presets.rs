@@ -153,13 +153,13 @@ pub struct Capabilities {
 }
 
 /// Whether `gpu`'s ray queries are verified for Ara's ray-traced paths: the D29
-/// hybrid, the RT fidelity tier and the ray-traced probe-GI bake. Metal's are not
-/// yet (an M5 renders the RT gallery speckled, with blocky artifacts on lit
-/// surfaces), so macOS stays raster unless `ARA_METAL_RT=1` opts in to validate it.
+/// hybrid, the RT fidelity tier and the ray-traced probe-GI bake. Every RT device's
+/// are, Metal's included since the RIS reservoir fix (its RT gallery matches the
+/// Vulkan goldens); `ARA_METAL_RT=0` keeps a Mac on raster to compare against.
 pub fn verified_ray_tracing(gpu: &GpuDevice) -> bool {
     gpu.info().ray_tracing
-        && (!cfg!(target_os = "macos")
-            || std::env::var_os("ARA_METAL_RT").is_some_and(|value| value == "1"))
+        && !(cfg!(target_os = "macos")
+            && std::env::var_os("ARA_METAL_RT").is_some_and(|value| value == "0"))
 }
 
 impl Capabilities {
@@ -475,6 +475,10 @@ pub struct Plan {
     pub requested: QualityPreset,
     /// Renderer and budgets.
     pub path: RenderPath,
+    /// Ray tracing was requested on a device without verified ray queries
+    /// ([`verified_ray_tracing`]), so the path is raster; hosts report ARA6008 so
+    /// the declined opt-in is never silent.
+    pub rt_fallback: bool,
 }
 
 /// High/Epic local reflection captures (512-texel tiles, `captures` at most). Authored
@@ -565,6 +569,7 @@ impl Plan {
             preset,
             requested,
             path,
+            rt_fallback: options.ray_tracing && !capabilities.ray_tracing,
         })
     }
 }
@@ -635,15 +640,18 @@ mod tests {
                 let render = display.map(|v| (v as f32 * scale).round() as u32);
                 assert!(matches!(plan.path,
                     RenderPath::Raster(r) if r.render_size == render && r.display_size == display));
+                assert!(!plan.rt_fallback);
             }
         }
-        // Non-RT devices keep the requested preset on raster even when opting in.
+        // Non-RT devices keep the requested preset on raster even when opting in,
+        // and report the declined opt-in (ARA6008).
         let choice = QualityChoice::Preset(QualityPreset::Epic);
         let epic = Plan::resolve(choice, &raster, display, traced).unwrap();
         assert_eq!(epic.preset, QualityPreset::Epic);
-        assert!(matches!(epic.path, RenderPath::Raster(_)));
+        assert!(matches!(epic.path, RenderPath::Raster(_)) && epic.rt_fallback);
         for preset in QualityPreset::ALL {
             let plan = Plan::resolve(QualityChoice::Preset(preset), &RT, display, traced).unwrap();
+            assert!(!plan.rt_fallback);
             match plan.path {
                 RenderPath::Fidelity(f) => {
                     assert_ne!(preset, QualityPreset::Low);

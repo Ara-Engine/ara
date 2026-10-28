@@ -1,15 +1,80 @@
 {
   "device": {
     "api_version": "1.4.351",
+    "buffer_int64_atomics": true,
     "compute_family": 2,
     "compute_queue_flags": "COMPUTE | TRANSFER | SPARSE_BINDING",
     "descriptor_heap_available": true,
     "device_id": 10115,
+    "device_local_mib": 11997,
+    "discrete": true,
     "driver_version": 2588114944,
+    "external_memory": true,
+    "geometry_shader": true,
+    "global_priority_extension": null,
     "graphics_family": 0,
+    "graphics_global_priority": "medium",
     "graphics_queue_flags": "GRAPHICS | COMPUTE | TRANSFER | SPARSE_BINDING",
+    "hdr_metadata": false,
+    "identity": {
+      "deviceUuid": [
+        98,
+        26,
+        143,
+        108,
+        205,
+        107,
+        209,
+        236,
+        163,
+        185,
+        120,
+        26,
+        52,
+        61,
+        47,
+        21
+      ],
+      "driverUuid": [
+        123,
+        174,
+        94,
+        179,
+        146,
+        161,
+        82,
+        146,
+        144,
+        242,
+        90,
+        194,
+        139,
+        107,
+        225,
+        129
+      ],
+      "luid": [
+        247,
+        46,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
     "max_image_dimension": 32768,
+    "max_storage_buffer_range": 4294967295,
+    "mesh_dispatch": [
+      4194304,
+      65535,
+      65535,
+      4194304
+    ],
+    "mesh_shading": true,
     "name": "NVIDIA GeForce RTX 4070 SUPER",
+    "packed_integer_dot_accelerated": true,
     "pipeline_cache_uuid": [
       100,
       75,
@@ -29,12 +94,25 @@
       126
     ],
     "ray_tracing": true,
+    "sampled_image_capacity": 65536,
+    "shader_integer_dot_product": true,
+    "storage_buffer_capacity": 128,
+    "task_dispatch": [
+      4194304,
+      65535,
+      65535,
+      4194304
+    ],
+    "texture_compression_bc": true,
+    "timestamp_clock": "VK_KHR_calibrated_timestamps",
     "timestamp_period_ns": 1.0,
     "timestamp_valid_bits": [
       64,
       64
     ],
-    "vendor_id": 4318
+    "unified_device_local": false,
+    "vendor_id": 4318,
+    "wave_ops": true
   },
   "height_hash": "013d88813ee8590a7d0617e976799e3e7ddf9962d547dab13bbe6d48ea1e11f1",
   "instance_hash": "8251f4131805a525d60e0bae66bec459a2d3fa0b40848c791a23c8ad84e5e42f",

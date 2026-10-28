@@ -73,7 +73,9 @@ float lightTarget(float3 value){return max(dot(value,float3(0.2126,0.7152,0.0722
 // `primary` marks camera-visible shading, which affords more candidates than the
 // direct light gathered at every secondary bounce.
 float3 risDirect(Frame f,Surface s,float3 v,inout uint rng,bool primary=false){
-    LightCandidate selected;float sum=0;float target=0;
+    // Initialized: an undefined reservoir lets the Metal Shader Converter's DXIL path
+    // read `selected.value` from a different candidate than `target` (RIS fireflies).
+    LightCandidate selected=(LightCandidate)0;float sum=0;float target=0;
     // Emissive triangles make many-light scenes without many Light entities: two
     // candidates left emitter-lit rooms speckled when reservoirs are off (Medium).
     uint candidates=f.transport.x==1?(buffers[f.scene.x].Load(12)>64?32:8):(primary && emitterCount(f)>0?6:2);

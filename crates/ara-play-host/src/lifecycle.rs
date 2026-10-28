@@ -175,6 +175,7 @@ mod tests {
             }
         };
         let player = Player {
+            incarnation: "stop-test-player".into(),
             child,
             link: Link::accept(stream)?,
             hello: ara_play::Hello {
