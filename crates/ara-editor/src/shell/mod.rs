@@ -138,6 +138,8 @@ pub struct Shell {
     pub(crate) game_fps: u32,
     pub(crate) game_size: [u32; 2],
     pub(crate) game_target: [u32; 2],
+    /// UI scale of the Game view's window, sent with embedded Play resizes.
+    pub(crate) game_scale: f32,
     pub(crate) game_captured: bool,
     pub(crate) game_aspect: &'static str,
     pub(crate) game_stats: bool,
@@ -247,6 +249,7 @@ pub struct Shell {
     asset_folder_click: Option<(String, std::time::Instant)>,
     asset_rename: Option<scripts::Rename>,
     script_job: Option<(String, std::time::Instant)>,
+    script_modules: scripts::ModuleList,
     pub(crate) drag: Option<Drag>,
     scrub: Option<scrub::Scrub>,
     motion: motion::Motion,
@@ -316,7 +319,7 @@ pub struct Shell {
     pub(crate) entity_clipboard: Option<Vec<Value>>,
     pub(crate) field_clipboard: Option<Value>,
     pending_clipboard: Option<String>,
-    recent_commands: Vec<&'static str>,
+    recent_commands: Vec<String>,
     /// Command waiting for a new shortcut on the Keyboard Shortcuts page.
     pub(crate) recording: Option<&'static str>,
     key_search: bool,
@@ -357,6 +360,7 @@ pub struct UiStats {
 pub(crate) enum Binding {
     Protocol(&'static str, Value),
     Command(&'static str, commands::Target),
+    CommandOwned(String, commands::Target),
     Content(Vec<Value>, String),
     Field(String, Option<usize>),
     /// The Scene toolbar's field-of-view field (drafted, applied on commit).
@@ -475,6 +479,7 @@ impl Shell {
             game_fps: 0,
             game_size: [0, 0],
             game_target: [0, 0],
+            game_scale: 1.,
             game_captured: false,
             game_aspect: "free",
             game_preview: None,
@@ -496,7 +501,7 @@ impl Shell {
             explained_problems: std::collections::BTreeSet::new(),
             hierarchy_view: None,
             hierarchy_surface: None,
-            browser: assets::Browser::new(editor.host.root()),
+            browser: assets::Browser::new(&editor.host.root().join(ara_doc::AUTHORING_ROOT)),
             imports: imports::Imports::new(editor.host.root()),
             asset_rows: names::AssetRows::default(),
             name_fit: names::NameFit::default(),
@@ -531,6 +536,7 @@ impl Shell {
             asset_folder_click: None,
             asset_rename: None,
             script_job: None,
+            script_modules: Default::default(),
             drag: None,
             scrub: None,
             motion: Default::default(),
@@ -585,7 +591,7 @@ impl Shell {
             recording: None,
             key_search: false,
             label_width: 0.38,
-            keymap: commands::keymap(&editor.state),
+            keymap: commands::keymap(&editor.state, &editor.extensions),
             keymap_revision: 0,
             keymap_settings: keymap_settings(&editor.state),
             drop_preview: None,
@@ -714,12 +720,19 @@ impl Shell {
         self.rebuild(editor)?;
         Ok(true)
     }
+
+    /// Invalidate retained panel markup after a body patch, then reconcile the UI.
+    #[cfg(feature = "hotpatch")]
+    pub fn rust_hotpatched(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.memos.clear();
+        self.rebuild(editor)
+    }
     fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
         self.built = (editor.panels_revision, editor.host.store().revision());
         // The keymap follows two settings; rebuilding it took ~0.1 ms per rebuild.
         let settings = keymap_settings(&editor.state);
         if settings != self.keymap_settings {
-            self.keymap = commands::keymap(&editor.state);
+            self.keymap = commands::keymap(&editor.state, &editor.extensions);
             self.keymap_settings = settings;
             self.keymap_revision += 1;
         }
@@ -1592,13 +1605,14 @@ impl Shell {
         );
     }
     /// Every chrome/toolbar/menu control's registry command, for UI tests.
-    pub fn command_bindings(&self) -> Vec<(String, &'static str)> {
+    pub fn command_bindings(&self) -> Vec<(String, String)> {
         self.ui
             .nodes
             .iter()
             .filter_map(
                 |n| match self.bindings.get(&ara_ui::source::stable_id(&n.element.id)) {
-                    Some(Binding::Command(c, _)) => Some((n.element.id.clone(), *c)),
+                    Some(Binding::Command(c, _)) => Some((n.element.id.clone(), (*c).to_owned())),
+                    Some(Binding::CommandOwned(c, _)) => Some((n.element.id.clone(), c.clone())),
                     _ => None,
                 },
             )
@@ -1617,6 +1631,7 @@ impl Shell {
                     self.bindings.get(&ara_ui::source::stable_id(&n.element.id)),
                     Some(
                         Binding::Command(..)
+                            | Binding::CommandOwned(..)
                             | Binding::MenuBar(_)
                             | Binding::MenuSub(..)
                             | Binding::ContextMenu(..)

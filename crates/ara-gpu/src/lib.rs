@@ -11,6 +11,8 @@ pub mod descriptors;
 #[cfg(target_os = "macos")]
 pub mod metal;
 pub mod shared;
+#[cfg(feature = "fidelity-lab")]
+pub mod tunables;
 pub mod vulkan;
 
 pub use ash::vk;

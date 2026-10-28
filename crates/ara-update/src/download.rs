@@ -50,6 +50,14 @@ pub struct Progress {
     /// Verified manifest's exact size.
     pub total: u64,
 }
+/// Transfer stage, kept separate from byte progress so verification is visible.
+#[derive(Clone, Copy, Debug)]
+pub enum DownloadPhase {
+    /// Receiving the authenticated archive, with resume when supported.
+    Downloading,
+    /// Checking every byte against the signed SHA-256 digest.
+    Verifying,
+}
 /// Hash a file without reading the distribution into memory.
 pub fn sha256_file(path: &Path) -> Result<String, Error> {
     digest_file(path, None)
@@ -77,7 +85,18 @@ pub fn download(
     release: &VerifiedRelease,
     stage: &Path,
     cancel: &Cancel,
+    progress: impl FnMut(Progress),
+) -> Result<PathBuf, Error> {
+    download_with_phase(feed, release, stage, cancel, progress, |_| {})
+}
+/// Download with explicit stage notifications for user-visible install progress.
+pub fn download_with_phase(
+    feed: &Feed,
+    release: &VerifiedRelease,
+    stage: &Path,
+    cancel: &Cancel,
     mut progress: impl FnMut(Progress),
+    mut phase: impl FnMut(DownloadPhase),
 ) -> Result<PathBuf, Error> {
     let asset = release.archive()?;
     if asset.size > MAX_DOWNLOAD {
@@ -94,6 +113,8 @@ pub fn download(
                 "partial download exceeds the signed length",
             ));
         }
+        crate::check_space(stage, asset.size - offset)?;
+        phase(DownloadPhase::Downloading);
         if offset < asset.size {
             let url = feed.asset_url(asset)?;
             let runtime = tokio::runtime::Builder::new_current_thread()
@@ -163,6 +184,7 @@ pub fn download(
                 "download incomplete; retry to resume",
             ));
         }
+        phase(DownloadPhase::Verifying);
         if digest_file(&partial, Some(cancel))? != asset.sha256 {
             return Err(Error::new(
                 HASH,
@@ -174,7 +196,7 @@ pub fn download(
     })();
     if result
         .as_ref()
-        .is_err_and(|e: &Error| e.code != crate::NETWORK && e.code != crate::RATE_LIMIT)
+        .is_err_and(|e: &Error| !matches!(e.code, crate::NETWORK | crate::RATE_LIMIT | crate::IO))
     {
         let _ = fs::remove_file(&partial);
     }
@@ -183,10 +205,27 @@ pub fn download(
 /// Extract an archive into a new staging directory. Reject traversal, links, Windows
 /// alternate streams/device names, duplicate files and both declared/actual expansion bombs.
 pub fn extract(archive: &Path, destination: &Path, cancel: &Cancel) -> Result<(), Error> {
+    // Query the ZIP only after its download checksum has been verified. Check the
+    // exact expanded requirement before creating any installation directory.
+    let mut zip = zip::ZipArchive::new(File::open(archive)?)
+        .map_err(|e| Error::new(MANIFEST, e.to_string()))?;
+    let mut required = 0_u64;
+    for index in 0..zip.len() {
+        cancel.check()?;
+        required = required
+            .checked_add(
+                zip.by_index(index)
+                    .map_err(|e| Error::new(MANIFEST, e.to_string()))?
+                    .size(),
+            )
+            .ok_or_else(|| Error::new(SIZE, "archive size overflow"))?;
+        if required > MAX_EXPANDED {
+            return Err(Error::new(SIZE, "expanded archive exceeds 64 GiB limit"));
+        }
+    }
+    crate::check_space(destination, required)?;
     fs::create_dir(destination)?;
     let result = (|| {
-        let mut zip = zip::ZipArchive::new(File::open(archive)?)
-            .map_err(|e| Error::new(MANIFEST, e.to_string()))?;
         if zip.len() > 200_000 {
             return Err(Error::new(SIZE, "too many archive entries"));
         }
@@ -260,6 +299,12 @@ pub fn extract(archive: &Path, destination: &Path, cancel: &Cancel) -> Result<()
                     return Err(Error::new(SIZE, "archive entry differs from declared size"));
                 }
                 output.sync_all()?;
+                #[cfg(unix)]
+                if let Some(mode) = entry.unix_mode() {
+                    use std::os::unix::fs::PermissionsExt;
+                    // Preserve only ordinary permission bits; ZIP set-id bits never apply.
+                    output.set_permissions(fs::Permissions::from_mode(mode & 0o777))?;
+                }
             }
         }
         cancel.check()

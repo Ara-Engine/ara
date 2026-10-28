@@ -871,9 +871,17 @@ fn compiler_cache_bypass_preserves_clippy_and_records_total_time() {
     )
     .unwrap();
     let binary = env!("CARGO_BIN_EXE_ara-dev");
+    // Hide an installed sccache: ara-dev would otherwise inject it over the fixture's wrapper.
+    let sccache = format!("sccache{}", std::env::consts::EXE_SUFFIX);
+    let path = std::env::join_paths(
+        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+            .filter(|dir| !dir.join(&sccache).is_file()),
+    )
+    .unwrap();
     assert!(
         !configured_command(&root, binary, &["check", "--json"])
             .env_remove("RUSTC_WRAPPER")
+            .env("PATH", path)
             .output()
             .unwrap()
             .status

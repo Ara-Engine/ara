@@ -57,6 +57,10 @@ pub struct EmbedParams {
     /// Most frames rendered per second (default 60).
     #[serde(default)]
     pub max_fps: Option<u32>,
+    /// Physical pixels per game-UI unit: the owner's UI scale (2 on Retina), so the
+    /// game UI keeps its size in the owner's view. Default 1.
+    #[serde(default)]
+    pub scale: Option<f32>,
 }
 
 /// `play.resize` params.
@@ -67,6 +71,9 @@ pub struct ResizeParams {
     pub width: u32,
     /// New height in pixels.
     pub height: u32,
+    /// New game-UI scale (see [`EmbedParams::scale`]); none keeps the current one.
+    #[serde(default)]
+    pub scale: Option<f32>,
 }
 
 /// `play.device` params.
@@ -102,6 +109,14 @@ fn check(size: [u32; 2]) -> Result<()> {
     Ok(())
 }
 
+fn check_scale(scale: f32) -> Result<f32> {
+    ensure!(
+        scale.is_finite() && (0.25..=8.).contains(&scale),
+        "game UI scale {scale} must be 0.25..=8"
+    );
+    Ok(scale)
+}
+
 /// An embedded player's shared ring, pacing, input and frame statistics.
 pub struct Embedded {
     pub(crate) game_ui: Option<crate::game_ui::Surface>,
@@ -114,6 +129,8 @@ pub struct Embedded {
     pending: Option<[u32; 2]>,
     /// The owner's raw input, mapped like windowed input.
     pub input: Mapper,
+    /// Physical pixels per game-UI unit ([`EmbedParams::scale`]).
+    scale: f32,
     entry: Entry,
     frames: u32,
     frame_times: Vec<f32>,
@@ -132,6 +149,7 @@ impl Embedded {
     ) -> Result<(Self, Presenter)> {
         let size = [params.width, params.height];
         check(size)?;
+        let scale = params.scale.map(check_scale).transpose()?.unwrap_or(1.);
         let mut presenter = match prepared {
             Some(mut presenter) => {
                 presenter.resize(size)?;
@@ -160,6 +178,7 @@ impl Embedded {
                 dirty: true,
                 pending: None,
                 input: Mapper::default(),
+                scale,
                 entry: Entry::Waiting,
                 frames: 0,
                 frame_times: Vec::new(),
@@ -172,6 +191,22 @@ impl Embedded {
     /// The current surface generation (handles valid in this process).
     pub fn desc(&self) -> SurfaceDesc {
         self.ring.desc()
+    }
+
+    /// Physical pixels per game-UI unit, the owner's UI scale.
+    pub fn scale(&self) -> f32 {
+        self.scale
+    }
+
+    /// Follow the owner's UI scale (a resize's `scale`; none keeps the current one).
+    pub fn set_scale(&mut self, scale: Option<f32>) -> Result<()> {
+        if let Some(scale) = scale.map(check_scale).transpose()?
+            && scale != self.scale
+        {
+            self.scale = scale;
+            self.dirty = true;
+        }
+        Ok(())
     }
 
     /// The owner returned a frame's slot; stale frames are ignored.
@@ -383,6 +418,25 @@ pub(crate) fn prewarm(
     Ok(presenter)
 }
 
+#[cfg(test)]
+mod params_tests {
+    use super::*;
+
+    #[test]
+    fn embed_and_resize_carry_an_optional_game_ui_scale() -> Result<()> {
+        let size = serde_json::json!({"width": 640, "height": 360});
+        let keep: ResizeParams = serde_json::from_value(size.clone())?;
+        assert_eq!(keep.scale, None);
+        let mut retina = size;
+        retina["scale"] = 2.0.into();
+        let resize: ResizeParams = serde_json::from_value(retina.clone())?;
+        let embed: EmbedParams = serde_json::from_value(retina)?;
+        assert_eq!((resize.scale, embed.scale), (Some(2.), Some(2.)));
+        assert!(check_scale(f32::NAN).is_err() && check_scale(9.).is_err());
+        Ok(())
+    }
+}
+
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
@@ -402,6 +456,7 @@ mod tests {
             width: 128,
             height: 72,
             max_fps: Some(30),
+            scale: Some(2.),
         };
         let (ring, presenter) = Embedded::open(
             &params,
@@ -411,6 +466,11 @@ mod tests {
             None,
         )?;
         let mut session = Session { ring, presenter };
+        // The owner's UI scale reaches the game UI; a resize without one keeps it.
+        assert_eq!(session.ring.scale(), 2.);
+        session.ring.set_scale(None)?;
+        assert_eq!(session.ring.scale(), 2.);
+        assert!(session.ring.set_scale(Some(f32::NAN)).is_err());
         session.ring.begin_entry();
         let frame = device::warm_frame();
         let started = Instant::now();
@@ -458,6 +518,7 @@ mod tests {
             width: 128,
             height: 72,
             max_fps: Some(144),
+            scale: None,
         };
         for (name, options) in [
             ("raster", RenderOptions::default()),

@@ -287,6 +287,11 @@ pub fn scratch(name: &str) -> PathBuf {
 }
 /// Small engine archive with enough layout to test service installation boundaries.
 pub fn engine_zip(version: &str) -> Vec<u8> {
+    engine_zip_with_cli(version, b"dummy fixture, never executed", None)
+}
+
+/// SDK fixture with a real windowless CLI for capability-aware replacement tests.
+pub fn engine_zip_with_cli(version: &str, cli: &[u8], source_commit: Option<&str>) -> Vec<u8> {
     let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
     for name in [
         "ara.exe",
@@ -294,17 +299,25 @@ pub fn engine_zip(version: &str) -> Vec<u8> {
         "ara-player.exe",
         "templates/blank/README.txt",
     ] {
-        zip.start_file(name, zip::write::SimpleFileOptions::default())
-            .unwrap();
-        zip.write_all(b"dummy fixture, never executed").unwrap();
+        zip.start_file(
+            name,
+            zip::write::SimpleFileOptions::default().unix_permissions(0o755),
+        )
+        .unwrap();
+        zip.write_all(if name == "ara.exe" {
+            cli
+        } else {
+            b"dummy fixture, never executed"
+        })
+        .unwrap();
     }
     zip.start_file("engine.json", zip::write::SimpleFileOptions::default())
         .unwrap();
-    zip.write_all(
-        serde_json::to_string(&json!({"format":"ara.engine/1","version":version}))
-            .unwrap()
-            .as_bytes(),
-    )
-    .unwrap();
+    let mut marker = json!({"format":"ara.engine/1","version":version});
+    if let Some(commit) = source_commit {
+        marker["sourceCommit"] = json!(commit);
+    }
+    zip.write_all(serde_json::to_string(&marker).unwrap().as_bytes())
+        .unwrap();
     zip.finish().unwrap().into_inner()
 }

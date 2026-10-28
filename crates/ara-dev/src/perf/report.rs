@@ -28,6 +28,12 @@ struct Delta {
     percent: Option<f64>,
 }
 
+fn trusted_baseline(before: &Report) -> bool {
+    before.format == "ara.perf/1"
+        && before.player["completed"] == true
+        && super::readiness::validate_passes(&before.player).is_ok()
+}
+
 fn numbers(value: &Value, prefix: &str, result: &mut BTreeMap<String, f64>) {
     match value {
         Value::Number(n) => {
@@ -40,6 +46,7 @@ fn numbers(value: &Value, prefix: &str, result: &mut BTreeMap<String, f64>) {
                 if matches!(
                     key.as_str(),
                     "samples"
+                        | "pass_presence"
                         | "frames"
                         | "warmup"
                         | "epoch"
@@ -118,6 +125,7 @@ impl Destination<'_> {
             player["format"] == "ara.player.perf/1",
             "unsupported player metrics format"
         );
+        super::readiness::validate_passes(&player).map_err(anyhow::Error::msg)?;
         ensure!(
             player["completed"] != false,
             "player measurement failed: {}",
@@ -147,7 +155,7 @@ impl Destination<'_> {
             .get("quality")
             .and_then(Value::as_str)
             .unwrap_or(options.preset.name());
-        let identity = serde_json::json!({"pack":pack_hash,"preset": preset,"width":options.width,"height":options.height,"profile":options.profile,"camera":player.get("camera"),"wait_ready":options.wait_ready,"warmup":options.warmup});
+        let identity = serde_json::json!({"pack":pack_hash,"preset": preset,"width":options.width,"height":options.height,"profile":options.profile,"camera":player.get("camera"),"wait_ready":options.wait_ready,"warmup":options.warmup,"pass_contract":{"expected":player["pass_presence"]["expected"],"required_passes":player["pass_presence"]["required_passes"]}});
         let previous = base.join(format!(
             "previous-{}-{}x{}-{}.json",
             preset, options.width, options.height, options.profile
@@ -161,14 +169,21 @@ impl Destination<'_> {
             let before: Report = serde_json::from_slice(&fs::read(baseline)?)?;
             if options.baseline.is_some() {
                 ensure!(
+                    trusted_baseline(&before),
+                    "{}: baseline lacks complete pass-presence proof; rerun the baseline",
+                    ara_bench::passes::INVALID_PASS_SET
+                );
+                ensure!(
                     before.identity == identity,
                     "baseline pack, preset, resolution, camera or profile differs"
                 );
             }
-            if before.identity == identity {
+            if trusted_baseline(&before) && before.identity == identity {
                 differences(&before.metrics, &metrics)
             } else {
-                eprintln!("Previous run has a different scene/settings; starting a new baseline.");
+                eprintln!(
+                    "Previous run has different settings or missing pass-presence proof; starting a new baseline."
+                );
                 BTreeMap::new()
             }
         } else {
@@ -181,6 +196,7 @@ impl Destination<'_> {
                 "executable":executable,
                 "binary_hash":crate::git::hash_file(root, executable)?,
                 "source_head":crate::git::text(root, ["rev-parse", "HEAD"])?,
+                "timing_guard":crate::gpu::last_reading(),
                 "source_dirty":!crate::git::text(root, ["status", "--porcelain"])?.is_empty()
             }),
             identity,
@@ -271,6 +287,22 @@ impl Destination<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_saved_baseline_without_complete_pass_proof_cannot_supply_deltas() -> Result<()> {
+        use ara_bench::passes::{Expected, Frame, Guard};
+        let mut baseline: Report = serde_json::from_value(
+            serde_json::json!({"format":"ara.perf/1","identity":{},"build_seconds":0.,"elapsed_seconds":0.,"metrics":{},"deltas":{},"player":{"completed":true,"frames":1}}),
+        )?;
+        assert!(!trusted_baseline(&baseline));
+        let mut guard = Guard::new(Expected::Raster, 1, std::time::Duration::from_secs(1));
+        guard.wait(std::time::Duration::ZERO, Some(Frame::from_names(["SSR"])))?;
+        guard.record(Frame::from_names(["SSR"]))?;
+        baseline.player["pass_presence"] = guard.report();
+        assert!(trusted_baseline(&baseline));
+        baseline.player["completed"] = serde_json::json!(false);
+        assert!(!trusted_baseline(&baseline));
+        Ok(())
+    }
     #[test]
     fn diffs_match_names_and_keep_absent_and_zero_baselines_honest() {
         let before = BTreeMap::from([

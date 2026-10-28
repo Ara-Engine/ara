@@ -36,6 +36,9 @@ pub struct Node {
     pub layout_id: NodeId,
     /// Cached paragraph, when this control displays text.
     pub text: Option<Text>,
+    /// Cached, paint-only Field/Input hint; never contributes to the widget's
+    /// committed value, accessibility value or intrinsic field dimensions.
+    pub placeholder: Option<Text>,
     /// Separate incremental work flags.
     pub dirty: Dirty,
     /// Computed logical viewport rectangle.
@@ -99,7 +102,22 @@ impl std::ops::AddAssign for Work {
     }
 }
 impl Ui {
+    /// Hover hints never capture pointer or keyboard input, including their descendants.
+    pub(crate) fn accepts_input(&self, index: usize) -> bool {
+        let mut current = Some(index);
+        while let Some(i) = current {
+            let node = &self.nodes[i];
+            if node.element.tag == "tooltip" {
+                return false;
+            }
+            current = node.element.parent;
+        }
+        true
+    }
     pub(crate) fn focus_candidate(&self, index: usize) -> bool {
+        if !self.accepts_input(index) {
+            return false;
+        }
         let n = &self.nodes[index];
         if is_focusable(n) {
             return self.shown(index);
@@ -265,6 +283,7 @@ impl Ui {
         self.paint_order.iter().copied().rev().find(|index| {
             let n = &self.nodes[*index];
             is_focusable(n)
+                && self.accepts_input(*index)
                 && n.rect.contains(x, y)
                 && n.clip.contains(x, y)
                 && self.rounded_hit(*index, x, y)
@@ -313,7 +332,18 @@ pub(crate) fn build_node(
         ..State::default()
     };
     let computed = sheet.compute(&element, state)?;
-    let text = element.attrs.get("text").map(|v| Text::new(v.to_owned()));
+    let text = element
+        .attrs
+        .get("text")
+        .map(|v| Text::new(v.to_owned()))
+        .or_else(|| {
+            matches!(element.tag.as_str(), "field" | "input").then(|| Text::new(String::new()))
+        });
+    let placeholder = matches!(element.tag.as_str(), "field" | "input")
+        .then(|| element.attrs.get("placeholder"))
+        .flatten()
+        .filter(|hint| !hint.is_empty())
+        .map(|hint| Text::new(hint.clone()));
     let layout_id = tree.new_leaf_with_context(computed.layout.clone(), index)?;
     Ok(Node {
         virtual_extent: None,
@@ -329,6 +359,7 @@ pub(crate) fn build_node(
         state,
         layout_id,
         text,
+        placeholder,
         rect: Box2::default(),
         clip: Box2::default(),
     })

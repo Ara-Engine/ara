@@ -27,26 +27,38 @@ pub(super) struct Verification {
 
 pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
     if !root.join("ara.project.json").exists() {
-        std::fs::create_dir_all(root.join("levels"))?;
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels"))?;
         std::fs::write(
             root.join("ara.project.json"),
-            ara_json::to_canonical_string(&json!({"name":"Outpost"})),
+            ara_json::to_canonical_string(
+                &json!({"name":"Outpost","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene"}),
+            ),
         )?;
         std::fs::write(
-            root.join("levels/main.scene"),
+            root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),
             ara_json::to_canonical_string(
                 &json!({"$schema":"ara://schema/scene/1","id":"sc_golden00","records":{}}),
             ),
         )?;
     }
-    std::fs::create_dir_all(root.join("models"))?;
-    std::fs::create_dir_all(root.join("textures"))?;
+    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("models"))?;
+    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("textures"))?;
     let mesh = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../ara-render/examples/assets/Avocado.glb");
-    if !root.join("models/Avocado.glb").exists() {
-        std::fs::copy(mesh, root.join("models/Avocado.glb"))?;
+    if !root
+        .join(ara_doc::AUTHORING_ROOT)
+        .join("models/Avocado.glb")
+        .exists()
+    {
+        std::fs::copy(
+            mesh,
+            root.join(ara_doc::AUTHORING_ROOT)
+                .join("models/Avocado.glb"),
+        )?;
     }
-    let texture = root.join("textures/checker.png");
+    let texture = root
+        .join(ara_doc::AUTHORING_ROOT)
+        .join("textures/checker.png");
     if !texture.exists() {
         image::RgbaImage::from_fn(128, 128, |x, y| {
             image::Rgba(if (x / 16 + y / 16) % 2 == 0 {
@@ -64,7 +76,9 @@ pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
         ("ContainerBlueVariantLarge", [52, 92, 150]),
         ("concrete_road_barrier_arm_2k", [180, 120, 60]),
     ] {
-        let path = root.join(format!("textures/{name}.png"));
+        let path = root
+            .join(ara_doc::AUTHORING_ROOT)
+            .join(format!("textures/{name}.png"));
         if !path.exists() {
             image::RgbaImage::from_fn(64, 64, |x, y| {
                 let shade = 0.75 + 0.25 * (((x / 8 + y / 8) % 2) as f32);

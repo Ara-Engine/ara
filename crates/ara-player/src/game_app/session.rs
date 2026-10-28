@@ -97,11 +97,11 @@ impl App {
                 })?;
                 world.start(true, prepared.build_ms)?;
                 if let Some(ui) = &world.ui {
-                    let size = match &self.window {
-                        Some(window) => window.window_size()?,
-                        None => [1280, 720],
+                    let (size, scale) = match &self.window {
+                        Some(window) => (window.window_size()?, window.pixel_density()),
+                        None => ([1280, 720], 1.),
                     };
-                    let surface = Surface::new(ui, &world.runtime, size)?;
+                    let surface = Surface::new(ui, &world.runtime, size, scale)?;
                     match &mut self.window {
                         Some(window) => window.game_ui = Some(surface),
                         None => self.headless_ui = Some(surface),

@@ -65,6 +65,7 @@ pub struct Editor {
     pub(crate) extraction_revision: u64,
     /// Registry commands requested over MCP, run by the shell at the next frame boundary.
     pub(crate) queued_commands: Vec<(String, crate::shell::commands::Target)>,
+    pub(crate) extensions: crate::extensions::Catalog,
     /// Agent activity seen by this window: glows, notices, overwrite reports (D24).
     pub activity: crate::activity::Activity,
     /// Embedded Play surfaces for the Game view (taken from the play service).
@@ -73,6 +74,9 @@ pub struct Editor {
     pub(crate) play_world: Option<String>,
     /// The Game view's size in physical pixels: the size embedded Play starts at.
     pub(crate) game_size: [u32; 2],
+    /// The Game view's UI scale (physical pixels per point): embedded Play draws its
+    /// game UI at this scale, so it keeps its size in the panel.
+    pub(crate) game_scale: f32,
     /// Model sources already checked on disk, present or reported missing
     /// (`report_missing_sources`); each is checked once per session.
     sources_checked: BTreeSet<String>,
@@ -122,9 +126,24 @@ impl Editor {
             asset_changed,
         )))
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        let worker = ara_asset::ProcessWorker::new(
+            ara_play_host::PlayConfig::for_project(root).import_worker,
+        )
+        .with_memo(Some(&root.join(".ara/cache")));
+        host.register(Box::new(ara_asset_host::AssetService::new(
+            worker,
+            std::sync::Arc::new(|path, required| {
+                ara_update::check_space(path, required)
+                    .map(|_| ())
+                    .map_err(|error| ara_asset::Error::Invalid(error.to_string()))
+            }),
+        )))
+        .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         host.register(Box::new(crate::authoring::AuthoringService))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         host.register(Box::new(crate::script_assets::ScriptService::default()))
+            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        host.register(Box::new(ara_play_host::SourceFixService::new(root)))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         *host.profiler() = ara_profile::Profiler::new(ara_profile::Config {
             budget_ns: 6_944_444,
@@ -169,12 +188,14 @@ impl Editor {
             changes,
             controls: control_send,
             resolver: Default::default(),
+            extensions: crate::extensions::Extensions::new(root)
+                .map_err(|d| anyhow::anyhow!(d.to_string()))?,
         }))
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         // Play runs in pooled ara-player processes; the toolbar binds play.* methods.
         let mut play = ara_play_host::PlayConfig::for_project(root);
         play.pool.headless = 1;
-        let mut play = ara_play_host::PlayService::new(root, play);
+        let mut play = ara_play_host::PlayService::new(root, play).with_headless_run();
         // The Game view shows embedded players through shared GPU surfaces (D19).
         let play_surfaces = Some(play.surfaces());
         host.register(Box::new(play))
@@ -226,10 +247,12 @@ impl Editor {
             review_revision: 0,
             extraction_revision: 0,
             queued_commands: Vec::new(),
+            extensions: Default::default(),
             activity,
             play_surfaces,
             play_world: None,
             game_size: [1280, 720],
+            game_scale: 1.,
             sources_checked: BTreeSet::new(),
             cameras,
         };
@@ -276,7 +299,11 @@ impl Editor {
         if self.plays_in_game_view() {
             let [w, h] = self.game_size;
             params["window"] = false.into();
-            params["embed"] = json!({"width": w.clamp(64, 8192), "height": h.clamp(64, 8192)});
+            params["embed"] = json!({
+                "width": w.clamp(64, 8192),
+                "height": h.clamp(64, 8192),
+                "scale": self.game_scale,
+            });
         }
     }
     /// Commit an atomic list of content commands as the window's human author.
@@ -388,6 +415,10 @@ impl Editor {
                     });
                 }
                 Control::Command(id, target) => self.queued_commands.push((id, target)),
+                Control::Extensions(catalog) => {
+                    self.extensions = catalog;
+                    changed = true;
+                }
             }
             self.panels_revision += 1;
         }

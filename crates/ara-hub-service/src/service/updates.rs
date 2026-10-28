@@ -1,4 +1,8 @@
 //! Release I/O workers never hold the serialized registry authority.
+mod current;
+mod removal_preflight;
+mod repair;
+mod uninstall;
 use super::*;
 use ara_update::{
     Cancel, Channel, Feed, FeedConfig, FeedSnapshot, Kind, Progress, VerifiedRelease,
@@ -31,6 +35,9 @@ struct Job {
     kind: String,
     version: String,
     state: String,
+    phase: String,
+    cancellable: bool,
+    disk: Option<ara_update::DiskSpace>,
     progress: Progress,
     result: Option<Value>,
     error: Option<ara_diag::Diagnostic>,
@@ -38,10 +45,21 @@ struct Job {
     cancel: Cancel,
     #[serde(skip)]
     proof: Option<(String, String)>,
+    #[serde(skip)]
+    repair_source: Option<EngineBuild>,
 }
 enum Message {
     Feed(Result<FeedSnapshot, ara_update::Error>),
     Progress(String, Progress),
+    Phase(String, &'static str),
+    UninstallPrepared(String, Result<PathBuf, ara_update::Error>),
+    Uninstalled(String, Result<PathBuf, ara_update::Error>),
+    UninstallInspected(
+        String,
+        Result<removal_preflight::Inspection, ara_update::Error>,
+    ),
+    RepairReady(String, Result<PathBuf, ara_update::Error>),
+    RepairCleaned(String, Result<(), ara_update::Error>),
     Done(String, Result<PathBuf, ara_update::Error>),
 }
 pub(super) struct Updates {
@@ -134,6 +152,19 @@ impl Hub {
                     }
                     self.changed("progress", None);
                 }
+                Message::Phase(id, phase) => {
+                    if let Some(job) = self.updates.jobs.get_mut(&id) {
+                        job.phase = phase.into();
+                    }
+                    self.changed("progress", None);
+                }
+                Message::UninstallPrepared(id, result) => self.commit_uninstall(id, result),
+                Message::Uninstalled(id, result) => self.finish_uninstall(id, result),
+                Message::UninstallInspected(id, result) => {
+                    self.finish_uninstall_preflight(id, result)
+                }
+                Message::RepairReady(id, result) => self.commit_repair(id, result),
+                Message::RepairCleaned(id, result) => self.finish_repair(id, result),
                 Message::Done(id, result) => {
                     let Some(mut job) = self.updates.jobs.remove(&id) else {
                         continue;
@@ -186,6 +217,8 @@ impl Hub {
                     match result {
                         Ok(result) => {
                             job.state = "complete".into();
+                            job.phase = "complete".into();
+                            job.cancellable = false;
                             job.result = Some(result);
                         }
                         Err(error) => {
@@ -196,6 +229,8 @@ impl Hub {
                             }
                             .into();
                             job.error = Some(error.diagnostic());
+                            job.phase = job.state.clone();
+                            job.cancellable = false;
                         }
                     }
                     self.updates.jobs.insert(id, job);
@@ -234,7 +269,7 @@ impl Hub {
                     .map(|r| r.manifest())
                     .collect();
                 Ok(
-                    json!({"releases":releases,"status":self.updates.status,"checking":self.updates.checking,"repo":self.updates.config.feed.repo,"channel":self.updates.config.feed.channel}),
+                    json!({"releases":releases,"status":self.updates.status,"checking":self.updates.checking,"repo":self.updates.config.feed.repo,"channel":self.updates.config.feed.channel,"installRoot":self.updates.config.engines}),
                 )
             }
             "hub.releases.check" => {
@@ -274,11 +309,15 @@ impl Hub {
                     .jobs
                     .get(&id)
                     .ok_or_else(|| invalid("unknown download job"))?;
-                if job.state == "complete" {
-                    return Err(invalid("download already completed"));
+                if job.state == "complete" || (job.state == "running" && !job.cancellable) {
+                    return Err(invalid(
+                        "operation has committed; it can no longer be cancelled",
+                    ));
                 }
                 job.cancel.cancel();
-                if job.state == "failed" || job.state == "cancelled" {
+                if job.kind != "uninstall-preflight"
+                    && (job.state == "failed" || job.state == "cancelled")
+                {
                     let stage = self.updates.staging.join(&id);
                     if stage.exists() {
                         fs::remove_dir_all(stage).map_err(io_error)?;
@@ -286,7 +325,14 @@ impl Hub {
                 }
                 Ok(json!({"cancelling":id}))
             }
-            "hub.engine.install" | "hub.update.prepare" => {
+            "hub.engine.preflight" => self.engine_preflight(required(p.version, "version")?),
+            "hub.engine.uninstall.preflight" => {
+                self.begin_uninstall_preflight(required(p.version, "version")?)
+            }
+            "hub.engine.install"
+            | "hub.engine.installCurrent"
+            | "hub.engine.repair"
+            | "hub.update.prepare" => {
                 if self.updates.status["state"] == "error"
                     && let Ok(diagnostic) = serde_json::from_value::<ara_diag::Diagnostic>(
                         self.updates.status["diagnostic"].clone(),
@@ -296,16 +342,55 @@ impl Hub {
                 }
                 let version = required(p.version, "version")?;
                 ara_update::version(&version).map_err(rpc)?;
-                let kind = if method == "hub.engine.install" {
+                let replace_current = method == "hub.engine.installCurrent";
+                let repair = method == "hub.engine.repair" || replace_current;
+                if replace_current && version != ara_host::project_layout::CURRENT_ENGINE_VERSION {
+                    return Err(invalid(
+                        "Install current engine only installs the current SDK version",
+                    ));
+                }
+                let kind = if method != "hub.update.prepare" {
                     Kind::Engine
                 } else {
                     Kind::Hub
                 };
                 if kind == Kind::Engine
+                    && !repair
                     && self.registry.engines.iter().any(|e| e.version == version)
                 {
                     return Err(invalid("this engine version is already registered"));
                 }
+                if kind == Kind::Engine && self.engine_removal_running(&version) {
+                    return Err(invalid(
+                        "wait for this version's uninstall to finish before installing it again",
+                    ));
+                }
+                let requested_kind = if replace_current {
+                    "engine-current"
+                } else if repair {
+                    "repair"
+                } else {
+                    kind.name()
+                };
+                if kind == Kind::Engine
+                    && self.updates.jobs.values().any(|job| {
+                        job.version == version
+                            && job.state == "running"
+                            && matches!(job.kind.as_str(), "engine" | "engine-current" | "repair")
+                            && job.kind != requested_kind
+                    })
+                {
+                    return Err(invalid(
+                        "wait for this version's active installation before starting another operation",
+                    ));
+                }
+                let repair_source = if replace_current {
+                    self.validate_current_install(&version)?
+                } else if repair {
+                    Some(self.validate_repair(&version)?)
+                } else {
+                    None
+                };
                 let release = self
                     .updates
                     .releases
@@ -330,14 +415,20 @@ impl Hub {
                         release.manifest().min_hub_version
                     )));
                 }
-                let id = match release
-                    .manifest()
-                    .build
-                    .as_ref()
-                    .filter(|_| kind == Kind::Hub)
-                {
-                    Some(build) => format!("hub-{version}-{}", build.commit),
-                    None => format!("{}-{version}", kind.name()),
+                let id = if replace_current {
+                    format!("engine-current-{version}")
+                } else if repair {
+                    format!("repair-{version}")
+                } else {
+                    match release
+                        .manifest()
+                        .build
+                        .as_ref()
+                        .filter(|_| kind == Kind::Hub)
+                    {
+                        Some(build) => format!("hub-{version}-{}", build.commit),
+                        None => format!("{}-{version}", kind.name()),
+                    }
                 };
                 if let Some(job) = self.updates.jobs.get(&id)
                     && job.state == "running"
@@ -345,6 +436,10 @@ impl Hub {
                     return Ok(json!(job));
                 }
                 let stage = self.updates.staging.join(&id);
+                let asset = release.archive().map_err(rpc)?;
+                let resumed = fs::metadata(stage.join(format!("{}.part", asset.sha256)))
+                    .map_or(0, |metadata| metadata.len().min(asset.size));
+                let disk = ara_update::check_space(&stage, asset.size - resumed).map_err(rpc)?;
                 let root = self.updates.config.engines.clone();
                 let config = self.updates.config.feed.clone();
                 let cache = self.updates.cache.clone();
@@ -354,9 +449,19 @@ impl Hub {
                 let worker_id = id.clone();
                 let job = Job {
                     id: id.clone(),
-                    kind: kind.name().into(),
+                    kind: if replace_current {
+                        "engine-current"
+                    } else if repair {
+                        "repair"
+                    } else {
+                        kind.name()
+                    }
+                    .into(),
                     version: version.clone(),
                     state: "running".into(),
+                    phase: "downloading".into(),
+                    cancellable: true,
+                    disk: Some(disk),
                     progress: Progress {
                         received: 0,
                         total: release.archive().map_err(rpc)?.size,
@@ -368,6 +473,7 @@ impl Hub {
                         let (manifest, signature) = release.proof();
                         (manifest.to_owned(), signature.to_owned())
                     }),
+                    repair_source,
                 };
                 std::thread::Builder::new()
                     .name(format!("ara-install-{id}"))
@@ -376,8 +482,12 @@ impl Hub {
                         let result = (|| {
                             let feed = Feed::new(config, &cache)?;
                             let mut last = Instant::now() - Duration::from_secs(1);
-                            let archive =
-                                ara_update::download(&feed, &release, &stage, &flag, |progress| {
+                            let archive = ara_update::download_with_phase(
+                                &feed,
+                                &release,
+                                &stage,
+                                &flag,
+                                |progress| {
                                     if last.elapsed() >= Duration::from_millis(150)
                                         || progress.received == progress.total
                                     {
@@ -385,11 +495,41 @@ impl Hub {
                                             tx.send(Message::Progress(worker_id.clone(), progress));
                                         last = Instant::now();
                                     }
-                                })?;
+                                },
+                                |phase| {
+                                    let phase = match phase {
+                                        ara_update::DownloadPhase::Downloading => "downloading",
+                                        ara_update::DownloadPhase::Verifying => "verifying",
+                                    };
+                                    let _ = tx.send(Message::Phase(worker_id.clone(), phase));
+                                },
+                            )?;
                             if kind == Kind::Hub {
                                 return Ok(archive);
                             }
-                            install_engine(&root, &version, &archive, &flag)
+                            let _ = tx.send(Message::Phase(worker_id.clone(), "extracting"));
+                            if repair {
+                                let staged = repair::prepare(
+                                    &root,
+                                    &version,
+                                    &archive,
+                                    &flag,
+                                    replace_current,
+                                )?;
+                                if replace_current {
+                                    let _ = tx.send(Message::Phase(worker_id.clone(), "verifying"));
+                                    if let Err(error) =
+                                        current::validate_staged(&staged, &root, &flag)
+                                    {
+                                        let _ = fs::remove_dir_all(&staged);
+                                        return Err(error);
+                                    }
+                                }
+                                return Ok(staged);
+                            }
+                            install_engine(&root, &version, &archive, &flag, || {
+                                let _ = tx.send(Message::Phase(worker_id.clone(), "installing"));
+                            })
                         })();
                         if result
                             .as_ref()
@@ -398,57 +538,18 @@ impl Hub {
                         {
                             let _ = fs::remove_dir_all(&stage);
                         }
-                        let _ = tx.send(Message::Done(worker_id, result));
+                        let _ = tx.send(if repair {
+                            Message::RepairReady(worker_id, result)
+                        } else {
+                            Message::Done(worker_id, result)
+                        });
                     })
                     .map_err(io_error)?;
                 self.updates.jobs.insert(id, job.clone());
                 self.changed("progress", None);
                 Ok(json!(job))
             }
-            "hub.engine.uninstall" => {
-                let version = required(p.version, "version")?;
-                ara_update::version(&version).map_err(rpc)?;
-                let engine = self.registry.engine(&version)?.clone();
-                if self
-                    .registry
-                    .projects
-                    .iter()
-                    .any(|p| p.engine_version == version && self.status_of(p)["state"] == "open")
-                {
-                    return Err(invalid(
-                        "close projects using this engine before uninstalling",
-                    ));
-                }
-                let root = self.updates.config.engines.join(&version);
-                if self.config.engine.executable.starts_with(&root) {
-                    return Err(invalid(
-                        "this engine hosts the running Hub service; restart the service from the standalone Hub before uninstalling",
-                    ));
-                }
-                if engine.executable != root.join("ara.exe")
-                    || !root.join(".ara-managed.json").is_file()
-                    || fs::symlink_metadata(&root)
-                        .map_err(io_error)?
-                        .file_type()
-                        .is_symlink()
-                {
-                    return Err(invalid(
-                        "only Hub-managed installations can be uninstalled; remove registration for external builds",
-                    ));
-                }
-                let trash = root.with_file_name(format!(".uninstall-{version}"));
-                fs::rename(&root, &trash).map_err(io_error)?;
-                let previous = self.registry.engines.clone();
-                self.registry.engines.retain(|e| e.version != version);
-                if let Err(error) = self.registry.save(&self.config.directory) {
-                    self.registry.engines = previous;
-                    fs::rename(&trash, &root).map_err(io_error)?;
-                    return Err(error);
-                }
-                fs::remove_dir_all(trash).map_err(io_error)?;
-                self.changed("engine", None);
-                Ok(json!({"removed":version}))
-            }
+            "hub.engine.uninstall" => self.begin_uninstall(required(p.version, "version")?),
             _ => Err(invalid("unknown release method")),
         }
     }
@@ -458,6 +559,7 @@ fn install_engine(
     version: &str,
     archive: &Path,
     cancel: &Cancel,
+    installing: impl FnOnce(),
 ) -> Result<PathBuf, ara_update::Error> {
     fs::create_dir_all(root)?;
     let destination = root.join(version);
@@ -470,23 +572,13 @@ fn install_engine(
     }
     ara_update::extract(archive, &staging, cancel)?;
     let result = (|| {
-        let marker: Value = serde_json::from_slice(&fs::read(staging.join("engine.json"))?)?;
-        if marker["format"] != "ara.engine/1"
-            || marker["version"] != version
-            || !staging.join("ara.exe").is_file()
-            || !staging.join("ara-editor.exe").is_file()
-            || !staging.join("ara-player.exe").is_file()
-        {
-            return Err(ara_update::Error {
-                code: ara_update::MANIFEST,
-                message: "engine archive is incomplete or has a different version".into(),
-            });
-        }
+        validate_payload(&staging, version)?;
         ara_update::write_json(
             &staging.join(".ara-managed.json"),
             &json!({"version":version}),
         )?;
         cancel.check()?;
+        installing();
         fs::rename(&staging, &destination)?;
         Ok(destination)
     })();
@@ -496,7 +588,23 @@ fn install_engine(
     result
 }
 
-fn background_priority() {
+fn validate_payload(staging: &Path, version: &str) -> Result<(), ara_update::Error> {
+    let marker: Value = serde_json::from_slice(&fs::read(staging.join("engine.json"))?)?;
+    if marker["format"] != "ara.engine/1"
+        || marker["version"] != version
+        || !staging.join("ara.exe").is_file()
+        || !staging.join("ara-editor.exe").is_file()
+        || !staging.join("ara-player.exe").is_file()
+    {
+        return Err(ara_update::Error {
+            code: ara_update::MANIFEST,
+            message: "engine archive is incomplete or has a different version".into(),
+        });
+    }
+    Ok(())
+}
+
+pub(super) fn background_priority() {
     #[cfg(windows)]
     {
         use windows_sys::Win32::System::Threading::{

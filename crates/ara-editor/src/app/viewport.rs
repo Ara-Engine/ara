@@ -1038,15 +1038,15 @@ mod tests {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../target/renderer-unification/scene-view")
             .join(format!("{}-{ray_tracing}", std::process::id()));
-        std::fs::create_dir_all(root.join("levels"))?;
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels"))?;
         std::fs::write(
             root.join("ara.project.json"),
             ara_json::to_canonical_string(
-                &json!({"name":"Scene presentation test","main":"levels/main.scene","rendering":{"quality":"high","rayTracing":ray_tracing}}),
+                &json!({"name":"Scene presentation test","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene","rendering":{"quality":"high","rayTracing":ray_tracing}}),
             ),
         )?;
         std::fs::write(
-            root.join("levels/main.scene"),
+            root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),
             ara_json::to_canonical_string(&json!({
                 "$schema":"ara://schema/scene/1","id":"sc_nativeview","records":{
                     "e_box":{"name":"Box","Transform":{},"MeshRenderer":{"color":[0.15,0.5,0.2,1]}},

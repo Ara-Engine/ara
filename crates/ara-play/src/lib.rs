@@ -537,6 +537,12 @@ pub struct Patched {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CaptureParams {
+    /// Camera entity ID, document address or exact scene name; absent uses the active camera.
+    #[serde(default)]
+    pub camera: Option<String>,
+    /// Per-capture rendering preset; absent uses the project's rendering policy.
+    #[serde(default)]
+    pub preset: Option<QualitySetting>,
     /// PNG path to write (plus `.marks.png`, `.legend.json`, `.json`); hash only when absent.
     pub path: Option<String>,
     /// Image width.
@@ -730,8 +736,9 @@ impl PlayScene {
     pub fn documents(workspace: &Workspace) -> Vec<DocumentData> {
         workspace
             .docs()
+            .filter(|(_, doc)| !workspace.is_project_document(doc.id.as_str()))
             .map(|(path, doc)| DocumentData {
-                path: path.to_owned(),
+                path: workspace.reference_path(path).to_owned(),
                 kind: doc.kind.clone(),
                 id: doc.id.to_string(),
                 records: doc

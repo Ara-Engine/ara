@@ -289,10 +289,11 @@ pub(crate) fn run(
 }
 
 /// Packages whose harnesses build the shared `dotnet/Ara.slnx`.
-const DOTNET_PACKAGES: [&str; 5] = [
+const DOTNET_PACKAGES: [&str; 6] = [
     "ara",
     "ara-export",
     "ara-player",
+    "ara-play-host",
     "ara-runtime-script",
     "ara-script",
 ];

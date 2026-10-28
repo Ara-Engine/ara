@@ -24,6 +24,7 @@ mod kinds;
 mod op;
 pub mod order;
 pub mod prefab;
+mod project_contract;
 mod read;
 pub mod refs;
 pub mod validate;
@@ -37,7 +38,11 @@ pub use id::{AssetId, IdGen, RecordId};
 pub use kinds::{Entity, register};
 pub use op::{Edit, Op};
 pub use order::{OrderKey, key_between};
+pub use project_contract::{
+    AUTHORING_ROOT, PROJECT_LAYOUT_VERSION, ProjectLayout, detect_project_layout,
+};
 pub use read::{ReadResult, read, read_header};
 pub use refs::AssetIndex;
 pub use workspace::Workspace;
 pub use write::{canonical_record, to_value, write};
+pub mod file_state;

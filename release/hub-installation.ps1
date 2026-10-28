@@ -6,7 +6,8 @@ function New-AraHubShortcut([string]$Link, [string]$HubRoot) {
     $shortcut = $shell.CreateShortcut($Link)
     $shortcut.TargetPath = Join-Path $HubRoot 'ara-hub.exe'
     $shortcut.WorkingDirectory = $HubRoot
-    $shortcut.IconLocation = (Join-Path $HubRoot 'assets\brand\ara.ico') + ',0'
+    # The Hub icon embedded in ara-hub.exe, so the shortcut always matches the binary.
+    $shortcut.IconLocation = (Join-Path $HubRoot 'ara-hub.exe') + ',0'
     $shortcut.Save()
 }
 function Register-AraHubShortcuts([string]$HubRoot, [string]$Programs) {

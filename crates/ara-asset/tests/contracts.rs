@@ -17,6 +17,7 @@ fn project_quality_defaults_round_trip_and_reject_invalid_settings() {
     };
     let text = settings.canonical_text().unwrap();
     let path = root.path().join(PROJECT_IMPORT_SETTINGS_FILE);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(&path, &text).unwrap();
     assert_eq!(
         ProjectImportSettings::read(root.path(), &db).unwrap(),
@@ -27,6 +28,44 @@ fn project_quality_defaults_round_trip_and_reject_invalid_settings() {
     std::fs::write(&path, text.replace("highQuality", "invalid")).unwrap();
     assert!(ProjectImportSettings::read(root.path(), &db).is_err());
 }
+#[test]
+fn scoped_policy_precedes_legacy_without_rewriting_the_legacy_file() {
+    let root = tempfile::tempdir().unwrap();
+    let mut db = ara_schema::SchemaDb::new();
+    register_schema(&mut db);
+    assert_eq!(PROJECT_IMPORT_SETTINGS_FILE, "settings/ara.imports");
+    let legacy = ProjectImportSettings {
+        preset: CookPreset::Balanced,
+    };
+    std::fs::write(
+        root.path().join(LEGACY_PROJECT_IMPORT_SETTINGS_FILE),
+        legacy.canonical_text().unwrap(),
+    )
+    .unwrap();
+    std::fs::create_dir(root.path().join("settings")).unwrap();
+    let scoped = ProjectImportSettings {
+        preset: CookPreset::HighQuality,
+    };
+    std::fs::write(
+        root.path().join("settings/ara.imports"),
+        scoped.canonical_text().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        ProjectImportSettings::read(root.path(), &db).unwrap(),
+        scoped
+    );
+    assert_eq!(
+        std::fs::read_to_string(root.path().join(LEGACY_PROJECT_IMPORT_SETTINGS_FILE)).unwrap(),
+        legacy.canonical_text().unwrap()
+    );
+    std::fs::remove_file(root.path().join("settings/ara.imports")).unwrap();
+    assert_eq!(
+        ProjectImportSettings::read(root.path(), &db).unwrap(),
+        legacy
+    );
+}
+
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
 

@@ -1,8 +1,10 @@
 //! Serialized Hub registry authority.
 mod background;
+mod capabilities;
 mod create;
 mod installation;
 mod lifecycle;
+mod migration;
 mod observed;
 mod process;
 mod templates;
@@ -15,6 +17,7 @@ use crate::{
 use ara_proto::{ConnId, Endpoint, Incoming, RpcError, jsonrpc};
 use ara_rpc::{Client, DaemonInfo, Handler, ServeOptions};
 pub use installation::{EngineRegistration, update_installed_engine};
+pub use migration::MigrationJob;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -73,6 +76,8 @@ impl HubConfig {
 
 /// User-level project authority. Every engine daemon remains in its own process.
 pub struct Hub {
+    capabilities: capabilities::Capabilities,
+    migrations: migration::Migrations,
     updates: updates::Updates,
     config: HubConfig,
     registry: Registry,
@@ -180,6 +185,8 @@ impl Hub {
         config.templates =
             Layered::with_checkout_samples(config.templates, &config.engine.executable);
         let mut hub = Self {
+            capabilities: capabilities::Capabilities::default(),
+            migrations: migration::Migrations::default(),
             updates: updates::Updates::new(updates, &config.directory),
             config,
             registry,
@@ -231,6 +238,17 @@ impl Hub {
     ) -> Result<Value, RpcError> {
         self.poll_updates();
         self.poll_processes();
+        self.poll_migrations();
+        if matches!(
+            method,
+            "hub.project.migration.plan"
+                | "hub.project.migrate"
+                | "hub.project.migration.status"
+                | "hub.project.migration.cancel"
+                | "hub.project.useCurrentEngine"
+        ) {
+            return self.migration_call(method, value);
+        }
         if matches!(
             method,
             "hub.engines.available"
@@ -240,7 +258,11 @@ impl Hub {
                 | "hub.downloads"
                 | "hub.download.cancel"
                 | "hub.engine.install"
+                | "hub.engine.installCurrent"
+                | "hub.engine.preflight"
+                | "hub.engine.repair"
                 | "hub.engine.uninstall"
+                | "hub.engine.uninstall.preflight"
                 | "hub.update.prepare"
         ) {
             return self.update_call(method, value);
@@ -255,7 +277,8 @@ impl Hub {
         match method {
             "hub.catalog" => {
                 if let Some(project) = p.project {
-                    let entry = self.registry.resolve(&project)?;
+                    let entry = self.registry.resolve(&project)?.clone();
+                    self.project_engine(&entry)?;
                     if let Some(mut client) = Client::for_project(&entry.path) {
                         return client.call("rpc.discover", json!({}));
                     }
@@ -266,6 +289,10 @@ impl Hub {
                 Ok(json!({"projects":self.registry.projects,"revision":self.revision}))
             }
             "hub.resolve" => Ok(json!(self.project(p.project)?)),
+            "hub.project.currentEngine" => {
+                self.project(p.project)?;
+                Ok(self.current_engine(p.headless.unwrap_or(false)))
+            }
             "hub.templates" => Ok(
                 json!({"templates":self.template_catalog(None)?.into_iter().map(|choice| choice.tile).collect::<Vec<_>>()}),
             ),
@@ -477,6 +504,13 @@ impl Hub {
                     {
                         continue;
                     }
+                    if let Err(error) = self.project_engine(&entry) {
+                        if p.project.is_some() {
+                            return Err(error);
+                        }
+                        self.activity_clients.remove(&entry.id);
+                        continue;
+                    }
                     if let Some(running) = self.processes.running.get(&entry.id) {
                         if running.watch.exited() {
                             continue;
@@ -523,6 +557,7 @@ impl Hub {
                         .iter()
                         .any(|project| self.status_of(project)["state"] == "open")
                         || self.updates.busy()
+                        || self.migrations.busy()
                     {
                         return Ok(json!({"stopping":false,"reason":"busy"}));
                     }

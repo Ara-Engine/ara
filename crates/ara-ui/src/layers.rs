@@ -28,21 +28,67 @@ impl LayerStack {
         event: crate::input::InputEvent,
         clipboard: &mut dyn ara_ui_text::Clipboard,
     ) -> Result<()> {
-        if matches!(event, crate::input::InputEvent::Cancel) && !self.layers.is_empty() {
-            self.close(ui, input)?;
+        self.sync(ui, input)?;
+        if matches!(event, crate::input::InputEvent::Cancel) && input.scrubbing() {
+            return input.event(ui, event, clipboard);
+        }
+        let interactive = self
+            .layers
+            .iter()
+            .rposition(|l| l.kind != LayerKind::Tooltip);
+        if matches!(event, crate::input::InputEvent::Cancel)
+            && let Some(index) = interactive
+        {
+            while self.layers.len() > index {
+                self.close(ui, input)?;
+            }
             return Ok(());
         }
         if let crate::input::InputEvent::PointerDown(p) = &event
-            && let Some(layer) = self.layers.last()
+            && let Some(layer) = interactive.and_then(|index| self.layers.get(index))
             && layer.kind == LayerKind::Popup
             && ui
                 .by_id(layer.node)
                 .is_some_and(|i| !ui.nodes[i].rect.contains(p[0], p[1]))
         {
-            self.close(ui, input)?;
+            if let Some(index) = interactive {
+                while self.layers.len() > index {
+                    self.close(ui, input)?;
+                }
+            }
             return Ok(());
         }
+        // Enter in a prompt invokes its declared primary action. A focused button
+        // keeps its ordinary activation, including the explicit Cancel button.
+        if matches!(event, crate::input::InputEvent::Activate)
+            && let Some(layer) = interactive.and_then(|index| self.layers.get(index))
+            && layer.kind == LayerKind::Modal
+            && input
+                .focused()
+                .and_then(|id| ui.by_id(id))
+                .is_none_or(|i| matches!(ui.nodes[i].element.tag.as_str(), "field" | "input"))
+            && let Some(action) = ui
+                .by_id(layer.node)
+                .and_then(|i| ui.nodes[i].element.attrs.get("default-action"))
+                .and_then(|id| ui.find(id))
+            && ui.focus_candidate(action)
+            && input.in_scope(ui, action)
+        {
+            return ui.activate(action);
+        }
         input.event(ui, event, clipboard)
+    }
+    /// Forget removed/hidden top overlays after host reconciliation and restore the
+    /// preceding scope. Stable IDs preserve open scopes when the tree is rebuilt.
+    pub fn sync(&mut self, ui: &mut Ui, input: &mut InputState) -> Result<()> {
+        while self
+            .layers
+            .last()
+            .is_some_and(|layer| ui.by_id(layer.node).is_none_or(|i| !ui.shown(i)))
+        {
+            self.close(ui, input)?;
+        }
+        Ok(())
     }
     /// Open a root-level overlay at logical coordinates and push its input scope when interactive.
     pub fn open(
@@ -92,7 +138,7 @@ impl LayerStack {
             ui.set_visible(i, false)?;
         }
         if layer.kind != LayerKind::Tooltip {
-            input.pop(ui);
+            input.remove_scope(ui, layer.node);
         }
         Ok(Some(layer.node))
     }
@@ -141,3 +187,6 @@ impl Ui {
         self.by_id(id).map(|i| self.nodes[i].element.id.as_str())
     }
 }
+
+#[cfg(test)]
+mod tests;

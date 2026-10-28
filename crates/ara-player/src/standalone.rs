@@ -17,10 +17,10 @@ mod tests;
 pub(super) struct Options {
     #[command(flatten)]
     perf: perf::PerfOptions,
-    /// Export folder containing ara-launch.json (defaults to the executable folder).
+    /// Export folder or its data folder (defaults to the executable's sibling data).
     #[arg(long)]
     pub(crate) root: Option<PathBuf>,
-    /// Run the authored world and capture it without opening a window.
+    /// Run the authored world without opening a window; --capture requests an image.
     #[arg(long)]
     pub(crate) headless: bool,
     /// Run continuous presentation on a hidden Vulkan window; perf mode implies this.
@@ -32,7 +32,7 @@ pub(super) struct Options {
     /// Diagnose rendering without swapchain acquisition or presentation; always hidden.
     #[arg(long, requires = "perf_output", conflicts_with = "headless")]
     no_present: bool,
-    /// Write a capture after --ticks (headless defaults to verify.png).
+    /// Write a capture after --ticks; omitted means no diagnostic files are written.
     #[arg(long)]
     capture: Option<PathBuf>,
     /// Fixed ticks to simulate before a standalone headless capture.
@@ -52,6 +52,7 @@ pub(super) struct Options {
 #[derive(Deserialize)]
 struct Launch {
     contract: String,
+    name: Option<String>,
     pack: String,
     encryption_key_env: Option<String>,
 }
@@ -94,7 +95,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     phases.insert("bootstrap_ms", began.elapsed().as_millis());
     let root = args.standalone.root.as_ref().map_or_else(
         || ara_gpu::cooked::install_root().context("player install folder"),
-        |root| Ok(root.to_owned()),
+        |root| Ok(ara_gpu::cooked::player_data_root(root)),
     )?;
     let launch: Launch = serde_json::from_slice(&std::fs::read(root.join("ara-launch.json"))?)?;
     ensure!(
@@ -140,6 +141,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     let render_options = ara_runtime_render::RenderOptions {
         ray_tracing: args.ray_tracing.unwrap_or(scene.rendering.ray_tracing),
     };
+    perf.configure_rt(render_options.ray_tracing, quality);
     let scene = Arc::new(scene);
     let (mut world, build_ms, window, presenter) = if args.standalone.headless {
         let (world, build_ms) = World::build_packed(&scene, source, false)?;
@@ -154,7 +156,11 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             Arc::clone(&scene),
             source,
             startup::Settings {
-                name: &args.name,
+                name: launch
+                    .name
+                    .as_deref()
+                    .filter(|name| !name.trim().is_empty())
+                    .unwrap_or(&args.name),
                 size,
                 cache: &args.gpu_cache,
                 quality,
@@ -232,10 +238,19 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
         };
         let mut previous = Instant::now();
         let mut frames = 0;
+        #[cfg(feature = "hotpatch")]
+        let mut rust_patches = ara_hotpatch::Hotpatch::connect();
         while args.standalone.frames.is_none_or(|limit| frames < limit) {
+            #[cfg(feature = "hotpatch")]
+            rust_patches.frame_boundary();
             ara_gpu::cpu_scope!("Player.standalone_frame");
             if perf.control(&mut *presenter)? {
                 break;
+            }
+            if perf.idle() {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                previous = Instant::now();
+                continue;
             }
             let frame_start = Instant::now();
             let waits_before = if perf.enabled() {
@@ -253,7 +268,9 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             let now = Instant::now();
             {
                 ara_gpu::cpu_scope!("Player.advance");
-                world.runtime.advance(now.duration_since(previous))?;
+                if !perf.lab_mode() {
+                    world.runtime.advance(now.duration_since(previous))?;
+                }
             }
             previous = now;
             world.mark();
@@ -261,6 +278,12 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             {
                 ara_gpu::cpu_scope!("Player.extract");
                 world.runtime.extract(&mut frame);
+            }
+            perf.apply_camera(&mut frame);
+            #[cfg(feature = "fidelity-lab")]
+            perf.apply_params(&mut *presenter, &frame);
+            if perf.capture(&mut *presenter, &mut frame)? {
+                continue;
             }
             let simulation_done = Instant::now();
             if is_2d {
@@ -360,13 +383,12 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
         window.shutdown(&*presenter)?;
         perf.finish()?;
     }
-    let capture = args
-        .standalone
-        .capture
-        .or_else(|| args.standalone.headless.then(|| root.join("verify.png")));
+    let capture = args.standalone.capture;
     let result = if let Some(path) = capture {
         Some(world.capture(
             &ara_play::CaptureParams {
+                camera: None,
+                preset: None,
                 path: Some(path.to_string_lossy().into_owned()),
                 width: size[0],
                 height: size[1],

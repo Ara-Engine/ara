@@ -8,6 +8,16 @@ pub(crate) fn check_creations(
     root: &std::path::Path,
     ops: &[ara_doc::Op],
 ) -> Result<(), Vec<Diagnostic>> {
+    let planned: std::collections::BTreeMap<_, _> = ops
+        .iter()
+        .filter_map(|op| {
+            if let ara_doc::Op::File { path, state, .. } = op {
+                Some((path.as_str(), state.as_ref()))
+            } else {
+                None
+            }
+        })
+        .collect();
     for op in ops {
         if let ara_doc::Op::Document {
             path,
@@ -15,11 +25,24 @@ pub(crate) fn check_creations(
             ..
         } = op
         {
-            check_new_path(root, path).map_err(|d| vec![d])?;
+            if planned.contains_key(path.as_str()) {
+                check_parent(root, path).map_err(|d| vec![d])?;
+            } else {
+                check_new_path(root, path).map_err(|d| vec![d])?;
+            }
             if kind == "import" {
                 let source = path
                     .strip_suffix(".import.json")
                     .expect("import documents have a sidecar extension");
+                if let Some(state) = planned.get(source) {
+                    if state.is_some_and(|s| s.kind == ara_doc::file_state::FileKind::File) {
+                        continue;
+                    }
+                    return Err(vec![Diagnostic::error(
+                        codes::INVALID_PARAMS,
+                        "source media is removed by this batch",
+                    )]);
+                }
                 let source = root.join(source).canonicalize().map_err(|e| {
                     vec![Diagnostic::error(
                         codes::IO,
@@ -100,7 +123,7 @@ pub(crate) fn read(
     {
         return crate::ui_document::read(text, file);
     }
-    if file != crate::project::MARKER {
+    if file != crate::project::MARKER && file != crate::project_layout::PREFERENCES {
         return ara_doc::read(text, file, db, index);
     }
     let value = match ara_json::parse(text) {
@@ -120,7 +143,12 @@ pub(crate) fn read(
     };
     let mut doc = Document::new(
         "project",
-        AssetId::parse("pj_project").expect("valid project ID"),
+        AssetId::parse(if file == crate::project_layout::PREFERENCES {
+            crate::project_layout::PREFERENCES_ID
+        } else {
+            "pj_project"
+        })
+        .expect("valid project settings ID"),
     );
     doc.insert_unchecked(
         RecordId::parse("p_settings").expect("valid settings ID"),
@@ -133,7 +161,18 @@ pub(crate) fn read(
 }
 
 pub(crate) fn read_header(text: &str, file: &str, db: &SchemaDb) -> Option<(String, AssetId)> {
-    if file.ends_with(".ui") && !text.trim_start().starts_with('{') {
+    if file == crate::project_layout::PREFERENCES {
+        ara_json::parse(text)
+            .ok()
+            .filter(serde_json::Value::is_object)
+            .map(|_| {
+                (
+                    "project".into(),
+                    AssetId::parse(crate::project_layout::PREFERENCES_ID)
+                        .expect("valid preferences ID"),
+                )
+            })
+    } else if file.ends_with(".ui") && !text.trim_start().starts_with('{') {
         crate::ui_document::header(text, file)
     } else {
         ara_doc::read_header(text, db)

@@ -121,13 +121,21 @@ fn world_error(e: crate::Error) -> Vec<Diagnostic> {
 }
 
 /// The world document named by ID or path, or the only one.
-fn world_of(cx: &Cx<'_>, named: Option<&str>) -> Result<AssetId, Vec<Diagnostic>> {
-    let workspace = cx.store().workspace();
+fn world_of(
+    workspace: &ara_doc::Workspace,
+    named: Option<&str>,
+) -> Result<AssetId, Vec<Diagnostic>> {
+    if let Some(named) = named {
+        return workspace
+            .find(named)
+            .and_then(|id| workspace.doc(id.as_str()))
+            .filter(|document| document.kind == "world")
+            .map(|document| document.id.clone())
+            .ok_or_else(|| fail(format!("no world document `{named}`")));
+    }
     let worlds: Vec<(&str, &ara_doc::Document)> = workspace
         .docs()
-        .filter(|(path, doc)| {
-            doc.kind == "world" && named.is_none_or(|n| *path == n || doc.id.as_str() == n)
-        })
+        .filter(|(_, doc)| doc.kind == "world")
         .collect();
     match worlds.as_slice() {
         [(_, doc)] => Ok(doc.id.clone()),
@@ -277,7 +285,7 @@ impl Service for WorldService {
                     (p.world, serde_json::to_value(CellsList { layer: p.layer }))
                 };
                 let args = args.map_err(|e| fail(e.to_string()))?;
-                let world = world_of(cx, world.as_deref())?;
+                let world = world_of(cx.store().workspace(), world.as_deref())?;
                 let tools = self.current(cx, &world)?;
                 // Reads: the tools take the store mutably but commit nothing.
                 cx.transact(None, |store, meta| {
@@ -302,7 +310,7 @@ impl Service for WorldService {
                     });
                     (p.world, p.why, command)
                 };
-                let world = world_of(cx, world.as_deref())?;
+                let world = world_of(cx.store().workspace(), world.as_deref())?;
                 // One attributed multi-document transaction; the host journals it.
                 cx.transact(why, |store, meta| {
                     command
@@ -318,5 +326,51 @@ impl Service for WorldService {
     fn tick(&mut self, _: &mut Cx<'_>) {
         // Publishes a finished background index without blocking the host tick.
         let _ = self.finish_build(Duration::ZERO);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ara_doc::{Document, Workspace};
+
+    #[test]
+    fn named_world_uses_authored_references_and_still_requires_world_kind() {
+        let mut workspace = Workspace::default();
+        workspace.set_reference_root(ara_doc::AUTHORING_ROOT);
+        for (path, kind, id) in [
+            ("worlds/first.world", "world", "wd_first"),
+            ("worlds/second.world", "world", "wd_second"),
+            ("scenes/main.scene", "scene", "sc_main"),
+        ] {
+            workspace.insert(
+                workspace.storage_path(path),
+                Document::new(kind, AssetId::parse(id).expect("fixture ID")),
+            );
+        }
+        for named in [
+            "worlds/second.world".to_owned(),
+            workspace.storage_path("worlds/second.world"),
+            "@worlds/second.world#wd_second".to_owned(),
+            "wd_second".to_owned(),
+        ] {
+            assert_eq!(
+                world_of(&workspace, Some(&named))
+                    .expect("named world")
+                    .as_str(),
+                "wd_second"
+            );
+        }
+        assert!(world_of(&workspace, Some("scenes/main.scene")).is_err());
+        assert!(world_of(&workspace, Some("@scenes/main.scene#sc_main")).is_err());
+        assert!(
+            world_of(&workspace, None).is_err(),
+            "multiple worlds require a selector"
+        );
+        workspace.remove("wd_first").expect("remove one world");
+        assert_eq!(
+            world_of(&workspace, None).expect("only world").as_str(),
+            "wd_second"
+        );
     }
 }

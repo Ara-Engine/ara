@@ -1,0 +1,378 @@
+diff --git a/packages/cli/src/build/builder.rs b/packages/cli/src/build/builder.rs
+index 396f8b0..df606f8 100644
+--- a/packages/cli/src/build/builder.rs
++++ b/packages/cli/src/build/builder.rs
+@@ -377,0 +378,13 @@ impl AppBuilder {
++        if std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some()
++            && let Err(error) = super::request::ara_require_captures(
++                &changed_crates,
++                &self.build.tip_crate_name(),
++                &artifacts.workspace_rustc,
++            )
++        {
++            self.abort_all(BuildStage::Restarting);
++            self.compile_start = Some(SystemTime::now());
++            self.build_task = tokio::spawn(async move { Err(error) });
++            return;
++        }
++
+diff --git a/packages/cli/src/build/link.rs b/packages/cli/src/build/link.rs
+index d22e63c..3c25e55 100644
+--- a/packages/cli/src/build/link.rs
++++ b/packages/cli/src/build/link.rs
+@@ -296,0 +297,2 @@ impl BuildRequest {
++        ctx.profile_phase("Patch: Cleanup");
++
+@@ -328,0 +331 @@ impl BuildRequest {
++        ctx.profile_phase("Patch: Metadata");
+@@ -333,0 +337 @@ impl BuildRequest {
++        ctx.profile_phase("Patch: HTML");
+@@ -527 +531,7 @@ impl BuildRequest {
+-        let mut cmd = Command::new("rustc");
++        // Ara's native facade checks source compatibility and applies per-crate
++        // latency experiments. Cargo may put the real toolchain before it in
++        // captured PATH, so select the explicit RUSTC instead of resolving PATH.
++        let compiler = std::env::var_os("RUSTC")
++            .filter(|_| std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some())
++            .unwrap_or_else(|| "rustc".into());
++        let mut cmd = Command::new(compiler);
+@@ -568,0 +579 @@ impl BuildRequest {
++        let ara_native = std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some();
+@@ -574,0 +586 @@ impl BuildRequest {
++                        && !(ara_native && (k == "RUSTC" || k.starts_with("ARA_HOTPATCH_") || k.starts_with("ARA_NATIVE_")))
+@@ -577,0 +590,8 @@ impl BuildRequest {
++        if ara_native {
++            // Captures outlive a serve session. Never replay a previous baseline's
++            // contract, trace directory or optional compiler settings.
++            cmd.envs(std::env::vars_os().filter(|(key, _)| {
++                let key = key.to_string_lossy();
++                key == "RUSTC" || key.starts_with("ARA_HOTPATCH_") || key.starts_with("ARA_NATIVE_")
++            }));
++        }
+diff --git a/packages/cli/src/build/request.rs b/packages/cli/src/build/request.rs
+index 144a142..168bf7d 100644
+--- a/packages/cli/src/build/request.rs
++++ b/packages/cli/src/build/request.rs
+@@ -1279,0 +1280,3 @@ impl BuildRequest {
++        if std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some() {
++            return ara_recapture_missing(&fingerprint_dir, &bust);
++        }
+@@ -1961 +1964,12 @@ impl BuildRequest {
+-                linker: self.custom_linker.clone(),
++                // Native Fat/Thin already perform their real link in the driver.
++                // A workspace linker (Ara's lld facade) must not force a redundant
++                // full executable link inside every cargo/rustc patch build.
++                linker: if matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat)
++                    && std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some()
++                    && std::env::var_os("ARA_NATIVE_SKIP_REDUNDANT_LINK").as_deref()
++                        != Some(std::ffi::OsStr::new("0"))
++                {
++                    None
++                } else {
++                    self.custom_linker.clone()
++                },
+@@ -3158,2 +3172,10 @@ impl BuildRequest {
+-        self.target_dir
+-            .join(self.triple.to_string())
++        let root = if std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some() {
++            ara_capture_build_root(
++                &self.target_dir,
++                std::env::var_os("CARGO_BUILD_BUILD_DIR").as_deref(),
++                &self.workspace_dir(),
++            )
++        } else {
++            self.target_dir.clone()
++        };
++        root.join(self.triple.to_string())
+@@ -3211,0 +3234,105 @@ impl BuildRequest {
++
++// Cargo can keep intermediates separately from target-dir. Missing captures must
++// invalidate that cache, otherwise a fresh dependency is silently left unpatched.
++fn ara_capture_build_root(
++    target: &Path,
++    build: Option<&std::ffi::OsStr>,
++    workspace: &Path,
++) -> PathBuf {
++    match build.map(PathBuf::from) {
++        Some(path) if path.is_absolute() => path,
++        Some(path) => workspace.join(path),
++        None => target.to_owned(),
++    }
++}
++
++fn ara_recapture_missing(directory: &Path, missing: &HashSet<String>) -> Result<()> {
++    let entries = match std::fs::read_dir(directory) {
++        Ok(entries) => entries,
++        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
++        Err(error) => return Err(error).context("ARA7602: cannot read Cargo capture fingerprints"),
++    };
++    let root = directory.canonicalize()?;
++    let normalized: HashSet<_> = missing.iter().map(|name| name.replace('-', "_")).collect();
++    for entry in entries {
++        let entry = entry?;
++        let name = entry.file_name();
++        let Some((package, _)) = name.to_str().and_then(|name| name.rsplit_once('-')) else {
++            continue;
++        };
++        if !normalized.contains(&package.replace('-', "_")) {
++            continue;
++        }
++        let kind = entry.file_type()?;
++        anyhow::ensure!(
++            kind.is_dir() && !kind.is_symlink(),
++            "ARA7602: capture fingerprint is not an owned directory"
++        );
++        let path = entry.path().canonicalize()?;
++        anyhow::ensure!(
++            path.parent() == Some(root.as_path()),
++            "ARA7602: capture fingerprint escaped its Cargo directory"
++        );
++        std::fs::remove_dir_all(path)
++            .context("ARA7602: cannot refresh missing workspace compiler capture")?;
++    }
++    Ok(())
++}
++
++pub(super) fn ara_require_captures(
++    changed: &[String],
++    tip: &str,
++    args: &WorkspaceRustcArgs,
++) -> Result<()> {
++    for name in changed {
++        anyhow::ensure!(
++            name == tip || args.replay_args(name).is_some(),
++            "ARA7602: workspace crate '{name}' has no compiler capture in this host; rebuild the matching target; last-good process retained"
++        );
++    }
++    Ok(())
++}
++
++#[cfg(test)]
++mod ara_capture_tests {
++    use super::*;
++
++    #[test]
++    fn split_build_root_and_hyphenated_packages_recapture_fresh_libraries() {
++        let scratch = tempfile::tempdir().unwrap();
++        let target = scratch.path().join("new-generation");
++        let build = scratch.path().join("warm-intermediates");
++        assert_eq!(
++            ara_capture_build_root(&target, Some(build.as_os_str()), scratch.path()),
++            build
++        );
++        let fingerprints = build.join("triple/hotpatch/.fingerprint");
++        let own = fingerprints.join("ara-render-deadbeef");
++        let other = fingerprints.join("serde-deadbeef");
++        std::fs::create_dir_all(&own).unwrap();
++        std::fs::create_dir_all(&other).unwrap();
++        ara_recapture_missing(&fingerprints, &HashSet::from(["ara_render".into()])).unwrap();
++        assert!(!own.exists());
++        assert!(other.is_dir());
++        assert_eq!(
++            ara_capture_build_root(&target, None, scratch.path()),
++            target
++        );
++    }
++
++    #[test]
++    fn uncaptured_library_rejects_instead_of_acknowledging_a_tip_only_patch() {
++        let mut args = WorkspaceRustcArgs::new(Vec::new());
++        let changed = ["ara_render".into()];
++        assert!(
++            ara_require_captures(&changed, "ara_player", &args)
++                .unwrap_err()
++                .to_string()
++                .contains("ARA7602")
++        );
++        args.rustc_args
++            .insert("ara_render.lib".into(), RustcArgs::default());
++        assert!(ara_require_captures(&changed, "ara_player", &args).is_ok());
++        assert!(ara_require_captures(&["ara_player".into()], "ara_player", &args).is_ok());
++    }
++}
+diff --git a/packages/cli/src/main.rs b/packages/cli/src/main.rs
+index 0c71ad5..810014b 100644
+--- a/packages/cli/src/main.rs
++++ b/packages/cli/src/main.rs
+@@ -49,0 +50,15 @@ async fn main() -> ExitCode {
++    // Capability probe for Ara's optional native-engine driver.
++    if std::env::args_os().nth(1).as_deref()
++        == Some(std::ffi::OsStr::new("--ara-native-rust-patch-version"))
++    {
++        println!("4");
++        return ExitCode::SUCCESS;
++    }
++    if std::env::args_os().nth(1).as_deref()
++        == Some(std::ffi::OsStr::new(
++            "--ara-native-workspace-capture-version",
++        ))
++    {
++        println!("1");
++        return ExitCode::SUCCESS;
++    }
+diff --git a/packages/cli/src/rustcwrapper.rs b/packages/cli/src/rustcwrapper.rs
+index c0df0cb..c381d9d 100644
+--- a/packages/cli/src/rustcwrapper.rs
++++ b/packages/cli/src/rustcwrapper.rs
+@@ -91 +91,6 @@ pub fn run_rustc() -> ExitCode {
+-    let mut cmd = std::process::Command::new("rustc");
++    let compiler = if std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some() {
++        captured_args.first().map(String::as_str).unwrap_or("rustc")
++    } else {
++        "rustc"
++    };
++    let mut cmd = std::process::Command::new(compiler);
+diff --git a/packages/cli/src/serve/mod.rs b/packages/cli/src/serve/mod.rs
+index f632956..0570d72 100644
+--- a/packages/cli/src/serve/mod.rs
++++ b/packages/cli/src/serve/mod.rs
+@@ -136,0 +137,9 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
++                if msg.to_text().ok() == Some("\"AraNativePatch\"")
++                    && std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some()
++                    && let Some(request) = std::env::var_os("ARA_NATIVE_PATCH_REQUEST")
++                {
++                    builder
++                        .handle_file_change(&[std::path::PathBuf::from(request)], &mut devserver)
++                        .await;
++                    continue;
++                }
+@@ -185,0 +195,10 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
++                        // A native engine can reject a patch before rustc finishes.
++                        // Preserve the compatible saves queued during that failure,
++                        // just as BuildReady drains saves after a successful build.
++                        if std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some() {
++                            devserver.send_reload_failed().await;
++                            let pending = builder.take_pending_file_changes();
++                            if !pending.is_empty() {
++                                builder.handle_file_change(&pending, &mut devserver).await;
++                            }
++                        }
+@@ -195 +214,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
+-                                    if let Some(_patching) = err.downcast_ref::<PatchError>() {
++                                    if std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some() {
++                                        tracing::warn!(
++                                            "ARA7602: native Rust patch rejected; rebuild explicitly. Last-good process retained: {err}"
++                                        );
++                                        devserver.send_reload_failed().await;
++                                    } else if let Some(_patching) = err.downcast_ref::<PatchError>()
++                                    {
+diff --git a/packages/cli/src/serve/runner.rs b/packages/cli/src/serve/runner.rs
+index cd6b699..25f180b 100644
+--- a/packages/cli/src/serve/runner.rs
++++ b/packages/cli/src/serve/runner.rs
+@@ -33,0 +34,45 @@ use tokio::process::Command;
++// Windows can notify between truncate and write. Read only after the writer
++// closes, so an empty/partial snapshot cannot queue a duplicate of the same save.
++async fn ara_native_rust_snapshot(path: &Path) -> std::io::Result<String> {
++    #[cfg(windows)]
++    if std::env::var_os("ARA_NATIVE_RUST_WRITER_SNAPSHOT").as_deref()
++        != Some(std::ffi::OsStr::new("0"))
++    {
++        use std::{io::Read, os::windows::fs::OpenOptionsExt};
++        let began = std::time::Instant::now();
++        loop {
++            // FILE_SHARE_READ | FILE_SHARE_DELETE permits atomic replacement,
++            // but refuses an in-progress writer until it releases its handle.
++            match std::fs::OpenOptions::new().read(true).share_mode(0x5).open(path) {
++                Ok(mut file) => {
++                    let mut contents = String::new();
++                    file.read_to_string(&mut contents)?;
++                    return Ok(contents);
++                }
++                Err(error) if matches!(error.raw_os_error(), Some(2 | 3 | 32 | 33))
++                    && began.elapsed() < std::time::Duration::from_secs(1) =>
++                {
++                    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
++                }
++                Err(error) => return Err(error),
++            }
++        }
++    }
++    std::fs::read_to_string(path)
++}
++
++// Optional cross-process latency evidence for Ara's native-only driver.
++fn ara_native_trace(event: &str, details: serde_json::Value) {
++    let Some(directory) = std::env::var_os("ARA_HOTPATCH_TRACE_DIR") else { return };
++    let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
++        .map_or(0, |d| d.as_micros());
++    let pid = std::process::id();
++    let path = PathBuf::from(directory);
++    if std::fs::create_dir_all(&path).is_ok() {
++        let row = serde_json::json!({"event":event,"at_us":at,"pid":pid,"details":details});
++        if let Ok(bytes) = serde_json::to_vec(&row) {
++            let _ = std::fs::write(path.join(format!("{event}-{at}-{pid}.json")), bytes);
++        }
++    }
++}
++
+@@ -358,3 +403,5 @@ impl AppServer {
+-                        if let Ok(metadata) = std::fs::metadata(&path) {
+-                            if metadata.len() == 0 {
+-                                continue;
++                        if std::env::var_os("ARA_NATIVE_RUST_PATCH").is_none() {
++                            if let Ok(metadata) = std::fs::metadata(&path) {
++                                if metadata.len() == 0 {
++                                    continue;
++                                }
+@@ -367,0 +415,3 @@ impl AppServer {
++                if std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some() {
++                    ara_native_trace("file_watch", serde_json::json!({"paths":files}));
++                }
+@@ -403,0 +454,17 @@ impl AppServer {
++        // Ara's lab owns CPU/GPU timing admission. Saves queue here; only its
++        // explicit request may start a build. Normal native/Dioxus watching stays intact.
++        let requested;
++        let files = if let Some(request) = std::env::var_os("ARA_NATIVE_PATCH_REQUEST") {
++            let request = PathBuf::from(request);
++            if !files.contains(&request) {
++                self.pending_file_changes.extend(files.iter().cloned());
++                return;
++            }
++            let mut paths: Vec<_> = files.iter().cloned().chain(self.take_pending_file_changes())
++                .filter(|path| *path != request).collect();
++            paths.sort();
++            paths.dedup();
++            requested = paths;
++            requested.as_slice()
++        } else { files };
++
+@@ -469 +536,7 @@ impl AppServer {
+-                let Ok(new_contents) = std::fs::read_to_string(path) else {
++                let native = std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some();
++                let contents = if native {
++                    ara_native_rust_snapshot(path).await
++                } else {
++                    std::fs::read_to_string(path)
++                };
++                let Ok(new_contents) = contents else {
+@@ -470,0 +544 @@ impl AppServer {
++                    needs_rust_rebuild |= native;
+@@ -485,0 +560,21 @@ impl AppServer {
++                // Native engines do not use RSX. Always replay Rust saves, including
++                // queued saves during compilation. The RSX diff exits on the first
++                // body difference, leaving stale snapshots for other changed files;
++                // a subsequent undo/redo can otherwise be silently ignored.
++                if self.hotreload_mode == HotReloadMode::Hotpatch
++                    && std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some()
++                {
++                    // A Windows save can notify both data and write-time changes.
++                    // Queued duplicates must not replay an already compiled revision.
++                    let duplicate = std::env::var_os("ARA_NATIVE_RUST_DEDUP").as_deref() != Some(std::ffi::OsStr::new("0"))
++                        && cached_file.most_recent.as_deref().unwrap_or(&cached_file.contents)
++                        == new_contents;
++                    ara_native_trace("source_snapshot", serde_json::json!({"path":path,"bytes":new_contents.len(),"duplicate":duplicate}));
++                    if duplicate {
++                        continue;
++                    }
++                    cached_file.most_recent = Some(new_contents);
++                    needs_rust_rebuild = true;
++                    continue;
++                }
++
+@@ -587,0 +683,5 @@ impl AppServer {
++            if needs_deep_rebuild && std::env::var_os("ARA_NATIVE_RUST_PATCH").is_some() {
++                tracing::warn!("ARA7602: native Rust build inputs changed; rebuild explicitly. Last-good process retained");
++                server.send_reload_failed().await;
++                return;
++            }

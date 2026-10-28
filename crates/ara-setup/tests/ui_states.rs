@@ -53,6 +53,8 @@ fn states() -> Vec<(&'static str, View, Pointer)> {
             Pointer { tick: 12, ..idle },
         ),
         ("confirm", View::confirm(&plan, "0.0.1-alpha"), idle),
+        ("upgrade", View::confirm(&plan, "0.0.0-alpha"), idle),
+        ("hub-upgrade", View::confirm(&Plan { kind: Kind::Hub, destination: "target/setup-fixture/hub".into() }, "0.0.0-alpha"), idle),
         (
             "confirm-hover",
             View::confirm(&plan, "0.0.1-alpha"),
@@ -67,6 +69,7 @@ fn states() -> Vec<(&'static str, View, Pointer)> {
         (
             "done",
             View::Done {
+                kind: Kind::Engine,
                 title: "Ara 0.0.1-alpha installed".into(),
                 destination: INSTALLED.into(),
                 note: "Replaced the previous installation. Open Ara Hub to create a project or try a sample.".into(),
@@ -87,7 +90,10 @@ fn every_state_renders_to_png() {
             let image = render(&view, pointer, scale, Frame::Preview).unwrap();
             assert_eq!(
                 (image.width, image.height),
-                ((480.0 * scale) as u32, (200.0 * scale) as u32)
+                (
+                    (ara_setup::ui::paint::WIDTH * scale) as u32,
+                    (ara_setup::ui::paint::HEIGHT * scale) as u32
+                )
             );
             let alpha = |x: u32, y: u32| image.rgba[((y * image.width + x) * 4 + 3) as usize];
             assert_eq!(alpha(0, 0), 0, "{name}: rounded corner is transparent");

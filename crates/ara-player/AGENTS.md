@@ -7,7 +7,8 @@ Standalone games and S5 Play. Owners authenticate single-use players with `ARA_P
 
 `ara-player --owner <port> [--name slot] [--window] [--size 1280x720] [--gpu-cache dir]
 [--quality auto|low|medium|high|epic] [--ray-tracing[=true|false]]`.
-Without `--owner`, loads `ara-launch.json` beside the executable (or `--root DIR`),
+Without `--owner`, loads `ara-launch.json` in the sibling `data/` (legacy flat and
+macOS `Contents/Resources` roots remain readable; `--root DIR` accepts either),
 reads the authored PlayScene/cooked generations from game.arapack, and opens a game
 borderless desktop-fullscreen window (`--windowed` restores a resizable window). `--headless [--capture PNG] [--ticks N]` captures without a window;
 `--frames N` bounds a windowed probe. Shipped assets never discover or import source
@@ -20,7 +21,7 @@ files. The same World, input mapper, animation/physics and presenters run both m
 `--read entity.Component.field` adds a value to `ARA_RESULT.reads` after simulation;
 repeat it to inspect shipped C# or Rust component fields. Shipping hosts resolve their
 NativeAOT metadata against the export folder; development host paths are rejected.
-Only pooled Play requires the owner token. `build.rs` embeds `assets/brand/icons/game/ara-game.rc`; window creation sets the game 64 px PNG. Exported players retain this default; projects can override with `Window::set_icon`.
+Only pooled Play requires the owner token. `build.rs` embeds `assets/brand/icons/game/ara-game.rc`; window creation sets the game 64 px PNG. Export presets can stamp a custom ICO into Windows players and name/version their copied executable before signing.
 
 Build with `--features tracy` to record literal CPU zones across Play world build, extraction, native instance updates, GPU recording/timeline waits, presentation
 and audio. The optional client starts in the executable; normal builds erase zones.
@@ -32,7 +33,7 @@ presenter before hello and reuse its device at embed; surface-less services allo
 
 ## Modules
 
-- `game_app/`: native menus/settings, lobby, bots and the art-only `levels/menu.scene` backdrop (no C# host). `game_ui/`: bindings, labels and GPU/CPU composition; captures keep UDP polling.
+- `game_app/`: native menus/settings, lobby, bots and the art-only `levels/menu.scene` backdrop (no C# host). `game_ui/`: bindings, labels and GPU/CPU composition; captures keep UDP polling. Windowed UI lays out in window points (SDL pointer units) and renders at the pixel density (2 on Retina); offscreen snapshots use scale 1.
 - `world/feedback.rs`: replicated event counters become audio, VFX and animation.
 - `packed.rs` and `standalone.rs`: the authored exported world and immutable pack source;
   ara-pack's bounded `native-decode` is linked into this player and its runtime templates.
@@ -40,8 +41,7 @@ presenter before hello and reuse its device at embed; surface-less services allo
 - `standalone/startup.rs`: shaderless progress (`device/loading.rs`, 225 KiB image + staging) precedes runtime/presenter/content workers. Real content, PSOs, uploads, effects and the initial GI volume/staging clear finish behind it; the surface bake can arrive later without allocation.
   Startup JSON separates loading/runtime/presenter timings, `content_warmup_ms`/`content_ready_ms`, and `full_scene_frame_ms`; loading hands its existing device/swapchain to the game.
 - `main.rs`: pool lifecycle, the loop (link polling, host-time ticking with bounded
-  catch-up, deferred patch acks, 250 ms `play.status` heartbeats, presentation),
-  method dispatch.
+  catch-up, deferred patch acks, 250 ms `play.status` heartbeats, presentation), method dispatch.
 - `net.rs`: `Play` (derefs to the runtime in every role): `Local`, `Host` (ara-net
   server owns the runtime and steps it; `play.join` issues client tokens) or `Mirror`
   (a client's never-stepped presentation world). Networked processes keep only their
@@ -136,12 +136,12 @@ headless music playback deterministically. It also renders past the end and loop
 through bounded producers, checking aggregate queue accounting and late audibility.
 `tests/model_authoring.rs` selects source kit nodes through MCP and captures lamp
 factor edits, source-pivot changes and enable/disable transitions in headless Play.
-`tests/csharp.rs` covers published types, C# commands/hot reload and stateful restart;
+`tests/csharp.rs` covers fresh-schema first Play, C# commands/hot reload and stateful restart;
 `tests/valley.rs` covers networked C#, terrain/foliage, streamed cells and audio.
-Both build .NET. Valley fixtures come from `ara-runtime-world`'s `valley` test.
+Both stage Outpost under `AUTHORING_ROOT` with a JSON manifest and build .NET once.
+Valley fixtures come from `ara-runtime-world`'s `valley` test.
 `tests/pending_game.rs` captures pending, failed and published models in a real child.
-`tests/embed.rs` (`--ignored`) exercises `PlayService::surfaces`: 90 demo frames imported on another GPU device, comparisons against captures, raw W input, typed/JSON resize and stop.
-It prints frame latency and per-frame cost.
+`tests/embed.rs` (`--ignored`) exercises `PlayService::surfaces`: 90 demo frames imported on another GPU device, comparisons against captures, raw W input, typed/JSON resize and stop; it prints frame latency and per-frame cost.
 `tests/probes.rs` (`--ignored --test-threads=1`) spawns hidden `--probe NAME` routes (`src/standalone/probes.rs`: frames in flight, UI teardown, unpresentable pump for the 3D and 2D paths) so SDL starts on a main thread, as macOS requires.
 `cargo clippy -p ara-player --all-targets -- -D warnings`.
 `cargo test -p ara-player --test embed hub_outpost -- --ignored` checks a fresh Hub Outpost template's native HUD for 30 seconds, then missing/corrupt reticles and path diagnostics.

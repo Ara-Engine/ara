@@ -182,6 +182,8 @@ codes! {
     /// The call names no document and none can be inferred from its entities or the
     /// project's main scene; pass `doc`.
     DOC_REQUIRED = 1814,
+    /// A CLI preparation job stopped reporting progress within its configured budget.
+    JOB_STALLED = 1815,
 
     /// No `ara.project.json` was found; the command needs a project.
     NO_PROJECT = 1901,
@@ -209,6 +211,10 @@ codes! {
     TYPES_CHANGED = 1912,
     /// A Hub project template is missing pinned files (sample art not fetched yet).
     TEMPLATE_INCOMPLETE = 1913,
+    /// An old project must be explicitly migrated before any authoring/runtime open.
+    PROJECT_MIGRATION_REQUIRED = 1914,
+    /// The pinned engine does not declare support for the project's layout.
+    PROJECT_ENGINE_LAYOUT_UNSUPPORTED = 1915,
 
     /// Diagnostics were dropped because an emitting thread's bus ring was full.
     DIAG_DROPPED = 2001,

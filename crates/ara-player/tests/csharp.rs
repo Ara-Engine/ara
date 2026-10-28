@@ -9,30 +9,66 @@ mod support;
 use ara_play_host::ScriptPaths;
 use serde_json::{Value, json};
 use std::{path::Path, time::Instant};
-use support::{Agent, build_dotnet, copy, demo_copy, repo};
+use support::{Agent, build_dotnet, demo_copy, outpost_module, repo};
 
 fn read(agent: &mut Agent, world: &Value, path: &str) -> Value {
     agent.play("read", json!({"world": world, "paths": [path]}))["values"][path].clone()
 }
 
 #[test]
+fn first_play_start_knows_a_scene_csharp_component_without_checked_schema_or_warm_play() {
+    build_dotnet();
+    let target = std::env::var_os("ARA_TEST_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| repo().join("target/player-csharp"));
+    let dir = target.join(format!("fresh-component-{}", std::process::id()));
+    std::fs::create_dir_all(dir.join(ara_doc::AUTHORING_ROOT)).unwrap();
+    std::fs::write(
+        dir.join("ara.project.json"),
+        ara_json::to_canonical_string(
+            &json!({"name":"Fresh C#","main":"main.scene","layoutVersion":4}),
+        ),
+    )
+    .unwrap();
+    std::fs::write(dir.join(ara_doc::AUTHORING_ROOT).join("Vitality.cs"), "/// <summary>Fresh compiled ECS health.</summary>\n[Component] public partial struct Vitality { /// <summary>Remaining hit points.</summary>\n public int Hp; }").unwrap();
+    std::fs::write(dir.join(ara_doc::AUTHORING_ROOT).join("main.scene"), ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_fresh","records":{"e_actor":{"name":"Actor","Transform":{},"Vitality":{"hp":7}}}}))).unwrap();
+    assert!(
+        !dir.join(".ara").exists(),
+        "fresh build has no generated schemas"
+    );
+    let mut agent = Agent::open(&dir, 5, |_| {});
+    assert!(
+        agent.host.store().schema().get("Vitality").is_some(),
+        "publish before reading the scene"
+    );
+    assert!(dir.join(".ara/scripts/game/game.types.json").is_file());
+    agent.pool_ready();
+    let world = agent.play("start", json!({"startPaused":true}));
+    assert_eq!(
+        read(&mut agent, &world["world"], "e_actor.Vitality.hp"),
+        json!(7)
+    );
+    agent.play("stop", json!({"world":world["world"]}));
+}
+
+#[test]
 fn agent_hot_reloads_csharp_gameplay_while_playing() {
     build_dotnet();
     let dir = demo_copy("csharp");
-    let module = Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-scripts/Outpost");
-    copy(&module, &dir.join("scripts/Outpost"));
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("demo-scripts/Outpost");
+    let module = outpost_module(&dir);
     let scripts = ScriptPaths::locate(&repo()).expect("built .NET host");
     let configure = |config: &mut ara_play_host::PlayConfig| config.scripts = Some(scripts.clone());
 
-    // 1. The first Play loads the module in a player; the owner publishes its types.
+    // 1. Opening publishes private types before the first Play loads the module.
     let mut agent = Agent::open(&dir, 5, configure);
     agent.pool_ready();
     let t = Instant::now();
     let warm = agent.play("start", json!({"startPaused": true}));
     let first_ms = t.elapsed().as_secs_f64() * 1000.0;
-    let types = dir.join("scripts/Outpost/Outpost.types.json");
+    let types = dir.join(".ara/scripts/Outpost/Outpost.types.json");
     agent.until("published C# types", |_| types.exists());
-    let checked = module.join("Outpost.types.json");
+    let checked = fixture.join("Outpost.types.json");
     if std::env::var_os("ARA_UPDATE_DEMO").is_some() {
         std::fs::copy(&types, &checked).unwrap();
     }
@@ -135,13 +171,13 @@ fn agent_hot_reloads_csharp_gameplay_while_playing() {
     assert_eq!(read(&mut agent, &id, "e_fox.Vitality.hp"), json!(55));
 
     // The agent edits the command body while playing: an EnC delta at a tick boundary.
-    let source = std::fs::read_to_string(dir.join("scripts/Outpost/Vitals.cs")).unwrap();
+    let source = std::fs::read_to_string(module.join("Vitals.cs")).unwrap();
     let edited = source.replace("v.Hp + 25", "v.Hp + 40");
     assert_ne!(source, edited);
     let t = Instant::now();
     let written = agent.play(
         "write",
-        json!({"path": "scripts/Outpost/Vitals.cs", "text": edited}),
+        json!({"path": module.join("Vitals.cs").strip_prefix(&dir).unwrap().to_string_lossy().replace('\\', "/"), "text": edited}),
     );
     assert_eq!(written["claimedBy"], json!(1), "{written}");
     let mut reload = Value::Null;

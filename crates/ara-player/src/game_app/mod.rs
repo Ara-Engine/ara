@@ -60,7 +60,7 @@ pub(crate) fn has_menu(args: &Args) -> Result<bool> {
         return Ok(false);
     }
     let root = match &args.standalone.root {
-        Some(root) => root.to_owned(),
+        Some(root) => ara_gpu::cooked::player_data_root(root),
         None => ara_gpu::cooked::install_root().context("player install folder")?,
     };
     if !root.join("ara-launch.json").is_file() {
@@ -95,6 +95,11 @@ pub(crate) fn run(args: Args) -> Result<()> {
         .clone()
         .or(args.standalone.root.clone())
         .unwrap_or_else(|| ara_gpu::cooked::install_root().unwrap_or_default());
+    let root = if args.game.project.is_some() {
+        root
+    } else {
+        ara_gpu::cooked::player_data_root(&root)
+    };
     let initial = if args.game.project.is_some() {
         None
     } else {
@@ -134,11 +139,15 @@ pub(crate) fn run(args: Args) -> Result<()> {
             )?
         };
         window.set_window_mode(settings.window_mode(), settings.size())?;
-        window.game_ui = Some(Surface::plain(&ui, window.window_size()?)?);
+        window.game_ui = Some(Surface::plain(
+            &ui,
+            window.window_size()?,
+            window.pixel_density(),
+        )?);
         (Some(window), presenter)
     };
     let headless_ui = if window.is_none() {
-        Some(Surface::plain(&ui, settings.size())?)
+        Some(Surface::plain(&ui, settings.size(), 1.)?)
     } else {
         None
     };
@@ -204,7 +213,11 @@ pub(crate) fn run(args: Args) -> Result<()> {
     }
     let mut previous = Instant::now();
     let mut frames = 0;
+    #[cfg(feature = "hotpatch")]
+    let mut rust_patches = ara_hotpatch::Hotpatch::connect();
     while !app.quit && args.standalone.frames.is_none_or(|limit| frames < limit) {
+        #[cfg(feature = "hotpatch")]
+        rust_patches.frame_boundary();
         let now = Instant::now();
         app.tick(now.duration_since(previous))?;
         previous = now;
@@ -337,9 +350,9 @@ impl App {
                 world.extract_frame(&mut self.frame);
             }
             if let Some(window) = &mut self.window {
-                let size = window.window_size()?;
+                let (size, scale) = (window.window_size()?, window.pixel_density());
                 if let Some(surface) = &mut window.game_ui {
-                    surface.update(&world.runtime, world.runtime.player().0, size)?;
+                    surface.update(&world.runtime, world.runtime.player().0, size, scale)?;
                     if let Some(crew) = &crew {
                         surface.label("lobby-players", crew)?;
                     }
@@ -347,7 +360,7 @@ impl App {
                 }
             }
             if let Some(surface) = &mut self.headless_ui {
-                surface.update(&world.runtime, world.runtime.player().0, [1280, 720])?;
+                surface.update(&world.runtime, world.runtime.player().0, [1280, 720], 1.)?;
                 if let Some(crew) = &crew {
                     surface.label("lobby-players", crew)?;
                 }

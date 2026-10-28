@@ -1,19 +1,33 @@
 use std::path::PathBuf;
 fn main() -> ara_ui::Result<()> {
-    if std::env::args().nth(1).as_deref() == Some("--compile-scripts") {
-        let root = PathBuf::from(std::env::args_os().nth(2).ok_or("missing script project")?);
+    #[cfg(feature = "hotpatch")]
+    // SAFETY: This is process entry, before worker threads and native runtimes.
+    let arguments = unsafe { ara_hotpatch::args_os()? };
+    #[cfg(not(feature = "hotpatch"))]
+    let arguments: Vec<_> = std::env::args_os().collect();
+    let arguments = arguments
+        .into_iter()
+        .map(|a| {
+            a.into_string()
+                .map_err(|_| "editor arguments must be UTF-8")
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if arguments.get(1).map(String::as_str) == Some("--compile-scripts") {
+        let root = PathBuf::from(arguments.get(2).ok_or("missing script project")?);
+        ara_host::project_layout::require_current_layout(&root)
+            .map_err(|diagnostic| format!("{diagnostic}"))?;
         return ara_editor::compile_scripts(&root);
     }
     ara_editor::LAUNCHED.get_or_init(std::time::Instant::now);
     if ara_crash::monitor_from_args()? {
         return Ok(());
     }
-    if std::env::args().nth(1).as_deref() == Some("--import-worker") {
+    if arguments.get(1).map(String::as_str) == Some("--import-worker") {
         ara_texture_gpu::serve_worker(&ara_importers::registry()?)?;
         return Ok(());
     }
     let mut options = ara_editor::Options::default();
-    let mut args = std::env::args().skip(1);
+    let mut args = arguments.into_iter().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--headless" => options.headless = true,
@@ -85,8 +99,13 @@ fn main() -> ara_ui::Result<()> {
             _ => options.project = PathBuf::from(arg),
         }
     }
-    // SAFETY: still single-threaded: nothing above starts a thread.
-    unsafe { options.isolate_profile() };
+    if !ara_editor::before_open_project(&options)? {
+        return Ok(());
+    }
+    if options.offscreen() {
+        // SAFETY: a bounded pre-open check starts no workers/windows; startup is still single-threaded.
+        unsafe { options.isolate_profile() };
+    }
     #[cfg(feature = "tracy")]
     let _tracy = ara_gpu::__tracy::Client::start();
     // Bounded runs never offer the crash folder or consume its "seen" marker.

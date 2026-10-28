@@ -1,0 +1,12 @@
+.kit-dialog-layer { position:absolute; left:0px; top:0px; width:100%; height:100%; align-items:center; justify-content:center; }
+.kit-dialog-backdrop { position:absolute; left:0px; top:0px; width:100%; height:100%; background:var(--overlay); }
+.kit-dialog { position:relative; padding:16px; gap:12px; background:var(--popover); color:var(--popover-foreground); border-width:1px; border-color:var(--border); border-radius:8px; overflow:hidden; }
+.kit-dialog-title { font-size:15px; white-space:normal; }
+.kit-dialog-body { min-height:0px; flex-basis:auto; flex-shrink:1; }
+.kit-dialog-choice-list { min-height:32px; max-height:280px; flex-basis:auto; flex-shrink:1; gap:8px; }
+.kit-dialog-choice { flex-shrink:0; }
+.kit-dialog-message { font-size:12px; white-space:normal; }
+.kit-dialog-actions { flex-direction:row; justify-content:end; gap:8px; }
+.kit-dialog-button { min-width:0px; max-width:100%; height:auto; flex-shrink:1; white-space:normal; }
+.kit-dialog-accept { background:var(--primary); color:var(--primary-foreground); }
+.kit-dialog-destructive { background:var(--destructive-surface); color:var(--destructive-foreground); }

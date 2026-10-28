@@ -14,6 +14,7 @@ struct TitlebarState {
     enabled: [bool; 3],
     mode_label: String,
     maximized: bool,
+    extra_menus: Vec<String>,
 }
 impl Shell {
     /// Memoized caption markup; the same command registry drives menus, keys and MCP.
@@ -23,6 +24,7 @@ impl Shell {
             .store()
             .workspace()
             .path_of(&editor.state.doc)
+            .map(|path| editor.host.store().workspace().reference_path(path))
             .unwrap_or("Scene")
             .to_owned();
         let ctx = self.ctx(editor, &Target::None);
@@ -37,6 +39,11 @@ impl Shell {
             .unwrap_or("local");
         let clients = editor.state.number("play.clients", 1.) as u32;
         let state = TitlebarState {
+            extra_menus: commands::bar_titles(&editor.extensions)
+                .into_iter()
+                .skip(MENUS.len())
+                .map(str::to_owned)
+                .collect(),
             open: self.menu.as_ref().and_then(|m| m.bar()),
             mnemonics: self.mnemonics,
             project: project_name(editor),
@@ -81,6 +88,14 @@ impl Shell {
                 out.push_str(&format!("<panel id='{id}-mnemonic' class='mnemonic' style='position:absolute;left:6px;top:21px;width:{width}px' />"));
             }
             out.push_str("</button>");
+        }
+        for (index, title) in s.extra_menus.iter().enumerate() {
+            let index = index + MENUS.len();
+            let id = format!("menu-title-{index}");
+            self.bindings
+                .insert(ara_ui::source::stable_id(&id), Binding::MenuBar(index));
+            out.push_str(&format!("<button id='{id}' class='menu-title{}' label='{} menu' action='Dispatch'><text id='{id}-text' text='{}' /></button>",
+                if s.open == Some(index) { " menu-title-open" } else { "" }, escape(title), escape(title)));
         }
         out.push_str("</panel></panel><panel id='titlebar-center' class='titlebar-center'>");
         self.titlebar_play(s, out);

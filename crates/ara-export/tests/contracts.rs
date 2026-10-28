@@ -9,7 +9,7 @@ fn preset(platform: &str) -> ExportPreset {
     } else {
         vec!["x64"]
     };
-    ExportPreset::from_text(&json!({"$schema":"ara://schema/export/1","platform":platform,"scriptProject":"game/Game.csproj","assembly":"Game","content":"content","templates":arches.into_iter().map(|arch|json!({"platform":platform,"arch":arch,"config":"release","hash":"0".repeat(64),"source":"templates/runtime"})).collect::<Vec<_>>()} ).to_string()).unwrap()
+    ExportPreset::from_text(&json!({"$schema":"ara://schema/export/1","platform":platform,"scriptProject":"Game.csproj","assembly":"Game","content":ara_doc::AUTHORING_ROOT,"templates":arches.into_iter().map(|arch|json!({"platform":platform,"arch":arch,"config":"release","hash":"0".repeat(64),"source":"templates/runtime"})).collect::<Vec<_>>()} ).to_string()).unwrap()
 }
 #[test]
 fn preset_is_schema_registered_and_canonical_round_trip_preserves_defaults() {
@@ -53,6 +53,69 @@ fn runtime_preset_discovers_modules_without_an_author_csproj() {
         p.validate().is_err(),
         "the S7 fixture still needs its project file"
     );
+}
+
+#[test]
+fn application_identity_round_trips_without_changing_the_script_assembly() {
+    let mut p = preset("windows");
+    p.name = Some("Outpost Preview".into());
+    p.version = "4.2.1".into();
+    p.icon = Some("icons/outpost.ico".into());
+    let text = p.to_text().unwrap();
+    let read = ExportPreset::from_text(&text).unwrap();
+    assert_eq!(read.name.as_deref(), Some("Outpost Preview"));
+    assert_eq!(read.assembly, "Game");
+    assert_eq!(read.version, "4.2.1");
+    assert_eq!(read.to_text().unwrap(), text);
+    p.name = Some("../Outpost".into());
+    assert!(p.validate().is_err());
+    p.name = Some("Outpost".into());
+    p.icon = Some("icons/outpost.png".into());
+    assert!(p.validate().is_err());
+}
+
+#[test]
+fn authored_icon_paths_and_project_artifact_pins_keep_separate_roots() {
+    let target =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/export-path-contracts");
+    std::fs::create_dir_all(&target).unwrap();
+    let scratch = tempfile::tempdir_in(target).unwrap();
+    let root = scratch.path();
+    let authored = root.join(ara_host::project_layout::AUTHORING_ROOT);
+    std::fs::create_dir_all(authored.join("icons")).unwrap();
+    std::fs::create_dir_all(root.join("templates")).unwrap();
+    tools::write_json(
+        &root.join("ara.project.json"),
+        &json!({"layoutVersion":ara_host::project_layout::VERSION}),
+    )
+    .unwrap();
+    std::fs::write(authored.join("icons/game.ico"), b"authored icon").unwrap();
+    std::fs::write(root.join("templates/player.zip"), b"artifact pin").unwrap();
+    assert_eq!(
+        std::fs::read(tools::authored_path(root, "icons/game.ico").unwrap()).unwrap(),
+        b"authored icon"
+    );
+    assert_eq!(
+        std::fs::read(tools::project_path(root, "templates/player.zip").unwrap()).unwrap(),
+        b"artifact pin"
+    );
+    assert!(tools::authored_path(root, "../templates/player.zip").is_err());
+}
+
+#[test]
+fn an_explicit_project_root_content_directory_keeps_file_paths_strict() {
+    let root = tempfile::tempdir().unwrap();
+    assert_eq!(
+        tools::content_path(root.path(), ".").unwrap(),
+        dunce::canonicalize(root.path()).unwrap()
+    );
+    assert!(tools::project_path(root.path(), ".").is_err());
+    assert!(tools::content_path(root.path(), "..").is_err());
+    let mut profile = preset("windows");
+    profile.content = ".".into();
+    profile.validate().unwrap();
+    let text = profile.to_text().unwrap();
+    assert_eq!(ExportPreset::from_text(&text).unwrap().content, ".");
 }
 /// A runtime profile may leave its templates for the builder to pin (the editor's
 /// Build Current Profile): it round-trips unpinned, other invariants still hold, and
@@ -172,6 +235,11 @@ fn doctor_versions_and_platform_scoping_have_stable_fixable_diagnostics() {
 #[test]
 fn failed_exports_emit_coded_errors_and_keep_failure_report() {
     let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("ara.project.json"),
+        r#"{"layoutVersion":4}"#,
+    )
+    .unwrap();
     let mut p = preset("windows");
     p.templates[0].source = "missing-runtime".into();
     let request = ara_export::ExportRequest {

@@ -26,7 +26,7 @@ use ara_schema::AssetRef;
 use std::collections::BTreeMap;
 
 /// Every `AnimAsset` record of the project's `animation` documents, by (document
-/// path, record ID); documents by ID with their path and record IDs.
+/// reference path, record ID); documents by ID with their reference path and record IDs.
 #[derive(Default)]
 pub struct Documents {
     records: BTreeMap<(String, String), AnimAsset>,
@@ -42,6 +42,7 @@ impl Documents {
             if doc.kind != "animation" {
                 continue;
             }
+            let path = workspace.reference_path(path);
             let mut ids = Vec::new();
             for id in doc.records().keys() {
                 let record = ara_anim::document::asset(doc, id)

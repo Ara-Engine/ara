@@ -375,7 +375,8 @@ fn cli_defaults_and_overrides_share_the_same_validated_policy() {
         Policy {
             threshold_percent: 20.,
             sustained_samples: 8,
-            dwm_allowance_percent: 4.
+            dwm_allowance_percent: 4.,
+            ..Policy::default()
         }
     );
     for (flag, value) in [

@@ -20,7 +20,7 @@ pub(crate) use describe::Fnv;
 pub use describe::{AbiConst, AbiField, AbiFn, AbiStruct, AbiTable};
 
 /// Bumped on any incompatible change to the semantics of the tables.
-pub const ABI_VERSION: u32 = 3;
+pub const ABI_VERSION: u32 = 4;
 
 abi_structs! { PUBLIC_STRUCTS;
     /// The fixed simulation tick that every system, behaviour and command sees.
@@ -69,7 +69,7 @@ abi_structs! { ABI_STRUCTS;
     pub struct BehaviourCall {
         /// Behaviour id (`module << 16 | index`).
         pub behaviour: u32,
-        /// `PHASE_TICK` or `PHASE_FRAME`.
+        /// `PHASE_TICK`, `PHASE_FRAME`, or the zero-row `PHASE_SWEEP` after a tick.
         pub phase: u32,
         /// Rows in this chunk.
         pub len: u32,
@@ -224,6 +224,8 @@ abi_consts! { ABI_CONSTS;
     pub const PHASE_TICK: u32 = 1;
     /// `BehaviourCall::phase`: a presented frame (`OnFrame`).
     pub const PHASE_FRAME: u32 = 2;
+    /// End-of-tick lifecycle sweep, even when a behaviour has no remaining chunks.
+    pub const PHASE_SWEEP: u32 = 3;
     /// Command-buffer op: make the reserved entity real.
     pub const CMD_SPAWN: u32 = 1;
     /// Command-buffer op: despawn the entity.
@@ -234,6 +236,16 @@ abi_consts! { ABI_CONSTS;
     pub const CMD_REMOVE: u32 = 4;
     /// Command-buffer op: emit a presentation cue (type index + bytes).
     pub const CMD_CUE: u32 = 5;
+    /// Queue a ChildOf relationship change; payload is the parent's u64 handle (zero unparents).
+    pub const CMD_PARENT: u32 = 6;
+    /// Find entities by exact name, name path or stable scene ID.
+    pub const SCENE_FIND: u32 = 0;
+    /// Read the direct ECS parent.
+    pub const SCENE_PARENT: u32 = 1;
+    /// Read direct ECS children in authored sibling order.
+    pub const SCENE_CHILDREN: u32 = 2;
+    /// Read other ECS children of the same parent, including roots.
+    pub const SCENE_SIBLINGS: u32 = 3;
     /// Status: ok.
     pub const RUN_OK: i32 = 0;
     /// Status: the code threw; it is disabled until the next reload.
@@ -295,6 +307,9 @@ abi_table! {
         /// Copies entity handles carrying a component in ascending handle order. Returns
         /// the required count; writes nothing when cap is too small. Exclusive phases only.
         fn query_entities(ctx: *mut c_void, component: u32, out: *mut u64, cap: u32) -> u32;
+        /// Scene identity/hierarchy query (SCENE_*). Returns the required count and
+        /// writes nothing when cap is too small. Exclusive gameplay phases only.
+        fn scene_entities(ctx: *mut c_void, op: u32, entity: u64, name: *const u8, len: u32, out: *mut u64, cap: u32) -> u32;
         /// Reads a fixed-tick action axis (button = axis 0). Missing actions are zero.
         /// Exclusive phases only; the embedding runtime publishes the tick's input snapshot.
         fn input_axis(ctx: *mut c_void, player: u64, name: *const u8, len: u32, axis: u32) -> f32;

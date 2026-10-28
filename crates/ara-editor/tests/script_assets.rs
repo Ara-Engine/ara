@@ -15,16 +15,28 @@ impl Project {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir_all(root.join("Assets/Gameplay/Empty")).unwrap();
-        std::fs::create_dir_all(root.join("levels")).unwrap();
+        std::fs::create_dir_all(
+            root.join(ara_doc::AUTHORING_ROOT)
+                .join("Assets/Gameplay/Empty"),
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
+        std::fs::create_dir_all(root.join("settings")).unwrap();
+        std::fs::write(
+            root.join("settings/ara.imports"),
+            ara_asset::ProjectImportSettings::default()
+                .canonical_text()
+                .unwrap(),
+        )
+        .unwrap();
         std::fs::write(
             root.join("ara.project.json"),
             ara_json::to_canonical_string(
-                &json!({"name":"Script Test","main":"levels/main.scene"}),
+                &json!({"name":"Script Test","layoutVersion":ara_host::project_layout::VERSION,"main":"levels/main.scene"}),
             ),
         )
         .unwrap();
-        std::fs::write(root.join("levels/main.scene"),ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_script01","records":{"e_player01":{"name":"Player","Transform":{}}}}))).unwrap();
+        std::fs::write(root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_script01","records":{"e_player01":{"name":"Player","Transform":{}}}}))).unwrap();
         Self(root)
     }
 }
@@ -62,30 +74,81 @@ fn loaded(editor: &mut Editor) -> Shell {
     shell
 }
 
+fn source(root: &std::path::Path, path: &str) -> PathBuf {
+    root.join(ara_doc::AUTHORING_ROOT).join(path)
+}
+fn completed(editor: &mut Editor, response: Value) -> Result<Value, Value> {
+    let Some(job) = response["job"].as_str() else {
+        return Ok(response);
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(90);
+    loop {
+        editor.tick();
+        let status = editor.action("jobs.status", json!({"job":job})).unwrap();
+        match status["status"].as_str() {
+            Some("done") => return Ok(status["result"].clone()),
+            Some("failed" | "cancelled") => return Err(status),
+            _ => {}
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "source job timed out: {status}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+}
+fn wait_sources(editor: &mut Editor) {
+    let jobs = editor.action("jobs.list", json!({})).unwrap();
+    for job in jobs["jobs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|job| job["name"] == "Author C# source" && job["status"] == "running")
+    {
+        completed(editor, json!({"job":job["job"]})).unwrap();
+    }
+}
+
 #[test]
 fn typed_script_create_emits_files_in_the_selected_folder_and_refuses_overwrites() {
     let project = Project::new();
     let mut editor = Editor::open(&project.0).unwrap();
     let args = json!({"path":"Assets/Gameplay/PlayerControl.cs","compile":false});
     let output = editor.action("script.create", args.clone()).unwrap();
+    let output = completed(&mut editor, output).unwrap();
     assert_eq!(output["class"], "PlayerControl");
-    assert_eq!(output["files"].as_array().unwrap().len(), 3);
-    let text = std::fs::read_to_string(project.0.join("Assets/Gameplay/PlayerControl.cs")).unwrap();
+    assert_eq!(output["files"].as_array().unwrap().len(), 1);
+    let text =
+        std::fs::read_to_string(source(&project.0, "Assets/Gameplay/PlayerControl.cs")).unwrap();
     assert!(text.contains("using Ara;"));
-    assert!(text.contains("namespace ScriptTestAssetsGameplay;"));
+    assert!(text.contains(&format!(
+        "namespace {};",
+        output["namespace"].as_str().unwrap()
+    )));
     assert!(text.contains("class PlayerControl : Behaviour"));
-    assert!(editor.action("script.create", args).is_err());
+    let duplicate = editor.action("script.create", args).unwrap();
+    assert!(completed(&mut editor, duplicate).is_err());
     assert_eq!(
         text,
-        std::fs::read_to_string(project.0.join("Assets/Gameplay/PlayerControl.cs")).unwrap()
+        std::fs::read_to_string(source(&project.0, "Assets/Gameplay/PlayerControl.cs")).unwrap()
     );
-    editor
+    let retry = editor
+        .action(
+            "script.rename",
+            json!({"path":"Assets/Gameplay/PlayerControl.cs","to":"Assets/Gameplay/Recovered.cs"}),
+        )
+        .unwrap();
+    completed(&mut editor, retry).expect("a rejected duplicate must not poison later source jobs");
+    assert!(source(&project.0, "Assets/Gameplay/Recovered.cs").is_file());
+    let system = editor
         .action(
             "script.create",
             json!({"path":"Assets/Gameplay/Movement.cs","template":"system","compile":false}),
         )
         .unwrap();
-    let system = std::fs::read_to_string(project.0.join("Assets/Gameplay/Movement.cs")).unwrap();
+    completed(&mut editor, system).unwrap();
+    let system =
+        std::fs::read_to_string(source(&project.0, "Assets/Gameplay/Movement.cs")).unwrap();
     assert!(system.contains("static partial class Movement"));
     assert!(system.contains("[Query]"));
     for args in [
@@ -97,7 +160,13 @@ fn typed_script_create_emits_files_in_the_selected_folder_and_refuses_overwrites
     ] {
         assert!(editor.action("script.create", args).is_err());
     }
-    assert!(!project.0.join("Assets/Nope.cs").exists());
+    assert!(
+        !project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("Assets/Nope.cs")
+            .exists()
+    );
 }
 
 #[test]
@@ -189,7 +258,6 @@ fn right_click_create_script_focuses_inline_rename() {
         .clone();
     shell.click(&script, &mut clip).unwrap();
     shell.dispatch(&mut editor).unwrap();
-    assert!(project.0.join("Assets/Gameplay/NewBehaviour.cs").exists());
     assert_eq!(
         shell.input.focused(),
         Some(ara_ui::source::stable_id("asset-rename-value"))
@@ -203,10 +271,20 @@ fn right_click_create_script_focuses_inline_rename() {
     shell.dispatch(&mut editor).unwrap();
     // Compilation runs in its own executable; this focused test checks the command's file output.
     shell.key(&mut editor, 40, true, &mut clip).unwrap();
-    let source =
-        std::fs::read_to_string(project.0.join("Assets/Gameplay/PlayerController.cs")).unwrap();
-    assert!(source.contains("class PlayerController : Behaviour"));
-    assert!(!project.0.join("Assets/Gameplay/NewBehaviour.cs").exists());
+    wait_sources(&mut editor);
+    let text =
+        std::fs::read_to_string(source(&project.0, "Assets/Gameplay/PlayerController.cs")).unwrap();
+    assert!(text.contains("class PlayerController : Behaviour"));
+    assert!(!source(&project.0, "Assets/Gameplay/NewBehaviour.cs").exists());
+    assert!(
+        editor
+            .host
+            .store()
+            .schema()
+            .get("PlayerController")
+            .is_some(),
+        "the queued rename compiles its new inventory"
+    );
 }
 
 #[test]
@@ -232,7 +310,6 @@ fn component_new_script_is_registered_for_the_dropdown_and_agents() {
             &ara_editor::shell::commands::Target::None,
         )
         .unwrap();
-    assert!(project.0.join("Assets/Gameplay/NewBehaviour.cs").is_file());
     assert_eq!(
         shell.input.focused(),
         Some(ara_ui::source::stable_id("asset-rename-value"))
@@ -243,9 +320,18 @@ fn component_new_script_is_registered_for_the_dropdown_and_agents() {
             json!({"template":"behaviour","attachTo":["e_player01"]}),
         )
         .unwrap();
-    assert_eq!(result["path"], "Assets/Gameplay/NewBehaviour2.cs");
+    assert_eq!(
+        result["path"],
+        format!(
+            "{}/Assets/Gameplay/NewBehaviour2.cs",
+            ara_doc::AUTHORING_ROOT
+        )
+    );
     assert!(result["job"].is_string());
-    assert!(project.0.join("Assets/Gameplay/NewBehaviour2.cs").is_file());
+    wait_sources(&mut editor);
+    assert!(source(&project.0, "Assets/Gameplay/NewBehaviour.cs").is_file());
+    completed(&mut editor, result).unwrap();
+    assert!(source(&project.0, "Assets/Gameplay/NewBehaviour2.cs").is_file());
     assert!(
         editor
             .action("component.new_script", json!({"attachTo":[]}))
@@ -281,7 +367,10 @@ fn asset_grid_scrollbar_drives_a_bounded_card_pool() {
     let project = Project::new();
     for n in 0..500 {
         std::fs::write(
-            project.0.join(format!("Assets/Gameplay/Code{n:04}.cs")),
+            project
+                .0
+                .join(ara_doc::AUTHORING_ROOT)
+                .join(format!("Assets/Gameplay/Code{n:04}.cs")),
             "// Browser fixture\n",
         )
         .unwrap();

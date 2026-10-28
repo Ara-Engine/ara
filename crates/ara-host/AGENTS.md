@@ -1,15 +1,18 @@
 # ara-host
-One project's engine host behind the Engine Protocol: sessions and scopes, the
-method registry (`Service`) and the core methods, review state, checkpoints, the
-journal, always-saved persistence and external-edit reconciliation. The daemon
-(`ara serve`) serves it; the offline CLI and tests call it in-process.
-Depends on ara-cmd, ara-ops, ara-doc, ara-merge, ara-schema, ara-proto, ara-diag,
-ara-why, ara-profile, ara-collab.
+Project Engine Protocol host: sessions, services, attributed history, review, persistence and reconciliation; used by `ara serve`, CLI and tests.
 ## Public API
 - `Project::open(root)` (needs `ara.project.json`), `main_scene()` (`main` in the
-  marker, else `levels/main.scene`), `project::discover(start)`,
-  `project::no_project` (ARA1901 + `ara init` fix), `MARKER`, `STATE_DIR` (`.ara`).
-  Scans skip hidden dirs, `target/`, `node_modules/`, `spikes/`, nested projects.
+  marker, else `scenes/main.scene`), `project::discover(start)`,
+  `project::no_project` (ARA1901 + `ara init` fix), `MARKER`, `STATE_DIR` (`.ara`). Scans skip hidden dirs, `target/`, `node_modules/`, `spikes/`, top-level `builds/` and `packages/`, nested projects.
+- `project::authored_files(root, db)`: one semantic inventory, sorted by unique storage_path;
+  authored paths are reference-relative, metadata/settings have Project scope.
+- `project_layout::{AUTHORING_ROOT, authored_root(root)}`: one authored-root contract.
+  Current projects use content-relative references and project-relative storage paths.
+- `project_layout`: `require_current_layout` rejects old opens (ARA1914). `migration_plan` is read-only.
+  `migrate_project` submits one typed, journaled command after consent and waits for its physical receipt; `Migration::apply` delegates.
+  Migration pins `CURRENT_ENGINE_VERSION`; `pin_current_engine` uses typed ops without compiling game code. History stays append-only; migration Undo restores old bytes and closes normal authoring.
+- `Workspace::insert_project_document` keeps root policy transactional without adding
+  it to the asset index; `is_project_document` excludes it from portable game data.
 - `Host::open(project, HostConfig)`: takes `.ara/lock` (ARA1903 if held), loads
   documents, replays `.ara/journal`. `call(conn, method, params)`,
   `handle_text(conn, json)`, `tick()` (watch + debounced flush + service ticks),
@@ -84,7 +87,7 @@ ara-why, ara-profile, ara-collab.
 `history.list/undo/redo`; `review.list/accept/revert`; `schema.list/describe/search`;
 `query`; `inspect`; `cmd.apply`; `logs`; `docs.search`;
 `jobs.list/status/start/cancel`; `subscribe`/`unsubscribe` (topics `ops`, `diagnostics`, `history`, `jobs`); `doc.sync`; `daemon.shutdown`.
-Reserved families (`run`, `capture`, `play`, `test`) answer ARA1806 until a service registers them.
+CLI/daemon register `run`/`capture`/`play`/`test` through ara-play-host; bare Hosts report ARA1806 for absent services.
 - `cmd.apply` / `inspect`: `doc` is optional (`core/pick.rs`): the one document
   holding every entity the call names (IDs, addresses, `name:` selectors), else
   the only scene, else the main scene; else ARA1814 with a fix per candidate. Named documents also match by unique stem or file name (`outpost`).
@@ -110,13 +113,17 @@ Reserved families (`run`, `capture`, `play`, `test`) answer ARA1806 until a serv
   transaction (store undo) or a subset of entities (a compensating transaction
   based on the target's revision, so later edits conflict). Accept remains an
   idempotent compatibility action for humans and agents. Redo restores `accepted`.
+- Entity-only revert selects the caller agent's latest applicable turn; human
+  callers select the latest turn, including human-authored edits. Explicit transaction IDs may target other
+  agents. Results carry author, reason and IDs; compensating transactions keep
+  their untracked status across journal replay.
 - Checkpoints: one per agent `cmd.apply` turn at its prior revision, plus manual ones.
   `session.rollback` undoes the session's later transactions all or nothing.
 - Journal: `txn`, `flush` (doc, rev, FNV hash), `session`, `ended`, `checkpoint`,
   `review`, `base` lines. On open, each file's revision is its newest flush entry
   with a matching hash; newer transactions are re-applied. Compaction (past 4096
   entries, nothing unsaved or being written) keeps the newest 1024 transactions.
-- File I/O runs on the file thread (`file_io.rs`) in request order, never on the host
+- File I/O runs on the file thread (`file_io.rs`) in request order; source/asset snapshot API: [`file-history.md`](../../docs/dev/file-history.md).
   thread: journal lines and compaction, `diagnostics.jsonl`, writes after `debounce`
   (temp + rename; `flush` journaled when it lands), removals, `notify` events (30 s
   rescan); `flush()` waits for it all. `watch_every` zero checks per tick (tests). An
@@ -129,22 +136,15 @@ Reserved families (`run`, `capture`, `play`, `test`) answer ARA1806 until a serv
   lands (in commit order): a crash loses only queued lines; no fsync per line.
 ## Testing
 `cargo test -p ara-host`: query parsing, logs, journal compaction, review, a held file thread.
-`tests/host.rs` copies fixtures to scratch: protocol, scopes, dry runs, symbols, review,
-rollback/recovery, external edits/conflicts, the file thread, services/jobs/subscriptions,
-document inference, apply text and agent `why`. `tests/collab.rs`: advisory claims,
-presence, branches/restart/submits and participant undo. Scene-to-text snapshots.
+`tests/host.rs` copies fixtures to scratch: protocol, scopes, dry runs, symbols, review, recovery, external edits/conflicts, file thread, services/jobs/subscriptions, document inference, text and `why`.
+`tests/collab.rs`: advisory claims, presence, branches/restart/submits and participant undo. Scene-to-text snapshots.
 `tests/diag.rs` serializes the global bus: grouped/attributed logs, cross-thread
 subscriptions, report/clear, executable `why` fixes and restart persistence.
 `Cx::create_document` delegates to `doc.create`, including format templates; fill documents with `Cx::apply` for normal attribution/history/undo.
 ## Structured reference (`docs.json`)
-`docs::structured` writes canonical JSON via `ara_json`, format `ara.docs/1`. Top level: `format`, `engineVersion`, `protocolVersion`, `types`, `commands`,
-`methods`, `diagnostics`, `csharpExamples`, `topics`. Catalogs are objects keyed by
-stable schema/command/method/code name. Fields carry type, unit, range, materialized
-schema default, doc, replication and value examples. Commands carry parameter JSON
-Schemas; methods carry scope, params and extensible result JSON Schemas. Result
-properties are optional because several methods vary their payload with parameters.
-C# examples carry page ID, source, region and compiled code, extracted from
-`dotnet/examples/` and embedded in markdown, full text and MCP search.
-`ara docs --json` continues to print the file-count summary. The engine package ships
-`docs.json`; publish lists its hash/size/URL in the signed release manifest.
+`docs::structured` writes canonical `ara.docs/1` JSON via `ara_json`: `format`, `engineVersion`, `protocolVersion`, `types`, `commands`, `methods`, `diagnostics`, `csharpExamples`, `topics`.
+Catalogs use stable schema/command/method/code keys. Fields carry type, unit, range, materialized default, doc, replication and examples.
+Commands carry parameter JSON Schemas; methods carry scope, params and extensible result Schemas. Optional result properties accommodate parameter-dependent payloads.
+C# examples carry page ID/source/region/compiled code from `dotnet/examples/`, embedded in markdown, full text and MCP search.
+`ara docs --json` prints the file-count summary. Packages ship `docs.json`; signed release manifests list its hash, size and URL.
 Run `cargo test -p ara-host --test docs` for round-trip and complete catalog/region coverage.

@@ -12,6 +12,7 @@ pub(crate) fn decorations(
     widget: Option<&Widget>,
     text: Option<&ara_ui_text::Text>,
     focused: bool,
+    numeric: bool,
     rect: Box2,
     origin: [f32; 2],
     node: u64,
@@ -120,5 +121,28 @@ pub(crate) fn decorations(
             }
         }
         _ => {}
+    }
+    if numeric {
+        let color = Color(accent.0, accent.1, accent.2, 150);
+        for offset in [-3., 0., 3.] {
+            draw(
+                Box2 {
+                    x: rect.x + rect.w - 9.,
+                    y: rect.y + rect.h * 0.5 + offset,
+                    w: 2.,
+                    h: 1.,
+                },
+                color,
+            );
+            draw(
+                Box2 {
+                    x: rect.x + rect.w - 5.,
+                    y: rect.y + rect.h * 0.5 + offset,
+                    w: 2.,
+                    h: 1.,
+                },
+                color,
+            );
+        }
     }
 }

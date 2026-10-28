@@ -12,7 +12,9 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
   Failed optional resource reads travel as nonfatal diagnostics, with original
   project-relative paths preserved for the player and editor console.
 
-- `PlayService::new(root, PlayConfig)`; `PlayConfig::for_project(root)` finds
+- `PlayService::new(root, PlayConfig).with_headless_automation()` enables daemon
+  run/capture; native editors keep their render-boundary capture service.
+  `PlayConfig::for_project(root)` finds
   `ara-player`/`ara-import-worker` next to the current executable (or `ARA_PLAYER`,
   `ARA_IMPORT_WORKER`), the .NET host (`ScriptPaths::locate`: `ARA_DOTNET_ARTIFACTS`
   or the nearest `dotnet/artifacts/bin`; installed tools beside the executable take
@@ -66,6 +68,11 @@ when it becomes the daemon) and by the editor (`Editor::open`). Depends on ara-h
 
 ## Methods
 
+`run {scene?,ticks?|duration?,seed?,tickHz?}` runs a fresh headless world and returns
+tick/hash, logs, events and diagnostics. `capture {scene?,camera?,path?,width?,height?,preset?,ticks?,seed?,marks?}`
+captures the same snapshot offscreen to PNG. Both stop and reap their own players
+before returning, including on failure; they never create windows.
+
 `play.start {scene?, mode local|host|dedicated, clients, window, embed?: {width, height,
 maxFps?}, startPaused, seed, tickHz, hotReload}` → `{world: "play:N", players[{role,
 pid, started, surface?}], bootMs, prepareMs, transport}`; `device {player, events}`
@@ -99,12 +106,12 @@ without joining it; omitted/false keeps the synchronous world-ready response.
   expect, patch, watch, capture, hash) in fresh headless players; `determinism` runs
   it twice in separate processes and requires equal final hashes.
 
-- C# (`scripts.rs`): projects with module folders (`ara.module.toml`) send them to
-  players (`PlayScene::scripts`); without a .NET build Play is refused with a setup
-  diagnostic. `script.write` from an agent session makes every world claim the path
-  (`play.compile`) before the file is written. Player `play.event`s: reloads and
+- C# (`scripts.rs`): the shared D30 inventory publishes gameplay schemas before
+  validation and sends private module inputs to players (`PlayScene::scripts`).
+  `script.write` prepares a `source.replace` transaction on a worker, makes worlds
+  claim agent paths (`play.compile`), then waits for materialization. Player `play.event`s: reloads and
   diagnostics (buffered for `play.events`, logged), `types` (the owner keeps each
-  module's `<Name>.types.json` current, canonical, inside the project), `restart`
+  module's private `.ara/scripts/` schema current, canonical), `restart`
   (L4: resume a fresh player from `play.snapshot`). The C# catalog is published to the
   host (`Cx::publish_commands("play", ..)`) on start, after reloads and on stop.
 

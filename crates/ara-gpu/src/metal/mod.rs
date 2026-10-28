@@ -24,9 +24,12 @@
 //!
 //! Shared surfaces (D19) use global IOSurfaces ([`external`]).
 //!
-//! Not yet available: acceleration structures, mesh/task stages,
-//! shader hot reload and HDR output.
+//! Acceleration structures and inline ray queries run on GPUs with hardware ray
+//! tracing (Apple9, M3 and later; D29) on the RT-tier device ([`acceleration`]).
+//!
+//! Not yet available: mesh/task stages and HDR output.
 mod abi;
+mod acceleration;
 mod cache;
 #[cfg(test)]
 mod cache_tests;
@@ -46,6 +49,8 @@ mod prepare;
 pub mod present;
 mod reload;
 mod resources;
+#[cfg(test)]
+mod rt_tests;
 mod scratch;
 mod serialized;
 mod tables;
@@ -103,6 +108,7 @@ impl<V> Owned<V> {
 enum Retired {
     Buffer(Owned<NativeBuffer>),
     Image(Owned<NativeImage>),
+    Acceleration(Owned<acceleration::NativeAcceleration>),
     /// Held only to keep the pipeline state alive until completion.
     Pipeline {
         _native: NativePipeline,
@@ -144,6 +150,7 @@ pub struct MetalDevice {
     allocators: Vec<Retained<ProtocolObject<dyn MTL4CommandAllocator>>>,
     buffers: Arena<BufferKind, Owned<NativeBuffer>>,
     images: Arena<ImageKind, Owned<NativeImage>>,
+    accelerations: Arena<AccelerationStructureKind, Owned<acceleration::NativeAcceleration>>,
     pipelines: Arena<PipelineKind, NativePipeline>,
     submitted: [u64; 2],
     /// Values committed to each queue; a deferred scope's batch is recorded
@@ -163,7 +170,6 @@ pub struct MetalDevice {
     deferred: Option<Vec<TimelinePoint>>,
     /// Submitted values when the scope began; every scoped submission waits on them.
     deferred_waits: [u64; 2],
-    /// An ended scope awaits poll/wait.
     /// Ended deferred scopes not yet consumed (at most `FRAMES_IN_FLIGHT`).
     pending_completions: usize,
     resource_worker: Option<prepare::ResourceWorker>,
@@ -178,8 +184,9 @@ pub struct MetalDevice {
     waits: crate::vulkan::waits::Counter,
     /// The cooked `ClearDepth` pipeline, loaded on first use.
     clear: Option<clear::Clear>,
-    /// Shader reload provenance (no hot reload on Metal yet, see `reload`).
-    shader_status: vulkan::ShaderStatus,
+    shader_worker: Option<reload::Worker>,
+    #[cfg(feature = "fidelity-lab")]
+    pub(crate) lab_params: crate::tunables::Registry,
     submission_stats: vulkan::SubmissionStats,
     /// Last: released after the workers joined, so the archive flush races no compile.
     _cache: cache::Lease,
@@ -196,14 +203,16 @@ unsafe impl Send for MetalDevice {}
 unsafe impl Sync for MetalDevice {}
 
 impl MetalDevice {
-    /// Like [`crate::vulkan::VulkanDevice::new`], which adds the optional RT tier when
-    /// available. Metal has no acceleration structures yet, so this is the raster
-    /// device with `info().ray_tracing` false, and RT consumers take their fallback.
+    /// Like [`crate::vulkan::VulkanDevice::new`]: the optional RT tier (acceleration
+    /// structures and inline ray queries) where the GPU has hardware ray tracing
+    /// (Apple9, M3 and later; D29), else `info().ray_tracing` is false and RT
+    /// consumers take their fallback.
     pub fn new(
-        window_extensions: &[std::ffi::CString],
+        _window_extensions: &[std::ffi::CString],
         cache_dir: impl Into<std::path::PathBuf>,
     ) -> Result<Self> {
-        Self::new_raster(window_extensions, cache_dir)
+        let cache_dir = cache_dir.into();
+        native::pool(|| Self::create(&cache_dir, true))
     }
     /// Create the system default Metal 4 device. `_window_extensions` keeps the Vulkan
     /// constructor's signature for backend-neutral callers; Metal needs none.
@@ -214,9 +223,9 @@ impl MetalDevice {
         cache_dir: impl Into<std::path::PathBuf>,
     ) -> Result<Self> {
         let cache_dir = cache_dir.into();
-        native::pool(|| Self::create(&cache_dir))
+        native::pool(|| Self::create(&cache_dir, false))
     }
-    fn create(cache_dir: &std::path::Path) -> Result<Self> {
+    fn create(cache_dir: &std::path::Path, ray_tracing: bool) -> Result<Self> {
         let device = MTLCreateSystemDefaultDevice().ok_or_else(|| nil("Metal device"))?;
         if !device.supportsFamily(MTLGPUFamily::Metal4) {
             return Err(GpuError::Contract(format!(
@@ -247,9 +256,15 @@ impl MetalDevice {
         for buffer in tables.buffers() {
             residency.addAllocation(ProtocolObject::from_ref(buffer));
         }
-        let info = info::device_info(&device);
+        let mut info = info::device_info(&device);
+        info.ray_tracing = ray_tracing && info::hardware_ray_tracing(&device);
         // Joined last: a failed creation above never counts as a live device.
         let (compiler, cache) = cache::acquire(&device, cache_dir)?;
+        let shader_worker = if std::env::var_os("ARA_SHADER_DIR").is_some() {
+            Some(reload::Worker::new(device.clone(), compiler.clone())?)
+        } else {
+            None
+        };
         Ok(Self {
             device,
             queues,
@@ -263,6 +278,7 @@ impl MetalDevice {
             allocators: Vec::new(),
             buffers: Arena::default(),
             images: Arena::default(),
+            accelerations: Arena::default(),
             pipelines: Arena::default(),
             submitted: [0; 2],
             flushed: [0; 2],
@@ -287,7 +303,9 @@ impl MetalDevice {
             recent_spans: Default::default(),
             waits: Default::default(),
             clear: None,
-            shader_status: Default::default(),
+            shader_worker,
+            #[cfg(feature = "fidelity-lab")]
+            lab_params: Default::default(),
             submission_stats: Default::default(),
             _cache: cache,
         })
@@ -489,10 +507,20 @@ impl MetalDevice {
     ) -> Result<Pipeline> {
         let created =
             native::pool(|| pipeline::create(&self.device, &self.compiler, cooked, artifacts))?;
-        self.pipelines.insert(created)
+        let handle = self.pipelines.insert(created)?;
+        if let Some(worker) = &mut self.shader_worker
+            && let Err(error) = worker.track(handle, cooked, artifacts)
+        {
+            self.retire_pipeline(handle)?;
+            return Err(error.into());
+        }
+        Ok(handle)
     }
     /// Invalidate a pipeline identity; release it after all queues complete.
     pub fn retire_pipeline(&mut self, pipeline: Pipeline) -> Result<()> {
+        if let Some(worker) = &self.shader_worker {
+            worker.forget(pipeline);
+        }
         let native = self.pipelines.remove(pipeline)?;
         self.retired.push(Retired::Pipeline {
             _native: native,
@@ -633,6 +661,11 @@ impl MetalDevice {
         for value in self.images.values_mut() {
             value.last[queue.index()] = point.value;
         }
+        // A TLAS reaches its BLASes by ID: every structure stays conservatively in use.
+        for value in self.accelerations.values_mut() {
+            value.last[queue.index()] = point.value;
+        }
+        self.mark_built(&list.commands)?;
         self.pending.push(Pending {
             point,
             allocator,
@@ -766,16 +799,6 @@ impl MetalDevice {
         }
         self.timing_window.span(true)
     }
-    /// Like `VulkanDevice::bind_acceleration_structure`; unreachable until the RT tier
-    /// lands, since `info().ray_tracing` is false and no structure can be created.
-    pub fn bind_acceleration_structure(
-        &mut self,
-        _structure: AccelerationStructure,
-    ) -> Result<HeapIndex> {
-        Err(GpuError::Contract(
-            "Acceleration structures are not available on the Metal backend yet".into(),
-        ))
-    }
     /// Time between this window's submission intervals; overlap counts once.
     pub fn timing_window_gaps(&self) -> Option<f64> {
         self.timing_window()?;
@@ -852,11 +875,9 @@ impl Device for MetalDevice {
     }
     fn create_acceleration_structure(
         &mut self,
-        _desc: &acceleration::AccelerationDesc,
+        desc: &crate::acceleration::AccelerationDesc,
     ) -> Result<AccelerationStructure> {
-        Err(GpuError::Contract(
-            "Acceleration structures are not available on the Metal backend yet".into(),
-        ))
+        native::pool(|| self.create_acceleration(desc))
     }
     fn create_pipeline(
         &mut self,
@@ -910,7 +931,23 @@ impl Device for MetalDevice {
         let retired = match resource {
             Resource::Buffer(b) => Retired::Buffer(self.buffers.remove(b)?),
             Resource::Image(i) => Retired::Image(self.images.remove(i)?),
-            Resource::AccelerationStructure(_) => return Err(GpuError::StaleHandle),
+            Resource::AccelerationStructure(h) => {
+                if self
+                    .accelerations
+                    .values_mut()
+                    .any(|v| v.raw.dependencies.contains(&h))
+                {
+                    return Err(GpuError::Contract(
+                        "BLAS is referenced by a live TLAS".into(),
+                    ));
+                }
+                let native = self.accelerations.remove(h)?;
+                for &buffer in &native.raw.auxiliary {
+                    self.retired
+                        .push(Retired::Buffer(self.buffers.remove(buffer)?));
+                }
+                Retired::Acceleration(native)
+            }
         };
         self.retired.push(retired);
         Ok(())
@@ -930,6 +967,7 @@ impl MetalDevice {
             let last = match &self.retired[index] {
                 Retired::Buffer(b) => b.last,
                 Retired::Image(i) => i.last,
+                Retired::Acceleration(a) => a.last,
                 Retired::Pipeline { last, .. } => *last,
             };
             if (0..2).any(|q| done[q] < last[q]) {
@@ -958,6 +996,14 @@ impl MetalDevice {
                         self.residency_dirty = true;
                     }
                 }
+                Retired::Acceleration(a) => {
+                    if let Some(slot) = a.heap {
+                        self.tables.accelerations.release(slot);
+                    }
+                    self.residency
+                        .removeAllocation(ProtocolObject::from_ref(&*a.raw.structure));
+                    self.residency_dirty = true;
+                }
                 Retired::Pipeline { .. } => {}
             }
         }
@@ -974,11 +1020,9 @@ impl BindlessHeap for MetalDevice {
     }
     fn insert_acceleration_structure(
         &mut self,
-        _structure: AccelerationStructure,
+        structure: AccelerationStructure,
     ) -> Result<HeapIndex> {
-        Err(GpuError::Contract(
-            "Acceleration structures are not available on the Metal backend yet".into(),
-        ))
+        self.bind_acceleration_structure(structure)
     }
     fn insert_storage_image(&mut self, image: Image) -> Result<HeapIndex> {
         self.storage_image(image)

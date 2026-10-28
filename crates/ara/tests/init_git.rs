@@ -101,7 +101,12 @@ fn init_at_repo_root_configures_root_agnostic_driver() {
 
     // Git supplies temporary paths from the work-tree root, without --root.
     for name in [".merge_base", ".merge_ours", ".merge_theirs"] {
-        fs::copy(repo.join("levels/main.scene"), repo.join(name)).expect("merge input");
+        fs::copy(
+            repo.join(ara_host::project_layout::AUTHORING_ROOT)
+                .join("scenes/main.scene"),
+            repo.join(name),
+        )
+        .expect("merge input");
     }
     ara(
         &repo,
@@ -136,7 +141,10 @@ fn init_nested_configures_parent_driver_only_when_requested() {
 fn merge_discovers_project_from_input_paths_outside_current_directory() {
     let dir = scratch("file-discovery");
     ara(&dir, &["init", "game"]);
-    let scene = dir.join("game/levels/main.scene");
+    let scene = dir
+        .join("game")
+        .join(ara_host::project_layout::AUTHORING_ROOT)
+        .join("scenes/main.scene");
     let scene = scene.to_str().expect("UTF-8 scene path");
     ara(&dir, &["merge", scene, scene, scene]);
 }

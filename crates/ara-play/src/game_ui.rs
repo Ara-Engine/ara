@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 /// Authored `ui/game.ui`, `ui/game.css` and `ui/bindings.json` carried inside Play/export.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GameUi {
-    /// Project-relative resource paths keyed by `image:<name>`, `font:<index>` or `click`.
+    /// Authored-root-relative resource paths keyed by `image:<name>`, `font:<index>` or `click`.
     /// Retained across Play/export so resource diagnostics identify the authored file.
     #[serde(default)]
     pub resource_paths: std::collections::BTreeMap<String, String>,

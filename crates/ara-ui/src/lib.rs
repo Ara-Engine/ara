@@ -2,18 +2,25 @@
 #![warn(missing_docs)]
 pub mod accessibility;
 pub mod binding;
+pub mod collection;
+pub mod controls;
 pub mod cursor;
+pub mod dialogs;
 pub mod docking;
+pub mod drag_drop;
 mod emit;
 mod focus;
 pub mod input;
 pub mod layers;
+pub mod native_input;
 pub mod paint;
 mod pipeline;
 pub mod popover;
 pub mod reconcile;
 pub mod runtime;
 pub mod scroll;
+pub mod select;
+pub mod selection;
 pub mod style;
 pub mod theme;
 pub mod virtualize;

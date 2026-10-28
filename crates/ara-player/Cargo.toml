@@ -8,12 +8,16 @@ publish.workspace = true
 
 [features]
 default = []
+hotpatch = ["dep:ara-hotpatch", "ara-sim/hotpatch", "ara-runtime-render/hotpatch"]
 tracy = ["ara-gpu/tracy"]
+fidelity-lab = ["dep:ara-pathtrace", "dep:ara-render-fidelity", "ara-render/fidelity-lab", "ara-runtime-render/fidelity-lab", "ara-gpu/fidelity-lab", "image/exr"]
 
 [build-dependencies]
 embed-resource.workspace = true
 
 [dependencies]
+ara-bench = { path = "../ara-bench", default-features = false }
+ara-hotpatch = { path = "../ara-hotpatch", optional = true, features = ["runtime"] }
 anyhow = { workspace = true }
 ara-2d = { path = "../ara-2d" }
 ara-asset = { path = "../ara-asset" }
@@ -21,6 +25,7 @@ ara-audio = { path = "../ara-audio" }
 ara-components.workspace = true
 ara-crash = { path = "../ara-crash" }
 ara-gpu = { path = "../ara-gpu" }
+ara-pathtrace = { path = "../ara-pathtrace", optional = true }
 ara-input = { path = "../ara-input" }
 ara-platform = { path = "../ara-platform" }
 ara-physics = { path = "../ara-physics" }
@@ -29,6 +34,7 @@ ara-play-host = { path = "../ara-play-host" }
 ara-json.workspace = true
 ara-pack = { path = "../ara-pack", default-features = false, features = ["native-decode"] }
 ara-render = { path = "../ara-render" }
+ara-render-fidelity = { path = "../ara-render-fidelity", optional = true }
 ara-runtime = { path = "../ara-runtime" }
 ara-runtime-audio = { path = "../ara-runtime-audio" }
 ara-runtime-net = { path = "../ara-runtime-net" }

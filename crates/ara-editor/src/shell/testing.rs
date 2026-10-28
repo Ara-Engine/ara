@@ -1,6 +1,6 @@
 //! Semantic helpers for UI tests and scripted verification: walk menus, read
 //! rows, filter, drag a tab to an area and open context menus at real controls.
-use super::commands::{Avail, menus::MENUS};
+use super::commands::Avail;
 use super::menu::Row;
 use super::*;
 
@@ -21,9 +21,13 @@ impl Shell {
     /// failing if a rendered row is not bound to the command it shows.
     pub fn walk_menus(&mut self, editor: &mut Editor) -> ara_ui::Result<Vec<(String, String)>> {
         let mut out = Vec::new();
-        for (index, menu) in MENUS.iter().enumerate() {
+        let menus: Vec<_> = commands::bar_titles(&editor.extensions)
+            .into_iter()
+            .map(str::to_owned)
+            .collect();
+        for (index, menu) in menus.iter().enumerate() {
             self.open_bar(index, false);
-            self.walk_level(editor, menu.title.to_owned(), &mut out)?;
+            self.walk_level(editor, menu.to_owned(), &mut out)?;
         }
         self.menu = None;
         self.rebuild(editor)?;
@@ -44,10 +48,11 @@ impl Shell {
             match row {
                 Row::Command { id, .. } => {
                     match self.bindings.get(&ara_ui::source::stable_id(&node)) {
-                        Some(Binding::Command(bound, _)) if bound == id => {}
+                        Some(Binding::Command(bound, _)) if *bound == id => {}
+                        Some(Binding::CommandOwned(bound, _)) if bound == id => {}
                         _ => return Err(format!("{path}: row {node} is not bound to {id}").into()),
                     }
-                    out.push((path.clone(), (*id).to_owned()));
+                    out.push((path.clone(), id.to_owned()));
                 }
                 Row::Sub(title, _) => {
                     if let Some(menu) = &mut self.menu {
@@ -127,7 +132,7 @@ impl Shell {
                     checked,
                     ..
                 } => {
-                    let spec = commands::get(id)?;
+                    let spec = commands::lookup(&editor.extensions, id)?;
                     let cx = self.ctx(editor, target);
                     // As rendered: the row's own check (value menus), else the command's.
                     let checked = checked.or(match spec.avail(&cx) {
@@ -150,7 +155,7 @@ impl Shell {
                 Row::Command {
                     id, target, label, ..
                 } => {
-                    let spec = commands::get(id)?;
+                    let spec = commands::lookup(&editor.extensions, id)?;
                     let cx = self.ctx(editor, target);
                     let reason = match spec.avail(&cx) {
                         Avail::Blocked(r) => Some(r),
@@ -228,12 +233,13 @@ impl Shell {
         &mut self,
         editor: &mut Editor,
         query: &str,
-    ) -> Vec<(&'static str, String, Option<&'static str>)> {
+    ) -> Vec<(&'static str, String, Option<String>)> {
         self.palette_items(editor, query)
             .into_iter()
             .map(|item| {
                 let command = match item.binding {
-                    Binding::Command(id, _) => Some(id),
+                    Binding::Command(id, _) => Some(id.to_owned()),
+                    Binding::CommandOwned(id, _) => Some(id),
                     _ => None,
                 };
                 (item.group, item.title, command)

@@ -75,6 +75,18 @@ fn options() -> Result<Option<Options>, String> {
     Ok(Some(options))
 }
 
+/// Automation modes report errors through their exit status, without desktop dialogs.
+fn interactive(options: &Options) -> bool {
+    #[cfg(feature = "rehearsal")]
+    if options.rehearse_update.is_some()
+        || options.update_health.is_some()
+        || std::env::var_os("ARA_RELEASE_TEST_API").is_some()
+    {
+        return false;
+    }
+    options.capture.is_none() && options.startup_probe.is_none() && options.service_check.is_none()
+}
+
 fn main() -> std::process::ExitCode {
     let entered = std::time::Instant::now();
     match ara_crash::monitor_from_args() {
@@ -90,10 +102,7 @@ fn main() -> std::process::ExitCode {
             return std::process::ExitCode::FAILURE;
         }
     };
-    let interactive = options.capture.is_none()
-        && options.startup_probe.is_none()
-        && options.service_check.is_none()
-        && !(cfg!(feature = "rehearsal") && std::env::var_os("ARA_RELEASE_TEST_API").is_some());
+    let interactive = interactive(&options);
     ara_hub_service::startup::record("ui.entry", entered.elapsed());
     let phase = std::time::Instant::now();
     let _crashes = ara_crash::desktop::start("ara-hub", interactive)
@@ -109,6 +118,47 @@ fn main() -> std::process::ExitCode {
                 native::fatal(&message);
             }
             std::process::ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn automation_never_uses_desktop_error_dialogs() {
+        for options in [
+            Options {
+                capture: Some("target/hub-captures".into()),
+                ..Default::default()
+            },
+            Options {
+                startup_probe: Some("target/hub-startup".into()),
+                ..Default::default()
+            },
+            Options {
+                service_check: Some("target/hub-service-check.json".into()),
+                ..Default::default()
+            },
+        ] {
+            assert!(!interactive(&options));
+        }
+        #[cfg(feature = "rehearsal")]
+        for options in [
+            Options {
+                rehearse_update: Some("target/hub-rehearsal.json".into()),
+                ..Default::default()
+            },
+            Options {
+                update_health: Some("target/hub-update-health".into()),
+                ..Default::default()
+            },
+        ] {
+            assert!(
+                !interactive(&options),
+                "explicit flags suffice without a test API environment"
+            );
         }
     }
 }

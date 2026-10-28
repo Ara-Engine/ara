@@ -9,6 +9,7 @@ the ABI and the host API. Design: `docs/research/10-csharp-scripting.md` (R10 D1
 | Project | Role | Loaded by |
 |---|---|---|
 | `src/Ara.Runtime` | Gameplay API (`Entity`, `[Component]`, `Behaviour`, `[Query]`, `[Command]`, `World`, `Rng`, `Commands`) and the C# half of the ABI. AOT-safe. `Generated/` is written by Rust (`csgen`). | every build |
+| `src/Ara.Editor` | Editor-only command/menu registration, immutable scene/selection queries and typed authoring commands. | hidden editor worker only |
 | `src/Ara.Generators` | Source generator: registration, chunk-batched system entry points, Behaviour data columns, command entry points, the NativeAOT export | modules (analyzer) |
 | `src/Ara.Analyzers` (+ `.CodeFixes`) | ARA0001–ARA0506 (incl. the API allowlist profiles) and their code fixes | modules (analyzer), compile server |
 | `src/Ara.Host` | Dev-only loader: collectible ALCs, EnC deltas, cascades and relinks, the compile-server client. hostfxr loads it | JIT hosts |
@@ -17,8 +18,9 @@ the ABI and the host API. Design: `docs/research/10-csharp-scripting.md` (R10 D1
 | `src/Ara.RunWorker` | The `ara_run` worker: compile, IL whitelist, run | its own process |
 | `samples/Outpost.Sample` | R10 §D3 sample: Door behaviour, UseMedkit command, Gravity/Movement systems | host |
 | `samples/Outpost.Sample.Aot` | The sample as one NativeAOT library exporting `ara_script_init` | host (AOT) |
-| `samples/Outpost.Game` | Compiles the co-op game in `samples/outpost/scripts/Salvage` with the same generators and analyzers. | solution build, compile server |
+| `samples/Outpost.Game` | Compiles the co-op game in `samples/outpost/content/scripts/Salvage` with the same generators and analyzers. | solution build, compile server |
 | `examples/Ara.Examples` | Compiled gameplay regions for every engine component. | .NET and Rust tests |
+| `examples/Ara.EditorExamples` | Compiled editor API regions, under `editor/`; never a player dependency. | solution build, documentation |
 | `examples/Ara.CommandExamples` | Authoring command regions; `--trace-commands` feeds Rust schema validation. Kept separate from gameplay's allowed references. | .NET and Rust tests |
 | `tests/*` | xunit tests, plus `Ara.TestModule` (a module the Rust tests load) | `dotnet test` |
 
@@ -35,8 +37,11 @@ are central (`Directory.Packages.props`). Warnings are errors.
 
 ## Writing gameplay modules
 
-- A module is a folder with `ara.module.toml` (`[module] name = "..."`, optional `hot`,
-  `references = ["Core"]`, `profile = "editor"`), compiled as one assembly; keep it under ~5k
+- A lowercase `<name>.module.json` creates a folder boundary (`name`, optional `hot`
+  and `references`). Sources outside named boundaries belong to `game`. Exact
+  `editor` ancestors create separate editor assemblies; gameplay never references them.
+  The shared inventory takes its authored root from Rust; private outputs stay under
+  `.ara/scripts/<module>/`. See `docs/dev/csharp-project-inventory.md`. Keep modules under ~5k
   lines (L3 cost, including the Windows AMSI scan of the new image, scales with module size).
 - A module may use public types of the modules it references (no cycles). An L3 of a
   referenced module relinks or rebuilds this one in the same swap.

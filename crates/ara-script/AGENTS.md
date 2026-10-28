@@ -1,16 +1,14 @@
 # ara-script
-
 The C# host (D11, A13): C# gameplay code (components, systems, behaviours, commands)
 on the Rust engine, with layered hot reload (L1-L4), cross-module references, NativeAOT for
 shipping and the `ara_run` agent worker. The C# side lives in `dotnet/` (see `dotnet/AGENTS.md`).
 Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs, netcorehost, libloading, windows-sys.
 
 ## Public API
-
 - `engine_bindings()`: the canonical ordered engine columns exposed to C# (currently
   checked native `Transform`), shared by the runtime, export hash and checked-in binding generation.
   A direct pointer view requires an explicit checked binding; other components use codecs.
-- `abi` (ABI v3): `HostInit` (+ `HostApi`, Rust → C#) and `ScriptApi` (C# → Rust), `Tick`,
+- `abi` (ABI v4): `HostInit` (+ `HostApi`, Rust → C#) and `ScriptApi` (C# → Rust), `Tick`,
   `Frame`, `SystemCall`, `BehaviourCall`, `CommandCall`, `ReloadReport` (kind, escalation,
   origin, cascade size, per-phase µs), the `ABI_CONSTS` (`RELOAD_*`, `ESC_*`, `ORIGIN_*`) and
   `layout_hash(engine_layouts)`. Entry: `ara_script_init(*const HostInit, *mut ScriptApi)`; Rust rejects null slots with ARA0922 before dispatch.
@@ -36,7 +34,10 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   - `execute_command`, `undo`, `describe`, `command_catalog()` (ara-cmd `Info` shape, `scope: "play"`).
   - `schema()`, `read_component` / `insert_component` (JSON), `take_diagnostics`, `take_cues`,
     `modules` (heat), `set_heat`, `compiling()`, `diag(DIAG_*)`, `shutdown() -> leaked generations`.
-- `ModuleSpec { name, dir, assembly, watch, hot, references, profile }` from `ara.module.toml`
+- `project::{inventory, compile, publish}` uses `ara_doc::AUTHORING_ROOT` and returns
+  explicit reference/storage sources and private schema/assembly results (D30).
+  `ara-play-host::open_project` publishes before validation; export uses this inventory.
+- `ModuleSpec { name, dir, assembly, watch, hot, references, profile }` from private inputs or legacy `ara.module.toml`
   (`references = ["Core"]`, `profile = "gameplay" | "editor"`: the API allowlist, ARA05xx).
 - Binding design: native `Transform` keeps its checked pointer view. Every other engine
   component gets a generated typed struct and AOT-safe JSON codec. `World.Get/Read/Set`
@@ -53,7 +54,6 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
 - `EngineBindings` + `bind_component!`, `run` (`RunPool`/`RunWorker`), `value`, `codes`
   (`ARA0900`–`ARA0999`), `register_tick_thread()`.
 ## Reload levels (A13, R10 D1)
-
 - **L1** body edits of a hot module → EnC delta (no closures, state machines, constructors).
 - **L2** additive edits → EnC delta: new methods/operators/non-auto properties, fields and
   auto-properties on classes (no initializers), consts, new non-generic non-partial types,
@@ -64,9 +64,9 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   cold modules, debugger attached) → a new collectible ALC; columns migrate field by field.
 - **L4** `RELOAD_L4` + `ARA0926`: engine bindings (`Ara.Runtime.dll`) changed on disk, or a
   retired generation stays alive (`ARA0927`). The last good code keeps running; restarting
-  the play process from a snapshot is the play process owner's job.
+  the play process from a snapshot is the play process owner's job. Inventory membership
+  changes also restart from the shared module graph, after validating its candidate.
 ## How it fits together
-
 - C# registers each atomic reload through `HostApi::register_modules` (a JSON array, deps
   first): `host/register.rs` validates every descriptor against the view earlier ones
   produce, then commits them all, or nothing changes. Types go into the Schema DB as dynamic
@@ -94,7 +94,7 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
 - Accessors for owners: `module_components`, `module_resources`, `owned_ids(world)`
   (every ID the host added, for ara-sim storage checks), `read_resource`/`write_resource`
   (JSON) and `module_types` (each module as a `*.types.json` document; the play service
-  keeps `<module>/<Name>.types.json` current so hosts validate C# components).
+  publishes `.ara/scripts/<module>/<Name>.types.json` before scene validation).
 - Commands: `play.command` runs `execute_command` between ticks; the play service
   publishes `command_catalog()` to the host (`Cx::publish_commands`), so `schema.list`
   shows C# commands next to the registry's.

@@ -42,6 +42,7 @@ fn project_quality_changes_only_inherited_texture_inputs() {
     let cancel = Cancellation::default();
     let inherited = snapshot(root.path(), &source, &worker, &cancel).unwrap();
     assert_eq!(inherited.preset, CookPreset::Balanced);
+    std::fs::create_dir_all(root.path().join("settings")).unwrap();
     std::fs::write(
         root.path().join(PROJECT_IMPORT_SETTINGS_FILE),
         ProjectImportSettings {

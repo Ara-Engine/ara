@@ -1,7 +1,6 @@
 # ara-hub-service
 
-User-level Ara Hub backend (D25), shared by the native Hub and global MCP.
-One service per config directory, enforced by an OS lock; projects run separately.
+User-level Ara Hub backend (D25), shared by the native Hub and global MCP. An OS lock enforces one service per config directory; projects run separately.
 
 ## Public API
 
@@ -33,9 +32,8 @@ One service per config directory, enforced by an OS lock; projects run separatel
 
 ## Wire contract for the Hub UI
 
-Connect using `ara_rpc::Client::for_project(config_dir.join("hub"))` (the reused
-transport discovery is `hub/.ara/daemon.json`; do not render its token). All
-params/results use camelCase. No engine session is needed for `hub.*`.
+Connect using `ara_rpc::Client::for_project(config_dir.join("hub"))`; discovery is
+`hub/.ara/daemon.json` (never render its token). Params/results use camelCase; `hub.*` needs no engine session.
 
 | Method | Params | Result / what to render |
 | --- | --- | --- |
@@ -46,14 +44,22 @@ params/results use camelCase. No engine session is needed for `hub.*`.
 | `hub.templates` | `{}` | `{templates:[{id,name,thumbnail,description?,setup?,engineVersion?}]}`; source engine pins for Create |
 | `hub.create` | `{template,name,path,engineVersion?,dryRun?}` | New registered project card; path must be absolute and not exist; missing parents are created. Every problem is one diagnostic whose `location.path` is the field (`name`, `path`, `template`, `engineVersion`); `dryRun` returns `{valid,path}` without creating |
 | `hub.open` | `{project,headless?}` | Status; false/default opens native editor, true starts headless |
+| `hub.project.currentEngine` / `hub.project.useCurrentEngine` | `{project,headless?}` | First: read-only `{engineVersion,available,registered}`; second: explicitly accepted typed pin job, using migration status, no direct marker write |
+| `hub.project.migration.plan` | `{project}` | Read-only background `MigrationJob`; complete `result` has `{needsMigration,fromVersion,toVersion,authoredRoot,planToken,operations,previewTree}` |
+| `hub.project.migrate` | `{project,planToken}` | Explicit typed migration job; complete only after files/history persist and the bootstrap authority closes |
+| `hub.project.migration.status` | `{project,job}` | Latest `{id,project,kind,state,phase,cancellable,progress,result,diagnostics}`; `kind:plan|migrate|pin`, `state:running|complete|failed|cancelled` |
+| `hub.project.migration.cancel` | `{project,job}` | Cancel before the typed commit; refusal means keep waiting for files/history to finish |
 | `hub.close` | `{project}` | Closed status after graceful flush/shutdown |
 | `hub.status` | `{project?}` | One status or `{projects:[status],revision,build}`; build is the service executable's SHA-256 |
 | `hub.engines` | `{}` | `{engines:[{version,executable,editor,managed}]}`; installed builds for each project's pin picker; managed builds support Uninstall |
 | `hub.engine.register` | `{engine:{version,executable,editor}}` | Persist an installed version; executable paths must exist and be absolute |
 | `hub.engine.remove` | `{engine:{version,executable,editor}}` | Remove only that exact build; reject while pinned projects are open |
 | `hub.engines.available` | `{channel?:"stable"|"preview"}` | `{releases:[signed manifest],status,checking,repo,channel}`; first call starts a background check; preview includes stable |
-| `hub.engine.install` | `{version,hubVersion?}` | Job `{id,kind,version,state,progress:{received,total},result,error}` immediately; verification/extraction run off the authority thread |
-| `hub.engine.uninstall` | `{version}` | `{removed:version}`; Hub-managed files only, rejects open pins |
+| `hub.engine.install` / `hub.engine.installCurrent` | `{version,hubVersion?}` | Background signed install job; explicit `installCurrent` accepts only the current SDK, verifies `[4]`, and replaces its same-version managed build or external registration with rollback (external files stay); ordinary install never replaces |
+| `hub.engine.preflight` | `{version}` | Read-only destination, channel, download bytes and estimated required/available space; exact expansion checked before extraction |
+| `hub.engine.repair` | `{version,hubVersion?}` | Signed same-version reinstall job (`kind:repair`); close pinned projects first; stage, swap and register with rollback |
+| `hub.engine.uninstall` | `{version}` | Job (`kind:uninstall`); prepares off-thread, commits removal, cleans off-thread; Hub-managed files only, rejects open pins |
+| `hub.engine.uninstall.preflight` | `{version}` | Cancellable read-only job (`kind:uninstall-preflight`, phase `inspecting`); complete result `{version,destination,bytes,files}` estimates regular-file logical size from background metadata traversal; no uninstall or registry mutation |
 | `hub.downloads` | `{}` | `{jobs:[job]}`; state is `running|complete|failed|cancelled`, error is a catalogued diagnostic |
 | `hub.download.cancel` | `{job:id}` | `{cancelling:id}`; removes partial data before commit |
 | `hub.releases.check` | `{}` | `{checking:true}`; refresh per-page ETags and signed cache |
@@ -64,15 +70,13 @@ params/results use camelCase. No engine session is needed for `hub.*`.
 | `hub.subscribe` | `{}` | `{revision}`; subsequent `hub.changed {revision,kind,project}` notifications |
 | `hub.unsubscribe` | `{}` | `{ok:true}`; also automatic on socket close |
 
-`project` accepts an exact ID/path or one case-insensitive name. Ambiguous names
-list IDs/paths for disambiguation. Global MCP only targets registered projects. Status:
+`project` accepts an exact ID/path or one case-insensitive name; ambiguous names list IDs/paths. Global MCP targets registered projects. Status:
 `{project:card,state:"open"|"closed",pid,port,headless}`; closed fields are null.
 Use state, not stale discovery files, for the open indicator. A change notification
 invalidates the appropriate view: refresh projects/status/activity; revision is a
 monotonic counter within this Hub run, not an on-disk revision. Subscribe before
 initial reads to avoid missing a change. No replay history is promised; refresh
-all views after reconnect. Do not render lifecycle calls as approval or review.
-
+all views after reconnect. The selected CLI's bounded hidden `--json capabilities` declares project layouts; invalid/missing declarations mean `[3]`. Only the Hub delegates old projects to their old `[3]` engine. A capable `[4]` engine returns ARA1914 for an old project and shows Migrate/Cancel. A current `content/` project pinned to an incapable engine returns ARA1915 and shows Use current engine (or Install current engine)/Cancel. Typed migration/pin completion refreshes the registry from the saved marker. `hub.changed {kind:"migration"}` refreshes jobs; normal current Host opening stays strict.
 `hub.changed {kind:"closed",project:id,revision}` is emitted when the authority
 process exits (Hub Close, window X, crash or kill). Windows observers block on
 process/cancellation kernel objects; discovery-file polling is not an exit signal.
@@ -82,6 +86,12 @@ Activity uses persistent connections at 2 s intervals while subscribed/open;
 unchanged snapshots emit nothing. GUI clients run all calls off their input thread.
 
 `hub.changed` kinds `releases` and `progress` invalidate release/job snapshots.
+Jobs include `phase`, `cancellable` and optional `disk {availableBytes,requiredBytes}`.
+Uninstall cancels before commit; `removing` has committed and cannot be cancelled.
+Retry the same uninstall to clean a retained managed tombstone after cleanup fails.
+Uninstall preflight rejects external builds, open pins and the service's own engine.
+It parses only the ownership marker, never follows links/reparse points or reads payloads; `bytes` estimates logical size (allocation/compression/hardlinks differ).
+Cancellation only stops inspection. Actual Uninstall revalidates ownership/pins at commit.
 `hub.engines` adds `managed:bool` (external registrations are unregister-only).
 Offline/rate-limited feeds carry a clear status; signatures are reverified on cache
 reads. Install roots: LOCALAPPDATA/Ara/Engines/version. Cancelled/tampered extraction
@@ -90,10 +100,7 @@ never registers. Imported project pins may name a missing semantic version.
 Render projects, Create, lifecycle, installed engines and activity. Errors are
 standard RpcError diagnostics: show messages and fixes. UI: `crates/ara-hub`.
 
-`hub.resolve {project}` returns a card. `hub.catalog {project?}` returns the running project catalog or the core method
-catalog without opening any project. `hub.call {project,method,params}` opens a
-registered project headless on demand and forwards to its authority. Each Hub
-socket/project pair has a distinct downstream socket and session attribution.
+`hub.resolve {project}` returns a card. `hub.catalog {project?}` returns a guarded running-project or core catalog without opening. `hub.call {project,method,params}` checks the selected engine's layout capability, opens it headless and forwards to its authority. Each socket/project pair has distinct downstream attribution.
 MCP responses include `notices` from participant-specific conflict events;
 normal replica op streams are filtered so idle agents do not accumulate them.
 `hub.shutdown {onlyIfIdle?:true}` returns `{stopping:false,reason:"busy"}` if projects
@@ -121,28 +128,21 @@ A failed custom template can leave its newly created destination for inspection.
 
 ## One-time global MCP installation
 
-`ara hub install-mcp --client claude|codex` prints Claude JSON / Codex TOML with
-the current executable's absolute path and `args:["mcp"]`; PATH is unnecessary.
-Hub displays/copies these instructions; it never edits the agent's config files.
-Register existing projects first with `ara hub add <absolute-path>`; create with
-`ara hub create <absolute-path> --name Name --template blank`.
-Use `ara_projects {action:"list"}` then `ara_session {action:"open",project:"Name"}`
-or give `project` on any existing tool. Sessions never cross projects.
-Per-project compatibility: `ara mcp --root <project>` and optional `.mcp.json`
-(`args:["mcp","--root","."]`) retain the standalone project daemon behavior.
+`ara hub install-mcp --client claude|codex` prints Claude JSON / Codex TOML using the current executable's absolute path and `args:["mcp"]`; PATH is unnecessary. Hub displays/copies it without editing client config files.
+Register with `ara hub add <absolute-path>`; create with `ara hub create <absolute-path> --name Name --template blank`.
+Use `ara_projects {action:"list"}` then `ara_session {action:"open",project:"Name"}`, or give `project` on any tool. Sessions never cross projects.
+Per-project `ara mcp --root <project>` and optional `.mcp.json` (`args:["mcp","--root","."]`) retain standalone daemon behavior.
 
 ## Tests and gates
 
 Every test/capture/manual check uses a scratch ARA_CONFIG_DIR under target/: the
 tracked `.cargo/config.toml` sets `target/ara-config` for `cargo test`/`cargo run`
 (an explicit value wins). Config-isolation tests fail if it resolves elsewhere. Test cleanup
-closes projects, shuts down the owned service and waits for discovery removal.
-Do not stop or alter another user's/service's profile.
+closes projects, shuts down the owned service and waits for discovery removal. Never alter another profile.
 
 `CARGO_BUILD_JOBS=2 cargo test -p ara-hub-service` covers registry/templates and release jobs.
-`cargo test -p ara --test hub` runs real user Hub + global stdio MCP + two project
-daemons, concurrent clients, registry metadata, subscriptions, and install output.
-`cargo test -p ara --test engine` retains per-project MCP/HTTP coverage.
+`cargo test -p ara --test hub` covers a real Hub, global stdio MCP, two daemons, concurrent clients, registry metadata, subscriptions and install output.
+`cargo test -p ara --test engine` covers per-project MCP/HTTP.
 `tests/process_exit.rs` uses windowless editor-authority processes to cover all
 four exit paths, including stale discovery after crash/kill. Watcher cancellation
 joins its thread and never terminates the observed editor when the Hub stops.

@@ -38,6 +38,17 @@ pub fn path(path: &Path) -> String {
         .map_or(text.clone(), str::to_owned)
 }
 
+/// Display an executable's directory across fixture platforms; never use this for I/O.
+pub fn executable_directory(executable: &Path) -> String {
+    let text = path(executable);
+    match text.rfind(['/', '\\']) {
+        Some(0) => text[..1].into(),
+        Some(2) if text.as_bytes().get(1) == Some(&b':') => text[..3].into(),
+        Some(index) => text[..index].into(),
+        None => text,
+    }
+}
+
 /// Shorten to at most `max` characters, keeping both ends (`C:\Users\…\Outpost`).
 pub fn middle(text: &str, max: usize) -> String {
     let count = text.chars().count();
@@ -134,5 +145,19 @@ mod tests {
         assert_eq!(initials("my  game project"), "MG");
         assert_eq!(folder(" Space: Odyssey? "), "Space- Odyssey-");
         assert_eq!(unique("My project", |n| n == "My project"), "My project 2");
+    }
+
+    #[test]
+    fn executable_directories_are_visible_across_capture_platforms() {
+        assert_eq!(
+            executable_directory(Path::new(r"C:\Users\tester\Ara\0.0.2\ara.exe")),
+            r"C:\Users\tester\Ara\0.0.2"
+        );
+        assert_eq!(
+            executable_directory(Path::new("/opt/ara/0.0.2/ara")),
+            "/opt/ara/0.0.2"
+        );
+        assert_eq!(executable_directory(Path::new(r"C:\ara.exe")), r"C:\");
+        assert_eq!(executable_directory(Path::new("/ara")), "/");
     }
 }

@@ -15,9 +15,10 @@ fn render(hub: &Hub, size: [f32; 2], light: bool) -> Ui {
         thumbnail: &|_| None,
         anchor: Some([1000., 300., 32., 32.]),
         docs: &[],
+        dialog_close_hint: false,
     };
     let page = view::page(hub, &ctx);
-    let mut ui = Ui::editor(&page.markup, view::CSS, size).expect("markup and stylesheet");
+    let mut ui = Ui::editor(&page.markup, view::stylesheet(), size).expect("markup and stylesheet");
     let theme = if light {
         EditorTheme::Light
     } else {
@@ -44,6 +45,7 @@ fn agent_setup_copy_commands_use_the_verified_path_with_shell_quoting() {
         thumbnail: &|_| None,
         anchor: None,
         docs: &[],
+        dialog_close_hint: false,
     };
     let path = executable.to_string_lossy();
     let quoted = if cfg!(windows) {
@@ -98,6 +100,7 @@ fn first_run_has_no_demo_update_or_missing_art_and_template_titles_are_complete(
                 thumbnail: &|_| None,
                 anchor: None,
                 docs: &[],
+                dialog_close_hint: false,
             },
         );
         assert!(
@@ -124,7 +127,13 @@ fn every_view_lays_out_in_both_themes_and_sizes() {
                     .iter()
                     .any(|n| n.element.attrs.get("text").map(String::as_str) == Some(view.title()));
                 assert!(title, "{view:?} shows its title");
-                assert!(ui.find(&format!("nav-{view:?}").to_lowercase()).is_some());
+                if view == View::Create {
+                    assert!(ui.find("create-back").is_some());
+                    assert!(ui.find("nav-projects").is_none(), "creation is a full page");
+                } else {
+                    assert!(ui.find(&format!("nav-{view:?}").to_lowercase()).is_some());
+                    assert!(ui.find("nav-create").is_none());
+                }
             }
             hub.intent(Intent::Navigate(View::Projects));
             hub.intent(Intent::Layout(Layout::List));
@@ -134,6 +143,57 @@ fn every_view_lays_out_in_both_themes_and_sizes() {
             assert!(ui.find("menu-remove").is_some(), "overflow menu");
             hub.intent(Intent::Menu(None));
             hub.intent(Intent::Layout(Layout::Grid));
+        }
+    }
+}
+
+#[test]
+fn hub_brand_and_fullpage_creation_fit_both_themes_and_capture_sizes() {
+    let mut hub = Hub::new(Prefs::default(), std::env::temp_dir(), None);
+    capture::seed(&mut hub);
+    for size in [[1440., 900.], [1280., 720.]] {
+        for light in [false, true] {
+            hub.intent(Intent::Navigate(View::Projects));
+            let ui = render(&hub, size, light);
+            assert!(ui.find("nav-create").is_none());
+            assert!(
+                ui.nodes
+                    .iter()
+                    .any(|node| node.element.attrs.get("src").map(String::as_str)
+                        == Some("brand-hub"))
+            );
+            assert!(!ui.nodes.iter().any(|node| {
+                node.element
+                    .attrs
+                    .get("src")
+                    .is_some_and(|src| src.contains("wordmark"))
+            }));
+            hub.intent(Intent::Navigate(View::Create));
+            let ui = render(&hub, size, light);
+            assert!(ui.find("nav-projects").is_none());
+            for id in [
+                "create-back",
+                "create-name",
+                "create-destination",
+                "create-engine",
+                "create-submit",
+            ] {
+                let node = &ui.nodes[ui.find(id).expect(id)];
+                let rect = node.rect;
+                assert!(
+                    rect.x >= 0.
+                        && rect.y >= 0.
+                        && rect.x + rect.w <= size[0] + 0.5
+                        && rect.y + rect.h <= size[1] + 0.5,
+                    "{id} must fit on {size:?}: {rect:?}"
+                );
+            }
+            assert_eq!(
+                ui.nodes[ui.find("create-engine").expect("engine")]
+                    .element
+                    .tag,
+                "dropdown"
+            );
         }
     }
 }

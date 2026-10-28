@@ -19,6 +19,51 @@ fn percentile(samples: &mut [f64], p: f64) -> f64 {
     samples[((samples.len() as f64 * p).ceil() as usize).clamp(1, samples.len()) - 1]
 }
 
+#[test]
+fn one_shot_run_and_capture_work_headless_over_mcp() {
+    let dir = support::repo()
+        .join("target/preview4-tests")
+        .join(format!("headless-automation-{}", std::process::id()));
+    support::copy(&Path::new(env!("CARGO_MANIFEST_DIR")).join("demo"), &dir);
+    let mut agent = Agent::open(&dir, 440, |config| {
+        config.pool.windowed = 0;
+        config.pool.headless = 0;
+    });
+    let first = agent.tool("ara_run", json!({"ticks":12,"seed":7}));
+    assert_eq!(first["tick"], 12, "{first}");
+    assert!(
+        first["logs"].is_array() && first["diagnostics"].is_array(),
+        "{first}"
+    );
+    assert_eq!(agent.play("status", json!({}))["worlds"], json!([]));
+    let second = agent.tool("ara_run", json!({"duration":0.2,"seed":7}));
+    assert_eq!(second["tick"], 12, "{second}");
+    assert_eq!(first["hash"], second["hash"]);
+    let image = dir.join(".ara/automation.png");
+    let captured = agent.tool("ara_capture", json!({"camera":"Camera","path":image,"width":96,"height":64,"preset":"low","marks":0,"seed":7}));
+    assert_eq!(captured["tick"], 0, "{captured}");
+    let pixels = image::open(&image).unwrap().to_rgba8();
+    assert_eq!(pixels.dimensions(), (96, 64));
+    let first_pixel = pixels.get_pixel(0, 0);
+    assert!(
+        pixels.pixels().any(|p| p != first_pixel),
+        "capture must contain rendered scene content"
+    );
+    let bad = agent.raw("ara_capture", json!({"camera":"no such camera","path":dir.join(".ara/bad.png"),"width":64,"height":64,"preset":"low"}));
+    assert_eq!(bad["isError"], true, "{bad}");
+    assert_eq!(
+        agent.play("status", json!({}))["worlds"],
+        json!([]),
+        "failed captures also release their world"
+    );
+    let tested = agent.tool(
+        "ara_test",
+        json!({"steps":[{"do":"step","ticks":2},{"do":"hash"}],"determinism":true}),
+    );
+    assert_eq!(tested["passed"], true, "{tested}");
+    assert_eq!(tested["deterministic"], true, "{tested}");
+}
+
 #[cfg(windows)]
 #[test]
 #[ignore = "opens a player window and posts its native close event"]
@@ -57,7 +102,9 @@ fn agent_plays_patches_keeps_and_verifies_the_demo_over_mcp() {
     let captures =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/runtime-polish/captures");
     // An importer upgrade must not fail Play: record an older glTF importer version.
-    let sidecar = dir.join("assets/fox/Fox.glb.import.json");
+    let sidecar = dir
+        .join(ara_doc::AUTHORING_ROOT)
+        .join("assets/fox/Fox.glb.import.json");
     let current = std::fs::read_to_string(&sidecar).unwrap();
     let recorded =
         serde_json::from_str::<Value>(&current).unwrap()["records"]["i_settings"]["version"]

@@ -72,29 +72,3 @@ pub(super) fn source(namespace: &str, name: &str, template: Template) -> String 
     };
     format!("using Ara;\n\nnamespace {namespace};\n\n{body}")
 }
-
-pub(super) fn ide_project(namespace: &str, runtime: Option<&Path>) -> String {
-    let escape = |s: String| {
-        s.replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-    };
-    let reference = runtime.map(|dir| {
-        let path = escape(dir.join("Ara.Runtime.dll").display().to_string());
-        format!("<ItemGroup><Reference Include=\"Ara.Runtime\"><HintPath>{path}</HintPath></Reference></ItemGroup>")
-    }).unwrap_or_default();
-    let generator = runtime
-        .and_then(Path::parent)
-        .and_then(Path::parent)
-        .map(|dir| dir.join("Ara.CompileServer/release/Ara.Generators.dll"))
-        .filter(|path| path.is_file())
-        .map(|path| {
-            let path = escape(path.display().to_string());
-            format!("<ItemGroup><Analyzer Include=\"{path}\" /></ItemGroup>")
-        })
-        .unwrap_or_default();
-    format!(
-        "<!-- Ara compiles this module; this project provides IDE completion. -->\n<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><Nullable>enable</Nullable><AllowUnsafeBlocks>true</AllowUnsafeBlocks><AssemblyName>{namespace}</AssemblyName></PropertyGroup>{reference}{generator}</Project>\n"
-    )
-}

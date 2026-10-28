@@ -47,6 +47,15 @@ impl Window {
             report["presentation"] = json!("noPresent");
         }
         report["presentation_settings"] = self.presentation_settings();
+        if self.options.lab_idle {
+            report["lab"] = json!({"simulation":"frozen","idle_submits":false});
+            #[cfg(feature = "fidelity-lab")]
+            {
+                report["lab"]["params"] = presenter
+                    .renderer()
+                    .map_or(Value::Null, |r| r.gpu().lab_params().report());
+            }
+        }
         report["gpu_submission_counters"] = presenter.renderer().map_or(Value::Null, |renderer| {
             json!({"scope":"Cumulative renderer backend only; excludes native WSI and UI submissions",
                 "backend":renderer.gpu().submission_stats()})
@@ -64,6 +73,10 @@ impl Window {
             json!({"extension":info.timestamp_clock,"period_ns":info.timestamp_period_ns,"valid_bits":info.timestamp_valid_bits})
         });
         report["completed"] = json!(state == Outcome::Ready);
+        report["pass_presence"] = self
+            .pass_guard
+            .as_ref()
+            .map_or(Value::Null, |guard| guard.report());
         self.update_run(&mut report);
         report["arrival"] = self.arrival.report();
         if self.options.perf_wait_ready {

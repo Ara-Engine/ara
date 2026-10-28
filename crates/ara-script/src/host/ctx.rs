@@ -117,7 +117,7 @@ impl HostCtx {
     }
 
     /// The published scope, if this thread owns it.
-    fn current(&self) -> Option<&Scope<'static>> {
+    pub(super) fn current(&self) -> Option<&Scope<'static>> {
         let p = self.scope.load(Ordering::Acquire);
         // SAFETY: a non-null pointer is a live `Scope` published by `with_scope`, which
         // outlives the callback; only its owning thread (checked below) dereferences it.
@@ -141,6 +141,7 @@ impl HostCtx {
             compile_state: host_compile_state,
             component_json: host_component_json,
             query_entities: host_query_entities,
+            scene_entities: super::scene::scene_entities,
             input_axis: host_input_axis,
             input_player: host_input_player,
             navigate: host_navigate,
@@ -152,14 +153,14 @@ impl HostCtx {
 
 /// # Safety
 /// `ctx` must be the `HostCtx` pointer from `HostInit`, which outlives the runtime.
-unsafe fn ctx<'a>(ctx: *mut c_void) -> &'a HostCtx {
+pub(super) unsafe fn ctx<'a>(ctx: *mut c_void) -> &'a HostCtx {
     // SAFETY: guaranteed by the caller.
     unsafe { &*ctx.cast::<HostCtx>() }
 }
 
 /// # Safety
 /// `ptr`/`len` must describe readable bytes (or `len == 0`).
-unsafe fn bytes<'a>(ptr: *const u8, len: u32) -> &'a [u8] {
+pub(super) unsafe fn bytes<'a>(ptr: *const u8, len: u32) -> &'a [u8] {
     if len == 0 || ptr.is_null() {
         return &[];
     }

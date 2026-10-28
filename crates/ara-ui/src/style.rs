@@ -103,7 +103,7 @@ impl Computed {
         }
         // Placed by `Ui::frame` (`popover`); a block keeps its rows at natural height
         // when the popover is clamped and scrolls.
-        let popover = tag == "popover";
+        let popover = matches!(tag, "popover" | "tooltip");
         if popover {
             layout.display = Display::Block;
             layout.position = Position::Absolute;

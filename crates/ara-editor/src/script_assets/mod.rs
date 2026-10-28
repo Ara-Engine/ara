@@ -2,6 +2,7 @@
 mod files;
 mod jobs;
 mod publish;
+mod source_jobs;
 mod templates;
 pub(crate) mod worker;
 use ara_host::{Cx, Method, Service, parse};
@@ -19,7 +20,7 @@ use std::{collections::BTreeMap, path::Path};
 struct ScriptCreate {
     /// Calling editor or agent session.
     session: String,
-    /// Project-relative C# source path; the class name follows its file stem.
+    /// Authored-root-relative or storage C# path; the class name follows its file stem.
     path: String,
     /// behaviour (default) or system. Systems cannot attach to entities.
     template: Option<templates::Template>,
@@ -37,7 +38,7 @@ struct ScriptCreate {
 struct NewScript {
     /// Calling editor or agent session.
     session: String,
-    /// Project-relative C# path; defaults to an unused Assets/Gameplay/NewBehaviour.cs.
+    /// C# reference or storage path; defaults to an unused Assets/Gameplay/NewBehaviour.cs.
     path: Option<String>,
     /// Behaviour by default; Systems cannot be attached to entities.
     template: Option<templates::Template>,
@@ -76,6 +77,7 @@ struct FolderCreate {
 
 #[derive(Default)]
 pub(crate) struct ScriptService {
+    authoring: source_jobs::Authoring,
     jobs: BTreeMap<String, jobs::Compile>,
     watch_session: Option<String>,
     signature: Option<u64>,
@@ -139,7 +141,11 @@ impl Service for ScriptService {
                             format!("Assets/Gameplay/NewBehaviour{n}.cs")
                         }
                     })
-                    .find(|path: &String| !cx.root().join(path).exists())
+                    .find(|path: &String| {
+                        source_jobs::storage_path(path).is_ok_and(|storage| {
+                            !self.pending_source(cx, &storage) && !cx.root().join(storage).exists()
+                        })
+                    })
                     .expect("a finite project has an unused script name")
             });
             return self.call(cx, "script.create", json!({"session":p.session,"path":path,"template":p.template,"attachTo":p.attach_to,"doc":p.doc}));
@@ -154,40 +160,26 @@ impl Service for ScriptService {
         }
         if method == "script.rename" {
             let p: ScriptRename = parse(params)?;
-            let old = script_name(&p.path).map_err(fail)?;
-            let new = script_name(&p.to).map_err(fail)?;
-            let old_path = files::checked(cx.root(), &p.path).map_err(fail)?;
-            let new_path = files::checked(cx.root(), &p.to).map_err(fail)?;
-            if old_path.parent() != new_path.parent() {
-                return Err(fail("Rename keeps the script in its module folder".into()));
+            let from = source_jobs::storage_path(&p.path)?;
+            let path = source_jobs::storage_path(&p.to)?;
+            script_name(&from).map_err(fail)?;
+            script_name(&path).map_err(fail)?;
+            let attach = p.attach_to.unwrap_or_default();
+            if !attach.is_empty() && cx.session().is_none_or(|s| !s.allows(Scope::EditScene)) {
+                return Err(fail("Attaching scripts requires edit:scene scope".into()));
             }
-            let text = std::fs::read_to_string(&old_path).map_err(|e| fail(e.to_string()))?;
-            let text = rename_identifier(&text, old, new);
-            let ops = if p.path == p.to {
-                Vec::new()
-            } else {
-                vec![FileOp::Rename {
-                    from: p.path.clone(),
-                    path: p.to.clone(),
-                    text,
-                }]
-            };
-            files::apply(cx.root(), &ops).map_err(fail)?;
-            let (doc, attach) = self.take_path(cx, &p.path).unwrap_or_default();
-            let job = self
-                .start(
-                    cx,
-                    &p.session,
-                    &p.to,
-                    p.doc.or(doc),
-                    p.attach_to.unwrap_or(attach),
-                )
-                .map_err(fail)?;
-            return Ok(json!({"path":p.to,"class":new,"files":ops,"job":job}));
+            return self.queue_source(
+                cx,
+                p.session,
+                source_jobs::Action::Rename { from, path },
+                p.doc,
+                attach,
+                true,
+            );
         }
-        let p: ScriptCreate = parse(params)?;
-        let name = script_name(&p.path).map_err(fail)?;
-        let path = files::checked(cx.root(), &p.path).map_err(fail)?;
+        let mut p: ScriptCreate = parse(params)?;
+        p.path = source_jobs::storage_path(&p.path)?;
+        script_name(&p.path).map_err(fail)?;
         let template = p.template.unwrap_or_default();
         let attach = p.attach_to.unwrap_or_default();
         if !attach.is_empty() && cx.session().is_none_or(|s| !s.allows(Scope::EditScene)) {
@@ -220,59 +212,20 @@ impl Service for ScriptService {
                 return Err(fail("An attachTo entity does not exist".into()));
             }
         }
-        let parent = path
-            .parent()
-            .ok_or_else(|| fail("Script needs a folder".into()))?;
-        let module = parent
-            .ancestors()
-            .take_while(|p| p.starts_with(cx.root()))
-            .find(|p| p.join("ara.module.toml").is_file());
-        let (dir, namespace) = if let Some(dir) = module {
-            let spec = ara_script::ModuleSpec::from_dir(dir).map_err(|d| vec![d])?;
-            (dir.to_path_buf(), spec.name)
-        } else {
-            (
-                parent.to_path_buf(),
-                templates::module_name(cx.root(), parent),
-            )
-        };
-        let relative = |p: &Path| {
-            p.strip_prefix(cx.root())
-                .unwrap_or(p)
-                .to_string_lossy()
-                .replace('\\', "/")
-        };
-        let mut ops = Vec::new();
-        if !dir.join("ara.module.toml").exists() {
-            ops.push(FileOp::Create {
-                path: relative(&dir.join("ara.module.toml")),
-                text: format!("[module]\nname = \"{namespace}\"\nhot = true\n"),
-            });
-        }
-        let ide = dir.join(format!("{namespace}.csproj"));
-        if !ide.exists() {
-            let runtime = ara_play_host::ScriptPaths::locate(cx.root()).map(|p| p.host_dir);
-            ops.push(FileOp::Create {
-                path: relative(&ide),
-                text: templates::ide_project(&namespace, runtime.as_deref()),
-            });
-        }
-        ops.push(FileOp::Create {
-            path: p.path.clone(),
-            text: templates::source(&namespace, name, template),
-        });
-        files::apply(cx.root(), &ops).map_err(fail)?;
-        let job = if p.compile.unwrap_or(true) {
-            Some(
-                self.start(cx, &p.session, &p.path, doc, attach)
-                    .map_err(fail)?,
-            )
-        } else {
-            None
-        };
-        Ok(json!({"path":p.path,"class":name,"namespace":namespace,"files":ops,"job":job}))
+        self.queue_source(
+            cx,
+            p.session,
+            source_jobs::Action::Create {
+                path: p.path,
+                template,
+            },
+            doc,
+            attach,
+            p.compile.unwrap_or(true),
+        )
     }
     fn tick(&mut self, cx: &mut Cx<'_>) {
+        self.poll_sources(cx);
         self.poll(cx);
         self.watch(cx);
     }
@@ -280,7 +233,7 @@ impl Service for ScriptService {
 
 fn script_name(path: &str) -> Result<&str, String> {
     let file = Path::new(path);
-    if file.components().any(|part|matches!(part,std::path::Component::Normal(name) if name.to_str().is_some_and(|name|name.starts_with('.') || matches!(name,"bin"|"obj"|"target"|"artifacts"|"node_modules"|"spikes")))) {
+    if file.components().any(|part|matches!(part,std::path::Component::Normal(name) if name.to_str().is_some_and(|name|name.starts_with('.')))) {
         return Err("Scripts must be outside hidden and generated-output folders".into());
     }
     let name = file

@@ -6,8 +6,8 @@ installed distribution. The setup stub both installers start with is the
 `ara-setup` crate (window, silent CLI, same-version replace; see its AGENTS.md);
 packaging appends the portable ZIP to `target/release/ara-setup.exe`.
 
-`cargo run -p ara-release -- package --version 0.0.1-alpha`
-`cargo run -p ara-release -- notes --version 0.0.1-alpha`
+`cargo run -p ara-release -- package --version <workspace.package.version>`
+`cargo run -p ara-release -- notes --version <workspace.package.version>`
 `cargo run -p ara-release -- smoke`
 `smoke --artifacts <existing release-dist>` tests packages without rebuilding them.
 Engine packaging/`notes` copy root RELEASE_NOTES.md verbatim and require its version header.
@@ -54,8 +54,8 @@ suppresses PATH/registry/Start-menu writes and registers the engine offline with
 starting a Hub service; smoke also isolates LOCALAPPDATA so its
 managed Hub never touches an existing user installation. Smoke
 captures every Hub page from the installed binary. Packaged samples get their
-`thumbnail.png` from `evidence/<main-scene>-player.png` (evidence is excluded).
-Sample kits (`assets/kit/*`, git-ignored) are generated into the staged copy by
+`thumbnail.png` from repository `evidence/samples/<sample>/<main-scene>-player.png`.
+Sample kits (`<authored-root>/assets/kit/*`, git-ignored) are generated into the staged copy by
 `ara-samples --samples <stage>/templates kits <name>`, so the checkout never drifts.
 Then `references::check` gates every template: each `@path#id`, glTF URI, sidecar
 source, look `scene` and project `main` must resolve inside it, or packaging fails
@@ -63,6 +63,8 @@ naming `document -> missing path` (`ara-release references <dir>` runs it alone)
 Smoke opens every installed template in the installed editor (`--frames 20`).
 It also creates Starter, queues `build.current` in an offscreen installed editor,
 checks the resolved PDB hash, and requires verified `ARA_RESULT` after 8 game ticks.
+The game launcher comes from `distribution.json` `entryPoint`. Smoke rejects
+unbranded launchers and private artifacts inside the upload folder; captures stay in `report/`.
 That flow uses a human session to gracefully stop its owned editor authority.
 Smoke invokes uninstall.cmd (the Apps entry point), requires exit 0, and checks
 projects, settings, crash reports and user-added install files survive. The script

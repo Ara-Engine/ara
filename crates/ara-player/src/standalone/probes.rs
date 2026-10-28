@@ -38,7 +38,7 @@ fn native_game_ui_retires_before_the_device_when_a_frame_returns_an_error() -> R
             "markup":"<ui id=\"game\"><text id=\"caption\" text=\"Live scene\"/></ui>","stylesheet":"","bindings":[]
         }))?;
         let window = owner.window.as_mut().context("window")?;
-        window.game_ui = Some(crate::game_ui::Surface::plain(&source, [160, 90])?);
+        window.game_ui = Some(crate::game_ui::Surface::plain(&source, [160, 90], 1.0)?);
         window.present(&mut owner.presenter, &crate::device::warm_frame(), || {
             Ok(ara_runtime_render::fidelity::native::Content::default())
         })?;
@@ -74,7 +74,7 @@ fn frames_in_flight_with_game_ui_and_swapchain_stay_validation_clean() -> Result
     // Scene, UI composite and swapchain blit all overlap the next frame here.
     for frame in 0..6 {
         if frame == 3 {
-            window.game_ui = Some(crate::game_ui::Surface::plain(&source, [160, 90])?);
+            window.game_ui = Some(crate::game_ui::Surface::plain(&source, [160, 90], 1.0)?);
         }
         window.present(&mut owner.presenter, &crate::device::warm_frame(), || {
             Ok(ara_runtime_render::fidelity::native::Content::default())

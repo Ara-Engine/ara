@@ -1,0 +1,37 @@
+[package]
+name = "ara-hotpatch"
+description = "Development-only Rust patch boundaries and conservative source compatibility checks."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+runtime = ["dep:subsecond", "dep:dioxus-cli-config", "dep:tungstenite", "dep:ara-diag", "dep:windows-sys"]
+
+[dependencies]
+anyhow.workspace = true
+blake3 = { workspace = true, default-features = true }
+quote.workspace = true
+proc-macro2.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+syn = { workspace = true, features = ["visit", "visit-mut"] }
+ara-diag = { path = "../ara-diag", optional = true }
+subsecond = { version = "0.7.10", optional = true }
+dioxus-cli-config = { version = "0.7.10", optional = true }
+tungstenite = { workspace = true, features = ["handshake"], optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, optional = true, features = ["Win32_Foundation", "Win32_System_Threading"] }
+
+[lints]
+workspace = true
+
+[[example]]
+name = "overhead"
+required-features = ["runtime"]

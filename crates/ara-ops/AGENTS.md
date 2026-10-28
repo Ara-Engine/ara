@@ -29,7 +29,8 @@ and the op stream for the Engine Protocol. Depends on ara-doc, ara-schema, ara-d
 - `restore(txn, apply)`: put a journaled transaction back into history after a
   restart (same ID and revisions); `apply` re-applies its ops first.
 - `restore_documents(txn, documents)`: replay only the unsaved files of a
-  transaction interrupted during a multi-document flush, retaining full history.
+  transaction interrupted during a multi-document flush, retaining full history;
+  file ops recover separately in the host. `observe_file(path, state)` publishes worker observations.
 - `load_doc(path, doc)` / `unload_doc(id)`: a document file appeared or was
   deleted. Not edits: no ops are recorded.
 - `load_doc_with_asset_path(save_path, doc, source_path)`: load sidecar settings
@@ -66,7 +67,7 @@ and the op stream for the Engine Protocol. Depends on ara-doc, ara-schema, ara-d
 - History is unbounded in memory. The on-disk journal, review state
   (applied/accepted/reverted) and checkpoints live in `ara-host`, which drives
   `restore` on startup.
-- `restore` does not rebuild redo stacks.
+- Live commits and `restore` share undo/redo stack transitions; journal replay preserves both stacks and new-edit invalidation.
 
 ## Testing
 

@@ -28,6 +28,7 @@ fn main() -> Result<()> {
                 source: "landscape.slang".into(),
                 entries: BTreeMap::from([(entry.into(), Stage::Compute)]),
                 state: RenderState::default(),
+                defines: BTreeMap::new(),
             },
         );
     }
@@ -92,6 +93,7 @@ fn main() -> Result<()> {
                     depth_write,
                     blend: false,
                 },
+                defines: BTreeMap::new(),
             },
         );
     }

@@ -40,7 +40,7 @@ pub fn run(samples: &Path, request: &Request<'_>) -> Result<Value> {
 }
 
 fn capture(root: &Path, request: &Request<'_>) -> Result<Value> {
-    let output = root.join(".scratch/editor");
+    let output = root.join(".ara/samples/editor");
     let _ = std::fs::remove_dir_all(&output);
     // Open it as a fresh clone does: no local journal, so the build's agent edits are
     // plain content rather than an unreviewed overlay (agents cannot accept them).
@@ -56,8 +56,10 @@ fn capture(root: &Path, request: &Request<'_>) -> Result<Value> {
             "--output",
         ])
         .arg(&output)
-        .stdout(std::fs::File::create(root.join(".scratch/editor.log"))?)
-        .stderr(std::fs::File::create(root.join(".scratch/editor.err.log"))?)
+        .stdout(std::fs::File::create(root.join(".ara/samples/editor.log"))?)
+        .stderr(std::fs::File::create(
+            root.join(".ara/samples/editor.err.log"),
+        )?)
         .spawn()
         .context("starting ara-editor")?;
     // The editor publishes `.ara/daemon.json` once its authority listens.
@@ -67,7 +69,7 @@ fn capture(root: &Path, request: &Request<'_>) -> Result<Value> {
             break client;
         }
         if let Some(status) = child.try_wait()? {
-            bail!("ara-editor exited early ({status}); see .scratch/editor.err.log");
+            bail!("ara-editor exited early ({status}); see .ara/samples/editor.err.log");
         }
         if started.elapsed() > Duration::from_secs(120) {
             let _ = child.kill();
@@ -101,10 +103,10 @@ fn capture(root: &Path, request: &Request<'_>) -> Result<Value> {
     drop(client);
     let status = child.wait()?;
     if !status.success() {
-        bail!("ara-editor failed ({status}); see .scratch/editor.err.log");
+        bail!("ara-editor failed ({status}); see .ara/samples/editor.err.log");
     }
     let image = image::open(output.join("editor.png")).context("editor.png")?;
-    let evidence = root.join("evidence");
+    let evidence = crate::evidence_directory(request.project);
     std::fs::create_dir_all(&evidence)?;
     image
         .resize(1920, 1080, image::imageops::FilterType::Lanczos3)

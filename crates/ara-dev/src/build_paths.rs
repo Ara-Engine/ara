@@ -219,13 +219,17 @@ mod tests {
 
     #[test]
     fn foreign_targets_are_rejected_even_when_missing_or_nested() {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR"))
+        let outer = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../target/ara-dev/path-tests")
             .join(format!(
                 "{}-{:?}",
                 std::process::id(),
                 std::thread::current().id()
             ));
+        // The real checkout's target may be a junction to an independent drive.
+        // Model the outer checkout explicitly instead of depending on its path.
+        fs::create_dir_all(outer.join(".git")).unwrap();
+        let parent = outer.join("target/path-tests");
         let own = parent.join("own");
         let other = parent.join("other");
         fs::create_dir_all(own.join(".git")).unwrap();
@@ -259,13 +263,14 @@ mod tests {
                 .is_some(),
             "a sibling cache inside the outer checkout's target is still foreign"
         );
-        assert!(
-            foreign_checkout(
-                &own,
-                &std::env::temp_dir().join("ara-dev-independent-cache")
-            )
+        // This is a read-only candidate, never created. TMP may itself be routed
+        // under a checkout's target, as it is in isolated agent test runs.
+        let canonical = own.canonicalize().unwrap();
+        let independent = canonical
+            .ancestors()
+            .last()
             .unwrap()
-            .is_none()
-        );
+            .join(format!("ara-dev-independent-cache-{}", std::process::id()));
+        assert!(foreign_checkout(&own, &independent).unwrap().is_none());
     }
 }

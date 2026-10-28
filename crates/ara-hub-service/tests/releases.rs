@@ -44,10 +44,18 @@ fn available(hub: &mut Hub) -> Value {
     }
 }
 fn finished(hub: &mut Hub) -> Value {
+    finished_job(hub, None)
+}
+fn finished_job(hub: &mut Hub, id: Option<&str>) -> Value {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         let value = hub.call("hub.downloads", json!({})).unwrap();
-        let job = &value["jobs"][0];
+        let job = value["jobs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|job| id.is_none_or(|id| job["id"] == id))
+            .unwrap();
         if job["state"] != "running" {
             return job.clone();
         }
@@ -69,8 +77,15 @@ fn engine_download_verify_extract_register_and_managed_uninstall() {
     let mut hub = hub(&root, &server);
     assert_eq!(available(&mut hub)["releases"][0]["version"], "1.0.0");
     let started = Instant::now();
-    hub.call("hub.engine.install", json!({"version":"1.0.0"}))
+    let started_job = hub
+        .call("hub.engine.install", json!({"version":"1.0.0"}))
         .unwrap();
+    assert_eq!(started_job["phase"], "downloading");
+    assert_eq!(started_job["cancellable"], true);
+    assert!(
+        started_job["disk"]["availableBytes"].as_u64().unwrap()
+            >= started_job["disk"]["requiredBytes"].as_u64().unwrap()
+    );
     assert!(started.elapsed() < Duration::from_secs(1));
     let job = finished(&mut hub);
     assert_eq!(job["state"], "complete", "{job}");
@@ -84,8 +99,15 @@ fn engine_download_verify_extract_register_and_managed_uninstall() {
     );
     assert!(root.join("engines/1.0.0/ara-editor.exe").is_file());
     assert!(!root.join("engines/.install-1.0.0").exists());
-    hub.call("hub.engine.uninstall", json!({"version":"1.0.0"}))
+    let removal = hub
+        .call("hub.engine.uninstall", json!({"version":"1.0.0"}))
         .unwrap();
+    assert_eq!(removal["kind"], "uninstall");
+    assert_eq!(removal["phase"], "preparing");
+    assert_eq!(
+        finished_job(&mut hub, removal["id"].as_str())["state"],
+        "complete"
+    );
     assert!(!root.join("engines/1.0.0").exists());
     assert!(
         !hub.call("hub.engines", json!({})).unwrap()["engines"]
@@ -95,6 +117,105 @@ fn engine_download_verify_extract_register_and_managed_uninstall() {
             .any(|e| e["version"] == "1.0.0")
     );
 }
+#[test]
+fn repair_restores_a_missing_companion_from_the_same_signed_version() {
+    let root = testing::scratch("engine-repair");
+    let server = Server::new();
+    server.releases(vec![server.release(
+        Kind::Engine,
+        "1.0.0",
+        Channel::Stable,
+        testing::engine_zip("1.0.0"),
+    )]);
+    let mut hub = hub(&root, &server);
+    available(&mut hub);
+    let plan = hub
+        .call("hub.engine.preflight", json!({"version":"1.0.0"}))
+        .unwrap();
+    assert_eq!(plan["destination"], json!(root.join("engines/1.0.0")));
+    assert_eq!(plan["spaceBasis"], "estimate");
+    assert!(
+        !root.join("engines/1.0.0").exists(),
+        "preflight is read-only"
+    );
+    hub.call("hub.engine.install", json!({"version":"1.0.0"}))
+        .unwrap();
+    assert_eq!(finished(&mut hub)["state"], "complete");
+    fs::remove_file(root.join("engines/1.0.0/ara-player.exe")).unwrap();
+    let job = hub
+        .call("hub.engine.repair", json!({"version":"1.0.0"}))
+        .unwrap();
+    assert_eq!(job["kind"], "repair");
+    assert_eq!(
+        finished_job(&mut hub, job["id"].as_str())["state"],
+        "complete"
+    );
+    assert!(root.join("engines/1.0.0/ara-player.exe").is_file());
+    assert!(!root.join("engines/.repair-backup-1.0.0").exists());
+}
+
+#[test]
+fn corrupted_repair_preserves_the_installed_engine() {
+    let root = testing::scratch("engine-repair-tampered");
+    let server = Server::new();
+    let bytes = testing::engine_zip("1.0.0");
+    server.releases(vec![server.release(
+        Kind::Engine,
+        "1.0.0",
+        Channel::Stable,
+        bytes.clone(),
+    )]);
+    let mut hub = hub(&root, &server);
+    available(&mut hub);
+    hub.call("hub.engine.install", json!({"version":"1.0.0"}))
+        .unwrap();
+    assert_eq!(finished(&mut hub)["state"], "complete");
+    let original = fs::read(root.join("engines/1.0.0/ara.exe")).unwrap();
+    server.set(
+        "/assets/engine-v1.0.0/ara-engine-1.0.0-windows-x64.zip",
+        Response::ok(vec![1; bytes.len()]),
+    );
+    let job = hub
+        .call("hub.engine.repair", json!({"version":"1.0.0"}))
+        .unwrap();
+    assert_eq!(
+        finished_job(&mut hub, job["id"].as_str())["state"],
+        "failed"
+    );
+    assert_eq!(
+        fs::read(root.join("engines/1.0.0/ara.exe")).unwrap(),
+        original
+    );
+    assert!(root.join("engines/1.0.0/ara-editor.exe").is_file());
+}
+
+#[test]
+fn unfinished_managed_uninstall_can_retry_cleanup_without_an_engine_registration() {
+    let root = testing::scratch("uninstall-cleanup");
+    let server = Server::new();
+    let mut hub = hub(&root, &server);
+    let trash = root.join("engines/.uninstall-1.0.0");
+    fs::create_dir_all(&trash).unwrap();
+    fs::write(trash.join(".ara-managed.json"), br#"{"version":"1.0.0"}"#).unwrap();
+    fs::write(
+        trash.join("locked-before-retry.txt"),
+        b"left by an interrupted cleanup",
+    )
+    .unwrap();
+    let job = hub
+        .call("hub.engine.uninstall", json!({"version":"1.0.0"}))
+        .unwrap();
+    assert_eq!(
+        job["cancellable"], false,
+        "registration was committed before cleanup retry"
+    );
+    assert_eq!(
+        finished_job(&mut hub, job["id"].as_str())["state"],
+        "complete"
+    );
+    assert!(!trash.exists());
+}
+
 #[test]
 fn tampered_and_oversized_assets_never_install_or_register() {
     for (name, body, expected) in [
@@ -174,7 +295,7 @@ fn register_missing_project_pin_and_refuse_external_uninstall() {
     fs::create_dir(&project).unwrap();
     fs::write(
         project.join("ara.project.json"),
-        r#"{"name":"Missing","engineVersion":"1.0.0"}"#,
+        r#"{"name":"Missing","layoutVersion":4,"engineVersion":"1.0.0"}"#,
     )
     .unwrap();
     assert_eq!(

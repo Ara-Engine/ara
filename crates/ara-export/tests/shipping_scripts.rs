@@ -40,11 +40,24 @@ fn exported_nativeaot_behaviour_runs_without_sources_and_rejects_stale_bindings(
     std::fs::create_dir_all(&target).unwrap();
     let scratch = tempfile::tempdir_in(&target).unwrap();
     let project = scratch.path().join("author");
-    let module = project.join("scripts/Gameplay");
+    let module = project
+        .join(ara_doc::AUTHORING_ROOT)
+        .join("scripts/Gameplay");
     std::fs::create_dir_all(&module).unwrap();
-    let core = project.join("scripts/Core");
+    tools::write_json(
+        &project.join("ara.project.json"),
+        &json!({"name":"Shipping scripts","layoutVersion":ara_host::project_layout::VERSION}),
+    )
+    .unwrap();
+    std::fs::create_dir_all(module.join("nested/editor")).unwrap();
+    std::fs::write(
+        module.join("nested/editor/Tools.cs"),
+        "#error editor sources must never compile into the player",
+    )
+    .unwrap();
+    let core = project.join(ara_doc::AUTHORING_ROOT).join("scripts/Core");
     std::fs::create_dir_all(&core).unwrap();
-    std::fs::write(core.join("ara.module.toml"), "[module]\nname = \"Core\"\n").unwrap();
+    std::fs::write(core.join("core.module.json"), r#"{"name":"Core"}"#).unwrap();
     std::fs::write(
         core.join("SpinRate.cs"),
         r#"
@@ -59,8 +72,8 @@ namespace Core;
     )
     .unwrap();
     std::fs::write(
-        module.join("ara.module.toml"),
-        "[module]\nname = \"Gameplay\"\nreferences = [\"Core\"]\n",
+        module.join("gameplay.module.json"),
+        r#"{"name":"Gameplay","references":["Core"]}"#,
     )
     .unwrap();
     std::fs::write(

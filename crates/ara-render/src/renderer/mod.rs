@@ -3,6 +3,8 @@ mod edit;
 mod frame;
 mod gi;
 mod hash;
+#[cfg(feature = "fidelity-lab")]
+mod lab;
 mod live;
 mod native;
 mod passes;
@@ -201,6 +203,8 @@ impl Renderer {
     /// window integrations can retain their swapchain while this runs on a worker.
     pub fn with_device(scene: Scene, size: [u32; 2], mut gpu: GpuDevice) -> Result<Self> {
         ensure!(!size.contains(&0), "Render extent is zero");
+        #[cfg(feature = "fidelity-lab")]
+        crate::lab::declare(gpu.lab_params_mut())?;
         let artifacts = ara_gpu::cooked::resource_dir(
             env!("CARGO_PKG_NAME"),
             concat!(env!("CARGO_MANIFEST_DIR"), "/cooked"),

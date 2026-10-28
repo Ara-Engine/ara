@@ -10,6 +10,7 @@ mod capture;
 pub mod codes;
 mod commands;
 mod editor;
+mod extensions;
 mod fixes;
 pub mod graph;
 /// Editor-only Vulkan adapter over the shared engine device.
@@ -26,7 +27,7 @@ mod transport;
 mod view_camera;
 pub mod world;
 
-pub use app::{LAUNCHED, Options, Settle, run};
+pub use app::{LAUNCHED, Options, Settle, before_open_project, run};
 pub use editor::{Editor, EditorError};
 #[doc(hidden)]
 pub use script_assets::worker::compile_scripts;

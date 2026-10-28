@@ -4,9 +4,14 @@ use anyhow::{Result, bail};
 use std::path::Path;
 
 #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+mod ipc;
+
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 mod native {
+    use super::ipc::{SocketPath, checked_name};
     use super::*;
     use std::{
+        io::Read,
         path::PathBuf,
         process::{Child, Command, Stdio},
         sync::{
@@ -33,7 +38,7 @@ mod native {
     pub struct Capture {
         handler: Option<Arc<crash_handler::CrashHandler>>,
         child: Child,
-        socket: PathBuf,
+        _socket: SocketPath,
         previous_hook: Arc<PanicHook>,
     }
     impl Capture {
@@ -44,7 +49,8 @@ mod native {
                 !ATTACHED.swap(true, Ordering::AcqRel),
                 "ARA-EXP-CRASH-004: a crash handler is already installed"
             );
-            let result = Self::attach(directory, build_id);
+            let result = Self::attach(directory, build_id)
+                .context("ARA-EXP-CRASH-004: native crash capture unavailable");
             if result.is_err() {
                 ATTACHED.store(false, Ordering::Release);
             }
@@ -53,39 +59,40 @@ mod native {
         fn attach(directory: &Path, build_id: &str) -> Result<Self> {
             std::fs::create_dir_all(directory)?;
             let directory = std::fs::canonicalize(directory)?;
-            let stamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)?
-                .as_nanos();
-            let socket =
-                std::env::temp_dir().join(format!("ara-{}-{stamp}.sock", std::process::id()));
-            let socket_name = socket.to_str().context("non-UTF8 crash socket path")?;
+            let socket = SocketPath::create()?;
+            let socket_name = checked_name(&socket.path)?;
             let mut command = Command::new(std::env::current_exe()?);
             command
                 .arg("--ara-crash-monitor")
-                .arg(&socket)
+                .arg(&socket.path)
                 .arg(&directory)
                 .arg(build_id)
+                .arg("--private-ipc")
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
-                .stderr(Stdio::null());
+                .stderr(Stdio::piped());
             #[cfg(windows)]
             {
                 use std::os::windows::process::CommandExt;
                 command.creation_flags(0x08000000); // CREATE_NO_WINDOW
             }
-            let mut child = command
-                .spawn()
-                .context("ARA-EXP-CRASH-004: starting crash monitor")?;
+            let mut child = command.spawn().context("starting crash monitor")?;
             let connected = (|| {
                 let deadline = Instant::now() + Duration::from_secs(5);
                 loop {
-                    if let Ok(client) =
-                        minidumper::Client::with_name(minidumper::SocketName::path(socket_name))
-                    {
-                        break Ok(client);
+                    let error = match minidumper::Client::with_name(minidumper::SocketName::path(
+                        socket_name,
+                    )) {
+                        Ok(client) => break Ok(client),
+                        Err(error) => error,
+                    };
+                    if let Some(status) = child.try_wait()? {
+                        bail!("crash monitor exited with {status}; connecting IPC: {error}");
                     }
-                    if child.try_wait()?.is_some() || Instant::now() >= deadline {
-                        bail!("ARA-EXP-CRASH-004: crash monitor did not become ready");
+                    if Instant::now() >= deadline {
+                        bail!(
+                            "crash monitor did not become ready within five seconds; connecting IPC: {error}"
+                        );
                     }
                     std::thread::sleep(Duration::from_millis(20));
                 }
@@ -95,8 +102,15 @@ mod native {
                 Err(error) => {
                     let _ = child.kill();
                     let _ = child.wait();
-                    let _ = std::fs::remove_file(&socket);
-                    return Err(error);
+                    let mut detail = String::new();
+                    if let Some(stderr) = child.stderr.take() {
+                        let _ = stderr.take(4096).read_to_string(&mut detail);
+                    }
+                    return Err(if detail.trim().is_empty() {
+                        error
+                    } else {
+                        error.context(format!("crash monitor startup: {}", detail.trim()))
+                    });
                 }
             };
             let panic_client = Arc::downgrade(&client);
@@ -134,7 +148,6 @@ mod native {
                 Err(error) => {
                     let _ = child.kill();
                     let _ = child.wait();
-                    let _ = std::fs::remove_file(&socket);
                     return Err(error.into());
                 }
             };
@@ -204,7 +217,7 @@ mod native {
             Ok(Self {
                 handler: Some(handler),
                 child,
-                socket,
+                _socket: socket,
                 previous_hook,
             })
         }
@@ -220,7 +233,6 @@ mod native {
             // Normal shutdown explicitly kills/reaps the owned idle monitor.
             let _ = self.child.kill();
             let _ = self.child.wait();
-            let _ = std::fs::remove_file(&self.socket);
             ATTACHED.store(false, Ordering::Release);
         }
     }
@@ -353,8 +365,10 @@ mod native {
             .context("monitor build ID missing")?
             .into_string()
             .map_err(|_| anyhow::anyhow!("non-UTF8 build ID"))?;
+        let private = args.next().as_deref() == Some(std::ffi::OsStr::new("--private-ipc"));
+        let socket = SocketPath::for_monitor(socket, private)?;
         let mut server = minidumper::Server::with_name(minidumper::SocketName::path(
-            socket.to_str().context("non-UTF8 crash socket path")?,
+            checked_name(&socket.path)?,
         ))?;
         server.run(
             Box::new(Handler {
@@ -367,7 +381,6 @@ mod native {
             &AtomicBool::new(false),
             None,
         )?;
-        let _ = std::fs::remove_file(socket);
         Ok(true)
     }
 }
@@ -379,7 +392,7 @@ pub use native::Capture;
 /// Return from main immediately when this returns true.
 pub fn monitor_from_args() -> Result<bool> {
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
-    return native::monitor_from_args();
+    return native::monitor_from_args().context("ARA-EXP-CRASH-004: crash monitor failed");
     #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     Ok(false)
 }

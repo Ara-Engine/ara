@@ -1,19 +1,26 @@
 //! The window's retained `Ui`, reconciled from the view-model on change, and the
 //! routing of pointer/keyboard input and `ara_ui` actions back to [`Intent`]s.
-use super::{images::Thumbnails, input::OsClipboard};
+use super::{images::Thumbnails, input::OsClipboard, selects::Selects};
 use crate::{
-    model::{Hub, Intent, View},
+    model::{Dialog, Hub, Intent, View},
     view::{self, Binding, Ctx, Doc},
 };
 use ara_ui::{
     Ui, Work,
     input::{InputEvent, InputState},
+    layers::{LayerKind, LayerStack},
     source::stable_id,
     theme::EditorTheme,
     widgets::Widget,
 };
 use ara_ui_text::{EditEvent, TextSystem};
 use std::collections::BTreeMap;
+
+#[derive(Default)]
+struct PagePosition {
+    scroll: [f32; 2],
+    focus: Option<u64>,
+}
 
 /// UI state of the Hub window.
 pub struct App {
@@ -39,13 +46,21 @@ pub struct App {
     light: bool,
     present_needed: bool,
     pending_work: Work,
+    layers: LayerStack,
+    overlay: Option<&'static str>,
+    base_scope: bool,
+    dialog: Option<Dialog>,
+    selects: Selects,
+    close_hint_shown: bool,
+    view: Option<View>,
+    page_positions: BTreeMap<View, PagePosition>,
 }
 
 impl App {
     /// An empty window of `size` logical pixels.
     pub fn new(size: [f32; 2], docs: Vec<Doc>) -> ara_ui::Result<Self> {
         Ok(Self {
-            ui: Ui::editor("<ui id='hub' />", view::CSS, size)?,
+            ui: Ui::editor("<ui id='hub' />", view::stylesheet(), size)?,
             input: InputState::default(),
             text: view::text_system()?,
             thumbnails: Thumbnails::default(),
@@ -59,35 +74,68 @@ impl App {
             light: false,
             present_needed: false,
             pending_work: Work::default(),
+            layers: LayerStack::default(),
+            overlay: None,
+            base_scope: false,
+            dialog: None,
+            selects: Selects::default(),
+            close_hint_shown: false,
+            view: None,
+            page_positions: BTreeMap::new(),
         })
     }
 
     /// Reconcile changed markup, keeping native nodes, shaped text, widgets and
     /// input identity. Theme changes swap palette tokens on the same retained UI.
     pub fn rebuild(&mut self, hub: &mut Hub, now_ms: u64) -> ara_ui::Result<()> {
+        let view_changed = self.view != Some(hub.view);
+        if view_changed && let Some(previous) = self.view {
+            let scroll = stable_id(&format!("scroll-{previous:?}").to_lowercase());
+            let scroll = match self.ui.widgets.get(&scroll) {
+                Some(Widget::Scroll(position)) => *position,
+                _ => [0., 0.],
+            };
+            self.page_positions.insert(
+                previous,
+                PagePosition {
+                    scroll,
+                    focus: self.input.focused(),
+                },
+            );
+        }
+        if self.dialog != hub.dialog {
+            self.selects.dismiss(&mut self.ui, &mut self.input)?;
+        }
         let anchor = hub
             .menu
             .as_ref()
-            .and_then(|id| self.ui.find(&format!("more-{id}")))
+            .map(|id| format!("more-{id}"))
+            .and_then(|id| self.ui.find(&id))
             .map(|i| {
                 let r = self.ui.nodes[i].rect;
                 [r.x, r.y, r.w, r.h]
             });
         let thumbnails = &self.thumbnails;
+        let close_hint = self.dialog == hub.dialog && self.close_hint();
         let ctx = Ctx {
+            dialog_close_hint: close_hint,
             now_ms,
             size: self.size,
             thumbnail: &|path| thumbnails.get(path),
             anchor,
             docs: &self.docs,
         };
-        let page = view::page(hub, &ctx);
+        let mut page = view::page(hub, &ctx);
+        self.close_hint_shown = close_hint;
+        self.selects
+            .prepare(&mut page, &mut self.ui, &mut self.input)?;
         self.bindings = page.bindings;
         self.thumbnails.request(&page.wanted);
         if self.markup == page.markup
             && self.ui.size == self.size
             && self.light == hub.prefs.light
             && hub.focus.is_none()
+            && self.dialog == hub.dialog
         {
             return Ok(());
         }
@@ -102,11 +150,52 @@ impl App {
             })?;
             self.light = hub.prefs.light;
         }
+        let overlay = if hub.dialog.is_some() {
+            Some("hub-dialog")
+        } else {
+            None
+        };
+        // A different dialog can reuse its root while replacing every action.
+        // Keep progress refreshes stable, but give a new decision its own focus.
+        let overlay_changed = self.overlay != overlay || self.dialog != hub.dialog;
+        if overlay_changed {
+            self.layers.close(&mut self.ui, &mut self.input)?;
+        }
         self.ui.reconcile(&page.markup)?;
         self.markup = page.markup;
         let work = self.ui.frame(&mut self.text)?;
         let layout_changed = work.layout_passes > 0;
         self.pending_work += work;
+        if !self.base_scope {
+            self.input
+                .push(&mut self.ui, stable_id("hub"), None, false)?;
+            self.base_scope = true;
+        }
+        if overlay_changed {
+            if let Some(id) = overlay {
+                let kind = if id == "hub-dialog" {
+                    LayerKind::Modal
+                } else {
+                    LayerKind::Popup
+                };
+                let initial = if id == "hub-dialog" {
+                    dialog_focus(&self.ui)
+                } else {
+                    None
+                };
+                self.layers.open(
+                    &mut self.ui,
+                    &mut self.input,
+                    stable_id(id),
+                    kind,
+                    [0., 0.],
+                    initial,
+                )?;
+            }
+            self.overlay = overlay;
+            self.dialog = hub.dialog.clone();
+        }
+        self.selects.sync(&mut self.ui, &mut self.input)?;
         if layout_changed {
             // Clamp retained scroll after layout. Zero is already valid and must
             // not dirty paint a second time for an otherwise finished frame.
@@ -130,6 +219,22 @@ impl App {
                 }
             }
         }
+        if view_changed {
+            self.view = Some(hub.view);
+            if let Some(position) = self.page_positions.get(&hub.view) {
+                let scroll = format!("scroll-{:?}", hub.view).to_lowercase();
+                if let Some(index) = self.ui.find(&scroll) {
+                    self.ui.scroll_to(index, position.scroll)?;
+                }
+                if hub.focus.is_none()
+                    && hub.dialog.is_none()
+                    && let Some(focus) = position.focus
+                    && self.ui.by_id(focus).is_some()
+                {
+                    self.input.focus(&mut self.ui, focus)?;
+                }
+            }
+        }
         if let Some(field) = hub.focus.take()
             && self.ui.find(field).is_some()
         {
@@ -145,6 +250,13 @@ impl App {
             InputEvent::PointerMove(self.pointer),
             &mut clipboard,
         ));
+        // Transfer phases can replace actions without changing the dialog's identity.
+        if self.overlay.is_some() && self.input.focused().is_none() {
+            let initial = dialog_focus(&self.ui);
+            if let Some(initial) = initial {
+                self.input.focus(&mut self.ui, initial)?;
+            }
+        }
         self.pending_work += self.ui.frame(&mut self.text)?;
         // Rebuild already generated a display list. Keep the presentation request
         // until the native loop consumes it, even when its next frame does no work.
@@ -177,7 +289,7 @@ impl App {
     ) -> ara_ui::Result<()> {
         self.pointer(event)?;
         let intents = self.actions();
-        if !intents.is_empty() {
+        if !intents.is_empty() || self.view_dirty() {
             for intent in intents {
                 hub.intent(intent);
             }
@@ -193,19 +305,96 @@ impl App {
         {
             self.pointer = p;
         }
-        self.input.event(&mut self.ui, event, &mut OsClipboard)
+        self.route(event, &mut OsClipboard)
+    }
+
+    fn route(
+        &mut self,
+        event: InputEvent,
+        clipboard: &mut dyn ara_ui_text::Clipboard,
+    ) -> ara_ui::Result<()> {
+        if let Some(event) = self
+            .selects
+            .event(&mut self.ui, &mut self.input, event, clipboard)?
+        {
+            self.layers
+                .event(&mut self.ui, &mut self.input, event, clipboard)?;
+        }
+        Ok(())
+    }
+
+    /// Route native text through the searchable select before ordinary field editing.
+    pub fn edit(
+        &mut self,
+        composing: &mut bool,
+        edit: EditEvent,
+        clipboard: &mut dyn ara_ui_text::Clipboard,
+    ) -> bool {
+        let closed_select = !self.selects.is_open()
+            && self
+                .focused()
+                .and_then(|id| self.ui.find(id))
+                .is_some_and(|index| self.ui.nodes[index].element.tag == "dropdown");
+        super::input::deliver_edit_with(composing, edit, |edit| {
+            if closed_select
+                && matches!(
+                    &edit,
+                    EditEvent::ImeStart | EditEvent::ImePreedit { .. } | EditEvent::ImeCancel
+                )
+            {
+                return Ok(());
+            }
+            self.route(InputEvent::Edit(edit), clipboard)
+        })
+    }
+
+    /// Open/filter/close can change markup without accepting a domain intent.
+    pub fn view_dirty(&self) -> bool {
+        self.selects.dirty() || self.close_hint() != self.close_hint_shown
+    }
+
+    fn close_hint(&self) -> bool {
+        self.ui.find("dialog-close").is_some_and(|index| {
+            let button = &self.ui.nodes[index];
+            button.rect.contains(self.pointer[0], self.pointer[1])
+                && button.clip.contains(self.pointer[0], self.pointer[1])
+        })
+    }
+
+    /// Inspect the same typed choice state used by native input and captures.
+    pub fn select(&self, control: &str) -> Option<&ara_ui::select::Select<Intent>> {
+        self.selects.get(control)
+    }
+
+    /// Native mouse Back follows the same nested popup/dialog/page order as Escape.
+    pub fn back(&mut self, hub: &Hub) -> ara_ui::Result<Vec<Intent>> {
+        if self.selects.is_open() {
+            self.selects.dismiss(&mut self.ui, &mut self.input)?;
+            return Ok(Vec::new());
+        }
+        if hub.dialog.is_some() {
+            return Ok(vec![Intent::DismissDialog]);
+        }
+        Ok(if hub.view == View::Create {
+            vec![Intent::Back]
+        } else {
+            Vec::new()
+        })
     }
 
     /// Intents raised by activated buttons and edited fields since the last call.
     pub fn actions(&mut self) -> Vec<Intent> {
+        let mut intents =
+            super::input::recover(self.selects.actions(&mut self.ui, &mut self.input))
+                .unwrap_or_default();
         let actions: Vec<_> = self.ui.drain_actions().collect();
-        actions
-            .into_iter()
-            .filter_map(|action| match self.bindings.get(&action.node)? {
+        intents.extend(actions.into_iter().filter_map(|action| {
+            match self.bindings.get(&action.node)? {
                 Binding::Intent(intent) => Some(intent.clone()),
                 Binding::Field(on) => action.value.as_str().map(|v| on(v.to_owned())),
-            })
-            .collect()
+            }
+        }));
+        intents
     }
 
     /// Authored ID of the focused control.
@@ -229,6 +418,22 @@ impl App {
         }
         let [shift, ctrl, _] = self.modifiers;
         let focused = self.focused().map(str::to_owned);
+        if !ctrl {
+            let key = match scancode {
+                74 => Some(ara_ui::select::Key::Home),
+                77 => Some(ara_ui::select::Key::End),
+                81 => Some(ara_ui::select::Key::Down),
+                82 => Some(ara_ui::select::Key::Up),
+                40 | 88 => Some(ara_ui::select::Key::Enter),
+                41 => Some(ara_ui::select::Key::Escape),
+                _ => None,
+            };
+            if let Some(key) = key
+                && self.selects.key(&mut self.ui, &mut self.input, key)?
+            {
+                return Ok(self.actions());
+            }
+        }
         let field = focused.as_deref().is_some_and(|id| {
             self.ui
                 .find(id)
@@ -238,11 +443,17 @@ impl App {
         match (scancode, ctrl) {
             // Escape: close the menu, drop a rename, then leave the field.
             (41, _) => {
+                if hub.dialog.is_some() {
+                    return Ok(vec![Intent::DismissDialog]);
+                }
                 if hub.menu.is_some() {
                     return Ok(vec![Intent::Menu(None)]);
                 }
                 if hub.rename.is_some() {
                     return Ok(vec![Intent::RenameCancel]);
+                }
+                if hub.view == View::Create {
+                    return Ok(vec![Intent::Back]);
                 }
                 self.input.blur(&mut self.ui);
                 return Ok(Vec::new());
@@ -252,28 +463,29 @@ impl App {
                     Some("rename-field") => vec![Intent::RenameCommit],
                     Some("create-name" | "create-destination") => vec![Intent::CreateSubmit],
                     Some(_) if !field => {
-                        self.input
-                            .event(&mut self.ui, InputEvent::Activate, &mut clipboard)?;
+                        self.route(InputEvent::Activate, &mut clipboard)?;
                         Vec::new()
                     }
                     _ => Vec::new(),
                 });
             }
             (43, _) => {
-                self.input.event(
-                    &mut self.ui,
-                    InputEvent::Tab { reverse: shift },
-                    &mut clipboard,
-                )?;
+                self.route(InputEvent::Tab { reverse: shift }, &mut clipboard)?;
                 return Ok(Vec::new());
             }
-            (9, true) if hub.view == View::Projects => {
+            (9, true)
+                if hub.view == View::Projects
+                    && hub.dialog.is_none()
+                    && !self.selects.is_open() =>
+            {
                 if self.ui.find("search").is_some() {
                     let _ = self.input.focus(&mut self.ui, stable_id("search"));
                 }
                 return Ok(Vec::new());
             }
-            (17, true) => return Ok(vec![Intent::Navigate(View::Create)]),
+            (17, true) if hub.dialog.is_none() && !self.selects.is_open() => {
+                return Ok(vec![Intent::Navigate(View::Create)]);
+            }
             _ => {}
         }
         if field {
@@ -301,10 +513,30 @@ impl App {
                 _ => None,
             };
             if let Some(edit) = edit {
-                self.input
-                    .event(&mut self.ui, InputEvent::Edit(edit), &mut clipboard)?;
+                self.route(InputEvent::Edit(edit), &mut clipboard)?;
             }
         }
         Ok(Vec::new())
     }
+}
+
+/// Focus a safe action when a dialog first opens or replaces a transfer control.
+fn dialog_focus(ui: &Ui) -> Option<u64> {
+    [
+        "engine-layout-cancel",
+        "engine-layout-use",
+        "migration-cancel",
+        "migration-submit",
+        "dialog-cancel",
+        "dialog-later",
+        "dialog-error-dismiss",
+        "dialog-done",
+        "dialog-close",
+    ]
+    .into_iter()
+    .find(|id| {
+        ui.find(id)
+            .is_some_and(|index| !ui.nodes[index].state.disabled)
+    })
+    .map(stable_id)
 }

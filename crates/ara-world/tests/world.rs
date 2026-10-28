@@ -81,6 +81,23 @@ fn fixture() -> (Store, AssetId) {
 }
 
 #[test]
+fn cell_identity_checks_compare_reference_paths_with_the_authored_boundary() {
+    let (store, id) = fixture();
+    let mut workspace = Workspace::default();
+    workspace.set_reference_root(ara_doc::AUTHORING_ROOT);
+    for (path, doc) in store.workspace().docs() {
+        workspace.insert(workspace.storage_path(path), doc.clone());
+    }
+    let manifest = Manifest::read(workspace.doc(id.as_str()).unwrap()).unwrap();
+    let documents = manifest.documents(&workspace, "c_a").unwrap();
+    assert_eq!(documents[0].0, "cells/a.scene");
+    assert_eq!(documents[0].1.id.as_str(), "sc_a");
+    let (_, scene) = workspace.remove("sc_a").unwrap();
+    workspace.insert(workspace.storage_path("cells/wrong.scene"), scene);
+    assert!(manifest.documents(&workspace, "c_a").is_err());
+}
+
+#[test]
 fn canonical_roundtrip_spatial_query_includes_unloaded_cells_and_tools_are_typed() {
     let (mut store, id) = fixture();
     let manifest = Manifest::read(store.workspace().doc(id.as_str()).unwrap()).unwrap();

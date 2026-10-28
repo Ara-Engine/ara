@@ -1,0 +1,5 @@
+{
+  "layoutVersion": 4,
+  "main": "scene/main.scene.json",
+  "name": "Export conformance sample"
+}

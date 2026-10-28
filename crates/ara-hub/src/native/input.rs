@@ -40,15 +40,26 @@ pub(crate) fn deliver_edit(
     edit: EditEvent,
     clipboard: &mut dyn Clipboard,
 ) -> bool {
+    deliver_edit_with(composing, edit, |edit| {
+        input.event(ui, InputEvent::Edit(edit), clipboard)
+    })
+}
+
+/// Normalize native composition while allowing the host's kit controls first refusal.
+pub(super) fn deliver_edit_with(
+    composing: &mut bool,
+    edit: EditEvent,
+    mut route: impl FnMut(EditEvent) -> ara_ui::Result<()>,
+) -> bool {
     let result = (|| -> ara_ui::Result<()> {
         match &edit {
             EditEvent::ImePreedit { text, .. } => {
                 if !*composing && !text.is_empty() {
-                    input.event(ui, InputEvent::Edit(EditEvent::ImeStart), clipboard)?;
+                    route(EditEvent::ImeStart)?;
                     *composing = true;
                 }
                 if text.is_empty() {
-                    input.event(ui, InputEvent::Edit(EditEvent::ImeCancel), clipboard)?;
+                    route(EditEvent::ImeCancel)?;
                     *composing = false;
                     return Ok(());
                 }
@@ -56,13 +67,13 @@ pub(crate) fn deliver_edit(
             EditEvent::ImeCommit(_) => *composing = false,
             _ => {}
         }
-        input.event(ui, InputEvent::Edit(edit), clipboard)
+        route(edit)
     })();
     if recover(result).is_some() {
         true
     } else {
         *composing = false;
-        let _ = recover(input.event(ui, InputEvent::Edit(EditEvent::ImeCancel), clipboard));
+        let _ = recover(route(EditEvent::ImeCancel));
         false
     }
 }
@@ -152,10 +163,12 @@ impl NativeInput {
     }
     /// Start or stop OS text input to match the focused control.
     pub fn sync_text_input(&mut self, ui: &Ui, input: &InputState, dpi: f32) -> anyhow::Result<()> {
-        let field = input
-            .focused()
-            .and_then(|id| ui.by_id(id))
-            .filter(|i| matches!(ui.nodes[*i].element.tag.as_str(), "field" | "input"));
+        let field = input.focused().and_then(|id| ui.by_id(id)).filter(|i| {
+            matches!(
+                ui.nodes[*i].element.tag.as_str(),
+                "field" | "input" | "dropdown"
+            )
+        });
         // SAFETY: Live main-thread window; IME geometry uses window units.
         unsafe {
             if field.is_some() != self.text_active {
@@ -185,7 +198,7 @@ impl NativeInput {
         Ok(())
     }
     /// Deliver queued text/IME edits to the focused field; collect drops.
-    pub fn pump(&mut self, ui: &mut Ui, input: &mut InputState) -> ara_ui::Result<bool> {
+    pub fn pump(&mut self, app: &mut super::App) -> ara_ui::Result<bool> {
         let mut changed = false;
         let mut clipboard = OsClipboard;
         while let Ok(watched) = self.events.try_recv() {
@@ -197,7 +210,7 @@ impl NativeInput {
                 }
                 Watched::Edit(edit) => edit,
             };
-            changed |= deliver_edit(&mut self.composing, ui, input, edit, &mut clipboard);
+            changed |= app.edit(&mut self.composing, edit, &mut clipboard);
         }
         Ok(changed)
     }

@@ -2,7 +2,7 @@
 
 ## Gameplay scripts in runtime exports
 
-`playerTemplate: "runtime"` builds every gameplay `ara.module.toml` module into
+`playerTemplate: "runtime"` builds gameplay modules declared by `<name>.module.json` into
 one NativeAOT shared library using the real generated `ara_script_init` ABI
 (A12/A13), rather than the S7 conformance ABI. References are linked in dependency
 order; editor modules are excluded, and missing dependencies/cycles are errors.
@@ -12,10 +12,10 @@ Runtime presets may omit `scriptProject`; it remains required by conformance pre
 `ARA_DOTNET_SDK` selects the SDK's `dotnet/` sources, or
 `ARA_DOTNET_ARTIFACTS` its prebuilt `bin/` tools; these are export-time inputs only.
 
-The player folder contains `game/<assembly>.dll` (or `.so`) and
-`game/scripts.json`: format, ABI version, engine layout hash and linked modules.
+The player data folder contains `data/game/<assembly>.dll` (or `.so`) and
+`data/game/scripts.json`: format, ABI version, engine layout hash and linked modules.
 The packed `PlayScene` uses `ScriptScene::shipping("game/scripts.json")`; the
-standalone entry resolves this path against the player folder. The runtime checks
+standalone entry resolves this path against the data folder. The runtime checks
 metadata before loading and the native initializer independently checks compiled
 bindings. `ARA0921` means rebuild scripts and player with the same Ara SDK and
 export again; `ARA0920` reports missing images or an inconsistent module inventory.
@@ -29,23 +29,83 @@ This runtime lane uses NativeAOT, as required by A12. The existing optional
 ReadyToRun and S7 fixture lanes remain available for conformance templates;
 ReadyToRun is diagnosed for runtime gameplay exports until its host is integrated.
 
-## Distribution v2
+## Project presets and distribution layout
+
+D30 defines `content/` as the freely organized authored root, including C# scripts.
+Export resolves it through the shared read-only project adapter; legacy projects
+must migrate before ordinary open or export. Authored references omit the `content/` prefix.
+
+Project-owned presets live in `settings/builds/<name>.export.json`. For example,
+`ara-export export --project PROJECT --preset windows --output PROJECT/builds/windows`
+uses `settings/builds/windows.export.json`. Explicit project-relative and absolute
+preset paths work; the old `presets/` lookup remains available for existing projects.
+Derived template/cache/job data lives in `.ara/export-cache/`.
+Preset `content: "."` explicitly selects the project directory as a content input;
+this does not bypass the current-layout requirement. Other content directories stay
+project-relative, and file/artifact paths remain strict.
+
+Windows and Linux ship one game executable, one `data/` directory and notices:
+
+```text
+build/
+  Outpost.exe                  # Outpost on Linux
+  data/
+    ara-launch.json
+    ara-crash.json
+    engine.json
+    game.arapack
+    game/                      # compiled gameplay, when present
+    resources/                 # cooked engine resources
+  THIRD_PARTY_NOTICES.txt
+```
+
+The executable name defaults to the project marker's `name`; a preset `name`
+overrides it without renaming C# assemblies. `version` defaults to `1.0.0` and is
+embedded in Windows version resources. An optional authored-root-relative `icon` accepts
+ICO on Windows, ICNS on macOS and SVG on Linux. Artifact template pins remain relative
+to the project root; gameplay modules and scene/UI asset paths use the shared authored
+root contract. Windows resource changes precede
+Authenticode signing. Without a custom icon the pinned player's game icon stays.
+macOS ships `<Game>.app`, with the named executable in `Contents/MacOS` and one
+`Contents/Resources` data root; its name/version also populate `Info.plist`.
+
+The build can be moved to another directory and double-clicked; neither the current
+working directory nor any author source/cache path is needed to locate its data.
+`--root` accepts the build folder or its data folder for explicit launch tooling.
+Headless gameplay writes a capture only when `--capture PATH` is supplied.
+
+Before compiling scripts, the editor checks its installed companion player, matching
+PDB GUID/age and every shader manifest, runtime binary and required Metal reflection. Offline
+Slang reflection and compiler caches stay outside the runtime payload. Shader checksums
+are checked when recorded by the cook. Pinned runtime ZIPs receive the same resource
+check before gameplay compilation. A missing or mixed cohort is
+`ARA-EXP-PREFLIGHT-001`, with an exact-version repair action for installed engines:
+close projects using that version, then choose Repair in Hub or run
+`ara hub repair <version>`. A repair never closes a project automatically.
+
+For read-only inspection without building, use `ara-export preflight --player EXE
+--engine ENGINE --symbols PLAYER_PDB` (omit symbols for a non-Windows player).
 
 Export writes a plain `build/` folder, `distribution.json`, `report.json`, generic
 packages, and a private `symbols/<build-id>.zip` plus its unpacked symbol store.
 `distribution.json` lists player files and packages with BLAKE3, length and execute
 permission, the entry point, build ID, symbol location and actual signing state.
-Symbols, logs and crash records are excluded from every player package.
+Verification captures and semantic sidecars live under `report/`, compiler/signing
+logs under `logs/`, and symbol archives under `symbols/`, all beside `build/`.
+Verification runs with its profile, crash directory and working directory outside
+the shipped build. Export rejects diagnostic captures, logs, dumps and symbol files
+inside the player folder before packaging. Runtime crashes use user state storage,
+never the installed game folder.
 
 Stores will be supported by optional plugins later. The engine produces generic
 builds and manifests; this change introduces no store integration or plugin system.
 
 The preset's `packaging` field selects `windowsPortable`, `windowsInstaller`,
 `linuxAppimage`, `linuxTar` or `androidPlay` (`folder` is the default). Generic
-project presets live at `presets/<name>.export.json`; `export --preset
+project presets live at `settings/builds/<name>.export.json`; `export --preset
 windows-portable --project PROJECT --output NEW_DIR` resolves that file. Paths to
 existing presets still work. `ara-export preset --kind windows-portable --base
-BASE --output PROJECT/presets/windows-portable.export.json` derives a named preset
+BASE --output PROJECT/settings/builds/windows-portable.export.json` derives a named preset
 from a platform preset with real runtime pins. The CLI owner can call the unchanged
 `export(ExportRequest, EventSink)` entry point for an export job and forward its
 progress, artifact and diagnostic events to `ara_jobs`.
@@ -143,8 +203,9 @@ The conformance fixture can validate a pack containing the real Fox demo project
 it verifies every file and the main scene document, then runs the original seeded
 S7 ECS/C# workload. Its report explicitly says conformance; it does not simulate
 the authored Fox controllers, physics, navigation or rendering. Stage a copy of
-`crates/ara-player/demo` under a scratch project's `content/` and the existing
-`fixtures/sample/game` under `game/`; this is export-test scaffolding. Never change
+`crates/ara-player/demo` under a scratch project's `content/` and copy the C# files
+from `fixtures/sample/content/` into that same authored root. Use a layout-version-4
+marker and authored-relative `scriptProject: "Game.csproj"`; this is export-test scaffolding. Never change
 the demo or label this fixture as a runnable Outpost game. The Outpost Door,
 UseMedkit and Gravity samples under `dotnet/` need the integrated host ABI and are
 not wired into the S7 conformance ABI.
@@ -174,7 +235,7 @@ no Linux launch, FUSE mount, Android device, real signing identity or store uplo
 is claimed.
 
 To repeat the distribution test, stage the demo and conformance C# files as above
-under `EVIDENCE/project/content` and `EVIDENCE/project/game`, and save prepared base
+under `EVIDENCE/project/content/`, add the current project marker, and save prepared base
 presets at `EVIDENCE/presets/{windows,linux,android}.export.json`. The Windows preset
 needs `installerStub`, Linux needs `appimageRuntime`, and Android needs its explicit
 test-key signing configuration. Configure the SDK environment shown below and the

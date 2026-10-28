@@ -9,6 +9,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
+mod readme;
 mod symbols_payload;
 
 const BINARIES: &[(&str, &str)] = &[
@@ -126,11 +127,11 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
         "uninstall.ps1",
         "launch-hub.ps1",
         "launch-editor.ps1",
-        "README-FIRST.txt",
         "LICENSE",
     ] {
         copy(&root.join("release").join(file), &stage.join(file))?;
     }
+    fs::write(stage.join("README-FIRST.txt"), readme::render(version))?;
     bundle_tools(root, &stage, &sdk)?;
     if hub {
         let script = stage.join("install.ps1");
@@ -156,10 +157,10 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     // Generate with the packaged CLI, so docs describe the exact shipped schema
     // and command registry. The scratch project lives only in the staging tree.
     let docs_project = stage.join(".docs-project");
-    fs::create_dir(&docs_project)?;
-    fs::write(
-        docs_project.join("ara.project.json"),
-        "{\"name\":\"Ara engine reference\"}",
+    fs::create_dir_all(docs_project.join(ara_doc::AUTHORING_ROOT))?;
+    support::json(
+        &docs_project.join("ara.project.json"),
+        &json!({"name":"Ara engine reference","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
     )?;
     fs::create_dir_all(dist.join("docs-profile"))?;
     run(
@@ -305,8 +306,10 @@ fn bundle_dotnet(root: &Path, stage: &Path, symbols: &Path, dist: &Path) -> Resu
     for project in [
         "Ara.Host",
         "Ara.Runtime",
+        "Ara.Editor",
         "Ara.CompileServer",
         "Ara.Analyzers",
+        "Ara.Analyzers.CodeFixes",
         "Ara.Generators",
         "Ara.RunWorker",
         "Ara.Agent",
@@ -362,6 +365,13 @@ fn templates(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
                 let name = path.file_name().context("sample directory")?;
                 for file in files(&path)? {
                     let rel = file.strip_prefix(&path)?;
+                    if rel
+                        .components()
+                        .next()
+                        .is_some_and(|component| component.as_os_str() == "builds")
+                    {
+                        continue;
+                    }
                     if !rel.components().any(|c| {
                         [".git", ".ara", "target", "bin", "obj", "evidence"]
                             .iter()
@@ -393,9 +403,8 @@ fn templates(root: &Path, stage: &Path, dist: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Keep the Hub's template preview, which lives in the excluded `evidence/`: the
-/// Play capture of the sample's main scene becomes `thumbnail.png` (the rule
-/// `ara_hub_service::DirectoryTemplates` applies in a checkout).
+/// Keep the Hub preview while repository evidence stays outside the game project.
+/// The main scene's Play capture becomes the packaged template's thumbnail.
 fn sample_thumbnail(sample: &Path, templates: &Path) -> Result<()> {
     let marker: serde_json::Value =
         serde_json::from_slice(&fs::read(sample.join("ara.project.json"))?)?;
@@ -406,7 +415,11 @@ fn sample_thumbnail(sample: &Path, templates: &Path) -> Result<()> {
         return Ok(());
     };
     let preview = sample
-        .join("evidence")
+        .parent()
+        .and_then(Path::parent)
+        .context("sample repository root")?
+        .join("evidence/samples")
+        .join(sample.file_name().context("sample directory")?)
         .join(format!("{}-player.png", stem.to_string_lossy()));
     let target = templates
         .join(sample.file_name().context("sample directory")?)

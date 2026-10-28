@@ -1,0 +1,21 @@
+{
+  "$schema": "ara://schema/prefab/1",
+  "id": "pf_duct",
+  "records": {
+    "e_part0": {
+      "name": "modular_airduct_rectangular_01_tripple_01",
+      "parent": "e_root",
+      "order": "a0",
+      "MeshRenderer": {
+        "model": "@third_party/modular_airduct_rectangular_01/modular_airduct_rectangular_01_1k.gltf#as_modularairductrectangula",
+        "node": "modular_airduct_rectangular_01_tripple_01"
+      },
+      "Transform": {}
+    },
+    "e_root": {
+      "name": "duct",
+      "order": "a0",
+      "Transform": {}
+    }
+  }
+}

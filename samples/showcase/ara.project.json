@@ -1,4 +1,5 @@
 {
-  "name": "Material and character showcase",
-  "main": "levels/showcase.scene"
+  "layoutVersion": 4,
+  "main": "levels/showcase.scene",
+  "name": "Material and character showcase"
 }

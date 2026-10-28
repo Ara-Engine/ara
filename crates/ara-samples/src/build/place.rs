@@ -40,7 +40,7 @@ impl Ctx {
     /// Registers a model file: writes its glTF sidecar and records its bounds.
     pub fn model(&self, models: &mut Models, name: &str, path: &str, id: &str) -> Result<()> {
         self.sidecar(path, id, Value::Null)?;
-        let (min, max) = super::bounds::file(&self.root.join(path), None)
+        let (min, max) = super::bounds::file(&crate::authored_path(&self.root, path), None)
             .with_context(|| format!("bounds of {path}"))?;
         models.0.insert(
             name.to_owned(),
@@ -273,7 +273,7 @@ impl Ground {
     /// Evaluates every tile of the project's terrain document at `path`.
     pub fn load(root: &Path, path: &str) -> Result<Self> {
         let schema = ara_runtime::schema(&[]).map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        let text = std::fs::read_to_string(root.join(path))?;
+        let text = std::fs::read_to_string(crate::authored_path(root, path))?;
         let read = ara_doc::read(&text, path, &schema, None);
         let doc = read.doc.context("terrain document did not parse")?;
         let terrain =

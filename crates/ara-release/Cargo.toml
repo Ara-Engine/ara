@@ -8,6 +8,7 @@ publish.workspace = true
 default-run = "ara-release"
 
 [dependencies]
+ara-doc.workspace = true
 ara-update = { path = "../ara-update" }
 ara-proto.workspace = true
 ara-rpc.workspace = true

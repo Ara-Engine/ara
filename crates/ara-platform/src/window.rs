@@ -310,6 +310,13 @@ impl Window {
         }
         Ok(())
     }
+    /// Physical pixels per window coordinate (2 on a Retina display, 1 where SDL reports
+    /// window coordinates in pixels). Pointer events are in window coordinates and
+    /// [`Self::size`] is in pixels, so UI hit tests divide or multiply by this.
+    pub fn pixel_density(&self) -> f32 {
+        // SAFETY: Live window on its owning thread.
+        unsafe { SDL_GetWindowPixelDensity(self.handle).max(0.25) }
+    }
     /// Display scale of the monitor showing this window.
     pub fn display_scale(&self) -> f32 {
         // SAFETY: Live window on its owning thread.

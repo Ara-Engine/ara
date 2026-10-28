@@ -8,6 +8,24 @@ namespace Ara.Hosting;
 /// </summary>
 public static unsafe class Host
 {
+    /// <summary>Copies scene identity or hierarchy matches from the active ECS world.</summary>
+    public static int SceneEntities(uint operation, Entity entity, string selector, Span<Entity> entities)
+    {
+        var context = RequireExclusive();
+        var count = Encoding.UTF8.GetByteCount(selector);
+        if (count > 4096) throw new ArgumentException("Entity paths are limited to 4096 UTF-8 bytes", nameof(selector));
+        Span<byte> bytes = stackalloc byte[count];
+        Encoding.UTF8.GetBytes(selector, bytes);
+        fixed (byte* name = bytes)
+        fixed (Entity* output = entities)
+        {
+            var needed = context.Init.Api.SceneEntities(context.Init.Ctx, operation, entity.Bits, name, (uint)count, (ulong*)output, (uint)entities.Length);
+            if (operation == AbiConst.SceneFind && needed > 1) throw new InvalidOperationException($"Entity name/path `{selector}` is ambiguous ({needed} matches); use a full path or stable ID");
+            if (needed > entities.Length) throw new ArgumentException($"Hierarchy query needs {needed} entity slots", nameof(entities));
+            return (int)needed;
+        }
+    }
+
     [ThreadStatic] static HostContext? t_context;
     /// <summary>Copies sorted handles without exposing engine storage to managed code.</summary>
     public static int QueryEntities(uint component, Span<Entity> entities)

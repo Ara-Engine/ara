@@ -6,6 +6,59 @@ use ara_update::{
 };
 use std::{fs, io::Write};
 
+#[cfg(unix)]
+#[test]
+fn extract_preserves_executable_permissions_without_set_id_bits() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = testing::scratch("executable-permissions");
+    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    zip.start_file(
+        "ara",
+        zip::write::SimpleFileOptions::default().unix_permissions(0o6755),
+    )
+    .unwrap();
+    zip.write_all(b"#!/bin/sh\nexit 0\n").unwrap();
+    let archive = root.join("sdk.zip");
+    fs::write(&archive, zip.finish().unwrap().into_inner()).unwrap();
+    let destination = root.join("sdk");
+    extract(&archive, &destination, &Cancel::default()).unwrap();
+    assert_eq!(
+        fs::metadata(destination.join("ara"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777,
+        0o755
+    );
+}
+
+#[test]
+fn download_exposes_verification_after_received_bytes() {
+    let server = Server::new();
+    let root = testing::scratch("download-phases");
+    let data = vec![0x42; 4096];
+    let listing = server.release(Kind::Hub, "1.0.0", Channel::Stable, data);
+    server.releases(vec![listing]);
+    let feed = Feed::new(server.config(), &root.join("cache")).unwrap();
+    let release = feed.check().unwrap().releases.remove(0);
+    let mut phases = Vec::new();
+    let mut received = 0;
+    download_with_phase(
+        &feed,
+        &release,
+        &root.join("download"),
+        &Cancel::default(),
+        |progress| received = progress.received,
+        |phase| phases.push(phase),
+    )
+    .unwrap();
+    assert_eq!(received, 4096);
+    assert!(matches!(
+        phases.as_slice(),
+        [DownloadPhase::Downloading, DownloadPhase::Verifying]
+    ));
+}
+
 #[test]
 fn feed_pagination_channels_etags_offline_and_rate_limit() {
     let server = Server::new();

@@ -26,10 +26,20 @@ fn path_xml(path: &Path) -> String {
 
 /// Finds module folders, excluding build outputs and editor-only modules.
 pub fn modules(root: &Path) -> Result<Vec<ModuleSpec>> {
-    let mut specs = ara_play_host::script_modules(root)
-        .into_iter()
-        .map(|path| ModuleSpec::from_dir(&path).map_err(|e| anyhow::anyhow!("{e}")))
-        .collect::<Result<Vec<_>>>()?;
+    ara_host::project_layout::require_current_layout(root)
+        .map_err(|diagnostic| anyhow::anyhow!("{diagnostic}"))?;
+    let inventory = ara_script::project::publish(root, ModuleProfile::Gameplay)
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let mut specs = inventory.gameplay_specs(root).map_err(|errors| {
+        anyhow::anyhow!(
+            "{}",
+            errors
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
+    })?;
     specs.retain(|spec| spec.profile == ModuleProfile::Gameplay);
     let mut names = std::collections::BTreeSet::new();
     for spec in &specs {
@@ -69,6 +79,8 @@ pub fn prepare(
     job: &Path,
     tools: &Toolchain,
 ) -> Result<Option<ShippingProject>> {
+    let canonical_project = dunce::canonicalize(project)?;
+    let project = canonical_project.as_path();
     let specs = modules(project)?;
     if specs.is_empty() {
         return Ok(None);
@@ -148,11 +160,25 @@ pub fn prepare(
             )
         })
         .collect();
+    let inventory = ara_script::project::inventory(project).map_err(|d| anyhow::anyhow!("{d}"))?;
     for spec in &specs {
         let csproj = &projects[spec.name.as_str()];
         std::fs::create_dir_all(csproj.parent().context("module project directory")?)?;
-        let source = dunce::canonicalize(&spec.dir)?;
-        let includes = source_items(&source, &spec.dir, &ara_play_host::script_modules(project));
+        let module = inventory
+            .modules
+            .iter()
+            .find(|module| module.name == spec.name)
+            .context("shipping module missing from inventory")?;
+        let includes = module
+            .sources
+            .iter()
+            .map(|source| {
+                format!(
+                    r#"<Compile Include="{}" />"#,
+                    path_xml(&project.join(&source.storage_path))
+                )
+            })
+            .collect::<String>();
         let refs = spec
             .references
             .iter()
@@ -344,47 +370,9 @@ pub fn write_manifest(output: &Path, library: &str, modules: &[String]) -> Resul
     )
 }
 
-/// The shipping compiler respects the same nested-module boundaries as Roslyn.
-fn source_items(source: &Path, module: &Path, roots: &[PathBuf]) -> String {
-    let mut excludes = [
-        "bin",
-        "obj",
-        "target",
-        "artifacts",
-        "node_modules",
-        "spikes",
-        ".*",
-    ]
-    .into_iter()
-    .map(|dir| format!("{}/**/{dir}/**", path_xml(source)))
-    .collect::<Vec<_>>();
-    excludes.extend(
-        roots
-            .iter()
-            .filter(|root| root.as_path() != module)
-            .filter_map(|root| root.strip_prefix(module).ok())
-            .map(|relative| format!("{}/**", path_xml(&source.join(relative)))),
-    );
-    format!(
-        r#"<Compile Include="{}/**/*.cs" Exclude="{}" />"#,
-        path_xml(source),
-        excludes.join(";")
-    )
-}
-
 #[cfg(test)]
 mod source_tests {
     use super::*;
-    #[test]
-    fn shipping_sources_exclude_nested_modules_and_generated_code() {
-        let module = Path::new("/game");
-        let roots = vec![module.to_owned(), module.join("Gameplay")];
-        let xml = source_items(module, module, &roots);
-        assert!(xml.contains(&format!("{}/**", path_xml(&module.join("Gameplay")))));
-        assert!(xml.contains("/game/**/obj/**"));
-        assert!(xml.contains("/game/**/.*/**"));
-        assert!(!xml.contains(";/game/**;"));
-    }
     #[test]
     fn script_images_take_each_platforms_shared_library_name() {
         assert_eq!(library_name("Outpost", "win-x64"), "Outpost.dll");

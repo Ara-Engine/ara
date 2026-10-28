@@ -6,6 +6,7 @@
     <LangVersion>14</LangVersion>
     <IsRoslynComponent>true</IsRoslynComponent>
     <ImplicitUsings>disable</ImplicitUsings>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" PrivateAssets="all" />

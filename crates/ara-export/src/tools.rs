@@ -293,3 +293,19 @@ pub fn project_path(root: &Path, relative: &str) -> Result<PathBuf> {
     }
     Ok(path)
 }
+
+/// Resolves an authored asset against the shared project layout; legacy projects
+/// retain their project-relative asset paths. Artifact pins use `project_path`.
+pub fn authored_path(root: &Path, relative: &str) -> Result<PathBuf> {
+    project_path(&ara_host::project::authored_root(root), relative)
+}
+
+/// Resolves an export content directory; `.` explicitly selects the project root.
+/// File/artifact paths continue to require ordinary nonempty relative paths.
+pub fn content_path(root: &Path, relative: &str) -> Result<PathBuf> {
+    if relative == "." {
+        Ok(dunce::canonicalize(root)?)
+    } else {
+        project_path(root, relative)
+    }
+}
