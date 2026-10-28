@@ -1913,10 +1913,14 @@ impl Renderer {
                 ],
             )
         });
+        // Entity IDs end ready for picks and capture readbacks, as after a frame's
+        // PresentationReady, when TSR or the wire composite read them here.
         graph.pass(
             "Output.Ready",
             Queue::Graphics,
-            [(input, Access::ShaderRead), (output, Access::CopySource)],
+            [(input, Access::ShaderRead), (output, Access::CopySource)]
+                .into_iter()
+                .chain(entity_ids.map(|id| (id, Access::CopySource))),
         );
         let compiled = graph.compile()?;
         let mut points = Vec::new();
