@@ -2,7 +2,7 @@
 use super::*;
 
 impl Shell {
-    pub(super) fn multi_import_panel(
+    pub(in crate::shell) fn multi_import_panel(
         &mut self,
         editor: &Editor,
         out: &mut String,
