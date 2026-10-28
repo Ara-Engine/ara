@@ -5,10 +5,18 @@ use super::*;
 fn captured_motion_then_press_keeps_the_game_target_at_independent_window_scales()
 -> ara_ui::Result<()> {
     let root = crate::test_target().join(format!("game-input-scales-{}", std::process::id()));
-    std::fs::create_dir_all(&root)?;
+    std::fs::create_dir_all(root.join("levels"))?;
     std::fs::write(
         root.join("ara.project.json"),
-        "{\"name\":\"Game input scale fixture\"}",
+        ara_json::to_canonical_string(
+            &json!({"name":"Game input scale fixture","main":"levels/main.scene"}),
+        ),
+    )?;
+    std::fs::write(
+        root.join("levels/main.scene"),
+        ara_json::to_canonical_string(
+            &json!({"$schema":"ara://schema/scene/1","id":"sc_gamescal1","records":{}}),
+        ),
     )?;
     let mut editor = Editor::open_with(&root, Some(root.join(".ara/user.json")))?;
     let mut shell = Shell::new(&mut editor, [900., 600.])?;
@@ -47,6 +55,25 @@ fn captured_motion_then_press_keeps_the_game_target_at_independent_window_scales
             shell.game_captured,
             "The press remains inside the logical Game viewport at density {density}, DPI {dpi}"
         );
+    }
+    for scancode in 224..=231 {
+        for pressed in [true, false] {
+            assert_eq!(
+                game_input(
+                    &Event::Key {
+                        scancode,
+                        pressed,
+                        repeat: false
+                    },
+                    &mut editor,
+                    &mut shell,
+                    1.
+                ),
+                None,
+                "Modifier transitions must also reach the editor's global shortcut state",
+            );
+            assert!(shell.game_captured);
+        }
     }
     assert_eq!(editor.host.store().revision(), revision);
     drop(shell);

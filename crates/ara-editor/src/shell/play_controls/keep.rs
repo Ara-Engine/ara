@@ -118,7 +118,7 @@ impl Shell {
     /// The only Keep apply path: exact pairs are captured before the async job;
     /// the host obtains a fresh diff and rechecks authored conflicts at commit.
     pub(crate) fn apply_keep_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
-        self.play_idle()?;
+        self.play_idle(editor)?;
         let choice = self
             .play_controls
             .keep
@@ -145,12 +145,12 @@ impl Shell {
         self.rebuild(editor)
     }
     pub(crate) fn cancel_keep_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
-        self.play_idle()?;
+        self.play_idle(editor)?;
         self.play_controls.keep = None;
         self.rebuild(editor)
     }
     pub(crate) fn refresh_keep_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
-        self.play_idle()?;
+        self.play_idle(editor)?;
         let choice = self
             .play_controls
             .keep

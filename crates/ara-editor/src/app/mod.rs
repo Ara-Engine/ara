@@ -2725,7 +2725,7 @@ fn panels_of(node: &ara_ui::docking::DockNode) -> Vec<String> {
 }
 /// While the Game view holds the keyboard and mouse, raw input goes to the shown Play
 /// client (the player maps it exactly like its own window). Esc, or pressing outside
-/// the view, gives them back; F5-F8 (Play, Pause, Step, Stop) stay with the editor.
+/// the view, gives them back; F5-F8 stay with the editor, whose modifier state is mirrored.
 /// `None` lets the editor handle the event; `Some(redraw)` consumed it.
 fn game_input(
     event: &Event,
@@ -2802,7 +2802,18 @@ fn game_input(
     if let (Some(world), Some(surfaces)) = (&editor.play_world, &editor.play_surfaces) {
         surfaces.device(world, shell.game_client, events);
     }
-    Some(false)
+    if matches!(
+        event,
+        Event::Key {
+            scancode: 224..=231,
+            ..
+        }
+    ) {
+        // Both owners need modifier transitions for chords such as Shift+F5.
+        None
+    } else {
+        Some(false)
+    }
 }
 
 /// The GPU's automatic preset: what Auto (and an Auto project default) resolve to in

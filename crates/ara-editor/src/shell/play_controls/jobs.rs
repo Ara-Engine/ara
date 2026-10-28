@@ -32,9 +32,16 @@ pub(super) struct Pending {
     phase: Phase,
     polled: Instant,
 }
+impl Pending {
+    /// Abandon the old world's reply before any new world can adopt it.
+    pub(super) fn cancel(self, editor: &mut Editor) {
+        let _ = editor.action("jobs.cancel", json!({"job":self.id}));
+    }
+}
 
 impl Shell {
-    pub(super) fn play_idle(&self) -> ara_ui::Result<()> {
+    pub(super) fn play_idle(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.reconcile_play_world(editor);
         if self.play_controls.pending.is_some() {
             return Err("Wait for the current runtime operation to complete".into());
         }
@@ -71,7 +78,7 @@ impl Shell {
         Ok(())
     }
     pub(crate) fn inspect_play_selection(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
-        self.play_idle()?;
+        self.play_idle(editor)?;
         if self
             .play_controls
             .runtime
@@ -97,6 +104,7 @@ impl Shell {
         self.rebuild(editor)
     }
     pub(crate) fn commit_play_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        self.reconcile_play_world(editor);
         if self.play_controls.pending.is_some() {
             return Ok(false);
         }
@@ -125,7 +133,7 @@ impl Shell {
         editor: &mut Editor,
         include_driven: bool,
     ) -> ara_ui::Result<()> {
-        self.play_idle()?;
+        self.play_idle(editor)?;
         if editor.state.selection.is_empty() {
             return Err("Select the entities whose changes should be kept".into());
         }
@@ -152,15 +160,17 @@ impl Shell {
     }
     /// Poll at a modest cadence; these Host job lookups never wait on player IO.
     pub(crate) fn poll_play_job(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
+        let changed = self.reconcile_play_world(editor);
         if self.play_controls.pending.is_none()
-            && self.game_running
-            && let Some(resume) = self.play_controls.simulate.take()
+            && let Some(resume) = self
+                .play_controls
+                .take_simulate(editor.play_world.as_deref(), self.game_running)
         {
             self.control_play(editor, None, resume)?;
             return Ok(true);
         }
         let Some(mut pending) = self.play_controls.pending.take() else {
-            return Ok(false);
+            return Ok(changed);
         };
         if editor.play_world.as_deref() != Some(pending.world.as_str()) {
             let _ = editor.action("jobs.cancel", json!({"job":pending.id}));
@@ -356,7 +366,7 @@ impl Shell {
         entity: Option<String>,
         resume: bool,
     ) -> ara_ui::Result<()> {
-        self.play_idle()?;
+        self.play_idle(editor)?;
         if self
             .play_controls
             .runtime

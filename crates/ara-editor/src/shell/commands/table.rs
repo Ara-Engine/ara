@@ -429,7 +429,7 @@ fn simulate(s: &mut Shell, e: &mut Editor) -> R {
     }
     act(e, "editor.layout.show", json!({"panel":"game"}))?;
     play(e, "play.start", params)?;
-    s.play_controls.simulate = Some(resume);
+    s.queue_simulate(e, resume)?;
     view(e, json!({"play":"paused"}))
 }
 fn undo_label(c: &Ctx, redo: bool) -> String {
@@ -1225,7 +1225,10 @@ fn build() -> Vec<Spec> {
             "rotate-ccw",
             "Ctrl+Shift+F5",
             "Restart the world from tick 0.",
-            |_, e, _| play(e, "play.restart", json!({})),
+            |s, e, _| {
+                s.reset_play_transients(e);
+                play(e, "play.restart", json!({}))
+            },
         )
         .when(|c| {
             if c.state.playing.is_some() {

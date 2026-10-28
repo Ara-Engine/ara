@@ -6,6 +6,7 @@ use ara_schema::ValueType;
 mod fields;
 mod jobs;
 mod keep;
+mod lifecycle;
 mod network;
 mod runtime;
 #[cfg(test)]
@@ -65,19 +66,24 @@ struct Runtime {
     editable: bool,
     drafts: BTreeMap<String, Draft>,
 }
+struct Simulate {
+    world: String,
+    resume: bool,
+}
 /// Transient presentation state; authored values are changed only by play.keep's typed batch.
 #[derive(Default)]
 pub(crate) struct State {
+    world: Option<String>,
     pub options: bool,
     pub players: BTreeMap<usize, PlayerInfo>,
-    /// Incremented only when the player tile set or readiness changes.
+    /// Incremented when the owning world, player tile set or readiness changes.
     pub revision: u64,
     runtime: Option<Runtime>,
     expanded: std::collections::BTreeSet<String>,
     pages: BTreeMap<String, usize>,
     message: Option<String>,
     pending: Option<jobs::Pending>,
-    pub simulate: Option<bool>,
+    simulate: Option<Simulate>,
     spectators: std::collections::BTreeSet<usize>,
     keep: Option<keep::Choice>,
     last_keep: Option<Value>,
@@ -94,6 +100,7 @@ impl Shell {
         player: usize,
         capture: bool,
     ) -> ara_ui::Result<()> {
+        self.reconcile_play_world(editor);
         if !self.game_players.contains(&player) {
             return Err("This Play client no longer has a view".into());
         }
@@ -132,6 +139,7 @@ impl Shell {
         action: &Action,
         value: Value,
     ) -> ara_ui::Result<()> {
+        self.reconcile_play_world(editor);
         if self.play_controls.pending.is_some() {
             return Err("Wait for the current runtime operation to complete".into());
         }
@@ -195,6 +203,7 @@ impl Shell {
         self.rebuild(editor)
     }
     pub(crate) fn discard_play_fields(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.reconcile_play_world(editor);
         if self.play_controls.pending.is_some() {
             return Err("Wait for the current runtime operation to complete".into());
         }
@@ -206,7 +215,7 @@ impl Shell {
     }
     /// The explicit inspection snapshot and live tile metadata, used by native acceptance evidence.
     pub(crate) fn play_runtime_report(&self) -> Value {
-        json!({"controlledPlayer":self.game_client,"spectator":self.play_controls.spectators.contains(&self.game_client),"captured":self.game_captured,"pending":self.play_controls.pending.is_some(),"players":self.play_controls.players.iter().map(|(player,info)|json!({"player":player,"live":info.live,"size":info.size,"fps":info.fps})).collect::<Vec<_>>(),"inspection":self.play_controls.runtime.as_ref().map(|runtime|json!({"world":runtime.world,"player":runtime.player,"entity":runtime.entity,"tick":runtime.tick,"components":runtime.components,"drafts":runtime.drafts.len(),"editable":runtime.editable})),"message":self.play_controls.message,"keep":self.keep_fields_report(),"lastKeep":self.play_controls.last_keep})
+        json!({"world":self.play_controls.world,"queuedSimulate":self.play_controls.simulate.as_ref().map(|request|json!({"world":request.world,"resume":request.resume})),"controlledPlayer":self.game_client,"spectator":self.play_controls.spectators.contains(&self.game_client),"captured":self.game_captured,"pending":self.play_controls.pending.is_some(),"players":self.play_controls.players.iter().map(|(player,info)|json!({"player":player,"live":info.live,"size":info.size,"fps":info.fps})).collect::<Vec<_>>(),"inspection":self.play_controls.runtime.as_ref().map(|runtime|json!({"world":runtime.world,"player":runtime.player,"entity":runtime.entity,"tick":runtime.tick,"components":runtime.components,"drafts":runtime.drafts.len(),"editable":runtime.editable})),"message":self.play_controls.message,"keep":self.keep_fields_report(),"lastKeep":self.play_controls.last_keep})
     }
     /// Each visible tile owns its own capture rectangle; changing focus never swaps images.
     pub(crate) fn game_input_rect(&self) -> Option<Box2> {

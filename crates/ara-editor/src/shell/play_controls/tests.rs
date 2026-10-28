@@ -6,6 +6,7 @@ use std::{
     path::PathBuf,
     sync::atomic::{AtomicU64, Ordering},
 };
+mod lifecycle;
 
 struct Project(PathBuf);
 impl Project {
