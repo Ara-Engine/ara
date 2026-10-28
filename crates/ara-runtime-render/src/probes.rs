@@ -349,6 +349,15 @@ impl ProbeCaptures {
         self.auto = auto;
     }
 
+    /// Whether capture work is under way (a generation in flight, a cache read or
+    /// write): a view that otherwise stops redrawing keeps preparing frames
+    /// (`RasterView::needs_frame`) until it settles.
+    pub fn is_busy(&self) -> bool {
+        self.probes
+            .values()
+            .any(|p| p.flight.is_some() || p.loading)
+    }
+
     /// The probe cache folder.
     pub fn cache_root(&self) -> &std::path::Path {
         &self.cache_root

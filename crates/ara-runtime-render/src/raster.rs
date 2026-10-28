@@ -134,13 +134,14 @@ impl RasterView {
         self.pending_gi = enabled;
     }
 
-    /// Keep progressive editor views polling until acquired probe surfaces arrive
-    /// and moved instances settle back into them.
+    /// Keep progressive editor views polling until acquired probe surfaces arrive,
+    /// moved instances settle back into them and reflection-probe captures finish.
     pub fn needs_frame(&self) -> bool {
         self.emitter_search.is_busy()
             || self.fades.is_active()
             || self.probe_gi_pending()
             || self.effects.is_pending()
+            || self.probes.is_busy()
     }
 
     /// GI acquisition/delivery only; emitters and model fades have their own work.
