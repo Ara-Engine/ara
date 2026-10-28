@@ -829,7 +829,7 @@ fn key(editor: &mut Editor, shell: &mut Shell, scancode: i32, pressed: bool) {
         pressed,
         repeat: false,
     };
-    super::game_input(&event, editor, shell, 1.0);
+    super::game_input(&event, editor, shell, 1.0, None);
 }
 
 /// The newest entity created by a human edit.
