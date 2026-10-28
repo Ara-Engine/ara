@@ -152,11 +152,22 @@ pub struct Capabilities {
     pub device_local_mib: Option<u64>,
 }
 
+/// Whether `gpu`'s ray queries are verified for Ara's ray-traced paths: the D29
+/// hybrid, the RT fidelity tier and the ray-traced probe-GI bake. Metal's are not
+/// yet (an M5 renders the RT gallery speckled, with blocky artifacts on lit
+/// surfaces), so macOS stays raster unless `ARA_METAL_RT=1` opts in to validate it.
+pub fn verified_ray_tracing(gpu: &GpuDevice) -> bool {
+    gpu.info().ray_tracing
+        && (!cfg!(target_os = "macos")
+            || std::env::var_os("ARA_METAL_RT").is_some_and(|value| value == "1"))
+}
+
 impl Capabilities {
-    /// Reads the capabilities of an opened device.
+    /// Reads the capabilities of an opened device (ray tracing only where verified:
+    /// [`verified_ray_tracing`]).
     pub fn of(gpu: &GpuDevice) -> Self {
         Self {
-            ray_tracing: gpu.info().ray_tracing,
+            ray_tracing: verified_ray_tracing(gpu),
             device_local_mib: gpu.info().quality_memory_mib(),
         }
     }
