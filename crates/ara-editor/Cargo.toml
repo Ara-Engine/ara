@@ -77,6 +77,9 @@ serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"
 sdl3-sys.workspace = true
 accesskit = { workspace = true, features = ["serde"] }
 
+[dev-dependencies]
+ara-ui-test = { path = "../ara-ui-test" }
+
 [target.'cfg(windows)'.dependencies]
 accesskit_windows = "0.35"
 windows = { workspace = true, features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_Security"] }

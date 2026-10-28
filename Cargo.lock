@@ -861,6 +861,7 @@ dependencies = [
  "ara-texture-gpu",
  "ara-ui",
  "ara-ui-render",
+ "ara-ui-test",
  "ara-ui-text",
  "ara-update",
  "ara-vfx",
