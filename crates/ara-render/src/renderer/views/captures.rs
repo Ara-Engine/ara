@@ -86,6 +86,11 @@ impl Renderer {
                 .is_none_or(|stats| stats.pending_textures == 0),
         };
         self.poll_capture_readbacks(sync)?;
+        for key in std::mem::take(&mut self.views.capture_rereads) {
+            if let Some(capture) = self.views.captures.index(key) {
+                self.read_capture(capture)?;
+            }
+        }
         let work = self
             .views
             .captures
@@ -127,6 +132,16 @@ impl Renderer {
     /// published image stays. False when nothing was pending.
     pub fn cancel_reflection_capture(&mut self, key: u64) -> bool {
         self.views.captures.cancel(key)
+    }
+    /// Reads authored probe `key`'s published column back again (its image lands in
+    /// `take_reflection_capture_images` a frame or two later); false without a
+    /// published capture. For a host whose image never arrived.
+    pub fn reread_reflection_capture(&mut self, key: u64) -> bool {
+        let ready = self.views.captures.status(key).is_some_and(|s| s.ready);
+        if ready {
+            self.views.capture_rereads.push(key);
+        }
+        ready
     }
     /// Authored probe `key`'s bake state, if the renderer holds its record.
     pub fn reflection_capture_status(&self, key: u64) -> Option<BakeStatus> {

@@ -253,6 +253,8 @@ struct Probe {
     loaded: Option<String>,
     /// That cache read has not come back yet.
     loading: bool,
+    /// The published capture's cache file could not be written (`ARA_PROBE_CACHE`).
+    cache_error: Option<Diagnostic>,
 }
 
 /// A generation between request and receipt.
@@ -268,10 +270,14 @@ struct Flight {
     requested: Option<u64>,
     /// A cancel is asked for.
     cancel: bool,
-    /// Published and read back: hashing and the cache write are under way.
+    /// Published and read back: hashing is under way (the cache file is written
+    /// after the receipt, off the job's path).
     writing: bool,
     /// Frames the renderer has not held a record for it yet.
     misses: u32,
+    /// Frames since the renderer published this bake without its image reaching
+    /// the job (`LANDING_FRAMES`).
+    unlanded: u32,
 }
 
 /// A recapture job: its members (probe, generation) and their outcomes.
@@ -286,11 +292,17 @@ struct Job {
 /// Off-thread cache work and its results.
 #[derive(Debug)]
 enum Io {
-    /// A published capture hashed and written (or not).
-    Written {
+    /// A published capture hashed: the generation's receipt.
+    Hashed {
         entity: String,
         generation: u64,
-        receipt: Result<ProbeReceipt, String>,
+        receipt: ProbeReceipt,
+    },
+    /// That capture's cache file written, or why not.
+    Cached {
+        entity: String,
+        source_hash: String,
+        error: Option<String>,
     },
     /// A cached capture read for `source_hash` (or missing or unreadable).
     Loaded {
@@ -645,7 +657,8 @@ impl ProbeCaptures {
         for entity in entities {
             changed |= self.advance(renderer, &entity);
         }
-        // Published images: hash and cache them off this thread.
+        // Published images: hash them off this thread (the receipt completes the
+        // job), then write the cache file there, off the job's path.
         for image in renderer.take_reflection_capture_images() {
             let Some((entity, probe)) = self.probes.iter_mut().find(|(_, p)| p.entity == image.key)
             else {
@@ -674,8 +687,7 @@ impl ProbeCaptures {
             );
             let sender = self.io.clone();
             std::thread::spawn(move || {
-                let receipt = write_cache(
-                    &root,
+                let receipt = receipt(
                     &doc,
                     &entity,
                     generation,
@@ -683,10 +695,16 @@ impl ProbeCaptures {
                     source_revision,
                     &image,
                 );
-                let _ = sender.send(Io::Written {
-                    entity,
+                let _ = sender.send(Io::Hashed {
+                    entity: entity.clone(),
                     generation,
-                    receipt,
+                    receipt: receipt.clone(),
+                });
+                let error = write_cache(&root, &receipt, &image).err();
+                let _ = sender.send(Io::Cached {
+                    entity,
+                    source_hash,
+                    error,
                 });
             });
             changed = true;
@@ -694,11 +712,16 @@ impl ProbeCaptures {
         while let Ok(io) = self.landed.try_recv() {
             changed = true;
             match io {
-                Io::Written {
+                Io::Hashed {
                     entity,
                     generation,
                     receipt,
-                } => self.written(&entity, generation, receipt),
+                } => self.published(&entity, generation, receipt),
+                Io::Cached {
+                    entity,
+                    source_hash,
+                    error,
+                } => self.cached(&entity, &source_hash, error),
                 Io::Loaded {
                     entity,
                     source_hash,
@@ -822,6 +845,28 @@ impl ProbeCaptures {
                     flight.completed = step;
                 }
                 None if s.pending => flight.state = ProbeState::Queued,
+                // Published (the bake count moved on), its image not yet here: read
+                // the column back again once, then fail rather than wait forever.
+                None if flight.requested.is_some_and(|b| s.bakes > b) => {
+                    flight.unlanded += 1;
+                    if flight.unlanded == LANDING_FRAMES {
+                        renderer.reread_reflection_capture(key);
+                    } else if flight.unlanded >= 2 * LANDING_FRAMES {
+                        let why = format!(
+                            "the published capture (bake {}) did not read back within {} frames",
+                            s.bakes,
+                            2 * LANDING_FRAMES
+                        );
+                        self.end(
+                            entity,
+                            generation,
+                            ProbeState::Failed,
+                            codes::PROBE_CACHE,
+                            &why,
+                        );
+                        return true;
+                    }
+                }
                 None => {}
             },
         }
@@ -887,38 +932,42 @@ impl ProbeCaptures {
         }
     }
 
-    /// A cache write finished: the generation's receipt, or its failure.
-    fn written(&mut self, entity: &str, generation: u64, receipt: Result<ProbeReceipt, String>) {
-        match receipt {
-            Ok(receipt) => {
-                if let Some(probe) = self.probes.get_mut(entity)
-                    && probe
-                        .flight
-                        .as_ref()
-                        .is_some_and(|f| f.generation == generation)
-                {
-                    probe.flight = None;
-                    probe.ended = None;
-                    probe.loaded = Some(receipt.source_hash.clone());
-                    probe.receipt = Some(receipt.clone());
-                }
-                for job in self.jobs.values_mut() {
-                    if job
-                        .members
-                        .iter()
-                        .any(|(e, g)| e == entity && *g == generation)
-                    {
-                        job.receipts.push(receipt.clone());
-                    }
-                }
+    /// A published capture was hashed: the generation's receipt completes it.
+    fn published(&mut self, entity: &str, generation: u64, receipt: ProbeReceipt) {
+        if let Some(probe) = self.probes.get_mut(entity)
+            && probe
+                .flight
+                .as_ref()
+                .is_some_and(|f| f.generation == generation)
+        {
+            probe.flight = None;
+            probe.ended = None;
+            probe.cache_error = None;
+            probe.loaded = Some(receipt.source_hash.clone());
+            probe.receipt = Some(receipt.clone());
+        }
+        for job in self.jobs.values_mut() {
+            if job
+                .members
+                .iter()
+                .any(|(e, g)| e == entity && *g == generation)
+            {
+                job.receipts.push(receipt.clone());
             }
-            Err(why) => self.end(
-                entity,
-                generation,
-                ProbeState::Failed,
-                codes::PROBE_CACHE,
-                &why,
-            ),
+        }
+    }
+
+    /// A published capture's cache file was written, or not: the probe's row
+    /// carries the failure (the capture itself stays published).
+    fn cached(&mut self, entity: &str, source_hash: &str, error: Option<String>) {
+        let doc = self.doc.clone().unwrap_or_default();
+        if let (Some(probe), Some(why)) = (self.probes.get_mut(entity), error)
+            && probe
+                .receipt
+                .as_ref()
+                .is_some_and(|r| r.source_hash == source_hash)
+        {
+            probe.cache_error = Some(Diagnostic::warning(codes::PROBE_CACHE, why).file(doc));
         }
     }
 
@@ -965,7 +1014,8 @@ impl ProbeCaptures {
     /// generations as Cancelled, and drains finished cache IO. A generation already
     /// published but not yet read back cannot complete without the renderer's next
     /// primary frame: it ends Cancelled (ARA_PROBE_STALE). Never records GPU work,
-    /// waits or touches files on this thread. True while a cache write is in flight.
+    /// waits or touches files on this thread. True while a published capture is
+    /// being hashed (its cache file is written afterwards, independently).
     pub fn retire(&mut self, renderer: &mut ara_render::Renderer) -> bool {
         let mut changed = false;
         let entities: Vec<String> = self.probes.keys().cloned().collect();
@@ -994,11 +1044,16 @@ impl ProbeCaptures {
         while let Ok(io) = self.landed.try_recv() {
             changed = true;
             match io {
-                Io::Written {
+                Io::Hashed {
                     entity,
                     generation,
                     receipt,
-                } => self.written(&entity, generation, receipt),
+                } => self.published(&entity, generation, receipt),
+                Io::Cached {
+                    entity,
+                    source_hash,
+                    error,
+                } => self.cached(&entity, &source_hash, error),
                 Io::Loaded { .. } => {}
             }
         }
@@ -1027,6 +1082,9 @@ const STEPS: u32 = 7;
 /// Frames a requested probe may wait for the renderer to hold its record (specs
 /// reach the bake planner during the next render) before `ARA_PROBE_LIMIT`.
 const RECORD_FRAMES: u32 = 8;
+/// Frames a published bake may wait for its image before the column is read back
+/// again; twice as many fail the generation (`ARA_PROBE_CACHE`).
+const LANDING_FRAMES: u32 = 120;
 
 impl Probe {
     fn pending(_entity: &str) -> Self {
@@ -1041,6 +1099,7 @@ impl Probe {
             ended: None,
             loaded: None,
             loading: false,
+            cache_error: None,
         }
     }
 
@@ -1060,6 +1119,7 @@ impl Probe {
         if let Some((_, ended)) = &self.ended {
             diagnostics.extend(ended.iter().cloned());
         }
+        diagnostics.extend(self.cache_error.iter().cloned());
         ProbeRow {
             doc: doc.to_owned(),
             entity: entity.to_owned(),
@@ -1097,6 +1157,7 @@ impl Flight {
             cancel: false,
             writing: false,
             misses: 0,
+            unlanded: 0,
         }
     }
 }
@@ -1120,32 +1181,38 @@ fn source_hash(inputs: &str, view: &ara_runtime::extract::ProbeView) -> String {
     format!("{:x}", hash.finalize())
 }
 
-/// Hashes a published image and writes it with its receipt under `root` as
-/// `<sourceHash>.capture`: a JSON receipt line, then the image bytes.
-fn write_cache(
-    root: &std::path::Path,
+/// The receipt of a published image: its hash and where its cache file goes.
+fn receipt(
     doc: &str,
     entity: &str,
     generation: u64,
     source_hash: &str,
     source_revision: u64,
     image: &ara_render::look::captures::CaptureImage,
-) -> Result<ProbeReceipt, String> {
+) -> ProbeReceipt {
     use sha2::{Digest, Sha256};
-    let capture_hash = format!("{:x}", Sha256::digest(&image.bytes));
-    let file = format!("{source_hash}.capture");
-    let receipt = ProbeReceipt {
+    ProbeReceipt {
         doc: doc.to_owned(),
         entity: entity.to_owned(),
         generation,
         source_revision,
         source_hash: source_hash.to_owned(),
-        capture_hash,
+        capture_hash: format!("{:x}", Sha256::digest(&image.bytes)),
         resolution: image.resolution,
         faces: 6,
-        cache_path: format!(".ara/cache/probes/{file}"),
+        cache_path: format!(".ara/cache/probes/{source_hash}.capture"),
         published: true,
-    };
+    }
+}
+
+/// Writes a published image with its receipt under `root` as `<sourceHash>.capture`
+/// (a JSON receipt line, then the image bytes), through a `.partial` file.
+fn write_cache(
+    root: &std::path::Path,
+    receipt: &ProbeReceipt,
+    image: &ara_render::look::captures::CaptureImage,
+) -> Result<(), String> {
+    let file = format!("{}.capture", receipt.source_hash);
     let header =
         serde_json::json!({"version": CACHE_VERSION, "extent": image.extent, "receipt": receipt});
     let mut bytes = serde_json::to_vec(&header).map_err(|e| e.to_string())?;
@@ -1156,9 +1223,7 @@ fn write_cache(
     let partial = root.join(format!("{file}.partial"));
     std::fs::write(&partial, &bytes)
         .map_err(|e| format!("cannot write {}: {e}", partial.display()))?;
-    std::fs::rename(&partial, &path)
-        .map_err(|e| format!("cannot publish {}: {e}", path.display()))?;
-    Ok(receipt)
+    std::fs::rename(&partial, &path).map_err(|e| format!("cannot publish {}: {e}", path.display()))
 }
 
 /// Reads `<sourceHash>.capture` under `root`: `None` when absent.

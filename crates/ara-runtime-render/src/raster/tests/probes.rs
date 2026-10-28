@@ -90,35 +90,63 @@ fn run_until(
     )
 }
 
-#[test]
-fn probe_recapture_publishes_caches_cancels_and_restores() -> Result<()> {
+/// A fresh per-process test folder under `target/runtime-render/<name>`.
+fn folder(name: &str) -> std::path::PathBuf {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../target/runtime-render/probe-jobs")
+        .join("../../target/runtime-render")
+        .join(name)
         .join(std::process::id().to_string());
-    let cache = root.join("project/.ara/cache/probes");
     let _ = std::fs::remove_dir_all(&root);
-    let plan = RasterPlan {
+    root
+}
+
+fn plan() -> RasterPlan {
+    RasterPlan {
         render_size: [96, 64],
         display_size: [96, 64],
         quality: QualityPreset::High.raster_quality(),
-    };
-    let open = |frame: RenderFrame| -> Result<(Renderer, RasterView, RenderFrame)> {
-        let candidate = RasterContent::new(frame, Content::default())?;
-        let mut renderer = Renderer::new_native(
-            candidate.native.scene(),
-            Box::new(candidate.prepared.textures.fork_sources(texture_config())?),
-            [96, 64],
-            &[],
-            root.join("gpu"),
-        )?;
-        let mut raster = RasterView::new(root.join("gi"));
-        raster.set_probe_gi(false);
-        raster.probes_mut().set_scene(DOC, cache.clone());
-        let frame = raster.publish_scene(&mut renderer, candidate, plan)?;
-        Ok((renderer, raster, frame))
-    };
+    }
+}
 
-    let (mut renderer, mut raster, frame) = open(scene(1.))?;
+/// Opens `frame` at High on a fresh device, its probes bound to `root`'s cache.
+fn open(root: &std::path::Path, frame: RenderFrame) -> Result<(Renderer, RasterView, RenderFrame)> {
+    let candidate = RasterContent::new(frame, Content::default())?;
+    let mut renderer = Renderer::new_native(
+        candidate.native.scene(),
+        Box::new(candidate.prepared.textures.fork_sources(texture_config())?),
+        [96, 64],
+        &[],
+        root.join("gpu"),
+    )?;
+    let mut raster = RasterView::new(root.join("gi"));
+    raster.set_probe_gi(false);
+    raster
+        .probes_mut()
+        .set_scene(DOC, root.join("project/.ara/cache/probes"));
+    let frame = raster.publish_scene(&mut renderer, candidate, plan())?;
+    Ok((renderer, raster, frame))
+}
+
+/// Waits (bounded) for a detached cache write to land.
+fn wait_for_file(path: &std::path::Path) -> Result<()> {
+    let started = std::time::Instant::now();
+    while !path.is_file() {
+        anyhow::ensure!(
+            started.elapsed() < std::time::Duration::from_secs(60),
+            "{} was never written",
+            path.display()
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    Ok(())
+}
+
+#[test]
+fn probe_recapture_publishes_caches_cancels_and_restores() -> Result<()> {
+    let root = folder("probe-jobs");
+    let cache = root.join("project/.ara/cache/probes");
+    let plan = plan();
+    let (mut renderer, mut raster, frame) = open(&root, scene(1.))?;
     step(&mut raster, &mut renderer, &frame, plan)?;
     let snapshot = raster.probes().snapshot(&ProbeFilter::default(), None);
     assert!(
@@ -162,11 +190,8 @@ fn probe_recapture_publishes_caches_cancels_and_restores() -> Result<()> {
         states.contains(&ProbeState::Progress) && states.last() == Some(&ProbeState::Done),
         "{states:?}"
     );
-    assert!(
-        cache
-            .join(format!("{}.capture", receipt.source_hash))
-            .is_file()
-    );
+    // The cache file follows the receipt, off the job's path.
+    wait_for_file(&cache.join(format!("{}.capture", receipt.source_hash)))?;
     assert_eq!(row(&raster).last_receipt.as_ref(), Some(&receipt));
 
     // Cancel: the request ends Cancelled and the published capture stays.
@@ -212,7 +237,7 @@ fn probe_recapture_publishes_caches_cancels_and_restores() -> Result<()> {
     drop(renderer);
 
     // Reopening the scene restores the capture from the disk cache without a request.
-    let (mut renderer, mut raster, frame) = open(scene(1.))?;
+    let (mut renderer, mut raster, frame) = open(&root, scene(1.))?;
     run_until(&mut raster, &mut renderer, &frame, plan, |r| {
         row(r).last_receipt.is_some()
     })?;
@@ -227,6 +252,50 @@ fn probe_recapture_publishes_caches_cancels_and_restores() -> Result<()> {
             .reflection_capture_status(7)
             .is_some_and(|s| s.ready)
     );
+    raster.destroy(&mut renderer)?;
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}
+
+#[test]
+fn a_capture_whose_image_never_reaches_the_job_is_read_back_again() -> Result<()> {
+    let root = folder("probe-reread");
+    let plan = plan();
+    let (mut renderer, mut raster, frame) = open(&root, scene(1.))?;
+    step(&mut raster, &mut renderer, &frame, plan)?;
+    let key = ProbeKey {
+        doc: DOC.into(),
+        entity: PROBE.into(),
+    };
+    let job = raster
+        .probes_mut()
+        .recapture(
+            &frame,
+            &RecaptureRequest {
+                probes: std::slice::from_ref(&key),
+                why: None,
+            },
+        )
+        .map_err(|d| anyhow::anyhow!("{d:?}"))?;
+    // The first published image is lost before the job sees it: the job reads the
+    // column back again instead of staying in Progress.
+    let (mut lost, started) = (0, std::time::Instant::now());
+    while !raster.probes().job(job).is_some_and(|j| j.finished) {
+        anyhow::ensure!(
+            started.elapsed() < std::time::Duration::from_secs(120),
+            "the job never finished: {:?}",
+            row(&raster)
+        );
+        if lost == 0 {
+            lost = renderer.take_reflection_capture_images().len();
+        }
+        step(&mut raster, &mut renderer, &frame, plan)?;
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    let status = raster.probes().job(job).expect("job");
+    assert_eq!(lost, 1);
+    assert!(status.failures.is_empty(), "{:?}", status.failures);
+    assert_eq!(status.receipts.len(), 1);
     raster.destroy(&mut renderer)?;
     renderer.gpu().assert_clean()?;
     Ok(())

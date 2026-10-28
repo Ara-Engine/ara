@@ -93,6 +93,8 @@ pub(super) struct Views {
     capture_readbacks: Vec<captures::CaptureReadback>,
     /// Images read back since the host last took them.
     capture_landed: Vec<crate::look::captures::CaptureImage>,
+    /// Explicit captures to read back again (`Renderer::reread_reflection_capture`).
+    capture_rereads: Vec<u64>,
 }
 impl Default for Views {
     fn default() -> Self {
@@ -111,6 +113,7 @@ impl Default for Views {
             capture_images: Default::default(),
             capture_readbacks: Vec::new(),
             capture_landed: Vec::new(),
+            capture_rereads: Vec::new(),
         }
     }
 }

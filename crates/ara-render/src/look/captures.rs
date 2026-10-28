@@ -875,7 +875,7 @@ impl Captures {
     }
 
     /// The record of explicit probe `key`, if the quality holds it.
-    fn index(&self, key: u64) -> Option<usize> {
+    pub(crate) fn index(&self, key: u64) -> Option<usize> {
         self.records.iter().position(|r| r.explicit && r.key == key)
     }
 
