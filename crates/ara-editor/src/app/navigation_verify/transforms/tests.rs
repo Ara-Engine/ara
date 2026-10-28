@@ -66,3 +66,4 @@ fn precision_expectation_uses_quarter_metre_increments_and_cancel_still_has_prev
         assert!(!close(before[id], cancelled_preview[id]));
     }
 }
+#![allow(clippy::unwrap_used)] // Tests assert independent transform-oracle fixture results.
