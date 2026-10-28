@@ -22,7 +22,11 @@ fn ssr_and_partial_rt_never_open_the_window() {
     let error = g
         .wait(Duration::from_secs(2), Some(frame(HYBRID)))
         .unwrap_err();
-    assert!(error.to_string().starts_with("ARA6093:"));
+    assert!(
+        error
+            .to_string()
+            .starts_with(&format!("{INVALID_PASS_SET}:"))
+    );
     assert_eq!(error.evidence()["status"], "invalid");
     assert!(validate(&g.report(), 1).is_err());
 }

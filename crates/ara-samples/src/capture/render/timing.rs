@@ -75,7 +75,12 @@ mod tests {
             guard.record(Frame::from_names(["SSR"]))?;
             Ok(json!({"p50":0.43}))
         });
-        assert!(result.unwrap_err().to_string().starts_with("ARA6093:"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .starts_with(&format!("{}:", ara_bench::passes::INVALID_PASS_SET))
+        );
         let failed: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         assert_eq!(failed["status"], "invalid");
         assert_eq!(failed["completed"], false);

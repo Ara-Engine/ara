@@ -163,6 +163,10 @@ mod tests {
         }
         assert!(validate(&player).is_ok());
         player["gpu_passes"]["RT.Reflect"]["samples"] = json!(0);
-        assert!(validate(&player).unwrap_err().starts_with("ARA6093:"));
+        assert!(
+            validate(&player)
+                .unwrap_err()
+                .starts_with(&format!("{}:", ara_bench::passes::INVALID_PASS_SET))
+        );
     }
 }
