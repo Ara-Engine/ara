@@ -163,10 +163,8 @@ fn installation_registration_does_not_start_a_service_and_reuses_one_when_runnin
         "unregistering another build must not replace/remove this one"
     );
     assert_eq!(
-        registry.engines[0].executable,
-        ara_hub_service::normalized_path(
-            &fs::canonicalize(&alternate).expect("alternate executable")
-        )
+        fs::canonicalize(&registry.engines[0].executable).expect("registered alternate executable"),
+        fs::canonicalize(&alternate).expect("alternate executable")
     );
     assert!(ara_rpc::DaemonInfo::read(&hub.config().join("hub")).is_none());
     hub.cli(&["hub", "register-engine", "--no-start"]);
