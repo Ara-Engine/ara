@@ -44,16 +44,16 @@ public sealed class EditorContractTests
             """;
         File.WriteAllText(source, text);
         using var session = new EditorRunner.Session();
-        Assert.True(session.Run(new(root, "game")).Accepted);
-        var failed = session.Run(new(root, "game", "invoke", "tools.bad"));
+        Assert.True(session.Run(new(root, "content")).Accepted);
+        var failed = session.Run(new(root, "content", "invoke", "tools.bad"));
         Assert.Equal("ARA0912", failed.Diagnostics[0]["code"]?.ToString());
         Assert.Empty(failed.Authoring);
         Assert.False(failed.Commands.Single(c => c.Id == "tools.bad").Enabled);
         Assert.Contains("callback failed", failed.Commands.Single(c => c.Id == "tools.bad").DisabledReason);
-        Assert.True(session.Run(new(root, "game", "invoke", "tools.good")).Accepted);
-        Assert.False(session.Run(new(root, "game")).Commands.Single(c => c.Id == "tools.bad").Enabled);
+        Assert.True(session.Run(new(root, "content", "invoke", "tools.good")).Accepted);
+        Assert.False(session.Run(new(root, "content")).Commands.Single(c => c.Id == "tools.bad").Enabled);
         File.WriteAllText(source, text.Replace("discarded", "changed", StringComparison.Ordinal));
-        Assert.True(session.Run(new(root, "game")).Commands.Single(c => c.Id == "tools.bad").Enabled);
+        Assert.True(session.Run(new(root, "content")).Commands.Single(c => c.Id == "tools.bad").Enabled);
     }
 
     [Fact]
@@ -74,23 +74,23 @@ public sealed class EditorContractTests
             """;
         File.WriteAllText(source, text);
         using var session = new EditorRunner.Session();
-        var catalog = session.Run(new(root, "game"));
+        var catalog = session.Run(new(root, "content"));
         Assert.True(catalog.Accepted);
         Assert.Empty(catalog.Diagnostics);
         File.WriteAllText(source, "#error invalid editor candidate");
-        var rejected = session.Run(new(root, "game"));
+        var rejected = session.Run(new(root, "content"));
         Assert.False(rejected.Accepted);
         Assert.NotEmpty(rejected.Diagnostics);
         Assert.Equal(catalog.Generation, rejected.Generation);
-        var lastGood = session.Run(new(root, "game", "invoke", "tools.create", Generation: catalog.Generation));
+        var lastGood = session.Run(new(root, "content", "invoke", "tools.create", Generation: catalog.Generation));
         Assert.Empty(lastGood.Diagnostics);
         Assert.Equal("first", lastGood.Authoring[0].Args.GetProperty("name").GetString());
         File.WriteAllText(source, text.Replace("first", "second", StringComparison.Ordinal));
-        var replaced = session.Run(new(root, "game"));
+        var replaced = session.Run(new(root, "content"));
         Assert.True(replaced.Accepted);
         Assert.NotEqual(catalog.Generation, replaced.Generation);
-        Assert.Equal("ARA1501", session.Run(new(root, "game", "invoke", "tools.create", Generation: catalog.Generation)).Diagnostics[0]["code"]?.ToString());
-        Assert.Equal("second", session.Run(new(root, "game", "invoke", "tools.create", Generation: replaced.Generation)).Authoring[0].Args.GetProperty("name").GetString());
+        Assert.Equal("ARA1501", session.Run(new(root, "content", "invoke", "tools.create", Generation: catalog.Generation)).Diagnostics[0]["code"]?.ToString());
+        Assert.Equal("second", session.Run(new(root, "content", "invoke", "tools.create", Generation: replaced.Generation)).Authoring[0].Args.GetProperty("name").GetString());
     }
     [Fact]
     public async Task Editor_extension_registers_one_catalog_and_returns_typed_authoring_commands_without_writing_sources()
