@@ -343,6 +343,7 @@ fn reference(e: &Editor, entity: &str) -> String {
         .store()
         .workspace()
         .path_of(&e.state.doc)
+        .map(|path| e.host.store().workspace().reference_path(path))
         .unwrap_or("")
         .to_owned();
     format!("@{path}#{entity}")

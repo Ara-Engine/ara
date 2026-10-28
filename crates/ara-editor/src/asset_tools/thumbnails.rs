@@ -285,7 +285,8 @@ fn relative(message: &str, root: &Path) -> String {
 }
 
 /// The square master image for a source, from the content-addressed cache when the
-/// source, its import settings and its dependencies are unchanged. `None` while a
+/// source, its import settings and its dependencies are unchanged. Paths are
+/// authored-root-relative. `None` while a
 /// model's import has not published.
 fn master(
     root: &Path,
@@ -294,7 +295,8 @@ fn master(
     shot: Shot,
     renderer: &mut Option<Renderer>,
 ) -> anyhow::Result<Option<RgbaImage>> {
-    let source = match root.join(path).canonicalize() {
+    let authored = root.join(ara_doc::AUTHORING_ROOT);
+    let source = match authored.join(path).canonicalize() {
         Ok(source) => source,
         // An import still copying its file into the project: pending, like a model
         // that has not published (it once reported "no preview" for good).
@@ -302,7 +304,7 @@ fn master(
         Err(error) => return Err(error.into()),
     };
     anyhow::ensure!(
-        source.starts_with(root.canonicalize()?),
+        source.starts_with(authored.canonicalize()?),
         "thumbnail source escapes project"
     );
     let bytes = if let Some(source) = override_source {
@@ -312,7 +314,7 @@ fn master(
     };
     let source_len = bytes.len();
     let mut inputs = bytes;
-    if let Ok(settings) = std::fs::read(root.join(format!("{path}.import.json"))) {
+    if let Ok(settings) = std::fs::read(authored.join(format!("{path}.import.json"))) {
         inputs.extend(settings);
     }
     // Cache identity includes referenced textures and external glTF buffers.
@@ -462,14 +464,17 @@ fn dependency_bytes(root: &Path, relative: &Path, value: &serde_json::Value, byt
                 ara_schema::grammar::parse_ref(text)
                     .ok()
                     .and_then(|r| r.path)
-                    .map(|p| root.join(p))
+                    .map(|p| root.join(ara_doc::AUTHORING_ROOT).join(p))
             } else {
                 None
             };
-            if let Some(path) = path
-                .and_then(|p| p.canonicalize().ok())
-                .filter(|p| p.starts_with(root.canonicalize().unwrap_or_default()))
-                && let Ok(data) = std::fs::read(path)
+            if let Some(path) = path.and_then(|p| p.canonicalize().ok()).filter(|p| {
+                p.starts_with(
+                    root.join(ara_doc::AUTHORING_ROOT)
+                        .canonicalize()
+                        .unwrap_or_default(),
+                )
+            }) && let Ok(data) = std::fs::read(path)
             {
                 bytes.extend(data);
             }
@@ -485,7 +490,11 @@ fn dependency_bytes(root: &Path, relative: &Path, value: &serde_json::Value, byt
                 .and_then(serde_json::Value::as_str)
                 .filter(|s| !s.starts_with("data:"))
                 && let Ok(path) = relative.join(uri).canonicalize()
-                && path.starts_with(root.canonicalize().unwrap_or_default())
+                && path.starts_with(
+                    root.join(ara_doc::AUTHORING_ROOT)
+                        .canonicalize()
+                        .unwrap_or_default(),
+                )
                 && let Ok(data) = std::fs::read(path)
             {
                 bytes.extend(data);
@@ -511,6 +520,42 @@ pub(crate) fn image_id(slot: usize) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn texture_thumbnail_reads_authored_pixels_and_keeps_the_cache_outside_content() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-editor/thumbnail-paths")
+            .join(std::process::id().to_string());
+        let source = root.join(ara_doc::AUTHORING_ROOT).join("textures/chip.png");
+        std::fs::create_dir_all(source.parent().expect("texture folder")).expect("scratch");
+        let color = image::Rgba([17, 124, 200, 255]);
+        RgbaImage::from_pixel(1, 1, color)
+            .save(&source)
+            .expect("source pixels");
+        let thumbnail = master(
+            &root,
+            "textures/chip.png",
+            None,
+            Shot::surface(false),
+            &mut None,
+        )
+        .expect("authored texture decodes")
+        .expect("texture is ready");
+        assert_eq!(*thumbnail.get_pixel(MASTER / 2, MASTER / 2), color);
+        let mut dependencies = Vec::new();
+        dependency_bytes(
+            &root,
+            source.parent().expect("source directory"),
+            &serde_json::json!("@textures/chip.png#as_chip"),
+            &mut dependencies,
+        );
+        assert_eq!(
+            dependencies,
+            std::fs::read(&source).expect("dependency pixels")
+        );
+        assert!(root.join(".ara/cache/thumbnails").is_dir());
+        assert!(!root.join(ara_doc::AUTHORING_ROOT).join(".ara").exists());
+    }
 
     #[test]
     fn a_model_whose_import_has_not_published_is_pending_at_once() {

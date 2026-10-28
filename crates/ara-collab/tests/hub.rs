@@ -419,3 +419,102 @@ fn the_who_summary_names_people_activity_claims_and_branches() {
         text.len()
     );
 }
+
+#[test]
+fn late_join_snapshot_keeps_reference_root_storage_paths_and_project_scope() {
+    use ara_doc::{AssetId, Document, RecordId, Workspace};
+    use ara_ops::Store;
+    use ara_schema::DocKindDesc;
+    let mut schema = db();
+    for (name, prefix, extension) in [
+        ("project", "pj", "project.json"),
+        ("import", "as", "import.json"),
+    ] {
+        schema
+            .add_kind(DocKindDesc {
+                name: name.into(),
+                version: 1,
+                id_prefix: prefix.into(),
+                extension: extension.into(),
+                doc: "Snapshot fixture metadata.".into(),
+                records: vec![],
+                single_root: false,
+            })
+            .expect("fixture kind");
+    }
+    let mut workspace = Workspace::default();
+    workspace.set_reference_root(ara_doc::AUTHORING_ROOT);
+    let mut scene = Document::new("scene", AssetId::parse("sc_scoped").expect("scene ID"));
+    scene.insert_unchecked(
+        RecordId::parse("e_instance").expect("entity ID"),
+        serde_json::from_value(json!({"prefab":"@prefabs/box.prefab#pf_box"})).expect("record"),
+    );
+    workspace.insert(workspace.storage_path("scenes/main.scene"), scene);
+    workspace.insert(
+        workspace.storage_path("prefabs/box.prefab"),
+        Document::new("prefab", AssetId::parse("pf_box").expect("prefab ID")),
+    );
+    workspace.insert_project_document(
+        "ara.project.json",
+        Document::new("project", AssetId::parse("pj_project").expect("marker ID")),
+    );
+    workspace.insert_project_document(
+        "settings/defaults.scene",
+        Document::new("scene", AssetId::parse("sc_policy").expect("policy ID")),
+    );
+    workspace.insert_with_asset_path(
+        workspace.storage_path("textures/logo.png.import.json"),
+        Document::new("import", AssetId::parse("as_logo").expect("source ID")),
+        workspace.storage_path("textures/logo.png"),
+    );
+    let store = Store::new(schema.clone(), workspace);
+    let snapshot = Snapshot::of(&store);
+    let wire = serde_json::to_value(&snapshot).expect("snapshot wire");
+    assert_eq!(wire["referenceRoot"], ara_doc::AUTHORING_ROOT);
+    let snapshot: Snapshot = serde_json::from_value(wire).expect("wire roundtrip");
+    let replica = Replica::from_snapshot(pid("ses_scoped"), schema, &snapshot).expect("late join");
+    let joined = replica.workspace();
+    assert_eq!(joined.reference_root(), ara_doc::AUTHORING_ROOT);
+    assert_eq!(
+        joined.path_of("sc_scoped"),
+        Some(format!("{}/scenes/main.scene", ara_doc::AUTHORING_ROOT).as_str())
+    );
+    assert_eq!(
+        joined.find("scenes/main.scene").map(|id| id.as_str()),
+        Some("sc_scoped")
+    );
+    assert_eq!(joined.index().path_of("pf_box"), Some("prefabs/box.prefab"));
+    assert_eq!(joined.index().path_of("as_logo"), Some("textures/logo.png"));
+    assert_eq!(
+        joined
+            .doc("sc_scoped")
+            .expect("scene")
+            .record("e_instance")
+            .expect("instance")["prefab"],
+        "@prefabs/box.prefab#pf_box"
+    );
+    assert!(joined.is_project_document("pj_project"));
+    assert!(joined.is_project_document("sc_policy"));
+    assert_eq!(joined.index().path_of("pj_project"), None);
+    assert_eq!(joined.index().path_of("sc_policy"), None);
+}
+
+#[test]
+fn legacy_late_join_snapshot_wire_keeps_an_empty_reference_root() {
+    let store = store();
+    let wire = serde_json::to_value(Snapshot::of(&store)).expect("generic snapshot wire");
+    assert!(
+        wire.get("referenceRoot").is_none(),
+        "empty roots preserve the old wire shape"
+    );
+    let snapshot: Snapshot = serde_json::from_value(wire).expect("old snapshot wire");
+    assert!(snapshot.reference_root.is_empty());
+    let workspace = snapshot
+        .workspace(store.schema())
+        .expect("generic workspace");
+    assert!(workspace.reference_root().is_empty());
+    assert_eq!(
+        workspace.path_of("sc_collab01"),
+        Some("levels/collab.scene")
+    );
+}

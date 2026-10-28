@@ -46,6 +46,145 @@ impl Drop for Project {
 fn write(path: &Path, value: Value) {
     std::fs::write(path, ara_json::to_canonical_string(&value)).unwrap();
 }
+
+#[test]
+fn copy_reference_uses_the_authored_path_under_the_content_root() {
+    use ara_editor::shell::commands::Target;
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let before = editor.host.store().revision();
+    shell
+        .run_command(
+            &mut editor,
+            "edit.copy_reference",
+            &Target::Entity("e_crate001".into()),
+        )
+        .unwrap();
+    let copied = shell
+        .take_clipboard()
+        .expect("Copy Reference writes the shell clipboard lane");
+    assert_eq!(copied, "@levels/main.scene#e_crate001");
+    let parts = ara_schema::grammar::parse_ref(&copied).unwrap();
+    let workspace = editor.host.store().workspace();
+    let physical = workspace.storage_path("levels/main.scene");
+    assert_eq!(
+        workspace.path_of(&editor.state.doc),
+        Some(physical.as_str())
+    );
+    let scene = workspace.find(parts.path.unwrap()).unwrap();
+    assert!(
+        workspace
+            .doc(scene.as_str())
+            .unwrap()
+            .record(parts.id.unwrap())
+            .is_some(),
+        "the copied reference resolves to the actual selected entity"
+    );
+    assert_eq!(
+        editor.host.store().revision(),
+        before,
+        "Copy Reference is read-only"
+    );
+}
+
+#[test]
+fn import_panel_overlays_live_dependencies_and_applies_settings_with_one_content_prefix() {
+    use ara_ui::input::InputEvent;
+    use ara_ui_text::EditEvent;
+    let project = Project::new();
+    let authored = project.0.join(ara_doc::AUTHORING_ROOT);
+    std::fs::create_dir_all(authored.join("models")).unwrap();
+    std::fs::write(
+        authored.join("models/crate.gltf"),
+        r#"{"asset":{"version":"2.0"}}"#,
+    )
+    .unwrap();
+    write(
+        &authored.join("models/crate.gltf.import.json"),
+        json!({"$schema":"ara://schema/import/1","id":"as_crate001","records":{"i_settings":{"importer":"ara.gltf","version":"1","settings":{}}}}),
+    );
+    let mut editor = Editor::open(&project.0).unwrap();
+    editor
+        .action("editor.layout.show", json!({"panel":"assets"}))
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 2100.]).unwrap();
+    let started = std::time::Instant::now();
+    while !shell.poll_assets_for_test(&mut editor) {
+        assert!(started.elapsed().as_secs() < 10, "asset scan never arrived");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    // The scene's browser snapshot predates this live authored edge.
+    editor.apply(vec![json!({"cmd":"property.set","args":{"entity":"e_crate001","path":"MeshRenderer.model","value":"@models/crate.gltf#as_crate001"}})], "Use the crate model", None).unwrap();
+    editor
+        .action("editor.workspace", json!({"asset":"levels/main.scene"}))
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    let label = |shell: &Shell, id: &str| {
+        shell.ui.nodes[shell.ui.find(id).unwrap()]
+            .element
+            .attrs
+            .get("label")
+            .cloned()
+            .unwrap()
+    };
+    assert_eq!(label(&shell, "dependency-Uses-0"), "models/crate.gltf");
+    let mut clipboard = MemoryClipboard::default();
+    shell.click("dependency-Uses-0", &mut clipboard).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    assert_eq!(
+        editor.state.asset_path.as_deref(),
+        Some("models/crate.gltf")
+    );
+    assert!(
+        shell.ui.find("import-settings-title").is_some(),
+        "the physical sidecar supplies the imported settings"
+    );
+    assert_eq!(label(&shell, "dependency-Used by-0"), "levels/main.scene");
+    let count = &shell.ui.nodes[shell.ui.find("dep-Used by-count").unwrap()];
+    assert_eq!(
+        count.text.as_ref().unwrap().value,
+        "1",
+        "the live overlay replaces the same logical graph key without a duplicate physical-path edge"
+    );
+    shell
+        .click("import-setting-lodCount", &mut clipboard)
+        .unwrap();
+    shell
+        .event(InputEvent::Edit(EditEvent::SelectAll), &mut clipboard)
+        .unwrap();
+    shell
+        .event(
+            InputEvent::Edit(EditEvent::Insert("3".into())),
+            &mut clipboard,
+        )
+        .unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    assert!(shell.commit_fields(&mut editor).unwrap());
+    editor.host.flush();
+    let sidecar = editor
+        .host
+        .store()
+        .workspace()
+        .storage_path("models/crate.gltf.import.json");
+    let settings: Value =
+        serde_json::from_str(&std::fs::read_to_string(project.0.join(&sidecar)).unwrap()).unwrap();
+    assert_eq!(settings["records"]["i_settings"]["settings"]["lodCount"], 3);
+    assert_eq!(
+        editor
+            .host
+            .store()
+            .workspace()
+            .index()
+            .path_of("as_crate001"),
+        Some("models/crate.gltf")
+    );
+    assert!(
+        !authored.join(ara_doc::AUTHORING_ROOT).exists(),
+        "Apply must not create content/content"
+    );
+}
+
 #[derive(Default)]
 struct MemoryClipboard(String);
 impl ara_ui_text::Clipboard for MemoryClipboard {
