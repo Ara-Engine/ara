@@ -62,12 +62,22 @@ pub(super) fn create(
         .iter()
         .map(|stage| load(device, cooked, stage, dir))
         .collect::<Result<Vec<_>>>()?;
+    build_loaded(device, compiler, &libraries, &cooked.state)
+}
+
+/// Create only the native PSO after library loading and hash validation have completed.
+pub(super) fn build_loaded(
+    device: &ProtocolObject<dyn MTLDevice>,
+    compiler: &Compiler,
+    libraries: &[LoadedStage],
+    state: &RenderState,
+) -> Result<NativePipeline> {
     let functions = libraries
         .iter()
         .map(|(stage, library, reflection)| (*stage, &**library, reflection.entry_point.as_str()))
         .collect::<Vec<_>>();
     let threads = libraries.iter().find_map(|(_, _, r)| r.state.tg_size);
-    build(device, compiler, &functions, &cooked.state, threads)
+    build(device, compiler, &functions, state, threads)
 }
 
 /// A loaded, hash-checked stage library with its converter reflection.

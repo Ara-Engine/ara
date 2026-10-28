@@ -5,7 +5,19 @@ use std::{
     path::Path,
 };
 
-pub(super) fn pin(base: &Path, executable: &Path) -> Result<Option<File>> {
+/// A pin belongs to its owner, even while a forked child temporarily shares its descriptor.
+pub(super) struct Lease {
+    file: File,
+}
+impl Drop for Lease {
+    fn drop(&mut self) {
+        // Closing alone keeps Unix locks alive until every inherited descriptor
+        // closes. Unlock our description without releasing independent pins.
+        let _ = self.file.unlock();
+    }
+}
+
+pub(super) fn pin(base: &Path, executable: &Path) -> Result<Option<Lease>> {
     let parent = executable.parent().context("player directory")?;
     if !parent.starts_with(base.join("players")) {
         return Ok(None);
@@ -17,8 +29,9 @@ pub(super) fn pin(base: &Path, executable: &Path) -> Result<Option<File>> {
         .truncate(false)
         .open(parent.join(".lease"))?;
     file.lock_shared()?;
+    let lease = Lease { file };
     ensure!(executable.is_file(), "player generation disappeared");
-    Ok(Some(file))
+    Ok(Some(lease))
 }
 pub(super) fn prune(base: &Path) -> Result<usize> {
     let root = base.join("players").canonicalize()?;
@@ -64,8 +77,31 @@ pub(super) fn prune(base: &Path) -> Result<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     #[test]
-    fn queued_and_running_generations_survive_retention() -> Result<()> {
+    fn inherited_descriptors_do_not_extend_the_owners_pin() -> Result<()> {
+        let base = fixture()?;
+        let first = base.join("players/0/player.exe");
+        let owner = pin(&base, &first)?.context("generation pin")?;
+        let independent = pin(&base, &first)?;
+        // A duplicated descriptor shares the same kernel lock as one inherited
+        // across fork, without relying on the duration of a concurrent spawn.
+        let inherited = owner.file.try_clone()?;
+        drop(owner);
+        assert_eq!(prune(&base)?, 1);
+        assert!(
+            first.is_file(),
+            "the independent owner still pins this generation"
+        );
+        drop(independent);
+        assert_eq!(prune(&base)?, 1);
+        assert!(!first.exists());
+        drop(inherited);
+        fs::remove_dir_all(base)?;
+        Ok(())
+    }
+
+    fn fixture() -> Result<std::path::PathBuf> {
         let base = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../target/ara-dev/lab-tests")
             .join(super::super::session::id());
@@ -75,6 +111,12 @@ mod tests {
             fs::write(directory.join("player.exe"), b"fixture")?;
             fs::write(directory.join(".lease"), b"")?;
         }
+        Ok(base)
+    }
+
+    #[test]
+    fn queued_and_running_generations_survive_retention() -> Result<()> {
+        let base = fixture()?;
         let first = base.join("players/0/player.exe");
         let live = pin(&base, &first)?;
         assert_eq!(prune(&base)?, 1);
@@ -82,6 +124,7 @@ mod tests {
         drop(live);
         assert_eq!(prune(&base)?, 1);
         assert!(!first.exists());
+        fs::remove_dir_all(base)?;
         Ok(())
     }
 }

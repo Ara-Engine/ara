@@ -225,6 +225,17 @@ impl Windowed {
             .filter(|name| !name.trim().is_empty())
             .unwrap_or_else(|| format!("Ara | {name}"));
         let window = Window::game(&title, size, mode, hidden)?;
+        #[cfg(target_os = "macos")]
+        if hidden {
+            // Benchmark extents are physical pixels, while Cocoa sizes SDL windows in points.
+            let density = window.pixel_density();
+            window.set_size(size.map(|pixels| (pixels as f32 / density).round().max(1.) as u32))?;
+            let actual = window.size()?;
+            anyhow::ensure!(
+                actual == size,
+                "hidden player pixel extent {actual:?} differs from requested {size:?}"
+            );
+        }
         // Native icons are cosmetic; Wayland may not support them.
         let icon = installed.and_then(|root| std::fs::read(root.join("icon.png")).ok());
         let _ = window.set_icon_png(icon.as_deref().unwrap_or(include_bytes!(

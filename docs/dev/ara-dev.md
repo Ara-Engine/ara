@@ -555,7 +555,7 @@ old PSO until the new cohort is ready. A visual reload does not start a timing
 window or pay measurement warmup. Evidence is under
 `target/lab-baseline/shader-latency/{m2-baseline,after-fastpath}.json`.
 
-The Mac mirror is experimental until native build and Metal validation pass. The PC endpoint owns its transport:
+The Mac mirror has native raster validation; hybrid RT remains experimental. The PC endpoint owns its transport:
 
 ```powershell
 ara-dev lab mirror --host mac --repo /Users/islam/projects/ara
@@ -586,6 +586,14 @@ snapshot, fetch or tool bootstrap. Rust changes use the source lane. Coalesced
 notifications retain a pending Rust update, and snapshots preserve Git's stat cache
 for unchanged files. Slot grants do not invalidate the already uploaded scene and
 reference inventory. Mirror status reports source, transfer and bootstrap phases.
+Hot shader imports stream the changed artifacts, durable metadata and import request
+through one SSH connection. The receiver checks AC power before extracting, holds
+`caffeinate` only for that job, then asks the warm peer to publish; source updates
+still bootstrap before importing. Unchanged notices do not contact the Mac.
+`mirror.transfer` records inventory/archive/wire/total milliseconds, changed file
+count and bytes; each transport job also retains its duration. Metal shader status
+separates library loading (`load_ms`) and PSO creation (`pso_ms`). The inventory
+captures each artifact's metadata once, keeping reference and scene changes visible.
 The Mac publishes complete imports under its visual lock, signals
 cohorts last, and hot-swaps native Metal PSOs in a background worker. Layout/state
 changes or failed compilation retain the last good cohort. The Mac never cooks
@@ -610,10 +618,31 @@ The PC proxy smoke test kept status responsive (0.307 s) and captured all three
 cameras in 3.990 s while the unreachable Mac peer retried. All 15 MCP tool schemas
 expose the platform argument.
 
-Mac native build, Metal validation and turnaround measurements are still pending.
-The first native bootstrap exposed a missing libc Mach binding; the guard now uses
-the public system ABI directly. This remains experimental until the native checks
-pass. PC-side tests cover slot refusal without starting any SSH or snapshot job.
+Native Mac validation on 2026-10-28 used a dedicated checkout of main `b3fb6dc7`
+plus the lab's pass-presence guard. All 29 active Metal tests passed with API and
+shader validation enabled, as did six shared pass-contract tests. A validated
+four-frame raster window passed; forcing a hybrid contract on raster refused with
+ARA6093 before any timing sample. This base does not select hybrid RT on Metal.
+The first bootstrap exposed a missing libc Mach binding; the guard uses the public
+system ABI directly. Native sampling also exposed Mach process CPU ticks being
+compared with host nanoseconds: they now use the device timebase (125/3 on the M5).
+Hidden Mac players interpret requested extents as physical pixels, avoiding Retina's
+previous 2560x1440 -> 5120x2880 expansion. No render pass changed.
+
+| Native Mac lab path | Measured turnaround |
+|---|---:|
+| Cold perf player and companion tools, one Cargo worker | 22m 53s |
+| Rust save -> replacement warm player; camera, preset, params and variant retained | 14.66 s |
+| Shader save -> changed warm Metal epoch, including PC cooking/SSH observation | 5.85 s (5 s target still missed) |
+| Three-camera 2560x1440 quick capture, seven regions and matched-transform FLIP | 1.81 s native / 6.03 s through PC with artifact download |
+| Default four-pair, 120-frame A/B with cached temporal evidence | 17.78 s through PC |
+
+The A/B kept one player PID and complete per-window pass proofs. Its GPU delta was
+inconclusive; CPU background load (6.80% mean, 11.94% peak) remains in the report.
+These are functional turnaround probes, not formal rendering budgets. Quick capture
+reports intentionally leave three-run repeatability gates unmeasured. The Mac's
+build output is disposable; evidence is retained under `target/lab-baseline/mac-p4/`
+on the PC. PC-side tests also cover slot refusal without starting SSH or a snapshot.
 
 Cold scene preparation runs in an owned, cancellable helper, under a scene-cache
 lease and the GPU queue. Opening a track returns `queued:true`; watch

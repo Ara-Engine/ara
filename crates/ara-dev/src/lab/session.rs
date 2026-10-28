@@ -50,7 +50,7 @@ pub(super) struct Session {
     shader_view: PathBuf,
     // A control acknowledgement precedes the asynchronous status-file refresh.
     shader_cohorts: Option<Value>,
-    _generation: Option<fs::File>,
+    _generation: Option<super::generations::Lease>,
 }
 impl Session {
     pub fn launch(

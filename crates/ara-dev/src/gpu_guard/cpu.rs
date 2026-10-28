@@ -5,6 +5,12 @@ use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+/// Match Mach process CPU clocks to host nanoseconds; callers validate a nonzero denominator.
+#[cfg(any(target_os = "macos", test))]
+pub(super) fn mach_nanoseconds(ticks: u64, numer: u32, denom: u32) -> u64 {
+    (u128::from(ticks) * u128::from(numer) / u128::from(denom)).min(u128::from(u64::MAX)) as u64
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(crate) struct Sample {
     pub interval: Interval,
@@ -293,6 +299,12 @@ fn native() -> Result<Raw> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mach_process_ticks_use_the_host_nanosecond_unit() {
+        assert_eq!(mach_nanoseconds(24_000_000, 125, 3), 1_000_000_000);
+        assert_eq!(mach_nanoseconds(987_654, 1, 1), 987_654);
+        assert_eq!(mach_nanoseconds(u64::MAX, 125, 3), u64::MAX);
+    }
     #[test]
     fn subtracts_only_the_protected_tree_and_handles_new_children_and_pid_reuse() {
         let birth = |ms| {
