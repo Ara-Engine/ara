@@ -62,10 +62,13 @@ void rtReflectMain(uint3 tid:SV_DispatchThreadID){
 }
 // Rough lobes (from where traced mirrors fade out up to the rough cut,
 // rtParams[1].w), half resolution: ray-traced specular occlusion of the probe and
-// sky reflections. The lobe is a cone of half-angle 1.3 alpha around the dominant
-// direction; each half-resolution pixel traces four rays on a ring of it, the ring's
-// rotation and radius set by the pixel's 2x2 phase, so any 2x2 block of results
-// (rtRoughAt) is one fixed sixteen-direction quadrature: deterministic, never noise.
+// sky reflections. Each half-resolution pixel traces four rays on a ring around the
+// dominant direction, the ring's rotation and radius set by the pixel's 2x2 phase:
+// the four radii sit at the GGX lobe's equal-energy quantiles (half-vector slope
+// alpha sqrt(u/(1-u)), u = 1/8, 3/8, 5/8, 7/8, reflected at twice its angle), so any
+// 2x2 block of results (rtRoughAt) is one fixed sixteen-direction quadrature of the
+// whole lobe, tails included (a cone of the core alone holds a third of its energy and
+// reflects its surroundings too sharply): deterministic, never noise.
 // A hit blocks its sub-cone by the share of it below the hit surface's plane (half
 // when grazing it, all when facing it), so reflected silhouettes fade over the
 // lobe instead of stepping; blocked shares take the hit's radiance. Root word 1:
@@ -89,7 +92,7 @@ void rtRoughMain(uint3 tid:SV_DispatchThreadID){
         float3 d=rtDominant(n,v,alpha),origin=world+n*(l.rtParams[1].x+l.rtParams[1].y*distance);
         float3 t1=normalize(cross(abs(d.y)<0.99?float3(0,1,0):float3(1,0,0),d)),t2=cross(d,t1);
         float cone=min(1.3*alpha,1.2),sub=cone/3;uint phase=(tid.x&1)+2*(tid.y&1);
-        float radius=tan(cone*sqrt((float(phase)+0.5)/4)*0.9);
+        float u=(float(phase)+0.5)/4;float radius=tan(min(2*atan(alpha*sqrt(u/(1-u))),1.4));
         float3 blocked=0;float share=0,valid=0;
         // The linear exposure multiplier readers before this frame's metering decode with
         // (look.slangh exposureState).
