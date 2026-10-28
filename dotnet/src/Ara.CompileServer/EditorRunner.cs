@@ -9,7 +9,8 @@ namespace Ara.CompileServer;
 internal sealed record EditorRow(string Id, string Name, string? Parent = null, string Order = "", Dictionary<string, JsonElement>? Components = null);
 internal sealed record EditorSceneInput(EditorRow[] Entities);
 internal sealed record EditorRequest(string Project, string AuthoringRoot, string Operation = "catalog", string? Command = null,
-    EditorSceneInput? Scene = null, string[]? Selection = null, string[]? Reserved = null, string? Generation = null);
+    EditorSceneInput? Scene = null, string[]? Selection = null, string[]? Reserved = null, string? Generation = null,
+    CompileRequestContext? DiagnosticContext = null);
 internal sealed record EditorResult(EditorCommand[] Commands, EditorMenu[] Menus, AuthoringCall[] Authoring, string[]? Selection,
     JsonObject[] Diagnostics, string? Generation = null, bool Accepted = false, ProjectInventoryResult? Inventory = null);
 
@@ -33,15 +34,15 @@ internal static class EditorRunner
 
         public EditorResult Run(EditorRequest request)
         {
+            ProjectInventoryResult? inventory = null;
             try
             {
                 var root = ProjectInventory.ProjectPath(request.Project);
                 if (_project is not null && _project != root) throw new ArgumentException("an editor worker belongs to one project");
                 _project = root;
-                ProjectInventoryResult? inventory = null;
                 if (_registry is null || request.Operation == "catalog")
                 {
-                    inventory = ProjectCompiler.Compile(new(root, request.AuthoringRoot, "editor"));
+                    inventory = ProjectCompiler.Compile(new(root, request.AuthoringRoot, "editor", request.DiagnosticContext));
                     if (inventory.Diagnostics.Any(d => (string?)d["severity"] == "error")) return Result(inventory.Diagnostics, inventory: inventory);
                     var generation = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
                         string.Join('\n', inventory.Modules.Select(m => m.Name + ":" + m.Fingerprint)))));
@@ -78,7 +79,7 @@ internal static class EditorRunner
             catch (Exception error)
             {
                 if (request.Operation == "invoke" && request.Command is { } command) _registry?.Disable(command, error.GetBaseException().Message);
-                return Result([ProjectInventory.Error(request.Operation == "invoke" ? "ARA0912" : "ARA0920", error.GetBaseException().Message)]);
+                return Result([.. inventory?.Diagnostics ?? [], ProjectInventory.Error(request.Operation == "invoke" ? "ARA0912" : "ARA0920", error.GetBaseException().Message)], inventory: inventory);
             }
         }
 

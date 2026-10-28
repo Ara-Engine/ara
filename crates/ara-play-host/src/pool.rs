@@ -25,6 +25,8 @@ pub const WATCHDOG: Duration = Duration::from_secs(5);
 
 /// A connected player process.
 pub struct Player {
+    /// Opaque lifetime, independent of PID reuse or reconnect timing.
+    pub(crate) incarnation: String,
     /// Owned child; killed on drop.
     pub child: Child,
     /// Live link.
@@ -565,6 +567,7 @@ impl Pool {
         link.respond(id, Ok(json!({}))).map_err(|e| e.to_string())?;
         link.flush().map_err(|e| e.to_string())?;
         Ok(Player {
+            incarnation: ara_doc::IdGen::from_entropy().asset_id("ps").to_string(),
             child: spawn.child,
             link,
             hello,

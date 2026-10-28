@@ -19,9 +19,15 @@ internal sealed class CompileClient : IDisposable
     readonly DevModuleLoader _loader;
     volatile bool _closing;
 
+    /// <summary>Opaque lifetime for this loader-owned producer connection.</summary>
+    internal readonly string DiagnosticInstance = Guid.NewGuid().ToString("N");
+    /// <summary>Ordered connection replacement within the owning loader.</summary>
+    internal readonly ulong DiagnosticBinding;
+
     /// <summary>Starts the server at <paramref name="serverDll"/> and connects to it.</summary>
-    internal CompileClient(string serverDll, DevModuleLoader loader)
+    internal CompileClient(string serverDll, DevModuleLoader loader, ulong diagnosticBinding)
     {
+        DiagnosticBinding = diagnosticBinding;
         _loader = loader;
         // Unix pipes are domain sockets, by default under $TMPDIR; macOS's long $TMPDIR
         // exceeds the 104-byte socket path limit, so other platforms use a short rooted
@@ -111,7 +117,7 @@ internal sealed class CompileClient : IDisposable
                         _loader.OnDelta(r);
                         break;
                     case MessageKind.Diagnostics:
-                        _loader.OnDiagnostics(r);
+                        _loader.OnDiagnostics(this, r);
                         break;
                     case MessageKind.Restart:
                         _loader.OnRestart(r);

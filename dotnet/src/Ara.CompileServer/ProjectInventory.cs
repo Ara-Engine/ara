@@ -41,10 +41,11 @@ internal static class ProjectInventory
         internal string[] References => AutomaticEditor ? [Owner.Name, .. Owner.References] : Owner.References;
     }
 
-    internal static JsonObject Error(string code, string message, string? file = null)
+    internal static JsonObject Error(string code, string message, string? file = null, string? module = null)
     {
         var result = new JsonObject { ["code"] = code, ["severity"] = "error", ["message"] = message };
         if (file is not null) result["location"] = new JsonObject { ["file"] = file.Replace('\\', '/') };
+        if (module is not null) result["data"] = new JsonObject { ["module"] = module };
         return result;
     }
 
@@ -143,10 +144,10 @@ internal static class ProjectInventory
                     var message = declared.TryGetValue(reference, out var declaration) && declaration.EditorManifest
                         ? $"gameplay module `{name}` cannot reference editor module `{reference}`"
                         : $"module `{name}` references unknown module `{reference}`";
-                    diagnostics.Add(Error(AraCodes.UnknownModule, message, module.Owner.Directory));
+                    diagnostics.Add(Error(AraCodes.UnknownModule, message, module.Owner.Directory, module.Name));
                     continue;
                 }
-                if (!module.Editor && target.Editor) { diagnostics.Add(Error(AraCodes.UnknownModule, $"gameplay module `{name}` cannot reference editor module `{reference}`", module.Owner.Directory)); continue; }
+                if (!module.Editor && target.Editor) { diagnostics.Add(Error(AraCodes.UnknownModule, $"gameplay module `{name}` cannot reference editor module `{reference}`", module.Owner.Directory, module.Name)); continue; }
                 references.Add(target.Name);
             }
             resolved[name] = [.. references.Order(StringComparer.Ordinal)];
@@ -155,7 +156,7 @@ internal static class ProjectInventory
         var active = new List<string>();
         void Visit(string name)
         {
-            if (active.Contains(name, StringComparer.OrdinalIgnoreCase)) { diagnostics.Add(Error(AraCodes.ModuleCycle, "module reference cycle: " + string.Join(" -> ", active.Append(name)))); return; }
+            if (active.Contains(name, StringComparer.OrdinalIgnoreCase)) { diagnostics.Add(Error(AraCodes.ModuleCycle, "module reference cycle: " + string.Join(" -> ", active.Append(name)), modules[name].Owner.Directory, modules[name].Name)); return; }
             if (!visited.Add(name)) return;
             active.Add(name);
             foreach (var reference in resolved[name]) Visit(reference);

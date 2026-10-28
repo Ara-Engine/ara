@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.CodeAnalysis;
 
 namespace Ara.CompileServer;
@@ -72,5 +73,20 @@ internal static class Diagnostics
             w.WriteEndArray();
         }
         return System.Text.Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    /// <summary>Converts a Roslyn row without changing its mapped source or human text.</summary>
+    internal static JsonObject Row(Diagnostic diagnostic)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream)) Write(writer, diagnostic);
+        return JsonNode.Parse(stream.ToArray())!.AsObject();
+    }
+
+    internal static JsonObject Row(string code, string severity, string message, string? file = null)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream)) Write(writer, code, severity, message, file);
+        return JsonNode.Parse(stream.ToArray())!.AsObject();
     }
 }

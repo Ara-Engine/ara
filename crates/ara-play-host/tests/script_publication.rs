@@ -7,7 +7,14 @@ fn relative_open_tracks_absolute_canonical_schema_files_across_cwd_changes() {
     if std::env::var_os("ARA_RELATIVE_SCHEMA_CHILD").is_some() {
         let project =
             ara_play_host::open_project(std::path::Path::new("project")).expect("relative open");
-        assert!(project.diags.is_empty(), "{:?}", project.diags);
+        assert!(
+            project
+                .diags
+                .iter()
+                .all(|d| d.code == ara_script::codes::COMPILE_RESULT),
+            "{:?}",
+            project.diags
+        );
         assert_eq!(project.type_files.len(), 1);
         let file = &project.type_files[0];
         assert_eq!(
@@ -73,7 +80,14 @@ fn fresh_open_publishes_and_repairs_private_schemas_before_validation() {
     let source = root.join(ara_doc::AUTHORING_ROOT).join("Armour.cs");
     std::fs::write(&source, "using Ara; /// <summary>Protection.</summary>\n[Component] public partial struct Armour { /// <summary>Points.</summary>\n public float Points; }").expect("source");
     let opened = ara_play_host::open_project(&root).expect("open");
-    assert!(opened.diags.is_empty(), "{:?}", opened.diags);
+    assert!(
+        opened
+            .diags
+            .iter()
+            .all(|d| d.code == ara_script::codes::COMPILE_RESULT),
+        "{:?}",
+        opened.diags
+    );
     assert!(
         opened.db.get("Armour").is_some(),
         "schema must exist before Host loads scenes"

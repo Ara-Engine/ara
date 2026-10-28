@@ -76,14 +76,14 @@ public sealed class EditorContractTests
         using var session = new EditorRunner.Session();
         var catalog = session.Run(new(root, "content"));
         Assert.True(catalog.Accepted);
-        Assert.Empty(catalog.Diagnostics);
+        InstalledTools.AssertNoProblems(catalog.Diagnostics);
         File.WriteAllText(source, "#error invalid editor candidate");
         var rejected = session.Run(new(root, "content"));
         Assert.False(rejected.Accepted);
         Assert.NotEmpty(rejected.Diagnostics);
         Assert.Equal(catalog.Generation, rejected.Generation);
         var lastGood = session.Run(new(root, "content", "invoke", "tools.create", Generation: catalog.Generation));
-        Assert.Empty(lastGood.Diagnostics);
+        InstalledTools.AssertNoProblems(lastGood.Diagnostics);
         Assert.Equal("first", lastGood.Authoring[0].Args.GetProperty("name").GetString());
         File.WriteAllText(source, text.Replace("first", "second", StringComparison.Ordinal));
         var replaced = session.Run(new(root, "content"));
@@ -125,7 +125,7 @@ public sealed class EditorContractTests
             new { id="e_child", name="Child", parent=(string?)"e_root", order="a0", components=new {} },
         }};
         using var catalog = await InstalledTools.Run("--editor", new { project=root, authoringRoot="content", operation="catalog", scene, selection=new[]{"e_child"}, reserved=Array.Empty<string>() });
-        Assert.Empty(catalog.RootElement.GetProperty("diagnostics").EnumerateArray());
+        InstalledTools.AssertNoProblems(catalog.RootElement.GetProperty("diagnostics").EnumerateArray());
         Assert.Equal("tools.mark", catalog.RootElement.GetProperty("commands")[0].GetProperty("id").GetString());
         Assert.Equal("Tools/Mark selection", catalog.RootElement.GetProperty("menus")[0].GetProperty("path").GetString());
         using var invoked = await InstalledTools.Run("--editor", new { project=root, authoringRoot="content", operation="invoke", command="tools.mark", scene, selection=new[]{"e_child"}, reserved=Array.Empty<string>() });

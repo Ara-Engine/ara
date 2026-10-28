@@ -95,7 +95,10 @@ internal sealed class ModuleSession
     internal void Commit(Outcome o)
     {
         if (o.Next is { } next) _state = next;
+        _diagnosticReferencesChanged = !o.ValidatedInputs;
     }
+
+    bool _diagnosticReferencesChanged;
 
     /// <summary>
     /// After a referenced module committed new code without a cascade (an L1/L2 delta), points
@@ -106,6 +109,7 @@ internal sealed class ModuleSession
         if (_state is not { } s || !s.DepRefs.TryGetValue(name, out var old)) return;
         var now = dep.Reference;
         if (ReferenceEquals(old, now)) return;
+        _diagnosticReferencesChanged = true;
         _state = s with
         {
             User = s.User.ReplaceReference(old, now),
@@ -200,7 +204,10 @@ internal sealed class ModuleSession
         if (_state is not { } s) return Initial(ctx, ct);
         var h = (hot ?? s.Hot) && ctx.Enc;
         var user = h == s.Hot ? s.User : s.User.WithOptions(ModuleCompiler.Options(h));
-        return Build(user, s with { Hot = h }, AbiConst.ReloadL3, escalation, new Phases(0, Stopwatch.GetTimestamp()), [], null, ctx, false, ct);
+        var current = MatchesInputs(s, ctx);
+        var outcome = Build(user, s with { Hot = h }, AbiConst.ReloadL3, escalation, new Phases(0, Stopwatch.GetTimestamp()), [], null, ctx, false, ct);
+        outcome.ValidatedInputs = current;
+        return outcome;
     }
 
     /// <summary>
@@ -210,6 +217,7 @@ internal sealed class ModuleSession
     /// </summary>
     internal Outcome Cascade(ICompileContext ctx, CancellationToken ct = default)
     {
+        _diagnosticReferencesChanged = true;
         var s = _state ?? throw new InvalidOperationException($"module `{Name}` has not built");
         var (refs, surfaces) = Dependencies(ctx);
         var user = s.User;
@@ -223,15 +231,28 @@ internal sealed class ModuleSession
         var same = References.All(n => s.DepSurfaces.TryGetValue(n, out var was) && was is not null && was == surfaces[n]);
         if (same)
         {
+            var problems = Problems(final, [], final.GetDiagnostics(ct), []);
+            if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(new Phases(0, Stopwatch.GetTimestamp()), problems);
             return new Outcome(this, OutcomeKind.Relink)
             {
                 ReloadKind = AbiConst.ReloadL3,
                 Escalation = Escalation.Relink,
+                ValidatedInputs = MatchesInputs(s, ctx, dependencies: false),
+                Problems = problems,
                 Next = s with { User = user, Final = final, DepRefs = refs, Generation = s.Generation + 1 },
             };
         }
-        return Build(user, s with { DepRefs = refs }, AbiConst.ReloadL3, Escalation.Dependency,
+        var outcome = Build(user, s with { DepRefs = refs }, AbiConst.ReloadL3, Escalation.Dependency,
             new Phases(0, Stopwatch.GetTimestamp()), [], null, ctx, false, ct);
+        outcome.ValidatedInputs = MatchesInputs(s, ctx, dependencies: false);
+        return outcome;
+    }
+
+    bool MatchesInputs(ModuleState state, ICompileContext ctx, bool dependencies = true)
+    {
+        var files = SourceFiles().Select(ProjectInventory.ProjectPath).ToArray();
+        return files.Length == state.Texts.Count && files.All(path => state.Texts.TryGetValue(path, out var text) && ReadWithRetry(path) == text)
+            && (!dependencies || References.All(name => state.DepRefs.TryGetValue(name, out var reference) && ReferenceEquals(reference, ctx.Dependency(name)?.Reference)));
     }
 
     /// <summary>Reads source without denying edits or replacements by another world's editor.</summary>
@@ -266,7 +287,7 @@ internal sealed class ModuleSession
             foreach (var removed in _disk.Keys.Where(path => !membership.Contains(path)).ToArray()) _disk.Remove(removed);
             paths = paths.Concat(membership.Where(path => !_disk.ContainsKey(path)));
         }
-        foreach (var path in paths)
+        foreach (var path in paths.Concat(SourceFiles()).Concat(s.Texts.Keys).Distinct(ModuleState.Paths))
         {
             if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) || (membership is null ? IsIgnored(path) : !membership.Contains(ProjectInventory.ProjectPath(path)))) continue;
             var full = ProjectInventory.ProjectPath(path);
@@ -287,7 +308,14 @@ internal sealed class ModuleSession
             if (newTree is null) { trees.Remove(path); texts.Remove(path); }
             else { trees[path] = newTree; texts[path] = newText!; }
         }
-        if (changes.Count == 0) return new Outcome(this, OutcomeKind.None);
+        if (changes.Count == 0)
+        {
+            var problems = Problems(s.Final, [], s.Final.GetDiagnostics(ct), []);
+            if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
+            var validated = MatchesInputs(s, ctx);
+            if (validated) _diagnosticReferencesChanged = false;
+            return new Outcome(this, OutcomeKind.None) { ValidatedInputs = validated, Problems = problems };
+        }
         var next = s.User;
         foreach (var c in changes) next = Apply(next, c);
         var changed = changes.Where(c => c.New is not null).Select(c => c.New!).ToList();
@@ -316,7 +344,11 @@ internal sealed class ModuleSession
             foreach (var c in changes) final = Apply(final, c);
             nextState = nextState with { Final = final };
             if (cls.Bodies.Count == 0 && !cls.Additive)
-                return new Outcome(this, OutcomeKind.None) { Next = nextState }; // trivia or doc comments only
+            {
+                var checkedProblems = Problems(final, [], final.GetDiagnostics(ct), changed);
+                if (checkedProblems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, checkedProblems);
+                return new Outcome(this, OutcomeKind.None) { Next = nextState, Problems = checkedProblems, ValidatedInputs = true };
+            }
             ModuleDelta? delta = null;
             ImmutableArray<Diagnostic> errors = [];
             try
@@ -341,6 +373,7 @@ internal sealed class ModuleSession
                     Delta = delta,
                     Changed = cls.Bodies.Count + cls.Inserts.Count,
                     Problems = problems,
+                    ValidatedInputs = true,
                     Timing = p,
                     Next = nextState with { Baseline = delta.Next, Surface = cls.Additive ? null : s.Surface, DepSurfaces = surfaces },
                 };
@@ -371,7 +404,7 @@ internal sealed class ModuleSession
         a.Count == b.Count && a.All(kv => b.TryGetValue(kv.Key, out var v) && (ReferenceEquals(v, kv.Value) || v.ContentEquals(kv.Value)));
 
     Outcome Errors(Phases p, List<Diagnostic> problems) =>
-        new(this, OutcomeKind.Errors) { Problems = problems, Timing = p };
+        new(this, OutcomeKind.Errors) { Problems = problems, Timing = p, ValidatedInputs = true };
 
     /// <summary>Runs the generator over a user compilation.</summary>
     (Compilation Final, ImmutableArray<Diagnostic> Diags, ImmutableDictionary<string, SourceText> Generated) Generate(CSharpCompilation user, CancellationToken ct)
@@ -391,10 +424,13 @@ internal sealed class ModuleSession
         if (list.All(d => d.Severity != DiagnosticSeverity.Error))
         {
             if (analysis is not null) list.AddRange(analysis.GetAwaiter().GetResult().Where(Diagnostics.Reportable));
-            else if (_analysis is not null && changed.Count > 0) list.AddRange(_analysis.Analyze(final, changed, Profile).Where(Diagnostics.Reportable));
+            else if (_analysis is not null && AnalysisTrees(final, changed) is { Count: > 0 } trees) list.AddRange(_analysis.Analyze(final, trees, Profile).Where(Diagnostics.Reportable));
         }
         return list;
     }
+
+    IReadOnlyCollection<SyntaxTree> AnalysisTrees(Compilation final, IReadOnlyCollection<SyntaxTree> changed) =>
+        _diagnosticReferencesChanged ? final.SyntaxTrees.Where(tree => _disk.ContainsKey(tree.FilePath)).ToArray() : changed;
 
     /// <summary>
     /// Generator (unless reused), full emit and analyzers (in parallel with the emit, over
@@ -409,7 +445,8 @@ internal sealed class ModuleSession
         var (final, genDiags, generated) = reuse ?? Generate(user, ct);
         p.Generate += p.Mark();
         if (genDiags.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, Problems(final, genDiags, [], analyze));
-        var analysis = _analysis is not null && analyze.Count > 0 ? Task.Run(() => _analysis.Analyze(final, analyze, Profile), ct) : null;
+        var analysisTrees = AnalysisTrees(final, analyze);
+        var analysis = _analysis is not null && analysisTrees.Count > 0 ? Task.Run(() => _analysis.Analyze(final, analysisTrees, Profile), ct) : null;
         var (image, errors) = ModuleCompiler.Emit(final, ct);
         p.Emit = p.Mark();
         var problems = Problems(final, genDiags, errors, analyze, analysis);
@@ -417,6 +454,7 @@ internal sealed class ModuleSession
         if (image is null || problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
         var o = new Outcome(this, OutcomeKind.Image)
         {
+            ValidatedInputs = true,
             ReloadKind = kind,
             Escalation = escalation,
             Image = image,

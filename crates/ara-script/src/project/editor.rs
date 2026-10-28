@@ -98,6 +98,10 @@ impl EditorClient {
             .ok_or_else(|| failure("editor request must be an object"))?;
         fields.insert("project".into(), json!(self.root));
         fields.insert("authoringRoot".into(), ara_doc::AUTHORING_ROOT.into());
+        fields.insert(
+            "diagnosticContext".into(),
+            super::lifecycle::context(&self.root, "editor")?,
+        );
         let mut bytes = serde_json::to_vec(request).map_err(io)?;
         bytes.push(b'\n');
         self.input.write_all(&bytes).map_err(io)?;

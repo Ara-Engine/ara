@@ -54,3 +54,27 @@ The Play integration fixtures stage legacy Outpost sources under `AUTHORING_ROOT
 with a JSON manifest preserving its name/hot setting. Generated schemas come from
 `.ara/scripts/`, and the first-start regression places a C# component directly in
 the scene with no checked-in schema or warm Play to hide missing publication.
+
+Compiler diagnostics carry a private lifecycle in `data.compile` (schema 1):
+`producer`, opaque `instance`, ordered `binding`, `attempt`, canonical `profile`,
+`phase` and diagnostic `channel`. `data.module` and a Module subject come from
+the inventory or loader slot, including when `#line` maps a source elsewhere.
+ARA0906 marks `bound`, `started` and `completed`; completion distinguishes
+`success`, `errors` and `cancelled`, with validation, total/emitted/error counts,
+truncation and declared coverage. These markers describe compilation, separately
+from loading or applying executable code. Runtime faults remain separate rows.
+
+Project/catalog callers allocate identities above disposable workers. Derived
+`.ara/scripts/diagnostic-bindings.json` counters order producer replacements across
+processes; helper restarts retain their caller's ordered attempts. The warm
+loader binds its active client before forwarding results. Play ingress adds
+trusted `data.play` (`world`, player index, opaque `source`, ordered `binding`)
+and a System subject, protecting scope identity through diagnostic Store dedup.
+Existing payloads, mapped locations and human messages are preserved.
+
+Only a completed success with `validation: current-module-inputs` can retire
+older compiler errors in the same active scope. Exact restoration to last-good
+inputs produces such a result without requiring a reload. Rebuilding committed
+code while disk inputs remain broken does not. Warning coverage stays partial,
+and truncated results advertise omitted rows; neither is an empty problem set.
+Console history is retained; the editor owns the current Problems projection.
