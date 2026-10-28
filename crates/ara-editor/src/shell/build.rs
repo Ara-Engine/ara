@@ -818,8 +818,9 @@ mod tests {
         let default = default_profile(root)?;
         assert!(default.templates.is_empty());
         assert_eq!(
-            default.content, ".",
-            "legacy projects keep root-relative authored content"
+            default.content,
+            ara_doc::AUTHORING_ROOT,
+            "all build profiles use the current authored root"
         );
         assert!(
             ara_export::ExportPreset::from_unpinned_text(&default.to_unpinned_text()?)?

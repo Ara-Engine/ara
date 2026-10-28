@@ -128,16 +128,17 @@ pub(super) fn markup(project: &str, state: &State) -> String {
 }
 
 fn text(out: &mut String, class: &str, value: &str) {
+    let id = out.len();
     let _ = write!(
         out,
-        "<text class='{class}' text='{}' />",
+        "<text id='migration-text-{id}' class='{class}' text='{}' />",
         escape(value, b'\'')
     );
 }
 fn button(out: &mut String, id: &str, label: &str, class: &str, enabled: bool) {
     let _ = write!(
         out,
-        "<button id='{id}' class='{class}' label='{label}' {}><text text='{label}' /></button>",
+        "<button id='{id}' class='{class}' label='{label}' {}><text id='{id}-label' text='{label}' /></button>",
         if enabled { "" } else { "disabled='true'" }
     );
 }
