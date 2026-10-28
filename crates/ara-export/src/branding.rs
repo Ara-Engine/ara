@@ -358,8 +358,12 @@ mod tests {
             );
             ensure!(!module.is_null(), "load copied resource image");
             let read = |kind: u16| -> Result<&[u8]> {
-                let resource =
-                    FindResourceW(module, 1usize as *const u16, kind as usize as *const u16);
+                // MAKEINTRESOURCE: integer resource IDs travel in the pointer arguments.
+                let resource = FindResourceW(
+                    module,
+                    std::ptr::without_provenance(1),
+                    std::ptr::without_provenance(usize::from(kind)),
+                );
                 ensure!(!resource.is_null(), "missing resource {kind}");
                 let loaded = LoadResource(module, resource);
                 ensure!(!loaded.is_null(), "load resource {kind}");
