@@ -1,6 +1,41 @@
 //! Native file history must retain its loaded model and references at every boundary.
 use super::*;
 
+fn assert_file_boundary(host: &Host) {
+    let history = ara_host::file_state::FileHistory::new(host.root());
+    let transaction = host.store().history().last().expect("current transaction");
+    let mut states = std::collections::BTreeMap::new();
+    for op in &transaction.ops {
+        if let ara_doc::Op::File { path, state, .. } = op {
+            states.insert(path, state);
+        }
+    }
+    for (path, expected) in states {
+        let actual = history.observe(path).expect("physical state");
+        if &actual != expected {
+            let disk = fs::read_to_string(host.root().join(path)).ok();
+            let parsed = disk
+                .as_deref()
+                .map(|text| ara_doc::read(text, path, host.store().schema(), None));
+            let canonical = host
+                .store()
+                .workspace()
+                .docs()
+                .find(|(candidate, _)| *candidate == path.as_str())
+                .map(|(_, doc)| ara_doc::write(doc, host.store().schema()));
+            let detail = json!({"transaction":transaction.id,"revision":transaction.result,"path":path,
+                "expected":expected,"actual":actual,"diskText":disk,
+                "expectedText":expected.as_ref().map(|state|String::from_utf8_lossy(&history.read(state).expect("immutable snapshot")).into_owned()),
+                "memoryCanonical":canonical,"parseWithoutIndex":parsed.as_ref().map(|read|json!({"diagnostics":read.diags,
+                    "canonical":read.doc.as_ref().map(|doc|ara_doc::write(doc,host.store().schema()))}))});
+            panic!(
+                "canonical save changed a committed immutable file snapshot: {}",
+                ara_json::to_canonical_string(&detail)
+            );
+        }
+    }
+}
+
 fn model(host: &Host, logical: &str) {
     let store = host.store();
     let workspace = store.workspace();
@@ -76,6 +111,7 @@ fn finish_with_model(
     host.flush();
     model(host, new);
     assert!(!host.unsaved());
+    assert_file_boundary(host);
 }
 
 #[test]
@@ -96,13 +132,24 @@ fn real_asset_rename_undo_redo_preserves_model_path_and_prefab_reference_before_
         authored.join("scenes/main.scene"),
         ara_json::to_canonical_string(&json!({
             "$schema":"ara://schema/scene/1","id":"sc_main","records":{
-                "e_instance":{"prefab":"@props/A.prefab#pf_prop","Transform":{},"order":"a0"}
+                "e_instance":{"prefab":"@props/A.prefab#pf_prop","order":"a0"}
             }
         })),
     )
     .expect("referencing scene");
+    let project = Project::open(scratch.path()).expect("project");
+    for logical in ["props/A.prefab", "scenes/main.scene"] {
+        let storage = format!("{}/{logical}", ara_doc::AUTHORING_ROOT);
+        let text = fs::read_to_string(scratch.path().join(&storage)).expect("fixture text");
+        let read = ara_doc::read(&text, &storage, &project.db, Some(&project.index));
+        assert!(
+            read.doc.is_some() && !ara_diag::has_errors(&read.diags),
+            "the physical fixture must validate before authority opening: {storage}: {:?}",
+            read.diags
+        );
+    }
     let mut host = Host::open(
-        Project::open(scratch.path()).expect("project"),
+        project,
         HostConfig {
             debounce: Duration::from_secs(3600),
             watch_every: Duration::from_secs(3600),
