@@ -137,6 +137,30 @@ mod platform {
         {
             return false;
         }
+        // An exited process its parent has not reaped yet (a zombie) still answers
+        // signal zero; the BSD process status tells it apart.
+        #[cfg(target_os = "macos")]
+        {
+            /// `SZOMB` from <sys/proc.h>: exited, awaiting collection by its parent.
+            const SZOMB: u32 = 5;
+            // SAFETY: `proc_bsdinfo` is plain integers and byte arrays; all-zero is valid.
+            let mut info: libc::proc_bsdinfo = unsafe { std::mem::zeroed() };
+            let size = std::mem::size_of::<libc::proc_bsdinfo>() as libc::c_int;
+            // SAFETY: `info` is a writable `proc_bsdinfo` of exactly `size` bytes, which is
+            // what PROC_PIDTBSDINFO fills.
+            let read = unsafe {
+                libc::proc_pidinfo(
+                    pid as libc::c_int,
+                    libc::PROC_PIDTBSDINFO,
+                    0,
+                    (&raw mut info).cast(),
+                    size,
+                )
+            };
+            if read == size && info.pbi_status == SZOMB {
+                return false;
+            }
+        }
         // SAFETY: Signal zero only checks a process, without sending a signal.
         unsafe {
             libc::kill(pid as libc::pid_t, 0) == 0
@@ -190,6 +214,30 @@ mod platform {
             if let Some(worker) = self.worker.take() {
                 let _ = worker.join();
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        /// A project process the Hub did not spawn (the fixture editor is the test's
+        /// child) stays a zombie after it exits until its parent reaps it; it has exited.
+        #[test]
+        fn an_exited_unreaped_child_is_not_alive() {
+            let mut child = std::process::Command::new("/bin/sh")
+                .args(["-c", "exit 0"])
+                .spawn()
+                .expect("child");
+            let deadline = std::time::Instant::now() + Duration::from_secs(10);
+            while alive(child.id()) {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "an exited, unreaped child still reads as alive"
+                );
+                thread::sleep(Duration::from_millis(10));
+            }
+            child.wait().expect("reap");
         }
     }
 }
