@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "cc67591195a4a7b91967d84c8474bdbe7aca33e299859e41d893ed001ecc4773",
+  "key": "3d27179c5c555a41830f991896ab7cfe60e138c5933471565f921b66aed64804",
   "stages": [
     {
-      "dxil": "cc67591195a4a7b91967d84c8474bdbe7aca33e299859e41d893ed001ecc4773/look_sky_irradiance/skyIrradianceMain.dxil",
+      "dxil": "3d27179c5c555a41830f991896ab7cfe60e138c5933471565f921b66aed64804/look_sky_irradiance/skyIrradianceMain.dxil",
       "dxil_hash": "8c8b457485403cea27bd2409e36b244b7a64125c1a22dd87afd93a60cd052fa5",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "cc67591195a4a7b91967d84c8474bdbe7aca33e299859e41d893ed001ecc4773/look_sky_irradiance/skyIrradianceMain.metallib",
+        "metallib": "3d27179c5c555a41830f991896ab7cfe60e138c5933471565f921b66aed64804/look_sky_irradiance/skyIrradianceMain.metallib",
         "metallib_hash": "2de9e24dc952507fc554767a38558a755ab3988e53226b9737f52b559d0b7cce",
-        "reflection": "cc67591195a4a7b91967d84c8474bdbe7aca33e299859e41d893ed001ecc4773/look_sky_irradiance/skyIrradianceMain.metal.json",
+        "reflection": "3d27179c5c555a41830f991896ab7cfe60e138c5933471565f921b66aed64804/look_sky_irradiance/skyIrradianceMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "skyIrradianceMain",
-      "spirv": "cc67591195a4a7b91967d84c8474bdbe7aca33e299859e41d893ed001ecc4773/look_sky_irradiance/skyIrradianceMain.spv",
+      "spirv": "3d27179c5c555a41830f991896ab7cfe60e138c5933471565f921b66aed64804/look_sky_irradiance/skyIrradianceMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "ff2916d6e67022dc9dd62275b47a86baa94fb753637fa93bd8b7d76eeccd6d3c",
       "stage": "compute"

@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "cc67591195a4a7b91967d84c8474bdbe7aca33e299859e41d893ed001ecc4773",
+  "key": "3d27179c5c555a41830f991896ab7cfe60e138c5933471565f921b66aed64804",
   "stages": [
     {
-      "dxil": "cc67591195a4a7b91967d84c8474bdbe7aca33e299859e41d893ed001ecc4773/tsr_shading_change_pyramid/tsrShadingChangePyramidMain.dxil",
+      "dxil": "3d27179c5c555a41830f991896ab7cfe60e138c5933471565f921b66aed64804/tsr_shading_change_pyramid/tsrShadingChangePyramidMain.dxil",
       "dxil_hash": "825851921cb64ae22e1151f78a33b774ba2934eaf5845dbed294d88b8d247c9e",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "cc67591195a4a7b91967d84c8474bdbe7aca33e299859e41d893ed001ecc4773/tsr_shading_change_pyramid/tsrShadingChangePyramidMain.metallib",
+        "metallib": "3d27179c5c555a41830f991896ab7cfe60e138c5933471565f921b66aed64804/tsr_shading_change_pyramid/tsrShadingChangePyramidMain.metallib",
         "metallib_hash": "e66a92fea9426f553729ae0e6df1f8322b2625770782e9ff75bcb060447a83c2",
-        "reflection": "cc67591195a4a7b91967d84c8474bdbe7aca33e299859e41d893ed001ecc4773/tsr_shading_change_pyramid/tsrShadingChangePyramidMain.metal.json",
+        "reflection": "3d27179c5c555a41830f991896ab7cfe60e138c5933471565f921b66aed64804/tsr_shading_change_pyramid/tsrShadingChangePyramidMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "tsrShadingChangePyramidMain",
-      "spirv": "cc67591195a4a7b91967d84c8474bdbe7aca33e299859e41d893ed001ecc4773/tsr_shading_change_pyramid/tsrShadingChangePyramidMain.spv",
+      "spirv": "3d27179c5c555a41830f991896ab7cfe60e138c5933471565f921b66aed64804/tsr_shading_change_pyramid/tsrShadingChangePyramidMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "a6abed253c3db4c530c111ddaee03ccf6191e224fb185e224ea5da34d86f6ac5",
       "stage": "compute"
