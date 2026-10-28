@@ -133,10 +133,11 @@ fn a_junction_introduced_after_preparation_cannot_redirect_restore() {
     let replacement = store.put(b"replacement").expect("blob");
     fs::remove_file(root.join("media/file.bin")).expect("remove source");
     fs::remove_dir(root.join("media")).expect("remove empty source directory");
+    // mklink reads any `/` in a path as a switch, so pass normalized absolute paths.
     let result = std::process::Command::new("cmd.exe")
         .args(["/c", "mklink", "/J"])
-        .arg(root.join("media"))
-        .arg(&outside)
+        .arg(std::path::absolute(root.join("media")).expect("junction path"))
+        .arg(std::path::absolute(&outside).expect("junction target"))
         .creation_flags(0x0800_0000)
         .output()
         .expect("create junction");

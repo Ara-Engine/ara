@@ -86,6 +86,7 @@ impl MetalDevice {
                 "Previous frame is still in flight".into(),
             ));
         }
+        self.poll_shader_reload();
         self.deferred_waits = self.submitted;
         self.deferred = Some(Vec::new());
         Ok(())

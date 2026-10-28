@@ -7,6 +7,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [features]
+fidelity-lab = ["ara-render/fidelity-lab"]
 hotpatch = ["ara-runtime/hotpatch", "ara-render/hotpatch", "ara-render-fidelity/hotpatch"]
 
 [dependencies]

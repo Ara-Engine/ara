@@ -80,6 +80,9 @@ pub(crate) struct Options {
     /// Wait for games or foreign GPU work to clear before the three-second baseline.
     #[arg(long)]
     wait_for_quiet: bool,
+    /// Refuse a busy CPU/GPU baseline instead of waiting.
+    #[arg(long, conflicts_with = "wait_for_quiet")]
+    no_wait: bool,
     #[command(flatten)]
     gpu_policy: crate::gpu_guard::Policy,
     /// Re-score saved GPU evidence and raw source reports without building or launching.
@@ -150,7 +153,7 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
     };
     let load_path = output.join("gpu-load.json");
     let guard = match crate::gpu_guard::Guard::start(
-        options.wait_for_quiet,
+        options.wait_for_quiet || !options.no_wait,
         load_path.clone(),
         options.gpu_policy,
     ) {

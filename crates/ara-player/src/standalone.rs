@@ -246,6 +246,11 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             if perf.control(&mut *presenter)? {
                 break;
             }
+            if perf.idle() {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                previous = Instant::now();
+                continue;
+            }
             let frame_start = Instant::now();
             let waits_before = if perf.enabled() {
                 presenter.host_wait_stats()
@@ -262,7 +267,9 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             let now = Instant::now();
             {
                 ara_gpu::cpu_scope!("Player.advance");
-                world.runtime.advance(now.duration_since(previous))?;
+                if !perf.lab_mode() {
+                    world.runtime.advance(now.duration_since(previous))?;
+                }
             }
             previous = now;
             world.mark();
@@ -270,6 +277,12 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
             {
                 ara_gpu::cpu_scope!("Player.extract");
                 world.runtime.extract(&mut frame);
+            }
+            perf.apply_camera(&mut frame);
+            #[cfg(feature = "fidelity-lab")]
+            perf.apply_params(&mut *presenter, &frame);
+            if perf.capture(&mut *presenter, &mut frame)? {
+                continue;
             }
             let simulation_done = Instant::now();
             if is_2d {
