@@ -158,16 +158,47 @@ fn stale_same_path_deletion_cannot_unload_recreated_identity_but_fresh_external_
         .files
         .io
         .deletion_observation(&path, crate::file_io::stamp(&f.root.join(&path)));
+    let before = f.host.store().revision();
+    f.host
+        .call(
+            ConnId::LOCAL,
+            "cmd.apply",
+            json!({"session":f.session,"doc":"ara.project.json",
+        "why":"Delete the old same-path incarnation before recreating it",
+        "commands":[{"cmd":"doc.delete","args":{"document":"@props/A.prefab#pf_prop"}}]}),
+        )
+        .unwrap();
+    f.host.flush();
+    assert!(f.host.store().workspace().doc("pf_prop").is_none());
+    assert!(
+        !f.root.join(&path).exists(),
+        "creation requires a physically absent destination"
+    );
     let held = f.host.file_test_state().files.io.hold();
-    f.recreate("props/A.prefab");
+    f.host.call(ConnId::LOCAL, "cmd.apply", json!({"session":f.session,"doc":"ara.project.json",
+        "why":"Recreate the same document identity at its now-absent path",
+        "commands":[{"cmd":"doc.create","args":{"path":"props/A.prefab","kind":"prefab","id":"pf_prop"}}]})).unwrap();
     let revision = f.host.store().revision();
+    assert_eq!(revision, before + 2);
+    let _receipt = f.host.queue_flush();
+    assert!(
+        f.host.unsaved(),
+        "the new save remains queued behind the held worker"
+    );
     f.host.file_test_state().file_reply(Reply::Deleted {
         path: path.clone(),
-        observed: delayed,
+        observed: delayed.clone(),
     });
     f.assert_path("props/A.prefab");
     drop(held);
     f.host.flush();
+    f.assert_path("props/A.prefab");
+    // A later delivery must also be rejected once the new incarnation has a
+    // synced baseline, where an unversioned path-only reply would unload it.
+    f.host.file_test_state().file_reply(Reply::Deleted {
+        path: path.clone(),
+        observed: delayed,
+    });
     f.assert_path("props/A.prefab");
     fs::remove_file(f.root.join(&path)).unwrap();
     f.host.file_test_state().files.io.sync();
