@@ -236,7 +236,7 @@ impl StartProgress {
             restarting: row["restart"] == true,
         }
     }
-    fn title(&self) -> &'static str {
+    pub(super) fn title(&self) -> &'static str {
         if self.stopping {
             "Stopping Play…"
         } else if self.restarting {
@@ -374,6 +374,7 @@ impl Shell {
         };
         if self.current.is_some()
             || before.stopping != now.stopping
+            || before.restarting != now.restarting
             || (before.total > 0) != (now.total > 0)
         {
             return Ok(false);

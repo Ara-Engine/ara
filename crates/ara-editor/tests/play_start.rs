@@ -119,6 +119,24 @@ fn play_starts_in_the_background_and_shows_its_progress() {
         text(&shell, "status-play-text").as_deref(),
         Some("Starting Play…")
     );
+    shell.show_play_row_for_test(
+        &mut editor,
+        json!({"status":"starting","restart":true,"progress":{"phase":"pool","elapsedMs":3500}}),
+    );
+    for id in ["game-starting-title", "status-play-text"] {
+        assert_eq!(text(&shell, id).as_deref(), Some("Restarting Play…"));
+    }
+    assert!(shell.move_play_row_for_test(
+        json!({"status":"starting","restart":true,"progress":{"phase":"pool","elapsedMs":3700}})
+    ));
+    assert_eq!(text(&shell, "game-starting-title").as_deref(), Some("Restarting Play…"));
+    assert!(!shell.move_play_row_for_test(
+        json!({"status":"starting","progress":{"phase":"pool","elapsedMs":3800}})
+    ));
+    shell.show_play_row_for_test(
+        &mut editor,
+        json!({"status":"starting","progress":{"phase":"assets","completed":3,"total":12,"elapsedMs":2450}}),
+    );
     // Over a camera preview the start is a hint on the view Play starts with, with
     // the same progress updated in place; Play's first (lit) frame replaces it.
     shell.show_game_preview_for_test(&mut editor, [640, 360]);

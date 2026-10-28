@@ -2,6 +2,7 @@
 use super::*;
 use std::sync::mpsc::{self, SyncSender};
 
+#[path = "tests/retained.rs"]
 mod retained;
 
 fn blocked(list: &mut ModuleList, root: &Path) -> SyncSender<Inventory> {
