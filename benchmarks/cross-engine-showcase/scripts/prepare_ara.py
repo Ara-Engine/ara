@@ -6,9 +6,11 @@ os.environ['ARA_CONFIG_DIR']=str(root/'profiles'/'prepare');os.environ['ARA_CRAS
 def call(*args):
     print('RUN',*map(str,args),flush=True);subprocess.run(list(map(str,args)),check=True)
 if not (project/'ara.project.json').exists():call(bin/'ara.exe','init',project,'--name','AraBench '+name)
-(project/'assets').mkdir(exist_ok=True);shutil.copyfile(root/'source'/name/(name+'.glb'),project/'assets'/'scene.glb')
+authored=project/'content'
+main=json.loads((project/'ara.project.json').read_text())['main']
+(authored/'assets').mkdir(parents=True,exist_ok=True);shutil.copyfile(root/'source'/name/(name+'.glb'),authored/'assets'/'scene.glb')
 cli=[bin/'ara.exe','--root',project,'--author','human','--json']
-if not (project/'assets'/'scene.glb.import.json').exists():call(*cli,'do','import.initialize','-p','source=assets/scene.glb','-p','id=as_benchmark','--why','Register the single shared Blender export')
+if not (authored/'assets'/'scene.glb.import.json').exists():call(*cli,'do','import.initialize','-p','source=assets/scene.glb','-p','id=as_benchmark','--why','Register the single shared Blender export')
 m=json.loads((root/'source'/name/'manifest.json').read_text())
 def camera_euler(view):
     f=[b-a for a,b in zip(view['position'],view['target'])];length=math.sqrt(sum(v*v for v in f));f=[v/length for v in f]
@@ -27,12 +29,12 @@ commands.extend([
 {'cmd':'entity.create','args':{'id':'e_camera','name':'Benchmark Camera','components':{'Transform':{'position':m['path'][0]['position'],'rotation':camera_euler(m['path'][0])},'Camera':{'fov':m['path'][0]['fov']}}}},
 {'cmd':'entity.create','args':{'id':'e_environment','name':'Common environment and fixed EV','components':{'Environment':environment,'PostProcessVolume':{'overrides':[{'module':'exposure','exposure':'manual','ev100':m['ev100']},{'module':'toneMapping','toneMapping':'filmic'},{'module':'bloom','bloom':.04}]}}}}
 ])
-request=root/'scripts'/('ara-author-'+name+'.json');request.write_text(json.dumps({'commands':commands,'doc':'levels/main.scene','why':'Author the common Blender benchmark geometry, lights and fixed exposure'}))
-if 'e_geometry' not in json.loads((project/'levels'/'main.scene').read_text())['records']:call(*cli,'do','--args','@'+str(request))
-call(*cli,'fmt',project/'levels'/'main.scene');call(*cli,'check')
+request=root/'scripts'/('ara-author-'+name+'.json');request.write_text(json.dumps({'commands':commands,'doc':main,'why':'Author the common Blender benchmark geometry, lights and fixed exposure'}))
+if 'e_geometry' not in json.loads((authored/main).read_text())['records']:call(*cli,'do','--args','@'+str(request))
+call(*cli,'fmt',authored/main);call(*cli,'check')
 template=root/'ara-runtime.zip'
 if not template.exists():call(bin/'ara-export.exe','runtime-template','--player',bin/'ara-player.exe','--engine',root/'ara-source','--output',template)
 pin=json.loads(subprocess.check_output(list(map(str,[bin/'ara-export.exe','pin','--platform','windows','--arch','x64','--config','release','--file',template,'--symbols',bin/'ara_player.pdb'])),text=True))
-preset=root/'scripts'/('ara-'+name+'.export.json');preset.write_text(json.dumps({'$schema':'ara://schema/export/1','platform':'windows','config':'release','scriptProject':'','assembly':'AraBench','content':'levels','playerTemplate':'runtime','templates':[pin]}))
+preset=root/'scripts'/('ara-'+name+'.export.json');preset.write_text(json.dumps({'$schema':'ara://schema/export/1','platform':'windows','config':'release','scriptProject':'','assembly':'AraBench','content':'content','playerTemplate':'runtime','templates':[pin]}))
 call(bin/'ara-export.exe','preset-fmt',preset)
 call(bin/'ara-export.exe','export','--project',project,'--preset',preset,'--output',root/'builds'/'ara'/name,'--cache',root/'ara-export-cache')

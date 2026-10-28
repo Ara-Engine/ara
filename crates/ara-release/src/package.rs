@@ -157,10 +157,10 @@ pub fn package(root: &Path, version: &str) -> Result<()> {
     // Generate with the packaged CLI, so docs describe the exact shipped schema
     // and command registry. The scratch project lives only in the staging tree.
     let docs_project = stage.join(".docs-project");
-    fs::create_dir(&docs_project)?;
-    fs::write(
-        docs_project.join("ara.project.json"),
-        "{\"name\":\"Ara engine reference\"}",
+    fs::create_dir_all(docs_project.join(ara_doc::AUTHORING_ROOT))?;
+    support::json(
+        &docs_project.join("ara.project.json"),
+        &json!({"name":"Ara engine reference","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
     )?;
     fs::create_dir_all(dist.join("docs-profile"))?;
     run(

@@ -206,7 +206,10 @@ mod assembly_tests {
         ] {
             fs::write(
                 dir.join("ara.project.json"),
-                serde_json::json!({ "name": name }).to_string(),
+                ara_json::to_canonical_string(&serde_json::json!({
+                    "name": name,
+                    "layoutVersion": ara_doc::PROJECT_LAYOUT_VERSION,
+                })),
             )
             .unwrap();
             assert_eq!(assembly_stem(&dir), stem);

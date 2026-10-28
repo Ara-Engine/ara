@@ -8,7 +8,7 @@ use ara_host::Project;
 use serde_json::{Value, json};
 
 use super::{OUTPOST, at, clean, num_is, vec_is};
-use crate::fixture::patch;
+use crate::fixture::{authored_path, patch};
 use crate::solve::{Solver, git};
 use crate::task::{Area, Budget, Checks, Fixture, Task};
 use crate::world::World;
@@ -82,9 +82,9 @@ pub const BROKEN_REFS: Task = Task {
             json!([{ "cmd": "property.set", "args": { "entity": "e_gen001", "path": "MeshRenderer.mesh", "value": "@meshes/generator.glb#ms_genr0001" } }]),
         )?;
         s.flush();
-        let path = s.root().join(OUTPOST);
+        let path = authored_path(s.root(), OUTPOST);
         let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        s.write(
+        s.write_authored(
             OUTPOST,
             &text.replace(
                 "@prefabs/lantern.prefab#pf_lantrn01",
@@ -146,14 +146,21 @@ fn conflicted_merge(root: &Path) -> Result<(), String> {
     }
     let db = Project::open(root).map_err(|d| d.to_string())?.db;
     let stage = |n: u8| -> Result<ara_doc::Document, String> {
-        let text = g(&["show", &format!(":{n}:{OUTPOST}")])?;
+        let text = g(&[
+            "show",
+            &format!(":{n}:{}/{OUTPOST}", ara_doc::AUTHORING_ROOT),
+        ])?;
         ara_doc::read(&text, OUTPOST, &db, None)
             .doc
             .ok_or_else(|| format!("stage {n} does not read"))
     };
     let merged =
         ara_merge::merge(&stage(1)?, &stage(2)?, &stage(3)?, &db).map_err(|d| d.to_string())?;
-    fs::write(root.join(OUTPOST), ara_doc::write(&merged.doc, &db)).map_err(|e| e.to_string())?;
+    fs::write(
+        authored_path(root, OUTPOST),
+        ara_doc::write(&merged.doc, &db),
+    )
+    .map_err(|e| e.to_string())?;
     g(&["config", "merge.ara.name", "Ara semantic merge"])?;
     g(&[
         "config",
@@ -167,13 +174,13 @@ fn conflicted_merge(root: &Path) -> Result<(), String> {
 pub const MERGE_CONFLICT: Task = Task {
     id: "merge-resolve-conflict",
     area: Area::Merge,
-    prompt: "I merged the `teammate` branch into main and git stopped with a conflict in levels/outpost.scene. Resolve it (for the barrel's name, keep mine) and finish the merge.",
+    prompt: "I merged the `teammate` branch into main and git stopped with a conflict in content/levels/outpost.scene. Resolve it (for the barrel's name, keep mine) and finish the merge.",
     fixture: Fixture::Outpost,
     setup: Some(conflicted_merge),
     budget: Budget::new(25, 6),
     verify: |w: &World, c: &mut Checks| {
         clean(c, w);
-        let text = w.file(OUTPOST).unwrap_or_default();
+        let text = w.authored_file(OUTPOST).unwrap_or_default();
         c.check(
             "no `$conflicts` left",
             !text.contains("$conflicts"),
@@ -222,14 +229,14 @@ pub const MERGE_CONFLICT: Task = Task {
         );
     },
     solve: |s: &mut Solver| {
-        let path = s.root().join(OUTPOST);
+        let path = authored_path(s.root(), OUTPOST);
         let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
         let mut doc: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
         if let Some(o) = doc.as_object_mut() {
             o.shift_remove("$conflicts");
         }
-        s.write(OUTPOST, &ara_json::to_canonical_string(&doc))?;
-        s.git(&["add", OUTPOST])?;
+        s.write_authored(OUTPOST, &ara_json::to_canonical_string(&doc))?;
+        s.git(&["add", &format!("{}/{OUTPOST}", ara_doc::AUTHORING_ROOT)])?;
         s.git(&["commit", "-q", "--no-edit"]).map(drop)
     },
 };
@@ -271,9 +278,9 @@ pub const FIX_TYPOS: Task = Task {
         }
     },
     solve: |s: &mut Solver| {
-        let path = s.root().join(OUTPOST);
+        let path = authored_path(s.root(), OUTPOST);
         let text = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        s.write(
+        s.write_authored(
             OUTPOST,
             &text
                 .replace("\"sise\"", "\"size\"")

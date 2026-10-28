@@ -775,12 +775,15 @@ name = "ara-dev"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-doc",
  "ara-hotpatch",
+ "ara-json",
  "blake3",
  "cc",
  "clap",
  "libc",
  "object",
+ "proc-macro2",
  "quote",
  "semver",
  "serde",
@@ -1680,6 +1683,7 @@ name = "ara-release"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-doc",
  "ara-export-installer",
  "ara-json",
  "ara-proto",
