@@ -235,6 +235,11 @@ fn doctor_versions_and_platform_scoping_have_stable_fixable_diagnostics() {
 #[test]
 fn failed_exports_emit_coded_errors_and_keep_failure_report() {
     let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("ara.project.json"),
+        r#"{"layoutVersion":4}"#,
+    )
+    .unwrap();
     let mut p = preset("windows");
     p.templates[0].source = "missing-runtime".into();
     let request = ara_export::ExportRequest {
