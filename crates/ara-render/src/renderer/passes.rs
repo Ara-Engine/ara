@@ -849,8 +849,11 @@ impl Renderer {
                     .chain(cascade_reads.iter().copied())
                     .chain(graphics.iter().copied()),
             );
-            let masks = self.views.captures.refit_masks();
-            declare(refit, Recipe::Look(LookPass::CaptureRefit(masks)));
+            let (masks, copy) = (
+                self.views.captures.refit_masks(),
+                self.views.captures.copy_records(),
+            );
+            declare(refit, Recipe::Look(LookPass::CaptureRefit { masks, copy }));
             // Each 16x16 tile's captures, from the G-buffer depth.
             let tiles = graph.pass(
                 "Captures.Tiles",

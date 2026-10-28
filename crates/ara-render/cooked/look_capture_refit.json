@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "cfc55db72260e4ab213160edb5472746434bf831d6e5696d0e91c700aa501008",
+  "key": "22357ef339b44a99eaf77f5dd9ff99fa28988912842428627fc1a389e0e1c60c",
   "stages": [
     {
-      "dxil": "03bc2615b56ddcd5be698e2db28b75b60c8be3b586e45062a8f426a871748654/captureRefitMain.dxil",
-      "dxil_hash": "0a474c924dd9688a34595389eaff2fa6bd3f4202ccd5a4c7f10c967996dd3922",
+      "dxil": "22357ef339b44a99eaf77f5dd9ff99fa28988912842428627fc1a389e0e1c60c/captureRefitMain.dxil",
+      "dxil_hash": "15498c54c2b5462de37db2bcf11161047ac70bcffb6cfe67b27ca1cabd81357b",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "03bc2615b56ddcd5be698e2db28b75b60c8be3b586e45062a8f426a871748654/captureRefitMain.metallib",
-        "metallib_hash": "ae96e41731c357db3957031255b722c1bb0c816f1af448e55108317c12b6162e",
-        "reflection": "03bc2615b56ddcd5be698e2db28b75b60c8be3b586e45062a8f426a871748654/captureRefitMain.metal.json",
+        "metallib": "22357ef339b44a99eaf77f5dd9ff99fa28988912842428627fc1a389e0e1c60c/captureRefitMain.metallib",
+        "metallib_hash": "28f860a6633f8150c24dd851125e1af3633d39696a0737f3f8f8da8d8bb8ffdc",
+        "reflection": "22357ef339b44a99eaf77f5dd9ff99fa28988912842428627fc1a389e0e1c60c/captureRefitMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "captureRefitMain",
-      "spirv": "03bc2615b56ddcd5be698e2db28b75b60c8be3b586e45062a8f426a871748654/captureRefitMain.spv",
+      "spirv": "22357ef339b44a99eaf77f5dd9ff99fa28988912842428627fc1a389e0e1c60c/captureRefitMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "f3ae1047887f05ac2d6d7332c84589a26ba99ea7a8c4df9d348255e3f382250a",
+      "spirv_hash": "6120ad1dfdbdcb9709ada84e8d668e04fcbdcfa97e4f5cc19a1138d23cdc468d",
       "stage": "compute"
     }
   ],

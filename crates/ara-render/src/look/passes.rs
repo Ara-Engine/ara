@@ -43,8 +43,10 @@ pub(crate) enum LookPass {
     SsrPyramid(u32),
     SsrTrace,
     /// Measures the ambient light at each reflection capture against its bake
-    /// (`look::captures`); the mask marks bakes that landed since the last one.
-    CaptureRefit(u32),
+    /// (`look::captures`): `masks` marks bakes that landed since the last one (low
+    /// half) and baselines it clears (high half); `copy` first copies the changed
+    /// records into the frame buffer.
+    CaptureRefit { masks: u32, copy: bool },
     /// Lists the captures each 16x16 render tile can need (`look::captures`).
     CaptureTiles,
     /// The horizon's sun visibility (`look::horizon`).
@@ -597,8 +599,8 @@ impl LookGpu {
                 groups(size.map(|v| (v >> level).max(1))),
             ),
             LookPass::SsrTrace => (p.ssr_trace, 0, groups(size.map(|v| v.div_ceil(2)))),
-            // One thread per capture (look::captures::MAX_CAPTURES).
-            LookPass::CaptureRefit(masks) => (p.capture_refit, masks, [1, 1, 1]),
+            // One thread per capture and axis (look::captures::MAX_CAPTURES x 6).
+            LookPass::CaptureRefit { masks, .. } => (p.capture_refit, masks, [1, 1, 1]),
             LookPass::CaptureTiles => (
                 p.capture_tiles,
                 0,
@@ -634,9 +636,20 @@ impl LookGpu {
             LookPass::VsmProject => (p.vsm_project, 0, groups(size)),
             LookPass::GiClear | LookPass::GiScatter(_) => return,
         };
+        // Root word 3: the relight's record copy.
+        let copy = matches!(pass, LookPass::CaptureRefit { copy: true, .. });
         recorder.push(Command::Pipeline(pipeline));
         recorder.push(Command::Constants(RootConstants {
-            words: [frame_index, input, argument, 0, 0, 0, 0, u32::from(exposed)],
+            words: [
+                frame_index,
+                input,
+                argument,
+                u32::from(copy),
+                0,
+                0,
+                0,
+                u32::from(exposed),
+            ],
         }));
         recorder.push(Command::Dispatch(dispatch));
     }
