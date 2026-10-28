@@ -39,7 +39,7 @@ fn rejected_project_edit_does_not_advance_private_settings_history() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|diagnostic| diagnostic["code"] == ara_diag::codes::MISSING_SCOPE)
+            .any(|diagnostic| diagnostic["code"] == json!(ara_diag::codes::MISSING_SCOPE))
     );
     editor.action("editor.settings", json!({})).unwrap();
     assert_eq!(editor.state.settings, before);
@@ -71,6 +71,52 @@ fn rejected_project_edit_does_not_advance_private_settings_history() {
     )
     .unwrap();
     assert_eq!(editor.host.store().revision(), revision);
+}
+
+#[test]
+fn another_authors_round_trip_still_reports_an_undo_conflict_without_advancing_history() {
+    let project = Project::new();
+    let mut editor = open(&project);
+    editor
+        .action(
+            "editor.settings.set",
+            json!({"key":"play.clients","value":4}),
+        )
+        .unwrap();
+    let session = agent(&mut editor);
+    for value in [8, 4] {
+        Endpoint::call(
+            &mut editor.host,
+            "editor.settings.set",
+            json!({
+                "session":session,"key":"play.clients","value":value
+            }),
+        )
+        .unwrap();
+    }
+    editor.action("editor.settings", json!({})).unwrap();
+    let revision = editor.host.store().revision();
+    let history = editor.host.store().history().len();
+    let settings = editor.state.settings.clone();
+    let undo = editor.state.settings_undo.clone();
+    let redo = editor.state.settings_redo.clone();
+    let error = editor
+        .action("editor.settings.undo", json!({}))
+        .unwrap_err();
+    assert!(
+        error.0.data.as_ref().unwrap()["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == json!(ara_diag::codes::UNDO_CONFLICT)),
+        "Overlapping later intent remains an Undo conflict even when its final value matches: {error}"
+    );
+    editor.action("editor.settings", json!({})).unwrap();
+    assert_eq!(editor.host.store().revision(), revision);
+    assert_eq!(editor.host.store().history().len(), history);
+    assert_eq!(editor.state.settings, settings);
+    assert_eq!(editor.state.settings_undo, undo);
+    assert_eq!(editor.state.settings_redo, redo);
 }
 
 #[test]

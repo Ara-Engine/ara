@@ -1176,7 +1176,7 @@ mod tests {
                 .as_array()
                 .expect("diagnostic list")
                 .iter()
-                .any(|diagnostic| diagnostic["code"] == ara_diag::codes::EXTERNAL_CONFLICT)
+                .any(|diagnostic| diagnostic["code"] == json!(ara_diag::codes::EXTERNAL_CONFLICT))
         );
         assert_eq!(editor.host.store().revision(), revision);
         assert_eq!(editor.state.settings, before);

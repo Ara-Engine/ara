@@ -2,8 +2,8 @@
 use super::*;
 use ara_diag::{Diagnostic, codes};
 use ara_host::{
+    Cx,
     project_policy::{PREFERENCES, PREFERENCES_ID},
-    service::Cx,
 };
 
 impl Settings {
