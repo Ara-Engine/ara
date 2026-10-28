@@ -464,7 +464,7 @@ impl Cx<'_> {
     /// An actual change publishes the existing `jobs` notification.
     pub fn set_job_cancellable(&mut self, job: &str, cancellable: bool) {
         if let Some(record) = self.st.jobs.set_cancellable(job, cancellable) {
-            let record = json!(record);
+            let record = serde_json::json!(record);
             self.st.notify(Topic::Jobs, record);
         }
     }
@@ -476,8 +476,12 @@ impl Cx<'_> {
         if !self.st.jobs.cancel(job) {
             return false;
         }
-        let record = self.st.jobs.get(job).expect("cancel keeps the job record owned");
-        let record = json!(record);
+        let record = self
+            .st
+            .jobs
+            .get(job)
+            .expect("cancel keeps the job record owned");
+        let record = serde_json::json!(record);
         self.st.notify(Topic::Jobs, record);
         true
     }

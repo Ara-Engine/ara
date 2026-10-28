@@ -28,19 +28,39 @@ pub(crate) enum Request {
         source_revision: u64,
         why: Option<String>,
     },
-    Cancel { job: String, session: String },
+    Cancel {
+        job: String,
+        session: String,
+    },
     /// Publish a full snapshot (call the backend with since=None), or Unavailable.
     Refresh,
 }
 
 /// Only the owner may publish these after checking current Scene/frame provenance.
 pub(crate) enum Event {
-    Started { job: String, session: String, binding: SceneBinding, backend: ProbeJob },
-    Status { job: String, session: String, binding: SceneBinding, status: ProbeJobStatus },
+    Started {
+        job: String,
+        session: String,
+        binding: SceneBinding,
+        backend: ProbeJob,
+    },
+    Status {
+        job: String,
+        session: String,
+        binding: SceneBinding,
+        status: ProbeJobStatus,
+    },
     /// Rejection before any backend generation was allocated.
-    Rejected { job: String, session: String, diagnostics: Vec<Diagnostic> },
+    Rejected {
+        job: String,
+        session: String,
+        diagnostics: Vec<Diagnostic>,
+    },
     /// Always a complete listing, including zero authored probes. Not a since delta.
-    Snapshot { binding: SceneBinding, snapshot: ProbeSnapshot },
+    Snapshot {
+        binding: SceneBinding,
+        snapshot: ProbeSnapshot,
+    },
     /// No current renderer snapshot exists; old scene rows must not masquerade as current.
     Unavailable { reason: String },
 }
@@ -74,7 +94,14 @@ pub(crate) struct Bridge {
 
 impl Bridge {
     pub(super) fn new(requests: Receiver<Request>, events: SyncSender<Event>) -> Self {
-        Self { requests, events, pending: VecDeque::new(), tracked: BTreeMap::new(), disconnected: false, draining: false }
+        Self {
+            requests,
+            events,
+            pending: VecDeque::new(),
+            tracked: BTreeMap::new(),
+            disconnected: false,
+            draining: false,
+        }
     }
 
     fn collect(&mut self) {
@@ -82,14 +109,25 @@ impl Bridge {
             match self.requests.try_recv() {
                 Ok(request) => {
                     match &request {
-                        Request::Recapture { job, session, doc, .. } => {
-                            self.tracked.insert(job.clone(), Tracked {
-                                session: session.clone(), doc: doc.clone(), backend: None, binding: None,
-                                cancelled: self.draining, cancellable: true,
-                            });
+                        Request::Recapture {
+                            job, session, doc, ..
+                        } => {
+                            self.tracked.insert(
+                                job.clone(),
+                                Tracked {
+                                    session: session.clone(),
+                                    doc: doc.clone(),
+                                    backend: None,
+                                    binding: None,
+                                    cancelled: self.draining,
+                                    cancellable: true,
+                                },
+                            );
                         }
                         Request::Cancel { job, session } => {
-                            if let Some(tracked) = self.tracked.get_mut(job).filter(|t| &t.session == session) {
+                            if let Some(tracked) =
+                                self.tracked.get_mut(job).filter(|t| &t.session == session)
+                            {
                                 tracked.cancelled = true;
                             }
                         }
@@ -98,7 +136,10 @@ impl Bridge {
                     self.pending.push_back(request);
                 }
                 Err(TryRecvError::Empty) => break,
-                Err(TryRecvError::Disconnected) => { self.disconnected = true; break; }
+                Err(TryRecvError::Disconnected) => {
+                    self.disconnected = true;
+                    break;
+                }
             }
         }
     }
@@ -113,16 +154,27 @@ impl Bridge {
     /// retry it before further work. Invalid attribution also leaves tracking intact.
     pub(crate) fn send(&mut self, event: Event) -> Result<(), Box<Event>> {
         self.collect();
-        if !self.valid(&event) { return Err(Box::new(event)); }
+        if !self.valid(&event) {
+            return Err(Box::new(event));
+        }
         let update = match &event {
-            Event::Started { job, binding, backend, .. } => TrackingUpdate::Started(job.clone(), binding.clone(), backend.0),
-            Event::Status { job, status, .. } => TrackingUpdate::Status(job.clone(), status.cancellable, status.finished),
+            Event::Started {
+                job,
+                binding,
+                backend,
+                ..
+            } => TrackingUpdate::Started(job.clone(), binding.clone(), backend.0),
+            Event::Status { job, status, .. } => {
+                TrackingUpdate::Status(job.clone(), status.cancellable, status.finished)
+            }
             Event::Rejected { job, .. } => TrackingUpdate::Rejected(job.clone()),
             Event::Snapshot { .. } | Event::Unavailable { .. } => TrackingUpdate::None,
         };
         match self.events.try_send(event) {
             Ok(()) => {}
-            Err(TrySendError::Full(event) | TrySendError::Disconnected(event)) => return Err(Box::new(event)),
+            Err(TrySendError::Full(event) | TrySendError::Disconnected(event)) => {
+                return Err(Box::new(event));
+            }
         }
         match update {
             TrackingUpdate::Started(job, binding, backend) => {
@@ -132,10 +184,15 @@ impl Bridge {
                 }
             }
             TrackingUpdate::Status(job, cancellable, finished) => {
-                if finished { self.tracked.remove(&job); }
-                else if let Some(tracked) = self.tracked.get_mut(&job) { tracked.cancellable &= cancellable; }
+                if finished {
+                    self.tracked.remove(&job);
+                } else if let Some(tracked) = self.tracked.get_mut(&job) {
+                    tracked.cancellable &= cancellable;
+                }
             }
-            TrackingUpdate::Rejected(job) => { self.tracked.remove(&job); }
+            TrackingUpdate::Rejected(job) => {
+                self.tracked.remove(&job);
+            }
             TrackingUpdate::None => {}
         }
         Ok(())
@@ -143,13 +200,23 @@ impl Bridge {
 
     fn valid(&self, event: &Event) -> bool {
         match event {
-            Event::Started { job, session, .. } | Event::Rejected { job, session, .. } => {
-                self.tracked.get(job).is_some_and(|t| &t.session == session && t.backend.is_none())
-            }
-            Event::Status { job, session, binding, status } => self.tracked.get(job).is_some_and(|t| {
-                &t.session == session && t.backend == Some(status.job.0) && t.binding.as_ref() == Some(binding)
+            Event::Started { job, session, .. } | Event::Rejected { job, session, .. } => self
+                .tracked
+                .get(job)
+                .is_some_and(|t| &t.session == session && t.backend.is_none()),
+            Event::Status {
+                job,
+                session,
+                binding,
+                status,
+            } => self.tracked.get(job).is_some_and(|t| {
+                &t.session == session
+                    && t.backend == Some(status.job.0)
+                    && t.binding.as_ref() == Some(binding)
             }),
-            Event::Snapshot { binding, snapshot } => !binding.doc.is_empty() && binding.scene_revision == snapshot.scene_revision,
+            Event::Snapshot { binding, snapshot } => {
+                !binding.doc.is_empty() && binding.scene_revision == snapshot.scene_revision
+            }
             Event::Unavailable { reason } => !reason.trim().is_empty(),
         }
     }
@@ -159,14 +226,35 @@ impl Bridge {
     pub(crate) fn cancel_target(&self, job: &str) -> Option<ProbeJob> {
         let tracked = self.tracked.get(job)?;
         let backend = tracked.backend?;
-        (tracked.cancelled && tracked.cancellable
-            && !self.tracked.values().any(|t| t.backend.is_none() && !t.cancelled)
-            && self.tracked.values().filter(|t| t.backend == Some(backend)).all(|t| t.cancelled && t.cancellable))
-            .then_some(ProbeJob(backend))
+        (tracked.cancelled
+            && tracked.cancellable
+            && !self
+                .tracked
+                .values()
+                .any(|t| t.backend.is_none() && !t.cancelled)
+            && self
+                .tracked
+                .values()
+                .filter(|t| t.backend == Some(backend))
+                .all(|t| t.cancelled && t.cancellable))
+        .then_some(ProbeJob(backend))
     }
 
     pub(crate) fn cancel_requested(&self, job: &str) -> bool {
         self.tracked.get(job).is_some_and(|t| t.cancelled)
+    }
+
+    /// Invalidating one source generation must not cancel a later request for the
+    /// same Scene, or another subscriber still using a coalesced backend job.
+    pub(crate) fn request_cancel(&mut self, job: &str) {
+        self.collect();
+        if let Some(tracked) = self.tracked.get_mut(job).filter(|t| !t.cancelled) {
+            tracked.cancelled = true;
+            self.pending.push_back(Request::Cancel {
+                job: job.to_owned(),
+                session: tracked.session.clone(),
+            });
+        }
     }
 
     /// Scene closure/drain cancels UI intent but retains every owner resource until
@@ -187,7 +275,10 @@ impl Bridge {
         for (job, tracked) in &mut self.tracked {
             if !tracked.cancelled && doc.is_none_or(|doc| doc == tracked.doc) {
                 tracked.cancelled = true;
-                self.pending.push_back(Request::Cancel { job: job.clone(), session: tracked.session.clone() });
+                self.pending.push_back(Request::Cancel {
+                    job: job.clone(),
+                    session: tracked.session.clone(),
+                });
             }
         }
     }

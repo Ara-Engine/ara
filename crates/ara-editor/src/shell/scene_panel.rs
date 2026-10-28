@@ -228,7 +228,8 @@ impl Shell {
         }
         self.notices_markup(editor, out);
         self.loading_markup(editor, out);
-        if !editor.state.hide_overlays && !editor.state.game_view
+        if !editor.state.hide_overlays
+            && !editor.state.game_view
             && let Some(target) = self.pilot_target()
         {
             out.push_str(&format!("<panel id='scene-pilot' style='position:absolute;left:12px;top:46px;max-width:92%;padding:6px;gap:4px;background:var(--popover);border-radius:4px'><text id='scene-pilot-target' class='caption' style='white-space:normal' text='Piloting {}' /><button id='scene-unpilot' class='viewport-button' label='Stop piloting' text='Stop piloting' description='Keep the last completed Camera move and return to Scene navigation' action='Dispatch' /></panel>",escape(target)));

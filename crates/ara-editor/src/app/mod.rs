@@ -8,7 +8,6 @@ mod chrome_verify;
 mod collection_verify;
 mod content_drags;
 mod controller;
-mod pilot;
 mod cursors;
 mod diagnostics_verify;
 mod drags;
@@ -29,6 +28,7 @@ mod monkey_route;
 mod navigation_verify;
 mod open_project;
 mod panels_verify;
+mod pilot;
 mod play_verify;
 mod prefab_verify;
 mod qa;
@@ -840,9 +840,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let routed_at = Instant::now();
             let mut quit = false;
             for (sdl, event) in events {
-                let pilot_before = pilot::before_event(
-                    &event, &mut controller, &mut editor, &mut shell,
-                );
+                let pilot_before =
+                    pilot::before_event(&event, &mut controller, &mut editor, &mut shell);
                 dirty |= pilot_before;
                 scene_dirty |= pilot_before;
                 let camera_before = editor.state.camera;
@@ -891,9 +890,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     }
                 }
                 let native_camera_change = editor.state.camera != camera_before;
-                let pilot_after = pilot::update(
-                    &controller, &mut editor, &mut shell, native_camera_change,
-                );
+                let pilot_after =
+                    pilot::update(&controller, &mut editor, &mut shell, native_camera_change);
                 dirty |= pilot_after;
                 scene_dirty |= pilot_after;
             }
@@ -1101,9 +1099,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 Err(error) => editor.report_failure(&*error),
             }
             let native_camera_change = editor.state.camera != camera_before;
-            let pilot_after = pilot::update(
-                &controller, &mut editor, &mut shell, native_camera_change,
-            );
+            let pilot_after =
+                pilot::update(&controller, &mut editor, &mut shell, native_camera_change);
             dirty |= pilot_after;
             scene_dirty |= pilot_after;
             if (verification.as_ref().is_some_and(|v| v.finished())
@@ -1161,26 +1158,32 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 Ok(changed)
             })?;
             let shell_ms = measure_authority.then(|| tick_at.elapsed().as_secs_f64() * 1000.);
-            if shell.viewport_diagnostics.observe_stats(frame_interval, || {
-                let source = scene_view.diagnostic_source(&editor);
-                let mut sample = crate::shell::overlay::diagnostics::StatsSample::read(
-                    &renderer,
-                    previous_cpu_loop_ms,
-                    source.scene.map(|scene| scene.instances.len()),
-                    Some(renderer.size()),
-                );
-                for timing in scene_view.timings() {
-                    if timing.milliseconds.is_finite() && timing.milliseconds >= 0. {
-                        sample.gpu_longest_pass_ms = Some(
-                            sample.gpu_longest_pass_ms.map_or(timing.milliseconds, |value| {
-                                value.max(timing.milliseconds)
-                            }),
-                        );
-                        sample.gpu_pass_samples = Some(sample.gpu_pass_samples.unwrap_or(0) + 1);
+            if shell
+                .viewport_diagnostics
+                .observe_stats(frame_interval, || {
+                    let source = scene_view.diagnostic_source(&editor);
+                    let mut sample = crate::shell::overlay::diagnostics::StatsSample::read(
+                        &renderer,
+                        previous_cpu_loop_ms,
+                        source.scene.map(|scene| scene.instances.len()),
+                        Some(renderer.size()),
+                    );
+                    for timing in scene_view.timings() {
+                        if timing.milliseconds.is_finite() && timing.milliseconds >= 0. {
+                            sample.gpu_longest_pass_ms = Some(
+                                sample
+                                    .gpu_longest_pass_ms
+                                    .map_or(timing.milliseconds, |value| {
+                                        value.max(timing.milliseconds)
+                                    }),
+                            );
+                            sample.gpu_pass_samples =
+                                Some(sample.gpu_pass_samples.unwrap_or(0) + 1);
+                        }
                     }
-                }
-                sample
-            }) {
+                    sample
+                })
+            {
                 shell.rebuild(&mut editor)?;
                 dirty = true;
             }

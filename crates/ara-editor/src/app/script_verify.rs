@@ -1,5 +1,6 @@
 //! J10 combines raw SDL authoring controls with the shared real-ECS reload proof.
 mod input;
+mod lifecycle;
 mod observe;
 use super::journey::script_reload::{Proof, SPEED, Stage};
 use crate::{Editor, gpu::NativeUi, shell::Shell};
@@ -57,6 +58,7 @@ pub(super) struct ScriptCheck {
     world: Option<String>,
     fixture: Value,
     fixed_runtime: bool,
+    lifecycle: lifecycle::Lifecycle,
 }
 impl ScriptCheck {
     pub fn new(editor: &mut Editor, shell: &mut Shell, output: &Path) -> ara_ui::Result<Self> {
@@ -114,6 +116,7 @@ impl ScriptCheck {
             pointer: None,
             world: None,
             fixed_runtime: false,
+            lifecycle: Default::default(),
             fixture: json!({"ingress":"Protocol fixture setup only","revisionBefore":before,
                 "revisionAfter":editor.host.store().revision(),"entityCreation":fixture,"plannedSpeedBeforePlay":SPEED,"tickHz":60}),
         })

@@ -51,6 +51,9 @@ impl ScriptCheck {
                 }
             }
             3 | 4 => {
+                if self.index == 4 {
+                    self.lifecycle.arm(editor)?;
+                }
                 let stage = if self.index == 3 {
                     Stage::Changed
                 } else {

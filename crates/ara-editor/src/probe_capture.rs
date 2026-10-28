@@ -16,7 +16,10 @@ const MAX_ENTITIES: usize = 256;
 pub(crate) fn channel() -> (ProbeService, Bridge) {
     let (requests, request_rx) = sync_channel(CHANNEL_CAPACITY);
     let (events, event_rx) = sync_channel(CHANNEL_CAPACITY);
-    (ProbeService::new(requests, event_rx), Bridge::new(request_rx, events))
+    (
+        ProbeService::new(requests, event_rx),
+        Bridge::new(request_rx, events),
+    )
 }
 
 #[cfg(test)]

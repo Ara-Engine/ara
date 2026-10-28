@@ -39,7 +39,7 @@ impl ScriptService {
         let root = cx.root().to_owned();
         let (tx, result) = mpsc::channel();
         std::thread::spawn(move || {
-            let response=super::worker::response(super::worker::compile(&root));
+            let response = super::worker::response(super::worker::compile(&root));
             let _ = tx.send(Ok(response));
         });
         self.jobs.insert(
@@ -87,7 +87,7 @@ impl ScriptService {
                 )]),
             };
             let result = match result {
-                Ok(result)=>super::publish::complete(
+                Ok(result) => super::publish::complete(
                     cx,
                     &pending.session,
                     &pending.path,
@@ -95,8 +95,10 @@ impl ScriptService {
                     &pending.attach,
                     result,
                 ),
-                Err(diagnostics)=>{
-                    for diagnostic in &diagnostics {cx.log(diagnostic.clone());}
+                Err(diagnostics) => {
+                    for diagnostic in &diagnostics {
+                        cx.log(diagnostic.clone());
+                    }
                     Err(diagnostics)
                 }
             };

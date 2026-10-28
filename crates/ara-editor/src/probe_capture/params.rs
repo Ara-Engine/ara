@@ -33,7 +33,10 @@ pub(crate) struct CancelParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct QueryParams {
     /// Live protocol session.
-    #[expect(dead_code, reason = "Host validates the session before service dispatch")]
+    #[expect(
+        dead_code,
+        reason = "Host validates the session before service dispatch"
+    )]
     pub session: String,
     /// Scene ID, path or reference; omitted reads the current renderer scene.
     pub doc: Option<String>,

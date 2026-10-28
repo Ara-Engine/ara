@@ -21,8 +21,10 @@ pub(super) struct Compiled {
 /// The helper protocol is identical for child stdout and the preparation thread.
 pub(super) fn response(result: Result<Compiled, Vec<ara_diag::Diagnostic>>) -> serde_json::Value {
     match result {
-        Ok(compiled)=>json!({"ok":true,"types":compiled.types,"diagnostics":compiled.diagnostics}),
-        Err(diagnostics)=>json!({"ok":false,"diagnostics":diagnostics}),
+        Ok(compiled) => {
+            json!({"ok":true,"types":compiled.types,"diagnostics":compiled.diagnostics})
+        }
+        Err(diagnostics) => json!({"ok":false,"diagnostics":diagnostics}),
     }
 }
 
@@ -32,16 +34,25 @@ pub(super) fn compile(root: &Path) -> Result<Compiled, Vec<ara_diag::Diagnostic>
     compiled(inventory)
 }
 
-pub(super) fn compiled(inventory: ara_script::project::Inventory) -> Result<Compiled, Vec<ara_diag::Diagnostic>> {
-    if inventory.diagnostics.iter().any(ara_diag::Diagnostic::is_error) {
+pub(super) fn compiled(
+    inventory: ara_script::project::Inventory,
+) -> Result<Compiled, Vec<ara_diag::Diagnostic>> {
+    if inventory
+        .diagnostics
+        .iter()
+        .any(ara_diag::Diagnostic::is_error)
+    {
         return Err(inventory.diagnostics);
     }
-    Ok(Compiled{types:serde_json::Value::Object(
-        inventory
-            .modules
-            .into_iter()
-            .filter(|m| m.profile == ara_script::ModuleProfile::Gameplay)
-            .filter_map(|m| m.schema.map(|schema| (m.name, schema)))
-            .collect(),
-    ),diagnostics:inventory.diagnostics})
+    Ok(Compiled {
+        types: serde_json::Value::Object(
+            inventory
+                .modules
+                .into_iter()
+                .filter(|m| m.profile == ara_script::ModuleProfile::Gameplay)
+                .filter_map(|m| m.schema.map(|schema| (m.name, schema)))
+                .collect(),
+        ),
+        diagnostics: inventory.diagnostics,
+    })
 }

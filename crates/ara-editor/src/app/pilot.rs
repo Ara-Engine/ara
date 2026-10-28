@@ -8,7 +8,11 @@ pub(super) fn update(
     shell: &mut Shell,
     native_camera_change: bool,
 ) -> bool {
-    match shell.poll_pilot(editor, controller.camera_navigation_active(), native_camera_change) {
+    match shell.poll_pilot(
+        editor,
+        controller.camera_navigation_active(),
+        native_camera_change,
+    ) {
         Ok(changed) => changed,
         Err(error) => {
             editor.report_failure(&*error);
@@ -25,7 +29,15 @@ pub(super) fn before_event(
     shell: &mut Shell,
 ) -> bool {
     let mut changed = update(controller, editor, shell, false);
-    if matches!(event, Event::FocusLost | Event::Key { scancode: 41, pressed: true, .. }) {
+    if matches!(
+        event,
+        Event::FocusLost
+            | Event::Key {
+                scancode: 41,
+                pressed: true,
+                ..
+            }
+    ) {
         match shell.cancel_pilot_navigation(editor) {
             Ok(true) => {
                 if let Err(error) = controller.cancel_pointer_gestures(editor, shell) {

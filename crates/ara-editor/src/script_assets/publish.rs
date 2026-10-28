@@ -9,35 +9,42 @@ pub(super) fn complete(
     attach: &[String],
     result: Value,
 ) -> Result<Value, Vec<ara_diag::Diagnostic>> {
-    let mut diagnostics:Vec<ara_diag::Diagnostic>=match result.get("diagnostics") {
-        Some(value)=>serde_json::from_value(value.clone()).map_err(|error| {
-            let diagnostic=crate::invalid(format!("Compiler diagnostics could not be decoded: {error}"));
+    let mut diagnostics: Vec<ara_diag::Diagnostic> = match result.get("diagnostics") {
+        Some(value) => serde_json::from_value(value.clone()).map_err(|error| {
+            let diagnostic = crate::invalid(format!(
+                "Compiler diagnostics could not be decoded: {error}"
+            ));
             cx.log(diagnostic.clone());
             vec![diagnostic]
         })?,
-        None=>Vec::new(),
+        None => Vec::new(),
     };
     // Lifecycle Info and warnings are authoritative even when compilation fails.
     // Jobs must not log this already-published envelope a second time.
-    for diagnostic in &diagnostics {cx.log(diagnostic.clone());}
+    for diagnostic in &diagnostics {
+        cx.log(diagnostic.clone());
+    }
     if diagnostics.iter().any(ara_diag::Diagnostic::is_error) {
         return Err(diagnostics);
     }
     if result["ok"] != true {
-        let diagnostic=crate::invalid("C# compiler reported failure without an error diagnostic");
+        let diagnostic = crate::invalid("C# compiler reported failure without an error diagnostic");
         cx.log(diagnostic.clone());
         diagnostics.push(diagnostic);
         return Err(diagnostics);
     }
-    let published=cx.resume_session(session, |cx| publish(cx, path, doc, attach, &result))
-        .and_then(|result|result);
+    let published = cx
+        .resume_session(session, |cx| publish(cx, path, doc, attach, &result))
+        .and_then(|result| result);
     match published {
-        Ok(mut result)=>{
-            result["diagnostics"]=json!(diagnostics);
+        Ok(mut result) => {
+            result["diagnostics"] = json!(diagnostics);
             Ok(result)
         }
-        Err(failure)=>{
-            for diagnostic in &failure {cx.log(diagnostic.clone());}
+        Err(failure) => {
+            for diagnostic in &failure {
+                cx.log(diagnostic.clone());
+            }
             diagnostics.extend(failure);
             Err(diagnostics)
         }

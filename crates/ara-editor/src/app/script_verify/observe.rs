@@ -55,7 +55,7 @@ impl ScriptCheck {
             "asset":editor.state.asset_path,"world":editor.play_world,"gameRunning":shell.game_running,"gameLive":shell.game_live,
             "modal":shell.modal_active(),"status":shell.status_note,"actor":authored,"revision":editor.host.store().revision(),
             "scriptModuleInventory":shell.script_module_job_report(),"moduleCompileProof":self.proof.as_ref().map(Proof::report),
-            "compileProjection":shell.compile_problem_state()})
+            "compileProjection":shell.compile_problem_state(),"problemRetirementEvidence":self.lifecycle.report()})
     }
     fn capture(&self, shell: &Shell, gpu: &mut NativeUi, stage: &str) -> ara_ui::Result<()> {
         gpu.select_target(0);
@@ -69,13 +69,7 @@ impl ScriptCheck {
         Ok(())
     }
     pub fn write(&self) -> ara_ui::Result<()> {
-        let retirement = self
-            .results
-            .iter()
-            .find(|result| result["journey"] == CASES[6])
-            .map_or(Value::Null, |result| {
-                result["observed"]["problemRetirementEvidence"].clone()
-            });
+        let retirement = self.lifecycle.report();
         std::fs::write(
             self.output.join("script-behaviours.json"),
             ara_json::to_canonical_string(&json!({
@@ -83,9 +77,9 @@ impl ScriptCheck {
                 "failed":self.failures().len(),"error":self.error,"nativeEvents":self.native_events,
                 "ingress":"SDL_PushEvent -> Window::poll_tagged -> production route for all measured controls; typed source.replace and background ECS observations are separately labeled protocol",
                 "fixtures":self.fixture,"journeys":self.results,"nativeTrace":self.trace,
-                "runtimeEffect":self.proof.as_ref().map(Proof::report),"currentProblemsCleared":Value::Null,
+                "runtimeEffect":self.proof.as_ref().map(Proof::report),"currentProblemsCleared":if self.lifecycle.complete(){json!(true)}else{Value::Null},
                 "problemRetirementEvidence":retirement,
-                "limits":["The current compile projection is recorded. Exact compiler lifecycle metadata and native post-fix Problems verification are required before claiming retirement; module Reload.errors alone is insufficient.",
+                "limits":["Retirement covers only exact captured Spinner compiler scopes with newer verified complete error coverage, native Problems absence and expanded Console history. Unscoped summaries and unrelated errors are not declared resolved.",
                     "The offscreen IDE guard is exercised; this journey intentionally does not launch or inspect an external IDE.",
                     "Runtime rates use authoritative ECS tick deltas, not shared-GPU wall-clock frame rates."],
                 "current":{"journey":CASES.get(self.index),"phase":self.phase,"phaseSeconds":self.started.elapsed().as_secs_f64()}
