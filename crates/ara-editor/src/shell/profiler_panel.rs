@@ -23,44 +23,45 @@ impl Shell {
         editor: &mut Editor,
         out: &mut String,
     ) -> ara_ui::Result<()> {
-        // Read the editor state first: the live profile borrows the host mutably.
-        let recording = editor.host.profiler().is_recording();
-        let frozen = editor.profile_current.is_some();
-        let baseline = editor.profile_baseline.clone();
-        let compare = editor.state.profiler_compare;
-        let picked = editor.state.profiler_frame;
-        let current = match &editor.profile_current {
-            Some(profile) => profile.as_ref(),
-            None => editor.host.profiler().profile(),
+        let reading = self.profiler_reading(editor);
+        self.profiler_target_toolbar(&reading, out);
+        let recording = reading.recording;
+        let frozen = reading.frozen;
+        let baseline = &reading.baseline;
+        let compare = reading.compare;
+        let picked = reading.frame;
+        let freeze_blocked = self.profiler_freeze_blocker().map(str::to_owned);
+        let missing_player = !reading.editor && reading.current.is_none();
+        let empty = Profile::default();
+        let current = match reading.current.as_deref() {
+            Some(profile) => profile,
+            None if reading.editor => editor.host.profiler().profile(),
+            None => &empty,
         };
         let selected = picked
-            .and_then(|id| current.frames.iter().find(|f| f.id == id))
+            .and_then(|id| {
+                current
+                    .frames
+                    .iter()
+                    .find(|f| f.id == id && f.duration_ns > 0)
+            })
             .or_else(|| current.frames.iter().rev().find(|f| f.duration_ns > 0));
-        out.push_str("<panel id='profiler-toolbar' class='toolbar'>");
+        out.push_str("<panel id='profiler-toolbar' class='toolbar profiler-actions'>");
         self.bind_command("profile-record", "profiler.record", commands::Target::None);
-        out.push_str(&format!("<button id='profile-record' class='{}' label='{}' description='{}' action='Dispatch'>{}<text id='profile-record-label' text='{}' /></button>",if recording{"selected"}else{"ghost"},if recording{"Stop"}else{"Record"},if recording{"Stop recording editor frames"}else{"Record editor frames"},if recording{icons::icon_in("profile-record","square","on-selection")}else{icons::icon_in("profile-record","circle-dot","destructive")},if recording{"Stop"}else{"Record"}));
-        self.tool_text(
-            out,
-            "profile-freeze",
-            "profiler.freeze",
-            "pause",
-            "Freeze",
-            "ghost",
-        );
-        self.tool_text(
-            out,
-            "profile-baseline",
-            "profiler.baseline",
-            "flag",
-            "Baseline",
-            "ghost",
-        );
+        out.push_str(&format!("<button id='profile-record' class='{}' label='{}' description='{}' disabled='{}' action='Dispatch'>{}<text id='profile-record-label' text='{}' /></button>",if recording{"selected"}else{"ghost"},if recording{"Stop"}else{"Record"},escape(reading.blocker.as_deref().unwrap_or(if recording{"Stop recording the selected target"}else{"Record the selected target"})),reading.blocker.is_some(),if recording{icons::icon_in("profile-record","square","on-selection")}else{icons::icon_in("profile-record","circle-dot","destructive")},if recording{"Stop"}else{"Record"}));
+        for (id, command, label) in [
+            ("profile-freeze", "profiler.freeze", "Freeze"),
+            ("profile-baseline", "profiler.baseline", "Baseline"),
+        ] {
+            self.bind_command(id, command, commands::Target::None);
+            out.push_str(&format!("<button id='{id}' class='ghost' text='{label}' disabled='{}' description='{}' action='Dispatch' />",freeze_blocked.is_some(),escape(freeze_blocked.as_deref().unwrap_or("Read an immutable closed-frame capture from the selected target"))));
+        }
         self.bind_command(
             "profile-compare",
             "profiler.compare",
             commands::Target::None,
         );
-        out.push_str(&format!("<button id='profile-compare' class='{}' label='Compare' description='Compare the frozen capture with the baseline' action='Dispatch'>{}<text id='profile-compare-label' text='Compare' /></button>",if compare{"selected"}else{"ghost"},if compare{icons::icon_in("profile-compare","git-compare","on-selection")}else{icons::icon("profile-compare","git-compare")}));
+        out.push_str(&format!("<button id='profile-compare' class='{}' label='Compare' description='{}' disabled='{}' action='Dispatch'>{}<text id='profile-compare-label' text='Compare' /></button>",if compare{"selected"}else{"ghost"},escape(reading.compare_blocker.as_deref().unwrap_or("Compare the explicitly labelled current and baseline targets")),reading.compare_blocker.is_some(),if compare{icons::icon_in("profile-compare","git-compare","on-selection")}else{icons::icon("profile-compare","git-compare")}));
         if let Some(frame) = selected.filter(|_| !compare) {
             // ‹ Frame 239 › steps through the capture.
             let at = current
@@ -74,17 +75,22 @@ impl Shell {
                     "profile-prev",
                     "chevron-left",
                     "Previous frame",
-                    at.checked_sub(1),
+                    (0..at)
+                        .rev()
+                        .find(|index| current.frames[*index].duration_ns > 0),
                 ),
-                ("profile-next", "chevron-right", "Next frame", Some(at + 1)),
+                (
+                    "profile-next",
+                    "chevron-right",
+                    "Next frame",
+                    (at + 1..current.frames.len())
+                        .find(|index| current.frames[*index].duration_ns > 0),
+                ),
             ] {
                 let target = step
                     .and_then(|i| current.frames.get(i))
                     .map_or(frame.id, |f| f.id);
-                self.bindings.insert(
-                    ara_ui::source::stable_id(id),
-                    Binding::Protocol("editor.workspace", json!({ "frame": target })),
-                );
+                self.bind_profiler_frame(id, target);
                 out.push_str(&format!("<button id='{id}' class='ghost icon-button' label='{label}' description='{label}' action='Dispatch'>{}</button>",icons::icon(id,icon)));
                 if id == "profile-prev" {
                     out.push_str(&format!(
@@ -99,12 +105,29 @@ impl Shell {
         } else {
             out.push_str("<panel id='profile-toolbar-fill' class='fill' /></panel>");
         }
+        if missing_player {
+            self.empty(out,"profile-player-empty","gauge","No snapshot for this target",
+                reading.blocker.as_deref().unwrap_or("Record or read a snapshot of this exact player. Editor frames are not substituted for missing player data."),&[]);
+            return Ok(());
+        }
         if compare {
             self.profile_compare(baseline.as_deref(), current, out)?;
-            profile_status(current, frozen, baseline.is_some(), recording, out);
+            profile_status(
+                current,
+                frozen,
+                baseline.is_some(),
+                recording,
+                &reading.label,
+                out,
+            );
             return Ok(());
         }
         let Some(frame) = selected else {
+            if !reading.editor {
+                self.empty(out,"profile-player-no-frames","gauge","No completed player frames",
+                    "The selected target returned an empty closed-frame snapshot. Use its Record control above; no editor frames are substituted.",&[]);
+                return Ok(());
+            }
             self.empty(
                 out,
                 "profile-empty",
@@ -123,7 +146,14 @@ impl Shell {
         out.push_str("<panel id='profile-details-edge' class='tool-edge' />");
         profile_details(frame, out);
         out.push_str("</panel></panel>");
-        profile_status(current, frozen, baseline.is_some(), recording, out);
+        profile_status(
+            current,
+            frozen,
+            baseline.is_some(),
+            recording,
+            &reading.label,
+            out,
+        );
         Ok(())
     }
 
@@ -134,7 +164,8 @@ impl Shell {
         let frames = current
             .frames
             .iter()
-            .skip(current.frames.len().saturating_sub(STRIP));
+            .skip(current.frames.len().saturating_sub(STRIP))
+            .filter(|frame| frame.duration_ns > 0);
         let top = frames
             .clone()
             .map(|f| f.duration_ns)
@@ -143,11 +174,8 @@ impl Shell {
             .max(budget + budget / 4);
         out.push_str("<panel id='profile-strip' class='profile-strip'>");
         for frame in frames {
-            let id = format!("profile-frame-{}", frame.id);
-            self.bindings.insert(
-                ara_ui::source::stable_id(&id),
-                Binding::Protocol("editor.workspace", json!({"frame":frame.id})),
-            );
+            let id = self.profiler_frame_id(frame.id);
+            self.bind_profiler_frame(&id, frame.id);
             let class = if frame.id == selected.id {
                 " profile-bar-on"
             } else if frame.duration_ns > budget {
@@ -525,15 +553,17 @@ fn profile_status(
     frozen: bool,
     baseline: bool,
     recording: bool,
+    label: &str,
     out: &mut String,
 ) {
-    let (icon, tint, state) = if recording {
-        ("circle-dot", "destructive", "Recording")
+    let (icon, tint) = if recording {
+        ("circle-dot", "destructive")
     } else if frozen {
-        ("pause", "fg", "Frozen capture")
+        ("pause", "fg")
     } else {
-        ("gauge", "fg", "Live")
+        ("gauge", "fg")
     };
+    let state = escape(label);
     let mut times: Vec<u64> = current
         .frames
         .iter()

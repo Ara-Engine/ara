@@ -23,6 +23,7 @@ pub(crate) enum Destination {
     },
     ImportGroup,
     PackageFormat,
+    ProfilerTarget,
     Field(String),
     Append {
         field: String,
@@ -200,6 +201,7 @@ impl Shell {
                 self.choose_import_group(value)?;
             }
             Destination::PackageFormat => self.choose_package_format(value)?,
+            Destination::ProfilerTarget => self.choose_profiler_target(editor, value)?,
             Destination::Field(path) => {
                 editor.apply(
                     self.field_commands(editor, &editor.state.selection, path, value)?,

@@ -348,6 +348,10 @@ impl EditorService {
                 probe_cancel_blocker: Some(
                     "Capture cancellation requires the owning editor window",
                 ),
+                profiler_target_blocker: None,
+                profiler_freeze_blocker: None,
+                profiler_compare_blocker: None,
+                profiler_compare_active: state.profiler_compare,
                 script_recovery_blocker: Some(
                     "C# reload availability is reported by the active editor window",
                 ),

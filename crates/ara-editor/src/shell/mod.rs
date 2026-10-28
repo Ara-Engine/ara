@@ -90,6 +90,7 @@ mod panels;
 pub(crate) mod play_controls;
 pub mod prefab_ops;
 mod profiler_panel;
+pub(crate) mod profiler_targets;
 pub(crate) mod reachability;
 mod vfx_panel;
 use crate::{Editor, inspector::Field};
@@ -315,6 +316,7 @@ pub struct Shell {
     lighting: lighting::View,
     probe_ui: probes::State,
     project_request: Option<project_actions::LaunchRequest>,
+    profiler_targets: profiler_targets::State,
     pilot: pilot::Pilot,
     pub(crate) viewport_diagnostics: overlay::diagnostics::Diagnostics,
     pub(crate) drag: Option<Drag>,
@@ -657,6 +659,7 @@ impl Shell {
             lighting: Default::default(),
             probe_ui: Default::default(),
             project_request: None,
+            profiler_targets: Default::default(),
             pilot: Default::default(),
             viewport_diagnostics: Default::default(),
             drag: None,
@@ -855,6 +858,7 @@ impl Shell {
         let recovery_changed = self.poll_script_recovery(editor);
         let modules_changed = self.poll_script_modules(editor)?;
         let probes_changed = self.poll_probes(editor)?;
+        let profiler_changed = self.poll_profiler_target_state(editor)?;
         let play_changed = match self.poll_play_job(editor) {
             Ok(changed) => changed,
             Err(error) => {
@@ -866,6 +870,7 @@ impl Shell {
             && !recovery_changed
             && !modules_changed
             && !probes_changed
+            && !profiler_changed
             && !play_changed
             && self.built == (editor.panels_revision, editor.host.store().revision())
         {
@@ -884,6 +889,7 @@ impl Shell {
     fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
         self.poll_compile_problems(editor)?;
         self.poll_probes(editor)?;
+        self.poll_profiler_target_state(editor)?;
         self.built = (editor.panels_revision, editor.host.store().revision());
         // Async catalog reloads can make saved extension overrides reachable.
         let settings = keymap_settings(&editor.state);
@@ -985,6 +991,7 @@ impl Shell {
         css.push_str(history_panel::CSS);
         css.push_str(lighting::CSS);
         css.push_str(probes::CSS);
+        css.push_str(profiler_targets::CSS);
         css.push_str(palette::FORM_CSS);
         if self.toolkit_verify.is_some() {
             css.push_str(toolkit_verify::CSS);

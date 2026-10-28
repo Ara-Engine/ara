@@ -2348,17 +2348,20 @@ fn build() -> Vec<Spec> {
             s.copy_text(text.clone());
             Ok(())
         }),
-        cmd("profiler.record", "Record", "circle-dot", "", "Start recording editor frames.", |s, e, _| s.profiler_record(e)),
-        cmd("profiler.freeze", "Freeze Capture", "pause", "", "Freeze and save the current trace.", |_, e, _| act(e, "editor.profile.freeze", json!({}))),
-        cmd("profiler.baseline", "Set Baseline", "flag", "", "Freeze the trace as the comparison baseline.", |_, e, _| act(e, "editor.profile.freeze", json!({"baseline": true}))),
+        cmd("profiler.record", "Record", "circle-dot", "", "Start or stop recording the selected Profiler target.", |s,e,_|s.profiler_record_target(e)).when(|c|c.profiler_target_blocker.map_or(Avail::Ready,|reason|Avail::Blocked(reason.into()))),
+        cmd("profiler.freeze", "Freeze Capture", "pause", "", "Freeze the selected target's completed frames.", |s,e,_|s.profiler_freeze_target(e,false)).when(|c|c.profiler_freeze_blocker.map_or(Avail::Ready,|reason|Avail::Blocked(reason.into()))),
+        cmd("profiler.baseline", "Set Baseline", "flag", "", "Freeze an explicitly scoped comparison baseline.", |s,e,_|s.profiler_freeze_target(e,true)).when(|c|c.profiler_freeze_blocker.map_or(Avail::Ready,|reason|Avail::Blocked(reason.into()))),
+        cmd("profiler.snapshot", "Follow Profiler Target", "refresh-cw", "", "Read completed target frames without stopping recording.", |s,e,_|s.profiler_snapshot_target(e)),
+        cmd("profiler.refresh", "Refresh Profiler Targets", "refresh-cw", "", "Refresh live player targets without changing the selected scope.", |s,e,_|s.refresh_profiler_targets(e)),
+        cmd("profiler.frame", "Inspect Profiler Frame", "chart-no-axes-combined", "", "Inspect a frame from its exact target and capture incarnation.", |s,e,t|s.choose_profiler_frame(e,t)),
         cmd("profiler.scope", "Outline Scope", "crosshair", "", "Outline a scope's spans in the Profiler timeline; again clears it.", |s, _, t| {
             if let Target::Text(label) = t {
                 s.profile_scope = (s.profile_scope.as_deref() != Some(label.as_str())).then(|| label.clone());
             }
             Ok(())
         }),
-        cmd("profiler.compare", "Compare", "git-compare", "", "Compare the frozen capture with the baseline.", |_, e, _| act(e, "editor.workspace", json!({"compare": !e.state.profiler_compare})))
-            .when(|c| Avail::Checked(c.state.profiler_compare)),
+        cmd("profiler.compare", "Compare", "git-compare", "", "Compare explicitly scoped frozen captures.", |s,e,_|s.compare_profiler_targets(e))
+            .when(|c|c.profiler_compare_blocker.map_or(Avail::Checked(c.profiler_compare_active),|reason|Avail::Blocked(reason.into()))),
         cmd("settings.close", "Close Settings", "x", "", "Close the Settings window.", |_, e, _| act(e, "editor.layout.close", json!({"panel": "settings"}))),
     ]);
     c

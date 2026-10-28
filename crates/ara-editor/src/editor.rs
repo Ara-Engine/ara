@@ -48,6 +48,8 @@ pub struct Editor {
     pub profile_current: Option<std::sync::Arc<ara_profile::Profile>>,
     /// Independent baseline trace for the compare view.
     pub profile_baseline: Option<std::sync::Arc<ara_profile::Profile>>,
+    /// Owned asynchronous player-profiling adapter, attached by the Play owner.
+    pub(crate) play_profiling: Option<Box<dyn crate::shell::profiler_targets::backend::Backend>>,
     /// Deferred capture jobs, consumed by the GPU/window owner.
     pub(crate) captures: Receiver<CaptureTask>,
     /// GPU job results returned to the capture service.
@@ -207,6 +209,7 @@ impl Editor {
         // The Game view shows embedded players through shared GPU surfaces (D19).
         let play_surfaces = Some(play.surfaces());
         let script_recovery = play.script_recovery();
+        let play_profiling = Some(crate::shell::profiler_targets::backend::attach_play(play.profiling()));
         host.register(Box::new(play))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let (tasks, captures) = mpsc::channel();
@@ -253,6 +256,7 @@ impl Editor {
             active_fields: BTreeSet::new(),
             profile_current: None,
             profile_baseline: None,
+            play_profiling,
             captures,
             completed,
             probe_captures,
