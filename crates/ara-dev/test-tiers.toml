@@ -52,12 +52,13 @@ group = "gpu"
 memory_mib = 1536
 timeout_seconds = 240
 
+# The lib suite runs ~190 s alone (the full-editor overlay/control sweep is ~90 s of it).
 [[slow]]
 package = "ara-editor"
 target = "*"
 group = "gpu"
 memory_mib = 1536
-timeout_seconds = 180
+timeout_seconds = 600
 
 [[slow]]
 package = "ara-ui-test"
