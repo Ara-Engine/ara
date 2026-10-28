@@ -88,5 +88,6 @@ impl Shell {
         self.game_start = None;
         self.game_start_failed = false;
         self.game_fault = None;
+        self.game_commands_status = None;
     }
 }
