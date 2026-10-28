@@ -77,23 +77,27 @@ pub(super) fn resolve_scene_host<'a>(
 
 /// Keep a rectangle reachable: if it does not overlap any display, centre it on `fallback`.
 pub(super) fn recover(rect: [i32; 4], displays: &[[i32; 4]], fallback: [i32; 4]) -> [i32; 4] {
+    let wide = rect.map(i64::from);
     let visible = displays.iter().any(|d| {
-        let overlap_x = (rect[0] + rect[2]).min(d[0] + d[2]) - rect[0].max(d[0]);
-        let overlap_y = (rect[1] + rect[3]).min(d[1] + d[3]) - rect[1].max(d[1]);
+        let d = d.map(i64::from);
+        let overlap_x = (wide[0] + wide[2]).min(d[0] + d[2]) - wide[0].max(d[0]);
+        let overlap_y = (wide[1] + wide[3]).min(d[1] + d[3]) - wide[1].max(d[1]);
         // At least a grabbable strip of the title bar must be on screen.
         overlap_x >= 64 && overlap_y >= 24
     });
     if visible || displays.is_empty() {
         return rect;
     }
-    let w = rect[2].min(fallback[2]);
-    let h = rect[3].min(fallback[3]);
+    let fallback = fallback.map(i64::from);
+    let w = wide[2].min(fallback[2]);
+    let h = wide[3].min(fallback[3]);
     [
         fallback[0] + (fallback[2] - w) / 2,
         fallback[1] + (fallback[3] - h) / 3,
         w,
         h,
     ]
+    .map(|value| value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32)
 }
 impl Floats {
     /// Create, restyle and destroy OS windows to match the layout's floating list.
@@ -284,6 +288,16 @@ fn panel_titles(node: &ara_ui::docking::DockNode) -> String {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn extreme_saved_positions_recover_without_overflowing_desktop_arithmetic() {
+        let displays = [[0, 0, 1920, 1040]];
+        let main = [100, 100, 1440, 900];
+        for point in [i32::MIN, i32::MAX] {
+            let rect = super::recover([point, point, i32::MAX, i32::MAX], &displays, main);
+            assert!(rect[0] >= main[0] && rect[1] >= main[1]);
+            assert!(rect[2] <= main[2] && rect[3] <= main[3]);
+        }
+    }
     #[test]
     fn off_screen_windows_return_to_the_main_window() {
         let displays = [[0, 0, 1920, 1040]];
