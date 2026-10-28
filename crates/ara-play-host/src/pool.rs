@@ -394,6 +394,12 @@ pub struct Pool {
 }
 
 impl Pool {
+    #[cfg(test)]
+    pub(crate) fn with_idle(config: PoolConfig, token: String, idle: Vec<Player>) -> std::io::Result<Self> {
+        let mut pool = Self::new(config, token)?;
+        pool.idle = idle;
+        Ok(pool)
+    }
     /// Launch independently owned headless/embedded player worlds in one process.
     /// Each has a separate authenticated link, runtime, inputs and shared GPU surface.
     pub fn take_shared(&mut self, count: usize, timeout: Duration) -> Result<Vec<Player>, String> {

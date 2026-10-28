@@ -192,6 +192,7 @@ pub struct PlayService {
     headless_automation: bool,
     headless_capture: bool,
     source_writes: scripts::SourceWrites,
+    catalog_refresh: scripts::CatalogRefresh,
 }
 
 impl PlayService {
@@ -228,6 +229,7 @@ impl PlayService {
             headless_automation: false,
             headless_capture: false,
             source_writes: scripts::SourceWrites::default(),
+            catalog_refresh: scripts::CatalogRefresh::default(),
         }
     }
 
@@ -524,6 +526,17 @@ impl PlayService {
         params: Value,
         target: Option<usize>,
     ) -> Result<Value, Vec<Diagnostic>> {
+        self.call_on_checked(id, method, params, target, None)
+    }
+
+    fn call_on_checked(
+        &mut self,
+        id: &str,
+        method: &str,
+        params: Value,
+        target: Option<usize>,
+        progress: Option<&starting::Reporter>,
+    ) -> Result<Value, Vec<Diagnostic>> {
         let world = self.world(id)?;
         if target.is_some_and(|t| t >= world.players.len()) {
             return Err(fail(
@@ -537,7 +550,7 @@ impl PlayService {
             if target.is_some_and(|t| t != index) {
                 continue;
             }
-            match player.call(method, &params, Duration::from_secs(120)) {
+            match player.call_checked(method, &params, Duration::from_secs(120), || starting::check(progress)) {
                 Ok(Ok(value)) => {
                     if index == answer {
                         first = Some(value);
@@ -966,10 +979,17 @@ impl PlayService {
     /// Restarts a world in fresh players from its start snapshot, or from `resume`
     /// (a portable snapshot of a later tick: C# L4 restarts keep the game state).
     fn restart(&mut self, id: &str, resume: Option<&str>) -> Result<Value, Vec<Diagnostic>> {
-        let world = self
+        self.restart_checked(id, resume, None)
+    }
+
+    fn restart_checked(&mut self, id: &str, resume: Option<&str>, progress: Option<&starting::Reporter>) -> Result<Value, Vec<Diagnostic>> {
+        starting::report(progress, "restarting", 0, 1)?;
+        let mut world = self
             .worlds
             .remove(id)
             .ok_or_else(|| fail(codes::UNKNOWN_WORLD, format!("no play world `{id}`")))?;
+        self.catalog_refresh.invalidate(id,&mut world);
+        self.start_failures.remove(id);
         let roles: Vec<Role> = world.players.iter().map(|(r, _)| *r).collect();
         let snapshot = match &world.section {
             Some(_) => SnapshotRef::Shm {
@@ -1013,7 +1033,7 @@ impl PlayService {
             start_paused,
             resume,
             &conditions,
-            None,
+            progress,
         )?;
         let boot_ms = began.elapsed().as_secs_f64() * 1000.0;
         self.worlds.insert(
@@ -1045,16 +1065,17 @@ impl PlayService {
     fn stop(&mut self, id: &str) -> Result<Value, Vec<Diagnostic>> {
         ara_gpu::cpu_scope!("Play.stop_service");
         if let Some(result) = self.cancel_start(id) {
-            return Ok(result);
+            return result;
         }
         if !self.worlds.contains_key(id) {
             return Err(fail(codes::UNKNOWN_WORLD, format!("no play world `{id}`")));
         }
         let (task, sender) = lifecycle::Retiring::new(id)?;
-        let world = self
+        let mut world = self
             .worlds
             .remove(id)
             .expect("validated world remains owned by this service call");
+        self.catalog_refresh.invalidate(id,&mut world);
         if let Err(error) = sender.send(world) {
             self.worlds.insert(id.to_owned(), error.0);
             return Err(fail(
@@ -1080,7 +1101,11 @@ impl PlayService {
             .iter()
             .map(|(id, w)| json!({
                 "world": id,
-                "status": "running",
+                "status": if self.start_failures.contains_key(id) { "failed" } else { "running" },
+                "restartFailure": self.start_failures.get(id),
+                "commandsRefreshing": self.catalog_refresh.refreshing(id),
+                "commandsStale": self.catalog_refresh.stale(id),
+                "commandRefresh": self.catalog_refresh.status(id),
                 "scene": w.scene,
                 "window": w.window,
                 "processMode": w.process_mode,
@@ -1311,7 +1336,9 @@ impl Service for PlayService {
             "play.restart" => {
                 let p: PlayRestartParams = parse(params)?;
                 let id = p.world.unwrap_or_else(|| latest.clone());
-                if p.keep_state.unwrap_or(false) {
+                if p.background.unwrap_or(false) {
+                    self.restart_background(&id, p.keep_state.unwrap_or(false), false)
+                } else if p.keep_state.unwrap_or(false) {
                     self.resume(&id)
                 } else {
                     self.restart(&id, None)
@@ -1471,14 +1498,15 @@ impl Service for PlayService {
             );
         }
         for id in self.drain_events(cx) {
-            match self.resume(&id) {
+            match self.restart_background(&id, true, true) {
                 Ok(_) => cx.log(Diagnostic::info(
                     codes::PLAY,
-                    format!("{id}: engine bindings changed; restarted from the current tick"),
+                    format!("{id}: engine bindings changed; restarting from the current tick in the background"),
                 )),
                 Err(problems) => problems.into_iter().for_each(|d| cx.log(d)),
             }
         }
+        self.poll_catalog_refresh(cx);
         let playing = !self.worlds.is_empty();
         let allow = self
             .worlds

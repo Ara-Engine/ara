@@ -459,6 +459,9 @@ pub struct PlayRestartParams {
     pub session: String,
     /// World ID from `play.start` (`play:1`); default: the most recent world.
     pub world: Option<String>,
+    /// Return a restarting world immediately; poll `play.status` for progress.
+    /// Repeated requests coalesce. Omitted/false keeps the synchronous response.
+    pub background: Option<bool>,
     /// Resume from a portable snapshot of the current tick (C# state included) instead
     /// of the start snapshot (what C# L4 restarts do).
     pub keep_state: Option<bool>,

@@ -10,6 +10,8 @@ use ara_play::{Event, ScriptScene, method};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 mod write;
+mod catalog_refresh;
+pub(crate) use catalog_refresh::CatalogRefresh;
 pub(crate) use write::SourceWrites;
 
 /// The .NET JIT host and compile server players load C# modules with.
@@ -180,7 +182,11 @@ impl PlayService {
         }
         // Reloads may add, change or remove C# commands.
         for id in reloaded {
-            self.publish_commands(cx, &id);
+            // The replacement worker fetches the new catalog after an L4 restart.
+            if restarts.contains(&id) {continue}
+            if let Err(problems)=self.queue_catalog_refresh(&id) {
+                for problem in problems {cx.log(problem)}
+            }
         }
         restarts
     }
