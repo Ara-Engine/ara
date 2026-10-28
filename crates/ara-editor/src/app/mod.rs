@@ -2183,7 +2183,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if let Some(check) = &mut pilot_check {
                 let ready =
                     verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
-                check.end(&editor, &shell, &mut gpu, ready)?;
+                check.end(&editor, &mut shell, &mut gpu, ready)?;
             }
             if let Some(check) = &mut bookmarks_check {
                 check.end(&editor, &mut shell, &mut gpu)?;

@@ -83,7 +83,8 @@ impl PilotCheck {
                                 &mut editor.host,
                                 "editor.camera",
                                 json!({"session":self.agent,"yaw":self.baseline.yaw+0.3}),
-                            )?;
+                            )
+                            .map_err(|error| error.message)?;
                             self.gesture = json!({"ingress":"Protocol agent presence probe; not a measured native gesture","result":result});
                         } else {
                             let result = ara_proto::Endpoint::call(
@@ -91,7 +92,7 @@ impl PilotCheck {
                                 "cmd.apply",
                                 json!({"session":self.agent,"doc":self.doc,
                                 "why":"Native Pilot ownership fixture: agent deletes selected Camera","commands":[{"cmd":"entity.delete","args":{"entities":[CAMERA]}}]}),
-                            )?;
+                            ).map_err(|error| error.message)?;
                             self.gesture = json!({"ingress":"Protocol agent deletion fixture; not a measured native gesture","result":result});
                             self.before = fixture::records(editor)?;
                             self.revision = editor.host.store().revision();

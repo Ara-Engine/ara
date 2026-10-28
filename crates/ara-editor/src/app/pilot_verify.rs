@@ -96,7 +96,8 @@ impl PilotCheck {
             &mut editor.host,
             "session.begin",
             json!({"client":"native-pilot-proof","author":"agent:native-pilot-proof"}),
-        )?["session"]
+        )
+        .map_err(|error| error.message)?["session"]
             .as_str()
             .ok_or("Pilot fixture agent session missing")?
             .to_owned();
