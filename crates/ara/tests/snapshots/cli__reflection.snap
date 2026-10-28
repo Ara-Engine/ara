@@ -6375,6 +6375,48 @@ expression: out
         }
       }
     },
+    "PrefabApplyParams": {
+      "kind": "params",
+      "doc": "Parameters for atomic prefab application.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Instance or nested entity whose overrides are applied.",
+          "required": true
+        },
+        "path": {
+          "type": "option<string>",
+          "doc": "A single reflected field or component; absent applies its whole subtree.",
+          "default": null
+        },
+        "destination": {
+          "type": "option<asset<prefab>>",
+          "doc": "A source returned by prefab_sources; absent keeps the nearest prefab/variant boundary.",
+          "default": null
+        }
+      }
+    },
+    "PrefabCreateParams": {
+      "kind": "params",
+      "doc": "Parameters for creating a reusable prefab from an authored subtree.",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Root record to replace, preserving its ID, parent, order and local pose.",
+          "required": true
+        },
+        "path": {
+          "type": "string",
+          "doc": "New project-relative .prefab path.",
+          "required": true
+        },
+        "id": {
+          "type": "option<string>",
+          "doc": "Optional stable asset identity or batch symbol.",
+          "default": null
+        }
+      }
+    },
     "PrefabInstantiateParams": {
       "kind": "params",
       "doc": "Parameters of `prefab.instantiate`.",
@@ -10051,6 +10093,37 @@ expression: out
         }
       ]
     },
+    "prefab.apply": {
+      "kind": "command",
+      "summary": "Apply overrides and removals to a chosen prefab source in one undoable transaction.",
+      "params": "PrefabApplyParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_4f9a"
+        }
+      ]
+    },
+    "prefab.create": {
+      "kind": "command",
+      "summary": "Create a prefab asset and replace its source subtree in one undoable transaction.",
+      "params": "PrefabCreateParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_8b21",
+          "path": "prefabs/crate.prefab"
+        }
+      ]
+    },
     "prefab.instantiate": {
       "kind": "command",
       "summary": "Place an instance of a prefab; its content stays linked to the prefab.",
@@ -10101,6 +10174,22 @@ expression: out
           "entity": "e_4f9a/e_m4tz",
           "path": "MeshRenderer.tint",
           "value": [1, 0, 0, 1]
+        }
+      ]
+    },
+    "prefab.variant": {
+      "kind": "command",
+      "summary": "Create a linked prefab variant while preserving base inheritance and instance placement.",
+      "params": "PrefabCreateParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_4f9a",
+          "path": "prefabs/crate-red.prefab"
         }
       ]
     },

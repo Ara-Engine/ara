@@ -1,4 +1,5 @@
 //! Captured argv and policy only: no test invokes the process launcher.
+#![allow(clippy::unwrap_used)] // Fixture setup and captured requests are asserted in tests.
 use super::*;
 
 fn paths() -> (PathBuf, PathBuf) {

@@ -534,12 +534,12 @@ impl EditorService {
                         "Pair an explicit savedSearch with its saveSearch name",
                     )]);
                 }
-                if let Some(name) = p.remove_search {
-                    if state.asset_saved_searches.remove(&name).is_none() {
-                        return Err(vec![crate::invalid(
-                            "That saved Assets search no longer exists",
-                        )]);
-                    }
+                if let Some(name) = p.remove_search
+                    && state.asset_saved_searches.remove(&name).is_none()
+                {
+                    return Err(vec![crate::invalid(
+                        "That saved Assets search no longer exists",
+                    )]);
                 }
                 if let Some(path) = p.open_favourite {
                     let kind =

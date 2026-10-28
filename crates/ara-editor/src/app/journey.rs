@@ -250,16 +250,16 @@ impl Journey {
             "frames": self.age,
             "atSeconds": self.started.elapsed().as_secs_f64(),
         }));
-        if matches!(name, "script" | "hot-reload" | "failure" | "fix-script") {
-            if let Some(reload) = &self.reload {
-                if let Some(step) = self.report.last_mut() {
-                    step["runtimeEffect"] = reload.report()
-                }
-                std::fs::write(
-                    self.output.join("script-reload.json"),
-                    ara_json::to_canonical_string(&reload.report()),
-                )?;
+        if matches!(name, "script" | "hot-reload" | "failure" | "fix-script")
+            && let Some(reload) = &self.reload
+        {
+            if let Some(step) = self.report.last_mut() {
+                step["runtimeEffect"] = reload.report()
             }
+            std::fs::write(
+                self.output.join("script-reload.json"),
+                ara_json::to_canonical_string(&reload.report()),
+            )?;
         }
         self.after(editor, shell)?;
         self.note.clear();
