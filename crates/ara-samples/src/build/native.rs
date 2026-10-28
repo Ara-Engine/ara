@@ -19,7 +19,7 @@ pub(super) fn source(ctx: &Ctx, asset: &str) -> Result<(String, Value)> {
         .context("model has no glTF")?;
     let path = entry.relative(&file.path);
     let id = format!("as_{}", short(asset));
-    let doc = bounds::read(&ctx.root.join(&path))?;
+    let doc = bounds::read(&ctx.path(&path))?;
     let mut opacity = serde_json::Map::new();
     for (index, image) in doc["images"].as_array().into_iter().flatten().enumerate() {
         let Some(uri) = image["uri"].as_str().filter(|uri| uri.contains("_diff_")) else {

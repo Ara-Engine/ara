@@ -21,19 +21,27 @@ fn hub_outpost_embedded_hud_survives_thirty_seconds_and_missing_images() {
         "{:?}",
         initial.resource_diagnostics
     );
-    let reticle = "assets/third_party/outpost_ui/PNG/Extra/Default/crosshair_a.png";
+    let reticle = "third_party/outpost_ui/PNG/Extra/Default/crosshair_a.png";
     assert_eq!(initial.resource_paths["image:reticle"], reticle);
     assert_eq!(
         initial.images["reticle"],
-        std::fs::read(root.join(reticle)).unwrap()
+        std::fs::read(root.join(ara_doc::AUTHORING_ROOT).join(reticle)).unwrap()
     );
     assert_eq!(
         initial.fonts[0],
-        std::fs::read(root.join(&initial.resource_paths["font:0"])).unwrap()
+        std::fs::read(
+            root.join(ara_doc::AUTHORING_ROOT)
+                .join(&initial.resource_paths["font:0"])
+        )
+        .unwrap()
     );
     assert_eq!(
         initial.click,
-        std::fs::read(root.join(&initial.resource_paths["click"])).unwrap()
+        std::fs::read(
+            root.join(ara_doc::AUTHORING_ROOT)
+                .join(&initial.resource_paths["click"])
+        )
+        .unwrap()
     );
     let mut decoder =
         MediaDecoder::open(Box::new(std::io::Cursor::new(initial.click.clone())), "ogg").unwrap();
@@ -62,8 +70,14 @@ fn hub_outpost_embedded_hud_survives_thirty_seconds_and_missing_images() {
     let gpu = GpuDevice::new(&[], evidence.join("owner-gpu")).unwrap();
     for (stage, seconds) in [("valid", 30), ("missing", 5), ("corrupt", 5)] {
         match stage {
-            "missing" => std::fs::remove_file(root.join(reticle)).unwrap(),
-            "corrupt" => std::fs::write(root.join(reticle), b"not a PNG").unwrap(),
+            "missing" => {
+                std::fs::remove_file(root.join(ara_doc::AUTHORING_ROOT).join(reticle)).unwrap()
+            }
+            "corrupt" => std::fs::write(
+                root.join(ara_doc::AUTHORING_ROOT).join(reticle),
+                b"not a PNG",
+            )
+            .unwrap(),
             _ => {}
         }
         agent.until("a warm embedded player", |agent| {

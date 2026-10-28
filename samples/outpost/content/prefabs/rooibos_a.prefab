@@ -1,0 +1,21 @@
+{
+  "$schema": "ara://schema/prefab/1",
+  "id": "pf_rooibosa",
+  "records": {
+    "e_part0": {
+      "name": "wild_rooibos_bush_a",
+      "parent": "e_root",
+      "order": "a0",
+      "MeshRenderer": {
+        "model": "@third_party/wild_rooibos_bush/wild_rooibos_bush_1k.gltf#as_wildrooibosbush",
+        "node": "wild_rooibos_bush_a"
+      },
+      "Transform": {}
+    },
+    "e_root": {
+      "name": "rooibos_a",
+      "order": "a0",
+      "Transform": {}
+    }
+  }
+}

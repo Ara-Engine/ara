@@ -224,7 +224,7 @@ mod tests {
                 .join("player")
                 .join(format!("outpost-{preset}/{filename}"));
             fs::create_dir_all(source.parent().unwrap()).unwrap();
-            let player = json!({"completed":true,"frames":2,"gpu_span_ms":{"p50":1.,"p95":1.,"samples":2},"gpu_span_coverage":{"measured":2,"unavailable":0},"readiness":{"required":true,"state":"ready","renderer_ready":true,"renderer":{"raster":true,"gi_enabled":true},"ready_frame":1,"warmup_frames":1,"gpu_start_frame":3,"time_to_ready_ms":1.,"timeout_ms":1000.}});
+            let player = json!({"completed":true,"frames":2,"pass_presence":{"format":"ara.timing.passes/1","expected":"raster","status":"valid","required_passes":[],"timed_frames":2,"rt_present_frames":0},"gpu_span_ms":{"p50":1.,"p95":1.,"samples":2},"gpu_span_coverage":{"measured":2,"unavailable":0},"readiness":{"required":true,"state":"ready","renderer_ready":true,"renderer":{"raster":true,"gi_enabled":true},"ready_frame":1,"warmup_frames":1,"gpu_start_frame":3,"time_to_ready_ms":1.,"timeout_ms":1000.}});
             let value = if preset == "medium" {
                 player
             } else {

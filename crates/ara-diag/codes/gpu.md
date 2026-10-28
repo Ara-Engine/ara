@@ -3,6 +3,21 @@
 `ara-gpu` reports problems with named codes. They keep their names on the bus;
 the numbers are internal slots.
 
+## ARA6093 PERF_PASS_SET_INVALID: Timing window omitted its expected GPU workload
+owner: ara-bench
+
+A perf, D26, lab measure/A-B or sample capture timing window could not prove that every timed frame executed its selected ray-traced workload. Partial durations are invalid, including plausible but faster SSR fallback frames.
+
+Causes:
+- The expected reflection, filter or rough-reflection passes did not appear for the configured consecutive frames before the bounded readiness deadline.
+- A timed frame lost any required pass, or timing evidence from an old player lacked per-frame coverage.
+- An expected-pass or readiness override was invalid.
+
+Fixes:
+- Inspect the timing JSON's pass_presence, missing workload and renderer readiness; let asynchronous RT resources finish before retrying.
+- Keep the expected workload matched to the requested preset/device. Never infer it from whichever passes happened to execute.
+- Configure ARA_TIMING_STABLE_FRAMES, ARA_TIMING_READY_TIMEOUT_MS or ARA_TIMING_EXPECTED_RT deliberately; the resolved expectation and counts remain in the report. Rerun the whole window after any omission.
+
 ## ARA6091 CPU_FOREIGN_LOAD: Invalid timing under background CPU load
 owner: ara-dev
 shown as: ARA_CPU_FOREIGN_LOAD

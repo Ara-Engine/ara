@@ -71,15 +71,17 @@ fn exported_game_ticks_csharp_after_relocation_without_author_files() {
         PathBuf::from(std::env::var_os("ARA_SHIPPING_E2E_PLAYER").expect("prebuilt ara-player"));
     let pdb = PathBuf::from(std::env::var_os("ARA_SHIPPING_E2E_PDB").expect("matching player PDB"));
     let author = scratch.join("author");
-    let authored = author.clone();
-    // C# retains its compiler-discovery root while assets exercise the legacy layout.
-    let module = author
-        .join(ara_doc::AUTHORING_ROOT)
-        .join("scripts/Gameplay");
+    let authored = author.join(ara_doc::AUTHORING_ROOT);
+    let module = authored.join("scripts/Gameplay");
     std::fs::create_dir_all(&module).unwrap();
     std::fs::create_dir_all(authored.join("scenes")).unwrap();
     std::fs::create_dir_all(authored.join("prefabs")).unwrap();
     std::fs::create_dir_all(authored.join("ui")).unwrap();
+    std::fs::create_dir_all(author.join("settings")).unwrap();
+    write(
+        &author.join("settings/not-game.types.json"),
+        json!({"notGameSchema":true}),
+    );
     std::fs::write(
         authored.join("ui/game.ui"),
         "<ui id=\"game\"><text id=\"ticks\" text=\"Ticks\"/></ui>",
@@ -94,7 +96,7 @@ fn exported_game_ticks_csharp_after_relocation_without_author_files() {
     );
     write(
         &author.join("ara.project.json"),
-        json!({"name":"Native CSharp Export","main":"scenes/main.scene"}),
+        json!({"name":"Native CSharp Export","layoutVersion":ara_host::project_layout::VERSION,"main":"scenes/main.scene"}),
     );
     std::fs::write(
         module.join("gameplay.module.json"),
@@ -155,7 +157,7 @@ public sealed partial class Spinner : Behaviour
     template_pin["symbols"] = pin(&pdb);
     let preset: ExportPreset = serde_json::from_value(
         json!({"platform":"windows","config":"dev","name":"ShippingGame",
-        "playerTemplate":"runtime","lane":"nativeAot","assembly":"ShippingGame","content":".",
+        "playerTemplate":"runtime","lane":"nativeAot","assembly":"ShippingGame","content":ara_host::project_layout::AUTHORING_ROOT,
         "templates":[template_pin]}),
     )
     .unwrap();
@@ -187,6 +189,17 @@ public sealed partial class Spinner : Behaviour
     )
     .unwrap();
     assert!(snapshot.cache.is_empty() && snapshot.nav_cache.is_none());
+    assert!(
+        snapshot
+            .types
+            .iter()
+            .all(|value| value.get("notGameSchema").is_none())
+    );
+    assert!(snapshot.documents.iter().all(|document| {
+        !document
+            .path
+            .starts_with(&format!("{}/", ara_host::project_layout::AUTHORING_ROOT))
+    }));
     let (workspace, scene_id) = snapshot.workspace().unwrap();
     let mut diagnostics = Vec::new();
     let resolved = workspace.resolve(
@@ -226,7 +239,7 @@ public sealed partial class Spinner : Behaviour
             .tempdir_in(base)
             .unwrap()
             .keep()
-            .join("game")
+            .join("player-output")
     } else {
         scratch.join("relocated")
     };

@@ -1,0 +1,211 @@
+{
+  "format": "ara.preview4.qualification/1",
+  "sourceCommit": "ce644be038fae4f9bcb288b5227bb82a03e3269c",
+  "productionCodeCommit": "85552c413121a9d1fce7f5456ddd345ed119c495",
+  "realPackageCompletionBudgetSeconds": 90,
+  "playerGuardsChanged": false,
+  "cliBuildSourceCommit": "ce644be038fae4f9bcb288b5227bb82a03e3269c",
+  "qualificationNote": "Full capability/editor/CLI gates qualify production cohort 85552c41. The checkpoint differs only in the real-package completion budget; its focused install, clippy and reflection gates were rerun. Player message/probe bounds remain 1500/5000 ms. The separately recorded export replay predates only Hub guard and test-fixture changes.",
+  "passed": true,
+  "scope": "Final capability and path-adapter gates; earlier touched-crate receipts retained separately.",
+  "linux": [
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\linux-content-final-855\\fmt-capability.log",
+      "sha256": "c1d102dfc163b752377057d539a2aff1a788ca6af320c2ba4d43bf4aa7006e0f",
+      "kind": "fmt"
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\linux-content-final-855\\clippy-capability.log",
+      "sha256": "2f714244521c5646fa16dff54f7f545d6f0aa5d9fd063d25ba9470bf05d29c1e",
+      "kind": "clippy"
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\linux-content-final-855\\tests-capability.log",
+      "sha256": "28dd91e70d93cb0498b8e42482dc3c09385e8f26c86018e229bd5ca3c2479ecc",
+      "kind": "rust",
+      "suites": 66,
+      "passed": 465,
+      "failed": 0,
+      "ignored": 16
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\linux-content-final-855\\cli-capability.log",
+      "sha256": "9a5b0b21c175dba6e563f794e3fbadbb491df9b49ddf7c91433642c808b38d94",
+      "kind": "rust",
+      "suites": 4,
+      "passed": 22,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\linux-content-final-855\\dotnet-tests-capability.log",
+      "sha256": "7e796754b176fbdb9c5da78aa8bbe1415178897263f180da838ab90bdcba3590",
+      "kind": "dotnet",
+      "passed": 128,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\linux-content-final-855\\diagnostics-capability.log",
+      "sha256": "02aa2c7be4aa9fa3f4387e097f65001abc4b36448d8585bc4bd152160eb28267",
+      "kind": "rust",
+      "suites": 1,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\linux-content-final-855\\tests-install-proof.log",
+      "sha256": "105497710f5df38111ff69181f13b59758188ff5b4afffd77d4882744c7aed50",
+      "kind": "rust",
+      "suites": 1,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\linux-content-final-855\\clippy-install-proof.log",
+      "sha256": "126c72014b267595507cc1a0cd2eadb3e737139eb0b2224948360adde21b5e90",
+      "kind": "clippy"
+    }
+  ],
+  "windows": [
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-final-windows-fmt.log",
+      "sha256": "b5f80a54e19352071d49bc4e6d80c2b55a1068f9c56af33d5d013baac4301722",
+      "kind": "fmt"
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-final-clippy.log",
+      "sha256": "c77dd280d522a6b55d7904d434c216e818184b9521170577aac3d57ac8a0d272",
+      "kind": "clippy"
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-windows-cli-fixture-clippy.log",
+      "sha256": "839e86fa0f9df072de6c2752a0a7494819f49088c8c7a681bf21fb5d77fd2f28",
+      "kind": "clippy"
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-final-install-clippy.log",
+      "sha256": "4f721539b615bb05162bc4f27aa8490a5e48d87dfcf91cf3860a486e2a2d08b2",
+      "kind": "clippy"
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-final-reflection.log",
+      "sha256": "334892c3effc74fa9f470195e3e10c893970ebb0f3d41a7f27a04acd7e945f1b",
+      "kind": "rust",
+      "suites": 1,
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-windows-capability-tests.log",
+      "sha256": "c3b1f6e6b69a2500bfe6ef1fdfc04bf0d74a767a5a298443794308b196e323ca",
+      "kind": "rust",
+      "suites": 43,
+      "passed": 261,
+      "failed": 0,
+      "ignored": 4
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-windows-install-current.log",
+      "sha256": "52dfc7992ea65f89567f7c2106fa077d3680628a7a0c59dfa4be47c48c696b3c",
+      "kind": "rust",
+      "suites": 1,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-windows-capability-cli.log",
+      "sha256": "a61b77fa8ff5db878ea5215353b95fac75071a557e55f9aaec15e423612c88b4",
+      "kind": "rust",
+      "suites": 4,
+      "passed": 22,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-windows-collab-demo.log",
+      "sha256": "c0d3022b8a7a6317ed58a8a302a79c90faccb878b556d044bb5d6bd5b2180a46",
+      "kind": "rust",
+      "suites": 1,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 1
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-final-editor-tests.log",
+      "sha256": "a07f632e97e8d960d4e16a2f1770c19dc9f45b9f843c1b03a5862d163d7f6726",
+      "kind": "rust",
+      "suites": 5,
+      "passed": 145,
+      "failed": 0,
+      "ignored": 6
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-windows-thumbnail.log",
+      "sha256": "ed0478c424d479932e21becd51fee77c2e261a1b8dde586467c983065f8768d3",
+      "kind": "rust",
+      "suites": 1,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-windows-editor-profile.log",
+      "sha256": "edb88fbca083f598d82e103b4c6462ee48728c4e907440dba952595aeebbc321",
+      "kind": "rust",
+      "suites": 1,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-windows-capability-diagnostics.log",
+      "sha256": "14959309c39e2a4a52402bbab1c3714515333edfe11e1033d39c0961faec3fa1",
+      "kind": "rust",
+      "suites": 1,
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-windows-capability-release.log",
+      "sha256": "962cc6cee95960252005e794260b98ad0e9db0abd316f529aee32b86bb443e06",
+      "kind": "rust",
+      "suites": 2,
+      "passed": 13,
+      "failed": 0,
+      "ignored": 1
+    },
+    {
+      "path": "D:\\AraBuild\\ux-hub-evidence\\content-windows-capability-dotnet-tests.log",
+      "sha256": "edb26f24f91fecc51b144e3d42e850292f85cdbffa1e6c96b661034a599eea9a",
+      "kind": "dotnet",
+      "passed": 128,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "reflectedSchemaChanged": false,
+  "wireChange": "Collaboration Snapshot.referenceRoot is optional, serde-default and skipped when empty.",
+  "knownBaselineFailures": [
+    {
+      "test": "ara-player --test scenario::agent_plays_patches_keeps_and_verifies_the_demo_over_mcp",
+      "platform": "Linux",
+      "baselineCommit": "c46d8e9f526d5acae14895f8a53950ffc00d0e74",
+      "reason": "Untouched main returns inline where the test expects shm.",
+      "log": {
+        "path": "D:\\AraBuild\\ux-hub-evidence\\content-linux-scenario-baseline.log",
+        "sha256": "d5c1a0059d1719b84c94d3a40afef99cc5015fa951b39d3622fcc418f0569cd9",
+        "kind": "baseline"
+      }
+    }
+  ],
+  "limitations": [
+    "Literal Explorer double-click remains for Islam; zero-argument isolated desktop launch is separately recorded.",
+    "Archived Outpost has 122 missing fetched media sources; no full-art gameplay claim is made."
+  ]
+}

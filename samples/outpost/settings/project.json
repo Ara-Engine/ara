@@ -1,0 +1,8 @@
+{
+  "ui": {
+    "bindings": "ui/bindings.json",
+    "main": "ui/game.ui",
+    "resources": "ui/resources.json",
+    "stylesheet": "ui/game.css"
+  }
+}

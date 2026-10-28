@@ -220,17 +220,23 @@ mod discovery_tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../target/ara-play-host/root-module-types")
             .join(std::process::id().to_string());
-        std::fs::create_dir_all(root.join("types")).unwrap();
+        let authored = root.join(ara_doc::AUTHORING_ROOT);
+        std::fs::create_dir_all(authored.join("types")).unwrap();
         std::fs::write(
-            root.join("ara.module.toml"),
-            "[module]
-name=\"Root\"
-",
+            root.join("ara.project.json"),
+            ara_json::to_canonical_string(
+                &json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
+            ),
         )
         .unwrap();
-        std::fs::write(root.join("Root.types.json"), r#"{"types":{"Spinner":{}}}"#).unwrap();
+        std::fs::write(authored.join("root.module.json"), r#"{"name":"Root"}"#).unwrap();
         std::fs::write(
-            root.join("types/Project.types.json"),
+            authored.join("Root.types.json"),
+            r#"{"types":{"Spinner":{}}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            authored.join("types/Project.types.json"),
             r#"{"types":{"Door":{}}}"#,
         )
         .unwrap();
@@ -246,6 +252,13 @@ name=\"Root\"
             .join(std::process::id().to_string());
         let authored = root.join(ara_doc::AUTHORING_ROOT);
         std::fs::create_dir_all(authored.join("Gameplay/Nested")).unwrap();
+        std::fs::write(
+            root.join("ara.project.json"),
+            ara_json::to_canonical_string(
+                &json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
+            ),
+        )
+        .unwrap();
         std::fs::write(authored.join("root.module.json"), r#"{"name":"Root"}"#).unwrap();
         std::fs::write(
             authored.join("Gameplay/gameplay.module.json"),

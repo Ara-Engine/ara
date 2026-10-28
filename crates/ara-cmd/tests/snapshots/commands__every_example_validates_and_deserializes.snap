@@ -110,7 +110,7 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
           "lane": "nativeAot",
           "playerTemplate": "runtime",
           "assembly": "Game",
-          "content": "game",
+          "content": "content",
           "templates": []
         }
       }
@@ -373,6 +373,21 @@ expression: "ara_json::to_canonical_string(&reg.catalog())"
       {
         "entity": "e_4f9a",
         "path": "prefabs/crate-red.prefab"
+      }
+    ]
+  },
+  "project.migrate": {
+    "kind": "command",
+    "summary": "Apply an explicitly reviewed project-layout migration as one reversible transaction.",
+    "params": "ProjectMigrateParams",
+    "hints": {
+      "idempotent": false,
+      "destructive": false
+    },
+    "scope": "edit:assets",
+    "examples": [
+      {
+        "planToken": "reviewed-inventory-token"
       }
     ]
   },

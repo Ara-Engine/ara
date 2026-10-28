@@ -17,14 +17,22 @@ impl Project {
             .join("../../target/ara-editor/loading")
             .join(std::process::id().to_string());
         let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(root.join("levels")).unwrap();
-        std::fs::create_dir_all(root.join("models")).unwrap();
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
+        std::fs::create_dir_all(root.join("settings")).unwrap();
+        std::fs::write(
+            root.join("settings/ara.imports"),
+            ara_asset::ProjectImportSettings::default()
+                .canonical_text()
+                .unwrap(),
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("models")).unwrap();
         write(
             &root.join("ara.project.json"),
-            json!({"name":"Loading test","main":"levels/main.scene"}),
+            json!({"name":"Loading test","layoutVersion":ara_host::project_layout::VERSION,"main":"levels/main.scene"}),
         );
         write(
-            &root.join("levels/main.scene"),
+            &root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),
             json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":{
                 "e_crate001":{"name":"Salvage crate","Transform":{},
                     "MeshRenderer":{"model":"@models/crate.gltf#as_crate0001"}}}}),
@@ -33,9 +41,15 @@ impl Project {
             ("crate.gltf", "as_crate0001", "ara.gltf"),
             ("rock.png", "as_rock00001", "ara.image"),
         ] {
-            std::fs::write(root.join("models").join(file), "{}").unwrap();
+            std::fs::write(
+                root.join(ara_doc::AUTHORING_ROOT).join("models").join(file),
+                "{}",
+            )
+            .unwrap();
             write(
-                &root.join(format!("models/{file}.import.json")),
+                &root
+                    .join(ara_doc::AUTHORING_ROOT)
+                    .join(format!("models/{file}.import.json")),
                 json!({"$schema":"ara://schema/import/1","id":id,"records":{"i_settings":{"importer":importer,"version":"1","settings":{}}}}),
             );
         }

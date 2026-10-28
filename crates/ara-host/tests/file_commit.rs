@@ -126,7 +126,7 @@ fn fixture(name: &str) -> (PathBuf, Host, String) {
     fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("scenes")).expect("scratch");
     fs::write(
         root.join("ara.project.json"),
-        r#"{"layoutVersion":3,"main":"scenes/main.scene"}"#,
+        r#"{"layoutVersion":4,"main":"scenes/main.scene"}"#,
     )
     .expect("marker");
     fs::write(

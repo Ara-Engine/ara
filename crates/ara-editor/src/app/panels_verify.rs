@@ -35,7 +35,7 @@ pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
         std::fs::write(
             root.join("ara.project.json"),
             ara_json::to_canonical_string(
-                &json!({"name":"Outpost","main":"levels/main.scene","layoutVersion":3}),
+                &json!({"name":"Outpost","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"main":"levels/main.scene"}),
             ),
         )?;
         std::fs::write(

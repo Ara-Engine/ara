@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
 pub struct ImportSettings {
     /// Texture encoding quality override. Omit this field to inherit the project
-    /// preset in ara.imports; Balanced is the default for new projects.
+    /// preset in settings/ara.imports; Balanced is the default for new projects.
     pub preset: Option<crate::CookPreset>,
     /// Stable worker importer ID.
     pub importer: String,
@@ -17,7 +17,7 @@ pub struct ImportSettings {
     pub version: String,
     /// Importer-specific typed settings, canonicalized recursively.
     pub settings: serde_json::Value,
-    /// Referenced authoring assets, using project-relative `@path#id` syntax.
+    /// Referenced authoring assets, using authored-root-relative `@path#id` syntax.
     pub dependencies: Vec<AssetRef>,
 }
 impl Default for ImportSettings {

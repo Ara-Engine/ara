@@ -41,21 +41,20 @@ pub struct SourceAsset {
 
 /// Resolves the authored root once for background source I/O. A root already
 /// pointing at authored content (dependency inventory) remains unchanged.
-fn authored_root(project: &Path) -> PathBuf {
-    let modern = std::fs::read(project.join("ara.project.json"))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
-        .and_then(|marker| {
-            marker
-                .get("layoutVersion")
-                .and_then(serde_json::Value::as_u64)
-        })
-        .is_some_and(|version| version >= 3);
-    if modern {
-        project.join(ara_doc::AUTHORING_ROOT)
-    } else {
-        project.to_owned()
+fn authored_root(project: &Path) -> Result<PathBuf> {
+    let bytes = match std::fs::read(project.join("ara.project.json")) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(project.to_owned()),
+        Err(error) => return Err(error.into()),
+    };
+    let marker = serde_json::from_slice(&bytes)?;
+    if !ara_doc::detect_project_layout(&marker).is_current() {
+        return Err(Error::ProjectLayout(ara_diag::Diagnostic::error(
+            ara_diag::codes::PROJECT_MIGRATION_REQUIRED,
+            "this project uses an older layout; migrate with `ara project migrate` or open in the Hub/editor to migrate before importing",
+        ).file(project.join("ara.project.json").display().to_string())));
     }
+    Ok(project.join(ara_doc::AUTHORING_ROOT))
 }
 /// Snapshots source and dependencies on a background/CLI thread. All native source
 /// parsing, including dependency discovery, runs in a disposable process.
@@ -69,7 +68,7 @@ pub fn snapshot(
     let project_root = root
         .canonicalize()
         .map_err(|e| io_at(e, &root.display().to_string()))?;
-    let root = authored_root(&project_root)
+    let root = authored_root(&project_root)?
         .canonicalize()
         .map_err(|e| io_at(e, &project_root.display().to_string()))?;
     let source_path = checked_path(&root, &root, &asset.path)?;
@@ -187,8 +186,8 @@ impl AssetPipeline {
         schema: Arc<SchemaDb>,
     ) -> Result<Self> {
         let root = root.as_ref().canonicalize()?;
+        let authored_root = authored_root(&root)?;
         let watcher = FileWatcher::new(&root)?;
-        let authored_root = authored_root(&root);
         let project_preset = Some(crate::ProjectImportSettings::read(&root, &schema)?.preset);
         let worker = worker.with_memo(cache.worker_memo_root());
         let (tx, rx) = mpsc::channel();
@@ -428,10 +427,7 @@ impl AssetPipeline {
         let mut policy_changed = false;
         for path in self.watcher.changed()? {
             if ara_doc::file_state::same_path(&path, crate::PROJECT_IMPORT_SETTINGS_FILE)
-                || ara_doc::file_state::same_path(
-                    &path,
-                    crate::project_settings::SCOPED_PROJECT_IMPORT_SETTINGS_FILE,
-                )
+                || ara_doc::file_state::same_path(&path, crate::LEGACY_PROJECT_IMPORT_SETTINGS_FILE)
             {
                 policy_changed = true;
             } else if let Some(prefix) = &prefix {
@@ -533,6 +529,32 @@ impl Drop for AssetPipeline {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn source_open_rejects_old_projects_and_accepts_explicit_authored_roots() {
+        let directory = tempfile::tempdir().expect("source scratch");
+        let root = directory.path();
+        for marker in ["{}", r#"{"layoutVersion":3}"#] {
+            std::fs::write(root.join("ara.project.json"), marker).expect("old marker");
+            let diagnostic = authored_root(root)
+                .expect_err("old layouts cannot become empty import inventories")
+                .diagnostic("source.bin");
+            assert_eq!(diagnostic.code, ara_diag::codes::PROJECT_MIGRATION_REQUIRED);
+            assert!(!root.join(ara_doc::AUTHORING_ROOT).exists());
+            assert!(!root.join(".ara").exists());
+        }
+        std::fs::write(root.join("ara.project.json"), r#"{"layoutVersion":4}"#)
+            .expect("current marker");
+        assert_eq!(
+            authored_root(root).expect("current root"),
+            root.join(ara_doc::AUTHORING_ROOT)
+        );
+        let explicit = root.join("prepared-sources");
+        std::fs::create_dir(&explicit).expect("explicit authored root");
+        assert_eq!(
+            authored_root(&explicit).expect("caller-owned source boundary"),
+            explicit
+        );
+    }
     #[test]
     fn missing_sources_name_their_path() {
         let root = std::env::temp_dir();

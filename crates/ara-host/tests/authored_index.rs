@@ -21,6 +21,21 @@ fn scratch() -> PathBuf {
 }
 
 #[test]
+fn explicit_directory_scan_does_not_append_another_authored_root() {
+    let root = scratch();
+    let layouts = root.join(".ara/editor");
+    fs::create_dir_all(&layouts).expect("editor layouts");
+    let graph = layouts.join("animation.graph");
+    fs::write(&graph, "{}").expect("private layout");
+    let entries =
+        authored_files(&layouts, &ara_schema::SchemaDb::new()).expect("directory inventory");
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].path, "animation.graph");
+    assert_eq!(entries[0].storage_path, "animation.graph");
+    assert_eq!(entries[0].scope, AuthoredScope::Authored);
+}
+
+#[test]
 fn modern_index_separates_scope_and_storage_and_preserves_free_nested_folders() {
     let scratch = scratch();
     let root = scratch.as_path();
@@ -29,7 +44,7 @@ fn modern_index_separates_scope_and_storage_and_preserves_free_nested_folders() 
     fs::create_dir_all(root.join("settings")).expect("project settings");
     fs::create_dir_all(root.join("packages")).expect("reserved packages");
     fs::create_dir_all(root.join("builds")).expect("derived output");
-    fs::write(root.join("ara.project.json"), "{\"layoutVersion\":3}").expect("marker");
+    fs::write(root.join("ara.project.json"), "{\"layoutVersion\":4}").expect("marker");
     fs::write(game.join("settings/project.json"), "{}").expect("authored source");
     fs::write(root.join("settings/project.json"), "{}").expect("project policy");
     fs::write(root.join("packages/hidden.cs"), "").expect("plugin placeholder");
@@ -81,23 +96,30 @@ fn modern_index_separates_scope_and_storage_and_preserves_free_nested_folders() 
 }
 
 #[test]
-fn legacy_index_is_root_relative_and_creates_no_new_layout_directories() {
-    let scratch = scratch();
-    let root = scratch.as_path();
-    fs::create_dir_all(root.join("levels")).expect("legacy folder");
-    fs::write(root.join("ara.project.json"), "{}").expect("legacy marker");
-    fs::write(root.join("levels/main.scene"), "").expect("legacy scene");
-    let mut db = ara_schema::SchemaDb::new();
-    ara_doc::register(&mut db);
-    let entries = authored_files(root, &db).expect("legacy index");
-    let entry = entries
-        .iter()
-        .find(|entry| entry.path == "levels/main.scene")
-        .expect("scene");
-    assert_eq!(entry.storage_path, entry.path);
-    assert_eq!(entry.scope, AuthoredScope::Authored);
-    assert_eq!(authored_root(root), root);
-    assert!(!root.join(ara_doc::AUTHORING_ROOT).exists());
-    assert!(!root.join("packages").exists());
-    assert!(!root.join("settings").exists());
+fn legacy_projects_are_rejected_before_indexing_or_creating_state() {
+    for (marker, authored, label) in [
+        ("{}", "levels", "project-root"),
+        (r#"{"layoutVersion":3}"#, "game/levels", "game/"),
+    ] {
+        let root = scratch();
+        fs::create_dir_all(root.join(authored)).expect("legacy folder");
+        fs::write(root.join("ara.project.json"), marker).expect("marker");
+        fs::write(root.join(authored).join("main.scene"), "legacy scene").expect("scene");
+        let error = ara_host::Project::open(&root)
+            .err()
+            .expect("migration required");
+        assert_eq!(error.code, ara_diag::codes::PROJECT_MIGRATION_REQUIRED);
+        assert!(error.message.contains(label));
+        assert!(error.message.contains("ara project migrate"));
+        assert_eq!(
+            fs::read_to_string(root.join("ara.project.json")).expect("unchanged"),
+            marker
+        );
+        assert_eq!(
+            fs::read_to_string(root.join(authored).join("main.scene")).expect("unchanged"),
+            "legacy scene"
+        );
+        assert!(!root.join(".ara").exists());
+        assert!(!root.join(ara_doc::AUTHORING_ROOT).exists());
+    }
 }

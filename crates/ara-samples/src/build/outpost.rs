@@ -51,8 +51,7 @@ pub fn build(ctx: &Ctx) -> Result<()> {
             "terrain",
             "anim",
             "audio",
-            "assets/kit",
-            ".scratch",
+            "kit",
         ],
     )?;
     let models = models(ctx)?;
@@ -329,7 +328,7 @@ fn models(ctx: &Ctx) -> Result<Models> {
 }
 
 /// Writes the generated kit models the levels place (road and suit palette aside)
-/// and returns `(model name, glTF path)`. Only ignored `assets/kit/` files change.
+/// and returns `(model name, glTF path)`. Only ignored `kit/` files change.
 fn kits(root: &Path, lock: &Lock) -> Result<Vec<(&'static str, String)>> {
     Ok(vec![
         (
@@ -408,7 +407,7 @@ fn kits(root: &Path, lock: &Lock) -> Result<Vec<(&'static str, String)>> {
     ])
 }
 
-/// Writes every generated, git-ignored Outpost file (`assets/kit/`) without
+/// Writes every generated, git-ignored Outpost file (`kit/`) without
 /// authoring a document. `ara-samples kits` and release packaging run this on a
 /// project whose third-party assets are fetched.
 pub fn generate(root: &Path, lock: &Lock) -> Result<()> {
@@ -424,7 +423,7 @@ pub fn human(ctx: &Ctx, models: &mut Models) -> Result<()> {
     super::materials::palette(ctx, models, "human", "m2m_human", &palette)
 }
 
-/// Writes `assets/kit/human_suit.png`, the recoloured mannequin palette.
+/// Writes `kit/human_suit.png`, the recoloured mannequin palette.
 pub fn suit(root: &Path, lock: &Lock) -> Result<String> {
     kit::recolor(
         root,

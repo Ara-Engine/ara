@@ -20,33 +20,37 @@ fn write_json(path: &Path, value: &Value) {
 }
 
 #[test]
-fn conventional_scene_context_keeps_legacy_precedence_and_accepts_scoped_starter() {
+fn conventional_scene_context_respects_the_selected_authored_root() {
     let scratch = scratch();
     write_project(scratch.path());
     let mut bindings = bindings(scratch.path());
-    bindings.workspace = ara_doc::Workspace::default();
-    bindings.workspace.insert(
-        "scenes/main.scene",
-        ara_doc::Document::new(
-            "scene",
-            ara_doc::AssetId::parse("sc_scoped").expect("scoped scene ID"),
-        ),
-    );
-    assert_eq!(
-        scene_context(&bindings).expect("scoped starter context"),
-        Some(ara_doc::AssetId::parse("sc_scoped").expect("scoped scene ID"))
-    );
-    bindings.workspace.insert(
-        "levels/main.scene",
-        ara_doc::Document::new(
-            "scene",
-            ara_doc::AssetId::parse("sc_legacy").expect("legacy scene ID"),
-        ),
-    );
-    assert_eq!(
-        scene_context(&bindings).expect("legacy starter context"),
-        Some(ara_doc::AssetId::parse("sc_legacy").expect("legacy scene ID"))
-    );
+    let scoped = ara_doc::AssetId::parse("sc_scoped").expect("scoped scene ID");
+    let legacy = ara_doc::AssetId::parse("sc_legacy").expect("legacy scene ID");
+    for root in ["", ara_doc::AUTHORING_ROOT, "custom/content"] {
+        bindings.workspace = ara_doc::Workspace::default();
+        bindings.workspace.set_reference_root(root);
+        bindings.workspace.insert(
+            bindings.workspace.storage_path("scenes/main.scene"),
+            ara_doc::Document::new("scene", scoped.clone()),
+        );
+        assert_eq!(
+            scene_context(&bindings).expect("scoped starter fallback"),
+            Some(scoped.clone())
+        );
+        bindings.workspace.insert(
+            bindings.workspace.storage_path("levels/main.scene"),
+            ara_doc::Document::new("scene", legacy.clone()),
+        );
+        assert_eq!(
+            scene_context(&bindings).expect("layout-specific starter context"),
+            Some(if root.is_empty() {
+                legacy.clone()
+            } else {
+                scoped.clone()
+            }),
+            "the reference root determines conventional layout precedence"
+        );
+    }
 }
 
 #[test]
@@ -63,7 +67,7 @@ fn policy_references_resolve_by_id_path_fallback_and_policy_precedence() {
     );
     let policy = ara_host::project::read_document(
         r#"{"main":"@stale.scene#sc_alternate","ui":{"resources":"@feature/media.json#as_missing"}}"#,
-        ara_host::project_policy::PREFERENCES,
+        ara_host::project_layout::PREFERENCES,
         &bindings.schema,
         None,
     )
@@ -71,7 +75,7 @@ fn policy_references_resolve_by_id_path_fallback_and_policy_precedence() {
     .expect("policy document");
     bindings
         .workspace
-        .insert_project_document(ara_host::project_policy::PREFERENCES, policy);
+        .insert_project_document(ara_host::project_layout::PREFERENCES, policy);
     assert_eq!(
         json_owner(
             &bindings.workspace.storage_path("feature/media.json"),
@@ -99,7 +103,7 @@ fn policy_references_resolve_by_id_path_fallback_and_policy_precedence() {
     for reference in ["@#sc_media", "sc_media", "@wrong.json#sc_media"] {
         let policy = ara_host::project::read_document(
             &format!(r#"{{"ui":{{"resources":"{reference}"}}}}"#),
-            ara_host::project_policy::PREFERENCES,
+            ara_host::project_layout::PREFERENCES,
             &bindings.schema,
             None,
         )
@@ -107,7 +111,7 @@ fn policy_references_resolve_by_id_path_fallback_and_policy_precedence() {
         .expect("policy");
         bindings
             .workspace
-            .insert_project_document(ara_host::project_policy::PREFERENCES, policy);
+            .insert_project_document(ara_host::project_layout::PREFERENCES, policy);
         assert_eq!(
             json_owner(
                 &bindings.workspace.storage_path("feature/media.json"),
@@ -119,7 +123,7 @@ fn policy_references_resolve_by_id_path_fallback_and_policy_precedence() {
     }
     let policy = ara_host::project::read_document(
         r#"{"ui":{"resources":"@#as_missing"}}"#,
-        ara_host::project_policy::PREFERENCES,
+        ara_host::project_layout::PREFERENCES,
         &bindings.schema,
         None,
     )
@@ -127,7 +131,7 @@ fn policy_references_resolve_by_id_path_fallback_and_policy_precedence() {
     .expect("policy");
     bindings
         .workspace
-        .insert_project_document(ara_host::project_policy::PREFERENCES, policy);
+        .insert_project_document(ara_host::project_layout::PREFERENCES, policy);
     let errors = json_owner(
         &bindings.workspace.storage_path("feature/media.json"),
         &bindings,
@@ -158,7 +162,7 @@ fn configured_resources_and_unknown_json_references_follow_move_and_block_delete
     )
     .expect("configured main scene");
     write_json(
-        &root.join(ara_host::project_policy::PREFERENCES),
+        &root.join(ara_host::project_layout::PREFERENCES),
         &json!({"main":"@stale.scene#sc_feature","ui":{"resources":"@feature/media.json#as_missing"}}),
     );
     write_json(

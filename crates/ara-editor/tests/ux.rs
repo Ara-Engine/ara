@@ -17,13 +17,21 @@ impl Project {
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        std::fs::create_dir_all(root.join("levels")).unwrap();
+        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels")).unwrap();
+        std::fs::create_dir_all(root.join("settings")).unwrap();
+        std::fs::write(
+            root.join("settings/ara.imports"),
+            ara_asset::ProjectImportSettings::default()
+                .canonical_text()
+                .unwrap(),
+        )
+        .unwrap();
         write(
             &root.join("ara.project.json"),
-            json!({"name":"UX test","main":"levels/main.scene"}),
+            json!({"name":"UX test","layoutVersion":ara_host::project_layout::VERSION,"main":"levels/main.scene"}),
         );
         write(
-            &root.join("levels/main.scene"),
+            &root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),
             json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":{"e_crate001":{"name":"Salvage crate","Transform":{"position":[0,0.6,0]},"MeshRenderer":{}},"e_child001":{"name":"Child","parent":"e_crate001","Transform":{"position":[1,0,0]}}}}),
         );
         Self(root)
@@ -38,6 +46,145 @@ impl Drop for Project {
 fn write(path: &Path, value: Value) {
     std::fs::write(path, ara_json::to_canonical_string(&value)).unwrap();
 }
+
+#[test]
+fn copy_reference_uses_the_authored_path_under_the_content_root() {
+    use ara_editor::shell::commands::Target;
+    let project = Project::new();
+    let mut editor = Editor::open(&project.0).unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
+    let before = editor.host.store().revision();
+    shell
+        .run_command(
+            &mut editor,
+            "edit.copy_reference",
+            &Target::Entity("e_crate001".into()),
+        )
+        .unwrap();
+    let copied = shell
+        .take_clipboard()
+        .expect("Copy Reference writes the shell clipboard lane");
+    assert_eq!(copied, "@levels/main.scene#e_crate001");
+    let parts = ara_schema::grammar::parse_ref(&copied).unwrap();
+    let workspace = editor.host.store().workspace();
+    let physical = workspace.storage_path("levels/main.scene");
+    assert_eq!(
+        workspace.path_of(&editor.state.doc),
+        Some(physical.as_str())
+    );
+    let scene = workspace.find(parts.path.unwrap()).unwrap();
+    assert!(
+        workspace
+            .doc(scene.as_str())
+            .unwrap()
+            .record(parts.id.unwrap())
+            .is_some(),
+        "the copied reference resolves to the actual selected entity"
+    );
+    assert_eq!(
+        editor.host.store().revision(),
+        before,
+        "Copy Reference is read-only"
+    );
+}
+
+#[test]
+fn import_panel_overlays_live_dependencies_and_applies_settings_with_one_content_prefix() {
+    use ara_ui::input::InputEvent;
+    use ara_ui_text::EditEvent;
+    let project = Project::new();
+    let authored = project.0.join(ara_doc::AUTHORING_ROOT);
+    std::fs::create_dir_all(authored.join("models")).unwrap();
+    std::fs::write(
+        authored.join("models/crate.gltf"),
+        r#"{"asset":{"version":"2.0"}}"#,
+    )
+    .unwrap();
+    write(
+        &authored.join("models/crate.gltf.import.json"),
+        json!({"$schema":"ara://schema/import/1","id":"as_crate001","records":{"i_settings":{"importer":"ara.gltf","version":"1","settings":{}}}}),
+    );
+    let mut editor = Editor::open(&project.0).unwrap();
+    editor
+        .action("editor.layout.show", json!({"panel":"assets"}))
+        .unwrap();
+    let mut shell = Shell::new(&mut editor, [1440., 2100.]).unwrap();
+    let started = std::time::Instant::now();
+    while !shell.poll_assets_for_test(&mut editor) {
+        assert!(started.elapsed().as_secs() < 10, "asset scan never arrived");
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    // The scene's browser snapshot predates this live authored edge.
+    editor.apply(vec![json!({"cmd":"property.set","args":{"entity":"e_crate001","path":"MeshRenderer.model","value":"@models/crate.gltf#as_crate001"}})], "Use the crate model", None).unwrap();
+    editor
+        .action("editor.workspace", json!({"asset":"levels/main.scene"}))
+        .unwrap();
+    shell.rebuild(&mut editor).unwrap();
+    let label = |shell: &Shell, id: &str| {
+        shell.ui.nodes[shell.ui.find(id).unwrap()]
+            .element
+            .attrs
+            .get("label")
+            .cloned()
+            .unwrap()
+    };
+    assert_eq!(label(&shell, "dependency-Uses-0"), "models/crate.gltf");
+    let mut clipboard = MemoryClipboard::default();
+    shell.click("dependency-Uses-0", &mut clipboard).unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    assert_eq!(
+        editor.state.asset_path.as_deref(),
+        Some("models/crate.gltf")
+    );
+    assert!(
+        shell.ui.find("import-settings-title").is_some(),
+        "the physical sidecar supplies the imported settings"
+    );
+    assert_eq!(label(&shell, "dependency-Used by-0"), "levels/main.scene");
+    let count = &shell.ui.nodes[shell.ui.find("dep-Used by-count").unwrap()];
+    assert_eq!(
+        count.text.as_ref().unwrap().value,
+        "1",
+        "the live overlay replaces the same logical graph key without a duplicate physical-path edge"
+    );
+    shell
+        .click("import-setting-lodCount", &mut clipboard)
+        .unwrap();
+    shell
+        .event(InputEvent::Edit(EditEvent::SelectAll), &mut clipboard)
+        .unwrap();
+    shell
+        .event(
+            InputEvent::Edit(EditEvent::Insert("3".into())),
+            &mut clipboard,
+        )
+        .unwrap();
+    shell.dispatch(&mut editor).unwrap();
+    assert!(shell.commit_fields(&mut editor).unwrap());
+    editor.host.flush();
+    let sidecar = editor
+        .host
+        .store()
+        .workspace()
+        .storage_path("models/crate.gltf.import.json");
+    let settings: Value =
+        serde_json::from_str(&std::fs::read_to_string(project.0.join(&sidecar)).unwrap()).unwrap();
+    assert_eq!(settings["records"]["i_settings"]["settings"]["lodCount"], 3);
+    assert_eq!(
+        editor
+            .host
+            .store()
+            .workspace()
+            .index()
+            .path_of("as_crate001"),
+        Some("models/crate.gltf")
+    );
+    assert!(
+        !authored.join(ara_doc::AUTHORING_ROOT).exists(),
+        "Apply must not create content/content"
+    );
+}
+
 #[derive(Default)]
 struct MemoryClipboard(String);
 impl ara_ui_text::Clipboard for MemoryClipboard {
@@ -441,7 +588,10 @@ fn settings_edits_are_undoable_commands_in_both_scopes() {
 fn panels_show_real_empty_states() {
     let project = Project::new();
     std::fs::write(
-        project.0.join("levels/main.scene"),
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("levels/main.scene"),
         ara_json::to_canonical_string(
             &json!({"$schema":"ara://schema/scene/1","id":"sc_test0001","records":{}}),
         ),
@@ -608,7 +758,10 @@ fn viewport_toolbar_overlays_the_image_and_first_click_selects_each_tool() {
 fn any_scene_opens_with_its_own_camera_and_agents_only_move_their_presence() {
     let project = Project::new();
     write(
-        &project.0.join("levels/hangar.scene"),
+        &project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("levels/hangar.scene"),
         json!({"$schema":"ara://schema/scene/1","id":"sc_hangar001","records":{"e_lamp0001":{"name":"Lamp","Transform":{"position":[200,2,190]}}}}),
     );
     let mut editor = Editor::open(&project.0).unwrap();
@@ -973,12 +1126,43 @@ fn prefab_from_selection_overrides_apply_revert_and_open() {
 #[test]
 fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
     let project = Project::new();
-    std::fs::create_dir_all(project.0.join("models")).unwrap();
-    std::fs::create_dir_all(project.0.join("textures/rock")).unwrap();
-    std::fs::write(project.0.join("models/crate.gltf"), "{}").unwrap();
-    std::fs::write(project.0.join("models/crate.bin"), [0u8; 16]).unwrap();
-    std::fs::write(project.0.join("textures/rock/albedo.png"), [0u8; 16]).unwrap();
-    std::fs::write(project.0.join("NOTES.md"), "notes").unwrap();
+    std::fs::create_dir_all(project.0.join(ara_doc::AUTHORING_ROOT).join("models")).unwrap();
+    std::fs::create_dir_all(
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("textures/rock"),
+    )
+    .unwrap();
+    std::fs::write(
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("models/crate.gltf"),
+        "{}",
+    )
+    .unwrap();
+    std::fs::write(
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("models/crate.bin"),
+        [0u8; 16],
+    )
+    .unwrap();
+    std::fs::write(
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("textures/rock/albedo.png"),
+        [0u8; 16],
+    )
+    .unwrap();
+    std::fs::write(
+        project.0.join(ara_doc::AUTHORING_ROOT).join("NOTES.md"),
+        "notes",
+    )
+    .unwrap();
     let mut editor = Editor::open(&project.0).unwrap();
     editor
         .action("editor.layout.show", json!({"panel":"assets"}))
@@ -1073,7 +1257,14 @@ fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
         .unwrap();
     assert!(!files(&shell).contains(&"crate.bin".to_owned()));
     // A file that appears on disk shows up once the browser rescans.
-    std::fs::write(project.0.join("models/barrel.gltf"), "{}").unwrap();
+    std::fs::write(
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("models/barrel.gltf"),
+        "{}",
+    )
+    .unwrap();
     let start = std::time::Instant::now();
     while !files(&shell).contains(&"barrel.gltf".to_owned()) {
         assert!(
@@ -1500,6 +1691,16 @@ fn build_profile_creation_commits_once_and_keeps_csharp_build_available() {
     );
     assert_eq!(std::fs::read_to_string(path).unwrap(), text);
     assert_eq!(editor.host.store().history().len(), before + 1);
+
+    std::fs::create_dir_all(project.0.join(ara_doc::AUTHORING_ROOT).join("scripts/Game")).unwrap();
+    std::fs::write(
+        project
+            .0
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("scripts/Game/game.module.json"),
+        ara_json::to_canonical_string(&json!({"name":"Game"})),
+    )
+    .unwrap();
     let commands = editor.action("editor.commands", json!({})).unwrap();
     let current = commands["commands"]
         .as_array()

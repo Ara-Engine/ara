@@ -21,8 +21,9 @@ use std::{collections::BTreeMap, path::Path, sync::OnceLock};
 /// Fox's clips and controllers, referenced per record (`@anim/fox.animation#an_walk`).
 const ANIMATION: (&str, &str) = ("anim/fox.animation", "ac_foxanim1");
 
-fn demo() -> &'static Path {
+fn demo() -> std::path::PathBuf {
     Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../ara-player/demo"))
+        .join(ara_doc::AUTHORING_ROOT)
 }
 
 /// The Fox, cooked once in-process (the player loads the same artifacts from cache).

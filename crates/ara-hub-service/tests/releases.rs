@@ -295,7 +295,7 @@ fn register_missing_project_pin_and_refuse_external_uninstall() {
     fs::create_dir(&project).unwrap();
     fs::write(
         project.join("ara.project.json"),
-        r#"{"name":"Missing","engineVersion":"1.0.0"}"#,
+        r#"{"name":"Missing","layoutVersion":4,"engineVersion":"1.0.0"}"#,
     )
     .unwrap();
     assert_eq!(

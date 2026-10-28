@@ -1,0 +1,17 @@
+mygame/
+  .gitattributes
+  .gitignore
+  .mcp.json
+  AGENTS.md
+  ara.project.json
+  builds/
+  content/
+  content/editor/
+  content/scenes/
+  content/scenes/main.scene
+  packages/
+  settings/
+  settings/ara.imports
+  settings/builds/
+  settings/builds/windows.export.json
+  settings/project.json

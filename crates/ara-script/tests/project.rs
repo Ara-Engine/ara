@@ -1,6 +1,16 @@
 //! Published schemas and the runtime consume the same compiled module inventory.
 mod support;
 
+fn marker(root: &std::path::Path) {
+    std::fs::write(
+        root.join("ara.project.json"),
+        ara_json::to_canonical_string(
+            &serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
+        ),
+    )
+    .expect("current project marker");
+}
+
 #[test]
 fn source_presence_hint_never_traverses_directory_links() {
     let target = std::env::var_os("ARA_TEST_ROOT")
@@ -16,6 +26,7 @@ fn source_presence_hint_never_traverses_directory_links() {
     let external = scratch.join("outside");
     let authored = project.join(ara_doc::AUTHORING_ROOT);
     std::fs::create_dir_all(&authored).expect("project");
+    marker(&project);
     std::fs::create_dir_all(&external).expect("external source directory");
     std::fs::write(external.join("Outside.cs"), "class Outside { }").expect("outside source");
     let link = authored.join("linked");
@@ -56,6 +67,7 @@ fn empty_project_publication_does_not_initialize_derived_state() {
         });
     let root = target.join(format!("empty-publication-{}", std::process::id()));
     std::fs::create_dir_all(&root).expect("scratch");
+    marker(&root);
     for inventory in [
         ara_script::project::inventory(&root),
         ara_script::project::compile(&root, ara_script::ModuleProfile::Gameplay),
@@ -86,6 +98,7 @@ fn migrated_outpost_sample_compiles_and_ticks_without_shipping_its_editor_extens
     let root = target.join(format!("migrated-outpost-{}", std::process::id()));
     let module = root.join(ara_doc::AUTHORING_ROOT).join("Outpost");
     std::fs::create_dir_all(module.join("editor")).expect("migrated source folders");
+    marker(&root);
     // The migration owner moves the legacy sources and preserves this module identity.
     for source in ["Door.cs", "Motion.cs", "Vitals.cs"] {
         std::fs::copy(
@@ -232,6 +245,7 @@ fn relative_project_roots_resolve_once_and_private_module_paths_are_canonical() 
         });
     let parent = base.join(format!("relative-{}", std::process::id()));
     std::fs::create_dir_all(parent.join("project").join(ara_doc::AUTHORING_ROOT)).expect("project");
+    marker(&parent.join("project"));
     std::fs::create_dir_all(parent.join("elsewhere")).expect("other cwd");
     std::fs::write(parent.join("project").join(ara_doc::AUTHORING_ROOT).join("Counter.cs"), "/// <summary>A counter.</summary>\n[Component] public partial struct Counter { /// <summary>Ticks.</summary>\n public int Value; }").expect("source");
     let child = std::process::Command::new(std::env::current_exe().expect("test executable"))
@@ -269,6 +283,7 @@ fn published_schema_can_be_adopted_by_runtime_module_registration() {
                 .as_nanos()
         ));
     std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT)).expect("scratch");
+    marker(&root);
     let source = root.join(ara_doc::AUTHORING_ROOT).join("Counter.cs");
     std::fs::write(&source, "/// <summary>A fixed tick counter.</summary>\n[Component] public partial struct Counter { /// <summary>Ticks.</summary>\n public int Value; }\n public static partial class Count { [Query] static void Run(ref Counter count) { count.Value++; } }").expect("source");
     let publication = ara_script::project::publish(&root, ara_script::ModuleProfile::Gameplay)

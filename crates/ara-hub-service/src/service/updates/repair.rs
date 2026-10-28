@@ -77,17 +77,23 @@ impl Hub {
         let staged = result.as_ref().ok().cloned();
         let result = result.and_then(|staged| {
             job.cancel.check()?;
-            let previous = job.repair_source.as_ref().ok_or_else(|| failure("repair lost its original engine identity"))?;
-            let current = self.registry.engine(&job.version).map_err(update_error)?;
-            if current.executable != previous.executable || current.editor != previous.editor {
+            let replace_current = job.kind == "engine-current";
+            let previous = job.repair_source.as_ref();
+            let current = self.registry.engines.iter().find(|engine| engine.version == job.version);
+            if !current::same_registration(current, previous) {
                 return Err(failure("the engine registration changed during repair; the new registration was preserved"));
             }
             let destination = self.updates.config.engines.join(&job.version);
             self.ensure_unused(&job.version, &destination).map_err(update_error)?;
-            let old_marker: Value = serde_json::from_slice(&fs::read(previous.executable.with_file_name("engine.json"))?)?;
-            let new_marker: Value = serde_json::from_slice(&fs::read(staged.join("engine.json"))?)?;
-            if old_marker.get("sourceCommit").is_some() && old_marker["sourceCommit"] != new_marker["sourceCommit"] {
-                return Err(failure("the release differs from this engine's pinned source build; install the new version separately"));
+            if replace_current {
+                self.validate_current_install(&job.version).map_err(update_error)?;
+            } else {
+                let previous = previous.ok_or_else(|| failure("repair lost its original engine identity"))?;
+                let old_marker: Value = serde_json::from_slice(&fs::read(previous.executable.with_file_name("engine.json"))?)?;
+                let new_marker: Value = serde_json::from_slice(&fs::read(staged.join("engine.json"))?)?;
+                if old_marker.get("sourceCommit").is_some() && old_marker["sourceCommit"] != new_marker["sourceCommit"] {
+                    return Err(failure("the release differs from this engine's pinned source build; install the new version separately"));
+                }
             }
             let backup = destination.with_file_name(format!(".repair-backup-{}", job.version));
             if backup.exists() { return Err(failure("an unfinished repair backup exists; inspect it before retrying")); }
@@ -108,7 +114,7 @@ impl Hub {
                 if had_previous { fs::rename(&backup, &destination)?; }
                 return Err(update_error(error));
             }
-            job.result = Some(json!({"engine":engine,"repaired":job.version}));
+            job.result = Some(if replace_current {json!({"engine":engine,"installedCurrent":job.version})} else {json!({"engine":engine,"repaired":job.version})});
             job.phase = "finishing".into();
             job.cancellable = false;
             Ok(had_previous.then_some(backup))
@@ -164,7 +170,7 @@ impl Hub {
                 && let Some(value) = job.result.as_mut()
             {
                 value["cleanupWarning"] = format!(
-                    "Repair succeeded; old installation backup remains: {}",
+                    "Installation succeeded; old installation backup remains: {}",
                     error.message
                 )
                 .into();
@@ -179,9 +185,15 @@ pub(super) fn prepare(
     version: &str,
     archive: &Path,
     cancel: &Cancel,
+    replace_current: bool,
 ) -> Result<PathBuf, ara_update::Error> {
     fs::create_dir_all(root)?;
-    let staged = root.join(format!(".repair-{version}"));
+    let prefix = if replace_current {
+        ".install-current"
+    } else {
+        ".repair"
+    };
+    let staged = root.join(format!("{prefix}-{version}"));
     ara_update::extract(archive, &staged, cancel)?;
     let result = (|| {
         validate_payload(&staged, version)?;

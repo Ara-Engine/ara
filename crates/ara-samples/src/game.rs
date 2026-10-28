@@ -8,8 +8,8 @@ use serde_json::{Value, json};
 use std::time::{Duration, Instant};
 
 const SCENE: &str = "levels/outpost.scene";
-const ROBOT: &str = "assets/third_party/outpost_robot/RobotExpressive.glb";
-const SPACE: &str = "assets/third_party/outpost_space/Models/GLTF format";
+const ROBOT: &str = "third_party/outpost_robot/RobotExpressive.glb";
+const SPACE: &str = "third_party/outpost_space/Models/GLTF format";
 mod animation;
 mod audio;
 mod backdrop;
@@ -17,11 +17,11 @@ mod backdrop;
 /// Publishes C# types through headless Play, then augments the real compound in place.
 pub(crate) fn author(ctx: &Ctx) -> Result<()> {
     for name in ["bindings.json", "resources.json"] {
-        let path = ctx.root.join("ui").join(name);
+        let path = ctx.path("ui").join(name);
         let value: Value = serde_json::from_slice(&std::fs::read(&path)?)?;
         std::fs::write(path, ara_json::to_canonical_string(&value))?;
     }
-    std::fs::create_dir_all(ctx.root.join(".scratch"))?;
+    std::fs::create_dir_all(ctx.root.join(".ara/samples"))?;
     {
         let mut mcp = Mcp::start(&ctx.root)?;
         let started = mcp.play(
@@ -29,7 +29,7 @@ pub(crate) fn author(ctx: &Ctx) -> Result<()> {
             json!({"scene":SCENE,"startPaused":true,"window":false}),
         )?;
         let deadline = Instant::now() + Duration::from_secs(90);
-        let types = ctx.root.join("scripts/Salvage/Salvage.types.json");
+        let types = ctx.root.join(".ara/scripts/Salvage/Salvage.types.json");
         while !types.is_file() {
             anyhow::ensure!(Instant::now() < deadline, "C# types were not published");
             mcp.play("status", json!({}))?;
@@ -40,11 +40,11 @@ pub(crate) fn author(ctx: &Ctx) -> Result<()> {
     ctx.sidecar(ROBOT, "as_outpostrobot", json!({}))?;
     let drone = format!("{SPACE}/craft_speederA.glb");
     ctx.sidecar(&drone, "as_outpostdrone", json!({}))?;
-    let toolbox = "assets/third_party/metal_toolbox/metal_toolbox_1k.gltf";
+    let toolbox = "third_party/metal_toolbox/metal_toolbox_1k.gltf";
     ctx.sidecar(toolbox, "as_metaltoolbox", json!({}))?;
     let animation = "anim/scavenger.animation";
-    let existing: Value = serde_json::from_slice(&std::fs::read(ctx.root.join(SCENE))?)?;
-    if ctx.root.join(animation).is_file() {
+    let existing: Value = serde_json::from_slice(&std::fs::read(ctx.path(SCENE))?)?;
+    if ctx.path(animation).is_file() {
         ctx.apply(
             "ara.project.json",
             "Reauthor the scavenger animation controller",
@@ -59,7 +59,7 @@ pub(crate) fn author(ctx: &Ctx) -> Result<()> {
         animation,
         "ac_scavenger",
         "an_scavenger",
-        &ctx.root.join(ROBOT),
+        &ctx.path(ROBOT),
         "Idle",
         &[
             anim::Gait {
@@ -166,7 +166,7 @@ pub(crate) fn author(ctx: &Ctx) -> Result<()> {
             "Graffiti shutter leaf",
             json!({
                 "Transform":{"position":[1,0,0.12],"rotation":[0,180,0],"scale":[1.85,1.08,0.8]},
-                "MeshRenderer":{"model":"@assets/third_party/rollershutter_door/rollershutter_door_1k.gltf#as_rollershutterdoor","node":"rollershutter_door_graffiti"}
+                "MeshRenderer":{"model":"@third_party/rollershutter_door/rollershutter_door_1k.gltf#as_rollershutterdoor","node":"rollershutter_door_graffiti"}
             }),
         );
         visual.1["parent"] = json!(format!("e_gamedoor{index}"));
@@ -181,7 +181,7 @@ pub(crate) fn author(ctx: &Ctx) -> Result<()> {
             "MeshRenderer":{"model":format!("@{drone}#as_outpostdrone")},
             "NavAgent":{"maxSpeed":2.0,"radius":0.3,"height":1.0},
             "SecurityDrone":{"home":position}
-            ,"AudioSource":{"clip":"@assets/third_party/outpost_scifi/Audio/computerNoise_000.ogg#as_robotnoise","bus":"sfx","looping":true,"gain":0.12}
+            ,"AudioSource":{"clip":"@third_party/outpost_scifi/Audio/computerNoise_000.ogg#as_robotnoise","bus":"sfx","looping":true,"gain":0.12}
         })));
     }
     ctx.apply(

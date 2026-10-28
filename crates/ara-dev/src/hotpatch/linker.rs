@@ -30,6 +30,8 @@ pub(crate) fn forward() -> Option<ExitCode> {
         return None;
     }
     let linker = std::env::var_os("ARA_HOTPATCH_LLD")?;
+    let began = std::time::Instant::now();
+    ara_hotpatch::trace_event("linker_start", serde_json::json!({}));
     let args = match std::env::args_os()
         .skip(1)
         .map(super::response::prepare_argument)
@@ -41,18 +43,30 @@ pub(crate) fn forward() -> Option<ExitCode> {
             return Some(ExitCode::FAILURE);
         }
     };
-    let args: Vec<_> = args
+    let mut args: Vec<_> = args
         .into_iter()
         .filter(|arg| !super::response::empty_dx_archive(arg))
         .collect();
+    super::response::prefer_ara_resources(&mut args);
     let mut command = Command::new(linker);
     if !args.iter().any(|a| a == "-flavor") {
         command.args(["-flavor", "link"]);
     }
     #[cfg(windows)]
     command.arg(STACK_RESERVE);
-    Some(match command.args(args).status() {
-        Ok(status) => ExitCode::from(status.code().unwrap_or(1) as u8),
+    command.args(args);
+    if let Err(error) = super::experiment::linker(&mut command) {
+        eprintln!("ARA7600: invalid hotpatch linker experiment: {error:#}");
+        return Some(ExitCode::FAILURE);
+    }
+    Some(match command.status() {
+        Ok(status) => {
+            ara_hotpatch::trace_event(
+                "linker_end",
+                serde_json::json!({"total_us":began.elapsed().as_micros(),"success":status.success()}),
+            );
+            ExitCode::from(status.code().unwrap_or(1) as u8)
+        }
         Err(error) => {
             eprintln!("ARA7600: hotpatch rust-lld: {error}");
             ExitCode::FAILURE

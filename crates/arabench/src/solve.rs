@@ -119,6 +119,11 @@ impl Solver {
         Ok(())
     }
 
+    /// Writes an authored-root-relative file, recording its actual storage path.
+    pub fn write_authored(&mut self, rel: &str, text: &str) -> Result<(), String> {
+        self.write(&format!("{}/{rel}", ara_doc::AUTHORING_ROOT), text)
+    }
+
     /// Runs `git <args>` in the project.
     pub fn git(&mut self, args: &[&str]) -> Result<String, String> {
         git(&self.root, args)

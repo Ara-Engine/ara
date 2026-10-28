@@ -123,7 +123,7 @@ pub(crate) fn read(
     {
         return crate::ui_document::read(text, file);
     }
-    if file != crate::project::MARKER && file != crate::project_policy::PREFERENCES {
+    if file != crate::project::MARKER && file != crate::project_layout::PREFERENCES {
         return ara_doc::read(text, file, db, index);
     }
     let value = match ara_json::parse(text) {
@@ -143,8 +143,8 @@ pub(crate) fn read(
     };
     let mut doc = Document::new(
         "project",
-        AssetId::parse(if file == crate::project_policy::PREFERENCES {
-            crate::project_policy::PREFERENCES_ID
+        AssetId::parse(if file == crate::project_layout::PREFERENCES {
+            crate::project_layout::PREFERENCES_ID
         } else {
             "pj_project"
         })
@@ -161,14 +161,14 @@ pub(crate) fn read(
 }
 
 pub(crate) fn read_header(text: &str, file: &str, db: &SchemaDb) -> Option<(String, AssetId)> {
-    if file == crate::project_policy::PREFERENCES {
+    if file == crate::project_layout::PREFERENCES {
         ara_json::parse(text)
             .ok()
             .filter(serde_json::Value::is_object)
             .map(|_| {
                 (
                     "project".into(),
-                    AssetId::parse(crate::project_policy::PREFERENCES_ID)
+                    AssetId::parse(crate::project_layout::PREFERENCES_ID)
                         .expect("valid preferences ID"),
                 )
             })

@@ -859,7 +859,10 @@ mod tests {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     struct Project(PathBuf);
     impl Project {
-        fn new(marker: Value, policy: Option<Value>) -> Self {
+        fn new(mut marker: Value, policy: Option<Value>) -> Self {
+            if marker.get("layoutVersion").is_none() {
+                marker["layoutVersion"] = json!(ara_doc::PROJECT_LAYOUT_VERSION);
+            }
             let parent = std::path::absolute(crate::test_target())
                 .expect("absolute test target")
                 .join("editor-project-policy");
@@ -1020,7 +1023,7 @@ mod tests {
 
     #[test]
     fn optional_empty_policy_and_omitted_sections_use_the_public_legacy_fallback_without_writes() {
-        let marker = json!({"name":"Outpost","main":"levels/main.scene","layoutVersion":3,
+        let marker = json!({"name":"Outpost","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,
             "settings":{"play.tickHz":"120","build.profile":"legacy-profile"},"rendering":{"quality":"high"},"ui":{"main":"ui/legacy.ui"}});
         for policy in [
             None,
@@ -1062,7 +1065,7 @@ mod tests {
 
     #[test]
     fn project_save_and_undo_preserve_unknown_policy_and_unmodified_latest_disk_settings() {
-        let marker = json!({"id":"project-identity","name":"Outpost","main":"levels/main.scene","layoutVersion":3,"engine":"preview4",
+        let marker = json!({"id":"project-identity","name":"Outpost","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"engine":"preview4",
             "settings":{"play.tickHz":"30"},"rendering":{"quality":"epic"},"ui":{"main":"legacy.ui"},"input":{"legacy":true},"physics":{"gravity":[0,-1,0]},"look":{"legacy":true}});
         let initial = json!({"settings":{"play.tickHz":"120","build.profile":"original-profile","plugin.option":{"enabled":true}},
             "rendering":{"quality":"high","extension":{"toneMapper":"custom"}},"ui":{"main":"ui/main.ui","unknown":[1,2,3]},
@@ -1084,7 +1087,7 @@ mod tests {
         );
         assert_eq!(
             project.read("ara.project.json"),
-            json!({"id":"project-identity","name":"Outpost","main":"levels/main.scene","layoutVersion":3,"engine":"preview4"})
+            json!({"id":"project-identity","name":"Outpost","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"engine":"preview4"})
         );
         undo(&mut settings, false);
         assert_eq!(project.read(ara_host::project_policy::PREFERENCES), latest);
@@ -1115,7 +1118,7 @@ mod tests {
 
     #[test]
     fn default_resets_keep_explicit_barriers_and_migrate_legacy_policy_intact() {
-        let marker = json!({"name":"Outpost","main":"levels/main.scene","layoutVersion":3,"settings":{"play.tickHz":"120"},
+        let marker = json!({"name":"Outpost","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"settings":{"play.tickHz":"120"},
             "rendering":{"quality":"high"},"input":{"actions":{"Jump":"Space"}},"physics":{"gravity":[0,-9.81,0]},"look":{"sensitivity":0.8},"ui":{"main":"ui/main.ui"}});
         let project = Project::new(marker.clone(), Some(json!({})));
         let mut settings = project.authority(None);
@@ -1130,7 +1133,7 @@ mod tests {
         }
         assert_eq!(
             project.read("ara.project.json"),
-            json!({"name":"Outpost","main":"levels/main.scene","layoutVersion":3})
+            json!({"name":"Outpost","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION})
         );
         // A leftover/reintroduced legacy marker is the state after a failed
         // cleanup; an empty canonical section must not resurrect its old value.
@@ -1166,7 +1169,7 @@ mod tests {
 
     #[test]
     fn marker_identity_edits_do_not_accept_canonical_identity_aliases_or_erase_metadata() {
-        let marker = json!({"id":"identity","name":"Outpost","main":"levels/main.scene","layoutVersion":3,"extension":{"owner":"plugin"}});
+        let marker = json!({"id":"identity","name":"Outpost","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"extension":{"owner":"plugin"}});
         let policy = json!({"settings":{"project.name":"Ignored","project.mainScene":"ignored.scene"},"ui":null,"plugin":{"keep":1}});
         let project = Project::new(marker.clone(), Some(policy.clone()));
         let mut settings = project.authority(None);

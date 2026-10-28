@@ -38,7 +38,9 @@ pub use id::{AssetId, IdGen, RecordId};
 pub use kinds::{Entity, register};
 pub use op::{Edit, Op};
 pub use order::{OrderKey, key_between};
-pub use project_contract::AUTHORING_ROOT;
+pub use project_contract::{
+    AUTHORING_ROOT, PROJECT_LAYOUT_VERSION, ProjectLayout, detect_project_layout,
+};
 pub use read::{ReadResult, read, read_header};
 pub use refs::AssetIndex;
 pub use workspace::Workspace;

@@ -6,7 +6,7 @@ use ara_render::scene::{Mesh, Vertex};
 use std::{collections::BTreeMap, path::Path, time::Duration};
 
 /// Resolve storage input against the same authored boundary used by snapshots.
-/// Called only by thumbnail/cache workers, where reading the marker is permitted.
+/// Thumbnail/cache workers supply physical keys from validated current projects.
 fn source_path(root: &Path, storage: &str) -> anyhow::Result<String> {
     let authored = ara_host::project::authored_root(root);
     let prefix = authored
@@ -20,25 +20,33 @@ fn source_path(root: &Path, storage: &str) -> anyhow::Result<String> {
         .map_err(anyhow::Error::msg)
 }
 
+/// Read the import settings belonging to an authored-relative preview source.
+fn settings(root: &Path, path: &str) -> Option<ara_asset::ImportSettings> {
+    std::fs::read_to_string(
+        root.join(ara_doc::AUTHORING_ROOT)
+            .join(format!("{path}.import.json")),
+    )
+    .ok()
+    .and_then(|text| {
+        let mut db = ara_schema::SchemaDb::new();
+        ara_asset::register_schema(&mut db);
+        ara_doc::read(&text, "thumbnail.import.json", &db, None)
+            .doc
+            .and_then(|doc| doc.record("i_settings").cloned())
+            .and_then(|record| {
+                serde_json::from_value::<ara_asset::ImportSettings>(serde_json::Value::Object(
+                    record,
+                ))
+                .ok()
+            })
+    })
+}
+
 /// Load a thumbnail from a project-relative storage path. The worker snapshots
 /// its media with an authored-relative SourceAsset path; sidecar I/O stays physical.
 pub(super) fn load(root: &Path, path: &str) -> anyhow::Result<Vec<Mesh>> {
     let logical = source_path(root, path)?;
-    let settings = std::fs::read_to_string(root.join(format!("{path}.import.json")))
-        .ok()
-        .and_then(|text| {
-            let mut db = ara_schema::SchemaDb::new();
-            ara_asset::register_schema(&mut db);
-            ara_doc::read(&text, "thumbnail.import.json", &db, None)
-                .doc
-                .and_then(|doc| doc.record("i_settings").cloned())
-                .and_then(|record| {
-                    serde_json::from_value::<ara_asset::ImportSettings>(serde_json::Value::Object(
-                        record,
-                    ))
-                    .ok()
-                })
-        });
+    let settings = settings(root, &logical);
     let importer = ara_importers::FbxImporter;
     let source = SourceAsset {
         id: "as_preview0".into(),
@@ -223,33 +231,21 @@ mod tests {
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
-        for (name, modern, storage, logical) in [
+        for (name, storage, logical) in [
             (
                 "modern",
-                true,
                 format!("{}/assets/model.fbx", ara_doc::AUTHORING_ROOT),
                 "assets/model.fbx",
             ),
             (
                 "modern-nested",
-                true,
                 format!("{}/game/assets/model.fbx", ara_doc::AUTHORING_ROOT),
-                "game/assets/model.fbx",
-            ),
-            (
-                "legacy",
-                false,
-                "game/assets/model.fbx".into(),
                 "game/assets/model.fbx",
             ),
         ] {
             let root = base.join(name);
             std::fs::create_dir_all(&root)?;
-            let marker = if modern {
-                serde_json::json!({"layoutVersion":3})
-            } else {
-                serde_json::json!({})
-            };
+            let marker = serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION});
             std::fs::write(
                 root.join("ara.project.json"),
                 ara_json::to_canonical_string(&marker),
@@ -259,13 +255,28 @@ mod tests {
                 ara_host::project::authored_root(&root).join(logical),
                 root.join(&storage)
             );
-            if modern {
-                assert!(source_path(&root, "settings/model.fbx").is_err());
-            }
+            assert!(source_path(&root, "settings/model.fbx").is_err());
+            assert!(source_path(&root, "game/assets/model.fbx").is_err());
             assert!(source_path(&root, "../model.fbx").is_err());
         }
         Ok(())
     }
+    #[test]
+    fn fbx_preview_reads_the_authored_sidecar_settings() {
+        let root = crate::test_target()
+            .join("ara-editor/fbx-preview-paths")
+            .join(std::process::id().to_string());
+        let sidecar = root
+            .join(ara_doc::AUTHORING_ROOT)
+            .join("models/part.fbx.import.json");
+        std::fs::create_dir_all(sidecar.parent().expect("model folder")).expect("scratch");
+        std::fs::write(sidecar, r#"{"$schema":"ara://schema/import/1","id":"as_part","records":{"i_settings":{"importer":"ara.fbx","version":"preview-version","settings":{"scale":2},"preset":"fast"}}}"#)
+            .expect("non-default authored settings");
+        let imported = settings(&root, "models/part.fbx").expect("sidecar found under content");
+        assert_eq!(imported.version, "preview-version");
+        assert_eq!(imported.settings["scale"], 2);
+    }
+
     #[test]
     fn decodes_the_importers_finest_lod() {
         let input = vec![

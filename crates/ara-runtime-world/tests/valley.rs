@@ -6,7 +6,7 @@
 //!
 //! [`valley_documents`] authors every file through typed commands (terrain, foliage,
 //! behaviour, sidecars) or the canonical writer; `ARA_UPDATE_DEMO=1` rewrites them
-//! under `ara-player/demo`. The other tests play the level in-process: streaming and
+//! under `ara-player/demo/content`. The other tests play the level in-process: streaming and
 //! grounding across cells, streamed navigation, the guard's brain, determinism, exact
 //! checkpoints and replay. `ara-player`'s `valley` test plays it networked over MCP.
 extern crate glam34 as glam;
@@ -29,6 +29,11 @@ use std::{
 
 fn demo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../ara-player/demo")
+}
+
+/// Physical fixture root; all constants and asset references below stay authored-relative.
+fn content() -> PathBuf {
+    demo().join(ara_doc::AUTHORING_ROOT)
 }
 
 /// Terrain: 2×2 tiles of 32 m (one per world cell), origin-anchored for the landscape.
@@ -920,7 +925,7 @@ fn valley_documents() -> Vec<(String, Vec<u8>)> {
 fn valley_documents_are_canonical_and_current() {
     let (db, _) = engine();
     for (relative, expected) in valley_documents() {
-        let path = demo().join(&relative);
+        let path = content().join(&relative);
         if std::env::var_os("ARA_UPDATE_DEMO").is_some() {
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(&path, &expected).unwrap();
@@ -954,7 +959,7 @@ fn cooked() -> &'static BTreeMap<String, CachedImport> {
                 preset: ara_asset::CookPreset::Fast,
                 thread_budget: 4,
                 source_path: path.into(),
-                source: std::fs::read(demo().join(path)).unwrap(),
+                source: std::fs::read(content().join(path)).unwrap(),
                 importer: "ara.gltf".into(),
                 version: registry.get("ara.gltf").unwrap().version().into(),
                 settings: Value::Null,
@@ -993,7 +998,7 @@ fn imports(dir: &Path, index: &mut ara_doc::AssetIndex) {
             let sidecar: Value =
                 serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
             let relative = Path::new(source)
-                .strip_prefix(demo())
+                .strip_prefix(content())
                 .unwrap()
                 .to_string_lossy()
                 .replace('\\', "/");
@@ -1005,8 +1010,9 @@ fn imports(dir: &Path, index: &mut ara_doc::AssetIndex) {
 /// Every text document the Valley plays with, read strictly from the demo project.
 fn workspace(db: &SchemaDb) -> Workspace {
     let mut index = ara_doc::AssetIndex::new();
-    imports(&demo(), &mut index);
+    imports(&content(), &mut index);
     let mut workspace = Workspace::new(index);
+    workspace.set_reference_root(ara_doc::AUTHORING_ROOT);
     let mut paths = vec![
         SCENE.0.to_owned(),
         TERRAIN.0.to_owned(),
@@ -1020,14 +1026,15 @@ fn workspace(db: &SchemaDb) -> Workspace {
         [(0, 0), (1, 0), (0, 1), (1, 1)].map(|(x, z)| format!("world/cells/c{x}{z}.scene")),
     );
     for path in paths {
-        let text = std::fs::read_to_string(demo().join(&path)).unwrap();
-        let read = ara_doc::read(&text, &path, db, None);
+        let storage = workspace.storage_path(&path);
+        let text = std::fs::read_to_string(content().join(&path)).unwrap();
+        let read = ara_doc::read(&text, &storage, db, None);
         assert!(
             read.diags.iter().all(|d| !d.is_error()),
             "{path}: {:?}",
             read.diags
         );
-        workspace.insert(&path, read.doc.unwrap());
+        workspace.insert(storage, read.doc.unwrap());
     }
     workspace
 }

@@ -10,7 +10,8 @@ use std::path::Path;
 #[test]
 fn missing_model_keeps_simulation_and_placeholder_alive() {
     let schema = ara_runtime::schema(&[]).unwrap();
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ara-player/demo/levels/demo.scene");
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../ara-player/demo/content/levels/demo.scene");
     let read = ara_doc::read(
         &std::fs::read_to_string(path).unwrap(),
         "levels/demo.scene",

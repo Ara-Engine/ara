@@ -27,6 +27,18 @@ enum PackageKind {
 }
 #[derive(Subcommand)]
 enum Command {
+    /// Replay a consent-gated installed Hub update using existing binary sets only.
+    #[cfg(feature = "rehearsal")]
+    RehearseHub {
+        #[arg(long)]
+        older_bins: PathBuf,
+        #[arg(long)]
+        newer_bins: PathBuf,
+        #[arg(long)]
+        key: PathBuf,
+        #[arg(long)]
+        directory: PathBuf,
+    },
     /// Exercise signed dry-run releases through a loopback feed and installed binaries.
     #[cfg(feature = "rehearsal")]
     Rehearse {
@@ -104,6 +116,13 @@ fn main() -> Result<()> {
         .context("release crate must live under crates/")?
         .to_path_buf();
     match Cli::parse().command {
+        #[cfg(feature = "rehearsal")]
+        Command::RehearseHub {
+            older_bins,
+            newer_bins,
+            key,
+            directory,
+        } => smoke::hub_replay::run(&older_bins, &newer_bins, &key, &directory),
         #[cfg(feature = "rehearsal")]
         Command::Rehearse {
             artifacts,

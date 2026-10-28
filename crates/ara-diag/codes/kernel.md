@@ -1040,10 +1040,12 @@ A malformed `.ara/journal` line is skipped with a warning. If a decoded transact
 Causes:
 - A truncated or malformed journal line.
 - A transaction's revision or operations no longer fit the restored store or available documents.
+- Layout migration found committed native edits newer than a confirmed on-disk document save; migration stops before changing files so it cannot hide those edits.
 
 Fixes:
 - Preserve a copy of `.ara/journal` before investigating the reported line or transaction; compare `ara history`, `ara logs` and current documents to identify what was recovered.
 - Restore missing documents or recover the intended changes from a valid backup, then verify them with `ara check`; do not assume skipped or later transactions were applied.
+- For migration blocked by unsaved native edits, recover and save the journal with the Ara version that authored it, close that authority, and preview migration again. Keep `.ara/journal` and `.ara/file-history` intact.
 
 ## ARA1906 JOURNAL_REPLAYED: Unsaved transactions recovered
 owner: ara-host
@@ -1145,3 +1147,33 @@ Fixes:
 - In an Ara source checkout, run the command in the message (`ara-samples fetch <sample>`), then create the project again.
 - After fetching art, run `cargo run -p ara-samples -- kits <sample>` for missing kits, then create the project again. Installed templates ship their generated kits.
 - Pick another template, such as `blank`.
+
+## ARA1914 PROJECT_MIGRATION_REQUIRED: Project layout needs migration
+owner: ara-host
+
+The project uses the provisional preview-3 `game/` layout or an earlier layout
+with authored folders at its root. Opening with the current engine is refused before C# discovery,
+imports, Play or export so an old project cannot silently lose content.
+
+Causes:
+- The marker has `layoutVersion: 3`, an earlier version, or no layout version.
+
+Fixes:
+- Preview with `ara project migrate --dry-run`, then explicitly run `ara project migrate`.
+- Open in the Hub or editor and review the migration preview, then choose Migrate.
+- Choose Cancel to leave the project untouched and closed.
+
+## ARA1915 PROJECT_ENGINE_LAYOUT_UNSUPPORTED: Pinned engine cannot open this layout
+owner: ara-hub-service
+
+The project uses the `content/` layout but its pinned engine does not declare
+support for project layout 4. The Hub refuses to launch that engine.
+
+Causes:
+- An older engine is pinned to a migrated or preview-4 project.
+- The executable has no valid capability declaration; undeclared engines support v3 only.
+
+Fixes:
+- Choose Use current engine in the Hub, or install the current engine when offered.
+- Cancel to keep the project closed and its pin unchanged.
+- A v3 project may continue using its old engine until explicitly migrated; migration pins the current capable engine.

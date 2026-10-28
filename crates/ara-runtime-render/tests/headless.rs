@@ -12,8 +12,9 @@ use ara_runtime_render::Presenter;
 use ara_sim::StepInput;
 use std::path::Path;
 
-fn demo() -> &'static Path {
+fn demo() -> std::path::PathBuf {
     Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../ara-player/demo"))
+        .join(ara_doc::AUTHORING_ROOT)
 }
 
 fn runtime() -> Runtime {

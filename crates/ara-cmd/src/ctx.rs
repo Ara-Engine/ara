@@ -453,13 +453,17 @@ impl EditCtx<'_, '_> {
         self.staged.apply(edit).map(drop)
     }
     /// Create an empty document through a workspace lifecycle op, with a stable or symbolic ID.
+    /// Authored paths are reference-relative; project policy and editor layouts keep their storage paths.
     pub fn create_document(
         &mut self,
         path: &str,
         kind: &str,
         id: Option<&str>,
     ) -> Result<AssetId, Diagnostic> {
-        let path = if kind == "project" || (kind == "imports" && path == "settings/ara.imports") {
+        let path = if kind == "project"
+            || (kind == "imports" && path == "settings/ara.imports")
+            || (kind == "graph" && path.starts_with(".ara/editor/"))
+        {
             path.to_owned()
         } else {
             self.read().workspace().storage_path(path)

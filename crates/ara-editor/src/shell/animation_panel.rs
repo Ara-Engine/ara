@@ -1127,7 +1127,8 @@ fn in_front(node: &ara_ui::docking::DockNode, panel: &str) -> bool {
 /// The scene entity Play animates with controller `doc`: the selected entity when its
 /// `Animator.controller` points at the document, else the first in address order.
 fn animated_entity(editor: &Editor, doc: &str) -> Option<String> {
-    let path = editor.host.store().workspace().path_of(doc)?;
+    let workspace = editor.host.store().workspace();
+    let path = workspace.reference_path(workspace.path_of(doc)?);
     let entities = crate::world::resolve(editor.host.store(), &editor.state.doc).ok()?;
     let uses = |id: &String| {
         entities[id]

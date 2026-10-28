@@ -25,11 +25,13 @@ fn first_play_start_knows_a_scene_csharp_component_without_checked_schema_or_war
     std::fs::create_dir_all(dir.join(ara_doc::AUTHORING_ROOT)).unwrap();
     std::fs::write(
         dir.join("ara.project.json"),
-        ara_json::to_canonical_string(&json!({"name":"Fresh C#","main":"main.scene"})),
+        ara_json::to_canonical_string(
+            &json!({"name":"Fresh C#","main":"main.scene","layoutVersion":4}),
+        ),
     )
     .unwrap();
     std::fs::write(dir.join(ara_doc::AUTHORING_ROOT).join("Vitality.cs"), "/// <summary>Fresh compiled ECS health.</summary>\n[Component] public partial struct Vitality { /// <summary>Remaining hit points.</summary>\n public int Hp; }").unwrap();
-    std::fs::write(dir.join("main.scene"), ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_fresh","records":{"e_actor":{"name":"Actor","Transform":{},"Vitality":{"hp":7}}}}))).unwrap();
+    std::fs::write(dir.join(ara_doc::AUTHORING_ROOT).join("main.scene"), ara_json::to_canonical_string(&json!({"$schema":"ara://schema/scene/1","id":"sc_fresh","records":{"e_actor":{"name":"Actor","Transform":{},"Vitality":{"hp":7}}}}))).unwrap();
     assert!(
         !dir.join(".ara").exists(),
         "fresh build has no generated schemas"

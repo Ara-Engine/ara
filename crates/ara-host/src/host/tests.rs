@@ -192,7 +192,7 @@ fn queued_build_save_returns_while_disk_is_held_and_acknowledges_saved_bytes() {
         std::thread::sleep(Duration::from_millis(2));
     }
     assert!(
-        fs::read_to_string(dir.join("levels/arena.scene"))
+        fs::read_to_string(dir.join("content/levels/arena.scene"))
             .expect("saved scene")
             .contains("Snapshot ready")
     );

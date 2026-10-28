@@ -86,13 +86,14 @@ fn file_batch_fixture_child() {
 fn created_folder_batch_round_trips_undo_redo_undo_in_separate_cli_processes() {
     let root = std::env::temp_dir().join(format!("ara-file-parent-redo-{}", std::process::id()));
     fs::create_dir_all(root.join("drop")).expect("drop directory");
+    fs::create_dir_all(root.join("content")).expect("authored root");
     for (path, value) in [
         (
             "ara.project.json",
-            json!({"name":"File history","main":"main.scene"}),
+            json!({"name":"File history","main":"main.scene","layoutVersion":4}),
         ),
         (
-            "main.scene",
+            "content/main.scene",
             json!({"$schema":"ara://schema/scene/1","id":"sc_files","records":{}}),
         ),
     ] {

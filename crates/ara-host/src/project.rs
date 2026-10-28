@@ -87,6 +87,32 @@ pub struct Project {
 }
 
 impl Project {
+    /// Metadata-only authority used exclusively by the explicit migration worker.
+    /// It does not discover authored files, compile C#, or bypass ordinary opens.
+    pub(crate) fn migration_bootstrap(root: &Path) -> Result<Project, Diagnostic> {
+        let root = fs::canonicalize(root)
+            .map_err(|error| Diagnostic::error(codes::IO, error.to_string()))?;
+        if !root.join(MARKER).is_file() {
+            return Err(no_project(&root));
+        }
+        let mut db = SchemaDb::new();
+        ara_doc::register(&mut db);
+        ara_components::register(&mut db);
+        let mut registry = Registry::builtin(&mut db);
+        let diags = crate::ui_document::register(&mut registry, &mut db);
+        Ok(Project {
+            authored_root: root.join(ara_doc::AUTHORING_ROOT),
+            root,
+            db,
+            registry,
+            index: AssetIndex::new(),
+            docs: Vec::new(),
+            type_files: Vec::new(),
+            diags,
+            project_files: HashSet::new(),
+        })
+    }
+
     /// Opens the project at `root`, which must contain `ara.project.json`.
     pub fn open(root: &Path) -> Result<Project, Diagnostic> {
         Self::open_with(root, |_, _| Vec::new())
@@ -108,6 +134,7 @@ impl Project {
         if !root.join(MARKER).is_file() {
             return Err(no_project(&root));
         }
+        crate::project_layout::require_current_layout(&root)?;
         let mut db = SchemaDb::new();
         ara_doc::register(&mut db);
         ara_components::register(&mut db);
@@ -138,7 +165,7 @@ impl Project {
             })
             .map(|entry| root.join(entry.storage_path))
             .collect::<Vec<_>>();
-        let authored_root = authored_root(&root);
+        let authored_root = crate::project_layout::authored_root(&root);
         let mut project = Project {
             root,
             authored_root,
@@ -191,7 +218,7 @@ impl Project {
     /// True if `path` has a registered document extension (`.scene`, `.prefab`).
     pub fn is_document(&self, path: &Path) -> bool {
         path == self.root.join(MARKER)
-            || path == self.root.join(crate::project_policy::PREFERENCES)
+            || path == self.root.join(crate::project_layout::PREFERENCES)
             || path
                 .extension()
                 .and_then(|e| e.to_str())
@@ -206,12 +233,12 @@ impl Project {
             .and_then(|v| v.get(key).and_then(Value::as_str).map(str::to_owned))
     }
 
-    /// The project's main scene: `main` in `ara.project.json`, else the legacy
-    /// starter or a conventional scene under the chosen authored root. Calls naming no
+    /// The project's main scene: `main` in `ara.project.json` (`ara init` writes
+    /// `scenes/main.scene`), else a conventional starter if it exists. Calls that name no
     /// document default to it.
     pub fn main_scene(&self) -> Option<String> {
         self.marker_field("main").or_else(|| {
-            [crate::project_policy::MAIN_SCENE, "scenes/main.scene"]
+            [crate::project_layout::MAIN_SCENE, "levels/main.scene"]
                 .into_iter()
                 .find(|starter| self.authored_root.join(starter).is_file())
                 .map(str::to_owned)
@@ -277,7 +304,7 @@ impl Project {
         if self.authored_root == self.root {
             path.to_owned()
         } else {
-            format!("{}/{path}", ara_doc::AUTHORING_ROOT)
+            format!("{}/{path}", crate::project_layout::AUTHORING_ROOT)
         }
     }
     /// Converts project-relative storage to an authored reference path.
@@ -285,7 +312,7 @@ impl Project {
         if self.authored_root == self.root {
             path
         } else {
-            path.strip_prefix(ara_doc::AUTHORING_ROOT)
+            path.strip_prefix(crate::project_layout::AUTHORING_ROOT)
                 .and_then(|path| path.strip_prefix('/'))
                 .unwrap_or(path)
         }
@@ -296,7 +323,7 @@ impl Project {
     pub fn load(&self, extra: &[PathBuf]) -> (Workspace, BTreeMap<String, Vec<Diagnostic>>) {
         let mut ws = Workspace::new(self.index.clone());
         if self.authored_root != self.root {
-            ws.set_reference_root(ara_doc::AUTHORING_ROOT);
+            ws.set_reference_root(crate::project_layout::AUTHORING_ROOT);
         }
         let mut diags = BTreeMap::new();
         let mut seen = Vec::new();
@@ -380,7 +407,7 @@ pub(crate) fn document_files(root: &Path, extensions: &HashSet<String>) -> Vec<P
     walk(root, root, &mut files);
     files.retain(|f| {
         *f == root.join(MARKER)
-            || *f == root.join(crate::project_policy::PREFERENCES)
+            || *f == root.join(crate::project_layout::PREFERENCES)
             || is_document(f, extensions)
     });
     files
@@ -389,7 +416,7 @@ pub(crate) fn document_files(root: &Path, extensions: &HashSet<String>) -> Vec<P
 /// Whether `path` has one of the document `extensions`.
 pub(crate) fn is_document(path: &Path, extensions: &HashSet<String>) -> bool {
     path == Path::new(MARKER)
-        || path == Path::new(crate::project_policy::PREFERENCES)
+        || path == Path::new(crate::project_layout::PREFERENCES)
         || path
             .extension()
             .and_then(|e| e.to_str())
@@ -399,12 +426,13 @@ pub(crate) fn is_document(path: &Path, extensions: &HashSet<String>) -> bool {
 /// Whether `walk` visits the file at `rel` (relative to `root`): no hidden or
 /// skipped directory on the way, and no nested project.
 pub(crate) fn walked(root: &Path, rel: &Path) -> bool {
-    if authored_root(root) != root
+    if root.join(MARKER).is_file()
+        && crate::project_layout::authored_root(root) != root
         && rel != Path::new(MARKER)
-        && rel != Path::new(crate::project_policy::PREFERENCES)
+        && rel != Path::new(crate::project_layout::PREFERENCES)
         && rel != Path::new("settings/ara.imports")
         && rel != Path::new("ara.imports")
-        && !rel.starts_with(ara_doc::AUTHORING_ROOT)
+        && !rel.starts_with(crate::project_layout::AUTHORING_ROOT)
     {
         return false;
     }

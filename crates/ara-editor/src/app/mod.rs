@@ -25,6 +25,7 @@ mod journey;
 mod monkey;
 mod monkey_route;
 mod navigation_verify;
+mod open_project;
 mod panels_verify;
 mod play_verify;
 mod prefab_verify;
@@ -79,6 +80,16 @@ const UX_IDLE_PATIENCE: Duration = Duration::from_secs(20);
 /// When the process started: `main` sets it first. Startup timings
 /// (`--verify-responsiveness`) count from it.
 pub static LAUNCHED: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+/// Ask for legacy-layout migration before profile, scripts or project initialization.
+/// False means Cancel; bounded runs report ARA1914 without showing a window.
+pub fn before_open_project(options: &Options) -> ara_ui::Result<bool> {
+    // This route replaces the supplied project with a fresh checked fixture in run.
+    if options.verify_behaviours {
+        return Ok(true);
+    }
+    open_project::before_open(options)
+}
+
 /// Open the SDL3 editor, host the project authority and serve authenticated EP/MCP.
 pub fn run(mut options: Options) -> ara_ui::Result<()> {
     if options.verify_behaviours {
@@ -94,6 +105,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 "size":options.size,"dpi":options.dpi,
             })),
         )?;
+    }
+    if !before_open_project(&options)? {
+        return Ok(());
     }
     if options.headless {
         return headless(options);

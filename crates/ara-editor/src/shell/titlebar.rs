@@ -25,6 +25,7 @@ impl Shell {
             .store()
             .workspace()
             .path_of(&editor.state.doc)
+            .map(|path| editor.host.store().workspace().reference_path(path))
             .unwrap_or("Scene")
             .to_owned();
         let ctx = self.ctx(editor, &Target::None);

@@ -433,6 +433,7 @@ fn texture(
             let reference =
                 ara_schema::grammar::parse_ref(&reference.0).map_err(anyhow::Error::msg)?;
             let path = root
+                .join(ara_doc::AUTHORING_ROOT)
                 .join(
                     reference
                         .path
@@ -440,7 +441,7 @@ fn texture(
                 )
                 .canonicalize()?;
             anyhow::ensure!(
-                path.starts_with(root.canonicalize()?),
+                path.starts_with(root.join(ara_doc::AUTHORING_ROOT).canonicalize()?),
                 "texture escapes project"
             );
             image::open(path)?.to_rgba8()
@@ -486,6 +487,29 @@ fn texture(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn material_texture_upload_resolves_short_refs_inside_the_authored_root() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-editor/material-texture-paths")
+            .join(std::process::id().to_string());
+        let source = root.join(ara_doc::AUTHORING_ROOT).join("textures/chip.png");
+        std::fs::create_dir_all(source.parent().expect("texture folder")).expect("scratch");
+        image::RgbaImage::from_pixel(1, 1, image::Rgba([17, 124, 200, 255]))
+            .save(source)
+            .expect("authored texture");
+        let mut gpu = GpuDevice::new(&[], root.join(".ara/gpu")).expect("offscreen device");
+        let mut recorder = gpu.begin(Queue::Graphics);
+        texture(
+            &root,
+            &ara_material::TextureSource::Asset(ara_schema::AssetRef(
+                "@textures/chip.png#as_chip".into(),
+            )),
+            &mut gpu,
+            &mut recorder,
+        )
+        .expect("short texture reference uploads without a root-level copy");
+    }
 
     /// Needs slangc (`VULKAN_SDK`). The page preview and an in-node preview may cook
     /// one source at the same time: both get the one published folder, whole.

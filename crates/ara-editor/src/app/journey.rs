@@ -24,7 +24,7 @@ use crate::{Editor, shell::Shell};
 /// The file the import step brings into the project (the demo's CC0 rock, ~1 m).
 const IMPORT: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../ara-player/demo/assets/props/rock.glb"
+    "/../ara-player/demo/content/assets/props/rock.glb"
 );
 /// Frames a step may wait for its effect (jobs, Play, reloads) before giving up.
 const PATIENCE: u32 = 144 * 90;
@@ -752,9 +752,11 @@ impl Journey {
                     .clone()
                     .filter(|game| Some(game) != self.previous_build.as_ref())
                     .ok_or("the build failed; see Problems")?;
-                if name == "export-csharp" && !game.join("data/game/scripts.json").is_file() {
+                if name == "export-csharp"
+                    && !crate::shell::build::scripts_manifest(&game)?.is_file()
+                {
                     return Err(
-                        "the build did not ship the C# module (no data/game/scripts.json)".into(),
+                        "the build did not ship the C# module (no scripts manifest in application data)".into(),
                     );
                 }
                 if !self.note.contains("builds/") {

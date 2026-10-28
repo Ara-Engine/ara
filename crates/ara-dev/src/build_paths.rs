@@ -219,13 +219,17 @@ mod tests {
 
     #[test]
     fn foreign_targets_are_rejected_even_when_missing_or_nested() {
-        let parent = Path::new(env!("CARGO_MANIFEST_DIR"))
+        let outer = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../target/ara-dev/path-tests")
             .join(format!(
                 "{}-{:?}",
                 std::process::id(),
                 std::thread::current().id()
             ));
+        // The real checkout's target may be a junction to an independent drive.
+        // Model the outer checkout explicitly instead of depending on its path.
+        fs::create_dir_all(outer.join(".git")).unwrap();
+        let parent = outer.join("target/path-tests");
         let own = parent.join("own");
         let other = parent.join("other");
         fs::create_dir_all(own.join(".git")).unwrap();

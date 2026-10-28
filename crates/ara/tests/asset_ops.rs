@@ -58,19 +58,12 @@ fn apply(root: &Path, commands: Value) -> Value {
     )
 }
 
-fn journey(versioned: bool) {
+fn journey() {
     let scratch = scratch();
     let root = scratch.join("project");
-    let authored = if versioned {
-        root.join(ara_doc::AUTHORING_ROOT)
-    } else {
-        root.clone()
-    };
+    let authored = root.join(ara_doc::AUTHORING_ROOT);
     fs::create_dir_all(&authored).expect("authored root");
-    let mut marker = json!({"name":"Asset proof","main":"main.scene"});
-    if versioned {
-        marker["layoutVersion"] = json!(3);
-    }
+    let marker = json!({"name":"Asset proof","main":"main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION});
     fs::write(
         root.join("ara.project.json"),
         ara_json::to_canonical_string(&marker),
@@ -190,22 +183,32 @@ fn journey(versioned: bool) {
 }
 
 #[test]
-fn legacy_project_asset_journey() {
-    journey(false);
+fn legacy_project_asset_journey_requires_explicit_migration() {
+    let root = scratch();
+    fs::write(root.join("ara.project.json"), "{}").expect("legacy marker");
+    let output = run(&root, &["check"]);
+    assert!(!output.status.success());
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(text.contains("ARA1914"), "{text}");
+    assert!(!root.join("content").exists());
 }
 
 #[test]
 fn versioned_project_asset_journey() {
-    journey(true);
+    journey();
 }
 
 #[test]
 fn native_ui_move_round_trips_identity_and_original_bytes() {
     let root = scratch();
-    fs::create_dir_all(root.join("ui")).expect("UI directory");
-    fs::write(root.join("ara.project.json"), "{}\n").expect("marker");
+    fs::create_dir_all(root.join("content/ui")).expect("UI directory");
+    fs::write(root.join("ara.project.json"), r#"{"layoutVersion":4}"#).expect("marker");
     let original = "<ui id=\"hud\"><text id=\"title\" text=\"Ready\" /></ui>\n";
-    fs::write(root.join("ui/hud.ui"), original).expect("legacy UI");
+    fs::write(root.join("content/ui/hud.ui"), original).expect("legacy UI");
     let identity = ara_host::Project::open(&root)
         .expect("before")
         .index
@@ -225,10 +228,10 @@ fn native_ui_move_round_trips_identity_and_original_bytes() {
     );
     ok(&root, &["undo"]);
     assert_eq!(
-        fs::read_to_string(root.join("ui/hud.ui")).expect("restored bytes"),
+        fs::read_to_string(root.join("content/ui/hud.ui")).expect("restored bytes"),
         original
     );
-    assert!(!root.join("ui/moved.ui").exists());
+    assert!(!root.join("content/ui/moved.ui").exists());
     ok(&root, &["redo"]);
     assert_eq!(
         ara_host::Project::open(&root)

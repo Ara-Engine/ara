@@ -43,6 +43,12 @@ impl Contract {
     /// Reviewed recording entries may change their synchronous frame-local closures.
     /// Run off the frame thread, before loading any patch library.
     pub fn validate(&self) -> Result<()> {
+        self.validate_scope(None).map(|_| ())
+    }
+
+    /// Content identity of the currently compatible source revision. Lab staging
+    /// uses this to refuse publication if another edit superseded the compiled one.
+    pub fn revision(&self) -> Result<String> {
         self.validate_scope(None)
     }
 
@@ -59,9 +65,10 @@ impl Contract {
             .find(|p| p.join("Cargo.toml").is_file())
             .context("Rust source has no owning crate")?;
         self.validate_scope(Some(directory.strip_prefix(&self.root)?))
+            .map(|_| ())
     }
 
-    fn validate_scope(&self, scope: Option<&Path>) -> Result<()> {
+    fn validate_scope(&self, scope: Option<&Path>) -> Result<String> {
         let paths = inputs(&self.root, scope)?;
         let expected: Vec<_> = self
             .files
@@ -74,9 +81,15 @@ impl Contract {
             paths.len() == expected.len() && paths.iter().all(|p| self.files.contains_key(p)),
             "needs rebuild: Rust source files were added or removed"
         );
+        let mut revision = blake3::Hasher::new();
         for (path, original) in expected {
             let text = fs::read(self.root.join(path))?;
-            if blake3::hash(&text).to_hex().as_str() == original.bytes {
+            let hash = blake3::hash(&text);
+            let name = path.to_string_lossy();
+            revision.update(&(name.len() as u64).to_le_bytes());
+            revision.update(name.as_bytes());
+            revision.update(hash.as_bytes());
+            if hash.to_hex().as_str() == original.bytes {
                 continue;
             }
             let current = fingerprint_bytes(path, &text)?;
@@ -86,7 +99,7 @@ impl Contract {
                 path.display()
             );
         }
-        Ok(())
+        Ok(revision.finalize().to_hex().to_string())
     }
 
     /// Store a baseline under the driver's isolated target directory.

@@ -12,7 +12,7 @@ expression: out
       "severity": "error",
       "message": "`Transform` has no field `positon`",
       "location": {
-        "file": "broken.scene",
+        "file": "content/broken.scene",
         "doc": "sc_broken01",
         "record": "e_a1",
         "path": "Transform.positon"
@@ -31,7 +31,7 @@ expression: out
       "severity": "error",
       "message": "unknown component `Lihgt`",
       "location": {
-        "file": "broken.scene",
+        "file": "content/broken.scene",
         "doc": "sc_broken01",
         "record": "e_b2",
         "path": "Lihgt"
@@ -42,7 +42,7 @@ expression: out
       "severity": "error",
       "message": "`@prefabs/missing.prefab#pf_missing1` does not resolve: no asset has that ID or path",
       "location": {
-        "file": "broken.scene",
+        "file": "content/broken.scene",
         "doc": "sc_broken01",
         "record": "e_c3",
         "path": "prefab"
@@ -53,7 +53,7 @@ expression: out
       "severity": "error",
       "message": "parent `e_gone` does not exist",
       "location": {
-        "file": "broken.scene",
+        "file": "content/broken.scene",
         "doc": "sc_broken01",
         "record": "e_a1",
         "path": "parent"
@@ -72,7 +72,7 @@ expression: out
       "severity": "error",
       "message": "prefab `@prefabs/missing.prefab#pf_missing1` is not loaded",
       "location": {
-        "file": "broken.scene",
+        "file": "content/broken.scene",
         "doc": "sc_broken01",
         "record": "e_c3",
         "path": "prefab"

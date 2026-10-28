@@ -562,7 +562,13 @@ fn whole_projects_are_refused_and_hidden_system_entries_do_not_hide_authored_fol
             .iter()
             .any(|entry| entry.relative.ends_with("empty"))
     );
-    fs::write(source.join("ara.project.json"), b"{}").expect("project marker");
+    fs::write(
+        source.join("ara.project.json"),
+        ara_json::to_canonical_string(
+            &serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
+        ),
+    )
+    .expect("project marker");
     assert!(external::scan(&[source], &Cancellation::default(), 64, |_| {}).is_err());
 }
 

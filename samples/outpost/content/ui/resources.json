@@ -1,0 +1,47 @@
+{
+  "fonts": [
+    "third_party/outpost_ui/Font/Kenney Future.ttf"
+  ],
+  "click": "third_party/outpost_interface/Audio/click_001.ogg",
+  "images": {
+    "reticle": "third_party/outpost_ui/PNG/Extra/Default/crosshair_a.png"
+  },
+  "music": [
+    {
+      "entity": "e_run",
+      "component": "SalvageRun",
+      "field": "alert",
+      "target": "e_music"
+    }
+  ],
+  "sounds": [
+    {
+      "component": "SharedDoor",
+      "field": "openTick",
+      "clip": "@third_party/outpost_scifi/Audio/doorOpen_000.ogg#as_dooropen",
+      "gain": 0.7,
+      "effect": "sparks"
+    },
+    {
+      "component": "SalvageCache",
+      "field": "takenTick",
+      "clip": "@third_party/outpost_scifi/Audio/forceField_001.ogg#as_pickup",
+      "gain": 0.6,
+      "effect": "magic_swirl",
+      "hideSource": true
+    },
+    {
+      "component": "Survivor",
+      "field": "stepTick",
+      "clip": "@third_party/outpost_impact/Audio/footstep_grass_000.ogg#as_footstep",
+      "gain": 0.18
+    },
+    {
+      "component": "Survivor",
+      "field": "feedbackTick",
+      "clip": "@third_party/outpost_interface/Audio/click_001.ogg#as_uiclick",
+      "gain": 0.12,
+      "animation": "interact"
+    }
+  ]
+}

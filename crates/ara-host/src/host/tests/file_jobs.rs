@@ -12,7 +12,7 @@ fn source_job_waits_for_materialization_and_reports_restore_failures() {
         });
         let before = b"class Before {}\n";
         let after = "class After {}\n";
-        fs::write(dir.join("Source.cs"), before).expect("source");
+        fs::write(dir.join("content/Source.cs"), before).expect("source");
         let mut host = Host::open(
             Project::open(&dir).expect("project"),
             HostConfig {
@@ -34,11 +34,11 @@ fn source_job_waits_for_materialization_and_reports_restore_failures() {
         let response = call(
             &mut host,
             "cmd.apply",
-            json!({"session":session,"doc":"levels/arena.scene","why":"replace source", "commands":[{"cmd":"source.replace","args":{"path":"Source.cs","baseHash":FileState::bytes(before).hash,"text":after}}]}),
+            json!({"session":session,"doc":"levels/arena.scene","why":"replace source", "commands":[{"cmd":"source.replace","args":{"path":"content/Source.cs","baseHash":FileState::bytes(before).hash,"text":after}}]}),
         );
         let job = response["job"].as_str().expect("preparation job");
         let deadline = Instant::now() + Duration::from_secs(30);
-        while host.store().workspace().file_state("Source.cs")
+        while host.store().workspace().file_state("content/Source.cs")
             != Some(&FileState::bytes(after.as_bytes()))
         {
             host.tick();
@@ -61,7 +61,7 @@ fn source_job_waits_for_materialization_and_reports_restore_failures() {
             "a committed intent is not a completed file write: {status}"
         );
         if changed {
-            fs::write(dir.join("Source.cs"), b"external change\n")
+            fs::write(dir.join("content/Source.cs"), b"external change\n")
                 .expect("external edit after commit");
         }
         drop(release);
@@ -82,13 +82,13 @@ fn source_job_waits_for_materialization_and_reports_restore_failures() {
                             .is_empty()
                     );
                     assert_eq!(
-                        fs::read(dir.join("Source.cs")).expect("external source retained"),
+                        fs::read(dir.join("content/Source.cs")).expect("external source retained"),
                         b"external change\n"
                     );
                 } else {
                     assert_eq!(status["status"], "done", "{status}");
                     assert_eq!(
-                        fs::read_to_string(dir.join("Source.cs")).expect("durable source"),
+                        fs::read_to_string(dir.join("content/Source.cs")).expect("durable source"),
                         after
                     );
                 }

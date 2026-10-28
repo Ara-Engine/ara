@@ -15,6 +15,9 @@ use crate::branch::SavedDoc;
 pub struct Snapshot {
     /// The authority revision the documents are at.
     pub revision: u64,
+    /// Storage prefix omitted from authored references; absent for generic workspaces.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub reference_root: String,
     /// Each document's canonical text, by path.
     pub docs: Vec<SavedDoc>,
 }
@@ -32,6 +35,7 @@ impl Snapshot {
             .collect();
         Snapshot {
             revision: store.revision(),
+            reference_root: store.workspace().reference_root().to_owned(),
             docs,
         }
     }
@@ -39,9 +43,16 @@ impl Snapshot {
     /// The documents, read back.
     pub fn workspace(&self, db: &SchemaDb) -> Result<Workspace, Vec<Diagnostic>> {
         let mut ws = Workspace::new(AssetIndex::new());
+        ws.set_reference_root(&self.reference_root);
         for d in &self.docs {
             let r = read(&d.text, &d.path, db, None);
-            ws.insert(d.path.clone(), r.doc.ok_or(r.diags)?);
+            let doc = r.doc.ok_or(r.diags)?;
+            let asset_path = if doc.kind == "import" {
+                d.path.strip_suffix(".import.json").unwrap_or(&d.path)
+            } else {
+                &d.path
+            };
+            ws.insert_with_asset_path(d.path.clone(), doc, asset_path);
         }
         Ok(ws)
     }
