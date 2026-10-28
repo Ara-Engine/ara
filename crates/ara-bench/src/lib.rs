@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
 
+pub mod passes;
+
 /// OS sampler used by every scenario and overhead run. Does not spawn a sampler
 /// thread or wait; intervals shorter than the OS minimum are marked unavailable.
 pub struct LoadSampler {

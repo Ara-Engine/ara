@@ -645,6 +645,7 @@ name = "ara-bench"
 version = "0.0.1-alpha"
 dependencies = [
  "ara-components",
+ "ara-diag",
  "ara-doc",
  "ara-host",
  "ara-input",
@@ -775,6 +776,7 @@ name = "ara-dev"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-bench",
  "ara-hotpatch",
  "blake3",
  "cc",
@@ -1607,6 +1609,7 @@ dependencies = [
  "ara-anim",
  "ara-asset",
  "ara-audio",
+ "ara-bench",
  "ara-components",
  "ara-crash",
  "ara-diag",
@@ -1971,6 +1974,7 @@ dependencies = [
  "anyhow",
  "ara-anim",
  "ara-asset",
+ "ara-bench",
  "ara-components",
  "ara-diag",
  "ara-doc",

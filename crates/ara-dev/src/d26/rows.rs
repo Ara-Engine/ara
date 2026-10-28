@@ -69,7 +69,7 @@ pub(super) const DEFINITIONS: &[(&str, &str)] = &[
 pub(super) enum Status {
     Pass,
     Fail,
-    /// Foreign GPU load or unavailable monitoring makes timing judgments invalid.
+    /// Missing workload, foreign load or unavailable monitoring invalidates timing.
     Invalid,
     NotMeasured,
     /// Measured, with no gate to hold it to.
@@ -86,6 +86,7 @@ pub(super) struct Judged {
 #[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub(super) enum InvalidReason {
+    MissingPasses,
     ForeignGpuLoad,
     ForeignCpuLoad,
     Unmonitored,
@@ -892,6 +893,9 @@ mod tests {
     use std::path::PathBuf;
     fn ready_player(mut player: Value) -> Value {
         player["completed"] = json!(true);
+        let frames = player["frames"].as_u64().unwrap_or(1);
+        player["frames"] = json!(frames);
+        player["pass_presence"] = json!({"format":"ara.timing.passes/1","expected":"raster","status":"valid","required_passes":[],"timed_frames":frames,"rt_present_frames":0});
         player["readiness"] = json!({"required":true,"state":"ready","renderer_ready":true,
             "renderer":{"raster":true,"gi_enabled":true},"ready_frame":430,
             "warmup_frames":60,"gpu_start_frame":491,"time_to_ready_ms":2000.,"timeout_ms":120000.});

@@ -807,6 +807,22 @@ The player accepts `--perf-wait-ready --perf-ready-timeout-ms 120000` with
 prove the boundary: readiness at frame 430 with 60 warmup frames starts sampling
 at frame 491. A deadline failure never becomes a zero-cost GPU result.
 
+Perf/D26, lab measure/A/B, and `ara-samples capture` share `ara-bench::passes::Guard`.
+Before timing, the selected workload must execute for three consecutive completed
+GPU frames. Hybrid High/Epic require `RT.Reflect`, `RT.Filter.X/Y`, `RT.Rough` and
+`RT.Rough.X/Y`; full fidelity transport has its own trace/ReSTIR contract. Losing
+any required pass inside the window fails it with `ARA6093`. Reports retain
+`pass_presence.rt_present` (for example `240/240 frames`), required passes and the
+configured stability/deadline. Old players/reports without this proof are refused;
+rebuild the matching timing player before using `--no-build`.
+
+`ARA_TIMING_STABLE_FRAMES=3` and `ARA_TIMING_READY_TIMEOUT_MS=120000` configure the
+shared wait. `ARA_TIMING_EXPECTED_RT=auto|raster|hybrid|fidelity` explicitly selects
+a contract for deliberate renderer-mode experiments; the resolved mode remains
+visible in the JSON. Normal auto selection uses the preset/device and requested
+fidelity mode, never whichever passes happened to appear. A failed capture replaces
+its timing JSON with invalid evidence instead of retaining an older valid result.
+
 Protocol verification on Windows/RTX 4070 SUPER (2026-10-26): a hidden 640×360
 Low debug player on the frozen Outpost pack signalled readiness at frame 544;
 two warmup frames placed the five GPU samples at frames 547–551. `run.cpu`

@@ -183,11 +183,21 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
         context.player(&mut results);
         results.gpu_load = Some(guard.snapshot());
         write(&results)?;
+        if let Some(problem) = results.pass_failure() {
+            results.gpu_load = Some(guard.finish()?);
+            write(&results)?;
+            anyhow::bail!("{problem}");
+        }
     }
     if !results.skipped.contains_key(&Section::Flip) {
         context.flip(&mut results);
         results.gpu_load = Some(guard.snapshot());
         write(&results)?;
+        if let Some(problem) = results.pass_failure() {
+            results.gpu_load = Some(guard.finish()?);
+            write(&results)?;
+            anyhow::bail!("{problem}");
+        }
     }
     if !results.skipped.contains_key(&Section::Editor) {
         context.editor(&mut results);
@@ -198,6 +208,9 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
     let verdict = write(&results)?;
     println!("{verdict}");
     println!("Report: {}", output.join("report.html").display());
+    if let Some(problem) = results.pass_failure() {
+        anyhow::bail!("{problem}");
+    }
     if verdict.contains("INVALID") {
         return Err(crate::gpu_guard::invalid_error(
             results.gpu_load.as_ref().expect("guard report").detail(),
@@ -273,17 +286,48 @@ fn write_value(
     results: &measure::Results,
 ) -> Result<String> {
     let mut rows = rows::rows(results);
-    let invalid_rows = if let Some(load) = &results.gpu_load {
-        validity::apply(&mut rows, load, &results.windows)?
-    } else {
-        0
-    };
+    let pass_problem = results.pass_failure();
+    let pass_code = ara_bench::passes::INVALID_PASS_SET.to_string();
+    let rejected_sources: std::collections::BTreeSet<_> = results
+        .cold
+        .values()
+        .chain(results.steady.values())
+        .filter_map(|window| window.as_ref().ok())
+        .filter(|window| {
+            crate::perf::readiness::failure(&window.player)
+                .is_some_and(|reason| reason.contains(&pass_code))
+        })
+        .map(|window| window.report.as_path())
+        .collect();
+    for row in &mut rows {
+        if row.note.contains(&pass_code)
+            || (row.section == "GPU frame"
+                && row
+                    .source
+                    .as_deref()
+                    .is_some_and(|source| rejected_sources.contains(Path::new(source))))
+        {
+            row.status = rows::Status::Invalid;
+            row.value = None;
+            row.invalid_reason = Some(rows::InvalidReason::MissingPasses);
+            for gate in &mut row.gates {
+                gate.status = rows::Status::Invalid;
+            }
+        }
+    }
+    if let Some(load) = &results.gpu_load {
+        validity::apply(&mut rows, load, &results.windows)?;
+    }
+    let invalid_rows = rows
+        .iter()
+        .filter(|row| row.status == rows::Status::Invalid)
+        .count();
     let refused = results
         .gpu_load
         .as_ref()
         .is_some_and(crate::gpu_guard::Report::invalid)
         && rows.iter().all(|row| row.value.is_none());
-    let invalid = invalid_rows > 0 || refused;
+    let invalid = invalid_rows > 0 || refused || pass_problem.is_some();
     let measured = rows
         .iter()
         .filter(|row| {
@@ -291,15 +335,40 @@ fn write_value(
         })
         .count();
     let summary = rows::Summary::of(&rows);
+    let pass_presence: std::collections::BTreeMap<_, _> = results
+        .cold
+        .iter()
+        .filter_map(|(scene, window)| {
+            window
+                .as_ref()
+                .ok()
+                .map(|window| (format!("cold:{scene}"), &window.player["pass_presence"]))
+        })
+        .chain(
+            results
+                .steady
+                .iter()
+                .filter_map(|((scene, preset), window)| {
+                    window.as_ref().ok().map(|window| {
+                        (
+                            format!("steady:{scene}:{preset}"),
+                            &window.player["pass_presence"],
+                        )
+                    })
+                }),
+        )
+        .collect();
     let report = json!({
         "format": "ara.d26/1",
         "run": run,
         "device": results.device,
         "summary": summary,
-        "status": if refused||invalid_rows==measured&&invalid {"invalid"} else if invalid {"partially_invalid"}else {"measured"},
+        "status": if pass_problem.is_some()||refused||invalid_rows==measured&&invalid {"invalid"} else if invalid {"partially_invalid"}else {"measured"},
         "invalidRows":invalid_rows,
         "gpuLoad": results.gpu_load,
-        "diagnostic": if invalid {Some(crate::gpu_guard::CODE)} else {None},
+        "diagnostic": if pass_problem.is_some(){Some(pass_code.as_str())}else if invalid {Some(crate::gpu_guard::CODE)} else {None},
+        "passPresenceDiagnostic": pass_problem,
+        "passPresence": pass_presence,
         "skipped": results.skipped,
         "rows": rows,
         "definitions": rows::DEFINITIONS,
@@ -389,6 +458,48 @@ mod tests {
         assert_eq!(stamp(1_792_897_445), "20261025-030405");
         // A leap day.
         assert_eq!(stamp(1_709_164_800), "20240229-000000");
+    }
+
+    #[test]
+    fn a_missing_rt_frame_marks_the_scoreboard_invalid_with_no_gpu_budget_number() {
+        let output = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/ara-dev/tests")
+            .join(format!("rt-invalid-{}", std::process::id()));
+        fs::create_dir_all(&output).unwrap();
+        let mut results = measure::Results::default();
+        results.steady.insert(("Outpost","high"), Ok(measure::Window {
+            report: output.join("player.json"),
+            player: json!({"completed":false,"frames":1,"pass_presence":{"status":"invalid","failure":"timed frame lost RT.Reflect","rt_present":"1/2 frames"}}),
+        }));
+        let verdict = write_value(&output, &json!({}), &results).unwrap();
+        let report: serde_json::Value =
+            serde_json::from_slice(&fs::read(output.join("report.json")).unwrap()).unwrap();
+        assert!(verdict.contains("INVALID"));
+        assert_eq!(report["status"], "invalid");
+        assert_eq!(report["diagnostic"], "ARA6093");
+        assert!(results.pass_failure().unwrap().starts_with("ARA6093:"));
+        let rows = report["rows"].as_array().unwrap();
+        let gpu = rows
+            .iter()
+            .filter(|r| {
+                r["section"] == "GPU frame"
+                    && r["subject"] == "Outpost · High"
+                    && r["metric"]
+                        .as_str()
+                        .is_some_and(|metric| metric.starts_with("GPU frame "))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(gpu.len(), 2);
+        assert!(
+            gpu.iter()
+                .all(|row| row["status"] == "invalid" && row["value"].is_null())
+        );
+        assert!(
+            gpu.iter()
+                .all(|row| row["invalid_reason"] == "missing_passes")
+        );
+        assert_eq!(report["summary"]["gates"]["D26"]["invalid"], 2);
+        assert_eq!(report["summary"]["gates"]["D26"]["fail"], 0);
     }
 
     #[test]
