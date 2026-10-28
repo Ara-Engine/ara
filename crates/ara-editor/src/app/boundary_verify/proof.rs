@@ -100,11 +100,8 @@ impl BoundaryCheck {
                 && trace["hierarchySearch"] == "Boundary recovery B"
                 && trace["failureCount"] == 1
         });
-        let help = crate::shell::commands::menus::MENUS
-            .iter()
-            .position(|menu| menu.title == "Help");
         let keyboard_menu = menu.is_some_and(|trace| {
-            help.is_some_and(|index| trace["menu"]["source"] == format!("Bar({index})"))
+            trace["menu"]["source"] == "Bar(\"Help\")"
                 && trace["menu"]["active"].is_number()
                 && trace["failureCount"] == 1
         });
