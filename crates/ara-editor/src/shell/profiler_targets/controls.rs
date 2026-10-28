@@ -54,16 +54,18 @@ impl Shell {
         } else {
             Target::Player(serde_json::from_value::<Scope>(value)?)
         };
-        if let Target::Player(scope) = &selected {
-            if !self
+        if let Target::Player(scope) = &selected
+            && !self
                 .profiler_targets
                 .rows
                 .iter()
                 .any(|row| &row.target == scope)
-                && selected != self.profiler_targets.selected
-            {
-                return Err("That player incarnation is no longer in the live profiler target list; refresh it".into());
-            }
+            && selected != self.profiler_targets.selected
+        {
+            return Err(
+                "That player incarnation is no longer in the live profiler target list; refresh it"
+                    .into(),
+            );
         }
         if selected != self.profiler_targets.selected {
             self.input.cancel_interaction(&mut self.ui);
