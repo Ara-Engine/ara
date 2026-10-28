@@ -6,6 +6,8 @@ use crate::{
 };
 use ara_ui_text::TextSystem;
 use taffy::prelude::*;
+#[path = "banner_fit.rs"]
+mod banner_fit;
 #[path = "text_fit.rs"]
 mod text_fit;
 impl Ui {
@@ -152,8 +154,9 @@ impl Ui {
             // idle frames none. Bound the work even for pathological anchor cycles.
             for _ in 0..4 {
                 let text_changed = work.layout_passes > 0 && self.fit_auto_text()?;
+                let banners_changed = work.layout_passes > 0 && self.fit_banner_rails()?;
                 let overlays_changed = self.place_popovers()?;
-                if !text_changed && !overlays_changed {
+                if !text_changed && !banners_changed && !overlays_changed {
                     break;
                 }
                 self.compute_layout(text_system)?;
