@@ -35,6 +35,7 @@ mod reachability_verify;
 mod responsiveness;
 mod scene_quality;
 mod scene_sync;
+mod script_verify;
 mod selection_verify;
 mod setup;
 mod snap_verify;
@@ -423,6 +424,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
     let mut prefab_check = None;
     let mut diagnostics_check = None;
     let mut reachability_check = None;
+    let mut script_check = None;
     let mut play_check = None;
     let mut monkey_input = monkey::native::Adapter::default();
     if panel_verification.is_some()
@@ -772,6 +774,21 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if reachability_check
                 .as_ref()
                 .is_some_and(reachability_verify::ReachabilityCheck::finished)
+                && script_check.is_none()
+            {
+                script_check = Some(script_verify::ScriptCheck::new(
+                    &mut editor,
+                    &mut shell,
+                    &options.output,
+                )?);
+            }
+            if let Some(check) = &mut script_check {
+                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
+                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
+            }
+            if script_check
+                .as_ref()
+                .is_some_and(script_verify::ScriptCheck::finished)
                 && play_check.is_none()
             {
                 play_check = Some(play_verify::PlayCheck::new(&mut editor, &options.output)?);
@@ -825,6 +842,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 {
                     check.clipboard()
                 } else if let Some(check) = history_check.as_mut().filter(|check| !check.finished())
+                {
+                    check.clipboard()
+                } else if let Some(check) = script_check.as_mut().filter(|check| !check.finished())
                 {
                     check.clipboard()
                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
@@ -1031,6 +1051,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 {
                     check.clipboard()
                 } else if let Some(check) = history_check.as_mut().filter(|check| !check.finished())
+                {
+                    check.clipboard()
+                } else if let Some(check) = script_check.as_mut().filter(|check| !check.finished())
                 {
                     check.clipboard()
                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
@@ -2044,6 +2067,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             if let Some(check) = &mut reachability_check {
                 check.end(&editor, &shell, &mut gpu)?;
             }
+            if let Some(check) = &mut script_check {
+                check.end(&mut editor, &mut shell, &mut gpu)?;
+            }
             if let Some(check) = &mut play_check {
                 check.end(&editor, &shell, &mut gpu)?;
                 if check.finished() {
@@ -2205,6 +2231,11 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             let check = bookmarks_check
                 .as_ref()
                 .ok_or("The Assets bookmarks journey did not start")?;
+            check.write()?;
+            check.validate()?;
+            let check = script_check
+                .as_ref()
+                .ok_or("The native C# iteration journey did not start")?;
             check.write()?;
             check.validate()?;
             let check = input_check

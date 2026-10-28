@@ -9,13 +9,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub(super) const SPEED: f64 = 30.;
+pub(in crate::app) const SPEED: f64 = 30.;
 const FASTER: f64 = SPEED + 240.;
 const HZ: f64 = 60.;
 const DEADLINE: Duration = Duration::from_secs(180);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Stage {
+pub(in crate::app) enum Stage {
     Changed,
     Broken,
     Fixed,
@@ -37,7 +37,7 @@ enum Phase {
     Done,
 }
 
-pub(super) struct Proof {
+pub(in crate::app) struct Proof {
     doc: String,
     entity: String,
     path: String,

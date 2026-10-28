@@ -8,7 +8,7 @@
 //! shipped (NativeAOT) and run that game too.
 //! Offscreen only (hidden window). Writes `NN-step.png` per step and, after every
 //! step, `journey.json` (what each step did, whether it worked and how long it took).
-mod script_reload;
+pub(super) mod script_reload;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
