@@ -5,7 +5,7 @@ members = ["crates/*", "crates/ara-hotpatch/probe", "crates/ara-hotpatch/editor"
 exclude = ["spikes"]
 
 [workspace.package]
-version = "0.0.1-alpha"
+version = "0.0.2-alpha.4"
 edition = "2024"
 rust-version = "1.99"
 publish = false
