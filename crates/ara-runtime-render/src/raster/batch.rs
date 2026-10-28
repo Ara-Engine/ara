@@ -6,6 +6,8 @@ use ara_gpu::vulkan::PassTiming;
 /// waits it: at once on synchronous presenters, or after the next frame is
 /// submitted with frames in flight (`Presenter::set_frames_in_flight`).
 pub(crate) struct Submitted {
+    /// Optional recorder identity of this submission, not its readback frame.
+    pub profile: Option<u64>,
     completion: ara_gpu::GpuCompletion,
     /// Effects submissions, in scope order (the rest is the view).
     boundaries: [usize; 2],
@@ -25,6 +27,8 @@ pub(crate) struct Opened {
 /// A finished frame: its costs, and its own device span and submission gaps in
 /// milliseconds (exact while another frame overlaps it in flight).
 pub(crate) struct Finished {
+    /// Recorder identity carried intact through bounded completion retries.
+    pub profile: Option<u64>,
     pub costs: GpuFrameCosts,
     pub span_ms: Option<f64>,
     pub gaps_ms: Option<f64>,
@@ -73,6 +77,7 @@ impl RasterView {
         let completion = renderer.gpu_mut().end_deferred_completion()?;
         renderer.set_completed_timings(completed);
         Ok(Submitted {
+            profile: None,
             completion,
             boundaries,
             publication,
@@ -145,6 +150,7 @@ impl RasterView {
         let Submitted {
             completion,
             rendered,
+            profile,
             ..
         } = submitted;
         let mut costs = rendered?;
@@ -153,6 +159,7 @@ impl RasterView {
         costs.publication_ms = publication_ms;
         renderer.set_completed_timings(view);
         Ok(Ok(Finished {
+            profile,
             costs,
             span_ms: completion.timing_window().map(|span| span.milliseconds()),
             gaps_ms: completion.timing_window_gaps(),

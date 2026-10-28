@@ -16,7 +16,12 @@ pub use game_ui::read as read_game_ui;
 pub use package::{package_scene, package_scene_for_export, package_scene_with_progress};
 pub mod params;
 pub mod pool;
+mod profiling;
 mod published;
+pub use profiling::{
+    PlayProfileAction, PlayProfileOutcome, PlayProfileRequest, PlayProfileStatus,
+    PlayProfileTarget, PlayProfileTargetRow, PlayProfileTicket, PlayProfilingHandle,
+};
 mod rendering;
 pub use published::{ImportProgress, PublishedAssets, PublishedGeneration, PublishedSnapshot};
 mod script_recovery;
@@ -192,6 +197,7 @@ pub struct PlayService {
     source_writes: scripts::SourceWrites,
     script_diagnostics: scripts::DiagnosticSources,
     script_recovery: script_recovery::Controller,
+    profiling: profiling::Controller,
 }
 
 impl PlayService {
@@ -229,6 +235,7 @@ impl PlayService {
             source_writes: scripts::SourceWrites::default(),
             script_diagnostics: scripts::DiagnosticSources::default(),
             script_recovery: script_recovery::Controller::default(),
+            profiling: profiling::Controller::default(),
         }
     }
 
@@ -242,6 +249,11 @@ impl PlayService {
     /// Native editor control for explicit recovery of a scoped live Play incarnation.
     pub fn script_recovery(&self) -> ScriptRecoveryHandle {
         self.script_recovery.handle(&self.root)
+    }
+
+    /// Owned private native-editor control of exact player profiling incarnations.
+    pub fn profiling(&self) -> PlayProfilingHandle {
+        self.profiling.handle(&self.root)
     }
 
     /// Enable headless execution while the native editor supplies its own capture
@@ -1438,6 +1450,12 @@ impl Service for PlayService {
             }
         }
         self.script_recovery.tick(
+            &mut self.worlds,
+            &mut self.script_diagnostics,
+            &self.root,
+            &mut |diagnostic| cx.log(diagnostic),
+        );
+        self.profiling.tick(
             &mut self.worlds,
             &mut self.script_diagnostics,
             &self.root,

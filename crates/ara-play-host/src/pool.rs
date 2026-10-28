@@ -8,7 +8,7 @@
 //! off (0.5 s doubling to 30 s), so a broken player never stalls the host tick.
 use ara_play::{
     BUSY, Busy, CRASH_PREFIX, CrashReport, HELLO, Hello, PROTOCOL, STATUS, Status, TOKEN_ENV,
-    link::{Link, Message, error},
+    link::{Link, Message, Pump, error},
 };
 use serde_json::{Value, json};
 use std::{
@@ -30,7 +30,7 @@ pub struct Player {
     /// Owned child; killed on drop.
     pub child: Child,
     /// Live link.
-    pub link: Link,
+    pub link: Pump,
     /// Its hello (pid, window, init time, UDP address).
     pub hello: Hello,
     /// Stderr log file.
@@ -45,6 +45,8 @@ pub struct Player {
     pub events: Vec<ara_play::Event>,
     /// Embedded players' surface and frame notices not yet drained.
     pub embed: Vec<crate::embed::Notice>,
+    /// Bounded private profiling replies, decoded away from the host tick.
+    pub(crate) profiling: Vec<Value>,
 }
 
 impl Drop for Player {
@@ -57,6 +59,20 @@ impl Drop for Player {
 }
 
 impl Player {
+    fn observe_owned(&mut self, message: Message) {
+        if let Message::Notification { method, params } = message {
+            if method == crate::profiling::RESULT {
+                self.seen = Instant::now();
+                if self.profiling.len() < 64 {
+                    self.profiling.push(params);
+                }
+            } else {
+                self.observe(&Message::Notification { method, params });
+            }
+        } else {
+            self.observe(&message);
+        }
+    }
     /// Handles a non-response message (heartbeats); anything arriving counts as alive.
     pub fn observe(&mut self, message: &Message) {
         self.seen = Instant::now();
@@ -127,7 +143,7 @@ impl Player {
                     self.grace = self.seen;
                     return Ok(result);
                 }
-                Ok(Some(message)) => self.observe(&message),
+                Ok(Some(message)) => self.observe_owned(message),
                 Ok(None) => {}
                 Err(_) => return Err(self.closed()),
             }
@@ -164,7 +180,7 @@ impl Player {
     pub fn check(&mut self) -> Option<Value> {
         loop {
             match self.link.poll() {
-                Ok(Some(message)) => self.observe(&message),
+                Ok(Some(message)) => self.observe_owned(message),
                 Ok(None) => break,
                 Err(_) => break,
             }
@@ -561,11 +577,19 @@ impl Pool {
             .iter()
             .position(|s| s.child.id() == hello.pid)
             .ok_or("hello from a process this pool did not spawn")?;
-        let spawn = self.spawning.swap_remove(index);
+        let mut spawn = self.spawning.swap_remove(index);
         self.failures = 0;
         self.retry_at = None;
         link.respond(id, Ok(json!({}))).map_err(|e| e.to_string())?;
         link.flush().map_err(|e| e.to_string())?;
+        let link = match Pump::owner(link) {
+            Ok(link) => link,
+            Err(error) => {
+                let _ = spawn.child.kill();
+                let _ = spawn.child.wait();
+                return Err(error.to_string());
+            }
+        };
         Ok(Player {
             incarnation: ara_doc::IdGen::from_entropy().asset_id("ps").to_string(),
             child: spawn.child,
@@ -577,6 +601,7 @@ impl Pool {
             grace: Instant::now(),
             events: Vec::new(),
             embed: Vec::new(),
+            profiling: Vec::new(),
         })
     }
 

@@ -38,6 +38,30 @@ mod published;
 mod raster;
 
 impl Presenter {
+    /// Engine-private correlation for the next presentation submission. Does not
+    /// change rendering, synchronization or simulation; None leaves it unsampled.
+    pub fn profile_frame(&mut self, frame: Option<u64>) {
+        self.profile_next = frame;
+    }
+
+    /// Takes only completed pass samples with their original submitting frame ID.
+    /// Delayed samples never inherit the CPU frame in which readback was collected.
+    pub fn take_profile_timings(&mut self) -> Option<(u64, Vec<ara_gpu::commands::PassTiming>)> {
+        self.profile_completed.pop_front()
+    }
+
+    fn profile_completed(&mut self, frame: Option<u64>) {
+        if let Some(frame) = frame {
+            let timings = self.pass_timings();
+            if !timings.is_empty() {
+                let timings = timings.to_vec();
+                if self.profile_completed.len() == 8 {
+                    self.profile_completed.pop_front();
+                }
+                self.profile_completed.push_back((frame, timings));
+            }
+        }
+    }
     /// Reserve the initial GI volume and staging while a loading view remains
     /// visible. Call after a completed `present`, on the preparation worker, and
     /// continue presenting until true. Does not wait for the bulk probe bake. A frame
@@ -412,6 +436,7 @@ impl Presenter {
                 .context("raster presentation device")?;
             let finished = RasterView::finish_batched(renderer, submitted)?;
             self.stats.in_flight_wait = started.elapsed();
+            self.profile_completed(finished.profile);
             self.completed(finished.costs);
         }
         Ok(())
@@ -434,6 +459,7 @@ impl Presenter {
             self.stats.in_flight_wait += started.elapsed();
             match finished {
                 Ok(finished) => {
+                    self.profile_completed(finished.profile);
                     self.stats.gpu_ms = finished.costs.accounted_ms();
                     self.stats.gpu = Some(finished.costs);
                     self.stats.gpu_span_ms = finished.span_ms;
@@ -492,7 +518,7 @@ impl Presenter {
             .as_mut()
             .context("raster presentation device")?;
         let (published, size) = (&mut self.published, self.size);
-        let submitted = raster.end_batched(
+        let mut submitted = raster.end_batched(
             renderer,
             frame,
             &camera,
@@ -503,6 +529,7 @@ impl Presenter {
                 Published::publish(published, renderer.gpu_mut(), source, size).map(drop)
             },
         )?;
+        submitted.profile = self.profile_next.take();
         // Frame N, bounded: a stalled one stays queued behind N+1 (the next present
         // retries it before submitting anything), and N+1 is reported skipped so the
         // host submits no UI composite or window copy behind the stall.
@@ -574,7 +601,7 @@ impl Presenter {
                     .context("raster presentation device")?;
                 // Publication joins the frame's completion scope: nothing waits here.
                 let (published, size) = (&mut self.published, self.size);
-                let submitted = raster.submit_batched(
+                let mut submitted = raster.submit_batched(
                     renderer,
                     frame,
                     &camera(frame)?,
@@ -584,13 +611,17 @@ impl Presenter {
                         Published::publish(published, renderer.gpu_mut(), source, size).map(drop)
                     },
                 )?;
+                submitted.profile = self.profile_next.take();
                 if self.frames_in_flight {
                     self.in_flight.push_back(submitted);
                 } else {
                     // Bounded as above: an unfinished frame waits in `in_flight` for
                     // the next present (which skips until it completes), unpublished.
                     match RasterView::finish_within(renderer, submitted, Some(Self::STALL_WAIT))? {
-                        Ok(finished) => self.completed(finished.costs),
+                        Ok(finished) => {
+                            self.profile_completed(finished.profile);
+                            self.completed(finished.costs);
+                        }
                         Err(pending) => {
                             self.in_flight.push_back(pending);
                             self.stats.skipped = true;
@@ -613,6 +644,8 @@ impl Presenter {
                 };
                 self.publish(source)?;
                 self.timing_window();
+                let profile = self.profile_next.take();
+                self.profile_completed(profile);
             }
             self.stats.render = started.elapsed();
             self.published_quality = self.plan.map(|plan| plan.preset);

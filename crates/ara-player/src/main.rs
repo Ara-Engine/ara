@@ -16,6 +16,7 @@ mod input;
 mod net;
 mod packed;
 mod pending_models;
+mod profiling;
 mod standalone;
 mod world;
 
@@ -181,6 +182,7 @@ struct Player {
     stop: bool,
     /// Scene-dependent landscape/VFX pipelines warm on the first window frame.
     window_ready: bool,
+    profiling: profiling::Recorder,
     prewarmed: Option<(
         ara_runtime_script::ScriptPlugin,
         std::sync::mpsc::Receiver<ara_runtime_script::ScriptEvent>,
@@ -286,6 +288,7 @@ fn run(args: Args, launched: Instant) -> Result<()> {
         uploaded: false,
         stop: false,
         window_ready: false,
+        profiling: profiling::Recorder::default(),
         prewarmed,
     };
     player.run()
@@ -306,7 +309,17 @@ impl Player {
                 self.link.poll()?
             };
             if let Some(message) = message {
-                self.handle(message)?;
+                let control = matches!(&message,Message::Notification {method,..} if method==profiling::CONTROL);
+                let frame = if self.world.is_some() && !control {
+                    self.profiling.begin()
+                } else {
+                    None
+                };
+                let scope = frame.map(|_| ara_profile::scope("player.control"));
+                let result = self.handle(message);
+                drop(scope);
+                self.end_profile_frame();
+                result?;
                 continue;
             }
             if idle {
@@ -314,7 +327,20 @@ impl Player {
                     self.status()?;
                 }
             } else {
-                self.frame()?;
+                let frame = self.profiling.begin();
+                if let Some(presenter) = &mut self.presenter {
+                    presenter.profile_frame(frame);
+                }
+                let scope = frame.map(|_| ara_profile::scope("player.frame"));
+                let result = self.frame();
+                drop(scope);
+                if let Some(presenter) = &mut self.presenter {
+                    while let Some((frame, timings)) = presenter.take_profile_timings() {
+                        self.profiling.gpu(frame, &timings);
+                    }
+                }
+                self.end_profile_frame();
+                result?;
             }
         }
         if let (Some(window), Some(presenter)) = (&mut self.window, &self.presenter) {
@@ -334,6 +360,7 @@ impl Player {
     /// free) or sleep until the next tick is due (headless).
     fn frame(&mut self) -> Result<()> {
         ara_gpu::cpu_scope!("Player.frame");
+        let profiling = self.profiling.frame_open();
         let warming_window = self.window.is_some() && !self.window_ready;
         if warming_window {
             busy(&mut self.link, "first window frame")?;
@@ -352,6 +379,7 @@ impl Player {
             // its first lit frame publishes (`embed` module docs).
             let holding = !world.runtime.networked()
                 && self.embed.as_ref().is_some_and(embed::Embedded::entering);
+            let input_scope = profiling.then(|| ara_profile::scope("player.input"));
             let inputs = match (&mut self.window, &mut self.embed) {
                 (Some(window), _) => {
                     let (quit, inputs) = window.events(world.runtime.player())?;
@@ -366,12 +394,15 @@ impl Player {
             {
                 eprintln!("ara-player: input: {e:#}");
             }
+            drop(input_scope);
             let period = Duration::from_secs_f64(1.0 / f64::from(world.runtime.hz()));
+            let simulation_scope = profiling.then(|| ara_profile::scope("player.simulation"));
             let advanced = if holding {
                 Ok(None)
             } else {
                 world.runtime.advance(elapsed)
             };
+            drop(simulation_scope);
             match advanced {
                 Ok(Some(frame)) if frame.ticks > 0 => {
                     self.max_late = self
@@ -461,6 +492,7 @@ impl Player {
                     ),
                     _ => None,
                 };
+                let present_scope = profiling.then(|| ara_profile::scope("player.present"));
                 let presented = match (
                     &mut self.window,
                     &mut self.window2d,
@@ -482,6 +514,7 @@ impl Player {
                     }
                     _ => Ok(None),
                 };
+                drop(present_scope);
                 let audio = job.map(|job| {
                     ara_gpu::cpu_scope!("Player.audio.join");
                     job.join()
@@ -506,6 +539,17 @@ impl Player {
             }
         }
         self.after_frame(warming_window)
+    }
+
+    fn end_profile_frame(&mut self) {
+        if !self.profiling.frame_open() {
+            return;
+        }
+        let entities = self
+            .world
+            .as_ref()
+            .map_or(0, |world| u64::from(world.runtime.world().entities().len()));
+        self.profiling.end(entities);
     }
 
     /// The end of every loop iteration with a world: the first-window-frame notice,
@@ -720,6 +764,11 @@ impl Player {
     /// Owner notifications: slot releases, raw input and asynchronous resizes of
     /// embedded players. Bad params are logged; there is no one to answer.
     fn notification(&mut self, method: &str, params: Value) -> Result<()> {
+        if method == profiling::CONTROL {
+            return self
+                .profiling
+                .control(&mut self.link, params, self.world.is_some());
+        }
         if method == "player.private.scriptRecovery" {
             let Some(ticket) = params["ticket"].as_u64().filter(|ticket| *ticket > 0) else {
                 return Ok(());
