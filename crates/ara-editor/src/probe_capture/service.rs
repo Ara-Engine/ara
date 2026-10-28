@@ -1,5 +1,5 @@
 use super::bridge::{Event, Request, SceneBinding};
-use super::params::{CancelParams, QueryParams, RecaptureParams};
+use super::params::{RenderProbeCancelParams, RenderProbesQueryParams, RenderProbeRecaptureParams};
 use ara_diag::{Diagnostic, Location};
 use ara_host::{Cx, Method, Service};
 use ara_runtime_render::probes::{ProbeJobStatus, ProbeSnapshot, ProbeState};
@@ -62,7 +62,7 @@ impl ProbeService {
     fn recapture(
         &mut self,
         cx: &mut Cx<'_>,
-        params: RecaptureParams,
+        params: RenderProbeRecaptureParams,
     ) -> Result<Value, Vec<Diagnostic>> {
         if self.owner_disconnected {
             return Err(vec![crate::invalid(
@@ -129,7 +129,7 @@ impl ProbeService {
         Ok(json!({"ok":true,"job":job,"queued":true,"ops":[],"txn":null}))
     }
 
-    fn cancel(&mut self, cx: &mut Cx<'_>, params: CancelParams) -> Result<Value, Vec<Diagnostic>> {
+    fn cancel(&mut self, cx: &mut Cx<'_>, params: RenderProbeCancelParams) -> Result<Value, Vec<Diagnostic>> {
         let record = cx
             .job_record(&params.job)
             .filter(|record| {
@@ -154,7 +154,7 @@ impl ProbeService {
         )
     }
 
-    fn query(&mut self, cx: &Cx<'_>, params: QueryParams) -> Result<Value, Vec<Diagnostic>> {
+    fn query(&mut self, cx: &Cx<'_>, params: RenderProbesQueryParams) -> Result<Value, Vec<Diagnostic>> {
         if let Some(entities) = &params.entities {
             validate_entities(entities, true)?;
         }
@@ -352,17 +352,17 @@ impl Service for ProbeService {
     }
     fn methods(&self, db: &mut SchemaDb) -> Vec<Method> {
         vec![
-            Method::new::<RecaptureParams>(
+            Method::new::<RenderProbeRecaptureParams>(
                 db,
                 "render.probe.recapture",
                 "Queue derived reflection-probe captures at the current Scene render boundary.",
             ),
-            Method::new::<CancelParams>(
+            Method::new::<RenderProbeCancelParams>(
                 db,
                 "render.probe.cancel",
                 "Cancel this session's cancellable reflection-probe capture job.",
             ),
-            Method::new::<QueryParams>(
+            Method::new::<RenderProbesQueryParams>(
                 db,
                 "render.probes.query",
                 "Read the last current-Scene probe capabilities, state and real capture receipts.",

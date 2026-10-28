@@ -5,7 +5,7 @@ use serde::Deserialize;
 #[derive(Debug, Schema, Deserialize)]
 #[ara(params)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct RecaptureParams {
+pub(crate) struct RenderProbeRecaptureParams {
     /// Live protocol session that owns the returned job.
     pub session: String,
     /// Scene ID, path or reference; omitted uses the current renderer scene snapshot.
@@ -20,7 +20,7 @@ pub(crate) struct RecaptureParams {
 #[derive(Debug, Schema, Deserialize)]
 #[ara(params)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct CancelParams {
+pub(crate) struct RenderProbeCancelParams {
     /// Session that originally requested the capture.
     pub session: String,
     /// Host job ID returned by render.probe.recapture.
@@ -31,7 +31,7 @@ pub(crate) struct CancelParams {
 #[derive(Debug, Schema, Deserialize)]
 #[ara(params)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(crate) struct QueryParams {
+pub(crate) struct RenderProbesQueryParams {
     /// Live protocol session.
     #[expect(
         dead_code,
