@@ -219,13 +219,14 @@ impl PrefabCheck {
             self.output.join(format!("{name}.layout.json")),
             ara_json::to_canonical_string(&shell.layout_report()),
         )?;
-        self.trace.push(json!({"stage":stage,"revision":editor.host.store().revision(),"selection":editor.state.selection,"documents":fixture::snapshot(editor)}));
+        self.trace.push(json!({"stage":stage,"revision":editor.host.store().revision(),"selection":editor.state.selection,"documents":fixture::capture_documents(editor)}));
         Ok(())
     }
     pub fn write(&self) -> ara_ui::Result<()> {
         std::fs::write(
             self.output.join("prefab.json"),
             ara_json::to_canonical_string(&json!({
+                "documentsEncoding":"canonical-utf8-byte-length+blake3/v1",
                 "journeys":self.results,"completed":self.finished(),"passed":self.results.iter().filter(|row|row["ok"]==true).count(),"failed":self.failures().len()
             })),
         )?;

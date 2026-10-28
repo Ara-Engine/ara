@@ -73,6 +73,28 @@ pub(super) fn snapshot(editor: &Editor) -> Value {
     Value::Object(docs)
 }
 
+/// Capture every document's identity without retaining its body in each trace.
+/// Full snapshots above still drive exact, all-document equality assertions.
+pub(super) fn capture_documents(editor: &Editor) -> Value {
+    let docs: serde_json::Map<String, Value> = editor
+        .host
+        .store()
+        .workspace()
+        .docs()
+        .map(|(path, doc)| {
+            let canonical = ara_doc::write(doc, editor.host.store().schema());
+            (
+                path.into(),
+                json!({"canonicalBytes":canonical.len(),"blake3":blake3::hash(canonical.as_bytes()).to_hex().to_string()}),
+            )
+        })
+        .collect();
+    Value::Object(docs)
+}
+
+#[cfg(test)]
+mod tests;
+
 impl PrefabCheck {
     pub(super) fn setup(
         &mut self,
