@@ -277,21 +277,34 @@ impl DialogWindow {
         directory: &std::path::Path,
         name: &str,
     ) -> ara_ui::Result<()> {
-        let mut window = Self::create(true)?;
+        let device = crate::gpu::open_presentation(&[])?;
+        // SAFETY: The adapter is dropped before this owned UI-only device; no window or scene is created.
+        let mut adapter = unsafe { NativeUi::new(&device)? };
+        adapter.set_dpi(1.)?;
+        let mut renderer = Renderer::default();
+        let mut text = crate::shell::text_system()?;
         for (theme, light) in [("dark", false), ("light", true)] {
-            window.ui.switch_theme(if light {
+            let mut ui = Ui::editor(&view::markup(project, state), view::CSS, [648., 640.])?;
+            ui.switch_theme(if light {
                 ara_ui::theme::EditorTheme::Light
             } else {
                 ara_ui::theme::EditorTheme::Dark
             })?;
-            window.dirty = true;
-            window.show(project, state)?;
-            window.frame()?;
-            window
-                .adapter
+            ui.frame(&mut text)?;
+            renderer.render(
+                &mut adapter,
+                &ui.display,
+                &text.assets,
+                [648, 640],
+                TextMode::Raster,
+            )?;
+            adapter
                 .pixels()?
                 .save(directory.join(format!("editor-migration-{name}-{theme}.png")))?;
-            assert!(!window.shown, "capture cannot show its SDL window");
+        }
+        // SAFETY: Complete the capture submission before this local adapter/device drop.
+        unsafe {
+            adapter.wait_idle(&device)?;
         }
         Ok(())
     }
