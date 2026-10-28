@@ -226,13 +226,6 @@ impl BlockEncoder for Encoder {
                     "integer BC6H/BC7 shaders require shaderInt64 on this device",
                 ));
             }
-            // BC4/BC5/BC7 match the integer oracles on Metal, but the BC6H search
-            // kernels use about 48.5 KiB of threadgroup memory and Metal allows 32 KiB.
-            if cfg!(target_os = "macos") {
-                return Err(unavailable(
-                    "BC6H kernels need more threadgroup memory than Metal's 32 KiB",
-                ));
-            }
             state.dot = self.allow_dot && gpu.info().packed_integer_dot_accelerated;
             state.gpu = Some(gpu);
             state.timings.insert(
