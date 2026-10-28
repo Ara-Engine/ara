@@ -209,7 +209,9 @@ impl Editor {
         // The Game view shows embedded players through shared GPU surfaces (D19).
         let play_surfaces = Some(play.surfaces());
         let script_recovery = play.script_recovery();
-        let play_profiling = Some(crate::shell::profiler_targets::backend::attach_play(play.profiling()));
+        let play_profiling = Some(crate::shell::profiler_targets::backend::attach_play(
+            play.profiling(),
+        ));
         host.register(Box::new(play))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         let (tasks, captures) = mpsc::channel();

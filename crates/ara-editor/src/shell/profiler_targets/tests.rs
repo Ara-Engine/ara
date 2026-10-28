@@ -261,14 +261,20 @@ fn another_ticket_keeps_the_original_profile_request_owned_and_pending() {
     let mut state = State {
         selected: Target::Editor,
         pending: Some(Pending {
-            ticket: Ticket(18), target: original.clone(), purpose: Purpose::Snapshot,
+            ticket: Ticket(18),
+            target: original.clone(),
+            purpose: Purpose::Snapshot,
             session: "original-session".into(),
         }),
         ..State::default()
     };
     assert!(state.accept(Status {
-        ticket: Ticket(19), target: original.clone(), finished: true,
-        outcome: Some(Outcome::Completed), recording: false, profile: Some(profile()),
+        ticket: Ticket(19),
+        target: original.clone(),
+        finished: true,
+        outcome: Some(Outcome::Completed),
+        recording: false,
+        profile: Some(profile()),
         diagnostics: Vec::new(),
     }));
     let pending = state.pending.as_ref().expect("original ownership retained");
@@ -276,10 +282,17 @@ fn another_ticket_keeps_the_original_profile_request_owned_and_pending() {
     assert_eq!(pending.target, original);
     assert_eq!(pending.session, "original-session");
     assert!(state.current.is_none());
-    assert!(state.selected == Target::Editor, "late player data never substitutes for the selected Editor target");
+    assert!(
+        state.selected == Target::Editor,
+        "late player data never substitutes for the selected Editor target"
+    );
     assert!(state.accept(Status {
-        ticket: Ticket(18), target: original, finished: true,
-        outcome: Some(Outcome::Refused), recording: false, profile: None,
+        ticket: Ticket(18),
+        target: original,
+        finished: true,
+        outcome: Some(Outcome::Refused),
+        recording: false,
+        profile: None,
         diagnostics: Vec::new(),
     }));
     assert!(state.pending.is_none());
@@ -292,18 +305,30 @@ fn matching_ticket_from_another_incarnation_never_adopts_the_profile() {
     let mut state = State {
         selected: Target::Player(original.clone()),
         pending: Some(Pending {
-            ticket: Ticket(18), target: original.clone(), purpose: Purpose::Snapshot,
+            ticket: Ticket(18),
+            target: original.clone(),
+            purpose: Purpose::Snapshot,
             session: "original-session".into(),
         }),
         ..State::default()
     };
     assert!(state.accept(Status {
-        ticket: Ticket(18), target: scope(2, "replacement-incarnation", 8), finished: true,
-        outcome: Some(Outcome::Completed), recording: false, profile: Some(profile()),
+        ticket: Ticket(18),
+        target: scope(2, "replacement-incarnation", 8),
+        finished: true,
+        outcome: Some(Outcome::Completed),
+        recording: false,
+        profile: Some(profile()),
         diagnostics: Vec::new(),
     }));
     assert!(state.pending.is_none());
     assert!(state.current.is_none());
     assert!(state.selected == Target::Player(original));
-    assert!(state.error.as_deref().expect("scope mismatch").contains("did not match"));
+    assert!(
+        state
+            .error
+            .as_deref()
+            .expect("scope mismatch")
+            .contains("did not match")
+    );
 }

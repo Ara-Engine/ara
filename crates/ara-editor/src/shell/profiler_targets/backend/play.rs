@@ -8,7 +8,10 @@ use ara_play_host::{
 
 /// Attach the owned mailbox before its PlayService moves into the project Host.
 pub(crate) fn attach(handle: PlayProfilingHandle) -> Box<dyn Backend> {
-    Box::new(Play { handle, rows: Vec::new() })
+    Box::new(Play {
+        handle,
+        rows: Vec::new(),
+    })
 }
 
 struct Play {
@@ -22,7 +25,11 @@ impl Backend for Play {
         let current = self.handle.targets();
         // Shell polls at 4 Hz; an unchanged owned inventory needs no new strings.
         if current.len() != self.rows.len()
-            || self.rows.iter().zip(current).any(|(cached, live)| !same_row(cached, live))
+            || self
+                .rows
+                .iter()
+                .zip(current)
+                .any(|(cached, live)| !same_row(cached, live))
         {
             self.rows = current.iter().map(row).collect();
         }
@@ -34,7 +41,9 @@ impl Backend for Play {
     }
 
     fn request(&mut self, request: Request) -> Result<Ticket, Vec<Diagnostic>> {
-        self.handle.request(request_to_play(request)).map(|ticket| Ticket(ticket.0))
+        self.handle
+            .request(request_to_play(request))
+            .map(|ticket| Ticket(ticket.0))
     }
 
     fn poll(&mut self, ticket: Ticket) -> Option<Status> {
@@ -73,7 +82,12 @@ fn row(value: &PlayProfileTargetRow) -> Row {
 }
 
 fn scope(value: PlayProfileTarget) -> Scope {
-    Scope { world: value.world, player: value.player, source: value.source, binding: value.binding }
+    Scope {
+        world: value.world,
+        player: value.player,
+        source: value.source,
+        binding: value.binding,
+    }
 }
 
 fn request_to_play(value: Request) -> PlayProfileRequest {
