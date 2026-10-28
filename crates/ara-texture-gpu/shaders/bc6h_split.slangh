@@ -18,8 +18,10 @@
 // partitions each. Use these instead of the corresponding ordinary mode entries
 // for Balanced; their 8-way lane reductions preserve the same total order.
 static const uint BC6_SPLIT_STRIDE=344;
-groupshared uint bc6BatchHalf[16][3][64];
-groupshared uint bc6BatchLight[16][3][64];
+// One word per batched texel channel: the UF16 half in the low 16 bits and its linear
+// light in the high 16 (below 2^15 after the block's shift). Separate half and light
+// arrays needed 24.5 KiB, which Metal's converter doubles past its 32 KiB limit.
+groupshared uint bc6BatchTexel[16][3][64];
 groupshared uint bc6BatchShift[64];
 groupshared uint bc6PartHalf[16][3][8];
 groupshared uint bc6PartLight[16][3][8];
@@ -35,12 +37,12 @@ void bc6SplitPut(inout uint4 words,uint offset,uint value,uint count) {
 }
 uint bc6SplitBase(uint block) { return root.b+block*BC6_SPLIT_STRIDE; }
 uint bc6SHalf<let batch:uint>(uint slot,uint i,uint c) {
-    if (batch==1) return bc6BatchHalf[i][c][slot];
+    if (batch==1) return bc6BatchTexel[i][c][slot]&65535;
     if (batch==2) return bc6PartHalf[i][c][slot];
     return bc6Half[i][c];
 }
 uint bc6SLight<let batch:uint>(uint slot,uint i,uint c) {
-    if (batch==1) return bc6BatchLight[i][c][slot];
+    if (batch==1) return bc6BatchTexel[i][c][slot]>>16;
     if (batch==2) return bc6PartLight[i][c][slot];
     return bc6Light[i][c];
 }
@@ -347,12 +349,14 @@ void bc6SplitSingle<let mode:uint>(uint block,uint lane) {
     for (uint i=0;i<16;++i) {
         uint rg=buffers[NonUniformResourceIndex(root.input)].Load(block*128+i*8);
         uint b=buffers[NonUniformResourceIndex(root.input)].Load(block*128+i*8+4);
-        bc6BatchHalf[i][0][lane]=rg&65535;bc6BatchHalf[i][1][lane]=rg>>16;bc6BatchHalf[i][2][lane]=b&65535;
+        bc6BatchTexel[i][0][lane]=rg&65535;bc6BatchTexel[i][1][lane]=rg>>16;bc6BatchTexel[i][2][lane]=b&65535;
         maximum=max(maximum,max(max(rg&65535,rg>>16),b&65535));
     }
     uint exponent=maximum>>10,shift=exponent>5 ? exponent-5 : 0;bc6BatchShift[lane]=shift;
     // Each lane reads only its own SoA column; no cross-lane dependency/barrier.
-    for (uint i=0;i<16;++i) [unroll] for (uint c=0;c<3;++c) bc6BatchLight[i][c][lane]=bc6Linear(bc6BatchHalf[i][c][lane],shift);
+    for (uint i=0;i<16;++i) [unroll] for (uint c=0;c<3;++c) {
+        uint half=bc6BatchTexel[i][c][lane];bc6BatchTexel[i][c][lane]=half|(bc6Linear(half,shift)<<16);
+    }
     Bc6Candidate best=bc6Worst();
     if (root.preset!=0 || mode==10) for (uint kind=0;kind<(root.preset>=2 ? 2u : 1u);++kind) {
         Bc6Endpoints endpoints=bc6SplitSeed<false,1>(lane,0,kind);

@@ -82,8 +82,12 @@ void seedEndpoints(int4 pixels[16], uint mask, uint first, uint channels, bool b
     uniform = all((hi-lo)*active == 0);
     if (bbox || uniform) { loEndpoint = lo; hiEndpoint = hi; return; }
     uint major = first;
-    [unroll] for (uint c = 0; c < 4; ++c) if (active[c] != 0 && hi[c]-lo[c] > hi[major]-lo[major]) major = c;
-    int4 axis = int4(0); axis[major] = 64;
+    // No runtime-indexed vector components: Metal Shader Converter miscompiled
+    // `axis[major] = 64` (BC7 PCA seeds diverged from the integer oracle on Metal).
+    int4 range = hi-lo;
+    int widest = first == 0 ? range.x : first == 1 ? range.y : first == 2 ? range.z : range.w;
+    [unroll] for (uint c = 0; c < 4; ++c) if (active[c] != 0 && range[c] > widest) { major = c; widest = range[c]; }
+    int4 axis = int4(major == 0 ? 64 : 0, major == 1 ? 64 : 0, major == 2 ? 64 : 0, major == 3 ? 64 : 0);
     int4 cov0 = int4(0), cov1 = int4(0), cov2 = int4(0), cov3 = int4(0);
     int4 mean = int4((uint4(sum)*MEAN_RECIP[count]) >> 16);
     for (uint i = 0; i < 16; ++i) if ((mask & (1u << i)) != 0) {
