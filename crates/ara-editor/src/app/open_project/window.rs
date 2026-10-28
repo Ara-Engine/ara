@@ -83,6 +83,7 @@ impl DialogWindow {
         let present = if offscreen {
             None
         } else {
+            // SAFETY: The live window and UI-only device outlive this owned present handle.
             Some(unsafe { adapter.create_present(&device, &window)? })
         };
         crate::native::frame::style(window.raw(), false);
@@ -302,10 +303,7 @@ impl DialogWindow {
                 .pixels()?
                 .save(directory.join(format!("editor-migration-{name}-{theme}.png")))?;
         }
-        // SAFETY: Complete the capture submission before this local adapter/device drop.
-        unsafe {
-            adapter.wait_idle(&device)?;
-        }
+        adapter.wait_idle(&device)?;
         Ok(())
     }
 }
