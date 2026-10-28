@@ -129,6 +129,7 @@ fn main() -> std::process::ExitCode {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
