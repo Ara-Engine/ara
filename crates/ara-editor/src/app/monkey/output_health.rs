@@ -202,3 +202,7 @@ fn milliseconds(elapsed: Duration) -> f64 {
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests;
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod benchmark;
