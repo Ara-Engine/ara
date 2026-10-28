@@ -24,8 +24,6 @@ use ara_ui_text::Clipboard;
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
-    fs::File,
-    io::{BufWriter, Write},
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
     time::{Duration, Instant},
@@ -34,10 +32,17 @@ use std::{
 const SPIKE: Duration = Duration::from_millis(100);
 const HANG: Duration = Duration::from_secs(10);
 const DRAIN: Duration = Duration::from_secs(30);
+const JOURNAL_ACK: Duration = Duration::from_secs(120);
 
 struct Recorded {
     action: Action,
     cleanup: bool,
+}
+struct PendingAction {
+    recorded: Recorded,
+    json: Value,
+    ticket: journal::Ticket,
+    since: Instant,
 }
 
 /// One production-loop runner with durable actions and an injectable input router.
@@ -49,7 +54,15 @@ pub(super) struct Monkey {
     max_steps: Option<u64>,
     started: Instant,
     output: PathBuf,
-    journal: BufWriter<File>,
+    journal: journal::Writer,
+    pending_action: Option<PendingAction>,
+    journal_error: Option<String>,
+    aborted_action: Option<Value>,
+    journal_wait_frames: u64,
+    journal_wait_ms: f64,
+    max_journal_wait_ms: f64,
+    baseline_collected: bool,
+    last_wait_report: Instant,
     reports: report_writer::Reports,
     report_io_failed: bool,
     generator: Generator,
@@ -119,7 +132,15 @@ impl Monkey {
             max_steps,
             started: Instant::now(),
             output: output.into(),
-            journal: BufWriter::new(File::create(output.join("monkey-events.jsonl"))?),
+            journal: journal::Writer::new(&output.join("monkey-events.jsonl"))?,
+            pending_action: None,
+            journal_error: None,
+            aborted_action: None,
+            journal_wait_frames: 0,
+            journal_wait_ms: 0.,
+            max_journal_wait_ms: 0.,
+            baseline_collected: false,
+            last_wait_report: Instant::now(),
             reports: report_writer::Reports::new(output.join("monkey.json"))?,
             report_io_failed: false,
             generator: Generator::new(seed),
@@ -203,7 +224,7 @@ impl Monkey {
     /// Record the exact seed supplied to HostConfig at startup, before any action.
     /// Other consumers retain unknown provenance rather than inventing a Host seed.
     pub fn record_host_seed(&mut self, seed: u64) -> ara_ui::Result<()> {
-        if self.actions != 0 || seed != self.seed {
+        if self.actions != 0 || self.pending_action.is_some() || seed != self.seed {
             return Err(
                 "Host seed must match the monkey seed and be recorded before actions".into(),
             );
@@ -212,13 +233,23 @@ impl Monkey {
         Ok(())
     }
 
-    /// Execute one action at a frame boundary and dispatch ordinary widget actions.
-    #[allow(
-        dead_code,
-        reason = "Retained-input consumers share the same durable runner without a platform router"
-    )]
+    /// Bounded CPU-test pump through the same acknowledgement path. Production
+    /// native consumers call step_with once per frame and never wait here.
+    #[cfg(test)]
     pub fn step(&mut self, editor: &mut Editor, shell: &mut Shell) -> ara_ui::Result<bool> {
-        self.step_with(editor, shell, Action::run)
+        let before = self.actions;
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let changed = self.step_with(editor, shell, Action::run)?;
+            if self.actions > before || self.finished() || self.pending_action.is_none() {
+                return Ok(changed);
+            }
+            if Instant::now() >= deadline {
+                return Err("CPU test journal acknowledgement exceeded five seconds".into());
+            }
+            editor.tick();
+            std::thread::yield_now();
+        }
     }
 
     /// Run the recorded action through the production input owner. The journal,
@@ -236,7 +267,7 @@ impl Monkey {
         if !shell.offscreen {
             return Err("the editor monkey requires an offscreen run".into());
         }
-        if self.actions == 0
+        if !self.baseline_collected
             && !editor.host.root().join(".ara-monkey-fixture").is_file()
             && !editor.host.root().join(".ara-behaviour-fixture").is_file()
         {
@@ -252,92 +283,172 @@ impl Monkey {
             self.typed.baseline_jobs(&inventory)?;
             self.write_event(json!({"phase":"jobInventory","when":"startup","session":editor.session,"jobs":self.resources.report()["baselineJobs"]}))?;
         }
-        if self.actions == 0 {
+        if !self.baseline_collected {
             self.read_diagnostics(editor)?;
             self.baseline_diagnostics = std::mem::take(&mut self.diagnostics);
+            self.baseline_collected = true;
         } else {
             // A native click or registered Clear action can erase diagnostics.
             // Observe them before every action, not only each report interval.
             self.read_diagnostics(editor)?;
         }
-        let Recorded { action, cleanup } = if let Some(replay) = &mut self.replay {
-            let Some(action) = replay.pop_front() else {
-                self.stopped = true;
-                return Ok(false);
-            };
-            action
-        } else if self.budget_reached() {
-            if self.is_soak() {
-                self.shell_catalog.begin_drain();
-            }
-            let since = self.draining_since.get_or_insert_with(Instant::now);
-            if since.elapsed() >= DRAIN {
-                self.cleanup_incomplete = true;
-                self.stopped = true;
-                self.write_event(json!({"phase":"cleanupIncomplete","step":self.actions,"playResources":self.play.report(),"heldKeys":self.held_keys,"heldButtons":self.held_buttons}))?;
-                self.write_report()?;
-                return Ok(false);
-            }
-            let action = if !self.held_buttons.is_empty() || !self.held_keys.is_empty() {
-                Action::FocusLost
-            } else if let Some(action) = self
-                .play
-                .drain()
-                .or_else(|| self.typed.drain())
-                .or_else(|| self.resources.next())
-                .or_else(|| {
-                    if self.is_soak() {
-                        self.shell_catalog.next()
-                    } else {
-                        None
-                    }
-                })
-            {
+        if self.journal_error.is_some() {
+            return Ok(false);
+        }
+        if self.pending_action.is_none() {
+            let recorded = if let Some(replay) = &mut self.replay {
+                let Some(action) = replay.pop_front() else {
+                    self.stopped = true;
+                    return Ok(false);
+                };
                 action
-            } else if self.is_soak() && self.shell_catalog.drain_pending() {
-                Action::Protocol {
-                    method: "editor.commands".into(),
-                    params: json!({}),
-                    raw: false,
+            } else if self.budget_reached() {
+                if self.is_soak() {
+                    self.shell_catalog.begin_drain();
+                }
+                let since = self.draining_since.get_or_insert_with(Instant::now);
+                if since.elapsed() >= DRAIN {
+                    self.cleanup_incomplete = true;
+                    self.stopped = true;
+                    self.write_event(json!({"phase":"cleanupIncomplete","step":self.actions,"playResources":self.play.report(),"heldKeys":self.held_keys,"heldButtons":self.held_buttons}))?;
+                    self.write_report()?;
+                    return Ok(false);
+                }
+                let action = if !self.held_buttons.is_empty() || !self.held_keys.is_empty() {
+                    Action::FocusLost
+                } else if let Some(action) = self
+                    .play
+                    .drain()
+                    .or_else(|| self.typed.drain())
+                    .or_else(|| self.resources.next())
+                    .or_else(|| {
+                        if self.is_soak() {
+                            self.shell_catalog.next()
+                        } else {
+                            None
+                        }
+                    })
+                {
+                    action
+                } else if self.is_soak() && self.shell_catalog.drain_pending() {
+                    Action::Protocol {
+                        method: "editor.commands".into(),
+                        params: json!({}),
+                        raw: false,
+                    }
+                } else {
+                    return Ok(false);
+                };
+                Recorded {
+                    action,
+                    cleanup: true,
+                }
+            } else if let Some(action) = self
+                .typed
+                .discovery_action()
+                .filter(|_| !self.generator.queued())
+            {
+                Recorded {
+                    action,
+                    cleanup: false,
                 }
             } else {
-                return Ok(false);
+                let generator = &mut self.generator;
+                let typed = &mut self.typed;
+                let catalog = &mut self.shell_catalog;
+                let before = self.play.cleanup_actions();
+                let action = self.play.next(|| {
+                    generator.initialize(editor);
+                    generator.next(editor, shell, typed, catalog)
+                });
+                Recorded {
+                    action,
+                    cleanup: self.play.cleanup_actions() != before,
+                }
             };
-            self.drain_actions += 1;
-            Recorded {
-                action,
-                cleanup: true,
+            let action_json = serde_json::to_value(&recorded.action)?;
+            let line = self.journal_line(json!({"phase":"begin","seed":self.seed,"hostSeed":self.host_seed,
+            "step":self.actions,"ticket":self.journal.next_ticket(),"cleanup":recorded.cleanup,"action":action_json}))?;
+            let at = Instant::now();
+            let ticket = self.journal.begin(line);
+            self.measurements
+                .record(measurements::Stage::JournalSubmit, at.elapsed());
+            match ticket {
+                Ok(ticket) => {
+                    self.pending_action = Some(PendingAction {
+                        recorded,
+                        json: action_json,
+                        ticket,
+                        since: Instant::now(),
+                    })
+                }
+                Err(error) => {
+                    self.fail_journal(error.to_string());
+                    return Ok(false);
+                }
             }
-        } else if let Some(action) = self
-            .typed
-            .discovery_action()
-            .filter(|_| !self.generator.queued())
+        }
+        let ticket = self
+            .pending_action
+            .as_ref()
+            .ok_or("Journal action staging disappeared")?
+            .ticket;
+        let at = Instant::now();
+        let acknowledged = self.journal.poll(ticket);
+        self.measurements
+            .record(measurements::Stage::JournalSubmit, at.elapsed());
+        if acknowledged.is_ok()
+            && self
+                .pending_action
+                .as_ref()
+                .is_some_and(|pending| pending.recorded.cleanup)
+            && self
+                .draining_since
+                .is_some_and(|since| since.elapsed() >= DRAIN)
         {
-            Recorded {
-                action,
-                cleanup: false,
+            self.cleanup_incomplete = true;
+            self.stopped = true;
+            self.abort_pending(
+                "Resource drain deadline elapsed before this cleanup action was dispatched",
+            )?;
+            self.write_event(json!({"phase":"cleanupIncomplete","step":self.actions,"reason":"journal acknowledgement pending at resource drain deadline"}))?;
+            self.write_report()?;
+            return Ok(false);
+        }
+        match acknowledged {
+            Ok(false) => {
+                self.journal_wait_frames += 1;
+                if self
+                    .pending_action
+                    .as_ref()
+                    .is_some_and(|pending| pending.since.elapsed() >= JOURNAL_ACK)
+                {
+                    self.fail_journal(format!("Journal begin acknowledgement exceeded {} seconds; native loop continued while waiting",JOURNAL_ACK.as_secs()));
+                }
+                if self.journal_error.is_some()
+                    || self.last_wait_report.elapsed() >= Duration::from_secs(1)
+                {
+                    self.write_report()?;
+                    self.last_wait_report = Instant::now();
+                }
+                return Ok(false);
             }
-        } else {
-            let generator = &mut self.generator;
-            let typed = &mut self.typed;
-            let catalog = &mut self.shell_catalog;
-            let before = self.play.cleanup_actions();
-            let action = self.play.next(|| {
-                generator.initialize(editor);
-                generator.next(editor, shell, typed, catalog)
-            });
-            Recorded {
-                action,
-                cleanup: self.play.cleanup_actions() != before,
+            Err(error) => {
+                self.fail_journal(error.to_string());
+                return Ok(false);
             }
-        };
-        let action_json = serde_json::to_value(&action)?;
+            Ok(true) => {}
+        }
+        let pending = self
+            .pending_action
+            .take()
+            .ok_or("Acknowledged journal action disappeared")?;
+        self.record_journal_wait(pending.since.elapsed());
+        let Recorded { action, cleanup } = pending.recorded;
+        let action_json = pending.json;
         self.last_action = Some(action_json.clone());
         self.watchdog
             .progress(self.actions, Some(action_json.clone()));
-        self.write_event(
-            json!({"phase":"begin","seed":self.seed,"hostSeed":self.host_seed,"step":self.actions,"cleanup":cleanup,"action":action_json}),
-        )?;
         let at = Instant::now();
         let mut play_event = None;
         let result = catch_unwind(AssertUnwindSafe(|| {
@@ -350,6 +461,9 @@ impl Monkey {
             result
         }));
         self.actions += 1;
+        if cleanup && self.draining_since.is_some() {
+            self.drain_actions += 1;
+        }
         if cleanup {
             self.cleanup_actions += 1;
         } else {
@@ -490,6 +604,9 @@ impl Monkey {
     /// Generated budgets finish after their bounded recorded resource drain;
     /// replay exhaustion and panics stop immediately without inferred actions.
     pub fn finished(&self) -> bool {
+        if self.pending_action.is_some() {
+            return false;
+        }
         self.stopped
             || if let Some(replay) = &self.replay {
                 self.started.elapsed() >= self.budget || replay.is_empty()
@@ -564,6 +681,7 @@ impl Monkey {
             && self.diagnostics_truncated == 0
             && !self.diagnostic_bus_loss
             && !self.report_io_failed
+            && self.journal_error.is_none()
     }
 
     /// A duration-only generated run of at least thirty minutes is a soak;
@@ -651,13 +769,17 @@ impl Monkey {
 
     /// Persist the final summary even when an enclosing frame limit ended the run.
     pub fn finish(&mut self) -> ara_ui::Result<()> {
-        self.flush_journal()?;
         self.watchdog.finish();
+        let journal = self.journal.finish();
+        if let Err(error) = &journal {
+            self.fail_journal(error.to_string());
+        }
         let prior_writes = self.reports.drain_checkpoints();
         self.report_io_failed |= prior_writes.is_err();
         let text = self.report_text(true)?;
         let result = self.reports.finish(text);
         self.report_io_failed |= result.is_err();
+        journal?;
         prior_writes?;
         result?;
         Ok(())
@@ -678,28 +800,51 @@ impl Monkey {
     fn write_event(&mut self, event: Value) -> ara_ui::Result<()> {
         // JSONL frames use the same compact serializer as the host journal;
         // standalone report documents use Ara's canonical document writer.
-        let line = serde_json::to_string(&event)?;
+        let line = self.journal_line(event)?;
         let at = Instant::now();
-        let result = (|| {
-            self.journal.write_all(line.as_bytes())?;
-            if !line.ends_with('\n') {
-                self.journal.write_all(b"\n")?;
-            }
-            std::io::Result::Ok(())
-        })();
+        let result = self.journal.record(line);
         self.measurements
-            .record(measurements::Stage::JournalWrite, at.elapsed());
-        result?;
-        self.flush_journal()
+            .record(measurements::Stage::JournalSubmit, at.elapsed());
+        if let Err(error) = result {
+            self.fail_journal(error.to_string());
+        }
+        Ok(())
     }
 
-    fn flush_journal(&mut self) -> ara_ui::Result<()> {
+    fn journal_line(&mut self, event: Value) -> ara_ui::Result<String> {
         let at = Instant::now();
-        let result = self.journal.flush();
+        let result = serde_json::to_string(&event);
         self.measurements
-            .record(measurements::Stage::JournalFlush, at.elapsed());
-        result?;
+            .record(measurements::Stage::JournalSerialize, at.elapsed());
+        Ok(result?)
+    }
+
+    fn record_journal_wait(&mut self, elapsed: Duration) {
+        let ms = elapsed.as_secs_f64() * 1000.;
+        self.journal_wait_ms += ms;
+        self.max_journal_wait_ms = self.max_journal_wait_ms.max(ms);
+    }
+
+    fn abort_pending(&mut self, reason: &str) -> ara_ui::Result<()> {
+        if let Some(pending) = self.pending_action.take() {
+            self.record_journal_wait(pending.since.elapsed());
+            self.aborted_action = Some(
+                json!({"action":pending.json,"ticket":pending.ticket,"step":self.actions,"wasDispatched":false,"reason":reason}),
+            );
+            self.write_event(json!({"phase":"abort","step":self.actions,"ticket":pending.ticket,"wasDispatched":false,"reason":reason}))?;
+        }
         Ok(())
+    }
+
+    fn fail_journal(&mut self, reason: String) {
+        if let Err(error) = self.abort_pending(&reason) {
+            self.journal.fail(error.to_string());
+        }
+        if self.journal.report()["error"].is_null() {
+            self.journal.fail(reason.clone());
+        }
+        self.journal_error.get_or_insert(reason);
+        self.stopped = true;
     }
 
     fn read_diagnostics(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
@@ -753,6 +898,18 @@ impl Monkey {
 
     fn report_text(&mut self, final_snapshot: bool) -> ara_ui::Result<String> {
         let snapshot_at = Instant::now();
+        let mut journal = self.journal.report();
+        if let Some(error) = journal["error"].as_str() {
+            self.fail_journal(error.to_owned());
+        }
+        journal["pendingAction"] = self.pending_action.as_ref().map_or(Value::Null,|pending|json!({"action":pending.json,
+            "ticket":pending.ticket,"step":self.actions,"waitMs":pending.since.elapsed().as_secs_f64()*1000.,"wasDispatched":false}));
+        journal["abortedAction"] = self.aborted_action.clone().unwrap_or(Value::Null);
+        journal["waitFrames"] = self.journal_wait_frames.into();
+        journal["completedWaitMs"] = self.journal_wait_ms.into();
+        journal["maxCompletedWaitMs"] = self.max_journal_wait_ms.into();
+        journal["ackDeadlineSeconds"] = JOURNAL_ACK.as_secs().into();
+        journal["waitScope"] = "Elapsed wall time with an exact staged action withheld; the native UI/Host loop keeps pumping. It is not main-thread blocking time.".into();
         let mut report_writer = self.reports.report();
         self.report_io_failed |= !report_writer["error"].is_null();
         report_writer["finalSnapshotRequested"] = final_snapshot.into();
@@ -797,8 +954,9 @@ impl Monkey {
                 "slowestFrames":self.slowest,"panelFailures":self.boundary_failures,
                 "harnessTimings":self.measurements.summary(),
                 "reportWriter":report_writer,
+                "journalRecorder":journal,
                 "errorDiagnosticsBefore":self.baseline_diagnostics,"errorDiagnosticsDuring":self.diagnostics,"registryCommands":self.commands,
-                "baselineDiagnosticsCollected":self.actions>0,"diagnosticBusLoss":self.diagnostic_bus_loss,
+                "baselineDiagnosticsCollected":self.baseline_collected,"diagnosticBusLoss":self.diagnostic_bus_loss,
                 "finalDiagnosticsCollected":self.final_diagnostics,"diagnosticRecordsOmitted":self.diagnostics_truncated,
             }),
             json!({
@@ -844,6 +1002,8 @@ impl Monkey {
     fn termination(&self) -> &'static str {
         if !self.panics.is_empty() {
             "panic"
+        } else if self.journal_error.is_some() {
+            "journal-error"
         } else if self.cleanup_incomplete {
             "cleanup-timeout"
         } else if self.replay.as_ref().is_some_and(VecDeque::is_empty) {

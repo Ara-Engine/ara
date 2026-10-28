@@ -1,4 +1,5 @@
 //! Determinism, durable reporting and malformed inputs use the actual editor authority.
+mod journal_pump;
 use super::*;
 use crate::shell::commands;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -821,6 +822,7 @@ fn custom_input_callback_is_inside_the_durable_journal_and_panic_boundary() {
     let output = project.0.join("callback-report");
     let mut runner = Monkey::from_journal(&source, Duration::from_secs(30), &output).unwrap();
     let mut called = 0;
+    let deadline = Instant::now() + Duration::from_secs(5);
     while !runner.finished() {
         runner
             .step_with(&mut editor, &mut shell, |action, _, _, clipboard| {
@@ -842,6 +844,12 @@ fn custom_input_callback_is_inside_the_durable_journal_and_panic_boundary() {
                 }
             })
             .unwrap();
+        assert!(
+            Instant::now() < deadline,
+            "journal callback test exceeded its bounded pump"
+        );
+        editor.tick();
+        std::thread::yield_now();
     }
     runner.finish_with(&mut editor).unwrap();
     assert_eq!(called, 3);

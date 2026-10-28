@@ -1,4 +1,5 @@
 //! Stream action journals without retaining their diagnostic/report records.
+mod writer;
 use super::Recorded;
 use serde_json::Value;
 use std::{
@@ -7,6 +8,7 @@ use std::{
     io::{BufRead, BufReader},
     path::Path,
 };
+pub(super) use writer::{Ticket, Writer};
 
 #[derive(Default)]
 struct Metadata {
@@ -18,7 +20,6 @@ struct Metadata {
 impl Metadata {
     fn observe(&mut self, record: &Value, line: usize) -> ara_ui::Result<()> {
         self.seed = record["seed"].as_u64().unwrap_or(self.seed);
-        self.actions += 1;
         match &record["hostSeed"] {
             Value::Null => self.unknown_host_seed = true,
             value => {
@@ -48,6 +49,9 @@ fn visit(
     mut action: impl FnMut(usize, &Value) -> ara_ui::Result<()>,
 ) -> ara_ui::Result<Metadata> {
     let mut metadata = Metadata::default();
+    // Keep only the current begin until its end, next begin, or EOF. Legacy
+    // incomplete begins still replay; a new exact abort cancels only this begin.
+    let mut pending: Option<(usize, Value)> = None;
     for (line, text) in BufReader::new(File::open(path)?).lines().enumerate() {
         let text = text?;
         if text.trim().is_empty() {
@@ -57,12 +61,41 @@ fn visit(
         let record: Value =
             serde_json::from_str(&text).map_err(|error| format!("Replay line {line}: {error}"))?;
         if record["phase"] == "begin" {
+            if let Some((line, record)) = pending.take() {
+                metadata.actions += 1;
+                action(line, &record)?;
+            }
             metadata.observe(&record, line)?;
-            action(line, &record)?;
+            pending = Some((line, record));
+        } else if record["phase"] == "end" {
+            if pending
+                .as_ref()
+                .is_some_and(|(_, begin)| begin["step"] == record["step"])
+                && let Some((line, begin)) = pending.take()
+            {
+                metadata.actions += 1;
+                action(line, &begin)?;
+            }
+        } else if record["phase"] == "abort" {
+            let matches = pending.as_ref().is_some_and(|(_, begin)| {
+                record["wasDispatched"] == false
+                    && record["ticket"].as_u64().is_some()
+                    && record["ticket"] == begin["ticket"]
+                    && record["step"].as_u64().is_some()
+                    && record["step"] == begin["step"]
+            });
+            if !matches {
+                return Err(format!("Replay line {line}: abort must match an uncompleted begin's exact ticket and step").into());
+            }
+            pending = None;
         }
     }
+    if let Some((line, record)) = pending {
+        metadata.actions += 1;
+        action(line, &record)?;
+    }
     if metadata.actions == 0 {
-        return Err("The monkey journal contains no recorded actions".into());
+        return Err("The monkey journal contains no recorded actions to replay".into());
     }
     Ok(metadata)
 }
@@ -93,3 +126,7 @@ pub(super) fn read(path: &Path) -> ara_ui::Result<Replay> {
         actions,
     })
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests;

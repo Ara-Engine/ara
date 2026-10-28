@@ -9,8 +9,8 @@ pub(super) enum Stage {
     ReportSnapshotBuild,
     ReportCanonicalSerialize,
     ReportSubmit,
-    JournalWrite,
-    JournalFlush,
+    JournalSerialize,
+    JournalSubmit,
 }
 
 const STAGES: [&str; 7] = [
@@ -19,8 +19,8 @@ const STAGES: [&str; 7] = [
     "reportSnapshotBuildMs",
     "reportCanonicalSerializeMs",
     "reportSubmitMs",
-    "journalWriteMs",
-    "journalFlushMs",
+    "journalSerializeMs",
+    "journalSubmitMs",
 ];
 
 #[derive(Default)]
@@ -61,7 +61,7 @@ impl Measurements {
     pub fn summary(&self) -> Value {
         json!({
             "scope":"completed calls before this snapshot; build/serialize/queue-submission costs appear in the next snapshot and completed slow frame; reportWriter records actual background storage IO",
-            "diagnosticsScope":"Host logs query only; diagnostic journal writes are measured separately",
+            "diagnosticsScope":"Host logs query only; journal serialization/enqueue are measured here; journalRecorder reports actual background writes/flushes and acknowledgement waits",
             "stages":STAGES.iter().enumerate().map(|(index, stage)| {
                 ((*stage).to_owned(), json!({"calls":self.calls[index],"totalMs":self.totals[index],"maxCallMs":self.maxima[index]}))
             }).collect::<serde_json::Map<_, _>>()
@@ -77,18 +77,18 @@ mod tests {
     fn stage_tags_sum_calls_and_step_reset_preserves_aggregates() {
         let mut timings = Measurements::default();
         timings.record(Stage::DiagnosticsRead, Duration::from_millis(2));
-        timings.record(Stage::JournalWrite, Duration::from_millis(3));
-        timings.record(Stage::JournalWrite, Duration::from_millis(4));
-        timings.record(Stage::JournalFlush, Duration::from_millis(5));
+        timings.record(Stage::JournalSerialize, Duration::from_millis(3));
+        timings.record(Stage::JournalSerialize, Duration::from_millis(4));
+        timings.record(Stage::JournalSubmit, Duration::from_millis(5));
         assert_eq!(timings.step()["diagnosticsReadMs"], 2.);
-        assert_eq!(timings.step()["journalWriteMs"], 7.);
-        assert_eq!(timings.step()["journalFlushMs"], 5.);
+        assert_eq!(timings.step()["journalSerializeMs"], 7.);
+        assert_eq!(timings.step()["journalSubmitMs"], 5.);
         timings.begin_step();
-        assert_eq!(timings.step()["journalWriteMs"], 0.);
+        assert_eq!(timings.step()["journalSerializeMs"], 0.);
         let summary = timings.summary();
-        assert_eq!(summary["stages"]["journalWriteMs"]["calls"], 2);
-        assert_eq!(summary["stages"]["journalWriteMs"]["totalMs"], 7.);
-        assert_eq!(summary["stages"]["journalWriteMs"]["maxCallMs"], 4.);
+        assert_eq!(summary["stages"]["journalSerializeMs"]["calls"], 2);
+        assert_eq!(summary["stages"]["journalSerializeMs"]["totalMs"], 7.);
+        assert_eq!(summary["stages"]["journalSerializeMs"]["maxCallMs"], 4.);
         assert_eq!(
             summary["stages"].as_object().map(|stages| stages.len()),
             Some(7)
