@@ -1158,7 +1158,7 @@ fn probe(
     }
     for lane in 0..64 {
         let (mut albedo, mut emissive, mut normal) = (Vec3::ZERO, Vec3::ZERO, Vec3::ZERO);
-        let (mut mean, mut moment1, mut moment2, mut geometry) = (0f32, 0f32, 0f32, 0u32);
+        let (mut centroid, mut moment1, mut moment2, mut geometry) = (Vec3::ZERO, 0f32, 0f32, 0u32);
         for k in 0..16 {
             let uv = (Vec2::new((lane % 8) as f32, (lane / 8) as f32)
                 + (Vec2::new((k % 4) as f32, (k / 4) as f32) + 0.5) / 4.)
@@ -1168,7 +1168,7 @@ fn probe(
             if let Some(hit) = tracer.trace(origin, dir, RANGE) {
                 t = hit.distance;
                 geometry += 1;
-                mean += t;
+                centroid += dir * t;
                 if hit.normal.dot(dir) < 0. {
                     albedo += hit.shading.albedo;
                     emissive += hit.shading.emissive;
@@ -1182,11 +1182,22 @@ fn probe(
         }
         let sky = 1. - geometry as f32 / 16.;
         let g = geometry.max(1) as f32;
-        let (albedo, emissive, mean) = (albedo / g, emissive / g, mean / g);
+        let (albedo, emissive, centroid) = (albedo / g, emissive / g, centroid / g);
         let normal = if normal.length_squared() > 0. {
             normal.normalize()
         } else {
             -oct_decode((Vec2::new((lane % 8) as f32, (lane / 8) as f32) + 0.5) / 8.)
+        };
+        // The centre ray's distance to the plane through the hits' centroid along their
+        // mean normal, as `probeSurfacesMain`: relighting rebuilds one hit per texel on
+        // the centre ray, and the hits' mean distance would land behind a surface seen at
+        // an angle (distance grows as 1/cos across the texel), shadowing itself.
+        let axis = oct_decode((Vec2::new((lane % 8) as f32, (lane / 8) as f32) + 0.5) / 8.);
+        let facing = normal.dot(axis);
+        let mean = if facing < -0.05 {
+            (normal.dot(centroid) / facing).clamp(0., RANGE)
+        } else {
+            centroid.length()
         };
         let n = oct_encode(normal);
         texels[lane] = [
