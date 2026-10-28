@@ -345,7 +345,11 @@ impl Shell {
             return;
         };
         let title = start.title();
-        let detail = if start.stopping { String::new() } else { start.label() };
+        let detail = if start.stopping {
+            String::new()
+        } else {
+            start.label()
+        };
         let seconds = format!("{:.1} s", start.tenths as f64 / 10.);
         out.push_str(&format!("<panel id='game-starting' class='empty'>{}<text id='game-starting-title' class='empty-title' text='{title}' /><text id='game-starting-phase' class='empty-hint' style='white-space:nowrap' text='{}' />",icons::icon_in("game-starting","gamepad-2","icon-lg"),escape(&detail)));
         // A phase with a total: a bar and its count on one line.

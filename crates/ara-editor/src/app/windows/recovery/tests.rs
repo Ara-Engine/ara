@@ -82,7 +82,9 @@ fn failed_window_restores_only_its_tabs_and_keeps_authoring_and_other_floats() {
     redock(&mut editor, &mut shell, &inspector, &error).unwrap();
     assert_eq!(editor.state.floating, [console]);
     assert_eq!(editor.host.store().revision(), authoring);
-    editor.action("editor.focus", json!({"panel":"scene"})).unwrap();
+    editor
+        .action("editor.focus", json!({"panel":"scene"}))
+        .unwrap();
     shell.rebuild(&mut editor).unwrap();
     assert!(shell.shown_node("viewport-image").is_some());
     assert!(

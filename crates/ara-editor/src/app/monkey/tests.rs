@@ -1254,6 +1254,11 @@ fn capped_drain_fails_and_exact_replay_does_not_infer_extra_actions() {
     )
     .unwrap();
     replay.step(&mut editor, &mut shell).unwrap();
+    assert!(!replay.finished(), "a pending gesture gets only a bounded observation drain");
+    assert!(!replay.step(&mut editor, &mut shell).unwrap());
+    assert_eq!(replay.actions, 1, "waiting must not synthesize cleanup input");
+    replay.draining_since = Some(Instant::now() - DRAIN);
+    assert!(!replay.step(&mut editor, &mut shell).unwrap());
     assert!(replay.finished());
     assert_eq!(replay.actions, 1);
     assert_eq!(replay.cleanup_actions, 0);

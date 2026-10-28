@@ -298,7 +298,18 @@ impl Monkey {
         if self.pending_action.is_none() {
             let recorded = if let Some(replay) = &mut self.replay {
                 let Some(action) = replay.pop_front() else {
-                    self.stopped = true;
+                    // Replay preserves actions exactly, but asynchronous effects
+                    // may retire later than in the original run. Pump normally
+                    // and observe them; never synthesize cleanup commands.
+                    shell.cancel_script_module_intent();
+                    let since = self.draining_since.get_or_insert_with(Instant::now);
+                    if since.elapsed() >= DRAIN {
+                        self.cleanup_incomplete = true;
+                        self.stopped = true;
+                    }
+                    self.play.poll(editor)?;
+                    self.resources.shell(shell.monkey_background_work());
+                    self.refresh_end_inventory(editor)?;
                     return Ok(false);
                 };
                 action
@@ -605,14 +616,15 @@ impl Monkey {
     }
 
     /// Generated budgets finish after their bounded recorded resource drain;
-    /// replay exhaustion and panics stop immediately without inferred actions.
+    /// replay exhaustion waits for existing work without inferring extra actions.
     pub fn finished(&self) -> bool {
         if self.pending_action.is_some() {
             return false;
         }
         self.stopped
             || if let Some(replay) = &self.replay {
-                self.started.elapsed() >= self.budget || replay.is_empty()
+                self.started.elapsed() >= self.budget
+                    || (replay.is_empty() && self.resources_drained())
             } else {
                 self.budget_reached()
                     && self.resources_drained()
@@ -737,6 +749,7 @@ impl Monkey {
             self.shell_catalog.begin_drain();
         }
         self.resources.shell(shell.monkey_background_work());
+        self.play.poll(editor)?;
         self.refresh_end_inventory(editor)
     }
 

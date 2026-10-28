@@ -8,11 +8,16 @@ mod retained;
 fn blocked(list: &mut ModuleList, root: &Path) -> SyncSender<Inventory> {
     let (started, entered) = mpsc::sync_channel(1);
     let (release, result) = mpsc::sync_channel(1);
-    assert!(list.start_with(root, move |_| {
-        started.send(()).unwrap();
-        result.recv().unwrap()
-    }).unwrap());
-    entered.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+    assert!(
+        list.start_with(root, move |_| {
+            started.send(()).unwrap();
+            result.recv().unwrap()
+        })
+        .unwrap()
+    );
+    entered
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
     release
 }
 
@@ -23,7 +28,10 @@ fn finish(list: &mut ModuleList) -> Vec<ara_diag::Diagnostic> {
             assert!(list.job.is_none());
             return result;
         }
-        assert!(Instant::now() < deadline, "controlled discovery did not finish");
+        assert!(
+            Instant::now() < deadline,
+            "controlled discovery did not finish"
+        );
         std::thread::yield_now();
     }
 }
@@ -34,16 +42,25 @@ fn one_blocked_worker_coalesces_requests_and_cancel_does_not_claim_retirement() 
     let release = blocked(&mut list, Path::new("project"));
     list.intent = true;
     for _ in 0..32 {
-        assert!(!list.start_with(Path::new("project"), |_| panic!("duplicate task")).unwrap());
+        assert!(
+            !list
+                .start_with(Path::new("project"), |_| panic!("duplicate task"))
+                .unwrap()
+        );
         assert!(list.poll().is_none());
     }
     assert_eq!(list.started, 1);
     list.cancel_intent();
     assert!(!list.intent);
     assert!(list.job.is_some(), "cancellation is presentation-only");
-    release.send(Ok(vec![PathBuf::from("project/module")])).unwrap();
+    release
+        .send(Ok(vec![PathBuf::from("project/module")]))
+        .unwrap();
     assert!(finish(&mut list).is_empty());
-    assert!(!list.intent, "completion cannot reinstate a cancelled UI intent");
+    assert!(
+        !list.intent,
+        "completion cannot reinstate a cancelled UI intent"
+    );
     assert_eq!(list.paths(), ["module"]);
     assert_eq!((list.started, list.completed, list.cancelled), (1, 1, 1));
 }
@@ -53,7 +70,9 @@ fn completed_error_keeps_last_good_and_successful_empty_inventory_replaces_it() 
     let mut list = ModuleList::default();
     let root = Path::new("project");
     let release = blocked(&mut list, root);
-    release.send(Ok(vec![root.join("game"), root.join("tools")])).unwrap();
+    release
+        .send(Ok(vec![root.join("game"), root.join("tools")]))
+        .unwrap();
     assert!(finish(&mut list).is_empty());
     let good = list.paths.clone();
     let diagnostic = ara_diag::Diagnostic::error(

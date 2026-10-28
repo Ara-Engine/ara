@@ -1,8 +1,8 @@
 //! Owned Play preparation. The host polls progress; it never joins live work.
+mod restart;
 #[cfg(test)]
 mod tests;
 mod worker;
-mod restart;
 use super::*;
 pub(crate) use worker::Reporter;
 use worker::Worker;
@@ -15,12 +15,28 @@ pub(super) struct Pending {
     cancelled: bool,
 }
 enum Preparation {
-    Start { number: u32, request: PlayStartParams, workspace: ara_doc::Workspace, revision: u64 },
-    Restart { world: World, keep_state: bool, internal: bool },
+    Start {
+        number: u32,
+        request: PlayStartParams,
+        workspace: ara_doc::Workspace,
+        revision: u64,
+    },
+    Restart {
+        world: World,
+        keep_state: bool,
+        internal: bool,
+    },
 }
 impl Pending {
-    fn restarting(&self) -> bool { matches!(self.preparation,Preparation::Restart{..}) }
-    fn internal_restart(&self) -> bool { matches!(self.preparation,Preparation::Restart{internal:true,..}) }
+    fn restarting(&self) -> bool {
+        matches!(self.preparation, Preparation::Restart { .. })
+    }
+    fn internal_restart(&self) -> bool {
+        matches!(
+            self.preparation,
+            Preparation::Restart { internal: true, .. }
+        )
+    }
 }
 pub(super) struct Active {
     pub id: String,
@@ -62,19 +78,48 @@ fn run(input: Input, progress: &Reporter) -> Outcome {
     } = input;
     let restarting = pending.restarting();
     let mut result = match pending.preparation {
-        Preparation::Start { number, request, workspace, revision } => {
+        Preparation::Start {
+            number,
+            request,
+            workspace,
+            revision,
+        } => {
             service.next = number - 1;
-            service.start_owned(&workspace,revision,Some(&pending.scene),request,Some(progress))
+            service.start_owned(
+                &workspace,
+                revision,
+                Some(&pending.scene),
+                request,
+                Some(progress),
+            )
         }
-        Preparation::Restart { world, keep_state, .. } => {
-            service.worlds.insert(pending.id.clone(),world);
-            service.run_restart(&pending.id,keep_state,progress)
+        Preparation::Restart {
+            world, keep_state, ..
+        } => {
+            service.worlds.insert(pending.id.clone(), world);
+            service.run_restart(&pending.id, keep_state, progress)
         }
     };
     let catalog = if result.is_ok() && progress.check().is_ok() {
         let _ = progress.report("catalog", 0, 1);
-        let catalog = service.call_on_checked(&pending.id, method::COMMANDS, json!({}), Some(0), Some(progress))
-            .and_then(|catalog|if catalog.is_object(){Ok(catalog)}else{Err(fail(codes::PLAY,"C# command refresh returned a non-object catalog"))});
+        let catalog = service
+            .call_on_checked(
+                &pending.id,
+                method::COMMANDS,
+                json!({}),
+                Some(0),
+                Some(progress),
+            )
+            .and_then(|catalog| {
+                if catalog.is_object() {
+                    Ok(catalog)
+                } else {
+                    Err(fail(
+                        codes::PLAY,
+                        "C# command refresh returned a non-object catalog",
+                    ))
+                }
+            });
         if let Ok(catalog) = &catalog
             && let Some(world) = service.worlds.get_mut(&pending.id)
         {
@@ -123,7 +168,10 @@ impl PlayService {
             scene: scene.clone(),
             began: Instant::now(),
             preparation: Preparation::Start {
-                number:self.next, request,workspace:cx.store().workspace().clone(),revision:cx.store().revision(),
+                number: self.next,
+                request,
+                workspace: cx.store().workspace().clone(),
+                revision: cx.store().revision(),
             },
             cancelled: false,
         });
@@ -179,7 +227,13 @@ impl PlayService {
             self.start_failures.insert(id.clone(), json!({"world":id,"scene":scene,"restart":restarting,"status":"failed","error":"startup worker stopped before accepting work"}));
             return;
         }
-        self.starter = Some(Active { id, scene, restarting, internal_restart, worker });
+        self.starter = Some(Active {
+            id,
+            scene,
+            restarting,
+            internal_restart,
+            worker,
+        });
     }
 
     pub(super) fn poll_starting(&mut self, cx: &mut Cx<'_>) {
@@ -220,7 +274,7 @@ impl PlayService {
                                     cx.log(Diagnostic::info(codes::PLAY,format!("{}: engine bindings changed; restarted from the current tick",active.id)));
                                 }
                                 if let Some(catalog) = outcome.catalog {
-                                    self.catalog_refresh.ready(&active.id,&catalog);
+                                    self.catalog_refresh.ready(&active.id, &catalog);
                                     match catalog {
                                         Ok(catalog) => cx.publish_commands("play", &catalog),
                                         Err(problems) => {
@@ -248,19 +302,24 @@ impl PlayService {
         self.begin_starting();
     }
 
-    pub(super) fn cancel_start(&mut self, id: &str) -> Option<Result<Value,Vec<Diagnostic>>> {
+    pub(super) fn cancel_start(&mut self, id: &str) -> Option<Result<Value, Vec<Diagnostic>>> {
         if let Some(active) = &self.starter
             && active.id == id
         {
             active.worker.cancel();
             return Some(Ok(json!({"world":id,"status":"stopping"})));
         }
-        if let Some(result) = self.cancel_queued_restart(id) { return Some(result); }
+        if let Some(result) = self.cancel_queued_restart(id) {
+            return Some(result);
+        }
         if let Some(pending) = self.starting.iter_mut().find(|pending| pending.id == id) {
             pending.cancelled = true;
             return Some(Ok(json!({"world":id,"status":"stopping"})));
         }
-        if self.worlds.contains_key(id) { self.start_failures.remove(id); return None; }
+        if self.worlds.contains_key(id) {
+            self.start_failures.remove(id);
+            return None;
+        }
         self.start_failures
             .remove(id)
             .map(|_| Ok(json!({"world":id,"status":"stopped"})))
@@ -276,7 +335,12 @@ impl PlayService {
         }
         rows.extend(self.starting.iter().map(|pending| json!({"world":pending.id,"scene":pending.scene,"status":if pending.cancelled{"stopping"}else{"starting"},"restart":pending.restarting(),"players":[],
             "progress":{"phase":if pending.restarting(){"restarting"}else{"queued"},"label":if pending.restarting(){"Restarting Play…"}else{"Starting Play…"},"completed":0,"total":0,"elapsedMs":pending.began.elapsed().as_secs_f64()*1000.}})));
-        rows.extend(self.start_failures.iter().filter(|(id,_)|!self.worlds.contains_key(*id)).map(|(_,failure)|failure.clone()));
+        rows.extend(
+            self.start_failures
+                .iter()
+                .filter(|(id, _)| !self.worlds.contains_key(*id))
+                .map(|(_, failure)| failure.clone()),
+        );
         rows
     }
 }

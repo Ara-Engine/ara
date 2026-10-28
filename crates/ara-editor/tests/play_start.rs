@@ -126,11 +126,17 @@ fn play_starts_in_the_background_and_shows_its_progress() {
     for id in ["game-starting-title", "status-play-text"] {
         assert_eq!(text(&shell, id).as_deref(), Some("Restarting Play…"));
     }
-    assert_eq!(text(&shell, "game-command-refresh").as_deref(), Some("Refreshing C# commands…"));
+    assert_eq!(
+        text(&shell, "game-command-refresh").as_deref(),
+        Some("Refreshing C# commands…")
+    );
     assert!(shell.move_play_row_for_test(
         json!({"status":"starting","restart":true,"progress":{"phase":"pool","elapsedMs":3700}})
     ));
-    assert_eq!(text(&shell, "game-starting-title").as_deref(), Some("Restarting Play…"));
+    assert_eq!(
+        text(&shell, "game-starting-title").as_deref(),
+        Some("Restarting Play…")
+    );
     assert!(!shell.move_play_row_for_test(
         json!({"status":"starting","progress":{"phase":"pool","elapsedMs":3800}})
     ));

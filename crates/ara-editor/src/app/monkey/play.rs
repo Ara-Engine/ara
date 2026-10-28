@@ -112,6 +112,12 @@ impl State {
         let after = Inventory::read(editor)?;
         Ok(self.record(before, after))
     }
+    /// Observe already-owned retirement between replay actions without inventing
+    /// another protocol action or attributing somebody else's newly opened world.
+    pub fn poll(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.current = Inventory::read(editor)?;
+        Ok(())
+    }
     fn record(&mut self, before: &Inventory, after: Inventory) -> Option<Value> {
         // Authority is single-threaded during the callback: another connection's
         // queued requests do not run between these two status reads.

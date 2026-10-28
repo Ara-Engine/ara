@@ -1159,7 +1159,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 let progress_only = shell.play_controls.revision == was_play_views
                     && shell.game_live == was_live
                     && shell.game_fault == was_fault;
-                let progress_only = progress_only && shell.game_commands_status == was_commands_status;
+                let progress_only =
+                    progress_only && shell.game_commands_status == was_commands_status;
                 if !(progress_only && shell.patch_start_progress(was_start.as_ref())?) {
                     shell.rebuild(&mut editor)?;
                 }

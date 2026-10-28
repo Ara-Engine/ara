@@ -121,7 +121,10 @@ fn narrow_inspector_and_import_selects_fit_auto_rows_without_expanding_numeric_d
             minimum,
         );
         editor
-            .action("editor.workspace", json!({"asset":format!("{}/textures/quality.png",ara_doc::AUTHORING_ROOT)}))
+            .action(
+                "editor.workspace",
+                json!({"asset":format!("{}/textures/quality.png",ara_doc::AUTHORING_ROOT)}),
+            )
             .unwrap();
         editor
             .action("editor.focus", json!({"panel":"inspector"}))

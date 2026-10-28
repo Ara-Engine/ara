@@ -395,7 +395,11 @@ pub struct Pool {
 
 impl Pool {
     #[cfg(test)]
-    pub(crate) fn with_idle(config: PoolConfig, token: String, idle: Vec<Player>) -> std::io::Result<Self> {
+    pub(crate) fn with_idle(
+        config: PoolConfig,
+        token: String,
+        idle: Vec<Player>,
+    ) -> std::io::Result<Self> {
         let mut pool = Self::new(config, token)?;
         pool.idle = idle;
         Ok(pool)

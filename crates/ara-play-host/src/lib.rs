@@ -550,7 +550,9 @@ impl PlayService {
             if target.is_some_and(|t| t != index) {
                 continue;
             }
-            match player.call_checked(method, &params, Duration::from_secs(120), || starting::check(progress)) {
+            match player.call_checked(method, &params, Duration::from_secs(120), || {
+                starting::check(progress)
+            }) {
                 Ok(Ok(value)) => {
                     if index == answer {
                         first = Some(value);
@@ -982,13 +984,18 @@ impl PlayService {
         self.restart_checked(id, resume, None)
     }
 
-    fn restart_checked(&mut self, id: &str, resume: Option<&str>, progress: Option<&starting::Reporter>) -> Result<Value, Vec<Diagnostic>> {
+    fn restart_checked(
+        &mut self,
+        id: &str,
+        resume: Option<&str>,
+        progress: Option<&starting::Reporter>,
+    ) -> Result<Value, Vec<Diagnostic>> {
         starting::report(progress, "restarting", 0, 1)?;
         let mut world = self
             .worlds
             .remove(id)
             .ok_or_else(|| fail(codes::UNKNOWN_WORLD, format!("no play world `{id}`")))?;
-        self.catalog_refresh.invalidate(id,&mut world);
+        self.catalog_refresh.invalidate(id, &mut world);
         self.start_failures.remove(id);
         let roles: Vec<Role> = world.players.iter().map(|(r, _)| *r).collect();
         let snapshot = match &world.section {
@@ -1075,7 +1082,7 @@ impl PlayService {
             .worlds
             .remove(id)
             .expect("validated world remains owned by this service call");
-        self.catalog_refresh.invalidate(id,&mut world);
+        self.catalog_refresh.invalidate(id, &mut world);
         if let Err(error) = sender.send(world) {
             self.worlds.insert(id.to_owned(), error.0);
             return Err(fail(

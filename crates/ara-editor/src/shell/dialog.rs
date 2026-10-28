@@ -202,7 +202,12 @@ impl Shell {
                 ));
                 out.push_str("</panel>");
             }
-            Dialog::ScriptModules { paths, selected, pending, error } => {
+            Dialog::ScriptModules {
+                paths,
+                selected,
+                pending,
+                error,
+            } => {
                 out.push_str("<text id='dialog-title' class='title' style='white-space:normal;flex-shrink:0' text='Open Scripts in IDE' /><scroll id='script-module-content' style='flex-basis:auto;flex-shrink:1;min-height:0px;min-width:0px'>");
                 let note = if *pending {
                     "Discovering C# modules in the background. You can cancel this chooser; discovery will finish without opening an IDE."
@@ -222,17 +227,37 @@ impl Shell {
                         "C# module path",
                         choices::Select {
                             destination: choices::Destination::ScriptModule,
-                            options: paths.iter().map(|path| (Value::String(path.clone()), path.clone())).collect(),
-                            current: selected.as_ref().map_or(Value::Null, |path| Value::String(path.clone())),
+                            options: paths
+                                .iter()
+                                .map(|path| (Value::String(path.clone()), path.clone()))
+                                .collect(),
+                            current: selected
+                                .as_ref()
+                                .map_or(Value::Null, |path| Value::String(path.clone())),
                         },
                         out,
                     );
                     out.push_str("</panel>");
                 }
                 out.push_str("</scroll><panel id='dialog-actions' class='row' style='justify-content:end;flex-wrap:wrap;flex-shrink:0'>");
-                out.push_str(&self.bind_button("dialog-script-refresh", "Refresh", Binding::DialogAction("script-refresh"), ""));
-                out.push_str(&self.bind_button("dialog-cancel", "Cancel", Binding::DialogAction("close"), ""));
-                let button = self.bind_button("dialog-script-open", "Open", Binding::DialogAction("script-open"), "primary");
+                out.push_str(&self.bind_button(
+                    "dialog-script-refresh",
+                    "Refresh",
+                    Binding::DialogAction("script-refresh"),
+                    "",
+                ));
+                out.push_str(&self.bind_button(
+                    "dialog-cancel",
+                    "Cancel",
+                    Binding::DialogAction("close"),
+                    "",
+                ));
+                let button = self.bind_button(
+                    "dialog-script-open",
+                    "Open",
+                    Binding::DialogAction("script-open"),
+                    "primary",
+                );
                 if *pending || selected.is_none() {
                     out.push_str(&button.replacen("<button ", "<button disabled='true' ", 1));
                 } else {

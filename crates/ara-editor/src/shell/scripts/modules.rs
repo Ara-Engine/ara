@@ -85,11 +85,13 @@ impl ModuleList {
                         "C# module discovery failed without details; retry discovery or see Problems",
                     ));
                 }
-                self.error = Some(diagnostics
-                    .iter()
-                    .map(|diagnostic| diagnostic.message.as_str())
-                    .collect::<Vec<_>>()
-                    .join("\n"));
+                self.error = Some(
+                    diagnostics
+                        .iter()
+                        .map(|diagnostic| diagnostic.message.as_str())
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                );
                 diagnostics
             }
         }
@@ -136,7 +138,9 @@ impl Shell {
             return Ok(());
         }
         if self.dialog.is_some() || self.confirmations.is_open() || self.build_options_open() {
-            return Err("Finish or close the current dialog, then open Scripts in IDE again".into());
+            return Err(
+                "Finish or close the current dialog, then open Scripts in IDE again".into(),
+            );
         }
         if self.script_modules.job.is_some()
             && self.script_modules.root.as_deref() != Some(editor.host.root())
@@ -183,7 +187,10 @@ impl Shell {
         Ok(true)
     }
 
-    pub(in crate::shell) fn refresh_script_modules(&mut self, editor: &Editor) -> ara_ui::Result<()> {
+    pub(in crate::shell) fn refresh_script_modules(
+        &mut self,
+        editor: &Editor,
+    ) -> ara_ui::Result<()> {
         if !matches!(self.dialog, Some(Dialog::ScriptModules { .. })) {
             return Ok(());
         }
@@ -199,7 +206,9 @@ impl Shell {
     /// Retained Select intent; choosing a module does not launch it.
     pub(crate) fn choose_script_module(&mut self, value: Value) -> ara_ui::Result<()> {
         let path = value.as_str().ok_or("Choose a C# module path")?;
-        if let Some(Dialog::ScriptModules { paths, selected, .. }) = &mut self.dialog
+        if let Some(Dialog::ScriptModules {
+            paths, selected, ..
+        }) = &mut self.dialog
             && paths.iter().any(|candidate| candidate == path)
         {
             *selected = Some(path.into());
@@ -207,8 +216,16 @@ impl Shell {
         Ok(())
     }
 
-    pub(in crate::shell) fn confirm_script_module(&mut self, editor: &Editor) -> ara_ui::Result<()> {
-        let Some(Dialog::ScriptModules { selected: Some(path), pending: false, .. }) = &self.dialog else {
+    pub(in crate::shell) fn confirm_script_module(
+        &mut self,
+        editor: &Editor,
+    ) -> ara_ui::Result<()> {
+        let Some(Dialog::ScriptModules {
+            selected: Some(path),
+            pending: false,
+            ..
+        }) = &self.dialog
+        else {
             return Ok(());
         };
         if !self.script_modules.intent
