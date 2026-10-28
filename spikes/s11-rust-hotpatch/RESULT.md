@@ -26,8 +26,10 @@ capture capability 1 in addition to native protocol 4.
 These are save-to-observed-output wall times, including workspace replay,
 compilation, linking, delivery and output sampling. They are not DX's shorter
 tip-only compile timer. Each row kept its process and state alive. Mac raster
-rendering previously passed around 1 s. The new Mac ECS/editor confirmations
-measure 0.494 s / 2.976 s warm medians on AC; that machine slot is released.
+rendering previously passed around 1 s. The earlier Mac ECS/editor checkpoint
+measured 0.494 s / 2.976 s on AC. The current-main follow-up below observes
+0.453 s / 3.036 s, plus 3.017 s after fresh workspace captures over warm
+dependencies; its editor timing-guard caveat is retained. The Mac slot is released.
 
 ## Live/rebuild contract
 
@@ -43,6 +45,7 @@ measure 0.494 s / 2.976 s warm medians on AC; that machine slot is released.
 | Shader-only edits | Existing independent shader reload/cohort checks |
 | Replay, snapshot restore or network continuation after any applied Rust patch | Refuse with ARA7603; process/header/hash are marked, including legacy-reader format rejection |
 | Editor's separately built Play companion | Keeps built code; player Rust iteration uses its own driver/baseline |
+| Shared lab Rust strategy | Native hotpatch on verified Windows targets; Mac currently selects rebuild plus warm restart |
 | Shipping/export executable | Feature is off by default, release compilation rejects runtime opt-in, export rejects the marker |
 
 The lab adapter is implemented against `ReloadStrategy`. The cold-baseline
@@ -812,3 +815,83 @@ window. Evidence: `target/hotpatch-proof/lab-native-r7-functional/functional.jso
 its `trace/`, and `baseline/`, `body-1/`, `body-3/`, `restore-2/`, `restore-4/` PNGs.
 The earlier R7 lab launch timed out behind timing tickets before any source edit;
 it is not a patch measurement or a correctness failure.
+
+### Current-main Mac follow-up and warm-cache proof (2026-10-28)
+
+The reserved session used current main `b3fb6dc7eb314eb2226b2a3ac632c89e9af1f5aa`
+(after `6881a800`) plus Windows checkpoint `e178d9638627c568a35b1d40f7b2ab152a677450`.
+The isolated verification merge is `094bdb4823ccc8d4bb5083258ed5c3834a81e67b`.
+Its three conflicts were ordering-only CLI/Cargo-feature conflicts; main's ordering
+was retained. Other Mac checkouts were untouched. Jobs ran serially on AC,
+with two Rust jobs, nice 10, job-scoped caffeinate and hidden/offscreen hosts.
+The slot lasted approximately 32 minutes, including evidence transfer and cleanup.
+
+All times below are save-to-observed-output wall times. Warm statistics exclude
+the first edit and include three samples. The editor rows are **observations,
+not quiet-window certified timings**, for the guard issue described below.
+
+| Current-main Mac path | First edit | Warm median | Warm range | Native PID |
+| --- | ---: | ---: | ---: | ---: |
+| Real ECS system | 496.614 ms | 453.446 ms | 453.378–455.025 ms | 86771 |
+| Real editor panel | 3,372.920 ms | 3,035.705 ms | 3,031.562–3,090.412 ms | 236 |
+| Editor after fresh captures over warm dependencies | 3,256.035 ms | 3,016.692 ms | 3,010.665–3,058.527 ms | 2883 |
+
+Each run applied exactly four generations while preserving its PID. The ECS
+probe preserved its entity and verified replay, restore and network refusals.
+The editor's production protocol captured the live panel marker and its restore;
+both sets of PNGs were visually inspected. Scene/entity state stayed present.
+
+For the warm-cache regression, the original `.captured-args` directory was moved
+into evidence while keeping dependencies and incremental state. The ordinary
+matching-companion check reused its build in 4.11 s. The corrected DX baseline
+then recreated the editor library capture, and every body edit replayed the real
+`ara_editor` crate and changed its panel output. The new `ara_editor.lib.json`
+SHA-256 is `e86b4957c29ee307b29b2d55123a373eacac3ffcfe32e459a075520de8303063`.
+This validates the common CLI capture path through the direct editor lane;
+the Mac lab adapter still deliberately uses warm restart.
+
+Representative warm samples below are nearest their median; all columns are
+milliseconds. Compile includes the source guard. Native Mac link time comes
+from DX phase profiling, subtracted from the remaining driver span. Unavailable
+per-rustc CPU counters remain null. The editor timing caveat applies to this table.
+
+| Mac path | Watch | rustc + guard | dx link | Driver + validation | Boundary + apply | Output observation | Total |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ECS | 11 | 222 | 33 | 147 | 32 | 8 | 453 |
+| Editor | 12 | 2,378 | 104 | 229 | 150 | 163 | 3,036 |
+| Editor, fresh captures | 12 | 2,356 | 104 | 234 | 155 | 156 | 3,017 |
+
+The fresh-capture editor sample spends 2,027.843 ms in `ara_editor`, 304.142 ms
+in its small host and 24.489 ms in guards. It has no silent tip-only shortcut.
+The ~2–3 s target remains unmet by the Windows editor and narrowly missed by
+these observed Mac panel captures. Existing leaf-crate recommendations stand;
+no engine crate split is included.
+
+Both editor runs held `ara-dev gpu` timing admission. Their raw reports marked
+all edit windows CPU-contaminated, with no GPU contaminants, sampler errors or
+monitoring gaps. A separate counter-units bug was identified in
+`gpu_guard/macos.rs`: raw rusage Mach ticks are compared with system counters
+converted to nanoseconds. Apple's [task accounting](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/task.c#L6391)
+and [rusage implementation](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/bsd_kern.c)
+establish that clock distinction. A read-only host query returned a timebase of
+125/3. Clock-corrected rescoring, with the original 10%/three-sample policy,
+still overlaps three first-run samples and one warm-cache sample. Raw reports
+and derived reports are retained; no guard code or threshold was changed and
+no subset is promoted as the overall quiet median. The guard owner needs the
+units fix before formal Mac timing validation.
+
+Evidence is copied to `target/hotpatch-proof/mac-cache-p4/`: raw traces, stage
+tables, captures, both capture generations, guard reports, timebase metadata,
+source/tool identities, and cleanup receipts. The raw final archive SHA-256 is
+`ac5923c021c9ae806a2a7446d1364164418cc312d6cd8cdc00cbcf68ab38eb49`.
+The analyzer ignores macOS AppleDouble metadata sidecars; these are not trace
+events. Replay counts and real captured output are required alongside table
+acknowledgements.
+
+Owned driver, companion, intermediate and DX generation build output was cleaned.
+Final cleanup increased free space by 15.70 GiB, leaving 31 GiB free; the finished
+DX build cache had already been cleaned earlier. Evidence and the installed tool
+remain. An initial misquoted inventory command left an unscoped caffeinate
+process; its verified PID 72793 was stopped, and the release check found no
+Cargo/rustc/DX/caffeinate process or dirty source. The Mac was released with
+**Mac free (hotpatch done)** at 04:55 UTC, ahead of the lab/VQ/fidelity queue.

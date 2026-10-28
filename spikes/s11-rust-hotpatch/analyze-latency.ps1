@@ -1,7 +1,8 @@
 # Read-only stage accounting for measure-latency.ps1 and opt-in trace files.
 param([Parameter(Mandatory=$true)][string]$Output)
 $ErrorActionPreference='Stop'
-$events=@(Get-ChildItem -LiteralPath (Join-Path $Output 'trace') -Filter '*.json' | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json } | Sort-Object at_us)
+# macOS tar can preserve extended attributes as AppleDouble sidecars, not events.
+$events=@(Get-ChildItem -LiteralPath (Join-Path $Output 'trace') -Filter '*.json' | Where-Object Name -NotLike '._*' | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw | ConvertFrom-Json } | Sort-Object at_us)
 $rows=Get-Content -LiteralPath (Join-Path $Output 'latency.json') -Raw | ConvertFrom-Json
 $applies=@($events | Where-Object event -eq 'apply_end')
 $dxPhases=[Collections.Generic.List[object]]::new()
