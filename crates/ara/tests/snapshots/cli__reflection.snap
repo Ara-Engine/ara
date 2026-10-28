@@ -6447,6 +6447,17 @@ expression: out
         }
       }
     },
+    "ProjectMigrateParams": {
+      "kind": "params",
+      "doc": "Consent to the exact read-only migration preview.",
+      "fields": {
+        "planToken": {
+          "type": "string",
+          "doc": "Immutable token returned by the migration preview; changed files require review again.",
+          "required": true
+        }
+      }
+    },
     "ProjectSetMainParams": {
       "kind": "params",
       "doc": "Parameters of `project.setMain`.",
@@ -9271,7 +9282,7 @@ expression: out
             "lane": "nativeAot",
             "playerTemplate": "runtime",
             "assembly": "Game",
-            "content": "game",
+            "content": "content",
             "templates": []
           }
         }
@@ -10090,6 +10101,21 @@ expression: out
           "entity": "e_4f9a/e_m4tz",
           "path": "MeshRenderer.tint",
           "value": [1, 0, 0, 1]
+        }
+      ]
+    },
+    "project.migrate": {
+      "kind": "command",
+      "summary": "Apply an explicitly reviewed project-layout migration as one reversible transaction.",
+      "params": "ProjectMigrateParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:assets",
+      "examples": [
+        {
+          "planToken": "reviewed-inventory-token"
         }
       ]
     },
