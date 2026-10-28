@@ -1,9 +1,9 @@
 //! Typed project settings and user preferences. Every edit is an undoable op.
 //!
 //! One definition table drives the Settings window, its search, `editor.settings`
-//! over MCP and validation. Edits commit to a private op store (with per-author
-//! undo), then persist: user scope to the preferences file chosen at open,
-//! project policy to `settings/project.json`, with name/main metadata in `ara.project.json`.
+//! over MCP and validation. A private op store retains per-author settings undo.
+//! Project changes commit through the Host's authority and file worker; user
+//! preferences use the background writer chosen at open.
 use ara_doc::{AssetId, Document, Edit, RecordId, Workspace};
 use ara_ops::{Author, Store, TxnMeta};
 use ara_schema::{FieldPath, Schema, SchemaDb};
@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::path::{Path, PathBuf};
 
+mod project_commit;
 mod project_live;
 
 /// Where a setting is stored and who shares it.
@@ -494,13 +495,11 @@ struct EditorSettings {
 pub struct Settings {
     store: Store,
     doc: AssetId,
-    project_path: PathBuf,
-    preferences_path: PathBuf,
     /// Non-default user values.
     pub user: Map<String, Value>,
     /// Non-default project values.
     pub project: Map<String, Value>,
-    /// Last validated Host policy, separate from local settings history.
+    /// Last validated Host policy, separate from private settings history.
     observed_project: Map<String, Value>,
     /// Content revision consumed by the live projection; idle ticks do no work.
     observed_host_revision: Option<u64>,
@@ -520,7 +519,6 @@ impl Settings {
             .and_then(|v| v.as_object().cloned())
             .unwrap_or_default();
         let project_path = root.join("ara.project.json");
-        let preferences_path = root.join(ara_host::project_policy::PREFERENCES);
         let manifest = std::fs::read_to_string(&project_path)
             .ok()
             .and_then(|t| serde_json::from_str::<Value>(&t).ok())
@@ -582,8 +580,6 @@ impl Settings {
         Ok(Self {
             store: Store::new(db, ws),
             doc,
-            project_path,
-            preferences_path,
             user,
             observed_project: project.clone(),
             observed_host_revision: None,
@@ -618,7 +614,8 @@ impl Settings {
             Project => &self.project,
         }
     }
-    /// Set (`Some`) or reset (`None`) one setting as an attributed, undoable op.
+    /// Edit the private settings history. Project authoring additionally requires
+    /// [`Self::set_with_host`]; this read model never writes project files.
     pub fn set(
         &mut self,
         key: &str,
@@ -693,14 +690,10 @@ impl Settings {
         let user = read(USER);
         let project = read(PROJECT);
         let user_changed = user != self.user;
-        let project_changed = project != self.project;
         self.user = user;
-        let previous_project = std::mem::replace(&mut self.project, project);
+        self.project = project;
         if user_changed || changed == Some(User) {
             self.persist_user();
-        }
-        if project_changed || changed == Some(Project) {
-            self.persist_project(&previous_project);
         }
     }
     /// Write failures since the last call (the editor service logs them).
@@ -718,129 +711,9 @@ impl Settings {
             writer.save(Value::Object(self.user.clone()));
         }
     }
-    fn persist_project(&mut self, previous: &Map<String, Value>) {
-        if let Err(error) = self.save_project(previous) {
-            self.failures.push(error.to_string());
-        }
-    }
-    fn save_project(&self, previous: &Map<String, Value>) -> anyhow::Result<()> {
-        let root = self
-            .project_path
-            .parent()
-            .ok_or_else(|| anyhow::anyhow!("Project marker has no parent"))?;
-        // The public reader exposes one effective top-level policy key. Reading
-        // the canonical object separately is only for lossless save preservation.
-        let mut preferences = read_project_object(&self.preferences_path)?;
-        const POLICY: &[&str] = &["settings", "rendering", "input", "physics", "look", "ui"];
-        for key in POLICY {
-            if !preferences.contains_key(*key)
-                && let Some(value) = ara_host::project_policy::read(root, key)
-                    .map_err(|error| anyhow::anyhow!(error.to_string()))?
-            {
-                preferences.insert((*key).into(), value);
-            }
-        }
-        let changed = |key: &str| self.project.get(key) != previous.get(key);
-        let mut settings = preferences
-            .get("settings")
-            .and_then(Value::as_object)
-            .cloned()
-            .unwrap_or_default();
-        let mut settings_changed = false;
-        for definition in DEFS.iter().filter(|definition| {
-            definition.scope == Project
-                && !matches!(
-                    definition.key,
-                    "project.name" | "project.mainScene" | "rendering.quality"
-                )
-        }) {
-            if !changed(definition.key) {
-                continue;
-            }
-            settings_changed = true;
-            match self.project.get(definition.key) {
-                Some(value) => {
-                    settings.insert(definition.key.into(), value.clone());
-                }
-                None => {
-                    settings.remove(definition.key);
-                }
-            }
-        }
-        if settings_changed {
-            // An explicit empty section suppresses legacy fallback even if the
-            // marker cleanup fails after the policy file has already landed.
-            preferences.insert("settings".into(), Value::Object(settings));
-        }
-        if changed("rendering.quality") {
-            let mut rendering = preferences
-                .get("rendering")
-                .and_then(Value::as_object)
-                .cloned()
-                .unwrap_or_default();
-            match self.project.get("rendering.quality") {
-                Some(value) => {
-                    rendering.insert("quality".into(), value.clone());
-                }
-                None => {
-                    rendering.remove("quality");
-                }
-            }
-            preferences.insert("rendering".into(), Value::Object(rendering));
-        }
-        let preserved: Vec<_> = POLICY
-            .iter()
-            .copied()
-            .filter(|key| preferences.contains_key(*key))
-            .collect();
-        write_atomic(&self.preferences_path, &Value::Object(preferences)).map_err(|error| {
-            anyhow::anyhow!(
-                "Project policy was not saved to {}: {error}",
-                self.preferences_path.display()
-            )
-        })?;
-        // Re-read metadata before its own atomic save rather than replaying an
-        // opening snapshot over unrelated agent or tool changes.
-        let mut manifest = read_project_object(&self.project_path)?;
-        for (key, field) in [("project.name", "name"), ("project.mainScene", "main")] {
-            if !changed(key) {
-                continue;
-            }
-            match self.project.get(key) {
-                Some(value) => {
-                    manifest.insert(field.into(), value.clone());
-                }
-                None => {
-                    manifest.remove(field);
-                }
-            }
-        }
-        for key in preserved {
-            manifest.remove(key);
-        }
-        write_atomic(&self.project_path, &Value::Object(manifest)).map_err(|error| {
-            anyhow::anyhow!(
-                "Project metadata was not saved to {}: {error}",
-                self.project_path.display()
-            )
-        })
-    }
 }
-/// Preserve unknown canonical policy members without creating optional files on read.
-fn read_project_object(path: &Path) -> anyhow::Result<Map<String, Value>> {
-    let text = match std::fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Map::new()),
-        Err(error) => return Err(anyhow::anyhow!("{}: {error}", path.display())),
-    };
-    match ara_json::parse(&text).map_err(|error| anyhow::anyhow!("{}: {error}", path.display()))? {
-        Value::Object(object) => Ok(object),
-        _ => Err(anyhow::anyhow!(
-            "{}: project settings must be a JSON object",
-            path.display()
-        )),
-    }
-}
+/// Canonical fixture writer; production policy persistence belongs to the Host.
+#[cfg(test)]
 pub(crate) fn write_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -964,6 +837,10 @@ mod live_tests;
 mod history_live_tests;
 
 #[cfg(test)]
+#[path = "settings/commit_live_tests.rs"]
+mod commit_live_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -998,6 +875,55 @@ mod tests {
         fn open(&self) -> Settings {
             Settings::open(&self.0, None).expect("settings")
         }
+        fn authority(&self, user: Option<PathBuf>) -> crate::Editor {
+            let scene = ara_host::project::authored_root(&self.0).join("levels/main.scene");
+            std::fs::create_dir_all(scene.parent().expect("fixture parent"))
+                .expect("fixture directory");
+            std::fs::write(
+                scene,
+                ara_json::to_canonical_string(
+                    &json!({"$schema":"ara://schema/scene/1","id":"sc_settingsproof","records":{}}),
+                ),
+            )
+            .expect("fixture scene");
+            crate::Editor::open_config(
+                &self.0,
+                user,
+                ara_host::HostConfig {
+                    watch_every: std::time::Duration::ZERO,
+                    ..Default::default()
+                },
+            )
+            .expect("settings authority")
+        }
+    }
+    fn set(editor: &mut crate::Editor, key: &str, value: Option<Value>) {
+        editor
+            .action(
+                "editor.settings.set",
+                match value {
+                    Some(value) => json!({"key":key,"value":value}),
+                    None => json!({"key":key,"reset":true}),
+                },
+            )
+            .expect("typed setting");
+        editor.host.flush();
+        editor.tick();
+        assert!(
+            !editor.host.unsaved(),
+            "The authority must persist the setting"
+        );
+    }
+    fn undo(editor: &mut crate::Editor, redo: bool) {
+        editor
+            .action("editor.settings.undo", json!({"redo":redo}))
+            .expect("settings history");
+        editor.host.flush();
+        editor.tick();
+        assert!(
+            !editor.host.unsaved(),
+            "The authority must persist the inverse"
+        );
     }
     impl Drop for Project {
         fn drop(&mut self) {
@@ -1035,17 +961,28 @@ mod tests {
         let project = Project::new(json!({"main":"levels/main.scene","name":"Outpost"}), None);
         let root = &project.0;
         let user = root.join("user.json");
-        let mut s = Settings::open(root, Some(user.clone())).expect("open");
-        assert_eq!(s.value("project.name"), json!("Outpost"));
+        let mut s = project.authority(Some(user.clone()));
+        assert_eq!(s.state.settings["project.name"], json!("Outpost"));
         assert!(
-            s.set("appearance.theme", Some(json!("blue")), Author::Human)
-                .is_err()
+            s.action(
+                "editor.settings.set",
+                json!({"key":"appearance.theme","value":"blue"})
+            )
+            .is_err()
         );
-        s.set("appearance.theme", Some(json!("light")), Author::Human)
-            .expect("set");
-        s.set("play.tickHz", Some(json!("120")), Author::Human)
-            .expect("set");
-        assert!(s.modified("appearance.theme"));
+        set(&mut s, "appearance.theme", Some(json!("light")));
+        set(&mut s, "play.tickHz", Some(json!("120")));
+        let definitions = s
+            .action("editor.settings", json!({}))
+            .expect("settings projection");
+        assert!(
+            definitions["settings"]
+                .as_array()
+                .expect("settings definitions")
+                .iter()
+                .any(|definition| definition["key"] == "appearance.theme"
+                    && definition["modified"] == true)
+        );
         let manifest: Value = serde_json::from_str(
             &std::fs::read_to_string(root.join("ara.project.json")).expect("read"),
         )
@@ -1055,13 +992,13 @@ mod tests {
         assert!(manifest.get("settings").is_none());
         assert_eq!(manifest["main"], "levels/main.scene");
         assert_eq!(
-            s.next_label(&Author::Human, false).as_deref(),
+            s.state.settings_undo.as_deref(),
             Some("Set Fixed tick rate")
         );
-        s.undo(&Author::Human, false).expect("undo");
-        assert_eq!(s.value("play.tickHz"), json!("60"));
-        s.undo(&Author::Human, true).expect("redo");
-        assert_eq!(s.value("play.tickHz"), json!("120"));
+        undo(&mut s, false);
+        assert_eq!(s.state.settings["play.tickHz"], json!("60"));
+        undo(&mut s, true);
+        assert_eq!(s.state.settings["play.tickHz"], json!("120"));
         // Closing flushes background preference saves before a new editor reads them.
         drop(s);
         let reopened = Settings::open(root, Some(user)).expect("reopen");
@@ -1119,15 +1056,14 @@ mod tests {
             "rendering":{"quality":"high","extension":{"toneMapper":"custom"}},"ui":{"main":"ui/main.ui","unknown":[1,2,3]},
             "input":null,"physics":{"gravity":[0,-9.81,0],"custom":true},"look":{"camera":"custom"},"plugin":{"keep":"unchanged"}});
         let project = Project::new(marker, Some(initial.clone()));
-        let mut settings = project.open();
+        let mut settings = project.authority(None);
         let mut latest = initial;
         latest["settings"]["build.profile"] = json!("agent-selected-profile");
         latest["settings"]["agent.option"] = json!({"preserve":true});
         latest["ui"]["newFromAgent"] = json!("keep");
         project.write(ara_host::project_policy::PREFERENCES, &latest);
-        settings
-            .set("play.tickHz", Some(json!("30")), Author::Human)
-            .expect("typed setting");
+        settings.tick(); // The real Host watcher accepts the genuine disk edit.
+        set(&mut settings, "play.tickHz", Some(json!("30")));
         let mut expected = latest.clone();
         expected["settings"]["play.tickHz"] = json!("30");
         assert_eq!(
@@ -1138,28 +1074,26 @@ mod tests {
             project.read("ara.project.json"),
             json!({"id":"project-identity","name":"Outpost","main":"levels/main.scene","layoutVersion":3,"engine":"preview4"})
         );
-        settings.undo(&Author::Human, false).expect("undo");
+        undo(&mut settings, false);
         assert_eq!(project.read(ara_host::project_policy::PREFERENCES), latest);
-        settings.undo(&Author::Human, true).expect("redo");
+        undo(&mut settings, true);
         assert_eq!(
             project.read(ara_host::project_policy::PREFERENCES),
             expected
         );
-        settings
-            .set("rendering.quality", Some(json!("medium")), Author::Human)
-            .expect("quality");
+        set(&mut settings, "rendering.quality", Some(json!("medium")));
         expected["rendering"]["quality"] = json!("medium");
         assert_eq!(
             project.read(ara_host::project_policy::PREFERENCES),
             expected
         );
-        settings.undo(&Author::Human, false).expect("quality undo");
+        undo(&mut settings, false);
         expected["rendering"]["quality"] = json!("high");
         assert_eq!(
             project.read(ara_host::project_policy::PREFERENCES),
             expected
         );
-        assert!(settings.take_failures().is_empty());
+        assert!(!settings.host.unsaved());
         let reopened = project.open();
         assert_eq!(
             reopened.value("build.profile"),
@@ -1172,13 +1106,9 @@ mod tests {
         let marker = json!({"name":"Outpost","main":"levels/main.scene","layoutVersion":3,"settings":{"play.tickHz":"120"},
             "rendering":{"quality":"high"},"input":{"actions":{"Jump":"Space"}},"physics":{"gravity":[0,-9.81,0]},"look":{"sensitivity":0.8},"ui":{"main":"ui/main.ui"}});
         let project = Project::new(marker.clone(), Some(json!({})));
-        let mut settings = project.open();
-        settings
-            .set("play.tickHz", None, Author::Human)
-            .expect("tick reset");
-        settings
-            .set("rendering.quality", None, Author::Human)
-            .expect("quality reset");
+        let mut settings = project.authority(None);
+        set(&mut settings, "play.tickHz", None);
+        set(&mut settings, "rendering.quality", None);
         let policy = project.read(ara_host::project_policy::PREFERENCES);
         assert_eq!(policy["settings"], json!({}));
         assert_eq!(policy["rendering"], json!({}));
@@ -1199,7 +1129,7 @@ mod tests {
             ara_host::project_policy::read(&project.0, "rendering").expect("policy"),
             Some(json!({}))
         );
-        assert!(settings.take_failures().is_empty());
+        assert!(!settings.host.unsaved());
         assert!(!project.0.join(ara_doc::AUTHORING_ROOT).exists());
     }
 
@@ -1208,20 +1138,18 @@ mod tests {
         let marker = json!({"id":"identity","name":"Outpost","main":"levels/main.scene","layoutVersion":3,"extension":{"owner":"plugin"}});
         let policy = json!({"settings":{"project.name":"Ignored","project.mainScene":"ignored.scene"},"ui":null,"plugin":{"keep":1}});
         let project = Project::new(marker.clone(), Some(policy.clone()));
-        let mut settings = project.open();
-        assert_eq!(settings.value("project.name"), json!("Outpost"));
+        let mut settings = project.authority(None);
+        assert_eq!(settings.state.settings["project.name"], json!("Outpost"));
         assert_eq!(
-            settings.value("project.mainScene"),
+            settings.state.settings["project.mainScene"],
             json!("levels/main.scene")
         );
-        settings
-            .set("project.name", Some(json!("Renamed")), Author::Human)
-            .expect("rename");
+        set(&mut settings, "project.name", Some(json!("Renamed")));
         let mut expected = marker.clone();
         expected["name"] = json!("Renamed");
         assert_eq!(project.read("ara.project.json"), expected);
         assert_eq!(project.read(ara_host::project_policy::PREFERENCES), policy);
-        settings.undo(&Author::Human, false).expect("undo");
+        undo(&mut settings, false);
         assert_eq!(project.read("ara.project.json"), marker);
         assert_eq!(project.read(ara_host::project_policy::PREFERENCES), policy);
     }
@@ -1230,16 +1158,30 @@ mod tests {
     fn malformed_policy_after_open_is_reported_without_overwriting_it_or_cleaning_the_marker() {
         let marker = json!({"name":"Outpost","main":"levels/main.scene","settings":{"play.tickHz":"120"},"physics":{"custom":true}});
         let project = Project::new(marker.clone(), Some(json!({})));
-        let mut settings = project.open();
+        let mut editor = project.authority(None);
         let path = project.0.join(ara_host::project_policy::PREFERENCES);
         std::fs::write(&path, "{broken").expect("malformed external edit");
-        settings
-            .set("play.tickHz", Some(json!("30")), Author::Human)
-            .expect("private typed transaction");
+        editor.tick(); // Synchronously observe the invalid file through the real watcher.
+        let revision = editor.host.store().revision();
+        let before = editor.state.settings.clone();
+        let undo = editor.state.settings_undo.clone();
+        let error = editor
+            .action(
+                "editor.settings.set",
+                json!({"key":"play.tickHz","value":"30"}),
+            )
+            .expect_err("A diverged policy must reject the complete settings mutation");
         assert!(
-            !settings.take_failures().is_empty(),
-            "Persistence errors reach the existing editor diagnostic path"
+            error.0.data.as_ref().expect("diagnostics")["diagnostics"]
+                .as_array()
+                .expect("diagnostic list")
+                .iter()
+                .any(|diagnostic| diagnostic["code"] == ara_diag::codes::EXTERNAL_CONFLICT)
         );
+        assert_eq!(editor.host.store().revision(), revision);
+        assert_eq!(editor.state.settings, before);
+        assert_eq!(editor.state.settings_undo, undo);
+        editor.host.flush();
         assert_eq!(
             std::fs::read_to_string(&path).expect("unchanged policy"),
             "{broken"

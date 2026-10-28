@@ -199,7 +199,7 @@ impl Service for EditorService {
             Method::new::<EditorSettingsSet>(
                 db,
                 "editor.settings.set",
-                "Set or reset a setting as an undoable, attributed edit; project scope writes ara.project.json.",
+                "Set or reset a setting as an undoable, attributed edit; project policy enters Host history and persistence.",
             ),
             Method::new::<EditorSettingsUndo>(
                 db,
@@ -569,12 +569,12 @@ impl EditorService {
                             .ok_or_else(|| vec![crate::invalid("give a value, or reset: true")])?,
                     )
                 };
-                self.settings.set(&p.key, value, author(cx))?;
+                self.settings.set_with_host(cx, &p.key, value)?;
                 sync_settings(&mut state, &self.settings);
             }
             "editor.settings.undo" => {
                 let p: EditorSettingsUndo = parse(params)?;
-                self.settings.undo(&author(cx), p.redo.unwrap_or(false))?;
+                self.settings.undo_with_host(cx, p.redo.unwrap_or(false))?;
                 sync_settings(&mut state, &self.settings);
             }
             "editor.settings.view" => {

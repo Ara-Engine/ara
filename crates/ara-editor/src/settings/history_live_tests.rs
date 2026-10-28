@@ -18,17 +18,12 @@ fn canonical_clients(editor: &crate::Editor) -> f64 {
         .unwrap_or(1.)
 }
 
-fn wait_for_client_echo(editor: &mut crate::Editor, expected: f64) {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
-    while canonical_clients(editor) != expected {
-        editor.tick();
-        assert!(
-            std::time::Instant::now() < deadline,
-            "Settings persistence did not reach the canonical Host policy: expected {expected}, got {}",
-            canonical_clients(editor)
-        );
-        std::thread::sleep(std::time::Duration::from_millis(2));
-    }
+fn assert_client_commit(editor: &crate::Editor, expected: f64) {
+    assert_eq!(
+        canonical_clients(editor),
+        expected,
+        "A settings action must commit policy before returning"
+    );
 }
 
 fn without_client(value: Option<&Value>, suffix: &[&str]) -> (Option<Value>, Option<Value>) {
@@ -51,11 +46,11 @@ fn without_client(value: Option<&Value>, suffix: &[&str]) -> (Option<Value>, Opt
     (client, Some(value))
 }
 
-fn assert_only_client_echoes(editor: &crate::Editor, since: u64, expected: f64) {
+fn assert_only_client_mutations(editor: &crate::Editor, since: u64, expected: f64) {
     let transactions = editor.host.store().since(since);
     assert!(
         !transactions.is_empty(),
-        "The changed persisted client setting must produce a canonical echo"
+        "The settings inverse must produce a canonical transaction"
     );
     for transaction in transactions {
         assert_eq!(
@@ -65,8 +60,12 @@ fn assert_only_client_echoes(editor: &crate::Editor, since: u64, expected: f64) 
         );
         assert_eq!(
             transaction.why.as_deref(),
-            Some("`settings/project.json` changed on disk"),
-            "Unexpected settings echo: {transaction:?}"
+            Some(if expected == 1. {
+                "Undo Set Clients"
+            } else {
+                "Redo Set Clients"
+            }),
+            "Settings inverses must enter the authority directly: {transaction:?}"
         );
         for op in &transaction.ops {
             let ara_doc::Op::Set {
@@ -136,7 +135,7 @@ fn unrelated_canonical_changes_survive_human_settings_undo_redo_and_keep_its_lab
             json!({"key":"play.clients","value":4}),
         )
         .unwrap();
-    wait_for_client_echo(&mut editor, 4.);
+    assert_client_commit(&editor, 4.);
     let label = editor.state.settings_undo.clone();
     let session = agent(&mut editor);
     apply(
@@ -163,14 +162,14 @@ fn unrelated_canonical_changes_survive_human_settings_undo_redo_and_keep_its_lab
             .action("editor.settings.undo", json!({"redo":redo}))
             .unwrap();
         ticks(&mut editor);
-        wait_for_client_echo(&mut editor, f64::from(clients));
+        assert_client_commit(&editor, f64::from(clients));
         assert_eq!(
             editor.state.settings["play.clients"].as_f64(),
             Some(f64::from(clients))
         );
         assert_eq!(editor.state.settings["build.profile"], "agent shipping");
         assert_eq!(editor.state.settings["rendering.quality"], "medium");
-        assert_only_client_echoes(&editor, revision, f64::from(clients));
+        assert_only_client_mutations(&editor, revision, f64::from(clients));
         let workspace = editor.host.store().workspace();
         assert_eq!(
             policy(workspace, "settings").unwrap()["plugin.option"],
@@ -236,6 +235,7 @@ fn an_agent_change_to_the_same_setting_blocks_old_undo_and_redo_without_revertin
         &[("settings.settings[build.profile]", json!("new agent build"))],
     );
     ticks(&mut editor);
+    let before_redo = editor.host.store().revision();
     let redo = editor
         .action("editor.settings.undo", json!({"redo":true}))
         .unwrap_err();
@@ -247,7 +247,7 @@ fn an_agent_change_to_the_same_setting_blocks_old_undo_and_redo_without_revertin
             .any(|diagnostic| diagnostic["code"] == "ARA1502")
     );
     assert_eq!(editor.state.settings["build.profile"], "new agent build");
-    assert_eq!(editor.host.store().revision(), revision + 1);
+    assert_eq!(editor.host.store().revision(), before_redo);
 }
 
 #[test]
@@ -403,14 +403,18 @@ fn late_local_policy_watch_cannot_overwrite_a_later_recorded_agent_round_trip() 
     let persisted: Value =
         serde_json::from_str(&std::fs::read_to_string(project.0.join(PREFERENCES)).unwrap())
             .unwrap();
-    assert_eq!(
-        persisted["settings"]["build.profile"],
-        "new human private value"
-    );
+    assert_eq!(persisted["settings"]["build.profile"], "initial");
     assert_eq!(
         effective(&editor),
-        Some(json!("initial")),
-        "The local save must still be waiting for its first watch boundary"
+        Some(json!("new human private value")),
+        "The typed setting must reach authority before any watcher or flush"
+    );
+    let local_transactions = editor.host.store().history();
+    assert_eq!(local_transactions.len(), 1);
+    assert_eq!(local_transactions[0].author, Author::Human);
+    assert_eq!(
+        local_transactions[0].why.as_deref(),
+        Some("Set Build profile")
     );
     assert_eq!(
         editor.state.settings["build.profile"],
@@ -460,8 +464,8 @@ fn late_local_policy_watch_cannot_overwrite_a_later_recorded_agent_round_trip() 
             &std::fs::read_to_string(project.0.join(PREFERENCES)).unwrap()
         )
         .unwrap()["settings"]["build.profile"],
-        "new human private value",
-        "A read must not rewrite the queued old local policy save"
+        "initial",
+        "A read must not perform a project write before the Host flush"
     );
 
     // Zero-watch synchronously checks the real file thread before service ticks.
