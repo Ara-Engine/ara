@@ -294,7 +294,7 @@ fn loading_model_shapes_and_stale_native_content_never_claim_real_model_bounds()
             shape: ara_runtime::components::MeshShape::Box,
             size: [1.; 3],
         },
-        world: Mat4::IDENTITY,
+        world: glam34::Mat4::IDENTITY,
         color: [1.; 4],
         roughness: 0.5,
         metallic: 0.,

@@ -341,6 +341,7 @@ impl EditorService {
                 assets_show_all: false,
                 game: (true, "free", false),
                 starting: false,
+                pilot: false,
                 // The window's build job is not visible here; the project's state is.
                 build: crate::shell::commands::BuildState {
                     running: false,

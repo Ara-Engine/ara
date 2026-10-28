@@ -148,7 +148,7 @@ impl Pilot {
         if revision != session.checked {
             session
                 .guard
-                .validate(editor, &lookup(editor)?, session.checked)?;
+                .validate(editor, lookup(editor)?.as_ref(), session.checked)?;
             session.checked = revision;
         }
         let current = editor.state.camera;
@@ -194,7 +194,7 @@ impl Pilot {
                 return Err(error.into());
             }
         };
-        session.guard = model::Guard::capture(editor, &lookup(editor)?, &session.guard.entity)?;
+        session.guard = model::Guard::capture(editor, lookup(editor)?.as_ref(), &session.guard.entity)?;
         session.checked = editor.host.store().revision();
         session.baseline = current;
         self.last = json!({"outcome":"committed","entity":session.guard.entity,"base":pending.base,"revision":session.checked,"receipt":receipt});

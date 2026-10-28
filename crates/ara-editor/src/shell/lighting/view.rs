@@ -2,7 +2,7 @@
 use super::*;
 
 impl Shell {
-    pub(super) fn lighting_panel(
+    pub(in crate::shell) fn lighting_panel(
         &mut self,
         editor: &mut Editor,
         out: &mut String,
