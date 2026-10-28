@@ -68,7 +68,8 @@ struct Look {
     // pyramid feeds the bounce. The soft sun shadows read sunLux.w; [1] is spare.
 };
 static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64;
-Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(0);}
+// The look record (a frame record row: uniform, so no NonUniformResourceIndex).
+Look look(Frame f){return buffers[f.look.x].Load<Look>(0);}
 // Exposure state (look-post.slang exposureMain): applied multiplier, the previous
 // one, EV100 and metered luminance. The TAA history (RGBA16F) is stored pre-exposed
 // by the applied multiplier `taaMain` sees (x); exposureMain then keeps that value

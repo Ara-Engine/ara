@@ -31,7 +31,7 @@ void aoTraceMain(uint3 tid:SV_DispatchThreadID){
         if(length2<1e-6)continue;float projectedLength=sqrt(length2);projected/=projectedLength;
         float n=sign(dot(projected,sliceDirection))*acos(clamp(dot(projected,V),-1.,1.));
         float horizons[2]={-1,-1};
-        for(uint sideIndex=0;sideIndex<2;sideIndex++){
+        [unroll]for(uint sideIndex=0;sideIndex<2;sideIndex++){
             float sign=sideIndex==0?1.:-1.;
             for(uint k=0;k<steps;k++){
                 float t=(float(k)+jitter)/float(steps);float offset=max(t*t*radius,1+float(k));

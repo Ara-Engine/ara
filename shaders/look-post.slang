@@ -81,10 +81,11 @@ void bloomMain(uint3 tid:SV_DispatchThreadID){
         // luminance, so lone HDR fireflies cannot flash into the glow.
         float2 texel=2/float2(f.extent.xy),uv=(float2(p)+0.5)*2*texel;float3 t[13];float scale=1/inputScale(f,l,true);
         float2 o[13]={float2(-2,-2),float2(0,-2),float2(2,-2),float2(-1,-1),float2(1,-1),float2(-2,0),float2(0,0),float2(2,0),float2(-1,1),float2(1,1),float2(-2,2),float2(0,2),float2(2,2)};
-        for(uint i=0;i<13;i++)t[i]=min(historyTex(root.materials,uv+o[i]*texel).rgb*scale,float3(60000));
+        // Unrolled, so every index is a constant and the arrays stay in registers.
+        [unroll]for(uint i=0;i<13;i++)t[i]=min(historyTex(root.materials,uv+o[i]*texel).rgb*scale,float3(60000));
         uint4 groups[5]={uint4(3,4,8,9),uint4(0,1,5,6),uint4(1,2,6,7),uint4(5,6,10,11),uint4(6,7,11,12)};
         float exposure=exposureState(l).x;float weights[5]={0.5,0.125,0.125,0.125,0.125};c=0;float total=0;
-        for(uint g=0;g<5;g++){uint4 k=groups[g];float3 m=(t[k.x]+t[k.y]+t[k.z]+t[k.w])/4;float w=weights[g]/(1+luminance(m)*exposure);c+=m*w;total+=w;}
+        [unroll]for(uint g=0;g<5;g++){uint4 k=groups[g];float3 m=(t[k.x]+t[k.y]+t[k.z]+t[k.w])/4;float w=weights[g]/(1+luminance(m)*exposure);c+=m*w;total+=w;}
         c/=total;
     }else if(pass<5){
         // 4x4 [1 3 3 1] tent of the finer level, read in place from the down atlas.

@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44",
+  "key": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f",
   "stages": [
     {
-      "dxil": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44/giRelightVsmMain.dxil",
-      "dxil_hash": "4b1e6bf2c9fbedc86b66ce30561c51925cb5b82a6c9360055651d881da664e17",
+      "dxil": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f/giRelightVsmMain.dxil",
+      "dxil_hash": "5ea952ea273654be49a7aa4bc537f8d4e4f75919c84b98ca9f99b9a96de76c16",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44/giRelightVsmMain.metallib",
-        "metallib_hash": "b741c210d0228d23a0f758d749df695787f4a7a11c0772dd7b4a87619fbe6c14",
-        "reflection": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44/giRelightVsmMain.metal.json",
+        "metallib": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f/giRelightVsmMain.metallib",
+        "metallib_hash": "b0fc443202046617e372109aabb6a85e9ec76040e1d9069a374481b1ab4a7091",
+        "reflection": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f/giRelightVsmMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "giRelightVsmMain",
-      "spirv": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44/giRelightVsmMain.spv",
+      "spirv": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f/giRelightVsmMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "bda1257caf0e44ff0ae67b251530768bb92e4309d0069e1e10f443842d43641a",
+      "spirv_hash": "a4b490c5b451b1faac55b6f203d44889fc02a99a8599582aff5e22461586fac0",
       "stage": "compute"
     }
   ],

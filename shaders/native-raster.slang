@@ -21,12 +21,16 @@ struct Varying {
     nointerpolation uint material:TEXCOORD8;
     nointerpolation uint id:TEXCOORD9;
 };
+// Forward draws' varyings (nativeForwardVertex): the scene's, and this frame's HDR
+// exposure (hdrExposure), loaded per vertex rather than per fragment. Only the
+// forward pipelines carry it, so no other stage writes an output nothing reads.
+struct ForwardVarying {Varying v;nointerpolation float exposure:TEXCOORD10;};
 // Shadow draws' light matrix: cascades 0-3 from the frame record, 4+ the
 // local-shadow tiles' matrices in the look's table (look::local::FACES), and
 // VSM_PAGE_DRAWS+ this frame's virtual shadow pages (look::vsm PAGE_DRAWS).
 static const uint VSM_PAGE_DRAWS=1024;
 float4x4 shadowMatrix(Frame f,uint cascade){
-    if(cascade<4)return f.shadows[cascade];
+    if(cascade<4)return frameShadow(cascade);
     if(cascade>=VSM_PAGE_DRAWS)return buffers[NonUniformResourceIndex(look(f).vsm.z)].Load<float4x4>((cascade-VSM_PAGE_DRAWS)*64);
     return buffers[NonUniformResourceIndex(look(f).localShadows.x)].Load<float4x4>(LOCAL_FACES+(cascade-4)*64);
 }
@@ -57,6 +61,11 @@ Varying nativeVertex(uint vertex,uint instance,bool shadow,bool indexed) {
 }
 [shader("vertex")]
 Varying nativeGeometryVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){return nativeVertex(vertex,instance,false,true);}
+// The forward pipelines' vertices also carry the exposure their fragments apply.
+[shader("vertex")]
+ForwardVarying nativeForwardVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){
+    ForwardVarying o;o.v=nativeVertex(vertex,instance,false,true);Frame f=frame();o.exposure=hdrExposure(f,look(f));return o;
+}
 // Wireframe view modes (Renderer `Wire.Draw`): the camera's draws again, with the same
 // clip position as the G-buffer (so the depth test against it passes on visible
 // surfaces). Draws are procedural over each triangle's corners in order, so a vertex's
@@ -201,7 +210,8 @@ float terrainBreakup(float3 world){
 // distance (blended over a quarter more, decided per quad so derivatives stay
 // valid) layers keep colour maps and factors only.
 Surface terrainSurface<let SIDES:int>(NativeMaterial m,Varying v){
-    float4 weights=v.weights;for(uint i=m.slots.z;i<4;i++)weights[i]=0;
+    // Layers past the count weigh nothing (a mask, not a runtime index: see component).
+    uint layers=m.slots.z;float4 weights=v.weights*float4(layers>0,layers>1,layers>2,layers>3);
     float sum=dot(weights,float4(1));weights=sum>1e-8?weights/sum:float4(1,0,0,0);
     // The layers share the splat geometry; the frame follows the first layer's
     // normal-map coordinates (layers differ in tiling scale only).
@@ -219,9 +229,9 @@ Surface terrainSurface<let SIDES:int>(NativeMaterial m,Varying v){
     float3 projection=terrainProjection(normal);float side=projection.x+projection.z;
     bool sides=SIDES!=0 && max(max(side,QuadReadAcrossX(side)),max(QuadReadAcrossY(side),QuadReadAcrossDiagonal(side)))>0;
     for(uint i=0;i<m.slots.z;i++){
-        float w=weights[i];
+        float w=component(weights,i);
         [branch]if(max(max(w,QuadReadAcrossX(w)),max(QuadReadAcrossY(w),QuadReadAcrossDiagonal(w)))<=0)continue;
-        NativeMaterial layer=material(m.layers[i]);
+        NativeMaterial layer=material(component(m.layers,i));
         float4 base=terrainColor(layer,v,projection,sides)*layer.pbr.color;
         // Far away, the metal/roughness map's coarsest mip (its mean) scales the
         // factors: glTF factors are often one, with the map holding the values.
@@ -312,26 +322,26 @@ Surface forwardSurface<let FACES:int>(Varying v){
     s.roughness=max(s.roughness,sqrt(max(look(frame()).sunLux.w,0)));return s;
 }
 // The forward pass; `high` selects the High/Epic tier's code at compile time.
-Forward nativeForward(Varying v,bool high){Surface s=forwardSurface<0>(v);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),high);o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;}
+Forward nativeForward(ForwardVarying i,bool high){Varying v=i.v;Surface s=forwardSurface<0>(v);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),i.exposure,high);o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;}
 [shader("fragment")]
-Forward nativeForwardFragment(Varying v){return nativeForward(v,false);}
+Forward nativeForwardFragment(ForwardVarying i){return nativeForward(i,false);}
 // Lit frames' forward pass: nothing reads the G-buffer after it (only the debug
 // views do, through nativeForwardFragment), so it writes colour, id and motion only;
 // `high` selects the High/Epic tier's code at compile time.
 struct ForwardLit {float4 color:SV_Target0;float id:SV_Target1;float4 velocity:SV_Target2;};
-ForwardLit nativeForwardLit<let FACES:int>(Varying v,bool high){Surface s=forwardSurface<FACES>(v);Frame f=frame();Look l=look(f);ForwardLit o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),high);o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;}
+ForwardLit nativeForwardLit<let FACES:int>(ForwardVarying i,bool high){Varying v=i.v;Surface s=forwardSurface<FACES>(v);Frame f=frame();Look l=look(f);ForwardLit o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),i.exposure,high);o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;}
 [shader("fragment")]
-ForwardLit nativeForwardLitFragment(Varying v){return nativeForwardLit<0>(v,false);}
+ForwardLit nativeForwardLitFragment(ForwardVarying i){return nativeForwardLit<0>(i,false);}
 [shader("fragment")]
-ForwardLit nativeForwardLitFrontFragment(Varying v){return nativeForwardLit<2>(v,false);}
+ForwardLit nativeForwardLitFrontFragment(ForwardVarying i){return nativeForwardLit<2>(i,false);}
 [shader("fragment")]
-ForwardLit nativeForwardLitBackFragment(Varying v){return nativeForwardLit<1>(v,false);}
+ForwardLit nativeForwardLitBackFragment(ForwardVarying i){return nativeForwardLit<1>(i,false);}
 [shader("fragment")]
-ForwardLit nativeForwardHighFragment(Varying v){return nativeForwardLit<0>(v,true);}
+ForwardLit nativeForwardHighFragment(ForwardVarying i){return nativeForwardLit<0>(i,true);}
 [shader("fragment")]
-ForwardLit nativeForwardHighFrontFragment(Varying v){return nativeForwardLit<2>(v,true);}
+ForwardLit nativeForwardHighFrontFragment(ForwardVarying i){return nativeForwardLit<2>(i,true);}
 [shader("fragment")]
-ForwardLit nativeForwardHighBackFragment(Varying v){return nativeForwardLit<1>(v,true);}
+ForwardLit nativeForwardHighBackFragment(ForwardVarying i){return nativeForwardLit<1>(i,true);}
 // Transmissive forward draws (NativePipelines::refract): the surface composites the
 // opaque scene it refracts (look-refract.slangh) instead of blending a film. A
 // volume's back faces are its far side, which its front faces already refract

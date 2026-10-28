@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44",
+  "key": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f",
   "stages": [
     {
-      "dxil": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44/captureFaceMain.dxil",
-      "dxil_hash": "62162455c76c221445b6c8303059ed620bc1102bfb6e27b0a6127b459e53b342",
+      "dxil": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f/captureFaceMain.dxil",
+      "dxil_hash": "907af3c428148d1e8544962243b8cc50c71b72f89c4238b7c0e7b9df603036e9",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44/captureFaceMain.metallib",
-        "metallib_hash": "adb361262158abc9b56de188846fb77ba0e70cacf8c010b2b0aaaf85e2e3c20e",
-        "reflection": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44/captureFaceMain.metal.json",
+        "metallib": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f/captureFaceMain.metallib",
+        "metallib_hash": "27b8f22730d8d91f9c78a77249fbf3c0bb095127ac6c4be55afab51335b67e8d",
+        "reflection": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f/captureFaceMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "captureFaceMain",
-      "spirv": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44/captureFaceMain.spv",
+      "spirv": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f/captureFaceMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "01ee19b819f83c1e4385a39526e6dc592a8b0ac576dfa04b5578f20a5f553f08",
+      "spirv_hash": "1d52dda1f95fd8b713b770d9dc4e3542d1a73b525c23e975ff1408f04bac94f1",
       "stage": "compute"
     }
   ],

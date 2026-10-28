@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44",
+  "key": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f",
   "stages": [
     {
-      "dxil": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44/ssrTraceMain.dxil",
-      "dxil_hash": "175ffd8bf4dab2c90854937029a56812d0e68d71940a3ad3a013344c31fe9187",
+      "dxil": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f/ssrTraceMain.dxil",
+      "dxil_hash": "67ddc46c3230092cf9dc857e40bd3558902175b6544dc6f01fcca66b9a6f0fa1",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44/ssrTraceMain.metallib",
-        "metallib_hash": "aac2edc5c11f9554645e191025ab8e83327b37109684220a3dafe91b8d38e7a6",
-        "reflection": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44/ssrTraceMain.metal.json",
+        "metallib": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f/ssrTraceMain.metallib",
+        "metallib_hash": "513cb3b5fc45ef76370ab364c9a674d624a5176fc50bbb989c60cbe77e7273c8",
+        "reflection": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f/ssrTraceMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "ssrTraceMain",
-      "spirv": "fcd9aed4de297bc11bee8b363ff47d1b27232a0aec3244d9a8be8d6a56275a44/ssrTraceMain.spv",
+      "spirv": "a62b6bea973c5ca6bee0b8614c70866130750137857dfcdfbacd791896c4625f/ssrTraceMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "fd08e4130ef1224f51eae63f8d6a0e8f36892cc6f6f001eb7a89cd14212e7094",
+      "spirv_hash": "7db6575a2dd662aa73d4629bfce32d554a1dfa7e70de2539c40b79dea1340dfb",
       "stage": "compute"
     }
   ],
