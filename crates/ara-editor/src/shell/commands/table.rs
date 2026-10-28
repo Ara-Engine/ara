@@ -200,11 +200,8 @@ fn field_overridden(c: &Ctx) -> Avail {
 }
 fn prefab_source(c: &Ctx) -> Avail {
     match c.target.entity(c.state) {
-        Some(entity)
-            if entity.contains('/')
-                || crate::shell::prefab_ops::instance(c.store, &c.state.doc, entity).is_some() =>
-        {
-            Avail::Blocked("Already a prefab instance; unpack it first".into())
+        Some(entity) if entity.contains('/') => {
+            Avail::Blocked("Select the instance root to create an inherited prefab variant".into())
         }
         Some(_) => Avail::Ready,
         None => Avail::Blocked("Select the entity to turn into a prefab".into()),

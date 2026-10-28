@@ -2,7 +2,7 @@ use super::*;
 use crate::shell::{Binding, commands::Target};
 
 fn point(shell: &Shell, index: usize) -> Option<[f32; 2]> {
-    if !shell.ui.shown(index) {
+    if !shell.ui.shown(index) || shell.ui.nodes[index].state.disabled {
         return None;
     }
     let node = &shell.ui.nodes[index];
@@ -10,7 +10,11 @@ fn point(shell: &Shell, index: usize) -> Option<[f32; 2]> {
     let y = node.rect.y.max(node.clip.y);
     let right = (node.rect.x + node.rect.w).min(node.clip.x + node.clip.w);
     let bottom = (node.rect.y + node.rect.h).min(node.clip.y + node.clip.h);
-    (right - x > 2. && bottom - y > 2.).then_some([(x + right) * 0.5, (y + bottom) * 0.5])
+    (right - x > 2.
+        && bottom - y > 2.
+        && right - x >= node.rect.w - 0.5
+        && bottom - y >= node.rect.h - 0.5)
+        .then_some([(x + right) * 0.5, (y + bottom) * 0.5])
 }
 fn named(shell: &Shell, name: &str) -> Option<[f32; 2]> {
     point(shell, shell.shown_node(name)?)
@@ -71,6 +75,61 @@ fn key(window: &Window, code: i32, pressed: bool, events: &mut Vec<(u32, Event)>
     ));
 }
 impl PrefabCheck {
+    /// Reveal the actual menu row with native wheel input before clicking it.
+    fn menu_target(
+        &mut self,
+        shell: &Shell,
+        window: &Window,
+        scale: f32,
+        events: &mut Vec<(u32, Event)>,
+        predicate: impl Fn(&Binding, &str) -> bool,
+    ) -> ara_ui::Result<Option<[f32; 2]>> {
+        let Some(index) = shell.bindings.iter().find_map(|(id, binding)| {
+            let index = shell.ui.by_id(*id)?;
+            predicate(binding, &shell.ui.nodes[index].element.id).then_some(index)
+        }) else {
+            return Ok(None);
+        };
+        let node = &shell.ui.nodes[index];
+        if node.state.disabled {
+            return Err(format!("J5 menu target {} is disabled", node.element.id).into());
+        }
+        if let Some(position) = point(shell, index) {
+            return Ok(Some(position));
+        }
+        let mut ancestor = node.element.parent;
+        while let Some(parent) = ancestor {
+            let popup = &shell.ui.nodes[parent];
+            if popup.element.id.starts_with("menu-pop-") {
+                let viewport = popup.rect.intersection(popup.clip);
+                if viewport.w <= 2. || viewport.h <= 2. {
+                    return Err("J5 menu has no reachable native scroll viewport".into());
+                }
+                let delta = if node.rect.y < node.clip.y {
+                    node.rect.y - node.clip.y
+                } else {
+                    node.rect.y + node.rect.h - node.clip.y - node.clip.h
+                }
+                .clamp(-78., 78.);
+                if delta.abs() < 0.5 {
+                    return Err(
+                        format!("J5 menu row {} is horizontally clipped", node.element.id).into(),
+                    );
+                }
+                motion(
+                    window,
+                    [viewport.x + viewport.w * 0.5, viewport.y + viewport.h * 0.5],
+                    scale,
+                    events,
+                );
+                events.push((window.id(), Event::Wheel([0., -delta / 26.])));
+                self.trace.push(json!({"input":"pointer-wheel","selector":node.element.id,"delta":delta,"rect":node.rect,"clip":node.clip}));
+                return Ok(None);
+            }
+            ancestor = popup.element.parent;
+        }
+        Err("J5 clipped menu target has no native scroll ancestor".into())
+    }
     fn wait(&mut self, selector: &str) -> ara_ui::Result<()> {
         if self.waited >= PATIENCE {
             return Err(format!("J5 native control did not become reachable: {selector}").into());
@@ -126,19 +185,21 @@ impl PrefabCheck {
             );
         } else if self.age == 12 && act == Act::NestedExplicit {
             let wanted = "@prefabs/j5-base.prefab#pf_j5base";
-            let Some(position) = bound(shell, |binding, id| {
+            let Some(position) = self.menu_target(shell, window, scale, events, |binding, id| {
                 id.starts_with('m')
                     && matches!(binding,
                 Binding::Command("prefab.apply_to",target) if destination(target).as_deref()==Some(wanted))
-            }) else {
+            })? else {
                 return self.wait("Apply To > j5-base.prefab");
             };
             click(window, position, scale, 1, events);
             self.trace.push(json!({"input":"pointer-click","selector":"prefab.apply_to","destination":wanted,"point":position}));
         } else if self.age == 12 && act == Act::VariantCreate {
-            let Some(position) = bound(shell, |binding, id| {
-                id.starts_with('m') && matches!(binding, Binding::Command("create.prefab", _))
-            }) else {
+            let Some(position) =
+                self.menu_target(shell, window, scale, events, |binding, id| {
+                    id.starts_with('m') && matches!(binding, Binding::Command("create.prefab", _))
+                })?
+            else {
                 return self.wait("Entity > Prefab from Selection");
             };
             click(window, position, scale, 1, events);
