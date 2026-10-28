@@ -123,6 +123,8 @@ impl DocumentView {
 }
 
 #[cfg(test)]
+mod path_benchmark;
+#[cfg(test)]
 #[path = "path_tests.rs"]
 mod path_tests;
 /// Whether a document identifier or indexed path currently names a loaded document.
