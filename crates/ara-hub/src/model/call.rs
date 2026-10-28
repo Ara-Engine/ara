@@ -7,6 +7,13 @@ use std::path::PathBuf;
 /// One `hub.*` request.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Call {
+    /// Read-only compatibility check or an explicitly accepted typed engine choice.
+    ProjectEngine {
+        project: String,
+        request: u64,
+        method: &'static str,
+        params: Value,
+    },
     /// Background read-only preview or explicitly authorized typed migration.
     Migration {
         project: String,
@@ -87,6 +94,7 @@ impl Call {
     /// JSON-RPC method name.
     pub fn method(&self) -> &'static str {
         match self {
+            Self::ProjectEngine { method, .. } => method,
             Self::Migration { method, .. } => method,
             Self::Release { method, .. } => method,
             Self::Projects => "hub.projects",
@@ -107,7 +115,10 @@ impl Call {
     /// camelCase params, per the wire contract.
     pub fn params(&self) -> Value {
         match self {
-            Self::Migration {
+            Self::ProjectEngine {
+                project, params, ..
+            }
+            | Self::Migration {
                 project, params, ..
             } => {
                 let mut params = params.clone();

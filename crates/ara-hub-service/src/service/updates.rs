@@ -1,4 +1,5 @@
 //! Release I/O workers never hold the serialized registry authority.
+mod current;
 mod removal_preflight;
 mod repair;
 mod uninstall;
@@ -328,7 +329,10 @@ impl Hub {
             "hub.engine.uninstall.preflight" => {
                 self.begin_uninstall_preflight(required(p.version, "version")?)
             }
-            "hub.engine.install" | "hub.engine.repair" | "hub.update.prepare" => {
+            "hub.engine.install"
+            | "hub.engine.installCurrent"
+            | "hub.engine.repair"
+            | "hub.update.prepare" => {
                 if self.updates.status["state"] == "error"
                     && let Ok(diagnostic) = serde_json::from_value::<ara_diag::Diagnostic>(
                         self.updates.status["diagnostic"].clone(),
@@ -338,7 +342,13 @@ impl Hub {
                 }
                 let version = required(p.version, "version")?;
                 ara_update::version(&version).map_err(rpc)?;
-                let repair = method == "hub.engine.repair";
+                let replace_current = method == "hub.engine.installCurrent";
+                let repair = method == "hub.engine.repair" || replace_current;
+                if replace_current && version != ara_host::project_layout::CURRENT_ENGINE_VERSION {
+                    return Err(invalid(
+                        "Install current engine only installs the current SDK version",
+                    ));
+                }
                 let kind = if method != "hub.update.prepare" {
                     Kind::Engine
                 } else {
@@ -355,7 +365,28 @@ impl Hub {
                         "wait for this version's uninstall to finish before installing it again",
                     ));
                 }
-                let repair_source = if repair {
+                let requested_kind = if replace_current {
+                    "engine-current"
+                } else if repair {
+                    "repair"
+                } else {
+                    kind.name()
+                };
+                if kind == Kind::Engine
+                    && self.updates.jobs.values().any(|job| {
+                        job.version == version
+                            && job.state == "running"
+                            && matches!(job.kind.as_str(), "engine" | "engine-current" | "repair")
+                            && job.kind != requested_kind
+                    })
+                {
+                    return Err(invalid(
+                        "wait for this version's active installation before starting another operation",
+                    ));
+                }
+                let repair_source = if replace_current {
+                    self.validate_current_install(&version)?
+                } else if repair {
                     Some(self.validate_repair(&version)?)
                 } else {
                     None
@@ -384,7 +415,9 @@ impl Hub {
                         release.manifest().min_hub_version
                     )));
                 }
-                let id = if repair {
+                let id = if replace_current {
+                    format!("engine-current-{version}")
+                } else if repair {
                     format!("repair-{version}")
                 } else {
                     match release
@@ -416,7 +449,14 @@ impl Hub {
                 let worker_id = id.clone();
                 let job = Job {
                     id: id.clone(),
-                    kind: if repair { "repair" } else { kind.name() }.into(),
+                    kind: if replace_current {
+                        "engine-current"
+                    } else if repair {
+                        "repair"
+                    } else {
+                        kind.name()
+                    }
+                    .into(),
                     version: version.clone(),
                     state: "running".into(),
                     phase: "downloading".into(),
@@ -469,7 +509,23 @@ impl Hub {
                             }
                             let _ = tx.send(Message::Phase(worker_id.clone(), "extracting"));
                             if repair {
-                                return repair::prepare(&root, &version, &archive, &flag);
+                                let staged = repair::prepare(
+                                    &root,
+                                    &version,
+                                    &archive,
+                                    &flag,
+                                    replace_current,
+                                )?;
+                                if replace_current {
+                                    let _ = tx.send(Message::Phase(worker_id.clone(), "verifying"));
+                                    if let Err(error) =
+                                        current::validate_staged(&staged, &root, &flag)
+                                    {
+                                        let _ = fs::remove_dir_all(&staged);
+                                        return Err(error);
+                                    }
+                                }
+                                return Ok(staged);
                             }
                             install_engine(&root, &version, &archive, &flag, || {
                                 let _ = tx.send(Message::Phase(worker_id.clone(), "installing"));

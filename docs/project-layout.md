@@ -127,12 +127,22 @@ migration stops with ARA1905 and leaves everything unchanged. Recover and save t
 project with its originating Ara version before retrying; retain the journal and
 file-history snapshots throughout recovery.
 
-Hub and editor opening an older project show the move preview and Migrate / Cancel.
-Cancel keeps it closed and unchanged. Other opens report ARA1914 with the migration
-action, before compilation or import. Undo restores the old layout and exact bytes;
+The current engine requires the move preview and Migrate / Cancel before opening
+an older layout. Cancel keeps it closed and unchanged. Other current-engine opens
+report ARA1914 with the migration action, before compilation or import. The Hub
+can still delegate a v3 project to its old engine until migration. Undo restores the old layout and exact bytes;
 ordinary commands then require migration again. Redo remains available in the same
 open authority. Older history cannot be applied across the migration boundary; Undo
 the migration first to restore its original path semantics.
+
+Engines declare layout support through `ara --json capabilities`; the current
+engine reports `projectLayouts: [4]`. No valid declaration means v3-only. The Hub
+refuses a `content/` project pinned to an incapable engine (ARA1915), offering
+Use current engine or Install current engine, with Cancel. Migration pins the
+engine performing it in the same transaction. An explicit Use current engine
+also changes the pin through typed ops and waits for the saved marker. Signed
+Install current can replace an older same-version managed cohort or create a
+managed copy of an external registration; external files are retained.
 
 ## Exporting the worked project
 

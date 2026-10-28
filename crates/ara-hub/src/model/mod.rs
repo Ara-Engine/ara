@@ -4,6 +4,7 @@
 //! the window and the headless tests drive exactly the same state machine.
 mod call;
 mod create;
+pub mod engine_layout;
 pub mod engines;
 pub mod migration;
 mod notifications;
@@ -264,6 +265,10 @@ pub enum Effect {
 /// Everything a person can do in the Hub.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Intent {
+    /// Explicitly use the capable current engine, installing it first when needed.
+    AcceptCurrentEngine,
+    /// Keep the project closed without changing its engine pin.
+    CancelEngineLayout,
     /// Show the read-only preview needed to open an old-layout project.
     ReviewMigration { project: String, headless: bool },
     /// Start the typed migration explicitly accepted in the current preview.
@@ -294,6 +299,8 @@ pub enum Intent {
     SaveReleaseRepo,
     /// Install a published engine version.
     InstallEngine(String),
+    /// Explicitly replace the current-version SDK after signed verification.
+    InstallCurrentEngine(String),
     /// Download and repair this engine while retaining project version pins.
     RepairEngine(String),
     /// Retry an uninstall job, including cleanup after the engine was unregistered.
@@ -395,12 +402,16 @@ pub enum Intent {
 /// A dialog owns the decision, while background transfers continue independently.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Dialog {
+    /// The pinned engine cannot read this project's content/ layout.
+    EngineLayout(String),
     /// Read-only preview, explicit consent and typed progress for this project.
     Migration(String),
     /// Release notes, download progress and the explicit restart step.
     Update,
     /// Confirm a published engine installation.
     InstallEngine(String),
+    /// Confirm a signed current SDK replacement, preserving external files.
+    InstallCurrentEngine(String),
     /// Confirm and track repair of an installed engine version.
     RepairEngine(String),
     /// Confirm deletion of this exact managed installation with its affected projects.
@@ -464,6 +475,8 @@ impl List {
 
 /// The Hub's whole UI state.
 pub struct Hub {
+    /// A project open paused at its engine compatibility decision.
+    pub engine_layout: Option<engine_layout::Flow>,
     /// A project open paused at migration consent/progress.
     pub migration: Option<migration::Flow>,
     /// Technical release-source controls are explicitly disclosed.
@@ -525,12 +538,14 @@ pub struct Hub {
     dismissed_banners: BTreeSet<String>,
     create_origin: View,
     next_migration: u64,
+    next_engine_layout: u64,
 }
 
 impl Hub {
     /// A disconnected model. `home` seeds the Create destination.
     pub fn new(prefs: Prefs, home: PathBuf, local_engine: Option<Engine>) -> Self {
         Self {
+            engine_layout: None,
             migration: None,
             advanced: false,
             dialog: None,
@@ -567,6 +582,7 @@ impl Hub {
             dismissed_banners: BTreeSet::new(),
             create_origin: View::Projects,
             next_migration: 0,
+            next_engine_layout: 0,
         }
     }
 
@@ -651,7 +667,12 @@ impl Hub {
             // A background reply must not replace a decision while it is being made.
             if !matches!(
                 self.dialog,
-                Some(Dialog::Confirm { .. } | Dialog::UninstallEngine(_) | Dialog::Migration(_))
+                Some(
+                    Dialog::Confirm { .. }
+                        | Dialog::UninstallEngine(_)
+                        | Dialog::Migration(_)
+                        | Dialog::EngineLayout(_)
+                )
             ) {
                 self.dialog = Some(Dialog::Error(id));
             }
@@ -669,6 +690,8 @@ impl Hub {
     /// Apply one user intent.
     pub fn intent(&mut self, intent: Intent) {
         match intent {
+            Intent::AcceptCurrentEngine => self.accept_current_engine(),
+            Intent::CancelEngineLayout => self.cancel_engine_layout(),
             Intent::ReviewMigration { project, headless } => {
                 self.review_migration(project, headless)
             }
@@ -683,7 +706,10 @@ impl Hub {
                     _ => {}
                 }
                 self.menu = None;
-                if let Dialog::InstallEngine(version) | Dialog::RepairEngine(version) = &dialog {
+                if let Dialog::InstallEngine(version)
+                | Dialog::InstallCurrentEngine(version)
+                | Dialog::RepairEngine(version) = &dialog
+                {
                     self.preflight_engine(version.clone());
                 }
                 if let Dialog::UninstallEngine(engine) = &dialog {
@@ -694,8 +720,26 @@ impl Hub {
             Intent::DismissDialog if matches!(self.dialog, Some(Dialog::Migration(_))) => {
                 self.cancel_migration()
             }
+            Intent::DismissDialog if matches!(self.dialog, Some(Dialog::EngineLayout(_))) => {
+                self.cancel_engine_layout()
+            }
             Intent::DismissDialog => match self.dialog.take() {
-                Some(Dialog::Error(id)) => self.notices.retain(|notice| notice.id != id),
+                Some(
+                    Dialog::InstallEngine(version)
+                    | Dialog::InstallCurrentEngine(version)
+                    | Dialog::RepairEngine(version),
+                ) => self.dismiss_engine_install(&version),
+                Some(Dialog::Error(id)) => {
+                    self.notices.retain(|notice| notice.id != id);
+                    if let Some(version) = self
+                        .engine_layout
+                        .as_ref()
+                        .filter(|flow| flow.phase == engine_layout::Phase::Installing)
+                        .map(|flow| flow.version.clone())
+                    {
+                        self.dismiss_engine_install(&version);
+                    }
+                }
                 Some(Dialog::UninstallEngine(engine)) => self.close_removal(&engine.version),
                 _ => {}
             },
@@ -733,6 +777,9 @@ impl Hub {
                 serde_json::json!({"repo":self.releases.repo}),
             ),
             Intent::InstallEngine(version) => self.install_engine(version),
+            Intent::InstallCurrentEngine(version) => {
+                self.start_transfer("engine-current", version, "hub.engine.installCurrent")
+            }
             Intent::RepairEngine(version) => {
                 self.start_transfer("repair", version, "hub.engine.repair")
             }
@@ -744,6 +791,18 @@ impl Hub {
                 self.start_transfer("uninstall", version, "hub.engine.uninstall");
             }
             Intent::CancelDownload(job) => {
+                if let Some(version) = self
+                    .releases
+                    .jobs
+                    .iter()
+                    .find(|entry| {
+                        entry.id == job
+                            && matches!(entry.kind.as_str(), "engine" | "engine-current" | "repair")
+                    })
+                    .map(|entry| entry.version.clone())
+                {
+                    self.engine_layout_cancelled(&version);
+                }
                 if let Some(version) = self
                     .releases
                     .jobs
@@ -953,6 +1012,12 @@ impl Hub {
             }
         }
         if self.dialog.is_none()
+            && let Some(flow) = &self.engine_layout
+            && flow.phase != engine_layout::Phase::Installing
+        {
+            self.dialog = Some(Dialog::EngineLayout(flow.project.clone()));
+        }
+        if self.dialog.is_none()
             && let Some(flow) = &self.migration
         {
             self.dialog = Some(Dialog::Migration(flow.project.clone()));
@@ -1053,7 +1118,10 @@ impl Hub {
                 self.stale.clear();
             }
             Event::Changed { kind, .. } => match kind.as_str() {
-                "migration" => self.refresh_migration(),
+                "migration" => {
+                    self.refresh_migration();
+                    self.refresh_engine_layout();
+                }
                 "releases" => self.refresh_releases(),
                 "progress" => self.release_call("hub.downloads", serde_json::json!({})),
                 "engine" => self.refresh([List::Engines, List::Templates]),
@@ -1065,6 +1133,16 @@ impl Hub {
     }
 
     fn reply(&mut self, call: Call, result: Result<Value, RpcError>) {
+        if let Call::ProjectEngine {
+            project,
+            request,
+            method,
+            ..
+        } = call
+        {
+            self.engine_layout_reply(project, request, method, result);
+            return;
+        }
         if let Call::Migration {
             project,
             request,
@@ -1104,19 +1182,33 @@ impl Hub {
             {
                 self.transfer_failed(method, version);
             }
-            let retry = result.as_ref().err().and_then(|_| match *method {
-                "hub.engine.install" => params["version"]
-                    .as_str()
-                    .map(|version| Intent::Dialog(Dialog::InstallEngine(version.into()))),
-                "hub.engine.repair" => params["version"]
-                    .as_str()
-                    .map(|version| Intent::Dialog(Dialog::RepairEngine(version.into()))),
-                "hub.engine.uninstall" => params["version"]
-                    .as_str()
-                    .map(|version| Intent::RetryUninstall(version.into())),
-                "hub.update.prepare" => Some(Intent::Dialog(Dialog::Update)),
-                _ => None,
-            });
+            let retry = result
+                .as_ref()
+                .err()
+                .and_then(|_| {
+                    params["version"]
+                        .as_str()
+                        .filter(|_| *method == "hub.engine.installCurrent")
+                        .and_then(|version| self.engine_layout_transfer_failed(version))
+                })
+                .or_else(|| {
+                    result.as_ref().err().and_then(|_| match *method {
+                        "hub.engine.install" => params["version"]
+                            .as_str()
+                            .map(|version| Intent::Dialog(Dialog::InstallEngine(version.into()))),
+                        "hub.engine.installCurrent" => params["version"].as_str().map(|version| {
+                            Intent::Dialog(Dialog::InstallCurrentEngine(version.into()))
+                        }),
+                        "hub.engine.repair" => params["version"]
+                            .as_str()
+                            .map(|version| Intent::Dialog(Dialog::RepairEngine(version.into()))),
+                        "hub.engine.uninstall" => params["version"]
+                            .as_str()
+                            .map(|version| Intent::RetryUninstall(version.into())),
+                        "hub.update.prepare" => Some(Intent::Dialog(Dialog::Update)),
+                        _ => None,
+                    })
+                });
             self.release_reply(method, result);
             if let Some(retry) = retry
                 && let Some(notice) = self.notices.last_mut()
@@ -1140,7 +1232,9 @@ impl Hub {
             return;
         }
         match call {
-            Call::Release { .. } | Call::Migration { .. } => unreachable!("handled above"),
+            Call::Release { .. } | Call::Migration { .. } | Call::ProjectEngine { .. } => {
+                unreachable!("handled above")
+            }
             Call::Create { dry_run: true, .. } => {
                 let next = self.create.checked(&call, result);
                 self.calls.extend(next);
@@ -1167,6 +1261,13 @@ impl Hub {
             Call::Open { project, headless } => {
                 self.busy.remove(&project);
                 match result {
+                    Err(error)
+                        if error.diagnostics().iter().any(|diagnostic| {
+                            diagnostic.code == codes::PROJECT_ENGINE_LAYOUT_UNSUPPORTED
+                        }) =>
+                    {
+                        self.review_engine_layout(project, headless)
+                    }
                     Err(error)
                         if error.diagnostics().iter().any(|diagnostic| {
                             diagnostic.code == codes::PROJECT_MIGRATION_REQUIRED

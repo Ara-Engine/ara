@@ -10,8 +10,7 @@ Project Engine Protocol host: sessions, services, attributed history, review, pe
   Current projects use content-relative references and project-relative storage paths.
 - `project_layout`: `require_current_layout` rejects old opens (ARA1914). `migration_plan` is read-only.
   `migrate_project` submits one typed, journaled command after consent and waits for its physical receipt; `Migration::apply` delegates.
-  Migration pins `CURRENT_ENGINE_VERSION`; `pin_current_engine` changes a current project's pin through typed ops without compiling game code.
-  History stays append-only; Undo restores old bytes and closes normal authoring.
+  Migration pins `CURRENT_ENGINE_VERSION`; `pin_current_engine` uses typed ops without compiling game code. History stays append-only; migration Undo restores old bytes and closes normal authoring.
 - `Workspace::insert_project_document` keeps root policy transactional without adding
   it to the asset index; `is_project_document` excludes it from portable game data.
 - `Host::open(project, HostConfig)`: takes `.ara/lock` (ARA1903 if held), loads

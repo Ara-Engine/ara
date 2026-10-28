@@ -3,6 +3,7 @@
 //! back. The data is a fixed fixture fed through the model's own
 //! reply handling (no service), so captures are reproducible; the service path is
 //! covered by `ara/tests/hub_ui.rs`.
+mod engine_layout;
 mod flows;
 mod interactions;
 mod migration;
@@ -45,6 +46,11 @@ pub fn seed_first_run(hub: &mut Hub) {
 /// A read-only migration decision for native tests and offscreen captures.
 pub fn seed_migration(hub: &mut Hub) {
     migration::seed_dialog(hub);
+}
+
+/// The current-engine choice after a content-layout incompatibility.
+pub fn seed_engine_layout(hub: &mut Hub, available: bool) {
+    engine_layout::seed_dialog(hub, available);
 }
 
 fn seed_with(hub: &mut Hub, with_projects: bool) {
@@ -314,6 +320,7 @@ pub fn run(
         interactions::run(host, app, &folder, light)?;
         flows::run(host, app, &folder, light)?;
         migration::run(host, app, &folder, light)?;
+        engine_layout::run(host, app, &folder, light)?;
     }
     Ok(())
 }

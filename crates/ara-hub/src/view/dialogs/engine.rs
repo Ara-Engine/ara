@@ -1,7 +1,7 @@
 //! Engine install, repair and exact-installation removal decisions.
 use super::*;
 
-pub(super) fn install(p: &mut Page, hub: &Hub, version: &str, repair: bool) {
+pub(super) fn install(p: &mut Page, hub: &Hub, version: &str, repair: bool, current: bool) {
     heading(
         p,
         "brand-engine",
@@ -23,7 +23,13 @@ pub(super) fn install(p: &mut Page, hub: &Hub, version: &str, repair: bool) {
             p.text("dialog-copy muted", &crate::model::text::path(&destination));
         });
     }
-    let kind = if repair { "repair" } else { "engine" };
+    let kind = if current {
+        "engine-current"
+    } else if repair {
+        "repair"
+    } else {
+        "engine"
+    };
     if hub.releases.starting(kind, version) {
         pending(p, hub, kind, version);
         return;
@@ -54,7 +60,13 @@ pub(super) fn install(p: &mut Page, hub: &Hub, version: &str, repair: bool) {
         });
         return;
     }
-    if (!repair && hub.engines.iter().any(|engine| engine.version == version))
+    if (!repair && !current && hub.engines.iter().any(|engine| engine.version == version))
+        || (current
+            && hub
+                .releases
+                .jobs
+                .iter()
+                .any(|job| job.kind == kind && job.version == version && job.state == "complete"))
         || (repair
             && hub.releases.jobs.iter().any(|job| {
                 job.kind == "repair" && job.version == version && job.state == "complete"
@@ -83,7 +95,7 @@ pub(super) fn install(p: &mut Page, hub: &Hub, version: &str, repair: bool) {
         });
         return;
     }
-    p.text("dialog-copy", if repair { "Download a fresh copy of the editor and tools. Your projects and engine version pins stay unchanged. Close projects using this version before repairing." } else { "Install the editor and tools side by side. Existing projects keep their selected engine version." });
+    p.text("dialog-copy", if current { "Install the signed current editor and tools. A same-version managed installation is replaced only after verification; external files stay in place. Close projects using this version first. Your project opens after its engine choice has been saved." } else if repair { "Download a fresh copy of the editor and tools. Your projects and engine version pins stay unchanged. Close projects using this version before repairing." } else { "Install the editor and tools side by side. Existing projects keep their selected engine version." });
     if let Some(release) = hub
         .releases
         .available
@@ -128,7 +140,7 @@ pub(super) fn install(p: &mut Page, hub: &Hub, version: &str, repair: bool) {
             "Checking the installation location and available space…",
         );
     }
-    let in_use = repair
+    let in_use = (repair || current)
         && hub.projects.iter().any(|project| {
             project.engine_version == version
                 && hub.state(&project.id) != crate::model::State::Closed
@@ -171,7 +183,13 @@ pub(super) fn install(p: &mut Page, hub: &Hub, version: &str, repair: bool) {
             "Cancel",
             Some(Intent::DismissDialog),
         );
-        let label = if repair {
+        let label = if current {
+            if failed {
+                "Retry installation"
+            } else {
+                "Install current engine"
+            }
+        } else if repair {
             if failed {
                 "Retry repair"
             } else {
@@ -182,7 +200,9 @@ pub(super) fn install(p: &mut Page, hub: &Hub, version: &str, repair: bool) {
         } else {
             "Install engine"
         };
-        let intent = if repair {
+        let intent = if current {
+            Intent::InstallCurrentEngine(version.into())
+        } else if repair {
             Intent::RepairEngine(version.into())
         } else {
             Intent::InstallEngine(version.into())

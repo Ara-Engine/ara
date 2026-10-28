@@ -1,4 +1,6 @@
 //! Migration previews never open a project authority or mutate authored files.
+#[path = "support/capabilities.rs"]
+mod support;
 use ara_hub_service::{ALPHA_VERSION, DirectoryTemplates, EngineBuild, Hub, HubConfig};
 use ara_proto::ConnId;
 use serde_json::{Value, json};
@@ -41,7 +43,7 @@ impl Fixture {
             directory: scratch.path().join("isolated-profile"),
             engine: EngineBuild {
                 version: ALPHA_VERSION.into(),
-                executable: std::env::current_exe().expect("test executable"),
+                executable: support::engine_cli(&scratch.path().join("current-engine"), Some(&[4])),
                 editor: None,
             },
             templates: Box::new(DirectoryTemplates(scratch.path().join("templates"))),
@@ -176,5 +178,86 @@ fn only_explicit_migration_publishes_the_current_layout_after_the_receipt() {
     assert!(
         fixture.root.join(".ara/journal").is_file(),
         "typed migration is journalled"
+    );
+    let card = fixture.call("hub.resolve", json!({}));
+    assert_eq!(
+        card["engineVersion"],
+        ara_host::project_layout::CURRENT_ENGINE_VERSION,
+        "migration refreshes the registry from its physically saved engine pin"
+    );
+}
+
+#[test]
+fn content_project_refuses_undeclared_engine_before_launch_and_typed_choice_refreshes_registry() {
+    let mut fixture = Fixture::new();
+    fs::create_dir(fixture.root.join("content")).expect("current fixture content");
+    fs::rename(
+        fixture.root.join("levels"),
+        fixture.root.join("content/levels"),
+    )
+    .expect("current fixture scene");
+    let mut marker: Value = serde_json::from_slice(
+        &fs::read(fixture.root.join("ara.project.json")).expect("fixture marker"),
+    )
+    .expect("fixture JSON");
+    marker["layoutVersion"] = json!(4);
+    fs::write(
+        fixture.root.join("ara.project.json"),
+        ara_json::to_canonical_string(&marker),
+    )
+    .expect("current fixture marker");
+    let old = EngineBuild {
+        version: "preview-3".into(),
+        executable: std::env::current_exe().expect("undeclared executable"),
+        editor: None,
+    };
+    fixture
+        .hub
+        .call_for(ConnId::LOCAL, "hub.engine.register", json!({"engine":old}))
+        .expect("old registration");
+    fixture.call("hub.update", json!({"engineVersion":"preview-3"}));
+    let before = fs::read(fixture.root.join("ara.project.json")).expect("old pin");
+    let error = fixture
+        .hub
+        .call_for(
+            ConnId::LOCAL,
+            "hub.open",
+            json!({"project":fixture.project,"headless":true}),
+        )
+        .expect_err("v4 cannot launch an undeclared v3 engine");
+    assert!(error.diagnostics().iter().any(|diagnostic|diagnostic.code==ara_diag::codes::PROJECT_ENGINE_LAYOUT_UNSUPPORTED));
+    assert_eq!(
+        fs::read(fixture.root.join("ara.project.json")).expect("unchanged refused pin"),
+        before
+    );
+    assert_eq!(fixture.call("hub.status", json!({}))["state"], "closed");
+    assert_eq!(
+        fixture.call("hub.project.currentEngine", json!({"headless":true}))["available"],
+        true
+    );
+    let job = fixture.call("hub.project.useCurrentEngine", json!({"headless":true}));
+    assert_eq!(job["kind"], "pin");
+    assert_eq!(job["cancellable"], false);
+    let result = fixture.complete(job);
+    assert_eq!(result["state"], "complete", "{result}");
+    let card = fixture.call("hub.resolve", json!({}));
+    assert_eq!(
+        card["engineVersion"],
+        ara_host::project_layout::CURRENT_ENGINE_VERSION
+    );
+    let marker: Value = serde_json::from_slice(
+        &fs::read(fixture.root.join("ara.project.json")).expect("saved marker"),
+    )
+    .expect("marker JSON");
+    assert_eq!(marker["engineVersion"], card["engineVersion"]);
+    let persisted =
+        ara_hub_service::Registry::load(&fixture._scratch.path().join("isolated-profile"))
+            .expect("saved registry");
+    assert_eq!(
+        persisted
+            .resolve(&fixture.project)
+            .expect("persisted card")
+            .engine_version,
+        ara_host::project_layout::CURRENT_ENGINE_VERSION
     );
 }

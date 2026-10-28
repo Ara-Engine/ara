@@ -1,5 +1,6 @@
 //! Serialized Hub registry authority.
 mod background;
+mod capabilities;
 mod create;
 mod installation;
 mod lifecycle;
@@ -75,6 +76,7 @@ impl HubConfig {
 
 /// User-level project authority. Every engine daemon remains in its own process.
 pub struct Hub {
+    capabilities: capabilities::Capabilities,
     migrations: migration::Migrations,
     updates: updates::Updates,
     config: HubConfig,
@@ -183,6 +185,7 @@ impl Hub {
         config.templates =
             Layered::with_checkout_samples(config.templates, &config.engine.executable);
         let mut hub = Self {
+            capabilities: capabilities::Capabilities::default(),
             migrations: migration::Migrations::default(),
             updates: updates::Updates::new(updates, &config.directory),
             config,
@@ -242,6 +245,7 @@ impl Hub {
                 | "hub.project.migrate"
                 | "hub.project.migration.status"
                 | "hub.project.migration.cancel"
+                | "hub.project.useCurrentEngine"
         ) {
             return self.migration_call(method, value);
         }
@@ -254,6 +258,7 @@ impl Hub {
                 | "hub.downloads"
                 | "hub.download.cancel"
                 | "hub.engine.install"
+                | "hub.engine.installCurrent"
                 | "hub.engine.preflight"
                 | "hub.engine.repair"
                 | "hub.engine.uninstall"
@@ -272,8 +277,8 @@ impl Hub {
         match method {
             "hub.catalog" => {
                 if let Some(project) = p.project {
-                    let entry = self.registry.resolve(&project)?;
-                    ara_host::project_layout::require_current_layout(&entry.path)?;
+                    let entry = self.registry.resolve(&project)?.clone();
+                    self.project_engine(&entry)?;
                     if let Some(mut client) = Client::for_project(&entry.path) {
                         return client.call("rpc.discover", json!({}));
                     }
@@ -284,6 +289,10 @@ impl Hub {
                 Ok(json!({"projects":self.registry.projects,"revision":self.revision}))
             }
             "hub.resolve" => Ok(json!(self.project(p.project)?)),
+            "hub.project.currentEngine" => {
+                self.project(p.project)?;
+                Ok(self.current_engine(p.headless.unwrap_or(false)))
+            }
             "hub.templates" => Ok(
                 json!({"templates":self.template_catalog(None)?.into_iter().map(|choice| choice.tile).collect::<Vec<_>>()}),
             ),
@@ -495,11 +504,9 @@ impl Hub {
                     {
                         continue;
                     }
-                    if let Err(diagnostic) =
-                        ara_host::project_layout::require_current_layout(&entry.path)
-                    {
+                    if let Err(error) = self.project_engine(&entry) {
                         if p.project.is_some() {
-                            return Err(diagnostic.into());
+                            return Err(error);
                         }
                         self.activity_clients.remove(&entry.id);
                         continue;

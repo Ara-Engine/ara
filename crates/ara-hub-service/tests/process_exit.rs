@@ -1,4 +1,6 @@
 //! Windowless editor authorities exercise real OS process exits, including stale discovery.
+#[path = "support/capabilities.rs"]
+mod support;
 use ara_hub_service::{DirectoryTemplates, EngineBuild, Hub, HubConfig};
 use ara_proto::{ConnId, Endpoint, Incoming, jsonrpc};
 use ara_rpc::{Client, DaemonInfo, Handler, ServeOptions};
@@ -107,7 +109,7 @@ fn editor_exit_notifies_without_discovery_polling() {
             directory: root.join("config"),
             engine: EngineBuild {
                 version: "fixture".into(),
-                executable: exe.clone(),
+                executable: support::engine_cli(&root.join("current-engine"), Some(&[4])),
                 editor: Some(exe.clone()),
             },
             templates: Box::new(DirectoryTemplates(root.join("templates"))),
@@ -205,5 +207,65 @@ fn editor_exit_notifies_without_discovery_polling() {
                 "fixture keeps stale discovery"
             );
         }
+    }
+}
+
+#[test]
+fn undeclared_preview_three_cli_launches_and_proxies_its_old_project() {
+    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/hub-process-tests");
+    fs::create_dir_all(&base).expect("isolated fixture base");
+    let scratch = tempfile::tempdir_in(base).expect("isolated legacy launch fixture");
+    let root = scratch.path().canonicalize().expect("fixture root");
+    let mut hub = Hub::open(HubConfig {
+        directory: root.join("profile"),
+        engine: EngineBuild {
+            version: "current".into(),
+            executable: support::engine_cli(&root.join("current"), Some(&[4])),
+            editor: None,
+        },
+        templates: Box::new(DirectoryTemplates(root.join("templates"))),
+    })
+    .expect("isolated Hub");
+    let old = EngineBuild {
+        version: "preview-3".into(),
+        executable: support::engine_cli(&root.join("old"), None),
+        editor: None,
+    };
+    hub.call("hub.engine.register", json!({"engine":old}))
+        .expect("old engine registration");
+    let project = root.join("project");
+    fs::create_dir(&project).expect("legacy project");
+    fs::write(
+        project.join("ara.project.json"),
+        ara_json::to_canonical_string(
+            &json!({"name":"Old project","layoutVersion":3,"engineVersion":"preview-3"}),
+        ),
+    )
+    .expect("legacy marker");
+    let card = hub
+        .call("hub.register", json!({"path":project}))
+        .expect("register legacy project");
+    let result = hub.call("hub.open", json!({"project":card["id"],"headless":true}));
+    // Always close the exact fixture authority, including if a following assertion fails.
+    let assertion = || {
+        let status = result.expect("undeclared selected CLI must launch its own v3 authority");
+        assert_eq!(status["state"], "open");
+        let catalog = hub
+            .call(
+                "hub.call",
+                json!({"project":card["id"],"method":"rpc.discover","params":{}}),
+            )
+            .expect("proxy delegates to the old authority");
+        assert_eq!(catalog["methods"][0]["name"], "editor.state");
+        assert!(
+            !project.join("content").exists(),
+            "delegating never silently migrates"
+        );
+    };
+    let checked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(assertion));
+    hub.call("hub.close", json!({"project":card["id"]}))
+        .expect("close only this fixture authority");
+    if let Err(panic) = checked {
+        std::panic::resume_unwind(panic);
     }
 }

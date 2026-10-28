@@ -1,5 +1,6 @@
 //! Decisions and errors share one focused, accessible dialog surface.
 mod engine;
+mod engine_layout;
 mod error;
 mod migration;
 mod update;
@@ -32,10 +33,12 @@ pub(super) fn body(p: &mut Page, hub: &Hub, ctx: &Ctx) {
         "<modal id='hub-dialog' class='dialog-layer' label='Ara Hub dialog'><scroll id='dialog-frame' class='dialog-frame' style='width:{width}px;max-height:{height}px'><panel id='dialog-card' class='{class}' style='width:{width}px{card_height}'>"
     );
     match dialog {
+        Dialog::EngineLayout(project) => engine_layout::body(p, hub, project),
         Dialog::Migration(project) => migration::body(p, hub, project),
         Dialog::Update => update::body(p, hub),
-        Dialog::InstallEngine(version) => engine::install(p, hub, version, false),
-        Dialog::RepairEngine(version) => engine::install(p, hub, version, true),
+        Dialog::InstallEngine(version) => engine::install(p, hub, version, false, false),
+        Dialog::InstallCurrentEngine(version) => engine::install(p, hub, version, false, true),
+        Dialog::RepairEngine(version) => engine::install(p, hub, version, true, false),
         Dialog::UninstallEngine(engine) => engine::uninstall(p, hub, engine),
         Dialog::Confirm {
             title,

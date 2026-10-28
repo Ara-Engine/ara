@@ -185,6 +185,9 @@ impl Hub {
         }
     }
     pub(super) fn cancel_pending(&mut self, kind: String, version: String) {
+        if matches!(kind.as_str(), "engine" | "engine-current" | "repair") {
+            self.engine_layout_cancelled(&version);
+        }
         if kind == "engine" {
             self.releases.open_after.remove(&version);
         }
@@ -200,6 +203,7 @@ impl Hub {
     pub(super) fn transfer_failed(&mut self, method: &str, version: &str) {
         let kind = match method {
             "hub.engine.install" => "engine",
+            "hub.engine.installCurrent" => "engine-current",
             "hub.engine.repair" => "repair",
             "hub.update.prepare" => "hub",
             "hub.engine.uninstall" => "uninstall",
@@ -222,8 +226,11 @@ impl Hub {
     }
     pub(super) fn preflight_reply(&mut self, version: String, result: Result<Value, RpcError>) {
         self.releases.pending_preflights.remove(&version);
-        let visible = matches!(&self.dialog, Some(Dialog::InstallEngine(current) | Dialog::RepairEngine(current)) if current == &version);
-        let retry = if matches!(&self.dialog, Some(Dialog::RepairEngine(current)) if current == &version)
+        let visible = matches!(&self.dialog, Some(Dialog::InstallEngine(current) | Dialog::InstallCurrentEngine(current) | Dialog::RepairEngine(current)) if current == &version);
+        let retry = if matches!(&self.dialog, Some(Dialog::InstallCurrentEngine(current)) if current == &version)
+        {
+            Dialog::InstallCurrentEngine(version.clone())
+        } else if matches!(&self.dialog, Some(Dialog::RepairEngine(current)) if current == &version)
         {
             Dialog::RepairEngine(version.clone())
         } else {
@@ -398,7 +405,12 @@ impl Hub {
                         self.receive_removal(job);
                         continue;
                     }
-                    if job.kind == "engine" && job.state == "cancelled" {
+                    if matches!(job.kind.as_str(), "engine" | "engine-current" | "repair")
+                        && job.state == "cancelled"
+                    {
+                        if self.engine_layout_owns_install(&job.id) {
+                            self.engine_layout_cancelled(&job.version);
+                        }
                         self.releases.open_after.remove(&job.version);
                     }
                     let was_finished = self
@@ -408,9 +420,15 @@ impl Hub {
                         .any(|old| old.id == job.id && old.state == job.state);
                     if job.state == "complete"
                         && !was_finished
-                        && matches!(job.kind.as_str(), "engine" | "repair" | "uninstall")
+                        && matches!(
+                            job.kind.as_str(),
+                            "engine" | "engine-current" | "repair" | "uninstall"
+                        )
                     {
                         self.refresh([List::Engines]);
+                        if matches!(job.kind.as_str(), "engine" | "engine-current" | "repair") {
+                            self.engine_layout_installed(&job.version, &job.id);
+                        }
                         if job.kind == "uninstall" {
                             self.notice(format!("Uninstalled Ara {}", job.version), None);
                             continue;
@@ -435,7 +453,12 @@ impl Hub {
                     if let Some(error) = &job.error
                         && !was_finished
                     {
-                        self.notice(
+                        let retry = if self.engine_layout_owns_install(&job.id) {
+                            self.engine_layout_transfer_failed(&job.version)
+                        } else {
+                            None
+                        };
+                        let notice = self.notice(
                             format!(
                                 "Couldn't {} Ara {}",
                                 if job.kind == "uninstall" {
@@ -451,17 +474,27 @@ impl Hub {
                             ),
                             Some(&error.clone().into()),
                         );
+                        if let Some(retry) = retry
+                            && let Some(notice) =
+                                self.notices.iter_mut().find(|entry| entry.id == notice)
+                        {
+                            notice.retry = Some(Box::new(retry));
+                        }
                         self.releases.open_after.remove(&job.version);
                     }
                 }
                 self.releases.jobs = jobs;
             }
             "hub.engine.install"
+            | "hub.engine.installCurrent"
             | "hub.engine.repair"
             | "hub.update.prepare"
             | "hub.engine.uninstall.preflight"
             | "hub.engine.uninstall" => {
                 if let Ok(job) = serde_json::from_value::<Download>(value) {
+                    if method == "hub.engine.installCurrent" {
+                        self.engine_layout_install_started(&job);
+                    }
                     let key = (job.kind.clone(), job.version.clone());
                     self.releases.requests.remove(&key);
                     if self.releases.cancelling_requests.remove(&key) {
