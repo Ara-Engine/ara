@@ -368,6 +368,20 @@ fn interactive(
             match event {
                 Event::Quit => return Ok(()),
                 Event::Resize(_) => dirty = true,
+                Event::FocusLost => {
+                    app.input.cancel_interaction(&mut app.ui);
+                    for scancode in [225, 229, 224, 228, 226, 230] {
+                        let _ = input::recover(app.key(hub, scancode, false));
+                    }
+                    dirty = true;
+                }
+                // NativeInput's SDL watch delivers text/IME and folder drops once.
+                Event::TextInput { .. }
+                | Event::TextEditing { .. }
+                | Event::FileDropBegin
+                | Event::FileDropPosition { .. }
+                | Event::FileDropComplete
+                | Event::FileDrop { .. } => {}
                 Event::Key {
                     scancode, pressed, ..
                 } => {
