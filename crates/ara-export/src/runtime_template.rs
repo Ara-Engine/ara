@@ -179,13 +179,13 @@ fn mach_o(player: &Path) -> Result<bool> {
     ))
 }
 
-/// Cooked JSON records the runtime reads beside pipeline manifests: a VFX effect's
-/// content hash (`ara-vfx-gpu` checks `<effect>/effect.json` before building it).
-/// Every other JSON without stages is offline cook state and stays out.
-const RUNTIME_RECORDS: &[&str] = &["effect.json"];
+/// Cooked files the runtime reads beside pipeline manifests: `ara-vfx-gpu` checks
+/// each effect's content hash (`<effect>/effect.json`) and samples the particle
+/// atlas (`atlas.rgba`). Every other non-manifest file is offline cook state.
+const RUNTIME_FILES: &[&str] = &["effect.json", "atlas.rgba"];
 
 /// Adds runtime artifacts named by manifests: SPIR-V/DXIL, or Metal libraries and
-/// their required converter reflection, plus [`RUNTIME_RECORDS`]. Slang reflection
+/// their required converter reflection, plus [`RUNTIME_FILES`]. Slang reflection
 /// is an offline cook cache.
 fn resources(
     root: &Path,
@@ -208,19 +208,20 @@ fn resources(
             }
             continue;
         }
-        if path.extension().is_none_or(|extension| extension != "json") {
-            continue;
-        }
-        let value: serde_json::Value = serde_json::from_slice(&std::fs::read(&path)?)?;
         let relative = path
             .strip_prefix(root)?
             .to_string_lossy()
             .replace('\\', "/");
+        if RUNTIME_FILES.contains(&name.as_str()) {
+            ara_pack::validate_path(&relative)?;
+            files.insert(format!("{prefix}/{relative}"), path.to_owned());
+            continue;
+        }
+        if path.extension().is_none_or(|extension| extension != "json") {
+            continue;
+        }
+        let value: serde_json::Value = serde_json::from_slice(&std::fs::read(&path)?)?;
         let Some(stages) = value.get("stages").and_then(serde_json::Value::as_array) else {
-            if RUNTIME_RECORDS.contains(&name.as_str()) {
-                ara_pack::validate_path(&relative)?;
-                files.insert(format!("{prefix}/{relative}"), path.to_owned());
-            }
             continue;
         };
         ensure!(
@@ -352,6 +353,7 @@ mod tests {
         let effect = scratch.path().join("crates/ara-vfx-gpu/cooked/campfire");
         std::fs::create_dir_all(&effect).unwrap();
         std::fs::write(effect.join("effect.json"), "{\"hash\":\"cooked\"}").unwrap();
+        std::fs::write(effect.join("../atlas.rgba"), b"particle atlas").unwrap();
         let first = scratch.path().join("first.zip");
         let second = scratch.path().join("second.zip");
         build_runtime_template(&player, scratch.path(), &first).unwrap();
@@ -389,12 +391,14 @@ mod tests {
                 "offline {file} must stay outside the runtime payload"
             );
         }
-        // The VFX runtime checks each effect's cooked hash record before building it.
-        assert!(
-            archive
-                .by_name("resources/ara-vfx-gpu/campfire/effect.json")
-                .is_ok()
-        );
+        // The VFX runtime checks each effect's cooked hash and samples the atlas.
+        for file in ["campfire/effect.json", "atlas.rgba"] {
+            assert!(
+                archive
+                    .by_name(&format!("resources/ara-vfx-gpu/{file}"))
+                    .is_ok()
+            );
+        }
         let unpacked = scratch.path().join("game");
         let executable =
             crate::runtime::unpack_template(&first, &unpacked, "ara-player.exe").unwrap();
