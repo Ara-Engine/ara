@@ -16,6 +16,8 @@
 use super::commands::Target;
 use super::*;
 use std::collections::BTreeMap;
+mod compile;
+pub(crate) use compile::CompilationView;
 
 /// Console and Problems filters: panel-local view state (neither navigation nor undo).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -55,7 +57,9 @@ impl Default for LogView {
 /// One bus record, as `logs` returns it.
 struct Entry {
     seq: u64,
+    first: u64,
     count: u64,
+    sampled: u64,
     at: u64,
     origin: String,
     diagnostic: ara_diag::Diagnostic,
@@ -75,10 +79,16 @@ struct Identity<'a> {
     line: Option<u32>,
     column: Option<u32>,
     command: Option<usize>,
+    module: Option<&'a str>,
+    producer: Option<&'a str>,
+    profile: Option<&'a str>,
+    world: Option<&'a str>,
+    player: Option<u64>,
 }
 impl Entry {
     fn identity(&self) -> Identity<'_> {
         let location = &self.diagnostic.location;
+        let data = self.diagnostic.data.as_deref();
         Identity {
             code: self.diagnostic.code,
             severity: self.diagnostic.severity,
@@ -91,6 +101,11 @@ impl Entry {
             line: location.line,
             column: location.column,
             command: location.command,
+            module: data.and_then(|data| data["module"].as_str()),
+            producer: data.and_then(|data| data["compile"]["producer"].as_str()),
+            profile: data.and_then(|data| data["compile"]["profile"].as_str()),
+            world: data.and_then(|data| data["play"]["world"].as_str()),
+            player: data.and_then(|data| data["play"]["player"].as_u64()),
         }
     }
 }
@@ -109,16 +124,21 @@ fn entries(editor: &mut Editor, since: u64, severity: &str) -> Vec<Entry> {
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|e| {
-            Some(Entry {
-                seq: e["seq"].as_u64()?,
-                count: e["count"].as_u64().unwrap_or(1),
-                at: e["at"].as_u64().unwrap_or(0),
-                origin: e["origin"].as_str().unwrap_or("engine").to_owned(),
-                diagnostic: serde_json::from_value(e["diagnostic"].clone()).ok()?,
-            })
-        })
+        .filter_map(entry)
         .collect()
+}
+
+fn entry(e: &Value) -> Option<Entry> {
+    let seq = e["seq"].as_u64()?;
+    Some(Entry {
+        seq,
+        first: e["first"].as_u64().unwrap_or(seq),
+        count: e["count"].as_u64().unwrap_or(1),
+        sampled: e["sampled"].as_u64().unwrap_or(0),
+        at: e["at"].as_u64().unwrap_or(0),
+        origin: e["origin"].as_str().unwrap_or("engine").to_owned(),
+        diagnostic: serde_json::from_value(e["diagnostic"].clone()).ok()?,
+    })
 }
 
 /// Whether a record is about this computer (its GPU loader and overlay layers), not
@@ -486,10 +506,28 @@ impl Shell {
     }
 
     pub(super) fn problems_panel(&mut self, editor: &mut Editor, out: &mut String) {
+        // Move the read model for this render so rows can borrow cached entries
+        // while button construction mutates the Shell, without copying history.
+        let compilation = std::mem::take(&mut self.compile_problems);
+        self.problems_with_compilation(editor, out, &compilation);
+        self.compile_problems = compilation;
+    }
+
+    fn problems_with_compilation(
+        &mut self,
+        editor: &mut Editor,
+        out: &mut String,
+        compilation: &CompilationView,
+    ) {
         let view = self.log_view;
-        let (machine, all): (Vec<Entry>, Vec<Entry>) = entries(editor, 0, "warning")
+        let (machine, fresh): (Vec<Entry>, Vec<Entry>) = entries(editor, 0, "warning")
             .into_iter()
-            .partition(|e| machine(&e.diagnostic));
+            .partition(|entry| machine(&entry.diagnostic));
+        let all: Vec<&Entry> = fresh
+            .iter()
+            .filter(|entry| compilation.fallback(entry))
+            .chain(compilation.entries())
+            .collect();
         let errors = all
             .iter()
             .filter(|e| e.diagnostic.severity == ara_diag::Severity::Error)
@@ -518,6 +556,10 @@ impl Shell {
         }
         self.search(out, "problems", editor);
         out.push_str("</panel>");
+        let notice = compilation.notice();
+        if let Some(notice) = &notice {
+            out.push_str(&format!("<text id='problems-compile-status' class='caption wrap-text' style='flex-shrink:0;padding:6px' text='{}' />",escape(notice)));
+        }
         let query = editor
             .state
             .searches
@@ -559,7 +601,7 @@ impl Shell {
             groups.entry(group).or_default().push(e);
         }
         if groups.is_empty() && machine.is_empty() {
-            self.empty(out, "problems-empty", "circle-check", if all.is_empty() { "No problems" } else { "No matching problems" }, "Errors and warnings from documents, imports, scripts and Play are listed here by file, with fixes.", &[]);
+            self.empty(out, "problems-empty", if notice.is_some(){"info"}else{"circle-check"}, if notice.is_some(){"Compilation coverage is incomplete"}else if all.is_empty() { "No problems" } else { "No matching problems" }, notice.as_deref().unwrap_or("Errors and warnings from documents, imports, scripts and Play are listed here by file, with fixes."), &[]);
             return;
         }
         out.push_str("<scroll id='problems-scroll' class='body log-list'>");
@@ -574,6 +616,9 @@ impl Shell {
         for (n, (group, rows)) in groups.iter().enumerate() {
             let gid = format!("problem-group-{n}");
             out.push_str(&format!("<panel id='{gid}' class='problem-group'>{}<text id='{gid}-path' class='fg' text='{}' /><text id='{gid}-count' class='caption' text='{}' /></panel>",icons::icon(&gid,if group=="Project"{"folder"}else{"file"}),escape(group),rows.len()));
+            if rows.len() > 200 {
+                out.push_str(&format!("<text id='{gid}-window' class='caption wrap-text' text='Showing 200 of {} problems in this group. Search filters all retained rows.' />",rows.len()));
+            }
             for e in rows.iter().take(200) {
                 let id = format!("problem-{}", e.seq);
                 let (icon, tint) = severity_icon(e.diagnostic.severity);

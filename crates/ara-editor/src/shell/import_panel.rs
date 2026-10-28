@@ -260,7 +260,7 @@ impl Shell {
             for (n, link) in links.iter().enumerate() {
                 out.push_str(&self.bind_button(
                     &format!("dependency-{label}-{n}"),
-                    link,
+                    workspace.reference_path(link),
                     Binding::Protocol("editor.workspace", json!({"asset":link})),
                     "small quiet folder-row dep-row",
                 ));

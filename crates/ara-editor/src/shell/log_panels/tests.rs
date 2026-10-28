@@ -8,7 +8,9 @@ fn entry(message: &str, file: &str, line: u32, origin: &str) -> Entry {
     diagnostic.location.line = Some(line);
     Entry {
         seq: 1,
+        first: 1,
         count: 1,
+        sampled: 0,
         at: 0,
         origin: origin.into(),
         diagnostic,

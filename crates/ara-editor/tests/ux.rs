@@ -137,7 +137,7 @@ fn import_panel_overlays_live_dependencies_and_applies_settings_with_one_content
     shell.dispatch(&mut editor).unwrap();
     assert_eq!(
         editor.state.asset_path.as_deref(),
-        Some("models/crate.gltf")
+        Some(format!("{}/models/crate.gltf", ara_doc::AUTHORING_ROOT).as_str())
     );
     assert!(
         shell.ui.find("import-settings-title").is_some(),
@@ -1167,6 +1167,12 @@ fn assets_show_folders_then_files_hide_noise_and_search_everywhere() {
     )
     .unwrap();
     let mut editor = Editor::open(&project.0).unwrap();
+    editor
+        .action(
+            "editor.workspace",
+            json!({"folder":ara_doc::AUTHORING_ROOT}),
+        )
+        .unwrap();
     editor
         .action("editor.layout.show", json!({"panel":"assets"}))
         .unwrap();

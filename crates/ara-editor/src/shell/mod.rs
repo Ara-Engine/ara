@@ -300,6 +300,7 @@ pub struct Shell {
     script_job: Option<(String, std::time::Instant)>,
     script_modules: scripts::ModuleList,
     ide_request: Option<scripts::IdeRequest>,
+    compile_problems: log_panels::CompilationView,
     pub(crate) drag: Option<Drag>,
     scrub: Option<scrub::Scrub>,
     motion: motion::Motion,
@@ -632,6 +633,7 @@ impl Shell {
             script_job: None,
             script_modules: Default::default(),
             ide_request: None,
+            compile_problems: Default::default(),
             drag: None,
             scrub: None,
             motion: Default::default(),
@@ -850,6 +852,7 @@ impl Shell {
         self.rebuild(editor)
     }
     fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        self.poll_compile_problems(editor)?;
         self.built = (editor.panels_revision, editor.host.store().revision());
         // Async catalog reloads can make saved extension overrides reachable.
         let settings = keymap_settings(&editor.state);
