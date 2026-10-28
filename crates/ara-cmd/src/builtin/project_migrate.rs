@@ -55,6 +55,10 @@ impl Command for ProjectMigrate {
         "Apply an explicitly reviewed project-layout migration as one reversible transaction.";
     const SCOPE: &'static str = "edit:assets";
 
+    fn examples() -> Vec<Value> {
+        vec![json!({"planToken":"reviewed-inventory-token"})]
+    }
+
     fn run(ctx: &mut EditCtx<'_, '_>, params: Self::Params) -> Result<Value, Diagnostic> {
         let metadata = ctx
             .prepared_metadata()
