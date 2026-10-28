@@ -2,6 +2,10 @@
 use super::*;
 impl Lab {
     pub(super) fn tick_shaders(&mut self) -> Result<()> {
+        if cfg!(target_os = "macos") {
+            self.cooks.clear();
+            return Ok(());
+        }
         let activity = std::sync::Arc::clone(&self.activity);
         let publication = activity.gpu.try_write();
         if publication.is_ok()
@@ -43,7 +47,9 @@ impl Lab {
             let baseline_output =
                 super::super::watch::output(&self.root, &self.base, &cook.manifest)?;
             let relative_output = baseline_output.strip_prefix(self.base.join("shaders"))?;
+            let publication_started = Instant::now();
             let mut published = None;
+            let mut rebased = false;
             if cook.variant == "baseline" && status.success() && changed {
                 super::super::variants::publish_tree(&cook.output, &baseline_output)?;
                 self.variants
@@ -54,21 +60,49 @@ impl Lab {
                     .variants
                     .completed(&self.base, &cook.variant, relative, status.success())?
             {
-                self.variants
+                rebased = self
+                    .variants
                     .publish(&self.root, &self.base, &cook.variant)?;
                 published = Some(cook.variant.clone());
             }
             if let Some(published) = published {
+                let publish_started = Instant::now();
+                let outputs = if published == "baseline" {
+                    vec![relative_output.to_owned()]
+                } else {
+                    self.variants
+                        .packages(&published)?
+                        .into_iter()
+                        .map(|manifest| {
+                            let output = super::super::watch::output(
+                                &self.root,
+                                &self.base,
+                                &self.root.join(manifest),
+                            )?;
+                            Ok(output.strip_prefix(self.base.join("shaders"))?.to_owned())
+                        })
+                        .collect::<Result<Vec<_>>>()?
+                };
                 for session in self.sessions.values_mut() {
                     let name = session.active_variant();
                     if name == published
                         || (published == "baseline"
                             && !self.variants.affected(relative).contains(&name))
                     {
-                        super::super::variants::publish_tree(
-                            &super::super::variants::profile(&self.base, &name),
-                            session.view(),
-                        )?;
+                        if rebased {
+                            super::super::variants::publish_tree(
+                                &super::super::variants::profile(&self.base, &name),
+                                session.view(),
+                            )?;
+                        } else {
+                            for output in &outputs {
+                                super::super::variants::publish_tree(
+                                    &super::super::variants::profile(&self.base, &name)
+                                        .join(output),
+                                    &session.view().join(output),
+                                )?;
+                            }
+                        }
                         session.shaders_changed();
                         session.control(
                             json!({"reload_shaders":true,"measure":false}),
@@ -89,6 +123,7 @@ impl Lab {
                     }
                     self.pending_variants.remove(&track);
                 }
+                self.event("shader_views_published",json!({"variant":published,"publication_ms":publication_started.elapsed().as_secs_f64()*1000.,"view_copy_ms":publish_started.elapsed().as_secs_f64()*1000.}));
             }
         }
         drop(publication);
@@ -100,7 +135,7 @@ impl Lab {
             if let Some(executable) = self.binaries.get("ara-shader-cook") {
                 let cache = super::super::variants::cache(&self.base, &variant);
                 let output = super::super::watch::output(&self.root, &cache, &manifest)?;
-                if !output.exists() {
+                if !output.join(".ara-shader-reload").is_file() {
                     let baseline = super::super::watch::output(&self.root, &self.base, &manifest)?;
                     if baseline.is_dir() {
                         super::super::variants::publish_tree(&baseline, &output)?;
@@ -117,6 +152,7 @@ impl Lab {
                     .current_dir(&self.root)
                     .arg(&manifest)
                     .arg(&output)
+                    .env("ARA_SHADER_TOOL_CACHE", self.base.join("toolchain-cache"))
                     .stdout(File::options().create(true).append(true).open(&log)?)
                     .stderr(File::options().append(true).open(&log)?);
                 if variant != "baseline" {

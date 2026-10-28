@@ -4,6 +4,37 @@ use std::path::PathBuf;
 
 fn main() -> Result<()> {
     let mut raw: Vec<_> = std::env::args_os().skip(1).collect();
+    if raw.first().is_some_and(|a| a == "--dependencies") {
+        ensure!(raw.len() == 2, "--dependencies needs a catalog JSON path");
+        #[derive(serde::Deserialize)]
+        struct Job {
+            manifest: PathBuf,
+            output: PathBuf,
+            variant: Option<PathBuf>,
+        }
+        let jobs: Vec<Job> = serde_json::from_slice(&std::fs::read(&raw[1])?)?;
+        let mut errors = Vec::new();
+        for job in jobs {
+            let outcome = (|| -> Result<()> {
+                let variant = job
+                    .variant
+                    .map(std::fs::read)
+                    .transpose()?
+                    .map(|b| serde_json::from_slice::<ara_shader_cook::variant::Variant>(&b))
+                    .transpose()?;
+                ara_shader_cook::write_dependency_index(
+                    &job.manifest,
+                    &job.output,
+                    variant.as_ref(),
+                )
+            })();
+            if let Err(error) = outcome {
+                errors.push(format!("{}: {error:#}", job.manifest.display()));
+            }
+        }
+        ensure!(errors.is_empty(), "{}", errors.join("\n"));
+        return Ok(());
+    }
     let watch = raw.iter().any(|arg| arg == "--watch");
     let promote = raw.iter().any(|arg| arg == "--promote");
     raw.retain(|arg| arg != "--watch" && arg != "--promote");

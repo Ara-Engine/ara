@@ -57,6 +57,8 @@ pub(super) struct Track {
     dirty: Arc<AtomicBool>,
     base: PathBuf,
     revision: Arc<AtomicU64>,
+    #[cfg(target_os = "macos")]
+    worker: Option<std::thread::JoinHandle<()>>,
 }
 impl Track {
     pub fn launch(
@@ -79,7 +81,8 @@ impl Track {
         let chosen = selection.clone();
         let cancel = Arc::new(AtomicBool::new(false));
         let stopped = Arc::clone(&cancel);
-        let resource_view = super::variants::view(&base, &name);
+        let resource_view = super::variants::view(&base, &format!("{name}-{}", session::id()));
+        let worker_view = resource_view.clone();
         let variant = Arc::new(Mutex::new(selection.variant.clone()));
         let active_variant = Arc::clone(&variant);
         let dirty = Arc::new(AtomicBool::new(false));
@@ -89,15 +92,24 @@ impl Track {
         let worker_name = format!("ara-lab-{name}");
         let run = move || {
             let launch = |executable: &Path| -> Result<Session> {
+                let _power = super::mac::Job::start()?;
                 let _start = activity.starts.lock().expect("player admission");
+                #[cfg(not(target_os = "macos"))]
                 let _activity = activity.gpu.read().expect("lab activity");
+                #[cfg(target_os = "macos")]
+                let _activity = activity.gpu.write().expect("lab activity");
                 let _visual = crate::gpu::visual(600)?;
+                ensure!(
+                    !stopped.load(Ordering::Acquire),
+                    "track cancelled before player startup"
+                );
                 super::daemon::vram()?;
                 Session::launch(
                     &root,
                     &base,
                     executable,
                     &name,
+                    &worker_view,
                     chosen.clone(),
                     Arc::clone(&stopped),
                 )
@@ -171,8 +183,12 @@ impl Track {
                 match work {
                     Work::Restart(next, _generation, revision) => {
                         let outcome = (|| -> Result<Session> {
+                            let _power = super::mac::Job::start()?;
                             let _start = activity.starts.lock().expect("player admission");
+                            #[cfg(not(target_os = "macos"))]
                             let _activity = activity.gpu.read().expect("lab activity");
+                            #[cfg(target_os = "macos")]
+                            let _activity = activity.gpu.write().expect("lab activity");
                             let _visual = crate::gpu::visual(600)?;
                             super::daemon::vram()?;
                             Session::launch(
@@ -180,6 +196,7 @@ impl Track {
                                 &base,
                                 &next,
                                 &name,
+                                &worker_view,
                                 player.selection.clone(),
                                 Arc::clone(&stopped),
                             )
@@ -223,6 +240,7 @@ impl Track {
                     Work::Operation { tool, args, reply } => {
                         let started = std::time::Instant::now();
                         let result = (|| -> Result<Value> {
+                            let _power = super::mac::Job::start()?;
                             let source_current = up_to_date
                                 && applied_revision == requested_revision.load(Ordering::Acquire)
                                 && activity.rust_latest.load(Ordering::Acquire)
@@ -419,7 +437,9 @@ impl Track {
                 );
             }
         };
-        std::thread::Builder::new().name(worker_name).spawn(run)?;
+        let worker = std::thread::Builder::new().name(worker_name).spawn(run)?;
+        #[cfg(not(target_os = "macos"))]
+        drop(worker);
         Ok(Self {
             selection,
             send,
@@ -432,6 +452,8 @@ impl Track {
             dirty,
             base: cache_base,
             revision,
+            #[cfg(target_os = "macos")]
+            worker: Some(worker),
         })
     }
     pub fn status(&mut self) -> Result<Value> {
@@ -468,10 +490,18 @@ impl Track {
         Ok(self.send.send(Work::Operation { tool, args, reply })?)
     }
     pub fn reload_target(&self) -> Option<super::build::ReloadTarget> {
+        if self.latest["running"] != true {
+            return None;
+        }
         Some(super::build::ReloadTarget {
             pid: self.latest["pid"].as_u64()? as u32,
             control: PathBuf::from(self.latest["directory"].as_str()?).join("control"),
         })
+    }
+    pub fn can_reuse(&self) -> bool {
+        (self.latest["running"] == true || self.latest["starting"] == true)
+            && self.latest["error"].is_null()
+            && self.latest["restart_error"].is_null()
     }
     pub fn view(&self) -> &Path {
         &self.resource_view
@@ -486,5 +516,11 @@ impl Track {
 impl Drop for Track {
     fn drop(&mut self) {
         self.cancel.store(true, Ordering::Release);
+        // Unix child process groups are retired by the worker's owned Session.
+        // Let that destructor run before the daemon exits and abandons its threads.
+        #[cfg(target_os = "macos")]
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
     }
 }

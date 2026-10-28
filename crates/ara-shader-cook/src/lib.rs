@@ -1,6 +1,9 @@
 #![warn(missing_docs)]
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 //! Offline Slang compiler orchestration. The engine never links this crate.
+mod dependency;
+pub use dependency::write_index as write_dependency_index;
+mod identity;
 mod metal;
 pub mod variant;
 use anyhow::{Context, Result, ensure};
@@ -99,34 +102,14 @@ pub fn cook_with_variant(
         variant.apply(&mut pipelines, source_root)?;
         manifest_bytes = serde_json::to_vec(&pipelines)?;
     }
-    let compiler = String::from_utf8(run(Command::new(&tools.slangc).arg("-version"))?)?;
+    dependency::write(manifest, output, &pipelines)?;
+    let identity = identity::load(tools, output)?;
+    let compiler = identity.version;
+    let compiler_key = identity.key;
     let converter = metal::Converter::discover()?;
     if converter.is_none() {
         metal::report_skipped();
     }
-    let mut compiler_hash = Sha256::new();
-    let recipe = b"ara-cook-3|sm_6_6+spirv_1_6|sm_6_6|-O2|column-major|VULKAN|invert-y-vertex-mesh|vulkan1.3-validation";
-    compiler_hash.update(recipe);
-    let executable = std::fs::read(&tools.slangc)?;
-    compiler_hash.update(&executable);
-    if let Some(bin) = tools.slangc.parent() {
-        for name in [
-            "slang.dll",
-            "slang-compiler.dll",
-            "slang-glslang.dll",
-            "slang-glsl-module.dll",
-            "slang-rt.dll",
-            "dxcompiler.dll",
-        ] {
-            if let Ok(bytes) = std::fs::read(bin.join(name)) {
-                compiler_hash.update(name.as_bytes());
-                compiler_hash.update(&bytes);
-            }
-        }
-    }
-    compiler_hash.update(compiler.as_bytes());
-    compiler_hash.update(binding_layout_hash());
-    let compiler_key = hash(compiler_hash.finalize());
     // Unreferenced experimental siblings must not alter baseline provenance.
     // Each input still falls back to the full tree for unresolved module/includes.
     let fingerprints = pipelines
@@ -355,38 +338,15 @@ fn convert_stages(
 }
 
 fn pipeline_input_key(root: &Path, pipeline: &PipelineSource, compiler: &str) -> Result<String> {
-    fn includes(file: &Path, seen: &mut BTreeSet<PathBuf>, digest: &mut Sha256) -> Result<()> {
-        let file = file.canonicalize()?;
-        if !seen.insert(file.clone()) {
-            return Ok(());
-        }
-        let source = std::fs::read_to_string(&file)?;
-        digest.update(source.as_bytes());
-        for line in source.lines().map(str::trim) {
-            if let Some(include) = line.strip_prefix("#include") {
-                let include = include.trim();
-                if let Some(name) = include.strip_prefix('"').and_then(|s| s.split('"').next()) {
-                    includes(
-                        &file.parent().context("include parent")?.join(name),
-                        seen,
-                        digest,
-                    )?;
-                } else {
-                    anyhow::bail!("non-literal shader include: {line}");
-                }
-            } else if line.starts_with("import ") || line.starts_with("# include") {
-                anyhow::bail!("shader dependency requires conservative invalidation");
-            }
-        }
-        Ok(())
-    }
     let mut digest = Sha256::new();
     digest.update(compiler.as_bytes());
     digest.update(serde_json::to_vec(pipeline)?);
-    if includes(
+    if dependency::visit(
         &root.join(&pipeline.source),
         &mut BTreeSet::new(),
-        &mut digest,
+        &mut |source| {
+            digest.update(source.as_bytes());
+        },
     )
     .is_err()
     {

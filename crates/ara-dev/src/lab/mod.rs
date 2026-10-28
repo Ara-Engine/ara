@@ -3,7 +3,11 @@ mod ab;
 pub(crate) mod build;
 mod claims;
 mod daemon;
+mod dependencies;
 mod generations;
+mod mac;
+mod mirror;
+mod prepare;
 mod protocol;
 mod references;
 mod scenes;
@@ -24,12 +28,33 @@ use std::{
 
 #[derive(Args)]
 pub(crate) struct Options {
+    /// Route tools through the PC endpoint to its configured Mac peer.
+    #[arg(long,global=true,default_value="pc",value_parser=["pc","mac"])]
+    platform: String,
     #[command(subcommand)]
     action: Action,
 }
 
 #[derive(Subcommand)]
 enum Action {
+    #[command(hide = true)]
+    PrepareScene { input: PathBuf },
+    /// Configure the PC-owned Mac source/artifact mirror and queue synchronization.
+    Mirror {
+        /// Start remote work only after the Mac's current owner grants a machine slot.
+        #[arg(long)]
+        grant_slot: bool,
+        #[arg(long, default_value = "mac")]
+        host: String,
+        #[arg(long, default_value = "/Users/islam/projects/ara")]
+        repo: String,
+        #[arg(long)]
+        build_dir: Option<String>,
+        #[arg(long)]
+        pc_repository: Option<String>,
+    },
+    #[command(hide = true)]
+    Rpc,
     /// Start the singleton; returns once its endpoint is reachable.
     Start {
         /// Run attached to this terminal (the default detaches with hidden children).
@@ -177,12 +202,46 @@ pub(super) fn directory(root: &Path) -> PathBuf {
 }
 
 pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
-    let (tool, arguments) = match options.action {
+    let (tool, mut arguments) = match options.action {
+        Action::PrepareScene { input } => return prepare::run(root, &input),
+        Action::Mirror {
+            grant_slot,
+            host,
+            repo,
+            build_dir,
+            pc_repository,
+        } => (
+            "lab_mirror",
+            json!({"host":host,"repo":repo,"build_dir":build_dir,"pc_repository":pc_repository,"grant_slot":grant_slot}),
+        ),
+        Action::Rpc => {
+            use std::io::{BufRead, Write};
+            let mut input = String::new();
+            std::io::stdin().lock().read_line(&mut input)?;
+            let request: Value = serde_json::from_str(&input)?;
+            let result = protocol::call(
+                root,
+                request["tool"]
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("tool required"))?,
+                request["arguments"].clone(),
+            );
+            let value = match result {
+                Ok(value) => json!({"result":value}),
+                Err(error) => json!({"error":format!("{error:#}")}),
+            };
+            writeln!(std::io::stdout(), "{value}")?;
+            return Ok(true);
+        }
         Action::Start {
             foreground,
             build_dir,
             max_sessions,
         } => {
+            ensure!(
+                options.platform == "pc",
+                "start the mirror with lab mirror on the PC"
+            );
             let build_dir = build_dir.unwrap_or_else(|| build::default_directory(root));
             if foreground {
                 return daemon::run(root, &build_dir, max_sessions);
@@ -317,6 +376,7 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
         Action::Logs { lines } => ("lab_logs", json!({"lines":lines})),
         Action::Stop => ("lab_stop", json!({})),
     };
+    arguments["platform"] = json!(options.platform);
     let value: Value = protocol::call(root, tool, arguments)?;
     println!("{}", serde_json::to_string_pretty(&value)?);
     Ok(true)

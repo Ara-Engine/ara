@@ -9,6 +9,8 @@
 .sn/
 # Shader-cook reuse data and live reload signals; cooked manifests stay tracked.
 .ara-pipeline-inputs.json
+.ara-compiler-identity.json
+.ara-shader-dependencies.json
 .ara-shader-reload
 .ara-shader-reload.tmp
 

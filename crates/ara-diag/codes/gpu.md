@@ -141,3 +141,17 @@ Fixes:
 - On the canonical cook host (Windows), install Metal Shader Converter for Windows from https://developer.apple.com/download/all/?q=metal%20shader%20converter, then recook.
 - Point `ARA_METAL_SHADERCONVERTER` at `metal-shaderconverter` if it lives elsewhere.
 - Never commit cooked artifacts produced on a Mac; recook on the canonical host instead (docs/dev/macos.md).
+
+## ARA6092 LAB_MAC_BATTERY: Mac lab job requires AC power
+owner: ara-dev
+shown as: ARA_LAB_MAC_BATTERY
+
+The Fidelity Lab refused a build or player job because the Mac is on battery or its charger state could not be verified.
+
+Causes:
+- `pmset -g batt` does not report AC Power.
+- The charger is disconnected, or the power query failed.
+
+Fixes:
+- Connect the Mac to a charger, verify AC Power with `pmset -g batt`, then retry.
+- Keep `caffeinate` scoped to active jobs; an idle lab holds no sleep assertion.

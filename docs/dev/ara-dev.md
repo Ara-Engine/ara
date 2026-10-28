@@ -331,12 +331,15 @@ ara-dev lab stop
 `ara-dev lab mcp` is a stdio MCP endpoint for the same daemon: `lab_status`,
 `lab_claim`, `lab_release`, `lab_session`, `lab_reload`, `lab_rebuild`,
 `lab_capture`, `lab_measure`, `lab_variant`, `lab_ab`, `lab_set`, `lab_reference`,
-`lab_logs`, `lab_stop`. MCP stdout contains only
+`lab_logs`, `lab_stop`, `lab_mirror`. MCP stdout contains only
 JSON-RPC. All CLI results are JSON. Track names are independent of agent claims;
 claim overlaps warn and retain both owners. Claims never prevent an edit.
 
 The daemon watches every `pipelines.json` (including generated VFX), with a
-400 ms source debounce. Cooks publish under `target/ara-dev/lab/shaders`, leaving
+100 ms shader debounce and 400 ms Rust debounce. Literal source/include dependency
+indexes skip unrelated packages and variant siblings; uncertain imports fall back
+to conservative invalidation. Each cook reuses unchanged pipelines. Cooks publish
+under `target/ara-dev/lab/shaders`, leaving
 tracked cooked files untouched. Existing cooked outputs seed the cache. Rust
 edits queue a single incremental build. Successful binaries are copied to a new
 generation before starting replacements, avoiding Windows executable locking.
@@ -355,7 +358,10 @@ Showcase uses the benchmark export when present at
 `D:/AraBench/builds/ara/showcase/build`; pass `--pack` to select another frozen
 export. Outpost and Hangar reuse perf packs or export scratch sample copies once.
 Showcase's fixed cameras are stage, materials and props, using the sample look's
-matching transforms. Captures and comparisons go under `target/ara-dev/lab/captures`.
+matching transforms. External exports are retained as private content/gameplay
+snapshots under the lab packs cache; executable/symbol copies are omitted. Other
+worktrees and benchmark cleanup cannot remove a running track's restart input.
+Captures and comparisons go under `target/ara-dev/lab/captures`.
 `ARA_LAB_REFERENCES` overrides the reference root (default `D:/AraBench/report/images`);
 each scene has a `cycles/<camera>.png` reference. Missing references are reported.
 The seven Showcase regions are normalized in `crates/ara-dev/src/lab/quality/showcase.json`
@@ -500,6 +506,133 @@ with a ±0.399 ms 95% interval. These are functional/turnaround results, not a c
 performance baseline; the normal CPU policy refused the loaded machine. The
 sampler runs at Normal-equivalent thread priority so BelowNormal builds cannot
 starve monitoring into accepting an unobserved interval.
+
+On 2026-10-28 the default cached A/B improved to **12.63 and 12.73 s**, including
+admission and the unchanged load guard. Its work inside the guarded operation took
+6.50–6.53 s: 1.34–1.43 s switching, 4.78–4.85 s measuring all eight windows, and
+0.27–0.28 s retrieving the two temporal reports. Consecutive equal selections skip
+reloads, and other switches copy only changed cohorts. Temporal cache identity uses
+the acknowledged shader cohort, avoiding a race with the status-file refresh;
+native checks matched each cached identity to its actual A/B window.
+
+These turnaround probes used the explicit relaxed policy under 82.1–92.5% mean
+foreign CPU; both GPU-span comparisons were inconclusive. The default policy
+refused a 99.37% foreign CPU peak. A fresh temporal analysis still took 58.47 s
+including admission (42.42 s in temporal work); it is not advertised as a cached
+20-second A/B. Raw evidence is under `target/lab-baseline/ab-fastpath/`.
+
+The warm-restart strategy compares the staged player and its SDL library byte for
+byte. An unchanged player keeps its PID, selection and temporal cache generation.
+A native no-op rebuild took 2.60 s (2.20 s in Cargo) with the same PID and generation.
+Hotpatch strategies opt into this optimization explicitly; a successful patch still
+advances the quality-cache generation even when it requests no restart.
+
+The PC shader-save target was measured again on 2026-10-28 using an isolated
+four-pipeline post variant, three real source changes and no reload requests:
+
+| Stage | M2 four workers, before | After dependency/publication changes |
+|---|---:|---:|
+| Save to debounced detection | 0.676–0.706 s | 0.311–0.318 s |
+| Cook child, including startup | 2.073–2.752 s, including unrelated baseline cook | 0.901–1.024 s, four affected pipelines only |
+| Publish profile and player view | Full-tree copies; not separately instrumented | 0.310–0.314 s |
+| Metadata and SPIR-V load | Not separately instrumented | 6.84–8.02 ms |
+| Native PSO creation | Not separately instrumented | 117.37–214.60 ms |
+| Save to first new warm frame, observed status | 6.124–6.803 s | **1.803, 1.802, 1.814 s** |
+
+The earlier loaded outlier reached the new epoch after 20.82 s. Its final
+`compile_ms` combined load/PSO field could describe a forced no-op reload, so it is
+not used to infer the missing stage splits. New status exposes `load_ms`, `pso_ms`
+and a correlated `shader_reload` request/first-frame timestamp. The first-frame
+timestamps themselves were 1.780–1.808 s after save; status observation is a
+conservative bound. These are iteration latency observations under concurrent
+build load, not GPU performance comparisons.
+
+The lab caches the SDK fingerprint while its executable/DLL identity is unchanged,
+publishes only affected cohorts into existing views, and avoids rebasing a variant
+unless its recipe changes. A recipe change still restores removed overrides from
+baseline. Compilation and native PSO creation remain asynchronous; drawing uses the
+old PSO until the new cohort is ready. A visual reload does not start a timing
+window or pay measurement warmup. Evidence is under
+`target/lab-baseline/shader-latency/{m2-baseline,after-fastpath}.json`.
+
+The Mac mirror is experimental until native build and Metal validation pass. The PC endpoint owns its transport:
+
+```powershell
+ara-dev lab mirror --host mac --repo /Users/islam/projects/ara
+# After the Mac owner grants a slot:
+ara-dev lab mirror --host mac --repo /Users/islam/projects/ara --grant-slot
+ara-dev lab status --platform mac
+ara-dev lab capture --platform mac --quick
+ara-dev lab measure --platform mac --frames 120 --no-wait
+```
+
+Every MCP tool accepts `platform: "pc" | "mac"`. Claims remain shared across both
+machines. Registering a recipe with `platform: "mac"` cooks it on the PC and queues
+selection on the Mac after publication; it does not switch a PC track. `lab_mirror`
+configures host/repo/build_dir/pc_repository and queues synchronization. New and
+older configs default to waiting for a Mac slot. `--grant-slot` (MCP `grant_slot:true`)
+starts remote work only after the Mac owner releases its verification slot. Without
+a slot, Mac status is explicitly cached and no SSH, checkout, build or validation job
+runs. Every transport job rechecks the slot; a competing Cargo process also prevents
+checkout changes. The peer
+fetches the lab branch and private source-snapshot ref directly from the PC. The
+snapshot uses a private Git index and leaves every agent's branch, index and working
+files intact. A dirty Mac checkout refuses synchronization without discarding edits.
+
+Only changed published cooked files travel over SSH. Active pipeline metadata
+selects the required SPIR-V/metallib/reflection files; obsolete artifact directories
+are excluded. Shader publication uses the artifact lane without another source
+snapshot, fetch or tool bootstrap. Rust changes use the source lane. Coalesced
+notifications retain a pending Rust update, and snapshots preserve Git's stat cache
+for unchanged files. Slot grants do not invalidate the already uploaded scene and
+reference inventory. Mirror status reports source, transfer and bootstrap phases.
+The Mac publishes complete imports under its visual lock, signals
+cohorts last, and hot-swaps native Metal PSOs in a background worker. Layout/state
+changes or failed compilation retain the last good cohort. The Mac never cooks
+shaders. Frozen packs and references are cached under its lab target; Outpost/Hangar
+build their osx-arm64 gameplay image once when needed. Returned captures, crops,
+temporal artifacts and timing reports copy back under the PC's
+`target/ara-dev/lab/mirror/mac/` and tool results use those local paths.
+
+The Mac samples native host/process CPU time and AGX per-client cumulative GPU time
+through the same guard and GPU queue. Missing counters fail closed. WindowServer
+uses the compositor allowance, and foreign nice/BelowNormal builds still count.
+Before each Mac build or player job the peer checks `pmset -g batt`; battery or an
+unknown state refuses with `ARA_LAB_MAC_BATTERY` (ARA6092). A scoped `caffeinate`
+process lasts only for the job. Mac Cargo uses one job at nice 10; a foreign Cargo
+process postpones admission. Free-space admission defaults to 15 GiB for a cold
+player build and 2 GiB for incremental work (`ARA_LAB_MIN_DISK_GIB` overrides it).
+The mirror retries unavailable/battery peers while PC work continues. Tool upgrades
+stop only the endpoint recorded as this mirror's owner, using its authenticated
+control protocol. A pre-existing foreign Mac lab is retained.
+
+The PC proxy smoke test kept status responsive (0.307 s) and captured all three
+cameras in 3.990 s while the unreachable Mac peer retried. All 15 MCP tool schemas
+expose the platform argument.
+
+Mac native build, Metal validation and turnaround measurements are still pending.
+The first native bootstrap exposed a missing libc Mach binding; the guard now uses
+the public system ABI directly. This remains experimental until the native checks
+pass. PC-side tests cover slot refusal without starting any SSH or snapshot job.
+
+Cold scene preparation runs in an owned, cancellable helper, under a scene-cache
+lease and the GPU queue. Opening a track returns `queued:true`; watch
+`preparing_sessions` and `preparation_errors` in status. The old track stays alive
+until its replacement answers controls. Invalid packs retain the old PID. Each track
+generation has a private shader view, so its replacement can warm independently.
+
+An observed agent session (the temporary recipe/source was removed afterward):
+
+```text
+lab_claim lab-smoke: shaders/lab-smoke-post.slang
+edit sibling: post output * LAB_TEST_GAIN; register lab-smoke with define 0.8
+lab_capture: matched region mean 0.242371 baseline -> 0.425025 experiment; FAIL
+lab_ab: four paired windows, B-A +0.000120 ms; 95% [-0.399199, +0.399439]
+result: keep baseline; no timing win, quality regresses
+```
+
+The A/B line is the explicitly relaxed, contended functional run described above;
+its 45.4% mean foreign CPU is recorded. The default guard refused this machine load.
 
 The hotpatch integration seam is `lab::run_with_strategy` and
 `lab::build::ReloadStrategy`: `command` supplies the build, `stage` reads its artifacts
@@ -726,6 +859,11 @@ pinned upstream revision, applies the small checked-in native watcher patch, and
 builds the optional tool with the engine's pinned Rust toolchain. `--plan` prints
 the revision and destination without downloading or building. `ARA_DX` selects an
 already prepared tool. A missing version or native-fix capability reports ARA7600.
+Prepared tools need native protocol 4 and workspace capture capability 1. Re-run
+`hotpatch --install-dx` after upgrading: it backs up and replaces a recognized
+older tool patch while preserving unrecognized source edits. This fixes warm
+Cargo baselines that otherwise acknowledge a patch without rebuilding its edited
+library. Missing captures now reject the patch with ARA7602.
 
 ```
 cargo run -p ara-dev -- hotpatch --plan -- player
@@ -824,6 +962,10 @@ exact source revision and player PID, and acknowledged after frame-boundary
 publication. Incompatible source/layout edits establish a new baseline and use
 the existing rebuild and warm restart strategy. The lab owns sessions and GPU
 admission; the adapter owns its dx baseline and Rust publication handshake.
+Cached patch batches and launchers are scoped to that DX process. Entering or
+leaving the hotpatch command restores the cached normal player template; saved
+scene selections survive the transition. If that template was deleted, only the
+disposable binary receipt is invalidated and the lab builds a new one.
 
 For manual latency investigations, `ARA_HOTPATCH_TRACE_DIR` writes timestamped
 events off the idle frame path. The opt-in scripts `measure-latency.ps1` and
@@ -860,11 +1002,15 @@ entity/query/system alive and verifies replay, restore and network refusal after
 patch. Captures prove behavior, not D26 performance.
 
 Measured evidence and current limitations: [S11](../../spikes/s11-rust-hotpatch/RESULT.md).
-Its initial 0.39 s Mac result is a minimal loop measurement, not editor latency.
-Windows' actual fidelity/system/panel first edits measured 21.87 / 3.85 / 20.59 s;
-repeated edits varied up to 34.57 s. This is currently an experimental functional
-lane, above the 2–3 s latency target. Mac ECS/editor and the lab strategy adapter
-remain pending.
+Windows warm medians after the native watcher/link corrections are 2.476 s for
+fidelity recording, 2.149 s for the small real-ECS probe (1.388 s with a targeted
+16-CGU setting), and 15.205 s for editor panels. Mac ECS/editor warm medians are
+0.494 / 2.976 s on main 792064a7 plus the owned timing/runtime fixes. The initial
+0.39 s Mac result is only a minimal loop; native raster-pass edits previously
+passed around one second. Full stage tables and substantial shared-disk tails
+are in S11. Editor compilation still misses the Windows 2–3 s target; no blanket
+engine profile change is justified. The lab adapter's resident-player validation
+is still pending.
 
 ## Gate usage
 

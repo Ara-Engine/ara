@@ -2,10 +2,20 @@
 
 **Preview-4 latency pass:** Windows fidelity recording has a 2.476 s warm median;
 the small real-ECS system probe has a 2.149 s default median (1.388 s with a
-targeted 16-CGU setting). Editor default warm median is 15.205 s; lab publication
-verification is in progress. This remains an off-by-default experimental dev feature, with
+targeted 16-CGU setting). Editor default warm median is 15.205 s. Lab publication
+and corrected warm-cache rendering are verified. This remains an off-by-default experimental dev feature, with
 material shared-disk tails. The later sections contain stage timings and lever
 comparisons; the original functional checkpoint below is retained as history.
+
+**Warm-cache correctness finding (2026-10-28):** a new lab baseline could reuse
+Cargo dependencies without capturing their compiler invocations. DX then
+acknowledged a tip-only patch while the edited library's pixels stayed unchanged.
+The apparent 5.171 s result in `lab-native-r5` is invalid as render latency.
+The earlier cold-baseline raster captures do show the exposure change and restore.
+The corrective CLI now locates Cargo's separate build directory, normalizes
+hyphenated package names, and rejects uncaptured changes. Windows verification
+of that correction passed offscreen; prepared tools must advertise workspace
+capture capability 1 in addition to native protocol 4.
 
 | Windows native CLI v2 | First body edit | Repeat body edit | Restore/recovery |
 | --- | ---: | ---: | ---: |
@@ -16,8 +26,8 @@ comparisons; the original functional checkpoint below is retained as history.
 These are save-to-observed-output wall times, including workspace replay,
 compilation, linking, delivery and output sampling. They are not DX's shorter
 tip-only compile timer. Each row kept its process and state alive. Mac raster
-rendering previously passed around 1 s. The new Mac ECS confirmation measures a
-0.494 s warm median on AC; the editor confirmation is in progress.
+rendering previously passed around 1 s. The new Mac ECS/editor confirmations
+measure 0.494 s / 2.976 s warm medians on AC; that machine slot is released.
 
 ## Live/rebuild contract
 
@@ -35,8 +45,12 @@ rendering previously passed around 1 s. The new Mac ECS confirmation measures a
 | Editor's separately built Play companion | Keeps built code; player Rust iteration uses its own driver/baseline |
 | Shipping/export executable | Feature is off by default, release compilation rejects runtime opt-in, export rejects the marker |
 
-The lab adapter is implemented against `ReloadStrategy`; its real resident-player
-verification is still pending. Ordinary lab defaults to rebuild plus warm restart.
+The lab adapter is implemented against `ReloadStrategy`. The cold-baseline
+resident Raster player preserved its PID and visibly applied and restored four
+exposure edits. A subsequent warm-cache run exposed the capture bug described
+above; its corrected end-to-end verification passed offscreen without a timing
+lease, as explicitly requested. No latency claim is made from that run.
+Ordinary lab defaults to rebuild plus warm restart.
 Source inputs must remain stable while the compiler reads them. The source guard
 is a conservative compatibility policy, not arbitrary Rust ABI/state migration.
 
@@ -381,14 +395,16 @@ One ara-dev fixture run found the machine's installed sccache instead of exercis
 its intended missing-cache path. The final run uses the pinned compiler's bin
 directory without the user Cargo tool directory, as in the preceding native gate.
 
-## Windows latency investigation (2026-10-28, in progress)
+## Windows latency investigation (2026-10-28)
 
 The accepted functional checkpoint is `b7f59228`. The next pass keeps its
 body/layout policy, frame publication, persisted ECS state and determinism guards.
-All builds use D:, four BelowNormal jobs and hidden GPU hosts. Other agents and
-the integration gate are active; these are observed development latencies, not
-isolated CPU benchmarks. Mac ECS/editor measurements remain pending behind the
-preview verification agent's exclusive Mac slot.
+All builds use D: and BelowNormal priority with hidden GPU hosts. The initial
+comparisons used four jobs; the final optional-backend and lab runs use two,
+matching the updated shared-PC budget. Other agents and the integration gate
+are active; these are observed development latencies, not isolated CPU benchmarks.
+Mac ECS/editor measurements completed in the later exclusive slot; their results
+and cleanup are recorded below.
 
 Manual `measure-latency.ps1` alternates one body and its exact original, verifies
 the same PID and actual output, and restores sources in `finally`. Each compiler
@@ -585,7 +601,34 @@ median **0.494 s**. DX's link phase was 34–35 ms; the system crate's rustc wal
 time was 228–238 ms. Evidence is copied to
 `target/hotpatch-proof/mac-p4/native-r1-sim/` on Windows. The manual controller
 is in `mac-measure/`; it needs only the existing .NET 10 SDK and performs no
-NuGet package downloads. Editor confirmation is still in progress.
+NuGet package downloads.
+
+The actual editor retained PID 19775 and its session across four panel edits:
+3.284 s first, then 2.976/2.929/3.092 s, warm median **2.976 s**. Changed and
+restored PNGs were visually inspected through the production capture path.
+The small 800×600 Retina capture has clipped baseline chrome; that existing
+layout behavior is outside this hotpatch change. The panel marker itself is
+visible and restored correctly. Evidence: `mac-p4/native-r1-editor/` and
+`mac-p4/editor-captures/` under the Windows proof directory.
+
+| macOS representative warm edit, ms | Watch | rustc + guard | dx link | Driver + validation | Boundary + apply | Output observation | Total |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ECS | 10 | 233 | 34 | 165 | 32 | 18 | 494 |
+| Editor panel | 12 | 2,330 | 123 | 228 | 149 | 134 | 2,976 |
+
+Mac link values come from DX phase profiling; there is no MSVC linker-facade
+span on this platform. The analyzer leaves unavailable linker/CPU counters null
+rather than misreporting zero work. The editor compilation splits into 2,009 ms
+for `ara-editor`, 290 ms for its small host and 31 ms for guards. Actual native
+raster-pass editing previously passed around one second; it was not rerun in
+this slot, and is distinct from the new Windows fidelity recording measurements.
+
+Both Mac hosts exited gracefully. Sources were restored, evidence copied off
+host, and all owned current driver/DX/companion/fat/thin build targets cleaned.
+The Mac was released with no DX/Cargo/rustc/caffeinate process and 31.8 GiB free.
+`machine.txt` records the main revision, AC state and exact tool hashes;
+`cleanup.log` records scoped removal. Mac lab validation belongs to the lab agent
+and remains separate from these direct ECS/editor measurements.
 
 The Windows editor lever run also exposed an 82.565 s tail: changed crate
 14.573 s, host crate 53.707 s, links 4.676 s, and boundary publication 7.249 s.
@@ -651,3 +694,121 @@ fidelity crate already reaches the target median, so prioritize a panel leaf and
 the unusually costly editor host rather than splitting every engine crate.
 No engine crate refactoring is included. Recheck shared storage contention before
 using these wall times to set universal compiler defaults.
+
+### Optional Cranelift: real Windows system patches
+
+The named system probe was compiled and patched with
+`rustc 1.101.0-nightly (16d1ffac1 2026-10-26)` plus the optional
+`rustc-codegen-cranelift-preview` component. Only `ara_hotpatch_sim_probe` uses
+Cranelift; dependencies keep LLVM. An isolated panic=abort hotpatch profile is
+required. The pinned stable toolchain and ordinary Cargo builds are unchanged.
+
+Interleaved A/B runs used the same nightly, abort profile, 256 CGUs, two
+BelowNormal build jobs, native DX v4, target disk and body-edit controller:
+
+| Run | Backend | Warm median | Warm range | PID |
+| --- | --- | ---: | ---: | ---: |
+| A1 | Cranelift | 1.541 s | 1.506–1.590 s | 44336 |
+| B1 | LLVM control | 1.968 s | 1.833–2.010 s | 43156 |
+| A2 | Cranelift | 1.618 s | 1.605–1.774 s | 42608 |
+| B2 | LLVM control | 4.172 s | 3.151–4.629 s | 48728 |
+
+Each run retained its PID/entity/state, passed the replay/restore/network guards,
+and applied exactly four generations for four edits. Compiler traces confirm
+`-Zcodegen-backend=cranelift` in all five named-crate invocations (fat + four
+patches) in each A run, and zero in either B run. The slower B2 shows continued
+shared-machine variation; do not interpret the total difference as pure codegen
+speed. A1's changed-crate compiler wall time was 451–614 ms across warm edits.
+
+Evidence: `latency-{cranelift,nightly-llvm-control}-r{1,2}-sim` under the proof
+directory, and `target/hotpatch-research/cranelift-toolchain.txt`. This proves
+hybrid-backend live patching of the small ECS leaf on Windows, not editor/render
+Cranelift support or a Mac backend measurement. Keep stable LLVM as the default;
+the targeted stable 16-CGU probe also reached 1.388 s in its separate run.
+Missing/wrong nightly components are diagnosed as ARA7600 rather than installed
+or required by ordinary builds. Panics abort this optional host; see the official
+[Cranelift support and unwind limits](https://github.com/rust-lang/rust/blob/main/compiler/rustc_codegen_cranelift/Readme.md).
+
+### Lab native player startup: Windows resource collision
+
+The first real player baseline compiled its fat dependency archive in 1,893.6 s
+on the shared SATA target with two BelowNormal jobs, then failed its fat link at
+2,001.7 s. DX adds `.winres/resource.lib`; the player's own build script embeds
+`ara-game.lib`. Both define icon IDs 1–6, which rust-lld correctly rejects.
+Evidence: `target/hotpatch-proof/lab-native-r1/status-build-failed.json` and
+`D:/AraBuild/hotpatch-target/ara-hotpatch/lab/1793145478487947/dx.out.log`.
+
+The native linker facade now drops only DX's generated resource when Ara's
+branded resource is present. It keeps Ara's icon and does not use `/FORCE` or
+suppress unrelated link errors. Both the raw DX capture and direct arguments
+use that rule. The dependency cache is retained for the corrected retry; this
+cold cost is separate from warm edit latency.
+
+The corrected full-player retry completed its fat archive at 1,878.63 s and
+reported build success at 1,897.03 s; its hidden `--help` host exited normally
+at 1,902.75 s. This confirms the resource collision is fixed in the full player,
+in addition to the isolated lld regression. The subsequent normal `perf` build
+for lab export tools is a separate cold setup step, not a body-patch sample.
+
+Retry evidence is in `target/hotpatch-proof/lab-native-r4/`. Its owner record
+pins the preserved compiler facade and corrected linker facade separately;
+keeping the compiler path avoids another Cargo configuration invalidation.
+The adapter overrides the normal lab builder's job budget with the caller's
+two jobs. The lab owner's `build_started` event still reports its hardcoded
+four; that diagnostic is not the effective Cargo job count.
+
+### Lab publication, cache lifetime and warm-baseline capture
+
+The cold R4 player fell back to Raster after `vkCreateDevice` failed in its RT
+startup path. Editing the inactive FidelityView path acknowledged a table update
+but did not change pixels, so those saves are excluded from rendered latency.
+Four subsequent Raster exposure edits visibly changed and restored captures in
+the same native PID 34572 (launcher PID 49556), generations 5–8:
+
+| Raster operation | Save to frame-boundary acknowledgement | Save to captured sweep |
+| --- | ---: | ---: |
+| First body edit | 24.591 s | 29.029 s |
+| Restore | 16.205 s | 21.105 s |
+| Repeat body edit | 15.017 s | 19.124 s |
+| Restore | 18.391 s | 24.526 s |
+
+This full-player result includes cumulative earlier FidelityView edits and extra
+workspace replay. It is separate from the dedicated FidelityView probe's 2.476 s
+median. The fresh scene freeze used the ordinary player template and its matching
+PDB successfully. An unsupported declaration caused a new baseline and warm
+restart in 272.128 s from source watch to generation zero; both PIDs changed,
+the saved selection survived, and compilation took 219.149 s. Retained evidence
+also records a 543 ms early-read error in the manual observer.
+
+R5's apparent 5.171 s warm median was a false success: the Raster dependency's
+compiler capture was absent and its pixels stayed unchanged. Cargo kept its
+intermediates outside DX's new generation directory; upstream invalidation also
+compared underscore crate names with hyphenated package folders. The optional
+CLI now recaptures from the actual build root and rejects an uncaptured changed
+crate with ARA7602 instead of acknowledging tip-only compilation. Two upstream
+regression tests cover these cases. Native protocol stays at 4, and Ara requires
+workspace-capture capability 1. The installer upgrades only its recorded patch,
+backs up those bytes, and preserves unrecognized source edits.
+
+Patch batches and generated launchers belong to one DX lifetime. Entering or
+leaving hotpatch mode restores the cached ordinary template and removes old PID
+batch metadata. A missing template invalidates only the disposable binary receipt;
+scene selections remain intact. Missing DX selects ordinary warm restart with
+the caller's build budget. Focused cache, installer and policy tests pass without
+requiring DX in a fresh clone.
+
+Evidence: `target/hotpatch-proof/lab-native-r4/{raster,rebuild-measurement.json,
+fresh-freeze-result.json}`, `lab-native-r5/INVALID.md`, `lab-cache-fallback/`,
+and `target/hotpatch-research/capture-{final,budget}-*.log`.
+
+The corrected R7 functional run kept native PID **40208** through generations
+1–4: exposure increased twice and restored twice. Actual `ara_render` compiler
+replays are present. Sampled image luma increased by 0.30236 on both edits and
+returned within 0.00004 of baseline on both restores; captures were visually
+inspected. This ran hidden/offscreen without the shared timing lease, at the
+coordinator's explicit request. Its elapsed times are excluded from latency
+results. Formal corrected full-player timing remains for the announced quiet
+window. Evidence: `target/hotpatch-proof/lab-native-r7-functional/functional.json`,
+its `trace/`, and `baseline/`, `body-1/`, `body-3/`, `restore-2/`, `restore-4/` PNGs.
+The earlier R7 lab launch timed out behind timing tickets before any source edit;
+it is not a patch measurement or a correctness failure.

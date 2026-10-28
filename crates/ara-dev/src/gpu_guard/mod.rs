@@ -1,5 +1,9 @@
 //! Observe foreign GPU users; never terminate or reconfigure them.
+#[cfg(any(target_os = "macos", test))]
+mod agx;
 mod cpu;
+#[cfg(target_os = "macos")]
+mod macos;
 mod model;
 pub(crate) mod monitor;
 #[cfg(test)]
@@ -256,7 +260,7 @@ impl Guard {
     }
     pub(crate) fn snapshot(&self) -> Report {
         let mut report = self.report.lock().expect("GPU guard state").clone();
-        if report.sampler == "windows_pdh" {
+        if ["windows_pdh", "macos_agx"].contains(&report.sampler.as_str()) {
             let last = report.samples.last().map(|sample| sample.unix_ms);
             report.monitoring.finish(unix_ms(), last);
         }
@@ -322,6 +326,8 @@ enum FixtureFrame {
 }
 
 enum Sampler {
+    #[cfg(target_os = "macos")]
+    Mac(macos::Sampler),
     #[cfg(windows)]
     Windows(windows::Sampler),
     Fixture {
@@ -342,7 +348,11 @@ impl Sampler {
         {
             Ok(Self::Windows(windows::Sampler::new()?))
         }
-        #[cfg(not(windows))]
+        #[cfg(target_os = "macos")]
+        {
+            Ok(Self::Mac(macos::Sampler::new()?))
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             bail!("native per-process GPU guard is only available on Windows")
         }
@@ -351,11 +361,21 @@ impl Sampler {
         match self {
             #[cfg(windows)]
             Self::Windows(_) => "windows_pdh",
+            #[cfg(target_os = "macos")]
+            Self::Mac(_) => "macos_agx",
             Self::Fixture { .. } => "test_fixture",
         }
     }
     fn sample(&mut self) -> (u64, Result<Snapshot>) {
         match self {
+            #[cfg(target_os = "macos")]
+            Self::Mac(s) => {
+                let sample = s.sample();
+                (
+                    sample.as_ref().map_or_else(|_| unix_ms(), |s| s.unix_ms),
+                    sample,
+                )
+            }
             #[cfg(windows)]
             Self::Windows(s) => {
                 let sample = s.sample();

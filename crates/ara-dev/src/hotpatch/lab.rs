@@ -1,5 +1,7 @@
 //! Lab strategy adapter. The lab owns sessions, timing admission and transport.
 mod build;
+mod cache;
+mod fallback;
 mod launcher;
 pub(super) mod source;
 use crate::{
@@ -28,11 +30,12 @@ pub(super) fn run(root: &Path, dx: PathBuf, plan: bool) -> Result<bool> {
         );
         return Ok(true);
     }
+    cache::restore_template(root)?;
     if !cfg!(windows) {
         eprintln!(
             "ARA7600: native lab strategy is currently Windows-verified; using rebuild + warm restart"
         );
-        return crate::lab::run_with_strategy(root, &target, 1, Box::new(WarmRestart));
+        return crate::lab::run_with_strategy(root, &target, 1, Box::new(fallback::Warm));
     }
     let available = super::available(&dx).and_then(|_| {
         let capability = super::tool::command(&dx)
@@ -46,12 +49,12 @@ pub(super) fn run(root: &Path, dx: PathBuf, plan: bool) -> Result<bool> {
     });
     if let Err(error) = available {
         eprintln!("{error:#}; lab uses rebuild + warm restart");
-        return crate::lab::run_with_strategy(root, &target, 1, Box::new(WarmRestart));
+        return crate::lab::run_with_strategy(root, &target, 1, Box::new(fallback::Warm));
     }
     eprintln!(
         "Experimental lab Rust hotpatch: one shared player; body edits stage before publication. Ordinary ara-dev lab retains its multi-track warm-restart strategy."
     );
-    crate::lab::run_with_strategy(
+    let result = crate::lab::run_with_strategy(
         root,
         &target,
         1,
@@ -61,7 +64,9 @@ pub(super) fn run(root: &Path, dx: PathBuf, plan: bool) -> Result<bool> {
             target: target.to_owned(),
             sources: source::Sources::default(),
         }),
-    )
+    );
+    let restored = cache::restore_template(root);
+    result.and_then(|value| restored.map(|()| value))
 }
 
 struct Strategy {
@@ -105,6 +110,19 @@ impl ReloadStrategy for Strategy {
             .get_mut("ara-player")
             .context("matching lab player")?;
         let template = player.to_owned();
+        // Scene export needs matching symbols beside its immutable normal player.
+        // WarmRestart stages the executable/DLL, while Cargo leaves the PDB behind.
+        if cfg!(windows) {
+            let artifacts = crate::binaries::artifacts(&output)?;
+            let built = artifacts
+                .get("ara-player")
+                .context("normal player artifact")?;
+            fs::copy(
+                built.with_file_name("ara_player.pdb"),
+                template.with_file_name("ara_player.pdb"),
+            )
+            .context("preserve matching normal lab template symbols")?;
+        }
         let source = self.sources.prepare(&self.root, &self.dx, &self.target)?;
         *player = launcher::stage(player, &source)?;
         // Freezing a new lab scene must export the normal player, never our launcher.
@@ -142,7 +160,10 @@ impl ReloadStrategy for Strategy {
                 break;
             }
             ensure!(
-                began.elapsed() < Duration::from_secs(5),
+                // Library loading/relocation stays at the frame boundary. Shared
+                // disk stalls measured above five seconds must keep lab admission
+                // until the actual apply acknowledgement, not report success early.
+                began.elapsed() < Duration::from_secs(60),
                 "hotpatch frame-boundary acknowledgement timed out; last good retained"
             );
             std::thread::sleep(Duration::from_millis(10));

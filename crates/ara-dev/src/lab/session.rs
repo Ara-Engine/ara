@@ -47,6 +47,9 @@ pub(super) struct Session {
     cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub last_trace: Option<PathBuf>,
     root: PathBuf,
+    shader_view: PathBuf,
+    // A control acknowledgement precedes the asynchronous status-file refresh.
+    shader_cohorts: Option<Value>,
     _generation: Option<fs::File>,
 }
 impl Session {
@@ -55,18 +58,20 @@ impl Session {
         base: &Path,
         executable: &Path,
         name: &str,
+        view: &Path,
         selection: Selection,
         cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     ) -> Result<Self> {
         self::name(name)?;
+        #[cfg(target_os = "macos")]
+        super::mac::scripts(root, base, &selection.pack, &selection.scene)?;
         let generation = super::generations::pin(base, executable)?;
         let directory = base.join("sessions").join(name).join(id());
         let control = directory.join("control");
         fs::create_dir_all(&control)?;
         fs::create_dir_all(directory.join("empty-layers"))?;
         let mut command = Command::new(executable);
-        let view = super::variants::view(base, name);
-        super::variants::publish_tree(&super::variants::profile(base, &selection.variant), &view)?;
+        super::variants::publish_tree(&super::variants::profile(base, &selection.variant), view)?;
         command
             .current_dir(root)
             .arg("--root")
@@ -91,7 +96,7 @@ impl Session {
             .arg(&control)
             .arg("--gpu-cache")
             .arg(base.join("gpu-cache").join(name))
-            .env("ARA_SHADER_DIR", &view)
+            .env("ARA_SHADER_DIR", view)
             .env("ARA_CONFIG_DIR", directory.join("profile"))
             .env("ARA_CRASH_DIR", directory.join("crashes"))
             .env("VK_INSTANCE_LAYERS", "")
@@ -115,6 +120,8 @@ impl Session {
             cancel,
             last_trace: None,
             root: root.to_owned(),
+            shader_view: view.to_owned(),
+            shader_cohorts: None,
             _generation: generation,
         };
         session.control(
@@ -131,6 +138,7 @@ impl Session {
         )
     }
     pub fn control(&mut self, mut request: Value, timeout: Duration) -> Result<Value> {
+        let _power = super::mac::Job::start()?;
         let id = id();
         request["request_id"] = json!(id);
         write(
@@ -147,6 +155,15 @@ impl Session {
             if let Some(value) = read(&response) {
                 if let Some(error) = value["error"].as_str() {
                     bail!("{error}");
+                }
+                if let Some(cohorts) = [
+                    &value["shaders"]["cohorts"],
+                    &value["player"]["shaders"]["cohorts"],
+                ]
+                .into_iter()
+                .find(|cohorts| cohorts.is_object())
+                {
+                    self.shader_cohorts = Some(cohorts.clone());
                 }
                 return Ok(value);
             }
@@ -189,7 +206,11 @@ impl Session {
         let base = self.directory.ancestors().nth(3).context("lab base")?;
         let quality = self.quality()?;
         let status = read(&self.directory.join("status.json")).context("player status")?;
-        let identity = json!({"format":"ara.lab.temporal-cache/2","generation":read(&base.join("generation.json")),"selection":self.selection,"shaders":status["shaders"]["cohorts"],"content_generation":status["readiness"]["generation"],"config":quality["temporal"]});
+        let cohorts = self
+            .shader_cohorts
+            .as_ref()
+            .unwrap_or(&status["shaders"]["cohorts"]);
+        let identity = json!({"format":"ara.lab.temporal-cache/3","generation":read(&base.join("generation.json")),"selection":self.selection,"shaders":cohorts,"content_generation":status["readiness"]["generation"],"config":quality["temporal"]});
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         identity.to_string().hash(&mut hasher);
         let cache = base
@@ -248,15 +269,9 @@ impl Session {
     pub fn variant(&mut self, base: &Path, name: &str) -> Result<Value> {
         self::name(name)?;
         super::variants::Variants::load(base).ready(name)?;
-        let track = self
-            .directory
-            .parent()
-            .and_then(Path::file_name)
-            .context("track name")?
-            .to_string_lossy();
-        let view = super::variants::view(base, &track);
+        let view = self.shader_view.clone();
         let previous = self.selection.variant.clone();
-        super::variants::publish_tree(&super::variants::profile(base, name), &view)?;
+        super::variants::publish_selection(&super::variants::profile(base, name), &view)?;
         match self.control(
             json!({"reload_shaders":true,"measure":false,"frames":1}),
             Duration::from_secs(60),
@@ -266,7 +281,10 @@ impl Session {
                 Ok(json!({"variant":name,"reload":result}))
             }
             Err(error) => {
-                super::variants::publish_tree(&super::variants::profile(base, &previous), &view)?;
+                super::variants::publish_selection(
+                    &super::variants::profile(base, &previous),
+                    &view,
+                )?;
                 let _ = self.control(
                     json!({"reload_shaders":true,"measure":false,"frames":1}),
                     Duration::from_secs(60),

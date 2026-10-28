@@ -43,10 +43,11 @@ pub(crate) fn forward() -> Option<ExitCode> {
             return Some(ExitCode::FAILURE);
         }
     };
-    let args: Vec<_> = args
+    let mut args: Vec<_> = args
         .into_iter()
         .filter(|arg| !super::response::empty_dx_archive(arg))
         .collect();
+    super::response::prefer_ara_resources(&mut args);
     let mut command = Command::new(linker);
     if !args.iter().any(|a| a == "-flavor") {
         command.args(["-flavor", "link"]);

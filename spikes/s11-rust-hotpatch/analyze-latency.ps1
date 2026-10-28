@@ -22,14 +22,15 @@ $results=[Collections.Generic.List[object]]::new()
 function Last-Event([string]$Name,[double]$Before) { $events | Where-Object { $_.event -eq $Name -and $_.at_us -le $Before } | Select-Object -Last 1 }
 function Overlap([double]$Start,[double]$End,[double]$From,[double]$Until) { [math]::Max(0,[math]::Min($End,$Until)-[math]::Max($Start,$From)) }
 foreach($row in $rows) {
-    $apply=if($null -ne $row.generation){$applies[[int]$row.generation-1]}else{Last-Event 'apply_end' $row.observed_us}
+    $hostApplies=@($applies | Where-Object pid -eq $row.pid)
+    $apply=if($null -ne $row.generation){$hostApplies[[int]$row.generation-1]}else{Last-Event 'apply_end' $row.observed_us}
     if($null -eq $apply){throw 'Missing applied generation trace'}
     $start=Last-Event 'apply_start' $apply.at_us
     $received=Last-Event 'patch_received' $start.at_us
     $queued=Last-Event 'patch_queued' $start.at_us
     $watch=$events | Where-Object { $_.event -eq 'file_watch' -and $_.at_us -ge $row.save_us -and $_.at_us -le $received.at_us } | Select-Object -First 1
     if($null -eq $watch){throw 'Missing save/watch trace'}
-    $changed=switch($row.kind){sim{'ara_hotpatch_sim_probe'}fidelity{'ara_render_fidelity'}editor{'ara_editor'}}
+    $changed=switch($row.kind){sim{'ara_hotpatch_sim_probe'}fidelity{'ara_render_fidelity'}raster{'ara_render'}editor{'ara_editor'}}
     $changedUs=0.0; $tipUs=0.0; $cpuUs=0.0; $guardUs=0.0; $hasCpu=$false
     $linkSpans=@($events | Where-Object { $_.event -eq 'linker_end' -and $_.at_us -ge $watch.at_us -and $_.at_us -le $received.at_us } | ForEach-Object {
         $linkEnd=$_

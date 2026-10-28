@@ -213,9 +213,14 @@ impl Window {
             if let Some(parent) = output.parent().filter(|p| !p.as_os_str().is_empty()) {
                 std::fs::create_dir_all(parent)?;
             }
-            let status = serde_json::to_vec_pretty(
-                &json!({"quality":presenter.quality().map(|q| q.name()),"collecting":self.collecting,"shaders":shaders,"readiness":presenter.readiness()}),
-            )?;
+            let status = json!({"quality":presenter.quality().map(|q|q.name()),"collecting":self.collecting,"shaders":shaders,"readiness":presenter.readiness()});
+            #[cfg(feature = "fidelity-lab")]
+            let status = {
+                let mut status = status;
+                status["shader_reload"] = json!(self.lab.shader_reload);
+                status
+            };
+            let status = serde_json::to_vec_pretty(&status)?;
             if status != self.live_status {
                 let path = output.with_file_name("status.json");
                 let temporary = path.with_extension("json.tmp");
@@ -302,13 +307,30 @@ impl Window {
                 std::fs::rename(&request, request.with_extension("done"))?;
                 continue;
             }
+            let visual_reload = cfg!(feature = "fidelity-lab")
+                && self.options.lab_idle
+                && command.reload_shaders
+                && !command.measure;
+            #[cfg(feature = "fidelity-lab")]
+            if visual_reload {
+                self.lab.reloading = true;
+            }
             if command.reload_shaders {
-                self.waiting_for_shader_epoch = Some(presenter.shader_status().epoch);
+                let epoch = presenter.shader_status().epoch;
+                self.waiting_for_shader_epoch = Some(epoch);
+                #[cfg(feature = "fidelity-lab")]
+                {
+                    self.lab.shader_reload = Some(lab::ShaderReload {
+                        requested_epoch: epoch,
+                        request_unix_ms: lab::unix_ms(),
+                        first_new_frame_unix_ms: None,
+                    });
+                }
                 presenter.reload_shaders();
             }
             if command.measure
                 || changing_params
-                || command.reload_shaders
+                || (command.reload_shaders && !visual_reload)
                 || (!self.options.lab_idle && command.quality.is_some())
             {
                 self.reset();
@@ -346,27 +368,45 @@ impl Window {
                 &frame,
             );
         }
-        if !self.collecting {
-            return Ok(false);
-        }
         let mut shaders_ready = true;
         if self.waiting_for_shader_epoch.is_some() {
             let status = presenter.shader_status();
-            if let Some(error) = status.last_error {
+            if let Some(error) = &status.last_error {
                 eprintln!("Shader reload failed; previous result retained: {error}");
                 self.collecting = false;
                 self.waiting_for_shader_epoch = None;
+                #[cfg(feature = "fidelity-lab")]
+                {
+                    self.lab.reloading = false;
+                }
                 self.lab.respond(
                     &json!({"error":format!("shader reload failed; last good retained: {error}")}),
                 )?;
                 return Ok(false);
+            }
+            #[cfg(feature = "fidelity-lab")]
+            if !status.pending
+                && let Some(reload) = &mut self.lab.shader_reload
+                && status.epoch > reload.requested_epoch
+                && reload.first_new_frame_unix_ms.is_none()
+            {
+                reload.first_new_frame_unix_ms = Some(lab::unix_ms());
             }
             // An unchanged cohort completes without advancing the epoch.
             if status.pending {
                 shaders_ready = false;
             } else {
                 self.waiting_for_shader_epoch = None;
+                #[cfg(feature = "fidelity-lab")]
+                if self.lab.reloading {
+                    self.lab.reloading = false;
+                    self.lab.respond(&json!({"reloaded":true,"shaders":status,"shader_reload":self.lab.shader_reload}))?;
+                    return Ok(false);
+                }
             }
+        }
+        if !self.collecting {
+            return Ok(false);
         }
         if !shaders_ready && !self.options.perf_wait_ready {
             return Ok(false);

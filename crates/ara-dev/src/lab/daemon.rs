@@ -31,13 +31,20 @@ struct Cook {
     variant: String,
 }
 struct Lab {
+    mirror: Option<super::mirror::Worker>,
+    pending_import: Option<Value>,
+    preparing: BTreeMap<String, super::prepare::Pending>,
+    preparation_errors: BTreeMap<String, Value>,
     root: PathBuf,
     base: PathBuf,
     target: PathBuf,
     max_sessions: u32,
     binaries: crate::binaries::Binaries,
     build: Option<Build>,
+    dependency_job: Option<super::dependencies::IndexJob>,
+    dependency_stamp: Option<(u64, std::time::SystemTime)>,
     rebuild: bool,
+    next_build: Instant,
     last_build: Value,
     cook: Option<Cook>,
     cooks: BTreeSet<(String, PathBuf)>,
@@ -55,6 +62,23 @@ struct Lab {
 }
 impl Lab {
     fn event(&mut self, kind: &str, value: Value) {
+        if let Some(mirror) = &self.mirror {
+            if kind == "source_changes"
+                && value.as_array().is_some_and(|paths| {
+                    paths.iter().any(|path| {
+                        path.as_str().is_some_and(|path| {
+                            Path::new(path)
+                                .extension()
+                                .is_some_and(|ext| ext == "rs" || ext == "toml" || ext == "lock")
+                        })
+                    })
+                })
+            {
+                mirror.notify_sources();
+            } else if ["shader_cook", "shader_views_published"].contains(&kind) {
+                mirror.notify();
+            }
+        }
         let event = json!({"at":crate::d26::validity::unix_ms().unwrap_or_default(),"kind":kind,"detail":value});
         eprintln!("{event}");
         self.events.push_back(event);
@@ -78,10 +102,51 @@ impl Lab {
             .map(|(name, s)| Ok((name.clone(), s.status()?)))
             .collect::<Result<BTreeMap<_, _>>>()?;
         Ok(
-            json!({"format":"ara.lab/1","pid":std::process::id(),"root":self.root,"build_dir":self.target,"strategy":self.strategy.name(),"building":self.build.is_some(),"rebuild_queued":self.rebuild,"last_build":self.last_build,"shader_packages":self.watch.manifests().len(),"shader_queue":self.cooks,"shader_results":self.shader_results,"claims":self.claims,"sessions":sessions,"max_sessions":self.max_sessions,"variants":self.variants.status(),"pending_variants":self.pending_variants}),
+            json!({"mirror":session::read(&self.base.join("mirror/status.json")),"preparing_sessions":self.preparing.iter().map(|(n,p)|(n,p.status())).collect::<BTreeMap<_,_>>(),"preparation_errors":self.preparation_errors,"mirror_import_pending":self.pending_import.is_some(),"cook_host":"pc","format":"ara.lab/1","pid":std::process::id(),"root":self.root,"build_dir":self.target,"strategy":self.strategy.name(),"building":self.build.is_some(),"rebuild_queued":self.rebuild,"last_build":self.last_build,"shader_packages":self.watch.manifests().len(),"shader_queue":self.cooks,"shader_results":self.shader_results,"claims":self.claims,"sessions":sessions,"max_sessions":self.max_sessions,"variants":self.variants.status(),"pending_variants":self.pending_variants}),
         )
     }
     fn tick(&mut self) -> Result<()> {
+        self.publish_import()?;
+        if let Some(job) = &mut self.dependency_job
+            && let Some(status) = job.child.try_wait()?
+        {
+            let job = self.dependency_job.take().context("dependency index job")?;
+            self.event(
+                "shader_dependency_index",
+                json!({"success":status.success(),"log":job.log}),
+            );
+        }
+
+        let mut finished = Vec::new();
+        if let Some(executable) = self.binaries.get("ara-player").cloned() {
+            for (name, pending) in &mut self.preparing {
+                match pending.poll(
+                    &self.root,
+                    &self.base,
+                    &executable,
+                    name,
+                    std::sync::Arc::clone(&self.activity),
+                ) {
+                    Ok(Some(track)) => {
+                        self.sessions.insert(name.clone(), track);
+                        finished.push(name.clone());
+                    }
+                    Err(error) => {
+                        self.preparation_errors
+                            .insert(name.clone(), json!(format!("{error:#}")));
+                        finished.push(name.clone());
+                    }
+                    Ok(None) => {}
+                }
+            }
+        }
+        if !finished.is_empty() {
+            for name in finished {
+                self.preparing.remove(&name);
+            }
+            self.persist()?;
+        }
+
         let mut selection_changed = false;
         for session in self.sessions.values_mut() {
             session.status()?;
@@ -91,7 +156,12 @@ impl Lab {
             self.persist()?;
         }
         self.activity.compiling.store(
-            self.build.is_some() || self.cook.is_some() || !self.cooks.is_empty() || self.rebuild,
+            self.build.is_some()
+                || self.dependency_job.is_some()
+                || self.cook.is_some()
+                || !self.cooks.is_empty()
+                || self.rebuild
+                || !self.preparing.is_empty(),
             std::sync::atomic::Ordering::Release,
         );
         // Filesystem scanning is background CPU work too. Pause it while timing
@@ -109,20 +179,50 @@ impl Lab {
                     .rust_latest
                     .store(false, std::sync::atomic::Ordering::Release);
             }
+            if !path
+                .extension()
+                .is_some_and(|e| e == "slang" || e == "slangh" || e == "h")
+                && !path.file_name().is_some_and(|n| n == "pipelines.json")
+            {
+                continue;
+            }
+            if cfg!(target_os = "macos") {
+                continue;
+            }
             for manifest in self.watch.manifests() {
-                if path.starts_with(manifest.parent().context("shader source parent")?) {
+                if super::dependencies::affected(
+                    &self.root, &self.base, &manifest, "baseline", path,
+                )? {
                     self.cooks.insert(("baseline".into(), manifest.clone()));
-                    let relative = manifest.strip_prefix(&self.root)?;
-                    for name in self.variants.affected(relative) {
-                        self.variants.queued(&name, relative);
+                }
+                for name in self.variants.affected(manifest.strip_prefix(&self.root)?) {
+                    if super::dependencies::affected(
+                        &self.root, &self.base, &manifest, &name, path,
+                    )? {
+                        self.variants
+                            .queued(&name, manifest.strip_prefix(&self.root)?);
                         self.cooks.insert((name, manifest.clone()));
                     }
                 }
             }
         }
+
         if !changes.is_empty() {
             self.variants.save(&self.base)?;
             self.event("source_changes", json!(changes));
+        }
+        if let Some(build) = &mut self.build
+            && let Err(error) = build.monitor_disk(&self.target)
+        {
+            build.child.stop();
+            use std::io::Write;
+            writeln!(
+                File::options()
+                    .append(true)
+                    .open(build.directory.join("cargo.log"))?,
+                "\nLab disk guard: {error:#}"
+            )?;
+            self.event("build_stopped_for_disk", json!(format!("{error:#}")));
         }
         if let Some(build) = &mut self.build
             && let Some(status) = build.child.try_wait()?
@@ -158,17 +258,31 @@ impl Lab {
         }
         let activity = std::sync::Arc::clone(&self.activity);
         let admission = activity.gpu.try_read();
-        if self.rebuild && self.build.is_none() && admission.is_ok() {
-            self.rebuild = false;
-            self.build = Some(Build::start(
+        if self.rebuild
+            && self.build.is_none()
+            && admission.is_ok()
+            && Instant::now() >= self.next_build
+        {
+            match Build::start(
                 &self.root,
                 &self.target,
                 self.base.join("builds").join(session::id()),
                 self.strategy.as_ref(),
-            )?);
+            ) {
+                Ok(build) => {
+                    self.build = Some(build);
+                    self.rebuild = false;
+                }
+                Err(error) => {
+                    self.next_build = Instant::now() + Duration::from_secs(15);
+                    self.last_build = json!({"success":false,"admission_error":format!("{error:#}"),"retry_seconds":15});
+                    self.event("build_waiting", self.last_build.clone());
+                    return Ok(());
+                }
+            }
             self.event(
                 "build_started",
-                json!({"jobs":4,"priority":"BelowNormal","incremental":true}),
+                json!({"jobs":if cfg!(target_os="macos"){1}else{4},"priority":if cfg!(target_os="macos"){"nice 10"}else{"BelowNormal"},"incremental":true}),
             );
             self.activity
                 .compiling
@@ -186,19 +300,49 @@ impl Lab {
             .values()
             .filter_map(Session::reload_target)
             .collect::<Vec<_>>();
-        if !self.strategy.publish(&binaries, &targets)? {
-            self.binaries = binaries;
-            return Ok(());
+        let reused = self.strategy.reuse_unchanged_player()
+            && self.binaries.get("ara-player") == binaries.get("ara-player")
+            && !self.sessions.is_empty()
+            && self.sessions.values().all(Session::can_reuse);
+        let restart = if reused {
+            false
+        } else {
+            self.strategy.publish(&binaries, &targets)?
+        };
+        if restart {
+            for session in self.sessions.values() {
+                session.restart(executable.to_owned())?;
+            }
         }
-        for session in self.sessions.values() {
-            session.restart(executable.to_owned())?;
-        }
+        self.last_build["player_reused"] = json!(reused);
         self.binaries = binaries;
         session::write(&self.base.join("binaries.json"), &self.binaries)?;
-        session::write(
-            &self.base.join("generation.json"),
-            &json!({"id":session::id()}),
-        )?;
+        if !cfg!(target_os = "macos")
+            && let Some(executable) = self.binaries.get("ara-shader-cook")
+        {
+            let meta = fs::metadata(executable)?;
+            let stamp = (meta.len(), meta.modified()?);
+            if self.dependency_stamp.as_ref() != Some(&stamp) && self.dependency_job.is_none() {
+                self.dependency_job = Some(super::dependencies::prime(
+                    &self.root,
+                    &self.base,
+                    executable,
+                    &self.watch.manifests(),
+                    &self.variants,
+                )?);
+                self.dependency_stamp = Some(stamp);
+            }
+        }
+
+        if !reused {
+            session::write(
+                &self.base.join("generation.json"),
+                &json!({"id":session::id()}),
+            )?;
+        }
+        if !restart {
+            return self.persist();
+        }
         if self.sessions.is_empty() {
             let saved: BTreeMap<String, super::scenes::Selection> =
                 fs::read(self.base.join("selections.json"))
@@ -334,14 +478,44 @@ pub(crate) fn run_with_strategy(
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default();
+    let activity = std::sync::Arc::new(Activity::default());
+    let mirror = if cfg!(target_os = "macos") {
+        None
+    } else {
+        Some(super::mirror::Worker::new(
+            root,
+            &base,
+            std::sync::Arc::clone(&activity),
+        )?)
+    };
+    if cfg!(target_os = "macos")
+        && let Some(import) = session::read(&base.join("mirror/incoming.json"))
+    {
+        super::mirror::bundle::import(&base, &import)?;
+    }
+    if cfg!(target_os = "macos")
+        && let Some(import) = session::read(&base.join("mirror/incoming.json"))
+    {
+        activity.shaders_latest.store(
+            import["shaders_current"] != false,
+            std::sync::atomic::Ordering::Release,
+        );
+    }
     let mut lab = Lab {
+        mirror,
+        pending_import: None,
+        preparing: Default::default(),
+        preparation_errors: Default::default(),
         root: root.into(),
         base: base.clone(),
         target,
         max_sessions,
         binaries: Default::default(),
         build: None,
+        dependency_job: None,
+        dependency_stamp: None,
         rebuild: true,
+        next_build: Instant::now(),
         last_build: Value::Null,
         cook: None,
         cooks: Default::default(),
@@ -354,7 +528,7 @@ pub(crate) fn run_with_strategy(
         events: Default::default(),
         stopping: false,
         strategy,
-        activity: std::sync::Arc::new(Activity::default()),
+        activity,
         variants: super::variants::Variants::load(&base),
         pending_variants: Default::default(),
         promotions: Default::default(),
@@ -389,6 +563,9 @@ pub(crate) fn run_with_strategy(
         {
             lab.cooks.insert(("baseline".into(), root.join(relative)));
         }
+    }
+    if cfg!(target_os = "macos") {
+        lab.cooks.clear();
     }
     // Start a cached last-good generation before the incremental build. A bad edit
     // or a tool upgrade must not turn a warm restart into an empty lab.
@@ -449,6 +626,46 @@ pub(crate) fn run_with_strategy(
             Err(error) => return Err(error.into()),
         }
         while let Ok((stream, request)) = receive.try_recv() {
+            if let Ok(request) = &request
+                && request.token == endpoint.token
+                && request.arguments["platform"] == "mac"
+                && !["lab_claim", "lab_release"].contains(&request.tool.as_str())
+            {
+                if request.tool == "lab_variant"
+                    && (!request.arguments["recipe"].is_null()
+                        || request.arguments["promote"] == true)
+                {
+                    let mut args = request.arguments.clone();
+                    args["platform"] = json!("pc");
+                    args["_cook_only"] = json!(true);
+                    let result = lab
+                        .dispatch(Request {
+                            token: endpoint.token.clone(),
+                            tool: request.tool.clone(),
+                            arguments: args,
+                        })
+                        .and_then(|value| {
+                            if request.arguments["promote"] != true {
+                                super::mirror::select_after_cook(&lab.base, &request.arguments)?;
+                            }
+                            if let Some(mirror) = &lab.mirror {
+                                mirror.notify();
+                            }
+                            Ok(value)
+                        });
+                    super::protocol::reply(stream, result)?;
+                } else {
+                    let root = lab.root.clone();
+                    let tool = request.tool.clone();
+                    let args = request.arguments.clone();
+                    std::thread::spawn(move || {
+                        let result = super::mirror::proxy(&root, &tool, args);
+                        let _ = super::protocol::reply(stream, result);
+                    });
+                }
+                continue;
+            }
+
             if let Ok(request) = &request
                 && request.token == endpoint.token
                 && request.tool == "lab_reference"

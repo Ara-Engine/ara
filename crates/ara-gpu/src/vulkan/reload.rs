@@ -23,6 +23,10 @@ pub struct ShaderStatus {
     pub last_error: Option<String>,
     /// Background compilation time of the last successful cohort.
     pub compile_ms: f64,
+    /// Metadata, SPIR-V validation and shader-module load time; absent on unsplit backends.
+    pub load_ms: Option<f64>,
+    /// Native PSO construction time, separate from artifact loading.
+    pub pso_ms: Option<f64>,
 }
 
 struct Entry {
@@ -41,6 +45,8 @@ struct Replacement {
     native: pipeline::NativePipeline,
 }
 struct Compiled {
+    load_ms: f64,
+    pso_ms: f64,
     key: String,
     values: Vec<Replacement>,
     sources: Vec<(Pipeline, CookedPipeline)>,
@@ -54,6 +60,8 @@ enum Reply {
         key: String,
         values: Vec<Replacement>,
         milliseconds: f64,
+        load_ms: f64,
+        pso_ms: f64,
     },
     Failed {
         directory: PathBuf,
@@ -114,6 +122,7 @@ fn compile(
     directory: &Path,
     entries: &[&Entry],
 ) -> Result<Compiled> {
+    let metadata_started = Instant::now();
     let mut sources = Vec::new();
     for entry in entries {
         let source: CookedPipeline = serde_json::from_slice(&std::fs::read(&entry.manifest)?)?;
@@ -125,6 +134,10 @@ fn compile(
         sources.iter().all(|s| s.key == key),
         "partially cooked shader cohort; retaining last good pipelines"
     );
+    let mut times = pipeline::CreationTimes {
+        load_ms: metadata_started.elapsed().as_secs_f64() * 1000.,
+        pso_ms: 0.,
+    };
     let mut values = Vec::new();
     for (entry, source) in entries.iter().zip(&sources) {
         if entry
@@ -137,13 +150,14 @@ fn compile(
             continue;
         }
         // Null cache avoids externally synchronizing the renderer's mutable pipeline cache.
-        match pipeline::create_on_device(
+        match pipeline::create_profiled(
             device,
             mesh,
             layout,
             vk::PipelineCache::null(),
             source,
             directory,
+            &mut times,
         ) {
             Ok(native) => values.push(Replacement {
                 handle: entry.handle,
@@ -156,6 +170,8 @@ fn compile(
         }
     }
     Ok(Compiled {
+        load_ms: times.load_ms,
+        pso_ms: times.pso_ms,
         key,
         values,
         sources: entries
@@ -236,6 +252,8 @@ impl Worker {
                                     key: compiled.key,
                                     values: compiled.values,
                                     milliseconds: started.elapsed().as_secs_f64() * 1000.,
+                                    load_ms: compiled.load_ms,
+                                    pso_ms: compiled.pso_ms,
                                 }
                             }
                             Err(error) => Reply::Failed {
@@ -394,6 +412,8 @@ impl VulkanDevice {
                     key,
                     values,
                     milliseconds,
+                    load_ms,
+                    pso_ms,
                 } => {
                     for value in values {
                         if let Ok(slot) = self.pipelines.get_mut(value.handle) {
@@ -408,6 +428,8 @@ impl VulkanDevice {
                     worker.failures.remove(&directory);
                     worker.status.cohorts.insert(directory, key);
                     worker.status.compile_ms = milliseconds;
+                    worker.status.load_ms = Some(load_ms);
+                    worker.status.pso_ms = Some(pso_ms);
                     worker.status.last_error = worker.failures.values().next().cloned();
                     eprintln!(
                         "Shader epoch {} published ({milliseconds:.1} ms background compile)",

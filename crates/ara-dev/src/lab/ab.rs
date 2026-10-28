@@ -16,6 +16,9 @@ impl super::session::Session {
         super::variants::Variants::load(base).ready(experiment)?;
         let previous = self.selection.variant.clone();
         let pid = self.child.id();
+        let began = std::time::Instant::now();
+        let mut switch_seconds = 0.;
+        let mut window_seconds = 0.;
         let mut readings = Vec::new();
         let trace = base
             .join("measurements")
@@ -34,8 +37,14 @@ impl super::session::Session {
                     [("b", experiment), ("a", "baseline")]
                 };
                 for (side, variant) in sides {
-                    self.variant(base, variant)?;
+                    let switching = std::time::Instant::now();
+                    if self.selection.variant != variant {
+                        self.variant(base, variant)?;
+                    }
+                    switch_seconds += switching.elapsed().as_secs_f64();
+                    let measuring = std::time::Instant::now();
                     let mut reading = self.measure_window(frames, preset)?;
+                    window_seconds += measuring.elapsed().as_secs_f64();
                     ensure!(self.child.id() == pid, "A/B player changed");
                     reading["side"] = json!(side);
                     reading["variant"] = json!(variant);
@@ -48,18 +57,30 @@ impl super::session::Session {
                 }
             }
             let comparison = summarize(&readings)?;
-            self.variant(base, "baseline")?;
+            let temporal_started = std::time::Instant::now();
+            if self.selection.variant != "baseline" {
+                self.variant(base, "baseline")?;
+            }
             let a = self.temporal()?;
-            self.variant(base, experiment)?;
+            if self.selection.variant != experiment {
+                self.variant(base, experiment)?;
+            }
             let b = self.temporal()?;
             Ok(
-                json!({"format":"ara.lab.ab/1","a":"baseline","b":experiment,"pid":pid,"order":"AB, BA, repeated","comparison":comparison,"windows":readings,"trace":trace,"temporal":{"baseline":a["temporal"],"experiment":b["temporal"]}}),
+                json!({"format":"ara.lab.ab/1","a":"baseline","b":experiment,"pid":pid,"order":"AB, BA, repeated","comparison":comparison,"windows":readings,"trace":trace,"turnaround":{"switch_seconds":switch_seconds,"window_seconds":window_seconds,"temporal_seconds":temporal_started.elapsed().as_secs_f64()},"temporal":{"baseline":a["temporal"],"experiment":b["temporal"]}}),
             )
         })();
-        let restored = self.variant(base, &previous);
+        let restoring = std::time::Instant::now();
+        let restored = if self.selection.variant == previous {
+            Ok(Value::Null)
+        } else {
+            self.variant(base, &previous)
+        };
         match (result, restored) {
             (Ok(mut report), Ok(_)) => {
                 report["restored_variant"] = json!(previous);
+                report["turnaround"]["restore_seconds"] = json!(restoring.elapsed().as_secs_f64());
+                report["turnaround"]["total_seconds"] = json!(began.elapsed().as_secs_f64());
                 Ok(report)
             }
             (Err(error), _) => Err(error),

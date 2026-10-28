@@ -59,6 +59,7 @@ impl MetalDevice {
         self.deferred.as_ref().map_or(0, Vec::len)
     }
     fn begin_completion(&mut self) -> Result<()> {
+        self.poll_shader_reload();
         if self.deferred.is_some() || self.completion_pending {
             return Err(GpuError::Contract("Nested deferred completion".into()));
         }

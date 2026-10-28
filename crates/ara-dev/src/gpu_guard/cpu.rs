@@ -281,7 +281,11 @@ fn native() -> Result<Raw> {
         processes,
     })
 }
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+fn native() -> Result<Raw> {
+    super::macos::cpu()
+}
+#[cfg(not(any(windows, target_os = "macos")))]
 fn native() -> Result<Raw> {
     anyhow::bail!("native CPU load sampling is not implemented for this platform")
 }
