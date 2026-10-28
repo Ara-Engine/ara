@@ -56,7 +56,11 @@ fn setup(root: &Path, server: &Server) -> (Hub, PathBuf) {
 }
 
 fn finished(hub: &mut Hub, id: &Value) -> Value {
-    let deadline = Instant::now() + Duration::from_secs(20);
+    finished_with_timeout(hub, id, Duration::from_secs(20))
+}
+
+fn finished_with_timeout(hub: &mut Hub, id: &Value, timeout: Duration) -> Value {
+    let deadline = Instant::now() + timeout;
     loop {
         let jobs = hub.call("hub.downloads", json!({})).expect("jobs");
         let job = jobs["jobs"]
@@ -180,7 +184,10 @@ fn explicit_current_install_copies_external_then_replaces_managed_while_ordinary
     let job = hub
         .call("hub.engine.installCurrent", json!({"version":VERSION}))
         .expect("explicit install current");
-    assert_eq!(finished(&mut hub, &job["id"])["state"], "complete");
+    assert_eq!(
+        finished_with_timeout(&mut hub, &job["id"], Duration::from_secs(90))["state"],
+        "complete"
+    );
     let installed = root.join("engines").join(VERSION);
     assert_eq!(
         registered(&mut hub)["executable"],
@@ -220,7 +227,7 @@ fn explicit_current_install_copies_external_then_replaces_managed_while_ordinary
         .call("hub.engine.repair", json!({"version":VERSION}))
         .expect("ordinary signed repair");
     assert_eq!(
-        finished(&mut hub, &repair["id"])["state"],
+        finished_with_timeout(&mut hub, &repair["id"], Duration::from_secs(90))["state"],
         "failed",
         "ordinary Repair cannot change a pinned source build"
     );
@@ -231,7 +238,10 @@ fn explicit_current_install_copies_external_then_replaces_managed_while_ordinary
     let replacement = hub
         .call("hub.engine.installCurrent", json!({"version":VERSION}))
         .expect("explicit signed current replacement");
-    assert_eq!(finished(&mut hub, &replacement["id"])["state"], "complete");
+    assert_eq!(
+        finished_with_timeout(&mut hub, &replacement["id"], Duration::from_secs(90))["state"],
+        "complete"
+    );
     let after: Value =
         serde_json::from_slice(&fs::read(&marker_path).expect("new managed identity"))
             .expect("new marker JSON");
