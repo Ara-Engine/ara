@@ -157,23 +157,27 @@ struct Lobes{
     float3 f0;     // Fresnel at normal incidence.
     float3 scale;  // Multiple-scattering scale of the specular lobe, 1 + F_ms (1/E - 1).
     float3 albedo; // Directional albedo of the scaled specular lobe, E (f0 + (1 - f0) s) scale.
-    float3 diffuse;// Lambert reflectance over PI under the dielectric layer, times 1 - (0.04 + 0.96 E s).
+    float3 diffuse;// Lambert reflectance over PI under the dielectric layer, times 1 - that layer's albedo.
     float nv,a2,lv;// clamp(n.v, 0.001, 1); alpha^2; sqrt(nv^2 (1 - a2) + a2), v's Smith term.
 };
 // Energy-compensated GGX as Cycles' Principled BSDF v2 evaluates it: single scattering
 // times 1 + F_ms (1/E - 1) for the view direction (Kulla and Conty 2017's albedos, applied
 // as Turquin 2019's scale), so a white rough lobe reflects all it receives and coloured
 // metals keep their multiple-bounce saturation. The Lambert base lies under a dielectric
-// (f0 0.04) layer, attenuated as Cycles layers it by that layer's albedo estimate towards
-// the viewer, f0 + (1 - f0) E s (the f0 share counted as fully reflected), the same for
-// every light and the environment.
+// (f0 0.04) layer and receives what that layer, with its own multiple scattering, does
+// not reflect towards the viewer: 1 - (0.04 E + 0.96 E s)(1 + F_ms(0.04) (1/E - 1)), the
+// same for every light and the environment, so a white rough dielectric reflects all it
+// receives. (Attenuating by a layer estimate instead, Cycles' f0 + (1 - f0) s or
+// f0 + (1 - f0) E s, loses up to 7% or 3% of it at grazing angles, and both matched the
+// Cycles references worse in every region.)
 Lobes specularLobes(Surface s,float3 v){
     Lobes o;o.nv=clamp(dot(s.normal,v),0.001,1);float a=s.roughness*s.roughness;o.a2=a*a;
     o.lv=sqrt(o.nv*o.nv*(1-o.a2)+o.a2);float g=2*o.nv/(o.nv+o.lv);
-    float k=specularLoss(g,a),e=1/(1+k),bias=e*fresnelWeight(g,o.nv,s.roughness);
-    o.f0=lerp(float3(0.04),s.albedo,s.metal);o.scale=1+multipleFresnel(meanFresnel(o.f0),averageAlbedo(s.roughness))*k;
+    float k=specularLoss(g,a),e=1/(1+k),bias=e*fresnelWeight(g,o.nv,s.roughness),eavg=averageAlbedo(s.roughness);
+    o.f0=lerp(float3(0.04),s.albedo,s.metal);o.scale=1+multipleFresnel(meanFresnel(o.f0),eavg)*k;
     o.albedo=(o.f0*e+(1-o.f0)*bias)*o.scale;
-    o.diffuse=s.albedo*(1-s.metal)*(1-s.transmission)*(0.96-0.96*bias)/PI;
+    float layer=(0.04*e+0.96*bias)*(1+multipleFresnel(meanFresnel(float3(0.04)),eavg).x*k);
+    o.diffuse=s.albedo*(1-s.metal)*(1-s.transmission)*(1-layer)/PI;
     return o;
 }
 // Direct light reflected towards `v` from direction `l` (per unit illuminance) by
