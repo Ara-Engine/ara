@@ -1226,6 +1226,27 @@ fn build_profile_comes_from_a_command_and_csharp_projects_can_build() {
     shell
         .run_command(&mut editor, "build.profile.create", &Target::None)
         .unwrap();
+    let start = std::time::Instant::now();
+    loop {
+        editor.tick();
+        let jobs = editor.action("jobs.list", json!({})).unwrap();
+        let job = jobs["jobs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|job| job["name"] == "build_profile.create")
+            .expect("profile creation uses the prepared asset service");
+        match job["status"].as_str().unwrap() {
+            "done" => break,
+            "running" => {}
+            _ => panic!("profile creation failed: {job}"),
+        }
+        assert!(
+            start.elapsed().as_secs() < 10,
+            "profile creation stalled: {job}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
     let text =
         std::fs::read_to_string(project.0.join("settings/builds/windows.export.json")).unwrap();
     let preset = ara_export::ExportPreset::from_unpinned_text(&text).unwrap();

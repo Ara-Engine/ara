@@ -126,6 +126,19 @@ impl Editor {
             asset_changed,
         )))
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        let worker = ara_asset::ProcessWorker::new(
+            ara_play_host::PlayConfig::for_project(root).import_worker,
+        )
+        .with_memo(Some(&root.join(".ara/cache")));
+        host.register(Box::new(ara_asset_host::AssetService::new(
+            worker,
+            std::sync::Arc::new(|path, required| {
+                ara_update::check_space(path, required)
+                    .map(|_| ())
+                    .map_err(|error| ara_asset::Error::Invalid(error.to_string()))
+            }),
+        )))
+        .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         host.register(Box::new(crate::authoring::AuthoringService))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         host.register(Box::new(crate::script_assets::ScriptService::default()))

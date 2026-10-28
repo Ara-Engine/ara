@@ -20,6 +20,8 @@ ara-hotpatch = { path = "../ara-hotpatch", optional = true, features = ["runtime
 ara-texture-gpu = { path = "../ara-texture-gpu" }
 ara-crash = { path = "../ara-crash" }
 ara-asset = { path = "../ara-asset" }
+ara-asset-host = { path = "../ara-asset-host" }
+ara-update = { path = "../ara-update" }
 ara-asset-format = { path = "../ara-asset-format" }
 ara-importers = { path = "../ara-importers" }
 ara-graph = { path = "../ara-graph" }
