@@ -148,7 +148,12 @@ impl Act {
         }
     }
     fn finish(self) -> u32 {
-        FINISH + if matches!(self, Self::Hierarchy(_)) { 6 } else { 0 }
+        FINISH
+            + if matches!(self, Self::Hierarchy(_)) {
+                6
+            } else {
+                0
+            }
     }
 }
 #[derive(Clone, Copy)]
@@ -362,8 +367,8 @@ impl ContentDrags {
                 return self.write();
             }
         }
-        let history_stage = matches!(act, Act::Hierarchy(_))
-            && [FINISH + 3, FINISH + 6].contains(&self.age);
+        let history_stage =
+            matches!(act, Act::Hierarchy(_)) && [FINISH + 3, FINISH + 6].contains(&self.age);
         if [SETTLE, PREVIEW, FINISH].contains(&self.age) || history_stage {
             let stage = if self.age == SETTLE {
                 "before"

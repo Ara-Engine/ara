@@ -178,8 +178,20 @@ impl ContentDrags {
             return self.setup(act, editor, shell);
         }
         if matches!(act, Act::Hierarchy(_)) && [FINISH + 1, FINISH + 4].contains(&self.age) {
-            for (scancode, pressed) in [(224, true), (if self.age == FINISH + 1 { 29 } else { 28 }, true), (if self.age == FINISH + 1 { 29 } else { 28 }, false), (224, false)] {
-                events.push((window.id(), Event::Key { scancode, pressed, repeat:false }));
+            for (scancode, pressed) in [
+                (224, true),
+                (if self.age == FINISH + 1 { 29 } else { 28 }, true),
+                (if self.age == FINISH + 1 { 29 } else { 28 }, false),
+                (224, false),
+            ] {
+                events.push((
+                    window.id(),
+                    Event::Key {
+                        scancode,
+                        pressed,
+                        repeat: false,
+                    },
+                ));
             }
             return Ok(());
         }
@@ -286,7 +298,9 @@ impl ContentDrags {
                 Act::Hierarchy(hierarchy::Action::Before) => (Find::Entity(IDS[0]), false, 0.04),
                 Act::Hierarchy(hierarchy::Action::Inside) => (Find::Entity(IDS[3]), false, 0.5),
                 Act::Hierarchy(hierarchy::Action::After) => (Find::Entity(IDS[3]), false, 0.96),
-                Act::Hierarchy(hierarchy::Action::Root) => (Find::Control("hierarchy-rows"), false, 0.96),
+                Act::Hierarchy(hierarchy::Action::Root) => {
+                    (Find::Control("hierarchy-rows"), false, 0.96)
+                }
             };
             let Some(point) = self.point(
                 find, floating, shell, editor, window, floats, scale, fraction,

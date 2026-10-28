@@ -39,9 +39,17 @@ impl ContentDrags {
                 )
             }
             Act::Cycle => (
-                !changed && hierarchy::same_documents(&self.hierarchy_proof["before"], &hierarchy::snapshot(editor)?)
-                    && preview.is_some_and(|preview| preview["feedback"]["valid"] == false
-                        && preview["feedback"]["reason"].as_str().is_some_and(|reason|!reason.is_empty())),
+                !changed
+                    && hierarchy::same_documents(
+                        &self.hierarchy_proof["before"],
+                        &hierarchy::snapshot(editor)?,
+                    )
+                    && preview.is_some_and(|preview| {
+                        preview["feedback"]["valid"] == false
+                            && preview["feedback"]["reason"]
+                                .as_str()
+                                .is_some_and(|reason| !reason.is_empty())
+                    }),
                 json!({"refused":!changed,"preview":preview,"unchangedRecords":hierarchy::same_documents(&self.hierarchy_proof["before"], &hierarchy::snapshot(editor)?)}),
             ),
             Act::Hierarchy(action) => hierarchy::observe(action, &self.hierarchy_proof, preview),

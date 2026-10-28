@@ -159,9 +159,15 @@ impl NavigationCheck {
             if self.age == 0 {
                 self.precision = Some(transforms::Proof::setup(action, editor, shell)?);
                 events.push((window.id(), Event::FocusLost));
-            } else if !self.precision.as_mut().ok_or("Native J1 transform fixture missing")?
-                .inject(self.age, editor, shell, window, scale, scene_ready, events)? {
-                return self.wait_for("Native J1 transform handle or presented Scene did not become ready");
+            } else if !self
+                .precision
+                .as_mut()
+                .ok_or("Native J1 transform fixture missing")?
+                .inject(self.age, editor, shell, window, scale, scene_ready, events)?
+            {
+                return self.wait_for(
+                    "Native J1 transform handle or presented Scene did not become ready",
+                );
             }
             return Ok(());
         }
@@ -586,7 +592,10 @@ impl NavigationCheck {
             return Ok(());
         }
         if let Act::Transform(action) = act {
-            let result = self.precision.as_mut().ok_or("Native J1 transform fixture missing")?
+            let result = self
+                .precision
+                .as_mut()
+                .ok_or("Native J1 transform fixture missing")?
                 .end(self.age, editor, shell, gpu, &self.output, self.index + 1);
             let result = match result {
                 Ok(result) => result,
