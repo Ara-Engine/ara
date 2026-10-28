@@ -74,6 +74,8 @@ fn await_job(host: &mut Host, session: &Value, value: Value) -> Value {
 #[test]
 fn preview3_migration_is_readonly_until_consent_and_one_undo_restores_original_bytes() {
     let root = preview3();
+    let guide = "- **Layout:** `game/` holds every authored file\nPaths are relative to `game/`, not the project root.\nA feature may still be named game.\n";
+    fs::write(root.join("AGENTS.md"), guide).expect("managed guide");
     let old_ui = fs::read(root.join("game/ui/game.ui")).expect("original UI");
     let old_marker = fs::read(root.join("ara.project.json")).expect("original marker");
     let old_id = ara_host::project::read_document(
@@ -111,6 +113,10 @@ fn preview3_migration_is_readonly_until_consent_and_one_undo_restores_original_b
     .expect("typed migration");
     assert_eq!(result["restartRequired"], true);
     assert!(!root.join("game").exists());
+    let updated_guide = fs::read_to_string(root.join("AGENTS.md")).expect("updated guide");
+    assert!(updated_guide.contains("`content/` holds every authored file"));
+    assert!(updated_guide.contains("relative to `content/`"));
+    assert!(updated_guide.contains("A feature may still be named game."));
     assert_eq!(
         fs::read_to_string(root.join("migration-support/tests/keep.txt")).expect("support"),
         "retained user support"
@@ -150,6 +156,10 @@ fn preview3_migration_is_readonly_until_consent_and_one_undo_restores_original_b
         old_marker
     );
     assert!(!root.join("content").exists());
+    assert_eq!(
+        fs::read_to_string(root.join("AGENTS.md")).expect("restored guide"),
+        guide
+    );
     let blocked = host
         .call(
             ConnId::LOCAL,

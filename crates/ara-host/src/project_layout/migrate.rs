@@ -309,7 +309,27 @@ impl Migration {
                 .map_err(|error| problem(error.to_string()))?;
                 canonical.serialize().as_bytes().to_vec()
             } else {
-                references::text(text, &mappings, false).into_bytes()
+                let mut rewritten = references::text(text, &mappings, false);
+                if source == migration.root.join("AGENTS.md") && migration.reference_root == "game"
+                {
+                    // Update the engine's two layout instructions without rewriting user prose.
+                    rewritten = rewritten
+                        .replace(
+                            "- **Layout:** `game/` holds every authored file",
+                            &format!(
+                                "- **Layout:** `{}/` holds every authored file",
+                                super::AUTHORING_ROOT
+                            ),
+                        )
+                        .replace(
+                            "Paths are relative to `game/`, not the project root.",
+                            &format!(
+                                "Paths are relative to `{}/`, not the project root.",
+                                super::AUTHORING_ROOT
+                            ),
+                        );
+                }
+                rewritten.into_bytes()
             };
             if after != before {
                 migration.rewrites.push(Rewrite {
