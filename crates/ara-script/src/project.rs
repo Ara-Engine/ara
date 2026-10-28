@@ -5,11 +5,14 @@
 use ara_diag::{Diagnostic, codes};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::{
-    io::Write,
-    path::{Path, PathBuf},
-    process::{Command, Stdio},
-};
+use std::path::{Path, PathBuf};
+mod editor;
+mod fixes;
+mod lock;
+mod session;
+mod tool;
+pub use editor::EditorClient;
+pub use fixes::{AppliedFix, SourceChange, SourceText, code_fixes};
 
 /// One C# source, with both path forms made explicit.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -23,6 +26,14 @@ pub struct SourceFile {
     pub module: String,
     /// Folder-derived editor domain; never eligible for a player build.
     pub editor: bool,
+}
+
+/// Cheap source-presence hint for preparation workers. Module ownership and source
+/// paths still come exclusively from `inventory`; this avoids starting .NET for
+/// projects without any C# sources or manifests.
+pub fn has_sources(root: &Path) -> Result<bool, Diagnostic> {
+    let root = std::fs::canonicalize(root).map_err(io)?;
+    source_hint(&root.join(ara_doc::AUTHORING_ROOT), true)
 }
 
 /// A module's sources and explicit private build outputs.
@@ -144,6 +155,10 @@ pub fn inventory(root: &Path) -> Result<Inventory, Diagnostic> {
 /// them while keeping the project open; check/export must reject error results.
 pub fn compile(root: &Path, domain: crate::ModuleProfile) -> Result<Inventory, Diagnostic> {
     let root = &std::fs::canonicalize(root).map_err(io)?;
+    if !source_hint(&root.join(ara_doc::AUTHORING_ROOT), true)? {
+        return Ok(Inventory::default());
+    }
+    let _publication = lock::PublicationLock::acquire(root, || false)?;
     compile_canonical(root, domain)
 }
 
@@ -159,7 +174,15 @@ fn compile_canonical(root: &Path, domain: crate::ModuleProfile) -> Result<Invent
 /// when compilation has coded diagnostics; generated outputs never enter game/.
 pub fn publish(root: &Path, domain: crate::ModuleProfile) -> Result<Inventory, Diagnostic> {
     let root = &std::fs::canonicalize(root).map_err(io)?;
-    let mut inventory = compile_canonical(root, domain)?;
+    if !source_hint(&root.join(ara_doc::AUTHORING_ROOT), true)? {
+        return Ok(Inventory::default());
+    }
+    let _publication = lock::PublicationLock::acquire(root, || false)?;
+    let inventory = compile_canonical(root, domain)?;
+    publish_outputs(root, inventory)
+}
+
+fn publish_outputs(root: &Path, mut inventory: Inventory) -> Result<Inventory, Diagnostic> {
     for module in &inventory.modules {
         let Some(schema) = &module.schema else {
             continue;
@@ -234,8 +257,16 @@ pub fn publish(root: &Path, domain: crate::ModuleProfile) -> Result<Inventory, D
             .compile_server
             .parent()
             .ok_or_else(|| io("C# compiler directory missing"))?;
+        let editor_reference = if module.profile == crate::ModuleProfile::Editor {
+            format!(
+                "<Reference Include=\"Ara.Editor\"><HintPath>{}</HintPath></Reference>",
+                xml(&compiler_dir.join("Ara.Editor.dll").to_string_lossy())
+            )
+        } else {
+            String::new()
+        };
         let project = format!(
-            "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><LangVersion>14</LangVersion><AllowUnsafeBlocks>true</AllowUnsafeBlocks><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><EnableDefaultCompileItems>false</EnableDefaultCompileItems><AssemblyName>{}</AssemblyName><AraModuleProfile>{}</AraModuleProfile></PropertyGroup><ItemGroup>{sources}{references}<Using Include=\"Ara\" /><Using Include=\"System.Numerics\" /><Reference Include=\"Ara.Runtime\"><HintPath>{}</HintPath></Reference><Analyzer Include=\"{}\" /><Analyzer Include=\"{}\" /><CompilerVisibleProperty Include=\"AraModuleProfile\" /></ItemGroup></Project>\n",
+            "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework><LangVersion>14</LangVersion><AllowUnsafeBlocks>true</AllowUnsafeBlocks><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><EnableDefaultCompileItems>false</EnableDefaultCompileItems><AssemblyName>{}</AssemblyName><AraModuleProfile>{}</AraModuleProfile></PropertyGroup><ItemGroup>{sources}{references}{editor_reference}<Using Include=\"Ara\" /><Using Include=\"System.Numerics\" /><Reference Include=\"Ara.Runtime\"><HintPath>{}</HintPath></Reference><Analyzer Include=\"{}\" /><Analyzer Include=\"{}\" /><CompilerVisibleProperty Include=\"AraModuleProfile\" /></ItemGroup></Project>\n",
             xml(&module.name),
             module.profile.as_str(),
             xml(&runtime.to_string_lossy()),
@@ -341,42 +372,23 @@ fn invoke(
     mode: &str,
     domain: Option<crate::ModuleProfile>,
 ) -> Result<Inventory, Diagnostic> {
-    let tools = ToolPaths::locate(root).ok_or_else(|| Diagnostic::error(crate::codes::COMPILE_SERVER, "the installed C# compile tools are missing; build dotnet/Ara.slnx or repair the engine SDK"))?;
-    let mut command = Command::new("dotnet");
-    command
-        .args(["exec"])
-        .arg(&tools.compile_server)
-        .arg(mode)
-        .current_dir(root)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .env_remove("DOTNET_MODIFIABLE_ASSEMBLIES");
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x0800_0000 | 0x0000_4000); // no window, BelowNormal
-    }
-    let mut child = command.spawn().map_err(io)?;
-    let request = json!({"project":root, "authoringRoot":ara_doc::AUTHORING_ROOT, "domain":domain.map(crate::ModuleProfile::as_str)});
-    let bytes = serde_json::to_vec(&request).map_err(io)?;
-    child
-        .stdin
-        .take()
-        .ok_or_else(|| io("C# tool has no input pipe"))?
-        .write_all(&bytes)
-        .map_err(io)?;
-    let output = child.wait_with_output().map_err(io)?;
-    if !output.status.success() {
-        return Err(Diagnostic::error(
-            crate::codes::COMPILE_SERVER,
-            String::from_utf8_lossy(&output.stderr).trim().to_owned(),
-        ));
-    }
-    serde_json::from_slice(&output.stdout).map_err(|error| {
+    let request = json!({"project":root, "authoringRoot":ara_doc::AUTHORING_ROOT, "domain":domain.map(crate::ModuleProfile::as_str), "operation":mode});
+    session::invoke(root, request)
+}
+
+/// Compile editor modules and discover or invoke their command registrations.
+/// Calls are bounded and windowless; callback results contain typed authoring calls,
+/// never direct document writes. Run this on a preparation worker.
+pub fn editor(root: &Path, request: Value) -> Result<Value, Diagnostic> {
+    let root = &std::fs::canonicalize(root).map_err(io)?;
+    let _publication = lock::PublicationLock::acquire(root, || false)?;
+    let mut request = request.as_object().cloned().ok_or_else(|| {
         Diagnostic::error(
-            crate::codes::COMPILE_SERVER,
-            format!("invalid module inventory: {error}"),
+            codes::INVALID_PARAMS,
+            "editor tool request must be an object",
         )
-    })
+    })?;
+    request.insert("project".into(), root.to_string_lossy().into_owned().into());
+    request.insert("authoringRoot".into(), ara_doc::AUTHORING_ROOT.into());
+    tool::run(root, "--editor", request.into())
 }

@@ -63,6 +63,9 @@ enabled with ARA_VFX_GPU_TESTS=1. They require this device/driver and SDK layers
 GPU test captures and measurements go under target/ara-vfx-gpu; tracked evidence
 and goldens stay unchanged unless the explicit golden update flag is set.
 ARA_UPDATE_GOLDENS=1 deliberately updates six still/sequence PNG baseline pairs.
+Each fidelity tier has its own: `goldens/` (RT, on devices with ray queries) and
+`goldens/raster/` (unbaked-probe Raster: no ray queries, or Metal until its RT tier is verified);
+ARA_VFX_GOLDEN_TIER=rt|raster forces one.
 Inspect captures before accepting them. Gallery frames use lit geometry and the
 fidelity post stack; benchmark sprites intentionally isolate simulation/fill cost.
 Cooked artifacts are committed. A fresh check/test never runs a shader compiler.

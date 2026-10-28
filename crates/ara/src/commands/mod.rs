@@ -4,6 +4,7 @@
 mod check;
 mod docs;
 mod edit;
+pub mod fix;
 mod fmt;
 pub mod headless;
 pub mod hub;

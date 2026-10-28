@@ -4,11 +4,13 @@
 //! Each [`Spec`] has a stable id, a human title, a default (Ara keymap) shortcut,
 //! an availability check that explains why it is disabled, and how it runs.
 //! Menu paths are derived from [`menus::MENUS`], so they never drift.
+mod extensions;
 pub(crate) mod keys;
 pub(crate) mod menus;
 mod table;
 use super::Shell;
 use crate::{Editor, state::EditorState};
+pub(crate) use extensions::{bar_titles, entries, lookup, registered_menu_path};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -59,6 +61,7 @@ impl Target {
 /// Inputs to availability checks; built from navigation state and the op store.
 pub(crate) struct Ctx<'a> {
     pub state: &'a EditorState,
+    pub extensions: &'a crate::extensions::Catalog,
     pub store: &'a ara_ops::Store,
     pub target: &'a Target,
     /// The shell holds copied entities (Paste is available).
@@ -178,14 +181,13 @@ pub(crate) fn menu_path(id: &str) -> String {
 /// The registry as agents see it: ids, titles, menu paths, bindings and availability.
 pub(crate) fn export(cx: &Ctx, keymap: &keys::Keymap) -> Value {
     json!(
-        all()
-            .iter()
+        entries(cx.extensions)
             .map(|c| {
                 let avail = c.avail(cx);
                 json!({
                     "id": c.id,
                     "title": c.title(cx),
-                    "menu": menu_path(c.id),
+                    "menu": registered_menu_path(cx.extensions, c.id),
                     "summary": c.summary,
                     "shortcuts": keymap.chords(c.id).iter().map(|k| k.text()).collect::<Vec<_>>(),
                     "enabled": avail.ready(),
@@ -197,7 +199,7 @@ pub(crate) fn export(cx: &Ctx, keymap: &keys::Keymap) -> Value {
     )
 }
 /// The keymap for the current preferences.
-pub(crate) fn keymap(state: &EditorState) -> keys::Keymap {
+pub(crate) fn keymap(state: &EditorState, extensions: &crate::extensions::Catalog) -> keys::Keymap {
     let preset = keys::Preset::parse(
         state
             .settings
@@ -215,13 +217,18 @@ pub(crate) fn keymap(state: &EditorState) -> keys::Keymap {
                 .collect()
         })
         .unwrap_or_default();
-    keys::Keymap::new(all().iter().map(|c| (c.id, c.keys)), preset, &overrides)
+    keys::Keymap::new(
+        entries(extensions).map(|c| (c.id, c.keys)),
+        preset,
+        &overrides,
+    )
 }
 impl Shell {
     /// Availability inputs for the current editor state and a target.
     pub(crate) fn ctx<'a>(&self, editor: &'a Editor, target: &'a Target) -> Ctx<'a> {
         Ctx {
             state: &editor.state,
+            extensions: &editor.extensions,
             store: editor.host.store(),
             target,
             clipboard_entities: self.entity_clipboard.is_some(),
@@ -278,6 +285,16 @@ impl Shell {
             return Err(
                 "Opening desktop applications is unavailable during offscreen verification".into(),
             );
+        }
+        if let Some(spec) = lookup(&editor.extensions, id)
+            && spec.builtin.is_none()
+        {
+            if let Avail::Blocked(reason) = spec.avail(&self.ctx(editor, target)) {
+                return Err(format!("{}: {reason}", spec.title).into());
+            }
+            self.menu = None;
+            editor.action("editor.command", json!({"id":id,"target":target}))?;
+            return Ok(());
         }
         let spec = get(id).ok_or_else(|| format!("unknown command `{id}`"))?;
         let avail = {

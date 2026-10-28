@@ -127,7 +127,13 @@ fn every_view_lays_out_in_both_themes_and_sizes() {
                     .iter()
                     .any(|n| n.element.attrs.get("text").map(String::as_str) == Some(view.title()));
                 assert!(title, "{view:?} shows its title");
-                assert!(ui.find(&format!("nav-{view:?}").to_lowercase()).is_some());
+                if view == View::Create {
+                    assert!(ui.find("create-back").is_some());
+                    assert!(ui.find("nav-projects").is_none(), "creation is a full page");
+                } else {
+                    assert!(ui.find(&format!("nav-{view:?}").to_lowercase()).is_some());
+                    assert!(ui.find("nav-create").is_none());
+                }
             }
             hub.intent(Intent::Navigate(View::Projects));
             hub.intent(Intent::Layout(Layout::List));
@@ -137,6 +143,57 @@ fn every_view_lays_out_in_both_themes_and_sizes() {
             assert!(ui.find("menu-remove").is_some(), "overflow menu");
             hub.intent(Intent::Menu(None));
             hub.intent(Intent::Layout(Layout::Grid));
+        }
+    }
+}
+
+#[test]
+fn hub_brand_and_fullpage_creation_fit_both_themes_and_capture_sizes() {
+    let mut hub = Hub::new(Prefs::default(), std::env::temp_dir(), None);
+    capture::seed(&mut hub);
+    for size in [[1440., 900.], [1280., 720.]] {
+        for light in [false, true] {
+            hub.intent(Intent::Navigate(View::Projects));
+            let ui = render(&hub, size, light);
+            assert!(ui.find("nav-create").is_none());
+            assert!(
+                ui.nodes
+                    .iter()
+                    .any(|node| node.element.attrs.get("src").map(String::as_str)
+                        == Some("brand-hub"))
+            );
+            assert!(!ui.nodes.iter().any(|node| {
+                node.element
+                    .attrs
+                    .get("src")
+                    .is_some_and(|src| src.contains("wordmark"))
+            }));
+            hub.intent(Intent::Navigate(View::Create));
+            let ui = render(&hub, size, light);
+            assert!(ui.find("nav-projects").is_none());
+            for id in [
+                "create-back",
+                "create-name",
+                "create-destination",
+                "create-engine",
+                "create-submit",
+            ] {
+                let node = &ui.nodes[ui.find(id).expect(id)];
+                let rect = node.rect;
+                assert!(
+                    rect.x >= 0.
+                        && rect.y >= 0.
+                        && rect.x + rect.w <= size[0] + 0.5
+                        && rect.y + rect.h <= size[1] + 0.5,
+                    "{id} must fit on {size:?}: {rect:?}"
+                );
+            }
+            assert_eq!(
+                ui.nodes[ui.find("create-engine").expect("engine")]
+                    .element
+                    .tag,
+                "dropdown"
+            );
         }
     }
 }

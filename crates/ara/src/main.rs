@@ -228,6 +228,8 @@ enum Command {
     },
     /// Redo `--author`'s most recently undone transaction.
     Redo,
+    /// Apply shipped C# analyzer fixes through undoable typed source commands.
+    Fix(commands::fix::FixArgs),
     /// Run the project or a scene headless, returning results, logs and diagnostics.
     Run(commands::headless::RunArgs),
     /// Render a scene or camera offscreen into a PNG; never opens a window.
@@ -384,6 +386,7 @@ fn protocol_call(command: Command) -> Option<Result<Call, Vec<Diagnostic>>> {
         Command::Logs(args) => args.call(),
         Command::Why(args) => args.call(),
         Command::Run(args) => args.call(),
+        Command::Fix(args) => args.call(),
         Command::Capture(args) => args.call(),
         _ => return None,
     }))

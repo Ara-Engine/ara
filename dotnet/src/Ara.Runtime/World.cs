@@ -52,6 +52,31 @@ public sealed class MissingComponentException(Entity entity, string component)
 /// </summary>
 public static unsafe class World
 {
+    /// <summary>Find an entity by exact name, root-relative name path, or stable scene ID.
+    /// Returns Entity.Null when missing; ambiguous names throw instead of choosing an entity.</summary>
+    public static Entity Find(string nameOrPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(nameOrPath);
+        Span<Entity> one = stackalloc Entity[1];
+        return Host.SceneEntities(AbiConst.SceneFind, Entity.Null, nameOrPath, one) == 0 ? Entity.Null : one[0];
+    }
+
+    /// <summary>The current ECS parent, or Entity.Null for a root or missing entity.</summary>
+    public static Entity Parent(Entity entity)
+    {
+        Span<Entity> one = stackalloc Entity[1];
+        return Host.SceneEntities(AbiConst.SceneParent, entity, "", one) == 0 ? Entity.Null : one[0];
+    }
+
+    /// <summary>Direct children in authored sibling order, stable identity breaking ties.
+    /// Throws when scratch is too small. Relationships change at the command sync point.</summary>
+    public static Span<Entity> Children(Entity entity, Span<Entity> scratch) =>
+        scratch[..Host.SceneEntities(AbiConst.SceneChildren, entity, "", scratch)];
+
+    /// <summary>Other children of the same parent (other roots for a root), in sibling order.</summary>
+    public static Span<Entity> Siblings(Entity entity, Span<Entity> scratch) =>
+        scratch[..Host.SceneEntities(AbiConst.SceneSiblings, entity, "", scratch)];
+
     /// <summary>Copies entities carrying T into caller-owned scratch storage, in ascending handle order.
     /// Throws if the span is too small; no silently truncated gameplay queries.</summary>
     public static Span<Entity> Query<T>(Span<Entity> scratch) where T : IComponent<T> =>

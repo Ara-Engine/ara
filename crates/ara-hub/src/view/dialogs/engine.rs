@@ -4,7 +4,7 @@ use super::*;
 pub(super) fn install(p: &mut Page, hub: &Hub, version: &str, repair: bool) {
     heading(
         p,
-        "package",
+        "brand-engine",
         &format!(
             "{} Ara {version}",
             if repair { "Repair" } else { "Install" }

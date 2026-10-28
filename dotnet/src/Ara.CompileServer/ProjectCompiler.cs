@@ -13,7 +13,7 @@ internal sealed record ProjectBuildRequest(string Project, string AuthoringRoot,
 /// <summary>Compile and describe modules before scene validation; never start a gameplay world.</summary>
 internal static class ProjectCompiler
 {
-    internal static ProjectInventoryResult Compile(ProjectBuildRequest request)
+    internal static ProjectInventoryResult Compile(ProjectBuildRequest request, bool writeOutputs = true)
     {
         var inventory = ProjectInventory.Scan(new(request.Project, request.AuthoringRoot));
         if (inventory.Diagnostics.Any(d => (string?)d["severity"] == "error"))
@@ -41,6 +41,7 @@ internal static class ProjectCompiler
                 var fingerprint = Hash(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
                 {
                     module.Name, module.Hot, module.Profile, toolHash, runtimeHash, generatorHash,
+                    editorHash = module.Profile == "editor" ? Hash(File.ReadAllBytes(typeof(Ara.Editor.EditorRegistry).Assembly.Location)) : "",
                     sources = sources.Select(s => new { s.Source.StoragePath, hash = Hash(Encoding.UTF8.GetBytes(s.Text)) }),
                     references = module.References.Select(r => new { name = r, hash = built[r].Hash }),
                 })));
@@ -101,12 +102,15 @@ internal static class ProjectCompiler
                 var types = new JsonObject();
                 foreach (var (key, value) in schemaTypes) types.Add(key, value);
                 var document = new JsonObject { ["$schema"] = "ara://schema/types/1", ["types"] = types };
-                Directory.CreateDirectory(Path.GetDirectoryName(assembly)!);
-                AtomicWrite(assembly, image.Pe);
-                AtomicWrite(Path.ChangeExtension(assembly, ".pdb"), image.Pdb);
-                foreach (var generated in driver.GetRunResult().Results.SelectMany(r => r.GeneratedSources))
-                    AtomicWrite(Path.Combine(state, "generated", generated.HintName), Encoding.UTF8.GetBytes(generated.SourceText.ToString()));
-                AtomicWrite(stamp, Encoding.UTF8.GetBytes(fingerprint + "\n"));
+                if (writeOutputs)
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(assembly)!);
+                    AtomicWrite(assembly, image.Pe);
+                    AtomicWrite(Path.ChangeExtension(assembly, ".pdb"), image.Pdb);
+                    foreach (var generated in driver.GetRunResult().Results.SelectMany(r => r.GeneratedSources))
+                        AtomicWrite(Path.Combine(state, "generated", generated.HintName), Encoding.UTF8.GetBytes(generated.SourceText.ToString()));
+                    AtomicWrite(stamp, Encoding.UTF8.GetBytes(fingerprint + "\n"));
+                }
                 // Rust publishes this JSON through the canonical writer. The compiler
                 // returns it explicitly; no consumer scans private output directories.
                 built[name] = (MetadataReference.CreateFromImage(image.Pe), fingerprint);

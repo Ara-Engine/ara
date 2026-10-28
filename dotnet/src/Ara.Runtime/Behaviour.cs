@@ -43,6 +43,12 @@ public abstract unsafe class Behaviour
     /// <summary>Called instead of <see cref="OnSpawn"/> on an object recreated by a module reload; rebuild transient caches here.</summary>
     protected internal virtual void OnReload() { }
 
+    /// <summary>Called once at the next fixed tick after this behaviour is removed or
+    /// its entity is despawned, ordered by module, type, then ascending entity handle.
+    /// The removed data is unavailable; release transient resources here. Other live
+    /// entities remain accessible through World. Reload uses OnReload instead.</summary>
+    protected internal virtual void OnDestroy() { }
+
     /// <summary>One of this entity's components, for reading and writing.</summary>
     protected ref T Get<T>() where T : IComponent<T> => ref World.Get<T>(Entity);
 

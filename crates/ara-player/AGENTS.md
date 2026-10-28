@@ -41,8 +41,7 @@ presenter before hello and reuse its device at embed; surface-less services allo
 - `standalone/startup.rs`: shaderless progress (`device/loading.rs`, 225 KiB image + staging) precedes runtime/presenter/content workers. Real content, PSOs, uploads, effects and the initial GI volume/staging clear finish behind it; the surface bake can arrive later without allocation.
   Startup JSON separates loading/runtime/presenter timings, `content_warmup_ms`/`content_ready_ms`, and `full_scene_frame_ms`; loading hands its existing device/swapchain to the game.
 - `main.rs`: pool lifecycle, the loop (link polling, host-time ticking with bounded
-  catch-up, deferred patch acks, 250 ms `play.status` heartbeats, presentation),
-  method dispatch.
+  catch-up, deferred patch acks, 250 ms `play.status` heartbeats, presentation), method dispatch.
 - `net.rs`: `Play` (derefs to the runtime in every role): `Local`, `Host` (ara-net
   server owns the runtime and steps it; `play.join` issues client tokens) or `Mirror`
   (a client's never-stepped presentation world). Networked processes keep only their
@@ -137,12 +136,14 @@ headless music playback deterministically. It also renders past the end and loop
 through bounded producers, checking aggregate queue accounting and late audibility.
 `tests/model_authoring.rs` selects source kit nodes through MCP and captures lamp
 factor edits, source-pivot changes and enable/disable transitions in headless Play.
-`tests/csharp.rs` covers published types, C# commands/hot reload and stateful restart;
+`tests/csharp.rs` covers fresh-schema first Play, C# commands/hot reload and stateful restart;
 `tests/valley.rs` covers networked C#, terrain/foliage, streamed cells and audio.
-Both build .NET. Valley fixtures come from `ara-runtime-world`'s `valley` test.
+Both stage Outpost under `AUTHORING_ROOT` with a JSON manifest and build .NET once.
+Valley fixtures come from `ara-runtime-world`'s `valley` test.
 `tests/pending_game.rs` captures pending, failed and published models in a real child.
 `tests/embed.rs` (`--ignored`) exercises `PlayService::surfaces`: 90 demo frames imported on another GPU device, comparisons against captures, raw W input, typed/JSON resize and stop.
 It prints frame latency and per-frame cost.
+`tests/probes.rs` (`--ignored --test-threads=1`) spawns hidden `--probe NAME` routes (`src/standalone/probes.rs`: frames in flight, UI teardown, unpresentable pump for the 3D and 2D paths) so SDL starts on a main thread, as macOS requires.
 `cargo clippy -p ara-player --all-targets -- -D warnings`.
 `cargo test -p ara-player --test embed hub_outpost -- --ignored` checks a fresh Hub Outpost template's native HUD for 30 seconds, then missing/corrupt reticles and path diagnostics.
 Use isolated Vulkan layers, `SDL_AUDIODRIVER=dummy`, and fresh `ARA_CONFIG_DIR`/`ARA_CRASH_DIR` under `target/`.

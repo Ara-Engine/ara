@@ -116,7 +116,7 @@ fn main() {
     let _capture = match ara_crash::Capture::start(&directory, &build_id) {
         Ok(capture) => Some(capture),
         Err(error) => {
-            eprintln!("ARA-EXP-CRASH-004: {error:#}");
+            eprintln!("{error:#}");
             None
         }
     };
@@ -194,6 +194,10 @@ struct Player {
 
 fn run(args: Args, launched: Instant) -> Result<()> {
     ara_gpu::cpu_scope!("Player.run");
+    // Probes need no pack: they open their own hidden window on this main thread.
+    if let Some(name) = &args.standalone.probe {
+        return standalone::probes::run(name);
+    }
     if let Some(count) = args.group_slots {
         return group::run_group(args, launched, count);
     }

@@ -2,6 +2,177 @@
 mod support;
 
 #[test]
+fn source_presence_hint_never_traverses_directory_links() {
+    let target = std::env::var_os("ARA_TEST_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            support::dotnet()
+                .parent()
+                .expect("repo")
+                .join("target/script-project")
+        });
+    let scratch = target.join(format!("linked-sources-{}", std::process::id()));
+    let project = scratch.join("project");
+    let external = scratch.join("outside");
+    let authored = project.join(ara_doc::AUTHORING_ROOT);
+    std::fs::create_dir_all(&authored).expect("project");
+    std::fs::create_dir_all(&external).expect("external source directory");
+    std::fs::write(external.join("Outside.cs"), "class Outside { }").expect("outside source");
+    let link = authored.join("linked");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let result = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(&link)
+            .arg(&external)
+            .creation_flags(0x0800_0000)
+            .output()
+            .expect("create junction");
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&external, &link).expect("create directory symlink");
+    assert!(
+        !ara_script::project::has_sources(&project).expect("presence hint"),
+        "directory links must not contribute authored sources"
+    );
+}
+
+#[test]
+fn empty_project_publication_does_not_initialize_derived_state() {
+    let target = std::env::var_os("ARA_TEST_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            support::dotnet()
+                .parent()
+                .expect("repo")
+                .join("target/script-project")
+        });
+    let root = target.join(format!("empty-publication-{}", std::process::id()));
+    std::fs::create_dir_all(&root).expect("scratch");
+    for inventory in [
+        ara_script::project::inventory(&root),
+        ara_script::project::compile(&root, ara_script::ModuleProfile::Gameplay),
+        ara_script::project::publish(&root, ara_script::ModuleProfile::Gameplay),
+    ] {
+        let inventory = inventory.expect("empty project");
+        assert!(inventory.modules.is_empty());
+        assert!(inventory.diagnostics.is_empty());
+    }
+    assert!(
+        !root.join(".ara").exists(),
+        "a project without C# must not initialize compiler state"
+    );
+}
+
+#[test]
+fn migrated_outpost_sample_compiles_and_ticks_without_shipping_its_editor_extension() {
+    let _clr = support::clr_lock();
+    support::build();
+    let target = std::env::var_os("ARA_TEST_ROOT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            support::dotnet()
+                .parent()
+                .expect("repo")
+                .join("target/script-project")
+        });
+    let root = target.join(format!("migrated-outpost-{}", std::process::id()));
+    let module = root.join(ara_doc::AUTHORING_ROOT).join("Outpost");
+    std::fs::create_dir_all(module.join("editor")).expect("migrated source folders");
+    // The migration owner moves the legacy sources and preserves this module identity.
+    for source in ["Door.cs", "Motion.cs", "Vitals.cs"] {
+        std::fs::copy(
+            support::dotnet()
+                .join("samples/Outpost.Sample")
+                .join(source),
+            module.join(source),
+        )
+        .expect("legacy sample source");
+    }
+    std::fs::write(
+        module.join("outpost.sample.module.json"),
+        ara_json::to_canonical_string(
+            &serde_json::json!({"name":"Outpost.Sample","references":[],"hot":false}),
+        ),
+    )
+    .expect("migrated manifest");
+    std::fs::write(module.join("editor/Tools.cs"), "using Ara.Editor; public sealed class Tools : IEditorExtension { public void Register(EditorRegistry registry) => registry.RegisterCommand(\"outpost.inspect\", \"Inspect Outpost\", context => context.Scene.Find(\"Door\")); }").expect("editor extension");
+    let published = ara_script::project::publish(&root, ara_script::ModuleProfile::Gameplay)
+        .expect("publication");
+    assert!(
+        published.diagnostics.is_empty(),
+        "{:?}",
+        published.diagnostics
+    );
+    let specs = published.gameplay_specs(&root).expect("player modules");
+    assert_eq!(specs.len(), 1);
+    assert_eq!(specs[0].name, "Outpost.Sample");
+    assert!(!specs[0].hot);
+    let gameplay = published
+        .modules
+        .iter()
+        .find(|m| m.name == "Outpost.Sample")
+        .expect("gameplay");
+    assert_eq!(gameplay.sources.len(), 3);
+    let assembly = std::fs::read(root.join(&gameplay.assembly_path)).expect("player assembly");
+    assert!(
+        !assembly
+            .windows(b"Ara.Editor".len())
+            .any(|bytes| bytes == b"Ara.Editor")
+    );
+    let (mut schema, bindings) = support::engine();
+    assert!(
+        schema
+            .add_json_types(gameplay.schema.as_ref().expect("published schema"))
+            .is_empty()
+    );
+    let mut world = bevy_ecs::world::World::new();
+    let mut host = ara_script::ScriptHost::start(
+        ara_script::ScriptConfig::jit(support::bin("Ara.Host")),
+        schema,
+        &bindings,
+        &mut world,
+    )
+    .expect("host");
+    host.load_modules(&mut world, &specs)
+        .expect("migrated sample loads");
+    let door = world.spawn(support::EcsTransform::default()).id();
+    host.insert_component(
+        &mut world,
+        door,
+        "Door",
+        &serde_json::json!({"openAngle":90,"isOpen":true}),
+    )
+    .expect("door behaviour");
+    host.run_tick(
+        &mut world,
+        ara_script::abi::Tick {
+            frame: 1,
+            seed: 7,
+            dt: 0.1,
+            elapsed: 0.1,
+            reserved: 0,
+        },
+    );
+    assert_eq!(
+        world
+            .get::<support::EcsTransform>(door)
+            .expect("transform")
+            .rotation[1],
+        9.0
+    );
+    assert!(host.take_diagnostics().is_empty());
+    assert!(!module.join("Outpost.Sample.csproj").exists());
+    assert_eq!(host.shutdown(), 0);
+}
+
+#[test]
 fn relative_project_roots_resolve_once_and_private_module_paths_are_canonical() {
     if std::env::var_os("ARA_RELATIVE_MODULE_CHILD").is_some() {
         let root = std::path::Path::new("project");

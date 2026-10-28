@@ -10,6 +10,106 @@ use ara_schema::{Schema, SchemaDb};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+#[test]
+fn source_creation_and_relocation_are_reversible_file_ops_with_checked_absence() {
+    let directory = format!("{}/scripts", ara_doc::AUTHORING_ROOT);
+    let old_path = format!("{directory}/Before.cs");
+    let new_path = format!("{directory}/After.cs");
+    let mut db = SchemaDb::new();
+    ara_doc::register(&mut db);
+    let registry = Registry::builtin(&mut db);
+    let mut workspace = Workspace::default();
+    workspace.insert(
+        "main.scene",
+        Document::new("scene", AssetId::parse("sc_source").expect("scene")),
+    );
+    let mut store = Store::new(db, workspace);
+    store
+        .prepare_files(PreparedInventory {
+            entries: [
+                (ara_doc::AUTHORING_ROOT.into(), None),
+                (directory, None),
+                (old_path.clone(), None),
+            ]
+            .into(),
+            ..PreparedInventory::default()
+        })
+        .expect("prepared absence");
+    let session = Session::human();
+    registry
+        .apply(
+            &mut store,
+            &Batch::new(
+                "sc_source",
+                [(
+                    "source.replace",
+                    json!({"path":old_path,"baseHash":null,"text":"class Before {}\n"}),
+                )],
+            ),
+            &session,
+        )
+        .expect("typed creation");
+    let before = FileState::bytes(b"class Before {}\n");
+    assert_eq!(store.workspace().file_state(&old_path), Some(&before));
+    store
+        .prepare_files(PreparedInventory {
+            entries: [
+                (old_path.clone(), Some(before.clone())),
+                (new_path.clone(), None),
+            ]
+            .into(),
+            ..PreparedInventory::default()
+        })
+        .expect("rename inventory");
+    registry.apply(&mut store, &Batch::new("sc_source", [("source.replace", json!({"path":new_path,"from":old_path,"baseHash":before.hash,"text":"class After {}\n"}))]), &session).expect("typed relocation");
+    assert!(store.workspace().file_state(&old_path).is_none());
+    store.undo_last(&session.author).expect("undo relocation");
+    assert_eq!(store.workspace().file_state(&old_path), Some(&before));
+    assert!(store.workspace().file_state(&new_path).is_none());
+    store
+        .undo_last(&session.author)
+        .expect("undo source creation");
+    assert_eq!(
+        store.workspace().file_entries().count(),
+        0,
+        "including created empty directories"
+    );
+}
+
+#[test]
+fn source_replacement_accepts_the_same_case_insensitive_cs_suffix_as_the_compiler() {
+    let mut db = SchemaDb::new();
+    ara_doc::register(&mut db);
+    let registry = Registry::builtin(&mut db);
+    let mut workspace = Workspace::default();
+    workspace.insert(
+        "main.scene",
+        Document::new("scene", AssetId::parse("sc_source").expect("scene")),
+    );
+    let mut store = Store::new(db, workspace);
+    let before = FileState::bytes(b"class Before {}\n");
+    store
+        .prepare_files(PreparedInventory {
+            entries: [("game/Script.CS".into(), Some(before.clone()))].into(),
+            ..PreparedInventory::default()
+        })
+        .expect("prepared");
+    let batch = Batch::new(
+        "sc_source",
+        [(
+            "source.replace",
+            json!({"path":"game/Script.CS","baseHash":before.hash,"text":"class After {}\n"}),
+        )],
+    );
+    registry
+        .apply(&mut store, &batch, &Session::human())
+        .expect("compiler accepts .CS files");
+    assert_eq!(
+        store.workspace().file_state("game/Script.CS"),
+        Some(&FileState::bytes(b"class After {}\n"))
+    );
+}
+
 /// Delete a prepared entry in this test command.
 #[derive(Schema, Deserialize)]
 #[ara(params)]

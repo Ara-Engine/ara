@@ -16,7 +16,7 @@ pub fn compile_scripts(root: &Path) -> ara_ui::Result<()> {
     Ok(())
 }
 
-fn compile(root: &Path) -> Result<serde_json::Value, Vec<ara_diag::Diagnostic>> {
+pub(super) fn compile(root: &Path) -> Result<serde_json::Value, Vec<ara_diag::Diagnostic>> {
     let inventory = ara_script::project::publish(root, ara_script::ModuleProfile::Gameplay)
         .map_err(|d| vec![d])?;
     let errors: Vec<_> = inventory

@@ -374,6 +374,18 @@ impl Shell {
                         }
                         rebuild = true;
                     }
+                    Binding::CommandOwned(id, target) => {
+                        let (id, target) = (id.clone(), target.clone());
+                        self.remember(&id);
+                        self.menu = None;
+                        self.add_component = None;
+                        self.mnemonics = false;
+                        if editor.state.palette {
+                            editor.action("editor.palette", json!({"open":false}))?;
+                        }
+                        self.execute(editor, &id, &target)?;
+                        rebuild = true;
+                    }
                     Binding::MenuBar(index) => {
                         if self.menu.as_ref().and_then(|m| m.bar()) == Some(*index) {
                             self.menu = None;

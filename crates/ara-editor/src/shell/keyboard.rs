@@ -407,7 +407,7 @@ impl Shell {
     }
     /// Run the keymap command for a chord; conflicts prefer the focused context.
     fn run_chord(&mut self, editor: &mut Editor, chord: Chord) -> ara_ui::Result<bool> {
-        let mut candidates: Vec<&'static str> = self.keymap.commands(chord).to_vec();
+        let mut candidates = self.keymap.commands(chord).to_vec();
         if candidates.is_empty() {
             return Ok(false);
         }
@@ -416,12 +416,13 @@ impl Shell {
         candidates.sort_by_key(|id| id.starts_with("graph.") != graph);
         let target = Target::None;
         let Some(id) = candidates.into_iter().find(|id| {
-            commands::get(id).is_some_and(|c| c.avail(&self.ctx(editor, &target)).ready())
+            commands::lookup(&editor.extensions, id)
+                .is_some_and(|c| c.avail(&self.ctx(editor, &target)).ready())
         }) else {
             return Ok(false);
         };
-        self.remember(id);
-        self.run_command(editor, id, &target)?;
+        self.remember(&id);
+        self.run_command(editor, &id, &target)?;
         Ok(true)
     }
 }

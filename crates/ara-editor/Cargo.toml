@@ -64,6 +64,7 @@ ara-ui-render = { path = "../ara-ui-render" }
 ara-ui-text = { path = "../ara-ui-text" }
 ara-update = { path = "../ara-update" }
 anyhow = { workspace = true }
+notify = "8.2"
 bytemuck = { workspace = true }
 glam = { workspace = true, features = ["serde", "bytemuck"] }
 glam34 = { workspace = true }

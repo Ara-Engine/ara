@@ -760,6 +760,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -874,6 +875,7 @@ dependencies = [
  "glam 0.34.1",
  "gltf",
  "image",
+ "notify",
  "parley 0.12.0",
  "resvg",
  "sdl3-sys",
@@ -1019,6 +1021,7 @@ dependencies = [
  "ara-json",
  "ara-sdl3-src",
  "ash 0.38.0+1.4.352",
+ "block2 0.6.2",
  "bytemuck",
  "dispatch2",
  "objc2 0.6.5",
@@ -1599,6 +1602,7 @@ name = "ara-player"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-2d",
  "ara-anim",
  "ara-asset",
  "ara-audio",

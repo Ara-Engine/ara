@@ -65,6 +65,7 @@ pub struct Editor {
     pub(crate) extraction_revision: u64,
     /// Registry commands requested over MCP, run by the shell at the next frame boundary.
     pub(crate) queued_commands: Vec<(String, crate::shell::commands::Target)>,
+    pub(crate) extensions: crate::extensions::Catalog,
     /// Agent activity seen by this window: glows, notices, overwrite reports (D24).
     pub activity: crate::activity::Activity,
     /// Embedded Play surfaces for the Game view (taken from the play service).
@@ -130,6 +131,8 @@ impl Editor {
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         host.register(Box::new(crate::script_assets::ScriptService::default()))
             .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        host.register(Box::new(ara_play_host::SourceFixService::new(root)))
+            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         *host.profiler() = ara_profile::Profiler::new(ara_profile::Config {
             budget_ns: 6_944_444,
             ..Default::default()
@@ -178,12 +181,14 @@ impl Editor {
             bounds_key: None,
             pending_frames: Default::default(),
             frame_aspect: 16. / 9.,
+            extensions: crate::extensions::Extensions::new(root)
+                .map_err(|d| anyhow::anyhow!(d.to_string()))?,
         }))
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
         // Play runs in pooled ara-player processes; the toolbar binds play.* methods.
         let mut play = ara_play_host::PlayConfig::for_project(root);
         play.pool.headless = 1;
-        let mut play = ara_play_host::PlayService::new(root, play);
+        let mut play = ara_play_host::PlayService::new(root, play).with_headless_run();
         // The Game view shows embedded players through shared GPU surfaces (D19).
         let play_surfaces = Some(play.surfaces());
         host.register(Box::new(play))
@@ -239,6 +244,7 @@ impl Editor {
             review_revision: 0,
             extraction_revision: 0,
             queued_commands: Vec::new(),
+            extensions: Default::default(),
             activity,
             play_surfaces,
             play_world: None,
@@ -424,6 +430,10 @@ impl Editor {
                     });
                 }
                 Control::Command(id, target) => self.queued_commands.push((id, target)),
+                Control::Extensions(catalog) => {
+                    self.extensions = catalog;
+                    changed = true;
+                }
             }
             self.panels_revision += 1;
         }

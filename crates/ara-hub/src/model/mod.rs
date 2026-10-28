@@ -24,7 +24,7 @@ use std::{
     path::PathBuf,
 };
 
-/// Sidebar destinations.
+/// Hub pages; project creation is a dedicated page outside the sidebar.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum View {
@@ -43,10 +43,18 @@ pub enum View {
     Settings,
 }
 impl View {
-    /// Sidebar order.
+    /// All pages, including the dedicated creation page, for captures and checks.
     pub const ALL: [View; 6] = [
         View::Projects,
         View::Create,
+        View::Installs,
+        View::Agents,
+        View::Learn,
+        View::Settings,
+    ];
+    /// Persistent sidebar destinations.
+    pub const SIDEBAR: [View; 5] = [
+        View::Projects,
         View::Installs,
         View::Agents,
         View::Learn,
@@ -289,6 +297,8 @@ pub enum Intent {
     InstallAndOpen { project: String, headless: bool },
     /// Sidebar navigation.
     Navigate(View),
+    /// Return from project creation to the page that opened it.
+    Back,
     /// Dark/light.
     ToggleTheme,
     /// Project search text.
@@ -496,6 +506,7 @@ pub struct Hub {
     registered_local: bool,
     notice_times: BTreeMap<u64, std::time::Instant>,
     dismissed_banners: BTreeSet<String>,
+    create_origin: View,
 }
 
 impl Hub {
@@ -535,6 +546,7 @@ impl Hub {
             registered_local: false,
             notice_times: BTreeMap::new(),
             dismissed_banners: BTreeSet::new(),
+            create_origin: View::Projects,
         }
     }
 
@@ -733,6 +745,10 @@ impl Hub {
                 }
             }
             Intent::Navigate(view) => {
+                if view == View::Create && self.view != View::Create {
+                    self.create_origin = self.view;
+                    self.focus = Some("create-name");
+                }
                 self.view = view;
                 self.menu = None;
                 self.copied = None;
@@ -740,6 +756,14 @@ impl Hub {
                     self.create
                         .validate(&self.projects, &self.engines, &self.templates);
                     self.calls.extend(self.create.check());
+                }
+            }
+            Intent::Back => {
+                if self.view == View::Create {
+                    self.view = self.create_origin;
+                    self.menu = None;
+                    self.copied = None;
+                    self.focus = None;
                 }
             }
             Intent::ToggleTheme => self.prefs.light = !self.prefs.light,
@@ -800,6 +824,10 @@ impl Hub {
                 }
             },
             Intent::Template(id) => {
+                if self.view != View::Create {
+                    self.create_origin = self.view;
+                    self.focus = Some("create-name");
+                }
                 if let Some(version) = self
                     .templates
                     .iter()
@@ -1075,6 +1103,7 @@ impl Hub {
             }
             Call::Create { .. } => match self.create.created(result) {
                 Ok(project) => {
+                    let project_id = project.id.clone();
                     self.highlight = Some(project.id.clone());
                     self.search.clear();
                     self.view = View::Projects;
@@ -1082,6 +1111,7 @@ impl Hub {
                     self.detail(id, text::path(&project.path));
                     self.projects.push(project);
                     self.refresh([List::Projects, List::Status]);
+                    self.lifecycle(project_id, Busy::Opening);
                 }
                 // Field problems show inline; anything else (IO, template copy) as a toast.
                 Err(error) => {

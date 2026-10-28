@@ -161,7 +161,7 @@ fn apply_to_menu_uses_logical_asset_ids_and_preserves_nested_context_and_field_s
                 chosen.ok_or("Native J5's logical base asset reference is absent from Apply To")?;
             let before = snapshot(&editor);
             let revision = editor.host.store().revision();
-            shell.run_command(&mut editor, command, &target)?;
+            shell.run_command(&mut editor, &command, &target)?;
             assert_eq!(
                 editor.host.store().revision(),
                 revision + 1,

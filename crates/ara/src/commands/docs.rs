@@ -21,20 +21,32 @@ pub fn docs(project: &Project, out: Option<&Path>, json_out: bool) -> Result<boo
     )
     .with_headless_automation();
     let mut method_db = ara_schema::SchemaDb::new();
-    methods.extend(service.methods(&mut method_db).into_iter().map(|m| {
-        ara_proto::MethodInfo {
-            params: method_db
-                .get(&m.params)
-                .map(|t| method_db.type_json_schema(t))
-                .unwrap_or_default(),
-            name: m.name,
-            summary: m.summary,
-            scope: m.scope,
-            hints: m.hints,
-            tool: m.tool,
-            service: service.name().into(),
-        }
-    }));
+    let fixes = ara_play_host::SourceFixService::new(&project.root);
+    methods.extend(
+        service
+            .methods(&mut method_db)
+            .into_iter()
+            .chain(fixes.methods(&mut method_db))
+            .map(|m| {
+                let service_name = if m.name == "source.fix" {
+                    fixes.name()
+                } else {
+                    service.name()
+                };
+                ara_proto::MethodInfo {
+                    params: method_db
+                        .get(&m.params)
+                        .map(|t| method_db.type_json_schema(t))
+                        .unwrap_or_default(),
+                    name: m.name,
+                    summary: m.summary,
+                    scope: m.scope,
+                    hints: m.hints,
+                    tool: m.tool,
+                    service: service_name.into(),
+                }
+            }),
+    );
     let pages = docs::generate(&project.db, &project.registry, &methods, &name);
     let mut files = vec![
         (

@@ -16,6 +16,12 @@ fn gpu_replay_goldens_and_cpu_count_parity() {
     let captures = root.join("../../target/ara-vfx-gpu/goldens");
     std::fs::create_dir_all(&captures).unwrap();
     let mut gpu = GpuDevice::new(&[], root.join(".cache/tests")).unwrap();
+    // Each fidelity tier keeps its own baselines (`support::golden_tier`).
+    let tier = support::golden_tier(&gpu).unwrap();
+    let goldens = match tier {
+        ara_render_fidelity::Tier::Rt => root.join("goldens"),
+        _ => root.join("goldens/raster"),
+    };
     for (effect, tick) in ara_vfx::samples::all() {
         let mut system = GpuSystem::new(
             &mut gpu,
@@ -85,7 +91,8 @@ fn gpu_replay_goldens_and_cpu_count_parity() {
         let ticks = support::sequence_ticks(&effect.name);
         let mut times = ticks.to_vec();
         times.push(tick);
-        let mut frames = support::capture_frames(&mut gpu, &effect, &times, [960, 540]).unwrap();
+        let mut frames =
+            support::capture_frames(&mut gpu, &effect, &times, [960, 540], tier).unwrap();
         let (replay, _) = frames.pop().unwrap();
         let mid = ticks.iter().position(|t| *t == tick).unwrap();
         let strip = support::sequence_strip(&frames);
@@ -108,10 +115,8 @@ fn gpu_replay_goldens_and_cpu_count_parity() {
                 .iter()
                 .any(|stage| stage.pass == "Feature.Bloom.Down.1")
         );
-        let golden = root.join("goldens").join(format!("{}.png", effect.name));
-        let strip_golden = root
-            .join("goldens")
-            .join(format!("{}.sequence.png", effect.name));
+        let golden = goldens.join(format!("{}.png", effect.name));
+        let strip_golden = goldens.join(format!("{}.sequence.png", effect.name));
         if std::env::var("ARA_UPDATE_GOLDENS").as_deref() == Ok("1") {
             std::fs::create_dir_all(golden.parent().unwrap()).unwrap();
             a.image.save(&golden).unwrap();

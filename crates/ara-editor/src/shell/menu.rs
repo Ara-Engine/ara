@@ -49,17 +49,43 @@ impl MenuState {
 #[derive(Clone, Debug)]
 pub(crate) enum Row {
     Command {
-        id: &'static str,
+        id: String,
         target: Target,
         /// Title override (dynamic and value rows) or a filter-result path.
         label: Option<String>,
         path: String,
         checked: Option<bool>,
     },
-    Sub(&'static str, &'static [Item]),
+    Sub(String, Vec<Row>),
     Sep,
 }
 const WIDTH: f32 = 144.;
+
+fn insert_registered_menu(rows: &mut Vec<Row>, parts: &[&str], command: &str) {
+    let Some((head, tail)) = parts.split_first() else {
+        return;
+    };
+    if tail.is_empty() {
+        rows.push(Row::Command {
+            id: command.into(),
+            target: Target::None,
+            label: Some((*head).into()),
+            path: String::new(),
+            checked: None,
+        });
+        return;
+    }
+    let index = rows
+        .iter()
+        .position(|row| matches!(row, Row::Sub(title, _) if title == head))
+        .unwrap_or_else(|| {
+            rows.push(Row::Sub((*head).into(), vec![]));
+            rows.len() - 1
+        });
+    if let Row::Sub(_, children) = &mut rows[index] {
+        insert_registered_menu(children, tail, command);
+    }
+}
 impl Shell {
     fn row_height(editor: &Editor) -> f32 {
         if editor.state.comfortable() { 30. } else { 26. }
@@ -120,7 +146,7 @@ impl Shell {
         for item in items {
             match item {
                 Item::Command(id) => out.push(Row::Command {
-                    id,
+                    id: (*id).into(),
                     target: self.menu_target(),
                     label: None,
                     path: String::new(),
@@ -131,7 +157,11 @@ impl Shell {
                         out.push(Row::Sep);
                     }
                 }
-                Item::Sub(title, children) => out.push(Row::Sub(title, children)),
+                Item::Sub(title, children) => {
+                    let mut rows = Vec::new();
+                    self.expand(editor, children, &mut rows);
+                    out.push(Row::Sub((*title).into(), rows));
+                }
                 Item::Dynamic(kind) => self.dynamic(editor, *kind, out),
             }
         }
@@ -154,7 +184,7 @@ impl Shell {
                 let selected = self.selected_build_profile(editor).ok();
                 for name in self.build_profiles() {
                     out.push(Row::Command {
-                        id: kind.command(),
+                        id: kind.command().into(),
                         label: Some(name.clone()),
                         checked: Some(selected.as_deref() == Some(name.as_str())),
                         target: Target::Text(name),
@@ -178,7 +208,7 @@ impl Shell {
                     entity,
                 ) {
                     let logical = editor.host.store().workspace().reference_path(&source.path);
-                    out.push(Row::Command {id:kind.command(),target:Target::Text(json!({"entity":entity,"path":path,"destination":format!("@{logical}#{}",source.doc)}).to_string()),label:Some(logical.to_owned()),path:String::new(),checked:None});
+                    out.push(Row::Command {id:kind.command().into(),target:Target::Text(json!({"entity":entity,"path":path,"destination":format!("@{logical}#{}",source.doc)}).to_string()),label:Some(logical.to_owned()),path:String::new(),checked:None});
                 }
             }
             Dynamic::RecentScenes => {
@@ -203,7 +233,7 @@ impl Shell {
                 for id in scenes.into_iter().take(12) {
                     let path = workspace.path_of(&id).unwrap_or(&id).to_owned();
                     out.push(Row::Command {
-                        id: kind.command(),
+                        id: kind.command().into(),
                         checked: Some(id == editor.state.doc),
                         target: Target::Doc(id),
                         label: Some(path),
@@ -218,7 +248,7 @@ impl Shell {
                 }
                 for name in names {
                     out.push(Row::Command {
-                        id: kind.command(),
+                        id: kind.command().into(),
                         label: Some(name.clone()),
                         target: Target::Text(name),
                         path: String::new(),
@@ -246,7 +276,7 @@ impl Shell {
                     }
                     collect(&window.root, &mut panels);
                     out.push(Row::Command {
-                        id: kind.command(),
+                        id: kind.command().into(),
                         target: Target::Window(window.id.clone()),
                         label: Some(format!("{} (floating)", panels.join(", "))),
                         path: String::new(),
@@ -263,14 +293,26 @@ impl Shell {
         };
         let mut root = Vec::new();
         match &menu.source {
-            Source::Bar(i) => self.expand(editor, MENUS[*i].items, &mut root),
+            Source::Bar(i) => {
+                if let Some(menu) = MENUS.get(*i) {
+                    self.expand(editor, menu.items, &mut root);
+                }
+                if let Some(title) = commands::bar_titles(&editor.extensions).get(*i) {
+                    for placement in &editor.extensions.menus {
+                        let parts: Vec<_> = placement.path.split('/').collect();
+                        if parts.first() == Some(title) {
+                            insert_registered_menu(&mut root, &parts[1..], &placement.command);
+                        }
+                    }
+                }
+            }
             Source::Context(kind, _) => self.expand(editor, menus::context(*kind), &mut root),
             Source::Assets(..) => {}
             Source::Values("fov") => {
                 let current = editor.state.camera.fov_y_degrees;
                 for v in [30., 35., 40., 46., 50., 54., 60., 70., 90.] {
                     root.push(Row::Command {
-                        id: "view.camera.fov.set",
+                        id: "view.camera.fov.set".into(),
                         target: Target::Text(format!("{v}")),
                         label: Some(format!("{v}°")),
                         path: String::new(),
@@ -298,7 +340,7 @@ impl Shell {
                 };
                 for v in values {
                     root.push(Row::Command {
-                        id: "snap.set",
+                        id: "snap.set".into(),
                         target: Target::Text(format!("{kind}:{v}")),
                         label: Some(format!("{v} {unit}")),
                         path: String::new(),
@@ -312,7 +354,7 @@ impl Shell {
             // Adding an item by picking its asset offers no "None".
             if !self.appends(path) {
                 root.push(Row::Command {
-                    id: "field.set",
+                    id: "field.set".into(),
                     target: Target::Text(format!("{path}=null")),
                     label: Some("None".into()),
                     path: String::new(),
@@ -331,7 +373,7 @@ impl Shell {
                     continue;
                 };
                 root.push(Row::Command {
-                    id: "field.set",
+                    id: "field.set".into(),
                     target: Target::Text(format!("{path}={}", json!(reference))),
                     // Without its extension, like Assets (the folder is beside it).
                     label: Some(names::stem(asset.name()).to_owned()),
@@ -346,13 +388,7 @@ impl Shell {
         if !menu.query.is_empty() {
             let query = menu.query.to_lowercase();
             let mut flat = Vec::new();
-            fn flatten(
-                shell: &Shell,
-                editor: &Editor,
-                rows: Vec<Row>,
-                path: &str,
-                out: &mut Vec<Row>,
-            ) {
+            fn flatten(rows: Vec<Row>, path: &str, out: &mut Vec<Row>) {
                 for row in rows {
                     match row {
                         Row::Command {
@@ -369,26 +405,24 @@ impl Shell {
                             checked,
                         }),
                         Row::Sub(title, items) => {
-                            let mut children = Vec::new();
-                            shell.expand(editor, items, &mut children);
                             let path = if path.is_empty() {
                                 title.to_owned()
                             } else {
                                 format!("{path} › {title}")
                             };
-                            flatten(shell, editor, children, &path, out);
+                            flatten(items, &path, out);
                         }
                         Row::Sep => {}
                     }
                 }
             }
-            flatten(self, editor, root, "", &mut flat);
+            flatten(root, "", &mut flat);
             root = flat
                 .into_iter()
                 .filter(|row| match row {
                     Row::Command { id, label, .. } => {
                         let title = label.clone().unwrap_or_else(|| {
-                            commands::get(id)
+                            commands::lookup(&editor.extensions, id)
                                 .map(|c| c.title.to_owned())
                                 .unwrap_or_default()
                         });
@@ -403,9 +437,7 @@ impl Shell {
             let Some(Row::Sub(_, items)) = levels.last().and_then(|l| l.get(*open)).cloned() else {
                 break;
             };
-            let mut rows = Vec::new();
-            self.expand(editor, items, &mut rows);
-            levels.push(rows);
+            levels.push(items);
         }
         levels
     }
@@ -432,7 +464,7 @@ impl Shell {
                     menu.at[0], menu.at[1]
                 ),
                 _ => format!(
-                    "anchor='m{}-{}' placement='right-start' offset='-2'",
+                    "anchor='m{}-{}' placement='right-start' offset='0'",
                     level - 1,
                     menu.open[level - 1]
                 ),
@@ -464,13 +496,13 @@ impl Shell {
                         out.push_str(&format!("<button id='{id}' class='menu-item{}' label='{}' action='Dispatch'><panel id='{id}-check' class='menu-check' /><text id='{id}-label' class='menu-label' text='{}' />{}</button>",if active==Some(i){" menu-active"}else{""},escape(title),escape(title),if active==Some(i){icons::icon_in(&id,"chevron-right","on-selection")}else{icons::icon(&id,"chevron-right")}));
                     }
                     Row::Command { id: command, target, label, path, checked } => {
-                        let Some(spec) = commands::get(command) else { continue };
+                        let Some(spec) = commands::lookup(&editor.extensions, command) else { continue };
                         let cx = self.ctx(editor, target);
                         let avail = spec.avail(&cx);
                         let title = label.clone().unwrap_or_else(|| spec.title(&cx));
                         let check = checked.or(match avail { Avail::Checked(v) => Some(v), _ => None });
                         let reason = match &avail { Avail::Blocked(r) => r.clone(), _ => spec.summary.to_owned() };
-                        self.bindings.insert(ara_ui::source::stable_id(&id), Binding::Command(command, target.clone()));
+                        self.bindings.insert(ara_ui::source::stable_id(&id), spec.binding(target.clone()));
                         let tint = if active == Some(i) { "on-selection" } else if check == Some(true) { "accent" } else { "" };
                         let icon = if check == Some(true) {
                             icons::icon_in(&format!("{id}-c"), "check", tint)
@@ -579,7 +611,7 @@ impl Shell {
                 }
                 true
             }
-            Some(Binding::Command(..)) => {
+            Some(Binding::Command(..) | Binding::CommandOwned(..)) => {
                 // Hovering a row in a shallower level closes deeper submenus.
                 let level = self.ui.nodes[hit].element.id[1..]
                     .split('-')
@@ -612,9 +644,8 @@ impl Shell {
         let selectable = |i: usize| match &rows[i] {
             Row::Sep => false,
             Row::Sub(..) => true,
-            Row::Command { id, target, .. } => {
-                commands::get(id).is_some_and(|c| c.avail(&self.ctx(editor, target)).ready())
-            }
+            Row::Command { id, target, .. } => commands::lookup(&editor.extensions, id)
+                .is_some_and(|c| c.avail(&self.ctx(editor, target)).ready()),
         };
         let step = |from: Option<usize>, down: bool| -> Option<usize> {
             let n = rows.len();
@@ -641,7 +672,10 @@ impl Shell {
                 }
                 _ => {
                     if let Some(b) = menu.bar() {
-                        self.open_bar((b + 1) % MENUS.len(), true);
+                        self.open_bar(
+                            (b + 1) % commands::bar_titles(&editor.extensions).len(),
+                            true,
+                        );
                         self.rebuild(editor)?;
                         return Ok(true);
                     }
@@ -651,7 +685,8 @@ impl Shell {
                 if next.open.pop().is_none()
                     && let Some(b) = menu.bar()
                 {
-                    self.open_bar((b + MENUS.len() - 1) % MENUS.len(), true);
+                    let count = commands::bar_titles(&editor.extensions).len();
+                    self.open_bar((b + count - 1) % count, true);
                     self.rebuild(editor)?;
                     return Ok(true);
                 }
@@ -666,8 +701,8 @@ impl Shell {
                     Some(Row::Command { id, target, .. }) => {
                         self.menu = None;
                         self.mnemonics = false;
-                        self.remember(id);
-                        self.run_command(editor, id, &target)?;
+                        self.remember(&id);
+                        self.run_command(editor, &id, &target)?;
                         return Ok(true);
                     }
                     _ => {
@@ -679,7 +714,7 @@ impl Shell {
                             && !menu.query.is_empty()
                         {
                             self.menu = None;
-                            self.run_command(editor, id, &target)?;
+                            self.run_command(editor, &id, &target)?;
                             return Ok(true);
                         }
                     }
@@ -700,9 +735,9 @@ impl Shell {
         Ok(true)
     }
     /// Remember a command for the palette's recent list.
-    pub(crate) fn remember(&mut self, id: &'static str) {
+    pub(crate) fn remember(&mut self, id: &str) {
         self.recent_commands.retain(|c| *c != id);
-        self.recent_commands.insert(0, id);
+        self.recent_commands.insert(0, id.into());
         self.recent_commands.truncate(8);
     }
     /// What was right-clicked (or is focused) at a point of the current surface.

@@ -53,7 +53,14 @@ fn main() {
             vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
         )
         .expect("frame");
-    for shade in [0.25, 0.75] {
+    // Synchronous presents, then a run with frames in flight longer than the drawable
+    // pool: a hidden window's drawables still come back, so none is skipped.
+    for (index, shade) in [0.25, 0.75].into_iter().chain([0.5; 8]).enumerate() {
+        if index == 2 {
+            presenter
+                .set_frames_in_flight(true)
+                .expect("frames in flight");
+        }
         let mut rec = gpu.begin(Queue::Graphics);
         rec.push(Command::BeginRendering {
             colors: vec![Attachment {
@@ -67,6 +74,12 @@ fn main() {
         gpu.submit(rec.finish(), &[]).expect("render");
         presenter.display(&gpu, frame).expect("present");
     }
+    presenter.set_frames_in_flight(false).expect("drain");
+    assert_eq!(
+        presenter.skipped(),
+        0,
+        "a hidden window's presents never stall"
+    );
     drop(presenter);
     // SAFETY: the presenter released its layer reference; destroy in creation order.
     unsafe {
@@ -74,5 +87,5 @@ fn main() {
         SDL_DestroyWindow(window);
         SDL_Quit();
     }
-    println!("metal_sdl: presented 2 frames through an SDL3 Metal view");
+    println!("metal_sdl: presented 10 frames through an SDL3 Metal view");
 }

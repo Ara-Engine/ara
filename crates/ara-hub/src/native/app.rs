@@ -16,6 +16,12 @@ use ara_ui::{
 use ara_ui_text::{EditEvent, TextSystem};
 use std::collections::BTreeMap;
 
+#[derive(Default)]
+struct PagePosition {
+    scroll: [f32; 2],
+    focus: Option<u64>,
+}
+
 /// UI state of the Hub window.
 pub struct App {
     /// Retained tree and display list.
@@ -46,6 +52,8 @@ pub struct App {
     dialog: Option<Dialog>,
     selects: Selects,
     close_hint_shown: bool,
+    view: Option<View>,
+    page_positions: BTreeMap<View, PagePosition>,
 }
 
 impl App {
@@ -72,12 +80,29 @@ impl App {
             dialog: None,
             selects: Selects::default(),
             close_hint_shown: false,
+            view: None,
+            page_positions: BTreeMap::new(),
         })
     }
 
     /// Reconcile changed markup, keeping native nodes, shaped text, widgets and
     /// input identity. Theme changes swap palette tokens on the same retained UI.
     pub fn rebuild(&mut self, hub: &mut Hub, now_ms: u64) -> ara_ui::Result<()> {
+        let view_changed = self.view != Some(hub.view);
+        if view_changed && let Some(previous) = self.view {
+            let scroll = stable_id(&format!("scroll-{previous:?}").to_lowercase());
+            let scroll = match self.ui.widgets.get(&scroll) {
+                Some(Widget::Scroll(position)) => *position,
+                _ => [0., 0.],
+            };
+            self.page_positions.insert(
+                previous,
+                PagePosition {
+                    scroll,
+                    focus: self.input.focused(),
+                },
+            );
+        }
         if self.dialog != hub.dialog {
             self.selects.dismiss(&mut self.ui, &mut self.input)?;
         }
@@ -191,6 +216,22 @@ impl App {
             for (id, position) in scrolls {
                 if let Some(index) = self.ui.by_id(id) {
                     self.ui.scroll_to(index, position)?;
+                }
+            }
+        }
+        if view_changed {
+            self.view = Some(hub.view);
+            if let Some(position) = self.page_positions.get(&hub.view) {
+                let scroll = format!("scroll-{:?}", hub.view).to_lowercase();
+                if let Some(index) = self.ui.find(&scroll) {
+                    self.ui.scroll_to(index, position.scroll)?;
+                }
+                if hub.focus.is_none()
+                    && hub.dialog.is_none()
+                    && let Some(focus) = position.focus
+                    && self.ui.by_id(focus).is_some()
+                {
+                    self.input.focus(&mut self.ui, focus)?;
                 }
             }
         }
@@ -325,6 +366,22 @@ impl App {
         self.selects.get(control)
     }
 
+    /// Native mouse Back follows the same nested popup/dialog/page order as Escape.
+    pub fn back(&mut self, hub: &Hub) -> ara_ui::Result<Vec<Intent>> {
+        if self.selects.is_open() {
+            self.selects.dismiss(&mut self.ui, &mut self.input)?;
+            return Ok(Vec::new());
+        }
+        if hub.dialog.is_some() {
+            return Ok(vec![Intent::DismissDialog]);
+        }
+        Ok(if hub.view == View::Create {
+            vec![Intent::Back]
+        } else {
+            Vec::new()
+        })
+    }
+
     /// Intents raised by activated buttons and edited fields since the last call.
     pub fn actions(&mut self) -> Vec<Intent> {
         let mut intents =
@@ -394,6 +451,9 @@ impl App {
                 }
                 if hub.rename.is_some() {
                     return Ok(vec![Intent::RenameCancel]);
+                }
+                if hub.view == View::Create {
+                    return Ok(vec![Intent::Back]);
                 }
                 self.input.blur(&mut self.ui);
                 return Ok(Vec::new());

@@ -40,9 +40,14 @@ mod raster;
 impl Presenter {
     /// Reserve the initial GI volume and staging while a loading view remains
     /// visible. Call after a completed `present`, on the preparation worker, and
-    /// continue presenting until true. Does not wait for the bulk probe bake.
+    /// continue presenting until true. Does not wait for the bulk probe bake. A frame
+    /// in flight that does not complete within `STALL_WAIT` (on a single-queue
+    /// adapter, queued behind the loading view's stalled presentation) reports
+    /// false, so the caller keeps presenting and retries.
     pub fn preallocate_startup_resources(&mut self) -> Result<bool> {
-        self.drain()?;
+        if !self.settle(0)? {
+            return Ok(false);
+        }
         match (&mut self.raster, &mut self.renderer) {
             (Some(raster), Some(renderer)) => raster.preallocate_probe_resources(renderer),
             _ => Ok(true),
@@ -118,10 +123,14 @@ impl Presenter {
     }
 
     /// Blocks until a pending probe GI acquisition is installed (captures and
-    /// measurements that must not change lighting midway).
+    /// measurements that must not change lighting midway). Fails, rather than
+    /// blocking, while a frame in flight is stalled behind its presentation.
     pub fn wait_probe_gi(&mut self) -> Result<()> {
         // Installing the probes writes storage a frame in flight reads.
-        self.drain()?;
+        anyhow::ensure!(
+            self.settle(0)?,
+            "the frame in flight is stalled behind its presentation (Presenter::STALL_WAIT)"
+        );
         if let (Some(raster), Some(renderer)) = (&mut self.raster, &mut self.renderer) {
             raster.wait_probe_gi(renderer)?;
         }
@@ -350,12 +359,18 @@ impl Presenter {
     /// start of the next present or preparation (one frame of CPU/GPU overlap).
     /// Only for hosts whose later use of `output` is GPU work on the same queue
     /// (the window blit, the game UI composite); CPU readbacks `drain` first.
-    /// Off by default; turning it off drains.
+    /// Off by default; turning it off waits for the frames in flight (bounded: it
+    /// fails while one is stalled behind its presentation).
     pub fn set_frames_in_flight(&mut self, enabled: bool) -> Result<()> {
-        self.frames_in_flight = enabled;
+        // Turning them off waits for the frames in flight, bounded like a present: a
+        // frame stalled behind its presentation fails the switch and leaves them on.
         if !enabled {
-            self.drain()?;
+            anyhow::ensure!(
+                self.settle(0)?,
+                "the frame in flight is stalled behind its presentation (Presenter::STALL_WAIT)"
+            );
         }
+        self.frames_in_flight = enabled;
         Ok(())
     }
 
@@ -366,6 +381,8 @@ impl Presenter {
 
     /// Waits for the raster frames in flight, if any, and reports their GPU costs and
     /// device span in `stats` (with frames in flight they lag one present).
+    /// Unbounded: for teardown and CPU readbacks; presents and the waits a window
+    /// host reaches every frame use the bounded `settle`.
     pub fn drain(&mut self) -> Result<()> {
         let started = Instant::now();
         while let Some(submitted) = self.in_flight.pop_front() {
@@ -467,9 +484,12 @@ impl Presenter {
             },
         )?;
         // Frame N, bounded: a stalled one stays queued behind N+1 (the next present
-        // retries it before submitting anything).
+        // retries it before submitting anything), and N+1 is reported skipped so the
+        // host submits no UI composite or window copy behind the stall.
         self.in_flight.push_back(submitted);
-        self.settle(1)?;
+        if !self.settle(1)? {
+            self.stats.skipped = true;
+        }
         self.stats.render = started.elapsed();
         self.published_quality = self.plan.map(|plan| plan.preset);
         Ok(())

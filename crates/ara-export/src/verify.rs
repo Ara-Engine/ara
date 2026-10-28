@@ -32,6 +32,7 @@ pub struct VerifyReport {
 
 /// Parses the runtime's single JSON result line, rejecting missing/failed checks.
 pub fn runtime_result(output: &str) -> Result<Value> {
+    crash_monitor_status(output)?;
     let line = output
         .lines()
         .find_map(|l| l.split_once("ARA_RESULT ").map(|(_, v)| v))
@@ -50,6 +51,30 @@ pub fn runtime_result(output: &str) -> Result<Value> {
     Ok(value)
 }
 
+/// A playable runtime can still have lost crash capture. Preserve its coded
+/// startup cause in the export failure report instead of accepting ARA_RESULT.
+fn crash_monitor_status(output: &str) -> Result<()> {
+    if let Some(diagnostic) = output
+        .lines()
+        .find_map(|line| line.find("ARA-EXP-CRASH-004:").map(|start| &line[start..]))
+    {
+        anyhow::bail!("{diagnostic}");
+    }
+    Ok(())
+}
+
+/// Keeps crash startup diagnostics visible even when the runtime exits nonzero.
+pub(crate) fn run_desktop(command: &mut Command, log: &Path, timeout: Duration) -> Result<String> {
+    tools::run(command, log, timeout).map_err(|error| {
+        if let Ok(output) = std::fs::read_to_string(log)
+            && let Err(cause) = crash_monitor_status(&output)
+        {
+            return error.context(cause.to_string());
+        }
+        error
+    })
+}
+
 /// Executes desktop verification: 30 seconds for conformance, 120 for a real
 /// renderer's cold driver setup. Launch/capture time is reported separately.
 pub fn desktop(dist: &Path, executable: &Path, report: &Path) -> Result<VerifyReport> {
@@ -66,7 +91,7 @@ pub fn desktop(dist: &Path, executable: &Path, report: &Path) -> Result<VerifyRe
     if runtime {
         command.arg("--capture").arg(report.join("verify.png"));
     }
-    let output = tools::run(
+    let output = run_desktop(
         &mut command,
         &log,
         Duration::from_secs(if runtime { 120 } else { 30 }),
@@ -264,4 +289,48 @@ pub fn android(
         evidence: result,
         unavailable: vec![],
     })
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod crash_tests {
+    use super::*;
+
+    #[test]
+    fn failed_runtime_keeps_its_monitor_diagnostic() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/crash-verify");
+        std::fs::create_dir_all(&root).unwrap();
+        let dir = tempfile::tempdir_in(root).unwrap();
+        #[cfg(windows)]
+        let mut command = {
+            let mut command = Command::new("cmd.exe");
+            command.args([
+                "/d",
+                "/c",
+                "echo ARA-EXP-CRASH-004: socket path too long: 163 bytes & exit /b 2",
+            ]);
+            command
+        };
+        #[cfg(not(windows))]
+        let mut command = {
+            let mut command = Command::new("sh");
+            command.args([
+                "-c",
+                "echo 'ARA-EXP-CRASH-004: socket path too long: 163 bytes'; exit 2",
+            ]);
+            command
+        };
+        let error = run_desktop(
+            &mut command,
+            &dir.path().join("verify.log"),
+            Duration::from_secs(5),
+        )
+        .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("ARA-EXP-CRASH-004: socket path too long: 163 bytes")
+        );
+        assert!(error.downcast_ref::<tools::ToolFailure>().is_some());
+    }
 }

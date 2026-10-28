@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 use std::sync::mpsc::Sender;
 
 mod camera_bookmarks;
+mod extensions;
 mod framing;
 mod params;
 pub(crate) use framing::PendingFrame;
@@ -31,6 +32,7 @@ pub(crate) struct EditorService {
     pub pending_frames: std::collections::BTreeMap<String, PendingFrame>,
     /// Last human Scene viewport aspect ratio; protocol callers may override it per Frame.
     pub frame_aspect: f32,
+    pub extensions: crate::extensions::Extensions,
 }
 pub(crate) enum Control {
     ProfileFreeze {
@@ -39,6 +41,7 @@ pub(crate) enum Control {
     },
     /// Run a registry command on the window thread at the next frame boundary.
     Command(String, crate::shell::commands::Target),
+    Extensions(crate::extensions::Catalog),
 }
 /// Mirror effective settings and the human's settings undo labels into navigation.
 pub(crate) fn sync_settings(state: &mut EditorState, settings: &crate::settings::Settings) {
@@ -274,6 +277,7 @@ impl Service for EditorService {
         result
     }
     fn tick(&mut self, cx: &mut Cx<'_>) {
+        self.tick_extensions(cx);
         self.reconcile_project_settings(cx);
         self.report_layout_notice(cx);
         self.poll_bounds(cx);
@@ -326,6 +330,7 @@ impl EditorService {
             let target = Target::None;
             let cx = Ctx {
                 state,
+                extensions: &self.extensions.catalog,
                 store: cx.store(),
                 target: &target,
                 clipboard_entities: false,
@@ -343,10 +348,21 @@ impl EditorService {
                     profile: !crate::shell::build::presets(cx.root()).is_empty(),
                 },
             };
-            return Ok(json!({"commands": export(&cx, &keymap(state))}));
+            return Ok(
+                json!({"commands": export(&cx, &keymap(state, &self.extensions.catalog)), "generation":self.extensions.catalog.generation}),
+            );
         }
         if method == "editor.command" {
             let p: EditorCommand = parse(params)?;
+            if self
+                .extensions
+                .catalog
+                .commands
+                .iter()
+                .any(|command| command.id == p.id)
+            {
+                return self.extension_command(cx, p);
+            }
             if crate::shell::commands::get(&p.id).is_none() {
                 return Err(vec![crate::invalid(format!(
                     "no command `{}`; see editor.commands",

@@ -298,7 +298,10 @@ mod tests {
 
     #[test]
     fn modules_find_their_symbols_by_debug_id_when_names_differ() {
-        let store = tempfile::tempdir().unwrap();
+        let target =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/crash-symbols");
+        std::fs::create_dir_all(&target).unwrap();
+        let store = tempfile::tempdir_in(target).unwrap();
         let id = debugid::DebugId::from_breakpad("90DD4992B59E3FEE93FFF8F1A2D32F210").unwrap();
         // dump_syms names the store entry after the dSYM's DWARF file.
         let dir = store

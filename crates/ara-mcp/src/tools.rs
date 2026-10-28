@@ -1,4 +1,4 @@
-//! The thirteen tools (R03 §4.5, plus `ara_why`) and how their schemas are generated from the method
+//! The project tools (R03 §4.5, plus `ara_why` and `ara_fix`) and their schemas from the method
 //! catalog: a tool backed by one method takes that method's params schema; a tool
 //! backed by several gets an `action` enum plus the union of their params.
 
@@ -19,7 +19,7 @@ pub struct ToolSpec {
 }
 
 /// The tools, in their fixed order (deterministic `tools/list`).
-pub const TOOLS: [ToolSpec; 13] = [
+pub const TOOLS: [ToolSpec; 14] = [
     ToolSpec {
         name: "ara_query",
         title: "Query entities",
@@ -49,6 +49,12 @@ pub const TOOLS: [ToolSpec; 13] = [
         title: "Run a project",
         description: "Run the project or a scene headless for fixed ticks or simulated seconds. Returns the deterministic state hash, results, logs and diagnostics.",
         reserved: "run",
+    },
+    ToolSpec {
+        name: "ara_fix",
+        title: "Fix C# diagnostics",
+        description: "Apply shipped ARA0001/ARA0101/ARA0506 C# code fixes through attributed source.replace commands with offline undo and redo. Optional apply:false returns a dry-run diff plus commands usable by ara_apply. Returns a standard preparation job; poll ara_jobs with action:status for its ordinary transaction/ops result.",
+        reserved: "source.fix",
     },
     ToolSpec {
         name: "ara_capture",

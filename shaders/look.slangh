@@ -69,7 +69,9 @@ Look look(Frame f){return buffers[NonUniformResourceIndex(f.look.x)].Load<Look>(
 // The metering histogram's 256 counts follow the state, at byte EXPOSURE_BINS;
 // they are zero between frames.
 static const uint EXPOSURE_BINS=16;
-float4 exposureState(Look l){return buffers[NonUniformResourceIndex(l.state.x)].Load<float4>(0);}
+// Uniform (a Look row): no NonUniformResourceIndex, so the load can stay scalar in
+// every lit pixel (exposeHdr) rather than a per-lane bindless fetch.
+float4 exposureState(Look l){return buffers[l.state.x].Load<float4>(0);}
 float exposureScale(Frame f,float s){
     float fallback=f.sunColorExposure.w;return s>0 && s<1e30?s:fallback>0 && fallback<1e30?fallback:1;
 }
