@@ -21,6 +21,14 @@ pub(super) struct Watchdog {
 
 impl Watchdog {
     pub fn new(output: PathBuf, timeout: Duration) -> std::io::Result<Self> {
+        Self::spawn(output, timeout, || {})
+    }
+
+    fn spawn(
+        output: PathBuf,
+        timeout: Duration,
+        mut stalled_notice: impl FnMut() + Send + 'static,
+    ) -> std::io::Result<Self> {
         std::fs::write(
             output.join("monkey-watchdog.json"),
             ara_json::to_canonical_string(&json!({"stalled":false,"hangs":0})),
@@ -49,6 +57,7 @@ impl Watchdog {
                         stalled = true;
                         count += 1;
                         let _ = detected.send(count);
+                        stalled_notice();
                         write(&output, json!({"stalled":true,"hangs":count,"step":step,"lastAction":action,"secondsWithoutHeartbeat":last.elapsed().as_secs_f64()}));
                     }
                     Err(RecvTimeoutError::Timeout) => {}
@@ -73,14 +82,27 @@ impl Watchdog {
     pub fn count(&self) -> u64 {
         self.count
     }
-}
 
-impl Drop for Watchdog {
-    fn drop(&mut self) {
+    /// Called after the native loop and final authority/journal collection, before
+    /// waiting on report storage. Preserve every stall detected while input was live.
+    pub fn finish(&mut self) {
         let _ = self.sender.send(Message::Stop);
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
+        for count in self.stalls.try_iter() {
+            self.count = self.count.max(count);
+        }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests;
+
+impl Drop for Watchdog {
+    fn drop(&mut self) {
+        self.finish();
     }
 }
 

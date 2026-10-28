@@ -220,6 +220,7 @@ fn diagnostic_bus_loss_prevents_an_exact_count_acceptance_claim() {
 fn an_elapsed_duration_without_coverage_or_native_input_is_not_a_soak_pass() {
     let project = Project::new();
     let (mut editor, mut shell) = project.open();
+    let revision = editor.host.store().revision();
     let output = project.0.join("incomplete-soak");
     let mut runner = Monkey::new(1, Duration::from_secs(1800), None, &output).unwrap();
     runner.generator.enqueue([Action::Tab { reverse: false }]);
@@ -248,6 +249,17 @@ fn an_elapsed_duration_without_coverage_or_native_input_is_not_a_soak_pass() {
     assert_eq!(report["soakAccepted"], false);
     assert_eq!(report["soakRequested"], true);
     assert_eq!(report["durationCompleted"], true);
+    assert_eq!(report["cleanupIncomplete"], false);
+    assert_eq!(report["registryCommands"], json!({}));
+    assert_eq!(report["shellOrdinarySweepCompleted"], false);
+    assert!(report["shellDrainDeferredProbes"].as_u64().unwrap() > 0);
+    assert!(
+        !report["missingCommandEdgeCases"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(editor.host.store().revision(), revision);
 }
 
 #[test]
@@ -620,7 +632,7 @@ fn production_stage_measurements_are_retained_only_for_spikes_and_count_each_fra
         ..Default::default()
     };
     runner.measurements.record(
-        measurements::Stage::ReportFileWrite,
+        measurements::Stage::ReportSubmit,
         Duration::from_millis(110),
     );
     runner.record_frame_with_stages(Duration::from_millis(4), &stages);
@@ -632,20 +644,17 @@ fn production_stage_measurements_are_retained_only_for_spikes_and_count_each_fra
     assert_eq!(runner.slowest.len(), 1);
     assert_eq!(runner.slowest[0]["stages"]["tick_ms"], 7.);
     assert_eq!(runner.slowest[0]["stages"]["host_wait_ms"], 80.);
-    assert_eq!(
-        runner.slowest[0]["harnessStages"]["reportFileWriteMs"],
-        110.
-    );
-    runner.write_report().unwrap();
+    assert_eq!(runner.slowest[0]["harnessStages"]["reportSubmitMs"], 110.);
+    runner.finish().unwrap();
     let report: Value =
         serde_json::from_str(&std::fs::read_to_string(runner.output.join("monkey.json")).unwrap())
             .unwrap();
     assert_eq!(
-        report["harnessTimings"]["stages"]["reportFileWriteMs"]["calls"],
+        report["harnessTimings"]["stages"]["reportSubmitMs"]["calls"],
         1
     );
     assert_eq!(
-        report["harnessTimings"]["stages"]["reportFileWriteMs"]["totalMs"],
+        report["harnessTimings"]["stages"]["reportSubmitMs"]["totalMs"],
         110.
     );
 }

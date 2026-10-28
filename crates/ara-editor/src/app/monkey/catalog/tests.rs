@@ -132,3 +132,42 @@ fn malformed_final_catalogs_fail_closed() {
         );
     }
 }
+
+#[test]
+fn teardown_defers_unfinished_ordinary_work_but_covers_genuinely_late_registrations() {
+    let mut incomplete = State::default();
+    incomplete.observe(&Catalog::default());
+    incomplete.observe(&extension(&["tools.early"], "early"));
+    incomplete.begin_drain();
+    assert!(
+        incomplete.next().is_none(),
+        "Teardown must not launch an initial or early command sweep"
+    );
+    assert!(!incomplete.missing().is_empty());
+    incomplete.observe(&extension(&["tools.late_without_baseline"], "later"));
+    assert!(
+        incomplete.next().is_none(),
+        "Incomplete baseline work cannot become drain-eligible through reload"
+    );
+    assert!(!incomplete.complete());
+    assert!(
+        incomplete.report()["shellDrainDeferredProbes"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+
+    let mut completed = State::default();
+    completed.observe(&Catalog::default());
+    offer_pending(&mut completed);
+    let late = extension(&["tools.after_sweep"], "late");
+    completed.observe(&late);
+    completed.begin_drain();
+    assert_eq!(
+        offer_pending(&mut completed),
+        vec!["tools.after_sweep"; actions::edge_case_count()]
+    );
+    completed.reconcile_final(&response(&late), true);
+    assert!(completed.complete());
+    assert_eq!(completed.report()["shellDrainDeferredProbes"], 0);
+}

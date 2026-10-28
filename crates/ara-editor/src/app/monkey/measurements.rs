@@ -8,7 +8,7 @@ pub(super) enum Stage {
     DiagnosticsRead,
     ReportSnapshotBuild,
     ReportCanonicalSerialize,
-    ReportFileWrite,
+    ReportSubmit,
     JournalWrite,
     JournalFlush,
 }
@@ -18,7 +18,7 @@ const STAGES: [&str; 7] = [
     "diagnosticsReadMs",
     "reportSnapshotBuildMs",
     "reportCanonicalSerializeMs",
-    "reportFileWriteMs",
+    "reportSubmitMs",
     "journalWriteMs",
     "journalFlushMs",
 ];
@@ -56,11 +56,11 @@ impl Measurements {
         )
     }
 
-    /// A report cannot include the duration of writing itself. Those costs are
-    /// visible on its completed frame and in the next report's aggregates.
+    /// Snapshot work appears in the next report's aggregates. Actual background
+    /// storage costs are reported separately by the bounded report writer.
     pub fn summary(&self) -> Value {
         json!({
-            "scope":"completed calls before the current report snapshot; its own build/serialize/write costs appear in the next snapshot and completed slow frame",
+            "scope":"completed calls before this snapshot; build/serialize/queue-submission costs appear in the next snapshot and completed slow frame; reportWriter records actual background storage IO",
             "diagnosticsScope":"Host logs query only; diagnostic journal writes are measured separately",
             "stages":STAGES.iter().enumerate().map(|(index, stage)| {
                 ((*stage).to_owned(), json!({"calls":self.calls[index],"totalMs":self.totals[index],"maxCallMs":self.maxima[index]}))

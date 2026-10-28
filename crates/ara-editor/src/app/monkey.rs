@@ -8,6 +8,7 @@ mod journal;
 mod measurements;
 pub(super) mod native;
 mod play;
+mod report_writer;
 mod resources;
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -48,6 +49,8 @@ pub(super) struct Monkey {
     started: Instant,
     output: PathBuf,
     journal: BufWriter<File>,
+    reports: report_writer::Reports,
+    report_io_failed: bool,
     generator: Generator,
     replay: Option<VecDeque<Recorded>>,
     clipboard: MemoryClipboard,
@@ -112,6 +115,8 @@ impl Monkey {
             started: Instant::now(),
             output: output.into(),
             journal: BufWriter::new(File::create(output.join("monkey-events.jsonl"))?),
+            reports: report_writer::Reports::new(output.join("monkey.json"))?,
+            report_io_failed: false,
             generator: Generator::new(seed),
             replay: None,
             clipboard: MemoryClipboard::default(),
@@ -253,6 +258,9 @@ impl Monkey {
             };
             action
         } else if self.budget_reached() {
+            if self.is_soak() {
+                self.shell_catalog.begin_drain();
+            }
             let since = self.draining_since.get_or_insert_with(Instant::now);
             if since.elapsed() >= DRAIN {
                 self.cleanup_incomplete = true;
@@ -528,6 +536,7 @@ impl Monkey {
             && self.final_diagnostics
             && self.diagnostics_truncated == 0
             && !self.diagnostic_bus_loss
+            && !self.report_io_failed
     }
 
     /// A duration-only generated run of at least thirty minutes is a soak;
@@ -576,6 +585,9 @@ impl Monkey {
         if !self.budget_reached() && !self.replay.as_ref().is_some_and(VecDeque::is_empty) {
             return Ok(());
         }
+        if self.is_soak() {
+            self.shell_catalog.begin_drain();
+        }
         self.resources.shell(shell.monkey_background_work());
         self.refresh_end_inventory(editor)
     }
@@ -613,7 +625,12 @@ impl Monkey {
     /// Persist the final summary even when an enclosing frame limit ended the run.
     pub fn finish(&mut self) -> ara_ui::Result<()> {
         self.flush_journal()?;
-        self.write_report()
+        self.watchdog.finish();
+        let text = self.report_text(true)?;
+        let result = self.reports.finish(text);
+        self.report_io_failed |= result.is_err();
+        result?;
+        Ok(())
     }
 
     /// Drain the last diagnostics tail even if the duration elapsed between
@@ -694,7 +711,22 @@ impl Monkey {
     }
 
     fn write_report(&mut self) -> ara_ui::Result<()> {
+        let text = self.report_text(false)?;
+        let at = Instant::now();
+        let result = self.reports.checkpoint(text);
+        self.measurements
+            .record(measurements::Stage::ReportSubmit, at.elapsed());
+        self.report_io_failed |= result.is_err();
+        result?;
+        Ok(())
+    }
+
+    fn report_text(&mut self, final_snapshot: bool) -> ara_ui::Result<String> {
         let snapshot_at = Instant::now();
+        let mut report_writer = self.reports.report();
+        self.report_io_failed |= !report_writer["error"].is_null();
+        report_writer["finalSnapshotRequested"] = final_snapshot.into();
+        report_writer["heartbeatScope"] = "Native input loop and final authority/diagnostic/journal collection; final report storage is awaited after the heartbeat stops".into();
         let unvisited: Vec<_> = self
             .shell_catalog
             .ids()
@@ -731,6 +763,7 @@ impl Monkey {
                 "frameSpikes":self.spikes,"spikeThresholdMs":SPIKE.as_millis(),"maxFrameMs":self.max_frame_ms,
                 "slowestFrames":self.slowest,"panelFailures":self.boundary_failures,
                 "harnessTimings":self.measurements.summary(),
+                "reportWriter":report_writer,
                 "errorDiagnosticsBefore":self.baseline_diagnostics,"errorDiagnosticsDuring":self.diagnostics,"registryCommands":self.commands,
                 "baselineDiagnosticsCollected":self.actions>0,"diagnosticBusLoss":self.diagnostic_bus_loss,
                 "finalDiagnosticsCollected":self.final_diagnostics,"diagnosticRecordsOmitted":self.diagnostics_truncated,
@@ -768,12 +801,7 @@ impl Monkey {
         let text = ara_json::to_canonical_string(&report);
         self.measurements
             .record(measurements::Stage::ReportCanonicalSerialize, at.elapsed());
-        let at = Instant::now();
-        let result = std::fs::write(self.output.join("monkey.json"), text);
-        self.measurements
-            .record(measurements::Stage::ReportFileWrite, at.elapsed());
-        result?;
-        Ok(())
+        Ok(text)
     }
 
     fn missing_command_cases(&self) -> Vec<Value> {

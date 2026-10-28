@@ -29,6 +29,7 @@ impl Snapshot {
 struct Probe {
     registration: Registration,
     case: usize,
+    drain_eligible: bool,
 }
 #[derive(PartialEq, Eq)]
 struct Final {
@@ -50,6 +51,10 @@ pub(super) struct State {
     changes_omitted: u64,
     events: Vec<Value>,
     skipped: u64,
+    completed_registrations: usize,
+    ordinary_sweep_complete: bool,
+    draining: bool,
+    deferred_probes: u64,
 }
 impl State {
     /// Native table order stays fixed; newly loaded C# IDs are sorted before queuing.
@@ -95,11 +100,17 @@ impl State {
                 self.known.entry(registration.clone())
             {
                 entry.insert(BTreeSet::new());
-                self.pending
-                    .extend((0..actions::edge_case_count()).map(|case| Probe {
-                        registration: registration.clone(),
-                        case,
-                    }));
+                let drain_eligible = self.ordinary_sweep_complete && !registration.builtin;
+                if self.draining && !drain_eligible {
+                    self.deferred_probes += actions::edge_case_count() as u64;
+                } else {
+                    self.pending
+                        .extend((0..actions::edge_case_count()).map(|case| Probe {
+                            registration: registration.clone(),
+                            case,
+                            drain_eligible,
+                        }));
+                }
             }
         }
         let ids: BTreeSet<_> = registrations.keys().cloned().collect();
@@ -142,6 +153,19 @@ impl State {
         self.issued = Some(probe);
         Some(action)
     }
+    /// Teardown closes existing work. It must not start an unfinished initial
+    /// sweep; only registrations arriving after a completed ordinary sweep qualify.
+    pub fn begin_drain(&mut self) {
+        if self.draining {
+            return;
+        }
+        self.draining = true;
+        let before = self.pending.len();
+        self.pending.retain(|probe| probe.drain_eligible);
+        self.deferred_probes += (before - self.pending.len()) as u64;
+        self.events.push(json!({"phase":"shellCatalogDrain","ordinarySweepCompleted":self.ordinary_sweep_complete,
+            "deferredProbes":self.deferred_probes,"eligibleProbes":self.pending.len()}));
+    }
     pub fn len(&self) -> usize {
         self.latest.as_ref().map_or(0, |s| s.registrations.len())
     }
@@ -171,7 +195,12 @@ impl State {
         if let Some(registration) = current
             && let Some(cases) = self.known.get_mut(registration)
         {
-            cases.insert(case);
+            if cases.insert(case) && cases.len() == actions::edge_case_count() {
+                self.completed_registrations += 1;
+            }
+        }
+        if !self.draining && self.completed_registrations == self.known.len() {
+            self.ordinary_sweep_complete = true;
         }
     }
     /// The authority can publish a generation before Editor's queued controls are
@@ -278,6 +307,7 @@ impl State {
             "shellCommandCatalogErrors":self.errors,"shellCommandCatalogChanges":self.changes,
             "shellCommandCatalogFinalUnloaded":unloaded,
             "shellCommandCatalogChangesOmitted":self.changes_omitted,"shellRegistrationProbesSkipped":self.skipped,
+            "shellOrdinarySweepCompleted":self.ordinary_sweep_complete,"shellDrainDeferredProbes":self.deferred_probes,
             "shellRegistrationCases":self.known.iter().map(|(r,cases)| json!({"registration":r,"cases":cases})).collect::<Vec<_>>(),
             "shellCommandCoverageComplete":self.complete(),
             "shellCommandCoverageScope":"All observed native and loaded C# editor registrations, per generation; attempts can reject before callback execution."})
