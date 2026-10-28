@@ -65,10 +65,15 @@ impl ContentDrags {
                 .push(json!({"cmd":"entity.reparent","args":{"entity":IDS[1],"parent":IDS[0]}}));
         }
         editor.apply(commands, "Prepare behaviour fixture hierarchy", None)?;
+        if let Act::Hierarchy(action) = act {
+            hierarchy::prepare(action, editor)?;
+        }
         let selection = match act {
             Act::MultiReorder => vec![IDS[2], IDS[1]],
             Act::EntityReference | Act::FloatingReference => vec![CAMERA],
             Act::Cycle => vec![IDS[0]],
+            Act::Hierarchy(hierarchy::Action::Before) => vec![IDS[1], IDS[2]],
+            Act::Hierarchy(_) => vec![IDS[1], IDS[0], IDS[2]],
             _ => vec![IDS[1]],
         };
         editor.action("editor.select", json!({"entities":selection}))?;
@@ -84,6 +89,9 @@ impl ContentDrags {
             shell.rebuild(editor)?;
         }
         self.before_revision = editor.host.store().revision();
+        if matches!(act, Act::Hierarchy(_) | Act::Cycle) {
+            self.hierarchy_proof = json!({"before":hierarchy::snapshot(editor)?});
+        }
         self.before_entities = crate::world::resolve(editor.host.store(), &editor.state.doc)
             .map_err(|d| format!("{d:?}"))?
             .into_keys()
@@ -169,6 +177,12 @@ impl ContentDrags {
         if self.age == 0 {
             return self.setup(act, editor, shell);
         }
+        if matches!(act, Act::Hierarchy(_)) && [FINISH + 1, FINISH + 4].contains(&self.age) {
+            for (scancode, pressed) in [(224, true), (if self.age == FINISH + 1 { 29 } else { 28 }, true), (if self.age == FINISH + 1 { 29 } else { 28 }, false), (224, false)] {
+                events.push((window.id(), Event::Key { scancode, pressed, repeat:false }));
+            }
+            return Ok(());
+        }
         if self.age == BEGIN && matches!(act, Act::AssetSurface | Act::MaterialSurface) {
             let Some(point) = self.point(
                 Find::Viewport,
@@ -223,6 +237,8 @@ impl ContentDrags {
                 Act::MaterialSurface => Find::Asset("assets/coating.graph"),
                 Act::EntityReference | Act::FloatingReference => Find::Entity(IDS[2]),
                 Act::Cycle => Find::Entity(IDS[0]),
+                Act::Hierarchy(hierarchy::Action::Before) => Find::Entity(IDS[1]),
+                Act::Hierarchy(_) => Find::Entity(IDS[0]),
                 Act::Component => Find::Control("collapse-component-MeshRenderer"),
                 _ => Find::Entity(IDS[1]),
             };
@@ -267,6 +283,10 @@ impl ContentDrags {
                 Act::FloatingReference => (Find::Control("edit-FollowCamera-target"), true, 0.5),
                 Act::Component => (Find::Control("component-Transform"), false, 0.05),
                 Act::OsImport => return Ok(()),
+                Act::Hierarchy(hierarchy::Action::Before) => (Find::Entity(IDS[0]), false, 0.04),
+                Act::Hierarchy(hierarchy::Action::Inside) => (Find::Entity(IDS[3]), false, 0.5),
+                Act::Hierarchy(hierarchy::Action::After) => (Find::Entity(IDS[3]), false, 0.96),
+                Act::Hierarchy(hierarchy::Action::Root) => (Find::Control("hierarchy-rows"), false, 0.96),
             };
             let Some(point) = self.point(
                 find, floating, shell, editor, window, floats, scale, fraction,

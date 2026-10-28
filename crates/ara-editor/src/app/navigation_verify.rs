@@ -4,6 +4,7 @@
 use super::*;
 use ara_ui::paint::Box2;
 use std::path::Path;
+mod transforms;
 
 const HOLD: u32 = 120;
 const BEAM: &str = "e_framebeam";
@@ -31,6 +32,7 @@ enum Act {
     Frame,
     Projection,
     Bookmark,
+    Transform(transforms::Action),
 }
 const ACTS: &[Act] = &[
     Act::Fly(1.),
@@ -42,6 +44,12 @@ const ACTS: &[Act] = &[
     Act::Frame,
     Act::Projection,
     Act::Bookmark,
+    Act::Transform(transforms::Action::World),
+    Act::Transform(transforms::Action::Local),
+    Act::Transform(transforms::Action::Centre),
+    Act::Transform(transforms::Action::Pivot),
+    Act::Transform(transforms::Action::Precision),
+    Act::Transform(transforms::Action::Cancel),
 ];
 impl Act {
     fn label(self) -> String {
@@ -53,6 +61,7 @@ impl Act {
             Self::Frame => "frame-imported-bounds".into(),
             Self::Projection => "orthographic-toolbar-wheel".into(),
             Self::Bookmark => "bookmark-native-save-recall".into(),
+            Self::Transform(action) => action.label().into(),
         }
     }
 }
@@ -79,6 +88,7 @@ pub(super) struct NavigationCheck {
     fixture_wait: Option<FixtureWait>,
     fixture_status: Value,
     fixture_trace: Vec<Value>,
+    precision: Option<transforms::Proof>,
 }
 fn centre(rect: Box2) -> [f32; 2] {
     [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5]
@@ -108,6 +118,7 @@ impl NavigationCheck {
             fixture_wait: None,
             fixture_status: Value::Null,
             fixture_trace: Vec::new(),
+            precision: None,
         })
     }
     pub fn finished(&self) -> bool {
@@ -144,6 +155,16 @@ impl NavigationCheck {
             return Ok(());
         };
         self.waiting = false;
+        if let Act::Transform(action) = act {
+            if self.age == 0 {
+                self.precision = Some(transforms::Proof::setup(action, editor, shell)?);
+                events.push((window.id(), Event::FocusLost));
+            } else if !self.precision.as_mut().ok_or("Native J1 transform fixture missing")?
+                .inject(self.age, editor, shell, window, scale, scene_ready, events)? {
+                return self.wait_for("Native J1 transform handle or presented Scene did not become ready");
+            }
+            return Ok(());
+        }
         if self.age == 0 {
             if matches!(act, Act::Frame) && !self.model_published(editor)? {
                 return Ok(());
@@ -564,6 +585,26 @@ impl NavigationCheck {
         if self.waiting {
             return Ok(());
         }
+        if let Act::Transform(action) = act {
+            let result = self.precision.as_mut().ok_or("Native J1 transform fixture missing")?
+                .end(self.age, editor, shell, gpu, &self.output, self.index + 1);
+            let result = match result {
+                Ok(result) => result,
+                Err(error) => Some(json!({"ok":false,"error":error.to_string()})),
+            };
+            if let Some(mut result) = result {
+                result["journey"] = json!(action.label());
+                self.results.push(result);
+                self.index += 1;
+                self.age = 0;
+                self.waited = 0;
+                self.precision = None;
+                self.write()?;
+            } else {
+                self.age += 1;
+            }
+            return Ok(());
+        }
         if matches!(act, Act::Frame)
             && self.age == 1
             && !self.native_model_ready(editor, shell, scene_view, scene_ready)?
@@ -678,6 +719,7 @@ impl NavigationCheck {
                     "native Save prompt and Recall choice restore the complete orthographic camera after wheel navigation"
                 ),
             ),
+            Act::Transform(_) => (false, json!("handled by the native transform driver")),
         };
         self.frame_ms.sort_by(f64::total_cmp);
         self.results.push(json!({"journey":act.label(),"ok":ok,"inputSeconds":if matches!(act,Act::Fly(_)|Act::Panel|Act::Modal){1.}else{0.},"expected":expected,"displacementMetres":displacement,"beforeCamera":self.before,"intermediateCamera":self.intermediate,"afterCamera":editor.state.camera,"inputToCaptureMs":self.input_to_capture_ms,"frameP50Ms":self.frame_ms.get(self.frame_ms.len()/2),"frameP95Ms":self.frame_ms.get(self.frame_ms.len()*95/100),"frameMaxMs":self.frame_ms.last(),"projection":projection,

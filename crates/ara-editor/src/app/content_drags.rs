@@ -4,6 +4,7 @@ use super::*;
 use ara_ui::paint::Box2;
 use std::path::Path;
 mod fixture;
+mod hierarchy;
 mod input;
 mod verify;
 pub(super) use fixture::fixture;
@@ -38,6 +39,7 @@ enum Act {
     Component,
     FloatingReference,
     OsImport,
+    Hierarchy(hierarchy::Action),
 }
 
 #[cfg(test)]
@@ -61,6 +63,7 @@ mod readiness_tests {
             before_entities: Vec::new(),
             results: Vec::new(),
             trace: Vec::new(),
+            hierarchy_proof: Value::Null,
         }
     }
 
@@ -121,6 +124,10 @@ const ACTS: &[Act] = &[
     Act::Component,
     Act::FloatingReference,
     Act::OsImport,
+    Act::Hierarchy(hierarchy::Action::Before),
+    Act::Hierarchy(hierarchy::Action::Inside),
+    Act::Hierarchy(hierarchy::Action::After),
+    Act::Hierarchy(hierarchy::Action::Root),
 ];
 impl Act {
     fn label(self) -> &'static str {
@@ -137,7 +144,11 @@ impl Act {
             Self::Component => "component-reorder",
             Self::FloatingReference => "floating-reference",
             Self::OsImport => "os-file-import",
+            Self::Hierarchy(action) => action.label(),
         }
+    }
+    fn finish(self) -> u32 {
+        FINISH + if matches!(self, Self::Hierarchy(_)) { 6 } else { 0 }
     }
 }
 #[derive(Clone, Copy)]
@@ -163,6 +174,7 @@ pub(super) struct ContentDrags {
     before_entities: Vec<String>,
     results: Vec<Value>,
     trace: Vec<Value>,
+    hierarchy_proof: Value,
 }
 impl ContentDrags {
     pub fn new(editor: &mut Editor, output: &Path) -> ara_ui::Result<Self> {
@@ -199,6 +211,7 @@ impl ContentDrags {
             before_entities: Vec::new(),
             results: Vec::new(),
             trace: Vec::new(),
+            hierarchy_proof: Value::Null,
         })
     }
     pub fn finished(&self) -> bool {
@@ -270,7 +283,7 @@ impl ContentDrags {
     /// Native UI frames can complete before their asynchronous Scene image. Hold
     /// the exact checkpoint, using wall time rather than a guessed frame count.
     fn checkpoint_ready(&mut self, ready: bool, now: Instant) -> ara_ui::Result<bool> {
-        if ![SETTLE, BEGIN, PREVIEW, FINISH].contains(&self.age) {
+        if ![SETTLE, BEGIN, PREVIEW, FINISH, FINISH + 3, FINISH + 6].contains(&self.age) {
             return Ok(true);
         }
         if let Some(started) = self.scene_wait
@@ -312,6 +325,7 @@ impl ContentDrags {
         self.scene_wait_polls = 0;
         self.source = None;
         self.trace.clear();
+        self.hierarchy_proof = Value::Null;
     }
     /// Capture an already-composited frame and verify the mutation after the gesture settles.
     pub fn end(
@@ -348,11 +362,17 @@ impl ContentDrags {
                 return self.write();
             }
         }
-        if [SETTLE, PREVIEW, FINISH].contains(&self.age) {
+        let history_stage = matches!(act, Act::Hierarchy(_))
+            && [FINISH + 3, FINISH + 6].contains(&self.age);
+        if [SETTLE, PREVIEW, FINISH].contains(&self.age) || history_stage {
             let stage = if self.age == SETTLE {
                 "before"
             } else if self.age == PREVIEW {
                 "preview"
+            } else if self.age == FINISH + 3 {
+                "undo"
+            } else if self.age == FINISH + 6 {
+                "redo"
             } else {
                 "after"
             };
@@ -371,8 +391,11 @@ impl ContentDrags {
             }
             gpu.select_target(0);
             self.trace.push(json!({"stage":stage,"sceneReady":scene_ready,"pointer":shell.pointer,"dragging":shell.content_dragging(),"drop":shell.content_drag_report(),"layout":shell.layout_report()}));
+            if matches!(act, Act::Hierarchy(_)) && self.age >= PREVIEW {
+                self.hierarchy_proof[stage] = hierarchy::snapshot(editor)?;
+            }
         }
-        if self.age >= FINISH {
+        if self.age >= act.finish() {
             let (ok, observed) = self
                 .observe(act, editor, shell)
                 .unwrap_or_else(|error| (false, json!({"error":error.to_string()})));
