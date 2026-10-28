@@ -17,8 +17,10 @@ pub struct DescriptorUsage {
 }
 
 /// Anisotropic filtering ceiling of the material sampler (`samplers[0]`, wrap/wrap).
-/// Native material passes sample it with explicit gradients (`SampleGrad`); the Metal
-/// backend's matching sampler uses the same value.
+/// Native material passes sample it with explicit gradients (`SampleGrad`); its
+/// explicit-LOD readers (RT hits, GI material fetches, mip tails) filter through it too,
+/// where NVIDIA blends over the first half of each LOD step only (up to half a mip softer
+/// than trilinear). The Metal backend's matching sampler uses the same value.
 const MATERIAL_ANISOTROPY: f32 = 16.0;
 
 /// The material sampler's `maxAnisotropy`: [`MATERIAL_ANISOTROPY`] clamped to the
@@ -150,8 +152,8 @@ impl Heap {
             let mut samplers = [vk::Sampler::null(); 3];
             let material = material_anisotropy(gpu);
             for (index, sampler) in samplers.iter_mut().enumerate() {
-                // Only the material sampler (index 0) is anisotropic: the others are
-                // read at explicit LODs, where anisotropy does nothing.
+                // Only the material sampler (index 0) is anisotropic; the environment
+                // and temporal samplers stay trilinear.
                 let anisotropy = if index == 0 { material } else { 1.0 };
                 *sampler = gpu
                     .device

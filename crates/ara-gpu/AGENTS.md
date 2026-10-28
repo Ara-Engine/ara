@@ -66,9 +66,10 @@ must be recooked; only `previewVertex`/`previewFragment` caches accept the old A
 Binding 2 has three fixed samplers: material repeat (up to 16x anisotropic where the
 device allows; native materials sample it with gradients), environment U repeat/V clamp
 and temporal clamp (both trilinear), with native mip LODs enabled. Anisotropy changes
-mip selection for every read through the material sampler (NVIDIA returns one mip at a
-fractional LOD, explicit or from gradients): readers that need trilinear blending
-blend two levels themselves or use another sampler. Root constants are 32 bytes.
+mip blending for every read through the material sampler, explicit LODs and gradients
+alike (NVIDIA blends over the first half of each LOD step only, reaching the coarser
+mip at .5): readers that need exact trilinear blend two levels themselves or use
+another sampler. Root constants are 32 bytes.
 Declare every resource reachable through root indices in the graph.
 
 Insertions allocate fresh slots. Resource retirement invalidates its CPU handle

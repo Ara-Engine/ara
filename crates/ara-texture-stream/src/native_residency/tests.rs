@@ -332,12 +332,25 @@ fn native_gpu_residency_exceeds_128_and_refines_without_losing_material_maps() {
         )
         .unwrap();
     levels.initialize(&mut gpu).unwrap();
-    for (lod, expected) in [(0.0, 64.0), (1.5, 96.0), (20.0, 255.0)] {
+    // Integer LODs read one resident mip exactly. Between them the blend is the
+    // driver's: the material sampler is anisotropic, and NVIDIA's anisotropic path
+    // blends over the first half of each LOD step only (trilinear would be linear), so
+    // fractional LODs only rise monotonically within the two mips' values.
+    for (lod, expected) in [(0.0, 64.0), (1.0, 64.0), (2.0, 128.0), (20.0, 255.0)] {
         let value = sample(&mut gpu, &mut levels, pipeline, 0..1, lod, Probe::Color)[0];
         assert!(
             (value - expected / 255.0).abs() < 1e-5,
             "resident mip LOD {lod}: {value}"
         );
+    }
+    let mut previous = 64.0 / 255.0;
+    for lod in [1.25, 1.5, 1.75] {
+        let value = sample(&mut gpu, &mut levels, pipeline, 0..1, lod, Probe::Color)[0];
+        assert!(
+            value >= previous - 1e-5 && value <= 128.0 / 255.0 + 1e-5,
+            "resident mip LOD {lod}: {value} after {previous}"
+        );
+        previous = value;
     }
     let actual = sample(
         &mut gpu,
