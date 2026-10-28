@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92",
+  "key": "05b986170817dab4bf219c11c2c9b978ebb25cc6dee7e97129530b50bc1f9b4a",
   "stages": [
     {
-      "dxil": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92/reservoir_shade_atmosphere/reservoirShadeAtmosphere.dxil",
+      "dxil": "05b986170817dab4bf219c11c2c9b978ebb25cc6dee7e97129530b50bc1f9b4a/reservoir_shade_atmosphere/reservoirShadeAtmosphere.dxil",
       "dxil_hash": "97aca1f60c6aed5914ff3642a57788252d2e336196a1d20ae8e07aabef1068a3",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92/reservoir_shade_atmosphere/reservoirShadeAtmosphere.metallib",
+        "metallib": "05b986170817dab4bf219c11c2c9b978ebb25cc6dee7e97129530b50bc1f9b4a/reservoir_shade_atmosphere/reservoirShadeAtmosphere.metallib",
         "metallib_hash": "b7d46677490d1506bc614e1bfbb4aaa84ca1fa441425cd19715d9a024fb5748b",
-        "reflection": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92/reservoir_shade_atmosphere/reservoirShadeAtmosphere.metal.json",
+        "reflection": "05b986170817dab4bf219c11c2c9b978ebb25cc6dee7e97129530b50bc1f9b4a/reservoir_shade_atmosphere/reservoirShadeAtmosphere.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "reservoirShadeAtmosphere",
-      "spirv": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92/reservoir_shade_atmosphere/reservoirShadeAtmosphere.spv",
+      "spirv": "05b986170817dab4bf219c11c2c9b978ebb25cc6dee7e97129530b50bc1f9b4a/reservoir_shade_atmosphere/reservoirShadeAtmosphere.spv",
       "spirv_entry": "main",
       "spirv_hash": "0c62572c435d4e6bf934b98983ce4b2d9f4b6e596615559f14b8498cc4d3bbb1",
       "stage": "compute"

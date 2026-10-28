@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92",
+  "key": "05b986170817dab4bf219c11c2c9b978ebb25cc6dee7e97129530b50bc1f9b4a",
   "stages": [
     {
-      "dxil": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92/ddgi_layers/ddgiLayersMain.dxil",
+      "dxil": "05b986170817dab4bf219c11c2c9b978ebb25cc6dee7e97129530b50bc1f9b4a/ddgi_layers/ddgiLayersMain.dxil",
       "dxil_hash": "3da26203ee76bda2ed2258d53fb5eb7ceec251c5eca63298143683c706b2f9ad",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92/ddgi_layers/ddgiLayersMain.metallib",
+        "metallib": "05b986170817dab4bf219c11c2c9b978ebb25cc6dee7e97129530b50bc1f9b4a/ddgi_layers/ddgiLayersMain.metallib",
         "metallib_hash": "fbde431405ad33c627feddfb957926bdabf79dc003b260bc3c288863790ff0c1",
-        "reflection": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92/ddgi_layers/ddgiLayersMain.metal.json",
+        "reflection": "05b986170817dab4bf219c11c2c9b978ebb25cc6dee7e97129530b50bc1f9b4a/ddgi_layers/ddgiLayersMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "ddgiLayersMain",
-      "spirv": "33babfd586b8a7f4d90f6df0908c6521c0f219e7add466bd1ae78859abc33a92/ddgi_layers/ddgiLayersMain.spv",
+      "spirv": "05b986170817dab4bf219c11c2c9b978ebb25cc6dee7e97129530b50bc1f9b4a/ddgi_layers/ddgiLayersMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "28c3be26d30440d0df050b83e50632bd3231778ee0e74f314aecd945b54c12c5",
       "stage": "compute"
