@@ -110,6 +110,7 @@ pub struct NetHost {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod inspection_tests;
 
 impl NetHost {

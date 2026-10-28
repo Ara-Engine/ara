@@ -225,6 +225,7 @@ impl Link {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod inspection_tests {
     use super::*;
 
