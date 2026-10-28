@@ -956,7 +956,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             }
             if shell.content_dragging() {
                 if offscreen && shell.desktop_pointer.is_none() {
-                    dirty |= shell.content_drag_over(&editor, dt)?;
+                    dirty |= shell.advance_content_drag(dt)?;
                 } else {
                     track_content_drag(
                         desktop_pointer(&shell),
@@ -1849,6 +1849,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     icon_dpi = Some(dpi);
                     icons_ms = icons_at.elapsed().as_secs_f64() * 1000.;
                 }
+                // Late diagnostics/Game-preview rebuilds have also settled.
+                // Resolve once without another scroll step before native paint.
+                work += shell.settle_content_feedback(&mut editor)?;
                 gpu.select_target(0);
                 gpu.set_dpi(dpi)?;
                 if scene_overlays
@@ -1943,7 +1946,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 if float.window.size()?.contains(&0) {
                     continue;
                 }
-                let work = shell.frame_surface(&float.id)?;
+                let work = shell.frame_surface_with_content_feedback(&float.id, &mut editor)?;
                 if !(float.dirty || work.paint_nodes > 0 || work.layout_passes > 0) {
                     continue;
                 }
@@ -3022,7 +3025,8 @@ fn track_content_drag(
     };
     shell.content_drag_pointer(desktop);
     if on_surface {
-        shell.content_drag_over(editor, seconds)?;
+        shell.advance_content_drag(seconds)?;
+        shell.clear_content_surface_pick();
         if shell.content_asset_dragging()
             && let Some(rect) = shell.viewport()
             && let Some(hit) = scene_view.surface_hit(&editor.state.camera, rect, shell.pointer)
