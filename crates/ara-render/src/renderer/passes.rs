@@ -952,8 +952,11 @@ impl Renderer {
         // frames of the primary view; a deferred frame plans it here and `finish`
         // declares it. Resolving the primary view without it forgets its history.
         self.tsr.release_unused(&mut self.gpu)?;
-        let tsr =
-            self.tsr.upscaler == crate::tsr::Upscaler::Tsr && camera.projection.z_axis.w != 0.;
+        // Secondary views (editor Game previews) keep TAAU: each TSR view holds eight
+        // of the device's 64 bindless storage images.
+        let tsr = self.tsr.upscaler == crate::tsr::Upscaler::Tsr
+            && !self.secondary_active
+            && camera.projection.z_axis.w != 0.;
         if tsr {
             self.tsr.prepare(
                 &mut self.gpu,
@@ -981,7 +984,7 @@ impl Renderer {
                     .map(|rect| (look_frame.refract_info[0][0], rect)),
                 reflections: reflected.then(|| self.look.sampled[crate::look::gpu::SSR_TRACE]),
             })?;
-        } else {
+        } else if !self.secondary_active {
             self.tsr.invalidate();
         }
         let mut tsr_ids = None;
