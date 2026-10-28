@@ -46,7 +46,7 @@ impl Shell {
             } else {
                 &job.destination
             };
-            out.push_str(&format!("<panel id='{key}' class='notice asset-job'><panel id='{key}-heading' class='row' style='gap:6px;min-width:0px;flex-shrink:0'><text id='{key}-title' class='asset-job-title' description='{}' text='{} file{} → {}' />",
+            out.push_str(&format!("<banner id='{key}' class='notice asset-job'><panel id='{key}-heading' class='row' style='gap:6px;min-width:0px;flex-shrink:0'><text id='{key}-title' class='asset-job-title' description='{}' text='{} file{} → {}' />",
                 escape(destination),job.sources,if job.sources==1 {""} else {"s"},escape(destination)));
             let (command, label) = if running {
                 ("assets.import.cancel", "Cancel")
@@ -62,7 +62,7 @@ impl Shell {
             if running {
                 out.push_str(&format!("<panel id='{key}-progress' class='progress' style='height:3px'><panel id='{key}-fill' class='progress-fill' style='height:3px;width:{}%' /></panel>",job.status.progress*100.));
             }
-            out.push_str("</panel>");
+            out.push_str("</banner>");
             self.bind_command(&format!("{key}-action"), command, Target::Text(id));
         }
         out.push_str("</panel>");

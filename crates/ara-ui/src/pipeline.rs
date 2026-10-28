@@ -19,15 +19,45 @@ impl Ui {
                 .element
                 .parent
                 .map(|p| self.nodes[p].computed.color);
+            let computed = if self.nodes[index].dirty.style {
+                let mut computed = self
+                    .sheet
+                    .compute(&self.nodes[index].element, self.nodes[index].state)?;
+                if self.nodes[index].element.tag == "text"
+                    && let Some(parent) = self.nodes[index].element.parent
+                    && matches!(
+                        self.nodes[parent].element.tag.as_str(),
+                        "feedback" | "banner"
+                    )
+                {
+                    // Status prose follows its container's typography and wraps,
+                    // including labels that formerly inherited chrome nowrap.
+                    computed.font_size = self.nodes[parent].computed.font_size;
+                    computed
+                        .font_family
+                        .clone_from(&self.nodes[parent].computed.font_family);
+                    computed.wrap_text = true;
+                    computed.inherit_color = true;
+                }
+                if self.nodes[index].element.tag == "banner" {
+                    computed.layout.size.height = Dimension::auto();
+                    computed.layout.flex_shrink = 0.0;
+                }
+                Some(computed)
+            } else {
+                None
+            };
             let node = &mut self.nodes[index];
-            if node.dirty.style {
-                let mut computed = self.sheet.compute(&node.element, node.state)?;
+            if let Some(mut computed) = computed {
                 if computed.inherit_color
                     && let Some(color) = parent_color
                 {
                     computed.color = color;
                 }
                 let color_changed = computed.color != node.computed.color;
+                let typography_changed = computed.font_size != node.computed.font_size
+                    || computed.font_family != node.computed.font_family;
+                let message = matches!(node.element.tag.as_str(), "feedback" | "banner");
                 // Taffy's effective style also contains runtime placement and
                 // fitted auto-text height. A paint-only restyle must retain
                 // those results instead of resetting them to authored `auto`.
@@ -69,10 +99,13 @@ impl Ui {
                 node.dirty.style = false;
                 node.dirty.paint = true;
                 work.restyled += 1;
-                if color_changed {
-                    let children = node.element.children.clone();
-                    for child in children {
-                        if self.nodes[child].computed.inherit_color {
+                if color_changed || message && typography_changed {
+                    let count = node.element.children.len();
+                    for position in 0..count {
+                        let child = self.nodes[index].element.children[position];
+                        if (color_changed && self.nodes[child].computed.inherit_color)
+                            || (message && self.nodes[child].element.tag == "text")
+                        {
                             self.nodes[child].dirty.style = true;
                         }
                     }
@@ -101,6 +134,9 @@ impl Ui {
             work.layout_passes = 1;
         }
         if paint {
+            if !layout {
+                self.place_feedback_nodes();
+            }
             work.paint_nodes = self.emit_display(text_system)?;
             // Width clamps rewrap copy and submenus follow a menu that just flipped.
             // Settle that dependency in this frame; ordinary popovers need one pass,
@@ -113,6 +149,9 @@ impl Ui {
                 }
                 self.compute_layout(text_system)?;
                 work.layout_passes += 1;
+                work.paint_nodes += self.emit_display(text_system)?;
+            }
+            if work.layout_passes > 0 && self.place_feedback_nodes() {
                 work.paint_nodes += self.emit_display(text_system)?;
             }
         }

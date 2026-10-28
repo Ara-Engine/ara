@@ -79,6 +79,8 @@ pub struct Ui {
     /// Where `frame` last placed each popover, by stable identity; reapplied over the
     /// popover's CSS whenever it restyles.
     pub(crate) placed: std::collections::BTreeMap<u64, crate::popover::Applied>,
+    /// Retained pointer/target geometry for non-interactive drag feedback.
+    pub(crate) feedback: std::collections::BTreeMap<u64, crate::feedback::Anchor>,
 }
 /// Actual incremental work counters for profiling and focused tests; `+=` sums
 /// several frames (a host's per-frame budget).
@@ -107,7 +109,7 @@ impl Ui {
         let mut current = Some(index);
         while let Some(i) = current {
             let node = &self.nodes[i];
-            if node.element.tag == "tooltip" {
+            if matches!(node.element.tag.as_str(), "tooltip" | "feedback") {
                 return false;
             }
             current = node.element.parent;
@@ -182,6 +184,7 @@ impl Ui {
             editor_checks: false,
             parts: Default::default(),
             placed: Default::default(),
+            feedback: Default::default(),
         })
     }
     /// Resolve an authored ID without panicking when the node is absent.

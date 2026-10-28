@@ -103,10 +103,16 @@ impl Computed {
         }
         // Placed by `Ui::frame` (`popover`); a block keeps its rows at natural height
         // when the popover is clamped and scrolls.
-        let popover = matches!(tag, "popover" | "tooltip");
+        let popover = matches!(tag, "popover" | "tooltip" | "feedback");
         if popover {
             layout.display = Display::Block;
             layout.position = Position::Absolute;
+        }
+        // Inline status prose takes its natural height instead of shrinking to
+        // a neighboring control's fixed chrome height. Hosts own the rail width.
+        if tag == "banner" {
+            layout.display = Display::Block;
+            layout.flex_shrink = 0.0;
         }
         Self {
             layout,
