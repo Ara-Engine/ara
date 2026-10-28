@@ -37,6 +37,7 @@ mod ops;
 mod polish;
 #[cfg(test)]
 mod quality_tests;
+mod script_recovery_ui;
 pub(crate) mod scripts;
 mod scroll;
 mod scrub;
@@ -305,6 +306,7 @@ pub struct Shell {
     asset_folder_click: Option<(String, std::time::Instant)>,
     asset_rename: Option<scripts::Rename>,
     script_job: Option<(String, std::time::Instant)>,
+    script_recovery_ui: script_recovery_ui::State,
     script_modules: scripts::ModuleList,
     ide_request: Option<scripts::IdeRequest>,
     compile_problems: log_panels::CompilationView,
@@ -643,6 +645,7 @@ impl Shell {
             asset_folder_click: None,
             asset_rename: None,
             script_job: None,
+            script_recovery_ui: Default::default(),
             script_modules: Default::default(),
             ide_request: None,
             compile_problems: Default::default(),
@@ -843,6 +846,7 @@ impl Shell {
     /// revisions (an action that rebuilt in dispatch changed them); true if it rebuilt.
     pub fn rebuild_if_stale(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
         let compiled = self.poll_script_job(editor)?;
+        let recovery_changed = self.poll_script_recovery(editor);
         let modules_changed = self.poll_script_modules(editor)?;
         let probes_changed = self.poll_probes(editor)?;
         let play_changed = match self.poll_play_job(editor) {
@@ -853,6 +857,7 @@ impl Shell {
             }
         };
         if !compiled
+            && !recovery_changed
             && !modules_changed
             && !probes_changed
             && !play_changed
