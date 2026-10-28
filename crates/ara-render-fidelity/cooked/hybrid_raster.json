@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "36bee5acc8d29bd1d7fa064f3f8414a4012d400a7a60742076775abe5e741a03",
+  "key": "9a616d6e42f2dad7dc5a45278f7e83415d1ea21b9d6805367b4f7bb35ca51a1c",
   "stages": [
     {
-      "dxil": "36bee5acc8d29bd1d7fa064f3f8414a4012d400a7a60742076775abe5e741a03/hybrid_raster/hybridRasterMain.dxil",
+      "dxil": "9a616d6e42f2dad7dc5a45278f7e83415d1ea21b9d6805367b4f7bb35ca51a1c/hybrid_raster/hybridRasterMain.dxil",
       "dxil_hash": "0697918561e5162cab5bad75bb8deb9345ba1bb098ea95c9a0a125dc8617880b",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "36bee5acc8d29bd1d7fa064f3f8414a4012d400a7a60742076775abe5e741a03/hybrid_raster/hybridRasterMain.metallib",
+        "metallib": "9a616d6e42f2dad7dc5a45278f7e83415d1ea21b9d6805367b4f7bb35ca51a1c/hybrid_raster/hybridRasterMain.metallib",
         "metallib_hash": "178b634efbe0df68149e1f35bcafa2b2a31f4f7fd712fcd45881a592847537cc",
-        "reflection": "36bee5acc8d29bd1d7fa064f3f8414a4012d400a7a60742076775abe5e741a03/hybrid_raster/hybridRasterMain.metal.json",
+        "reflection": "9a616d6e42f2dad7dc5a45278f7e83415d1ea21b9d6805367b4f7bb35ca51a1c/hybrid_raster/hybridRasterMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "hybridRasterMain",
-      "spirv": "36bee5acc8d29bd1d7fa064f3f8414a4012d400a7a60742076775abe5e741a03/hybrid_raster/hybridRasterMain.spv",
+      "spirv": "9a616d6e42f2dad7dc5a45278f7e83415d1ea21b9d6805367b4f7bb35ca51a1c/hybrid_raster/hybridRasterMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "ead3cdadff797d5a8118cf17348d4e6c5f449988075ffbdb7b97a4ade8bce384",
       "stage": "compute"

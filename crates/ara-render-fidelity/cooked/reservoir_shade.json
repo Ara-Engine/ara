@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "36bee5acc8d29bd1d7fa064f3f8414a4012d400a7a60742076775abe5e741a03",
+  "key": "9a616d6e42f2dad7dc5a45278f7e83415d1ea21b9d6805367b4f7bb35ca51a1c",
   "stages": [
     {
-      "dxil": "36bee5acc8d29bd1d7fa064f3f8414a4012d400a7a60742076775abe5e741a03/reservoir_shade/reservoirShade.dxil",
+      "dxil": "9a616d6e42f2dad7dc5a45278f7e83415d1ea21b9d6805367b4f7bb35ca51a1c/reservoir_shade/reservoirShade.dxil",
       "dxil_hash": "7119102b07460c6b9a2e6712da748c7cc6ea6ecbb1e3cccadc4c3e6d5f912992",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "36bee5acc8d29bd1d7fa064f3f8414a4012d400a7a60742076775abe5e741a03/reservoir_shade/reservoirShade.metallib",
+        "metallib": "9a616d6e42f2dad7dc5a45278f7e83415d1ea21b9d6805367b4f7bb35ca51a1c/reservoir_shade/reservoirShade.metallib",
         "metallib_hash": "84c8c5e28319a8877502146d631874a8cf3eca9d6cea79c21f80346b73d4610a",
-        "reflection": "36bee5acc8d29bd1d7fa064f3f8414a4012d400a7a60742076775abe5e741a03/reservoir_shade/reservoirShade.metal.json",
+        "reflection": "9a616d6e42f2dad7dc5a45278f7e83415d1ea21b9d6805367b4f7bb35ca51a1c/reservoir_shade/reservoirShade.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "reservoirShade",
-      "spirv": "36bee5acc8d29bd1d7fa064f3f8414a4012d400a7a60742076775abe5e741a03/reservoir_shade/reservoirShade.spv",
+      "spirv": "9a616d6e42f2dad7dc5a45278f7e83415d1ea21b9d6805367b4f7bb35ca51a1c/reservoir_shade/reservoirShade.spv",
       "spirv_entry": "main",
       "spirv_hash": "53957209c30ba9618df26880784a9a5cb8e245622509ca2b27f11cdd2168adc1",
       "stage": "compute"
