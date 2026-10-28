@@ -127,8 +127,9 @@ fn play_starts_in_the_background_and_shows_its_progress() {
         assert_eq!(
             text(&shell, id).as_deref(),
             Some("Restarting Play…"),
-            "{id}; playing={:?}; game text={:?}",
+            "{id}; playing={:?}; panel error={:?}; game text={:?}",
             editor.state.playing,
+            text(&shell, "panel-error-game-detail"),
             shell
                 .ui
                 .nodes

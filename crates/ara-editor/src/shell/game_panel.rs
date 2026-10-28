@@ -75,7 +75,7 @@ impl Shell {
         out.push_str("</panel>");
         self.play_controls_markup(editor, out);
         if let Some(status) = self.game_commands_status {
-            out.push_str(&format!("<text id='game-command-refresh' class='caption' style='padding:4px 10px;flex-shrink:0' text='{}' />", escape(status)));
+            out.push_str(&format!("<text id='game-command-refresh' class='caption' style='padding:4px;padding-left:10px;padding-right:10px;flex-shrink:0' text='{}' />", escape(status)));
         }
         out.push_str("<panel id='game-surface' class='game-surface'>");
         if let Some(fault) = self.game_fault.clone() {
