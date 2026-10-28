@@ -118,3 +118,61 @@ fn filtered_range_uses_display_order_and_repairs_a_deleted_anchor() -> ara_ui::R
     assert!(editor.state.selection.iter().any(|id| id == "e_select0009"));
     Ok(())
 }
+
+#[test]
+fn shift_end_includes_name_and_id_query_matches_after_numbered_rows_and_escape_restores_anchor()
+-> ara_ui::Result<()> {
+    let project = Project::new()?;
+    let mut editor = Editor::open(&project.0)?;
+    editor.apply(vec![json!({"cmd":"entity.create","args":{"id":"e_selectproof","name":"Entity mesh","components":{"Transform":{}}}})],"Append a real displayed query match",None)?;
+    editor.action(
+        "editor.search",
+        json!({"panel":"hierarchy","query":"Entity select"}),
+    )?;
+    let mut shell = Shell::new(&mut editor, [1100., 700.])?;
+    shell.click_entity("e_select0005", &mut Clip)?;
+    shell.dispatch(&mut editor)?;
+    let before = shell.hierarchy_range_probe(&editor);
+    assert_eq!(before["anchor"], "e_select0005");
+    assert_eq!(before["active"], "e_select0005");
+    assert_eq!(before["focused"], "e_select0005");
+    assert_eq!(
+        before["order"].as_array().unwrap().last().unwrap(),
+        "e_selectproof"
+    );
+    assert!(before["mountedRows"].as_u64().unwrap() < 100);
+    let expected: std::collections::BTreeSet<_> = (5..1000)
+        .map(|index| format!("e_select{index:04}"))
+        .chain(["e_selectproof".into()])
+        .collect();
+    let revision = editor.host.store().revision();
+    shell.key(&mut editor, 225, true, &mut Clip)?;
+    shell.key(&mut editor, 77, true, &mut Clip)?;
+    shell.key(&mut editor, 225, false, &mut Clip)?;
+    assert_eq!(
+        editor
+            .state
+            .selection
+            .iter()
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>(),
+        expected
+    );
+    assert_eq!(
+        editor.state.selection.first().map(String::as_str),
+        Some("e_selectproof")
+    );
+    assert!(shell.hierarchy_offset > 0.);
+    assert_eq!(
+        shell.hierarchy_range_probe(&editor)["focused"],
+        "e_selectproof"
+    );
+    shell.key(&mut editor, 41, true, &mut Clip)?;
+    assert_eq!(editor.state.selection, ["e_select0005"]);
+    assert_eq!(
+        shell.hierarchy_range_probe(&editor)["focused"],
+        "e_select0005"
+    );
+    assert_eq!(editor.host.store().revision(), revision);
+    Ok(())
+}

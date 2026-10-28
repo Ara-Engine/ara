@@ -2,7 +2,7 @@
 use super::*;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-fn open() -> ara_ui::Result<(Editor, Shell)> {
+pub(super) fn open() -> ara_ui::Result<(Editor, Shell)> {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let root = crate::test_target().join("import-job-layout").join(format!(
         "{}-{}",
@@ -57,7 +57,7 @@ fn bounded_import_rail_exposes_cancel_and_dismiss_without_collapsing_the_browser
     shell.rebuild(&mut editor)?;
     shell.frame()?;
     let index = shell
-        .shown_node("asset-import-scroll")
+        .shown_node("asset-jobs-scroll")
         .ok_or("Import rail is not mounted")?;
     let viewport = shell.ui.nodes[index].rect;
     assert!(

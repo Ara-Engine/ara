@@ -2,9 +2,11 @@ use super::super::commands::Target;
 use super::*;
 #[cfg(test)]
 mod layout_tests;
+#[cfg(test)]
+mod rail_tests;
 
 impl Shell {
-    /// A bounded scroll surface for import jobs, appended by the Assets panel owner.
+    /// Import cards share the Assets panel's bounded background-job rail.
     /// Existing jobs.status message carries files/bytes even before optional detail fields exist.
     pub(crate) fn asset_import_markup(&mut self, out: &mut String) {
         if self.asset_import.jobs.is_empty()
@@ -13,9 +15,7 @@ impl Shell {
         {
             return;
         }
-        // A scroll view needs an actual viewport: the editor's generic scroll
-        // rule has zero flex basis, so max-height alone collapses this rail.
-        out.push_str("<scroll id='asset-import-scroll' style='height:25%;flex-basis:auto;max-height:180px;min-height:36px;flex-shrink:0'><panel id='asset-import-jobs' style='padding:6px;gap:6px;flex-direction:column'>");
+        out.push_str("<panel id='asset-import-jobs' class='asset-jobs'>");
         let queued = self.asset_import.queued.len() + self.asset_import.ready.len();
         if queued > 0 {
             out.push_str(&format!(
@@ -46,7 +46,7 @@ impl Shell {
             } else {
                 &job.destination
             };
-            out.push_str(&format!("<panel id='{key}' class='notice' style='flex-direction:column;align-items:stretch;gap:4px;min-width:0px;flex-shrink:0'><panel id='{key}-heading' class='row' style='gap:6px;min-width:0px;flex-shrink:0'><text id='{key}-title' class='fill' style='white-space:normal;min-width:0px;max-height:44px;overflow:hidden' description='{}' text='{} file{} → {}' />",
+            out.push_str(&format!("<panel id='{key}' class='notice asset-job'><panel id='{key}-heading' class='row' style='gap:6px;min-width:0px;flex-shrink:0'><text id='{key}-title' class='asset-job-title' description='{}' text='{} file{} → {}' />",
                 escape(destination),job.sources,if job.sources==1 {""} else {"s"},escape(destination)));
             let (command, label) = if running {
                 ("assets.import.cancel", "Cancel")
@@ -56,7 +56,7 @@ impl Shell {
             out.push_str(&format!("<button id='{key}-action' class='ghost' action='Dispatch' label='{label}'{}><text id='{key}-action-label' text='{label}' /></button></panel>",
                 if running&&!can_cancel {" disabled='true' description='Cancellation is unavailable at this stage'"} else {""}));
             out.push_str(&format!(
-                "<text id='{key}-message' class='caption' style='white-space:normal' text='{}' />",
+                "<text id='{key}-message' class='caption asset-job-message' text='{}' />",
                 escape(&summary)
             ));
             if running {
@@ -65,6 +65,6 @@ impl Shell {
             out.push_str("</panel>");
             self.bind_command(&format!("{key}-action"), command, Target::Text(id));
         }
-        out.push_str("</panel></scroll>");
+        out.push_str("</panel>");
     }
 }

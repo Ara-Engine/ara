@@ -264,7 +264,9 @@ impl PlayCheck {
             ("play.clients", json!(1)),
             ("play.inGameView", json!(true)),
             ("play.startPaused", json!(false)),
-            ("render.quality", json!("low")),
+            // This isolated Play fixture uses the runtime/project policy; the
+            // viewport override changes only the editor's Scene rendering.
+            ("rendering.quality", json!("low")),
             ("viewport.cameraSpeed", json!(4.)),
         ] {
             editor.action("editor.settings.set", json!({"key":setting,"value":value}))?;

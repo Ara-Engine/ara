@@ -56,7 +56,7 @@ impl ImportCheck {
             if probe["action"]["fullyVisible"] == true && probe["title"]["fullyVisible"] != true {
                 if let (Some(target), Some(scroll)) = (
                     shell.shown_node(&title),
-                    shell.shown_node("asset-import-scroll"),
+                    shell.shown_node("asset-jobs-scroll"),
                 ) {
                     let target = &shell.ui.nodes[target];
                     let viewport = shell.ui.nodes[scroll]
@@ -112,6 +112,6 @@ fn control_probe(shell: &Shell, key: &str) -> Value {
                 "text":node.text.as_ref().map(|text|text.value.as_str())})
         })
     };
-    json!({"viewport":node("asset-import-scroll"),"title":node(&format!("{key}-title")),
+    json!({"viewport":node("asset-jobs-scroll"),"title":node(&format!("{key}-title")),
         "action":node(&format!("{key}-action")),"label":node(&format!("{key}-action-label"))})
 }

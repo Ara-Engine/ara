@@ -756,7 +756,7 @@ fn ready_control(
         // Finished cards remain reviewable in a real scrolling surface. Use its
         // normal wheel path to reach an owned job instead of clicking through a clip.
         if id.starts_with("asset-import-")
-            && let Some(index) = shell.shown_node("asset-import-scroll")
+            && let Some(index) = shell.shown_node("asset-jobs-scroll")
         {
             let scroll = &shell.ui.nodes[index];
             let rect = scroll.rect.intersection(scroll.clip);

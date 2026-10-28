@@ -108,13 +108,24 @@ impl Shell {
             editor.state.asset_sidebar_width.min(content * 0.6).max(96.)
         };
         out.push_str("</panel>");
-        self.asset_operations_markup(out);
-        self.asset_import_markup(out);
+        // Every background result shares one viewport; independent status strips
+        // must not consume the drawer's asset rows as jobs accumulate.
+        let mut jobs = String::new();
+        self.asset_operations_markup(&mut jobs);
+        self.asset_import_markup(&mut jobs);
         if let Some(problem) = &self.browser.error {
-            out.push_str(&format!("<text id='assets-index-error' class='caption' style='white-space:normal' text='{}' />",escape(problem)));
+            jobs.push_str(&format!(
+                "<text id='assets-index-error' class='caption asset-job-message' text='{}' />",
+                escape(problem)
+            ));
+        }
+        if !jobs.is_empty() {
+            out.push_str("<scroll id='asset-jobs-scroll' class='asset-jobs-scroll'><panel id='asset-jobs' class='asset-jobs'>");
+            out.push_str(&jobs);
+            out.push_str("</panel></scroll>");
         }
         self.asset_types_markup(editor, out);
-        out.push_str("<panel id='assets-content' style='flex-direction:row;flex-grow:1;flex-basis:0px;min-height:0px'>");
+        out.push_str("<panel id='assets-content' class='asset-browser-content'>");
         if side > 0. {
             self.asset_tree(editor, out, side / (content - side - 5.).max(1.));
         }

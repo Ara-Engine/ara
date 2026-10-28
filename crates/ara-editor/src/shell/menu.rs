@@ -840,6 +840,8 @@ impl Shell {
         match scancode {
             81 => next.active = step(menu.active, true),
             82 => next.active = step(menu.active, false),
+            74 => next.active = (0..rows.len()).find(|index| selectable(*index)),
+            77 => next.active = (0..rows.len()).rfind(|index| selectable(*index)),
             79 => match menu.active.and_then(|i| rows.get(i).map(|r| (i, r))) {
                 Some((_, Row::Sub(title, _))) => {
                     next.open.push(title.clone());
@@ -912,6 +914,19 @@ impl Shell {
         }
         self.menu = Some(next);
         self.rebuild(editor)?;
+        // A wrapped row's actual height is known only after the menu is mounted.
+        // Keep keyboard highlight visible without taking focus from its filter.
+        let levels = self.menu_levels(editor);
+        if let Some(active) = self.menu.as_ref().and_then(|menu| menu.active)
+            && let Some(level) = levels.len().checked_sub(1)
+            && let Some(row) = levels[level].get(active)
+        {
+            let id = self.menu_row_id(editor, level, row);
+            if let Some(index) = self.shown_node(&id) {
+                self.ui.scroll_into_view(index)?;
+                self.frame()?;
+            }
+        }
         Ok(true)
     }
     /// Remember a command for the palette's recent list.
@@ -1069,3 +1084,6 @@ mod capture_tests;
 #[cfg(test)]
 #[path = "menu/prefab_source_tests.rs"]
 mod prefab_source_tests;
+#[cfg(test)]
+#[path = "menu/scroll_tests.rs"]
+mod scroll_tests;

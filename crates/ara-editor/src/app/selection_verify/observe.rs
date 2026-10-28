@@ -39,6 +39,7 @@ impl SelectionCheck {
             "camera":editor.state.camera,
             "readiness":self.readiness,
             "orthographicFit":self.orthographic_fit,
+            "hierarchyRange":self.range_projection,
             "endpoints":endpoints,
             "capture":identity(shell.input.captured()),
             "focus":identity(shell.input.focused()),
@@ -76,18 +77,33 @@ impl SelectionCheck {
                     Act::DeletedAnchor => expected([row(6)]),
                     _ => unreachable!(),
                 };
+                let range_expected = selected(&self.range_projection["expectedSuffix"]);
+                let range_correct = !range_expected.is_empty()
+                    && preview.is_some_and(|trace| selected(&trace["selection"]) == range_expected);
+                let range_scrolled = preview.is_some_and(|trace| {
+                    trace["hierarchyOffset"]
+                        .as_f64()
+                        .is_some_and(|offset| offset > 0.)
+                });
+                let end_focused = preview.is_some_and(|trace| {
+                    self.range_projection["expectedSuffix"]
+                        .as_array()
+                        .and_then(|order| order.last())
+                        .is_some_and(|last| &trace["focusedEntity"] == last)
+                });
+                let focus_restored=shell.input.focused().and_then(|id|shell.bindings.get(&id)).is_some_and(|binding|matches!(binding,crate::shell::Binding::Select(id) if id==&row(5)));
                 let extra = if act == Act::KeyboardEscape {
-                    preview.is_some_and(|trace|selected(&trace["selection"])== expected((5..ROWS).map(row)) && trace["hierarchyOffset"].as_f64().is_some_and(|offset|offset>0.))
-                        && shell.input.focused().and_then(|id|shell.bindings.get(&id)).is_some_and(|binding|matches!(binding,crate::shell::Binding::Select(id) if id==&row(5)))
+                    range_correct && range_scrolled && end_focused && focus_restored && unchanged
                 } else if act == Act::DeletedAnchor {
                     after.get(row(2).as_str()).is_none()
                         && editor.host.store().revision() == self.before_revision + 1
                 } else {
                     unchanged
                 };
+                let range_checks=(act==Act::KeyboardEscape).then(||json!({"matchesDisplayedSuffix":range_correct,"unmountedEndScrolledIntoView":range_scrolled,"displayedEndFocused":end_focused,"anchorFocusRestored":focus_restored}));
                 (
                     actual == wanted && extra,
-                    json!({"selected":actual,"expected":wanted,"contentUnchanged":unchanged,"extraChecks":extra,"rangePreview":preview.map(|trace|&trace["selection"])}),
+                    json!({"selected":actual,"expected":wanted,"contentUnchanged":unchanged,"extraChecks":extra,"rangePreview":preview.map(|trace|&trace["selection"]),"rangeProjection":if act==Act::KeyboardEscape{&self.range_projection}else{&Value::Null},"rangeChecks":range_checks}),
                 )
             }
             Act::MarqueeReplace

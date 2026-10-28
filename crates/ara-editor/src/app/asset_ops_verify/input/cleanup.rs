@@ -47,7 +47,7 @@ impl AssetOpsCheck {
         if !fully_visible {
             if command == "assets.import.dismiss" {
                 let scroll = shell
-                    .shown_node("asset-import-scroll")
+                    .shown_node("asset-jobs-scroll")
                     .ok_or("Completed import result has no native scroll viewport")?;
                 let viewport = shell.ui.nodes[scroll]
                     .rect

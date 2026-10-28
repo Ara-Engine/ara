@@ -99,6 +99,7 @@ pub(super) struct SelectionCheck {
     committed_records: Option<Value>,
     readiness: Value,
     orthographic_fit: Option<Value>,
+    range_projection: Value,
     trace: Vec<Value>,
     results: Vec<Value>,
 }
@@ -124,6 +125,7 @@ impl SelectionCheck {
             committed_records: None,
             readiness: Value::Null,
             orthographic_fit: None,
+            range_projection: Value::Null,
             trace: Vec::new(),
             results: Vec::new(),
         })
@@ -229,6 +231,7 @@ impl SelectionCheck {
         self.committed_records = None;
         self.readiness = Value::Null;
         self.orthographic_fit = None;
+        self.range_projection = Value::Null;
         self.from = [0.; 2];
         self.to = [0.; 2];
     }

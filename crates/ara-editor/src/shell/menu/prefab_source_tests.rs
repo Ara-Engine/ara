@@ -201,3 +201,55 @@ fn apply_to_menu_uses_logical_asset_ids_and_preserves_nested_context_and_field_s
     }
     Ok(())
 }
+
+#[test]
+fn linked_root_can_create_a_variant_in_one_undo_but_resolved_children_stay_blocked()
+-> ara_ui::Result<()> {
+    for modern in [false, true] {
+        let (mut editor, mut shell) = open(modern)?;
+        let command = commands::get("create.prefab").ok_or("Missing prefab command")?;
+        let child = Target::Entity("e_instance/e_nestedbase".into());
+        assert!(matches!(
+            command.avail(&shell.ctx(&editor, &child)),
+            Avail::Blocked(_)
+        ));
+        let root = Target::Entity("e_instance".into());
+        assert!(
+            command.avail(&shell.ctx(&editor, &root)).ready(),
+            "A linked root must expose the variant workflow its handler supports"
+        );
+        let before = snapshot(&editor);
+        let revision = editor.host.store().revision();
+        shell.run_command(&mut editor, command.id, &root)?;
+        assert_eq!(editor.host.store().revision(), revision + 1);
+        let workspace = editor.host.store().workspace();
+        let reference = workspace
+            .doc("sc_menuprefab")
+            .and_then(|doc| doc.record("e_instance"))
+            .and_then(|record| record.get("prefab"))
+            .and_then(Value::as_str)
+            .ok_or("Created variant instance has no source")?;
+        assert_ne!(reference, "@prefabs/outer.prefab#pf_menuouter");
+        let variant = workspace
+            .find(reference)
+            .and_then(|id| workspace.doc(id.as_str()))
+            .ok_or("Created variant document is missing")?;
+        let variant_root = variant
+            .children(None)
+            .first()
+            .and_then(|id| variant.record(id.as_str()));
+        assert_eq!(
+            variant_root
+                .and_then(|record| record.get("prefab"))
+                .and_then(Value::as_str),
+            Some("@prefabs/outer.prefab#pf_menuouter")
+        );
+        editor.action("history.undo", json!({}))?;
+        assert_eq!(
+            snapshot(&editor),
+            before,
+            "One Undo must restore the original instance and remove its new variant"
+        );
+    }
+    Ok(())
+}

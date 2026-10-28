@@ -24,6 +24,32 @@ fn navigation(key: i32, page: usize) -> Option<Navigation> {
 }
 
 impl Shell {
+    /// Read-only verification checkpoint of the complete filtered projection and
+    /// stable range state. Called before native input, never from the frame loop.
+    pub(crate) fn hierarchy_range_probe(&self, editor: &Editor) -> Value {
+        let entity = |key: Option<&u64>| key.and_then(|key| self.hierarchy_entities.get(key));
+        let order: Vec<_> = self
+            .hierarchy
+            .items
+            .iter()
+            .filter_map(|(key, _)| self.hierarchy_entities.get(key))
+            .collect();
+        let selected: Vec<_> = self
+            .hierarchy_selection
+            .selected()
+            .iter()
+            .filter_map(|key| self.hierarchy_entities.get(key))
+            .collect();
+        let focused = self
+            .input
+            .focused()
+            .and_then(|key| self.bindings.get(&key))
+            .and_then(|binding| match binding {
+                Binding::Select(entity) => Some(entity),
+                _ => None,
+            });
+        json!({"query":editor.state.searches.get("hierarchy"),"order":order,"anchor":entity(self.hierarchy_selection.anchor()),"active":entity(self.hierarchy_selection.active()),"selected":selected,"authoritativeSelection":editor.state.selection,"focused":focused,"mountedRows":self.hierarchy_view.as_ref().map(|view|view.visible_keys().count())})
+    }
     fn hierarchy_selection_order(&mut self, editor: &Editor) -> ara_ui::Result<Vec<u64>> {
         let live: HashSet<_> = self
             .resolved(editor)?

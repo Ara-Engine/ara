@@ -112,7 +112,7 @@ impl SelectionCheck {
             return self.setup(act, editor, shell);
         }
         if act.hierarchy() {
-            return self.hierarchy_input(act, shell, scale, events);
+            return self.hierarchy_input(act, editor, shell, scale, events);
         }
         if (4..=7).contains(&self.age) {
             let Some(viewport) = shell.viewport() else {
@@ -248,6 +248,7 @@ impl SelectionCheck {
     fn hierarchy_input(
         &mut self,
         act: Act,
+        editor: &Editor,
         shell: &Shell,
         scale: f32,
         events: &mut Vec<(u32, Event)>,
@@ -284,6 +285,34 @@ impl SelectionCheck {
         }
         match (act, self.age) {
             (Act::KeyboardEscape, 9) => {
+                let probe = shell.hierarchy_range_probe(editor);
+                let anchor = row(5);
+                if probe["anchor"] != anchor
+                    || probe["active"] != anchor
+                    || probe["focused"] != anchor
+                    || probe["selected"] != json!([anchor])
+                    || probe["authoritativeSelection"] != json!([anchor])
+                {
+                    self.range_projection = probe;
+                    return Err("Native row click did not establish the expected stable Shift+End anchor, active item, focus and selection".into());
+                }
+                let order = probe["order"]
+                    .as_array()
+                    .ok_or("Hierarchy range probe omitted full displayed order")?;
+                let index = order
+                    .iter()
+                    .position(|id| id == &anchor)
+                    .ok_or("Native range anchor is absent from displayed order")?;
+                let suffix = &order[index..];
+                if !(5..ROWS).all(|index| suffix.iter().any(|id| id == &row(index)))
+                    || probe["mountedRows"]
+                        .as_u64()
+                        .is_none_or(|mounted| mounted as usize >= suffix.len())
+                {
+                    self.range_projection = probe;
+                    return Err("Shift+End fixture does not include all expected numbered rows and an unmounted displayed destination".into());
+                }
+                self.range_projection = json!({"beforeInput":probe,"expectedSuffix":suffix});
                 key(events, 225, true);
                 tap(events, 77);
                 key(events, 225, false);
