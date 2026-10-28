@@ -629,12 +629,12 @@ impl Settings {
         let (value, label) = match value {
             Some(v) => {
                 valid(d, &v).map_err(|e| vec![crate::invalid(e)])?;
-                let value = (v != d.default.value()).then_some(v);
+                let value = (!ara_json::json_eq(&v, &d.default.value())).then_some(v);
                 (value, format!("Set {}", d.label))
             }
             None => (None, format!("Reset {}", d.label)),
         };
-        if value.as_ref() == self.scope_values(d.scope).get(key) {
+        if same_override(value.as_ref(), self.scope_values(d.scope).get(key)) {
             return Ok(label);
         }
         let mut meta = TxnMeta::by(author);
@@ -713,6 +713,15 @@ impl Settings {
         if let Some(writer) = &self.user_writer {
             writer.save(Value::Object(self.user.clone()));
         }
+    }
+}
+
+/// Setting numbers retain the same meaning across integer/float JSON spellings.
+fn same_override(left: Option<&Value>, right: Option<&Value>) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) => ara_json::json_eq(left, right),
+        (None, None) => true,
+        _ => false,
     }
 }
 /// Canonical fixture writer; production policy persistence belongs to the Host.

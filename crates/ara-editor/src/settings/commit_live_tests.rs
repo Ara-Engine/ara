@@ -230,7 +230,10 @@ fn sequential_project_settings_undo_redo_skips_its_cancelled_local_pairs() {
         editor
             .action("editor.settings.undo", json!({"redo":redo}))
             .unwrap();
-        assert_eq!(editor.state.settings["play.clients"], expected);
+        assert_eq!(
+            editor.state.settings["play.clients"].as_f64(),
+            Some(f64::from(expected))
+        );
         let transaction = editor.host.store().history().last().unwrap();
         assert_eq!(transaction.base, base);
         assert_eq!(transaction.result, base + 1);
@@ -291,12 +294,37 @@ fn host_native_cancelled_command_pairs_do_not_block_older_settings_undo() {
     );
     Endpoint::call(&mut editor.host, "history.undo", json!({"session":session})).unwrap();
     editor.action("editor.settings.undo", json!({})).unwrap();
-    assert_eq!(editor.state.settings["play.clients"], 1);
+    assert_eq!(editor.state.settings["play.clients"].as_f64(), Some(1.));
     assert!(
         policy(editor.host.store().workspace(), "settings")
             .unwrap()
             .get("play.clients")
             .is_none()
+    );
+}
+
+#[test]
+fn numeric_default_spellings_do_not_create_private_or_canonical_settings_edits() {
+    let project = Project::new();
+    let mut editor = open(&project);
+    let revision = editor.host.store().revision();
+    let undo = editor.state.settings_undo.clone();
+    let policy = std::fs::read(project.0.join(ara_host::project_policy::PREFERENCES)).unwrap();
+    for value in [json!(1), json!(1.0)] {
+        editor
+            .action(
+                "editor.settings.set",
+                json!({"key":"play.clients","value":value}),
+            )
+            .unwrap();
+        assert_eq!(editor.state.settings["play.clients"].as_f64(), Some(1.));
+        assert_eq!(editor.host.store().revision(), revision);
+        assert_eq!(editor.state.settings_undo, undo);
+    }
+    editor.host.flush();
+    assert_eq!(
+        std::fs::read(project.0.join(ara_host::project_policy::PREFERENCES)).unwrap(),
+        policy
     );
 }
 

@@ -32,13 +32,13 @@ impl Settings {
             Some(value) => {
                 valid(definition, &value).map_err(|error| vec![crate::invalid(error)])?;
                 (
-                    (value != definition.default.value()).then_some(value),
+                    (!ara_json::json_eq(&value, &definition.default.value())).then_some(value),
                     format!("Set {}", definition.label),
                 )
             }
             None => (None, format!("Reset {}", definition.label)),
         };
-        if value.as_ref() == self.project.get(key) {
+        if same_override(value.as_ref(), self.project.get(key)) {
             return Ok(label);
         }
         let mut desired = self.project.clone();
