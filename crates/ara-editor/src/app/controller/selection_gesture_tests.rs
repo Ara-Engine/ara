@@ -170,7 +170,9 @@ fn pointer_cancellation_discards_alt_preview_and_all_native_capture_before_relea
     let mut controller = preview(&mut editor, &mut shell);
     controller.buttons[1] = true;
     controller.keys.insert(226);
-    let menu = shell.shown_node("menu-title-0").unwrap();
+    let menu = shell
+        .shown_node(shell.menu_header_node("File").unwrap())
+        .unwrap();
     let rect = shell.ui.nodes[menu].rect;
     let mut clipboard = crate::native::SessionClipboard::new(true);
     shell
@@ -222,7 +224,9 @@ fn alt_pointer_chord_does_not_turn_the_next_escape_into_a_menu_mnemonic_cancel()
         if case == "native-held-motion" {
             native_owner.buttons[1] = true;
         } else if case == "retained-held-motion" {
-            let menu = shell.shown_node("menu-title-0").unwrap();
+            let menu = shell
+                .shown_node(shell.menu_header_node("File").unwrap())
+                .unwrap();
             let rect = shell.ui.nodes[menu].rect;
             shell
                 .event(

@@ -7,6 +7,46 @@ use super::*;
 /// A rendered menu row: command id, title as shown, and the disabled reason.
 pub type MenuRow = (String, String, Option<String>);
 impl Shell {
+    /// Current retained header for a named top-level menu, independent of catalog order.
+    pub fn menu_header_node(&self, title: &str) -> Option<&str> {
+        self.ui.nodes.iter().find_map(|node| {
+            matches!(self.bindings.get(&ara_ui::source::stable_id(&node.element.id)),Some(Binding::MenuBar(bound)) if bound==title).then_some(node.element.id.as_str())
+        })
+    }
+    /// Current command or submenu by its displayed title, for semantic native probes.
+    pub fn menu_item_node(&self, editor: &Editor, title: &str) -> Option<String> {
+        for (level, rows) in self.menu_levels(editor).iter().enumerate() {
+            for row in rows {
+                let shown = match row {
+                    Row::Sub(title, _) => title.clone(),
+                    Row::Command {
+                        id, target, label, ..
+                    } => label.clone().unwrap_or_else(|| {
+                        commands::lookup(&editor.extensions, id)
+                            .map(|spec| spec.title(&self.ctx(editor, target)))
+                            .unwrap_or_default()
+                    }),
+                    Row::Sep => continue,
+                };
+                if shown == title {
+                    return Some(self.menu_row_id(editor, level, row));
+                }
+            }
+        }
+        None
+    }
+    /// Resolve a scripted fixture's submenu position to its semantic navigation title.
+    pub(crate) fn menu_submenu_title(
+        &self,
+        editor: &Editor,
+        level: usize,
+        index: usize,
+    ) -> Option<String> {
+        match self.menu_levels(editor).get(level)?.get(index)? {
+            Row::Sub(title, _) => Some(title.clone()),
+            _ => None,
+        }
+    }
     /// Right-click empty space in the asset grid through the production hit route.
     pub fn open_assets_context(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
         let i = self
@@ -25,8 +65,8 @@ impl Shell {
             .into_iter()
             .map(str::to_owned)
             .collect();
-        for (index, menu) in menus.iter().enumerate() {
-            self.open_bar(index, false);
+        for menu in &menus {
+            self.open_bar_title(menu, false);
             self.walk_level(editor, menu.to_owned(), &mut out)?;
         }
         self.menu = None;
@@ -43,8 +83,8 @@ impl Shell {
         let levels = self.menu_levels(editor);
         let level = levels.len() - 1;
         let rows = levels[level].clone();
-        for (i, row) in rows.iter().enumerate() {
-            let node = format!("m{level}-{i}");
+        for row in &rows {
+            let node = self.menu_row_id(editor, level, row);
             match row {
                 Row::Command { id, .. } => {
                     match self.bindings.get(&ara_ui::source::stable_id(&node)) {
@@ -57,7 +97,7 @@ impl Shell {
                 Row::Sub(title, _) => {
                     if let Some(menu) = &mut self.menu {
                         menu.open.truncate(level);
-                        menu.open.push(i);
+                        menu.open.push(title.clone());
                     }
                     self.walk_level(editor, format!("{path} › {title}"), out)?;
                     if let Some(menu) = &mut self.menu {

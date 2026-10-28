@@ -819,7 +819,7 @@ fn centre(shell: &Shell, id: &str) -> Option<[f32; 2]> {
 fn target(shell: &Shell, control: Control) -> Option<String> {
     match control {
         Control::Toolbar => Some("tool-space".into()),
-        Control::Menu => Some("menu-title-0".into()),
+        Control::Menu => shell.menu_header_node("File").map(str::to_owned),
         Control::Tab => {
             let [a, b] = tab_pair(shell)?;
             Some(if selected(shell, &a) { b } else { a })

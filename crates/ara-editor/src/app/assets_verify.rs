@@ -120,7 +120,10 @@ impl AssetsVerification {
             }
             1 => {
                 shell.open_assets_context(editor)?;
-                shell.click("m0-0", &mut clip)?;
+                let create = shell
+                    .menu_item_node(editor, "Create")
+                    .ok_or("Assets Create submenu missing")?;
+                shell.click(&create, &mut clip)?;
                 shell.dispatch(editor)?;
                 capture.screenshot("02-create-menu", editor, shell, gpu, ui, renderer, scene)?;
             }

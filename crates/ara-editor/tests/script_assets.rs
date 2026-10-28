@@ -221,7 +221,10 @@ fn right_click_create_script_focuses_inline_rename() {
     let mut shell = loaded(&mut editor);
     let mut clip = Clip::default();
     assert!(shell.open_assets_context(&mut editor).unwrap());
-    shell.click("m0-0", &mut clip).unwrap();
+    let create = shell
+        .menu_item_node(&editor, "Create")
+        .expect("Assets Create submenu");
+    shell.click(&create, &mut clip).unwrap();
     shell.dispatch(&mut editor).unwrap();
     let script = shell
         .ui

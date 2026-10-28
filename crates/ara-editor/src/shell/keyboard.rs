@@ -16,6 +16,9 @@ impl Shell {
         pressed: bool,
         clipboard: &mut dyn Clipboard,
     ) -> ara_ui::Result<bool> {
+        if pressed {
+            self.interaction.note();
+        }
         if MODIFIERS.contains(&scancode) {
             self.native_input.key(
                 &mut self.ui,
@@ -70,6 +73,9 @@ impl Shell {
         if self.choice_key(editor, scancode, pressed, clipboard)? {
             return Ok(true);
         }
+        if self.palette_form_key(editor, scancode, pressed, clipboard)? {
+            return Ok(true);
+        }
         if self.modal_root == Some("build-options") {
             self.alt_tap = false;
             if !pressed {
@@ -122,8 +128,7 @@ impl Shell {
             alt,
             key: scancode,
         };
-        if let Some(id) = self.recording {
-            self.recording = None;
+        if let Some(id) = self.recording.take() {
             if scancode != 41 {
                 let mut map = editor
                     .state
@@ -132,7 +137,7 @@ impl Shell {
                     .and_then(Value::as_object)
                     .cloned()
                     .unwrap_or_default();
-                map.insert(id.into(), chord.text().into());
+                map.insert(id, chord.text().into());
                 editor.action(
                     "editor.settings.set",
                     json!({"key":"input.shortcuts","value":map}),
@@ -247,8 +252,7 @@ impl Shell {
             && matches!(scancode, 81 | 82 | 40 | 88)
         {
             if scancode == 40 || scancode == 88 {
-                let id = format!("command-{}", self.palette_active);
-                if self.ui.find(&id).is_some() {
+                if let Some(id) = self.palette_row_id(self.palette_active) {
                     self.click(&id, clipboard)?;
                     self.dispatch(editor)?;
                 }

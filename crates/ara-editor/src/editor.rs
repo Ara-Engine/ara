@@ -31,6 +31,7 @@ impl From<RpcError> for EditorError {
 
 /// One editor process owns the project lock, authority, navigation and agent activity.
 pub struct Editor {
+    pub(crate) interaction: crate::interaction::Interaction,
     asset_updates: Receiver<()>,
     /// Published model generations retained across document and transform edits.
     pub(crate) models: crate::world::gltf::ModelCache,
@@ -171,6 +172,7 @@ impl Editor {
         let state = navigation.state.clone();
         let (changes, updates) = mpsc::channel();
         let (control_send, controls) = mpsc::channel();
+        let interaction = crate::interaction::Interaction::default();
         host.register(Box::new(EditorService {
             navigation,
             settings,
@@ -181,7 +183,7 @@ impl Editor {
             bounds_key: None,
             pending_frames: Default::default(),
             frame_aspect: 16. / 9.,
-            extensions: crate::extensions::Extensions::new(root)
+            extensions: crate::extensions::Extensions::new(root, interaction.clone())
                 .map_err(|d| anyhow::anyhow!(d.to_string()))?,
         }))
         .map_err(|d| anyhow::anyhow!(d.to_string()))?;
@@ -224,6 +226,7 @@ impl Editor {
         )
         .map_err(EditorError::from)?;
         let mut editor = Self {
+            interaction,
             asset_updates,
             models: crate::world::gltf::ModelCache::new(root)?,
             host,
@@ -260,7 +263,9 @@ impl Editor {
         Ok(editor)
     }
     /// Push native human activity into the non-disruption boundary.
-    pub fn input_active(&mut self) {}
+    pub fn input_active(&mut self) {
+        self.interaction.note();
+    }
     /// A reflected editor action, using the same validation as an external client.
     pub fn action(&mut self, method: &str, mut params: Value) -> Result<Value, EditorError> {
         // Native command adapters can outlive a field or receive invalid input.

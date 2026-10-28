@@ -15,6 +15,7 @@ impl Shell {
         text: &str,
         clipboard: &mut dyn Clipboard,
     ) -> ara_ui::Result<bool> {
+        self.interaction.note();
         self.native_input.commit(
             &mut self.ui,
             &mut self.input,
@@ -31,6 +32,7 @@ impl Shell {
         length: i32,
         clipboard: &mut dyn Clipboard,
     ) -> ara_ui::Result<bool> {
+        self.interaction.note();
         self.native_input.preedit(
             &mut self.ui,
             &mut self.input,
@@ -141,6 +143,15 @@ impl Shell {
         event: InputEvent,
         clipboard: &mut dyn Clipboard,
     ) -> ara_ui::Result<()> {
+        if match &event {
+            InputEvent::PointerDown(point) => point.iter().all(|value| value.is_finite()),
+            InputEvent::Wheel { position, delta } => {
+                position.iter().chain(delta).all(|value| value.is_finite())
+            }
+            _ => false,
+        } {
+            self.interaction.note();
+        }
         if matches!(event, InputEvent::PointerDown(_) | InputEvent::Wheel { .. })
             || (matches!(event, InputEvent::PointerMove(_))
                 && (self.input.captured().is_some()
@@ -261,7 +272,7 @@ impl Shell {
                     })
                 {
                     action.value = action.value.to_string().into();
-                    committed_numeric = true;
+                    committed_numeric |= !matches!(binding, Binding::PaletteParam(_));
                 }
                 match binding {
                     Binding::Play(intent) => {
@@ -386,11 +397,11 @@ impl Shell {
                         self.execute(editor, &id, &target)?;
                         rebuild = true;
                     }
-                    Binding::MenuBar(index) => {
-                        if self.menu.as_ref().and_then(|m| m.bar()) == Some(*index) {
+                    Binding::MenuBar(title) => {
+                        if self.menu.as_ref().and_then(|m| m.bar()) == Some(title.as_str()) {
                             self.menu = None;
                         } else {
-                            self.open_bar(*index, false);
+                            self.open_bar_title(title, false);
                         }
                         self.mnemonics = false;
                         rebuild = true;
@@ -405,7 +416,7 @@ impl Shell {
                     Binding::MenuSub(level, row) => {
                         if let Some(menu) = &mut self.menu {
                             menu.open.truncate(*level);
-                            menu.open.push(*row);
+                            menu.open.push(row.clone());
                             menu.active = None;
                         }
                         rebuild = true;
@@ -478,7 +489,7 @@ impl Shell {
                         rebuild = true;
                     }
                     Binding::ShortcutRecord(id) => {
-                        self.recording = Some(*id);
+                        self.recording = Some(id.clone());
                         self.key_search = false;
                         rebuild = true;
                     }
@@ -490,7 +501,7 @@ impl Shell {
                             .and_then(Value::as_object)
                             .cloned()
                             .unwrap_or_default();
-                        map.remove(*id);
+                        map.remove(id);
                         editor.action(
                             "editor.settings.set",
                             json!({"key":"input.shortcuts","value":map}),
@@ -729,36 +740,24 @@ impl Shell {
                         rebuild = true;
                     }
                     Binding::Palette(command) => {
-                        self.palette_command = Some(command.clone());
-                        self.palette_params.clear();
-                        if let Some(entity) = editor.state.selection.first() {
-                            self.palette_params.insert("entity".into(), json!(entity));
-                        }
+                        self.begin_palette_form(editor, command)?;
                         rebuild = true;
                     }
                     Binding::PaletteParam(key) => {
-                        let text = action.value.as_str().unwrap_or("");
-                        let value = serde_json::from_str(text).unwrap_or_else(|_| json!(text));
-                        self.palette_params.insert(key.clone(), value);
+                        self.edit_palette_parameter(key, action.value);
+                        rebuild = true;
+                    }
+                    Binding::PaletteBack => {
+                        self.back_palette_form();
+                        rebuild = true;
+                    }
+                    Binding::PaletteUnset(key) => {
+                        self.unset_palette_parameter(key);
+                        rebuild = true;
                     }
                     Binding::PaletteRun => {
-                        if let Some(command) = self.palette_command.as_deref() {
-                            let params = serde_json::to_value(&self.palette_params)?;
-                            if command.starts_with("editor.")
-                                && editor.host.catalog().iter().any(|m| m.name == command)
-                            {
-                                editor.action(command, params)?;
-                            } else {
-                                editor.apply(
-                                    vec![json!({"cmd":command,"args":params})],
-                                    "Run command palette action",
-                                    None,
-                                )?;
-                            }
-                            editor.action("editor.palette", json!({"open":false}))?;
-                            self.palette_command = None;
-                            rebuild = true;
-                        }
+                        self.run_palette_form(editor)?;
+                        rebuild = true;
                     }
                     Binding::Asset(asset) => {
                         rebuild = true;

@@ -2,7 +2,7 @@
 use super::*;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-fn open(modern: bool) -> ara_ui::Result<(Editor, Shell)> {
+pub(super) fn open(modern: bool) -> ara_ui::Result<(Editor, Shell)> {
     static NEXT: AtomicU64 = AtomicU64::new(0);
     let root = crate::test_target()
         .join("prefab-source-menus")

@@ -482,7 +482,9 @@ impl Controller {
             }
             Event::MouseMotion { position, delta } => {
                 shell.pointer = position;
-                editor.input_active();
+                if self.buttons.iter().any(|pressed| *pressed) {
+                    editor.input_active();
+                }
                 if self.move_marquee(shell) {
                     return Ok((true, false, false));
                 }
@@ -556,7 +558,9 @@ impl Controller {
                 if button < 4 {
                     self.buttons[button as usize] = pressed;
                 }
-                editor.input_active();
+                if pressed {
+                    editor.input_active();
+                }
                 // The colour picker's eyedropper owns clicks while it picks: a left
                 // click (or releasing a drag from its button) picks, a right click cancels.
                 if shell.eyedropper_active() {

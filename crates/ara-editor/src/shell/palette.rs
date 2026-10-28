@@ -2,8 +2,9 @@
 //! keycaps. Prefixes: `@` entities and assets, `#` scenes and assets, `?` help.
 //! Engine (content) commands keep their generated parameter form.
 use super::commands::{Avail, Target, entries, registered_menu_path};
-use super::panels::display;
 use super::*;
+mod parameters;
+pub(super) use parameters::{FORM_CSS, State as ParameterState};
 
 /// One palette row.
 pub(super) struct Item {
@@ -238,6 +239,7 @@ impl Shell {
         items
     }
     pub(super) fn palette(&mut self, editor: &mut Editor, out: &mut String) -> ara_ui::Result<()> {
+        self.guard_palette_generation(editor);
         let width = (self.ui.size[0] - 32.).min(640.);
         // A popover centred below a point near the top: a click outside closes it.
         out.push_str(&format!(
@@ -279,7 +281,7 @@ impl Shell {
                     "<text id='palette-group-{index}' class='palette-group' text='{group}' />"
                 ));
             }
-            let id = format!("command-{index}");
+            let id = item.row_id(editor);
             let active = index == self.palette_active;
             out.push_str(&format!("<button id='{id}' class='palette-result{}' label='{}' description='{}' action='Dispatch'{}>{}<panel id='{id}-copy' class='palette-copy'>",if active{" palette-active"}else{""},escape(&item.title),escape(item.reason.as_deref().unwrap_or(&item.detail)),if item.reason.is_some(){" disabled='true'"}else{""},if active{icons::icon_in(&id,item.icon,"on-selection")}else{icons::icon(&id,item.icon)}));
             highlight(out, &id, &item.title, &term, active);
@@ -349,44 +351,23 @@ impl Shell {
             out.push_str("</scroll>");
             return Ok(());
         }
-        out.push_str(&format!(
-            "<text id='palette-command' class='accent' text='{}' />",
-            escape(name)
-        ));
-        let schema = editor
-            .host
-            .catalog()
-            .iter()
-            .find(|m| m.name == name)
-            .map(|m| m.params.clone())
-            .or_else(|| editor.command_schemas.get(name).cloned());
-        if let Some(schema) = schema
-            && let Some(properties) = schema["properties"].as_object()
-        {
-            for (key, prop) in properties {
-                if key == "session" {
-                    continue;
-                }
-                let id = format!("param-{key}");
-                self.bindings.insert(
-                    ara_ui::source::stable_id(&id),
-                    Binding::PaletteParam(key.clone()),
-                );
-                let value = self
-                    .palette_params
-                    .get(key)
-                    .map(display)
-                    .unwrap_or_default();
-                out.push_str(&format!("<panel id='param-row-{key}' class='prop-row'><text id='param-label-{key}' class='prop-label' style='width:140px' text='{}' /><panel id='param-value-{key}' class='prop-value'><field id='{id}' text='{}' action='Dispatch' description='{}' style='flex-grow:1' /></panel></panel>",escape(key),escape(&value),escape(prop["description"].as_str().unwrap_or(""))));
-            }
-        }
-        out.push_str(&self.bind_button(
-            "palette-run",
-            "Run command",
-            Binding::PaletteRun,
-            "primary",
-        ));
-        Ok(())
+        self.palette_parameters(editor, name, out)
+    }
+}
+
+impl Item {
+    fn row_id(&self, editor: &Editor) -> String {
+        let identity = match &self.binding {
+            Binding::Command(id, target) => format!("command:{id}:{target:?}"),
+            Binding::CommandOwned(id, target) => format!("command:{id}:{target:?}"),
+            Binding::Palette(command) => format!("form:{command}"),
+            _ => format!("{}:{}:{}", self.group, self.id, self.title),
+        };
+        let identity = format!(
+            "{identity}:{}:{:?}:{}",
+            editor.state.doc, editor.state.selection, self.title
+        );
+        format!("command-{:016x}", ara_ui::source::stable_id(&identity))
     }
 }
 /// Title text with matched characters in the accent color.

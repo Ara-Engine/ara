@@ -9,8 +9,8 @@ use super::*;
 /// Where an open menu's rows come from.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Source {
-    /// A top-level menu by index.
-    Bar(usize),
+    /// A top-level menu by its registered title, independent of catalog order.
+    Bar(String),
     /// A right-click (or ⋯) menu for a target.
     Context(Context, Target),
     /// Snap increments (`move`, `rotate`, `scale`) or Scene view fields of view (`fov`).
@@ -30,17 +30,21 @@ pub(crate) struct MenuState {
     pub at: [f32; 2],
     /// Surface that shows the menu; `None` is the main window.
     pub surface: Option<String>,
-    /// Open submenu row per level.
-    pub open: Vec<usize>,
+    /// Open submenu title per level, independent of sibling order.
+    pub open: Vec<String>,
     /// Keyboard highlight in the deepest level.
     pub active: Option<usize>,
     /// Type-to-filter text (root level).
     pub query: String,
+    /// Last painted row identities, used to preserve a keyboard highlight on reorder.
+    painted_rows: Vec<String>,
+    /// Effective authoring/navigation target fingerprint, calculated once per rebuild.
+    context_identity: String,
 }
 impl MenuState {
-    pub fn bar(&self) -> Option<usize> {
-        match self.source {
-            Source::Bar(i) => Some(i),
+    pub fn bar(&self) -> Option<&str> {
+        match &self.source {
+            Source::Bar(title) => Some(title),
             _ => None,
         }
     }
@@ -61,8 +65,21 @@ pub(crate) enum Row {
 }
 const WIDTH: f32 = 144.;
 
+/// A header press cannot change roots when registered titles reorder or reload.
+pub(crate) fn bar_id(title: &str, generation: Option<&str>) -> String {
+    let value = ara_json::to_canonical_string(&json!([title, generation]));
+    format!("menu-title-{}", blake3::hash(value.as_bytes()).to_hex())
+}
+
 fn insert_registered_menu(rows: &mut Vec<Row>, parts: &[&str], command: &str) {
     let Some((head, tail)) = parts.split_first() else {
+        rows.push(Row::Command {
+            id: command.into(),
+            target: Target::None,
+            label: None,
+            path: String::new(),
+            checked: None,
+        });
         return;
     };
     if tail.is_empty() {
@@ -92,14 +109,40 @@ impl Shell {
     }
     /// Open a menu bar menu (or switch to it), below its title.
     pub(crate) fn open_bar(&mut self, index: usize, keyboard: bool) {
+        let ui = self
+            .current
+            .as_ref()
+            .and_then(|id| self.floats.iter().find(|s| &s.id == id))
+            .map_or(&self.ui, |s| &s.ui);
+        let title = ui
+            .nodes
+            .iter()
+            .filter_map(|node| {
+                match self
+                    .bindings
+                    .get(&ara_ui::source::stable_id(&node.element.id))
+                {
+                    Some(Binding::MenuBar(title)) => Some(title.clone()),
+                    _ => None,
+                }
+            })
+            .nth(index);
+        if let Some(title) = title {
+            self.open_bar_title(&title, keyboard);
+        }
+    }
+    /// Open a semantic top-level identity; the next render validates its registration.
+    pub(crate) fn open_bar_title(&mut self, title: &str, keyboard: bool) {
         self.menu = Some(MenuState {
-            source: Source::Bar(index),
-            anchor: Some(format!("menu-title-{index}")),
+            source: Source::Bar(title.into()),
+            anchor: None,
             at: [0., 0.],
             surface: None,
             open: Vec::new(),
             active: keyboard.then_some(0),
             query: String::new(),
+            painted_rows: Vec::new(),
+            context_identity: String::new(),
         });
     }
     /// Open a context or value menu at a point of the current surface.
@@ -112,6 +155,8 @@ impl Shell {
             open: Vec::new(),
             active: None,
             query: String::new(),
+            painted_rows: Vec::new(),
+            context_identity: String::new(),
         });
         self.mnemonics = false;
     }
@@ -293,16 +338,17 @@ impl Shell {
         };
         let mut root = Vec::new();
         match &menu.source {
-            Source::Bar(i) => {
-                if let Some(menu) = MENUS.get(*i) {
+            Source::Bar(title) => {
+                if let Some(menu) = MENUS.iter().find(|menu| menu.title == title.as_str()) {
                     self.expand(editor, menu.items, &mut root);
                 }
-                if let Some(title) = commands::bar_titles(&editor.extensions).get(*i) {
-                    for placement in &editor.extensions.menus {
-                        let parts: Vec<_> = placement.path.split('/').collect();
-                        if parts.first() == Some(title) {
-                            insert_registered_menu(&mut root, &parts[1..], &placement.command);
-                        }
+                let mut placements: Vec<_> = editor.extensions.menus.iter().collect();
+                placements.sort_by(|a, b| (&a.path, &a.command).cmp(&(&b.path, &b.command)));
+                placements.dedup_by(|a, b| a.path == b.path && a.command == b.command);
+                for placement in placements {
+                    let parts: Vec<_> = placement.path.split('/').collect();
+                    if parts.first().copied() == Some(title.as_str()) {
+                        insert_registered_menu(&mut root, &parts[1..], &placement.command);
                     }
                 }
             }
@@ -385,6 +431,7 @@ impl Shell {
                 });
             }
         }
+        self.dedup_menu_rows(editor, &mut root);
         if !menu.query.is_empty() {
             let query = menu.query.to_lowercase();
             let mut flat = Vec::new();
@@ -434,22 +481,140 @@ impl Shell {
         }
         let mut levels = vec![root];
         for open in &menu.open {
-            let Some(Row::Sub(_, items)) = levels.last().and_then(|l| l.get(*open)).cloned() else {
+            let Some(Row::Sub(_, items)) = levels
+                .last()
+                .and_then(|rows| {
+                    rows.iter()
+                        .find(|row| matches!(row,Row::Sub(title,_) if title==open))
+                })
+                .cloned()
+            else {
                 break;
             };
             levels.push(items);
         }
         levels
     }
+    fn row_identity(&self, editor: &Editor, row: &Row) -> String {
+        let value = match row {
+            Row::Command {
+                id,
+                target,
+                label,
+                path,
+                ..
+            } => {
+                let title = label.clone().unwrap_or_else(|| {
+                    commands::lookup(&editor.extensions, id)
+                        .map(|entry| entry.title(&self.ctx(editor, target)))
+                        .unwrap_or_default()
+                });
+                json!(["command", id, target, title, path])
+            }
+            Row::Sub(title, _) => json!(["submenu", title]),
+            Row::Sep => json!(["separator"]),
+        };
+        ara_json::to_canonical_string(&value)
+    }
+    fn dedup_menu_rows(&self, editor: &Editor, rows: &mut Vec<Row>) {
+        let mut seen = std::collections::BTreeSet::new();
+        for row in rows.iter_mut() {
+            if let Row::Sub(_, children) = row {
+                self.dedup_menu_rows(editor, children);
+            }
+        }
+        rows.retain(|row| {
+            !matches!(row, Row::Command { .. }) || seen.insert(self.row_identity(editor, row))
+        });
+    }
+    fn row_navigation_identity(row: &Row) -> String {
+        let value = match row {
+            Row::Command {
+                id,
+                target,
+                label,
+                path,
+                ..
+            } => json!(["command", id, target, label, path]),
+            Row::Sub(title, _) => json!(["submenu", title]),
+            Row::Sep => json!(["separator"]),
+        };
+        ara_json::to_canonical_string(&value)
+    }
+    /// Semantic row identity used by rendering and verification; never a sibling index.
+    pub(crate) fn menu_row_id(&self, editor: &Editor, level: usize, row: &Row) -> String {
+        let Some(menu) = &self.menu else {
+            return String::new();
+        };
+        let value = json!([
+            format!("{:?}", menu.source),
+            menu.open.get(..level).unwrap_or(&[]),
+            self.row_identity(editor, row),
+            menu.context_identity,
+            editor.extensions.generation
+        ]);
+        let canonical = ara_json::to_canonical_string(&value);
+        format!("m{level}-{}", blake3::hash(canonical.as_bytes()).to_hex())
+    }
+    /// Reconcile navigation by title/command while invalidating captures on changed code or targets.
+    fn sync_menu_navigation(&mut self, editor: &Editor) -> Vec<Vec<Row>> {
+        let Some(menu) = self.menu.as_ref() else {
+            return Vec::new();
+        };
+        if let Some(title) = menu.bar()
+            && !commands::bar_titles(&editor.extensions).contains(&title)
+        {
+            self.menu = None;
+            return Vec::new();
+        }
+        let levels = self.menu_levels(editor);
+        let rows = levels.last().map(Vec::as_slice).unwrap_or(&[]);
+        let identities: Vec<_> = rows.iter().map(Self::row_navigation_identity).collect();
+        let context = ara_json::to_canonical_string(&json!([
+            editor.state.doc,
+            editor.state.selection,
+            editor.state.focus,
+            editor.state.asset_path,
+            editor.state.asset_folder,
+            editor.state.resource,
+            editor.state.resource_item,
+            editor.state.canvas_selection,
+            self.asset_selection.selected()
+        ]));
+        if let Some(menu) = &mut self.menu {
+            if !menu.painted_rows.is_empty() {
+                menu.active = menu
+                    .active
+                    .and_then(|active| menu.painted_rows.get(active))
+                    .and_then(|prior| identities.iter().position(|identity| identity == prior));
+            } else {
+                menu.active = menu.active.filter(|i| *i < rows.len());
+            }
+            menu.open.truncate(levels.len().saturating_sub(1));
+            menu.painted_rows = identities;
+            menu.context_identity = blake3::hash(context.as_bytes()).to_hex().to_string();
+            if let Some(title) = menu.bar() {
+                menu.anchor = Some(bar_id(title, editor.extensions.generation.as_deref()));
+            }
+        }
+        levels
+    }
     /// Popups for the current surface: menus and context menus.
     pub(super) fn overlays(&mut self, editor: &mut Editor, out: &mut String) -> ara_ui::Result<()> {
+        if self
+            .menu
+            .as_ref()
+            .is_none_or(|menu| menu.surface != self.current)
+        {
+            return Ok(());
+        }
+        let levels = self.sync_menu_navigation(editor);
         let Some(menu) = self.menu.clone() else {
             return Ok(());
         };
         if menu.surface != self.current {
             return Ok(());
         }
-        let levels = self.menu_levels(editor);
         let keymap = self.keymap.clone();
         for (level, rows) in levels.iter().enumerate() {
             // The root opens below its control (or at the click); each submenu beside
@@ -463,11 +628,14 @@ impl Shell {
                     "at='{},{}' placement='bottom-start' offset='0'",
                     menu.at[0], menu.at[1]
                 ),
-                _ => format!(
-                    "anchor='m{}-{}' placement='right-start' offset='0'",
-                    level - 1,
-                    menu.open[level - 1]
-                ),
+                _ => {
+                    let anchor = levels[level - 1]
+                        .iter()
+                        .find(|row| matches!(row,Row::Sub(title,_) if title==&menu.open[level-1]))
+                        .map(|row| self.menu_row_id(editor, level - 1, row))
+                        .unwrap_or_default();
+                    format!("anchor='{anchor}' placement='right-start' offset='0'")
+                }
             };
             out.push_str(&format!(
                 "<popover id='menu-pop-{level}' class='menu' {place} style='min-width:{WIDTH}px'>"
@@ -485,14 +653,21 @@ impl Shell {
             let active = if level + 1 == levels.len() {
                 menu.active
             } else {
-                menu.open.get(level).copied()
+                menu.open.get(level).and_then(|open| {
+                    rows.iter()
+                        .position(|row| matches!(row,Row::Sub(title,_) if title==open))
+                })
             };
             for (i, row) in rows.iter().enumerate() {
-                let id = format!("m{level}-{i}");
+                let id = if matches!(row, Row::Sep) {
+                    format!("menu-separator-{level}-{i}")
+                } else {
+                    self.menu_row_id(editor, level, row)
+                };
                 match row {
                     Row::Sep => out.push_str(&format!("<panel id='{id}' class='menu-sep'><panel id='{id}-line' class='menu-line' /></panel>")),
                     Row::Sub(title, _) => {
-                        self.bindings.insert(ara_ui::source::stable_id(&id), Binding::MenuSub(level, i));
+                        self.bindings.insert(ara_ui::source::stable_id(&id), Binding::MenuSub(level, title.clone()));
                         out.push_str(&format!("<button id='{id}' class='menu-item{}' label='{}' action='Dispatch'><panel id='{id}-check' class='menu-check' /><text id='{id}-label' class='menu-label' text='{}' />{}</button>",if active==Some(i){" menu-active"}else{""},escape(title),escape(title),if active==Some(i){icons::icon_in(&id,"chevron-right","on-selection")}else{icons::icon(&id,"chevron-right")}));
                     }
                     Row::Command { id: command, target, label, path, checked } => {
@@ -597,13 +772,13 @@ impl Shell {
             .bindings
             .get(&ara_ui::source::stable_id(&self.ui.nodes[hit].element.id));
         let change = match binding {
-            Some(Binding::MenuBar(i)) if menu.bar().is_some_and(|b| b != *i) => {
-                let i = *i;
-                self.open_bar(i, false);
+            Some(Binding::MenuBar(title)) if menu.bar().is_some_and(|b| b != title.as_str()) => {
+                let title = title.clone();
+                self.open_bar_title(&title, false);
                 true
             }
             Some(Binding::MenuSub(level, row)) if menu.open.get(*level) != Some(row) => {
-                let (level, row) = (*level, *row);
+                let (level, row) = (*level, row.clone());
                 if let Some(m) = &mut self.menu {
                     m.open.truncate(level);
                     m.open.push(row);
@@ -636,10 +811,10 @@ impl Shell {
     }
     /// Keyboard navigation inside an open menu; returns whether the key was used.
     pub(crate) fn menu_key(&mut self, editor: &mut Editor, scancode: i32) -> ara_ui::Result<bool> {
+        let levels = self.sync_menu_navigation(editor);
         let Some(menu) = self.menu.clone() else {
             return Ok(false);
         };
-        let levels = self.menu_levels(editor);
         let rows = levels.last().cloned().unwrap_or_default();
         let selectable = |i: usize| match &rows[i] {
             Row::Sep => false,
@@ -666,16 +841,16 @@ impl Shell {
             81 => next.active = step(menu.active, true),
             82 => next.active = step(menu.active, false),
             79 => match menu.active.and_then(|i| rows.get(i).map(|r| (i, r))) {
-                Some((i, Row::Sub(..))) => {
-                    next.open.push(i);
+                Some((_, Row::Sub(title, _))) => {
+                    next.open.push(title.clone());
                     next.active = None;
                 }
                 _ => {
                     if let Some(b) = menu.bar() {
-                        self.open_bar(
-                            (b + 1) % commands::bar_titles(&editor.extensions).len(),
-                            true,
-                        );
+                        let titles = commands::bar_titles(&editor.extensions);
+                        if let Some(index) = titles.iter().position(|title| *title == b) {
+                            self.open_bar_title(titles[(index + 1) % titles.len()], true);
+                        }
                         self.rebuild(editor)?;
                         return Ok(true);
                     }
@@ -685,8 +860,13 @@ impl Shell {
                 if next.open.pop().is_none()
                     && let Some(b) = menu.bar()
                 {
-                    let count = commands::bar_titles(&editor.extensions).len();
-                    self.open_bar((b + count - 1) % count, true);
+                    let titles = commands::bar_titles(&editor.extensions);
+                    if let Some(index) = titles.iter().position(|title| *title == b) {
+                        self.open_bar_title(
+                            titles[(index + titles.len() - 1) % titles.len()],
+                            true,
+                        );
+                    }
                     self.rebuild(editor)?;
                     return Ok(true);
                 }
@@ -694,8 +874,8 @@ impl Shell {
             }
             40 | 88 => {
                 match menu.active.and_then(|i| rows.get(i).cloned()) {
-                    Some(Row::Sub(..)) => {
-                        next.open.push(menu.active.unwrap_or(0));
+                    Some(Row::Sub(title, _)) => {
+                        next.open.push(title);
                         next.active = None;
                     }
                     Some(Row::Command { id, target, .. }) => {
@@ -883,6 +1063,9 @@ impl Shell {
     }
 }
 
+#[cfg(test)]
+#[path = "menu/capture_tests.rs"]
+mod capture_tests;
 #[cfg(test)]
 #[path = "menu/prefab_source_tests.rs"]
 mod prefab_source_tests;

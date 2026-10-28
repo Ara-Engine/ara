@@ -2,7 +2,7 @@
 //! Ctrl+Alt+,): search with per-category counts, a modified-only filter, a 2 px
 //! modified marker with ↺ reset, and the Keyboard Shortcuts page with presets.
 //! Every edit is an undoable `editor.settings.set`.
-use super::commands::{all, keys::Preset, menu_path};
+use super::commands::keys::Preset;
 use super::*;
 use crate::settings::{DEFS, Def, Kind, Scope, categories};
 
@@ -256,14 +256,12 @@ impl Shell {
             .state
             .settings
             .get("input.shortcuts")
-            .and_then(Value::as_object)
-            .cloned()
-            .unwrap_or_default();
-        let keymap = self.keymap.clone();
+            .and_then(Value::as_object);
+        let keymap = &self.keymap;
         // Matching commands under one header per menu, in menu-bar order; commands
         // outside the menus come last. Rows keep only a deeper sub-path.
-        let mut groups: Vec<(String, Vec<(&commands::Spec, String)>)> = Vec::new();
-        for spec in all() {
+        let mut groups: Vec<(String, Vec<_>)> = Vec::new();
+        for spec in commands::entries(&editor.extensions) {
             if matches!(
                 spec.id,
                 "file.open_scene"
@@ -280,7 +278,7 @@ impl Shell {
                 .iter()
                 .map(|c| c.text().to_lowercase())
                 .collect::<Vec<_>>();
-            let path = menu_path(spec.id);
+            let path = commands::registered_menu_path(&editor.extensions, spec.id);
             if !query.is_empty()
                 && !format!("{} {} {}", spec.title, path, spec.id)
                     .to_lowercase()
@@ -306,17 +304,20 @@ impl Shell {
                 escape(&top.to_uppercase())
             ));
             for (spec, sub) in rows {
-                let id = spec.id.replace('.', "-");
+                let id = shortcut_row_id(spec.id, spec.builtin.is_some());
                 let chords = keymap.chords(spec.id);
                 out.push_str(&format!("<panel id='shortcut-{id}' class='shortcut-row' description='{}'><text id='shortcut-title-{id}' text='{}' /><text id='shortcut-path-{id}' class='caption' text='{}' /><panel id='shortcut-fill-{id}' class='fill' />",escape(spec.summary),escape(spec.title),escape(&sub)));
                 let conflicts = keymap.conflicts(spec.id);
-                if let Some(other) = conflicts.first().and_then(|c| commands::get(c)) {
+                if let Some(other) = conflicts
+                    .first()
+                    .and_then(|c| commands::lookup(&editor.extensions, c))
+                {
                     out.push_str(&format!(
                         "<text id='shortcut-conflict-{id}' class='conflict' text='Also {}' />",
                         escape(other.title)
                     ));
                 }
-                if self.recording == Some(spec.id) {
+                if self.recording.as_deref() == Some(spec.id) {
                     out.push_str(&format!("<text id='shortcut-recording-{id}' class='accent' text='Press keys… (Esc cancels)' />"));
                 } else if chords.is_empty() {
                     out.push_str(&format!(
@@ -331,13 +332,13 @@ impl Shell {
                 }
                 self.bindings.insert(
                     ara_ui::source::stable_id(&format!("rebind-{id}")),
-                    Binding::ShortcutRecord(spec.id),
+                    Binding::ShortcutRecord(spec.id.to_owned()),
                 );
                 out.push_str(&format!("<button id='rebind-{id}' class='ghost icon-button' label='Rebind {}' description='Press a new shortcut' action='Dispatch'>{}</button>",escape(spec.title),icons::icon(&format!("rebind-{id}"),"pencil")));
-                if overrides.contains_key(spec.id) {
+                if overrides.is_some_and(|map| map.contains_key(spec.id)) {
                     self.bindings.insert(
                         ara_ui::source::stable_id(&format!("unbind-{id}")),
-                        Binding::ShortcutReset(spec.id),
+                        Binding::ShortcutReset(spec.id.to_owned()),
                     );
                     out.push_str(&format!("<button id='unbind-{id}' class='ghost icon-button' label='Reset {}' description='Back to the preset binding' action='Dispatch'>{}</button>",escape(spec.title),icons::icon(&format!("unbind-{id}"),"undo-2")));
                 }
@@ -356,6 +357,17 @@ impl Shell {
         }
     }
 }
+fn shortcut_row_id(command: &str, builtin: bool) -> String {
+    if builtin {
+        command.replace('.', "-")
+    } else {
+        format!("extension-{:x}", ara_ui::source::stable_id(command))
+    }
+}
+
+#[cfg(test)]
+mod tests;
+
 fn default_of(d: &Def) -> Value {
     match d.default {
         crate::settings::Lit::B(v) => json!(v),

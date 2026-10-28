@@ -9,6 +9,10 @@ use ara_ui::{
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Destination {
     Setting(String),
+    PaletteParameter {
+        command: String,
+        key: String,
+    },
     Import {
         doc: String,
         key: String,
@@ -101,6 +105,9 @@ impl Shell {
         value: Value,
     ) -> ara_ui::Result<()> {
         match target {
+            Destination::PaletteParameter { command, key } => {
+                self.choose_palette_parameter(command, key, value)
+            }
             Destination::HierarchySavedFilter => {
                 let name = value.as_str().ok_or("Choose a saved hierarchy filter")?;
                 self.use_hierarchy_filter(editor, &Target::Text(name.into()), false)?;

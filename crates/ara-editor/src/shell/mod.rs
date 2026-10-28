@@ -288,6 +288,7 @@ pub struct Shell {
     bodies: BTreeMap<String, String>,
     pub(crate) palette_command: Option<String>,
     pub(crate) palette_params: BTreeMap<String, Value>,
+    palette_form: palette::ParameterState,
     palette_active: usize,
     pub(crate) pick_field: Option<String>,
     pub(crate) rename: bool,
@@ -376,7 +377,7 @@ pub struct Shell {
     pending_clipboard: Option<String>,
     recent_commands: Vec<String>,
     /// Command waiting for a new shortcut on the Keyboard Shortcuts page.
-    pub(crate) recording: Option<&'static str>,
+    pub(crate) recording: Option<String>,
     key_search: bool,
     label_width: f32,
     keymap: commands::keys::Keymap,
@@ -384,6 +385,8 @@ pub struct Shell {
     keymap_revision: u64,
     /// The settings `keymap` was built from (`input.keymap`, `input.shortcuts`).
     keymap_settings: (Option<Value>, Option<Value>),
+    keymap_catalog: [u8; 32],
+    interaction: crate::interaction::Interaction,
     /// Live tab drag target, painted as a lit region with an action label.
     pub(crate) drop_preview: Option<dock_drag::DropPreview>,
     marquee: Option<(Option<String>, Box2)>,
@@ -424,6 +427,8 @@ pub(crate) enum Binding {
     Search(String),
     Palette(String),
     PaletteParam(String),
+    PaletteBack,
+    PaletteUnset(String),
     PaletteRun,
     Select(String),
     Asset(assets::Asset),
@@ -464,8 +469,8 @@ pub(crate) enum Binding {
         max: Option<f64>,
     },
     Diagnostic(ara_diag::Diagnostic),
-    MenuBar(usize),
-    MenuSub(usize, usize),
+    MenuBar(String),
+    MenuSub(usize, String),
     MenuFilter,
     /// The Add Component dropdown's search field.
     AddComponentFilter,
@@ -476,8 +481,8 @@ pub(crate) enum Binding {
     PanelRetry(String),
     Setting(String),
     SettingChoice(String, Value),
-    ShortcutRecord(&'static str),
-    ShortcutReset(&'static str),
+    ShortcutRecord(String),
+    ShortcutReset(String),
     KeySearch,
     DialogText,
     DialogAction(&'static str),
@@ -612,6 +617,7 @@ impl Shell {
             bodies: BTreeMap::new(),
             palette_command: None,
             palette_params: BTreeMap::new(),
+            palette_form: Default::default(),
             palette_active: 0,
             pick_field: None,
             rename: false,
@@ -686,6 +692,8 @@ impl Shell {
             keymap: commands::keymap(&editor.state, &editor.extensions),
             keymap_revision: 0,
             keymap_settings: keymap_settings(&editor.state),
+            keymap_catalog: keymap_catalog(&editor.extensions),
+            interaction: editor.interaction.clone(),
             drop_preview: None,
             marquee: None,
             desktop_pointer: None,
@@ -834,12 +842,21 @@ impl Shell {
     }
     fn rebuild_all(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
         self.built = (editor.panels_revision, editor.host.store().revision());
-        // The keymap follows two settings; rebuilding it took ~0.1 ms per rebuild.
+        // Async catalog reloads can make saved extension overrides reachable.
         let settings = keymap_settings(&editor.state);
-        if settings != self.keymap_settings {
+        let catalog = keymap_catalog(&editor.extensions);
+        if settings != self.keymap_settings || catalog != self.keymap_catalog {
             self.keymap = commands::keymap(&editor.state, &editor.extensions);
             self.keymap_settings = settings;
+            self.keymap_catalog = catalog;
             self.keymap_revision += 1;
+            if self
+                .recording
+                .as_deref()
+                .is_some_and(|id| commands::lookup(&editor.extensions, id).is_none())
+            {
+                self.recording = None;
+            }
         }
         self.reduce_motion = editor.state.reduce_motion;
         self.version += 1;
@@ -923,6 +940,7 @@ impl Shell {
         css.push_str(ara_ui::dialogs::CSS);
         css.push_str(ara_ui::select::CSS);
         css.push_str(history_panel::CSS);
+        css.push_str(palette::FORM_CSS);
         if self.toolkit_verify.is_some() {
             css.push_str(toolkit_verify::CSS);
         }
@@ -1277,6 +1295,7 @@ impl Shell {
             self.sync_choice_controls()?;
         }
         self.sync_modal_scopes(editor)?;
+        self.sync_palette_form()?;
         self.position_asset_file_name()?;
         if let Some(host) = &mut self.toolkit_verify {
             host.sync(&mut self.ui, &mut self.input)?;
@@ -1855,4 +1874,16 @@ fn keymap_settings(state: &crate::state::EditorState) -> (Option<Value>, Option<
         state.settings.get("input.keymap").cloned(),
         state.settings.get("input.shortcuts").cloned(),
     )
+}
+
+/// Borrow catalog strings so checking reloads does not clone command metadata.
+fn keymap_catalog(catalog: &crate::extensions::Catalog) -> [u8; 32] {
+    let mut hash = blake3::Hasher::new();
+    for value in std::iter::once(catalog.generation.as_deref().unwrap_or(""))
+        .chain(catalog.commands.iter().map(|command| command.id.as_str()))
+    {
+        hash.update(&(value.len() as u64).to_le_bytes());
+        hash.update(value.as_bytes());
+    }
+    *hash.finalize().as_bytes()
 }

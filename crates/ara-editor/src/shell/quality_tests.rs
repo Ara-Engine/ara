@@ -380,12 +380,12 @@ fn walk_menu(
         .cloned()
         .unwrap_or_default();
     for (index, row) in rows.into_iter().enumerate() {
-        if !matches!(row, Row::Sub(..)) {
+        let Row::Sub(title, _) = row else {
             continue;
-        }
+        };
         if let Some(menu) = &mut shell.menu {
             menu.open.truncate(level);
-            menu.open.push(index);
+            menu.open.push(title);
             menu.active = None;
         }
         shell.rebuild(editor).unwrap();

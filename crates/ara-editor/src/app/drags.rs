@@ -5,8 +5,8 @@ use ara_ui::{
     docking::{Axis, DockNode},
     paint::Box2,
 };
-mod scene;
 mod rapid;
+mod scene;
 
 #[derive(Clone, Copy, Debug)]
 enum Zone {
@@ -177,9 +177,9 @@ impl DragCheck {
             ]);
         }
         acts.push(Act::Scale(1.));
-        for scale in [1.,1.25] {
-            for panel in ["settings","inspector"] {
-                acts.push(Act::Rapid(rapid::Act {panel,scale}));
+        for scale in [1., 1.25] {
+            for panel in ["settings", "inspector"] {
+                acts.push(Act::Rapid(rapid::Act { panel, scale }));
             }
         }
         Self {
@@ -221,7 +221,9 @@ impl DragCheck {
             return Ok(());
         };
         if let Err(error) = self.input(&act, editor, shell, window, floats, scale, events) {
-            if matches!(act,Act::Rapid(_)) {self.rapid.restore(editor,shell)?;}
+            if matches!(act, Act::Rapid(_)) {
+                self.rapid.restore(editor, shell)?;
+            }
             shell.leave();
             events.retain(|(_, e)| !matches!(e, Event::MouseButton { .. }));
             events.push((0, Event::FocusLost));
@@ -330,8 +332,18 @@ impl DragCheck {
         scale: f32,
         events: &mut Vec<(u32, Event)>,
     ) -> ara_ui::Result<()> {
-        if let Act::Rapid(act)=act {
-            return self.rapid.inject(*act,self.index,self.age,editor,shell,window,floats,events,&self.output);
+        if let Act::Rapid(act) = act {
+            return self.rapid.inject(
+                *act,
+                self.index,
+                self.age,
+                editor,
+                shell,
+                window,
+                floats,
+                events,
+                &self.output,
+            );
         }
         let main = window.rect()?;
         if self.age == 0 && scene_action(act) {
@@ -478,8 +490,17 @@ impl DragCheck {
         let Some(act) = self.acts.get(self.index).cloned() else {
             return Ok(());
         };
-        if let Act::Rapid(act)=&act {
-            self.rapid.end(*act,self.index,self.age,editor,shell,gpu,floats,&self.output)?;
+        if let Act::Rapid(act) = &act {
+            self.rapid.end(
+                *act,
+                self.index,
+                self.age,
+                editor,
+                shell,
+                gpu,
+                floats,
+                &self.output,
+            )?;
         }
         if [0, 5, 6 + SETTLE].contains(&self.age) {
             std::fs::create_dir_all(&self.output)?;
@@ -586,7 +607,9 @@ impl DragCheck {
         std::fs::create_dir_all(&self.output)?;
         std::fs::write(
             self.output.join("drags.json"),
-            ara_json::to_canonical_string(&json!({"drags":self.results,"expectedCases":self.acts.len(),"originalCases":self.acts.iter().filter(|act|!matches!(act,Act::Rapid(_))).count(),"rapidCases":self.acts.iter().filter(|act|matches!(act,Act::Rapid(_))).count()})),
+            ara_json::to_canonical_string(
+                &json!({"drags":self.results,"expectedCases":self.acts.len(),"originalCases":self.acts.iter().filter(|act|!matches!(act,Act::Rapid(_))).count(),"rapidCases":self.acts.iter().filter(|act|matches!(act,Act::Rapid(_))).count()}),
+            ),
         )?;
         Ok(())
     }

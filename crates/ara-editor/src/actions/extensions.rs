@@ -9,6 +9,7 @@ impl EditorService {
         let agent = cx
             .session()
             .is_some_and(|s| matches!(s.author, ara_ops::Author::Agent(_)));
+        let navigation = self.extensions.interaction.capture(state, &session, agent);
         let presence = agent.then(|| state.presence.get(&session)).flatten();
         let doc = presence.map_or(&state.doc, |p| &p.doc).clone();
         let mut selection = if agent {
@@ -43,6 +44,7 @@ impl EditorService {
                     doc,
                     revision: cx.store().revision(),
                     command: command.id,
+                    navigation,
                 },
                 request,
             )
@@ -102,6 +104,14 @@ impl EditorService {
                                 })?
                             };
                             if let Some(selection) = reply.selection {
+                                if let Some(reason) = pending.navigation.suppression(
+                                    &self.extensions.interaction,
+                                    &self.navigation.state,
+                                    &pending.session,
+                                ) {
+                                    output["navigationSuppressed"] = json!(reason);
+                                    return Ok(output);
+                                }
                                 let selection: Vec<_> = selection.into_iter().map(|id| output["ids"][&id].as_str().map(str::to_owned).unwrap_or(id)).collect();
                                 // Reuse D24's private agent presence and navigation ops.
                                 output["navigation"] = self.dispatch(cx, "editor.select", json!({"session":pending.session,"doc":pending.doc,"entities":selection}))?;
