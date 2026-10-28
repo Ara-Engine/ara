@@ -585,6 +585,20 @@ fn initial_view(hub: &mut Hub, options: &Options) {
     }
 }
 
+/// Show a fatal startup error to someone who launched the Hub from the Start menu.
+pub fn fatal(message: &str) {
+    let text = std::ffi::CString::new(message.replace('\0', " ")).unwrap_or_default();
+    // SAFETY: SDL copies both strings; a null parent window is allowed.
+    unsafe {
+        sdl3_sys::messagebox::SDL_ShowSimpleMessageBox(
+            sdl3_sys::messagebox::SDL_MESSAGEBOX_ERROR,
+            c"Ara Hub".as_ptr(),
+            text.as_ptr(),
+            std::ptr::null_mut(),
+        );
+    }
+}
+
 #[cfg(test)]
 mod project_route_tests {
     use super::*;
@@ -607,19 +621,5 @@ mod project_route_tests {
             call,
             crate::model::Call::Open { .. } | crate::model::Call::Create { dry_run: false, .. }
         )));
-    }
-}
-
-/// Show a fatal startup error to someone who launched the Hub from the Start menu.
-pub fn fatal(message: &str) {
-    let text = std::ffi::CString::new(message.replace('\0', " ")).unwrap_or_default();
-    // SAFETY: SDL copies both strings; a null parent window is allowed.
-    unsafe {
-        sdl3_sys::messagebox::SDL_ShowSimpleMessageBox(
-            sdl3_sys::messagebox::SDL_MESSAGEBOX_ERROR,
-            c"Ara Hub".as_ptr(),
-            text.as_ptr(),
-            std::ptr::null_mut(),
-        );
     }
 }
