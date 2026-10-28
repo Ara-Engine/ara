@@ -4,6 +4,19 @@ Real-art test projects, authored through Ara's own commands by `ara-samples`
 (`crates/ara-samples`). No third-party binary is in git: `assets.lock.json` pins every
 file (URL, BLAKE3, size, license, authors, source page) and `fetch` restores them.
 
+Each file can also have an optional ordered `mirrors` array. `fetch` tries its
+`url` first, then each mirror until a download matches both the pinned BLAKE3 and
+size. Transfers resume separately per URL; a failed integrity check discards that
+partial download. If every URL fails, the error lists every attempt and its curl,
+HTTP or integrity failure. `verify` checks the same pins without downloading, and
+credits continue to use the original source and authors.
+
+The five Kenney packs used by Outpost have fallback URLs in Ara's
+[`sample-assets-v1` release](https://github.com/Ara-Engine/ara/releases/tag/sample-assets-v1).
+Maintainers upload the original ZIP filenames with exactly the locked bytes before
+publishing the sample release; the fetch tool does not publish assets. Release
+packaging copies this lock into Hub templates, so both use the same fallback list.
+
 | Project | Scenes |
 |---|---|
 | `outpost/` | `content/levels/outpost.scene`: Outpost at dusk (a derelict compound on 384 m of terrain with foliage, a campfire, floodlights, wind and music). `content/levels/hangar.scene`: the hangar interior at night, lit by emissive panels, a festoon and a few lamps. |

@@ -44,6 +44,50 @@ impl Scrub {
     }
 }
 impl Shell {
+    /// Protect a native numeric grip's authored field for the lifetime of its gesture.
+    pub(crate) fn begin_native_scrub(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        if !self.input.scrubbing() {
+            return Ok(());
+        }
+        let path = self
+            .input
+            .captured()
+            .and_then(|id| self.bindings.get(&id))
+            .and_then(|binding| match binding {
+                Binding::Field(path, axis) => Some(axis.map_or_else(
+                    || path.clone(),
+                    |axis| {
+                        let rgba = self.fields.get(path).is_some_and(|field| {
+                            matches!(
+                                field.widget,
+                                crate::inspector::Widget::Vector { rgba: true, .. }
+                            )
+                        });
+                        format!(
+                            "{path}.{}",
+                            if rgba {
+                                ["r", "g", "b", "a"][axis]
+                            } else {
+                                ["x", "y", "z", "w"][axis]
+                            }
+                        )
+                    },
+                )),
+                Binding::Nested(target, ..) => Some(
+                    target
+                        .split_once('#')
+                        .map_or(target.as_str(), |(path, _)| path)
+                        .to_owned(),
+                ),
+                _ => None,
+            });
+        if let Some(path) = path {
+            for entity in &editor.state.selection.clone() {
+                editor.field_gesture(entity, &path, true)?;
+            }
+        }
+        Ok(())
+    }
     /// Begin a scalar or channel gesture using each selected entity's effective base.
     pub fn begin_scrub(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
         if self
@@ -193,42 +237,31 @@ impl Shell {
             return Ok(false);
         };
         self.drafts.remove(&format!("@scrub|{}", scrub.path));
-        let result = if !cancel && scrub.delta.abs() > f64::EPSILON {
-            let target = scrub.target();
-            let calls = scrub
-                .values()
-                .filter(|(entity, value)| {
-                    scrub
-                        .bases
-                        .iter()
-                        .find(|(id, _)| id == entity)
-                        .is_some_and(|(_, base)| value.as_f64() != Some(*base))
-                })
-                .flat_map(|(entity, value)| {
-                    let value = if let Some(pointer) = &scrub.pointer {
-                        let Some(whole) = self.fields.get(&scrub.path).and_then(|field| {
-                            compound::preview_value(&field.value, pointer, value)
-                        }) else {
-                            return Vec::new();
-                        };
-                        whole
-                    } else {
-                        value
-                    };
-                    crate::inspector::edit_commands(&[entity.to_owned()], &target, &value)
-                })
-                .collect::<Vec<_>>();
-            if calls.is_empty() {
-                Ok(())
-            } else {
-                editor
-                    .apply(calls, "Scrub inspector value", None)
-                    .map(|_| ())
-                    .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })
+        let result = (|| -> ara_ui::Result<()> {
+            if cancel || scrub.delta.abs() <= f64::EPSILON {
+                return Ok(());
             }
-        } else {
+            let target = scrub.pointer.as_ref().map_or_else(
+                || scrub.target(),
+                |pointer| format!("{}#{pointer}", scrub.path),
+            );
+            let mut calls = Vec::new();
+            for (entity, value) in scrub.values() {
+                if scrub
+                    .bases
+                    .iter()
+                    .find(|(id, _)| id == entity)
+                    .is_some_and(|(_, base)| value.as_f64() == Some(*base))
+                {
+                    continue;
+                }
+                calls.extend(self.field_commands(editor, &[entity.to_owned()], &target, value)?);
+            }
+            if !calls.is_empty() {
+                editor.apply(calls, "Scrub inspector value", None)?;
+            }
             Ok(())
-        };
+        })();
         editor.end_field_gestures()?;
         result?;
         self.rebuild(editor)?;

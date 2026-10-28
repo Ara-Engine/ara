@@ -1,5 +1,5 @@
 //! On-demand downloads: a content-addressed blob cache (`samples/.cache/blobs/<blake3>`),
-//! resumable transfers (`curl -C -` into `.part` files) and hash verification before a
+//! resumable transfers (`curl -C -` into `.part` files) and integrity checks before a
 //! blob is published. Project files are hard links (or copies) of verified blobs.
 use crate::lock::{Asset, Lock};
 use anyhow::{Context, Result, bail, ensure};
@@ -9,6 +9,9 @@ use std::{
     process::Command,
     sync::Mutex,
 };
+
+#[cfg(test)]
+mod tests;
 
 /// The shared download cache under `samples/`.
 pub struct Cache {
@@ -28,33 +31,65 @@ impl Cache {
         self.root.join("blobs").join(hash)
     }
 
-    /// Downloads `url` into the blob cache (resuming a partial transfer) and returns
-    /// its hash. With `expected`, a mismatch deletes the partial file and fails.
-    pub fn download(&self, url: &str, expected: Option<&str>) -> Result<(String, u64)> {
-        if let Some(hash) = expected {
+    /// Tries `url`, then `mirrors` in order, resuming each URL's own partial transfer.
+    /// With an expected (BLAKE3, size), only matching bytes enter the blob cache.
+    pub fn download(
+        &self,
+        url: &str,
+        mirrors: &[String],
+        expected: Option<(&str, u64)>,
+    ) -> Result<(String, u64)> {
+        if let Some((hash, size)) = expected {
             let blob = self.blob(hash);
-            if blob.is_file() && hash_file(&blob)? == hash {
-                return Ok((hash.to_owned(), std::fs::metadata(&blob)?.len()));
+            if blob.is_file() {
+                if std::fs::metadata(&blob)?.len() == size && hash_file(&blob)? == hash {
+                    return Ok((hash.to_owned(), size));
+                }
+                std::fs::remove_file(blob)?;
             }
         }
         let partial = self.root.join("partial");
         std::fs::create_dir_all(&partial)?;
         std::fs::create_dir_all(self.root.join("blobs"))?;
+        let mut failures = Vec::new();
+        for candidate in std::iter::once(url).chain(mirrors.iter().map(String::as_str)) {
+            match self.download_from(candidate, &partial, expected) {
+                Ok(result) => return Ok(result),
+                Err(error) => failures.push(format!("{candidate}: {error:#}")),
+            }
+        }
+        bail!("all download URLs failed:\n{}", failures.join("\n"))
+    }
+
+    /// Verifies one candidate before publishing it; incomplete transfers remain resumable.
+    fn download_from(
+        &self,
+        url: &str,
+        partial: &Path,
+        expected: Option<(&str, u64)>,
+    ) -> Result<(String, u64)> {
         let key = blake3::hash(url.as_bytes()).to_hex();
         let part = partial.join(format!("{}.part", &key[..32]));
         curl(url, &part)?;
         let hash = hash_file(&part)?;
-        if let Some(expected) = expected
-            && hash != expected
-        {
-            std::fs::remove_file(&part)?;
-            bail!("hash mismatch for {url}: expected {expected}, got {hash}");
-        }
         let size = std::fs::metadata(&part)?.len();
+        if let Some((expected_hash, expected_size)) = expected {
+            if hash != expected_hash {
+                std::fs::remove_file(&part)?;
+                bail!("hash mismatch: expected {expected_hash}, got {hash}");
+            }
+            if size != expected_size {
+                std::fs::remove_file(&part)?;
+                bail!("size mismatch: expected {expected_size}, got {size}");
+            }
+        }
         let blob = self.blob(&hash);
-        if blob.exists() {
+        if blob.is_file() && hash_file(&blob)? == hash {
             std::fs::remove_file(&part)?;
         } else {
+            if blob.exists() {
+                std::fs::remove_file(&blob)?;
+            }
             std::fs::rename(&part, &blob)?;
         }
         Ok((hash, size))
@@ -77,25 +112,30 @@ impl Cache {
 
 /// `curl` with retries and resume; the binary ships with Windows 10+, macOS and Linux.
 fn curl(url: &str, out: &Path) -> Result<()> {
-    let status = Command::new("curl")
+    let output = Command::new("curl")
         .args([
             "-fsSL",
             "--retry",
             "5",
             "--retry-delay",
             "2",
+            "--write-out",
+            "%{http_code}",
             "-C",
             "-",
             "-o",
         ])
         .arg(out)
         .arg(url)
-        .status()
+        .output()
         .context("running curl (install it or put it on PATH)")?;
     // 33: the server refused the range because the partial file is already complete.
     ensure!(
-        status.success() || status.code() == Some(33),
-        "download failed ({status}): {url}"
+        output.status.success() || output.status.code() == Some(33),
+        "curl {} (HTTP {}): {}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout).trim(),
+        String::from_utf8_lossy(&output.stderr).trim()
     );
     Ok(())
 }
@@ -163,16 +203,14 @@ fn materialize(cache: &Cache, project: &Path, asset: &Asset) -> Result<()> {
     let dir = asset.dir(project);
     for file in &asset.files {
         let target = dir.join(&file.path);
-        if target.is_file() && hash_file(&target)? == file.blake3 {
+        if target.is_file()
+            && std::fs::metadata(&target)?.len() == file.size
+            && hash_file(&target)? == file.blake3
+        {
             continue;
         }
-        let (hash, size) = cache.download(&file.url, Some(&file.blake3))?;
-        ensure!(
-            size == file.size,
-            "{}: size {size}, lock says {}",
-            file.path,
-            file.size
-        );
+        let (hash, _) =
+            cache.download(&file.url, &file.mirrors, Some((&file.blake3, file.size)))?;
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -240,7 +278,10 @@ pub fn verify(samples: &Path, lock: &Lock, projects: &[String]) -> Result<Vec<St
         {
             for file in &asset.files {
                 let path = asset.dir(&samples.join(project)).join(&file.path);
-                if !path.is_file() || hash_file(&path)? != file.blake3 {
+                if !path.is_file()
+                    || std::fs::metadata(&path)?.len() != file.size
+                    || hash_file(&path)? != file.blake3
+                {
                     missing.push(format!("{project}/{}", asset.relative(&file.path)));
                 }
             }

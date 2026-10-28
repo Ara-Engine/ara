@@ -33,6 +33,16 @@ pub enum ViewMode {
     Wireframe = 7,
     /// The lit image with the native geometry's triangle edges drawn over it.
     LitWireframe = 8,
+    /// The diffuse indirect light surface shading actually samples (probe GI, sky
+    /// irradiance and the screen-space bounce), without direct light, emission or
+    /// specular reflection: exposed like Lit, shown in sRGB without tone mapping.
+    /// Only where [`RenderCapabilities::gi_diffuse`] holds.
+    GiDiffuse = 9,
+    /// Raster fragments per pixel of the submitted native geometry before depth
+    /// rejection (alpha discard respected), on the fixed heat legend: 0 black, 1 blue,
+    /// 2 green, 4 yellow, 8 orange, 16 or more red. Only where
+    /// [`RenderCapabilities::overdraw`] holds.
+    Overdraw = 10,
 }
 impl ViewMode {
     /// Complete baseline debug capture set.
@@ -57,6 +67,8 @@ impl ViewMode {
             Self::ShadowCascades => "shadow_cascades",
             Self::Wireframe => "wireframe",
             Self::LitWireframe => "lit_wireframe",
+            Self::GiDiffuse => "gi_diffuse",
+            Self::Overdraw => "overdraw",
         }
     }
     /// Renders the lit scene (`Lit`, and under `LitWireframe`'s edges).
@@ -71,6 +83,23 @@ impl ViewMode {
     pub(crate) fn shader_mode(self) -> u32 {
         if self.lit() { 0 } else { self as u32 }
     }
+}
+/// What this renderer can show beyond Lit, with the reason for anything it cannot
+/// (`Renderer::capabilities`; `render.probes.query` reports it as is). A mode it cannot
+/// show is never drawn as Lit under that mode's name.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderCapabilities {
+    /// Authored reflection probes are captured and shade surfaces at the current
+    /// preset (native raster at High or Epic).
+    pub reflection_probes: bool,
+    /// [`ViewMode::GiDiffuse`] is available and its GI data ready.
+    pub gi_diffuse: bool,
+    /// [`ViewMode::Overdraw`] is available.
+    pub overdraw: bool,
+    /// For each capability that is `false`, why (keys `reflectionProbes`,
+    /// `giDiffuse`, `overdraw`).
+    pub reasons: std::collections::BTreeMap<String, String>,
 }
 /// Agent-visible capture contract; no wall-clock values enter rendering.
 #[derive(Debug, Clone, Serialize, Deserialize)]

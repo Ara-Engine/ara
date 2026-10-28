@@ -681,29 +681,6 @@ public partial struct Camera2d : IComponent<Camera2d>
 }
 
 /// <summary>
-/// Texels per side of a reflection capture's map.
-/// </summary>
-public enum CaptureResolution : uint
-{
-    /// <summary>
-    /// The quality preset's (512 texels on High and Epic).
-    /// </summary>
-    Auto = 0,
-    /// <summary>
-    /// 128 texels: soft, distant or rough reflections.
-    /// </summary>
-    Low = 1,
-    /// <summary>
-    /// 256 texels.
-    /// </summary>
-    Medium = 2,
-    /// <summary>
-    /// 512 texels: mirrors and polished metal seen up close.
-    /// </summary>
-    High = 3,
-}
-
-/// <summary>
 /// Predicted capsule movement: slopes, stairs, moving platforms, crouching and pushing.
 /// </summary>
 [StructLayout(LayoutKind.Explicit, Size = 40)]
@@ -3189,82 +3166,90 @@ public partial struct PrimitiveMaterialOverride
 }
 
 /// <summary>
-/// A local reflection capture (High and Epic): the renderer bakes the lit scene around <c>captureOffset</c> and smooth surfaces inside the influence box reflect it, so mirrors and metals show the room around them, including what is off screen. Reflected directions are corrected against the projection box: match it to the room's walls and floor. Bakes refresh when content or lighting changes. Without any, the renderer places captures over the scene's content automatically.
+/// An authored reflection probe (High and Epic): the renderer captures the lit scene around the entity into a six-face map, and smooth surfaces inside its box of influence reflect it, so mirrors and metals show the room around them, including what is off screen. The entity's Transform places the capture origin and orients and scales the box. Captures are derived runtime data (a recapture job; cached under <c>.ara/cache/probes</c>), never authored edits: a change to these settings, the geometry, materials, lighting or environment marks the capture stale, and the last valid capture stays in use until its replacement is published. Without any probe, the renderer places captures over the scene's content automatically.
 /// </summary>
-[StructLayout(LayoutKind.Explicit, Size = 64)]
-[EngineComponent("ReflectionCapture", Module = "render")]
-public partial struct ReflectionCapture : IComponent<ReflectionCapture>
+[StructLayout(LayoutKind.Explicit, Size = 68)]
+[EngineComponent("ReflectionProbe", Module = "render")]
+public partial struct ReflectionProbe : IComponent<ReflectionProbe>
 {
     /// <summary>
-    /// Half-size of the influence box along the entity's axes (scaled by its transform): surfaces inside it reflect this capture.
+    /// Whether this probe contributes reflections. A disabled probe keeps its last valid capture but contributes nothing.
     /// </summary>
     /// <remarks>
-    /// Unit: m. Range: [0.01, ∞]. Default: [5,3,5].
+    /// Default: true.
     /// </remarks>
-    [FieldOffset(0), Unit("m"), Min(0.01), Default(5, 3, 5)]
-    public Vector3 Extents;
+    [FieldOffset(0), Default(true)]
+    public bool Enabled;
     /// <summary>
-    /// Distance inside the influence box over which the capture fades into its neighbours and the sky.
+    /// Full size of the box of influence along the entity's axes, centred on its origin and scaled by its transform: surfaces inside reflect this probe.
     /// </summary>
     /// <remarks>
-    /// Unit: m. Range: [0, ∞]. Default: 1.
+    /// Unit: m. Range: [0.01, 100000]. Default: [10,10,10].
     /// </remarks>
-    [FieldOffset(12), Unit("m"), Min(0), Default(1)]
-    public float Blend;
+    [FieldOffset(4), Unit("m"), Range(0.01, 100000), Default(10, 10, 10)]
+    public Vector3 Bounds;
     /// <summary>
-    /// Half-size of the projection box reflections land on; match the room's walls. Zero uses <c>extents</c>.
+    /// Selection among overlapping probes: a larger priority wins; equal priorities blend by influence (ties ordered by document and entity identity).
     /// </summary>
     /// <remarks>
-    /// Unit: m. Range: [0, ∞]. Default: [0,0,0].
+    /// Range: [-1000, 1000]. Default: 0.
     /// </remarks>
-    [FieldOffset(16), Unit("m"), Min(0), Default(0, 0, 0)]
-    public Vector3 ProjectionExtents;
+    [FieldOffset(16), Range(-1000, 1000), Default(0)]
+    public int Priority;
     /// <summary>
-    /// Centre of the projection box relative to the entity.
+    /// Distance outside the box over which the probe's contribution fades to zero. Zero is a hard boundary.
     /// </summary>
     /// <remarks>
-    /// Unit: m. Default: [0,0,0].
+    /// Unit: m. Range: [0, 1000]. Default: 1.
     /// </remarks>
-    [FieldOffset(28), Unit("m"), Default(0, 0, 0)]
-    public Vector3 ProjectionOffset;
+    [FieldOffset(20), Unit("m"), Range(0, 1000), Default(1)]
+    public float BlendDistance;
     /// <summary>
-    /// Where the capture is taken, relative to the entity. Keep it in open space, near the reflective surfaces it serves.
+    /// Texels per side of each captured face: one of 64, 128, 256, 512 or 1024 ([<c>ReflectionProbe::RESOLUTIONS</c>]).
+    /// </summary>
+    /// <remarks>
+    /// Range: [64, 1024]. Default: 256.
+    /// </remarks>
+    [FieldOffset(24), Range(64, 1024), Default(256)]
+    public uint CaptureResolution;
+    /// <summary>
+    /// Advanced: full size of the box reflections are projected onto (match the room's walls and floor). Zero uses <c>bounds</c>.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Range: [0, 100000]. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(28), Unit("m"), Range(0, 100000), Default(0, 0, 0)]
+    public Vector3 ProjectionBounds;
+    /// <summary>
+    /// Advanced: centre of the projection box relative to the entity.
     /// </summary>
     /// <remarks>
     /// Unit: m. Default: [0,0,0].
     /// </remarks>
     [FieldOffset(40), Unit("m"), Default(0, 0, 0)]
+    public Vector3 ProjectionOffset;
+    /// <summary>
+    /// Advanced: where the capture is taken, relative to the entity. Keep it in open space, near the reflective surfaces it serves.
+    /// </summary>
+    /// <remarks>
+    /// Unit: m. Default: [0,0,0].
+    /// </remarks>
+    [FieldOffset(52), Unit("m"), Default(0, 0, 0)]
     public Vector3 CaptureOffset;
     /// <summary>
-    /// Overlapping captures blend in priority order (higher first), then smaller boxes first.
-    /// </summary>
-    /// <remarks>
-    /// Default: 0.
-    /// </remarks>
-    [FieldOffset(52), Default(0)]
-    public int Priority;
-    /// <summary>
-    /// Texels per side of the captured map.
-    /// </summary>
-    /// <remarks>
-    /// Default: "auto".
-    /// </remarks>
-    [FieldOffset(56), Default("auto")]
-    public CaptureResolution Resolution;
-    /// <summary>
-    /// Brightness multiplier of the reflection.
+    /// Advanced: brightness multiplier of the reflection.
     /// </summary>
     /// <remarks>
     /// Range: [0, 8]. Default: 1.
     /// </remarks>
-    [FieldOffset(60), Range(0, 8), Default(1)]
+    [FieldOffset(64), Range(0, 8), Default(1)]
     public float Intensity;
     /// <summary>Stable engine component index.</summary>
     public static uint TypeIndex => 40;
     /// <inheritdoc/>
-    public static ref ReflectionCapture Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadReflectionCapture, EngineValueCodecs.WriteReflectionCapture);
+    public static ref ReflectionProbe Access(Entity entity, bool write) => ref EngineAccess.Get(entity, TypeIndex, write, EngineValueCodecs.ReadReflectionProbe, EngineValueCodecs.WriteReflectionProbe);
     /// <inheritdoc/>
-    public static void Insert(in Commands commands, Entity entity, in ReflectionCapture value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteReflectionCapture));
+    public static void Insert(in Commands commands, Entity entity, in ReflectionProbe value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteReflectionProbe));
     /// <inheritdoc/>
     public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
 }
@@ -4493,7 +4478,7 @@ public enum ZoneShape : uint
 public static class EngineComponents
 {
     /// <summary>Schema names by TypeIndex.</summary>
-    public static readonly string[] Names = ["Transform", "AcousticPortal", "AcousticSource", "AcousticSurface", "Animator", "AudioGraphSource", "AudioListener", "AudioSource", "Brain", "Camera", "Camera2d", "CharacterController", "CharacterController2d", "CharacterInput", "CharacterInput2d", "CharacterMotion", "CharacterMotion2d", "Collider", "Collider2d", "Environment", "Flipbook", "FollowCamera", "HeightFog", "Joint", "Light", "Light2d", "MeshRenderer", "MusicSource", "NavAgent", "NavAgentType", "NavArea", "NavLink", "NavMeshSurface", "NavObstacle", "Perceiver", "PhysicsId", "PhysicsPose", "PhysicsPose2d", "PlayerControl", "PostProcessVolume", "ReflectionCapture", "ReverbZone", "RigidBody", "RigidBody2d", "SkyAtmosphere", "Sprite", "Stimulus", "StreamedWorld", "Terrain", "TerrainChunk", "TileColliderSource2d", "Tilemap", "Vehicle", "VehicleInput", "VehicleTelemetry", "Velocity", "Velocity2d", "VisualEffect", "Wanderer"];
+    public static readonly string[] Names = ["Transform", "AcousticPortal", "AcousticSource", "AcousticSurface", "Animator", "AudioGraphSource", "AudioListener", "AudioSource", "Brain", "Camera", "Camera2d", "CharacterController", "CharacterController2d", "CharacterInput", "CharacterInput2d", "CharacterMotion", "CharacterMotion2d", "Collider", "Collider2d", "Environment", "Flipbook", "FollowCamera", "HeightFog", "Joint", "Light", "Light2d", "MeshRenderer", "MusicSource", "NavAgent", "NavAgentType", "NavArea", "NavLink", "NavMeshSurface", "NavObstacle", "Perceiver", "PhysicsId", "PhysicsPose", "PhysicsPose2d", "PlayerControl", "PostProcessVolume", "ReflectionProbe", "ReverbZone", "RigidBody", "RigidBody2d", "SkyAtmosphere", "Sprite", "Stimulus", "StreamedWorld", "Terrain", "TerrainChunk", "TileColliderSource2d", "Tilemap", "Vehicle", "VehicleInput", "VehicleTelemetry", "Velocity", "Velocity2d", "VisualEffect", "Wanderer"];
     internal static readonly string[] DefaultJson = [
         "{\"position\":[0,0,0],\"rotation\":[0,0,0],\"scale\":[1,1,1]}",
         "{\"a\":\"\",\"b\":\"\",\"position\":[0,0,0],\"width\":1,\"height\":2,\"open\":1}",
@@ -4535,7 +4520,7 @@ public static class EngineComponents
         "{\"position\":[0,0],\"rotation\":0}",
         "{\"player\":1,\"walkSpeed\":1.6,\"runSpeed\":4.5,\"jumpSpeed\":4.5,\"turnRate\":540,\"yaw\":0,\"camera\":null}",
         "{\"shape\":\"global\",\"blendDistance\":0,\"priority\":0,\"weight\":1,\"overrides\":[]}",
-        "{\"extents\":[5,3,5],\"blend\":1,\"projectionExtents\":[0,0,0],\"projectionOffset\":[0,0,0],\"captureOffset\":[0,0,0],\"priority\":0,\"resolution\":\"auto\",\"intensity\":1}",
+        "{\"enabled\":true,\"bounds\":[10,10,10],\"priority\":0,\"blendDistance\":1,\"captureResolution\":256,\"projectionBounds\":[0,0,0],\"projectionOffset\":[0,0,0],\"captureOffset\":[0,0,0],\"intensity\":1}",
         "{\"name\":\"\",\"shape\":\"box\",\"position\":[0,0,0],\"rotation\":[0,0,0,1],\"halfExtents\":[5,3,5],\"radius\":5,\"fade\":1,\"priority\":0,\"material\":\"generic\",\"rt60\":null,\"wet\":1,\"earlyReflections\":true,\"useBaked\":true}",
         "{\"motion\":\"static\",\"mass\":0,\"allowSleep\":true,\"continuous\":false}",
         "{\"motion\":\"static\",\"mass\":0,\"allowSleep\":true,\"continuous\":false,\"lockRotation\":false}",
@@ -5075,23 +5060,6 @@ internal static class EngineValueCodecs
         }
         w.WriteEndObject();
     }
-    internal static CaptureResolution ReadCaptureResolution(JsonElement v)
-        => v.GetString() switch
-        {
-            "auto" => CaptureResolution.Auto,
-            "low" => CaptureResolution.Low,
-            "medium" => CaptureResolution.Medium,
-            "high" => CaptureResolution.High,
-            _ => throw new JsonException("unknown enum variant")
-        };
-    internal static void WriteCaptureResolution(Utf8JsonWriter w, CaptureResolution v) => w.WriteStringValue(v switch
-    {
-        CaptureResolution.Auto => "auto",
-        CaptureResolution.Low => "low",
-        CaptureResolution.Medium => "medium",
-        CaptureResolution.High => "high",
-        _ => throw new JsonException("unknown enum value")
-    });
     internal static CharacterController ReadCharacterController(JsonElement v)
         => new()
         {
@@ -6961,39 +6929,52 @@ internal static class EngineValueCodecs
         }
         w.WriteEndObject();
     }
-    internal static ReflectionCapture ReadReflectionCapture(JsonElement v)
+    internal static ReflectionProbe ReadReflectionProbe(JsonElement v)
         => new()
         {
-            Extents = new Vector3(Field(v, "extents", "[5,3,5]")[0].GetSingle(), Field(v, "extents", "[5,3,5]")[1].GetSingle(), Field(v, "extents", "[5,3,5]")[2].GetSingle()),
-            Blend = Field(v, "blend", "1").GetSingle(),
-            ProjectionExtents = new Vector3(Field(v, "projectionExtents", "[0,0,0]")[0].GetSingle(), Field(v, "projectionExtents", "[0,0,0]")[1].GetSingle(), Field(v, "projectionExtents", "[0,0,0]")[2].GetSingle()),
+            Enabled = Field(v, "enabled", "true").GetBoolean(),
+            Bounds = new Vector3(Field(v, "bounds", "[10,10,10]")[0].GetSingle(), Field(v, "bounds", "[10,10,10]")[1].GetSingle(), Field(v, "bounds", "[10,10,10]")[2].GetSingle()),
+            Priority = Field(v, "priority", "0").GetInt32(),
+            BlendDistance = Field(v, "blendDistance", "1").GetSingle(),
+            CaptureResolution = Field(v, "captureResolution", "256").GetUInt32(),
+            ProjectionBounds = new Vector3(Field(v, "projectionBounds", "[0,0,0]")[0].GetSingle(), Field(v, "projectionBounds", "[0,0,0]")[1].GetSingle(), Field(v, "projectionBounds", "[0,0,0]")[2].GetSingle()),
             ProjectionOffset = new Vector3(Field(v, "projectionOffset", "[0,0,0]")[0].GetSingle(), Field(v, "projectionOffset", "[0,0,0]")[1].GetSingle(), Field(v, "projectionOffset", "[0,0,0]")[2].GetSingle()),
             CaptureOffset = new Vector3(Field(v, "captureOffset", "[0,0,0]")[0].GetSingle(), Field(v, "captureOffset", "[0,0,0]")[1].GetSingle(), Field(v, "captureOffset", "[0,0,0]")[2].GetSingle()),
-            Priority = Field(v, "priority", "0").GetInt32(),
-            Resolution = ReadCaptureResolution(Field(v, "resolution", "\"auto\"")),
             Intensity = Field(v, "intensity", "1").GetSingle(),
         };
-    internal static void WriteReflectionCapture(Utf8JsonWriter w, ReflectionCapture v)
+    internal static void WriteReflectionProbe(Utf8JsonWriter w, ReflectionProbe v)
     {
         w.WriteStartObject();
-        w.WritePropertyName("extents");
+        w.WritePropertyName("enabled");
+        {
+        w.WriteBooleanValue(v.Enabled);
+        }
+        w.WritePropertyName("bounds");
         {
         w.WriteStartArray();
-        WriteFloat(w, v.Extents.X);
-        WriteFloat(w, v.Extents.Y);
-        WriteFloat(w, v.Extents.Z);
+        WriteFloat(w, v.Bounds.X);
+        WriteFloat(w, v.Bounds.Y);
+        WriteFloat(w, v.Bounds.Z);
         w.WriteEndArray();
         }
-        w.WritePropertyName("blend");
+        w.WritePropertyName("priority");
         {
-        WriteFloat(w, v.Blend);
+        w.WriteNumberValue(v.Priority);
         }
-        w.WritePropertyName("projectionExtents");
+        w.WritePropertyName("blendDistance");
+        {
+        WriteFloat(w, v.BlendDistance);
+        }
+        w.WritePropertyName("captureResolution");
+        {
+        w.WriteNumberValue(v.CaptureResolution);
+        }
+        w.WritePropertyName("projectionBounds");
         {
         w.WriteStartArray();
-        WriteFloat(w, v.ProjectionExtents.X);
-        WriteFloat(w, v.ProjectionExtents.Y);
-        WriteFloat(w, v.ProjectionExtents.Z);
+        WriteFloat(w, v.ProjectionBounds.X);
+        WriteFloat(w, v.ProjectionBounds.Y);
+        WriteFloat(w, v.ProjectionBounds.Z);
         w.WriteEndArray();
         }
         w.WritePropertyName("projectionOffset");
@@ -7011,14 +6992,6 @@ internal static class EngineValueCodecs
         WriteFloat(w, v.CaptureOffset.Y);
         WriteFloat(w, v.CaptureOffset.Z);
         w.WriteEndArray();
-        }
-        w.WritePropertyName("priority");
-        {
-        w.WriteNumberValue(v.Priority);
-        }
-        w.WritePropertyName("resolution");
-        {
-        WriteCaptureResolution(w, v.Resolution);
         }
         w.WritePropertyName("intensity");
         {

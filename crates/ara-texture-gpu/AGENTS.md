@@ -1,6 +1,8 @@
 # ara-texture-gpu
 
-Offline headless Vulkan block encoders for disposable import workers. No windows.
+Offline headless block encoders for disposable import workers: Vulkan, and Metal on
+Apple9 (M3) and later (`buffer_int64_atomics`), both byte-identical to the integer
+oracles. No windows.
 BC4/BC5/BC7 inputs are 16 packed RGBA8 u32 words per block; BC6H uses 32 words
 (positive finite RGB half bits). Dispatch sizes are entry-specific; see the split
 headers and host recorders. All output-
@@ -41,6 +43,11 @@ under target, with private ARA_CONFIG_DIR/ARA_CRASH_DIR; never use main's binari
 Run the ignored unified-host and ara-import-worker GPU protocol probes after
 changing dispatch, negotiation or device setup. Worker stdout carries frames only;
 device logging belongs on stderr. A timed GPU import must prove nonzero GPU work.
+
+Metal through Metal Shader Converter: threadgroup memory is capped at 32 KiB and
+the converter reported twice the DXIL groupshared size for the BC6H batch kernels,
+so batched texels pack half and linear light into one word. Never index a vector
+component at runtime (`axis[major] = 64` was miscompiled); use per-component selects.
 
 Re-cook shaders/pipelines.json with ara-shader-cook; cooked artifacts are never
 merged. Reference modules preserve their third-party table notices. Cross-vendor

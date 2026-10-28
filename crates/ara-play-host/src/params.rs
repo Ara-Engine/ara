@@ -18,7 +18,9 @@ pub struct PlayStartParams {
     pub background: Option<bool>,
     /// `local` (default), `host` (Listen) or `dedicated`.
     pub mode: Option<String>,
-    /// Additional client processes for `host`/`dedicated` (max 16).
+    /// Execute isolated player worlds in one shared process or separate processes (default).
+    pub process_mode: Option<ara_play::ProcessMode>,
+    /// Additional client worlds for `host`/`dedicated` (max 16).
     pub clients: Option<u32>,
     /// Open windows (SDL3) for local/host/client players; headless otherwise.
     pub window: Option<bool>,
@@ -136,6 +138,8 @@ pub struct PlayInspectParams {
     /// Networked worlds: which process answers (0 = the authority, the default;
     /// 1.. = clients in launch order, player `index + 1`).
     pub player: Option<u32>,
+    /// Return a Host job immediately; inspect the result through jobs instead of blocking.
+    pub background: Option<bool>,
 }
 
 /// Params of `play.read`.
@@ -152,6 +156,8 @@ pub struct PlayReadParams {
     /// Networked worlds: which process answers (0 = the authority, the default;
     /// 1.. = clients in launch order, player `index + 1`).
     pub player: Option<u32>,
+    /// Return a Host job immediately while the requested player answers.
+    pub background: Option<bool>,
 }
 
 /// Params of `play.patch`: live edits applied at the next tick boundary.
@@ -165,6 +171,44 @@ pub struct PlayPatchParams {
     pub world: Option<String>,
     /// Edits `{entity, path, value}` (`{"entity":"e_lamp1","path":"Light.color","value":[1,0,0,1]}`).
     pub sets: Vec<Value>,
+    /// Return a Host job immediately; completion acknowledges the applying authority tick.
+    pub background: Option<bool>,
+}
+
+/// Parameters of the nonblocking editor view switch `play.view`.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayViewParams {
+    /// Calling editor or agent session.
+    pub session: String,
+    /// Active world; absent selects the latest world.
+    pub world: Option<String>,
+    /// Rendering player index (0 local/listen host, 1+ clients).
+    pub player: u32,
+    /// Read the current typed navigation state; performs no navigation mutation.
+    pub inspect: Option<bool>,
+    /// Editor spectator camera; null restores this player's gameplay camera.
+    pub camera: Option<ara_play::ViewCamera>,
+    /// Start spectator mode from this player's current gameplay camera.
+    pub capture_current: Option<bool>,
+    /// Spectator navigation speed in metres per second; default 4, valid range 0.5–50.
+    #[ara(range(min = 0.5, max = 50))]
+    pub navigation_speed: Option<f32>,
+}
+/// Parameters of `play.control`: one authority-boundary possession command.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayControlParams {
+    /// Calling editor or agent session.
+    pub session: String,
+    /// Active world; absent selects the latest world.
+    pub world: Option<String>,
+    /// Player index whose controls transfer (0 local/listen host, 1+ clients).
+    pub player: u32,
+    /// Controllable entity address; null ejects this player without stopping simulation.
+    pub entity: Option<ara_schema::EntityRef>,
 }
 
 /// Params of `play.capture`.
@@ -258,6 +302,31 @@ pub struct PlayFileParams {
     pub path: String,
 }
 
+/// Params of the read-only runtime diff and Keep eligibility preview.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayDiffParams {
+    /// Session handle from `session.begin`.
+    pub session: String,
+    /// World identity; omitted uses the latest world.
+    pub world: Option<String>,
+    /// Restrict the preview to these exact entity addresses.
+    pub entities: Option<Vec<String>>,
+    /// Read the runtime boundary through a nonblocking Host job.
+    pub background: Option<bool>,
+}
+
+/// One exact entity/field pair explicitly selected for Keep Changes.
+#[derive(Debug, Clone, PartialEq, Eq, Schema, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayKeepField {
+    /// Stable scene entity or prefab address.
+    pub entity: String,
+    /// Exact reflected field path; this selector never matches a prefix.
+    pub path: String,
+}
+
 /// Params of `play.keep`.
 #[derive(Debug, Schema, Deserialize)]
 #[ara(params)]
@@ -271,10 +340,15 @@ pub struct PlayKeepParams {
     pub entities: Option<Vec<String>>,
     /// Only paths starting with one of these (`Light.color`).
     pub paths: Option<Vec<String>>,
+    /// Exact selected entity/field pairs, intersected with any legacy filters.
+    /// An explicitly empty list keeps nothing.
+    pub fields: Option<Vec<PlayKeepField>>,
     /// Also keep values runtime systems write every tick (poses, velocities).
     pub include_driven: Option<bool>,
     /// Why, shown in review.
     pub why: Option<String>,
+    /// Read the runtime diff asynchronously, then keep it in one attributed content transaction.
+    pub background: Option<bool>,
 }
 
 /// Params of `play.debug.crash` (fault-isolation tests).
@@ -385,6 +459,9 @@ pub struct PlayRestartParams {
     pub session: String,
     /// World ID from `play.start` (`play:1`); default: the most recent world.
     pub world: Option<String>,
+    /// Return a restarting world immediately; poll `play.status` for progress.
+    /// Repeated requests coalesce. Omitted/false keeps the synchronous response.
+    pub background: Option<bool>,
     /// Resume from a portable snapshot of the current tick (C# state included) instead
     /// of the start snapshot (what C# L4 restarts do).
     pub keep_state: Option<bool>,

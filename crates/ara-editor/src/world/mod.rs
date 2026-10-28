@@ -1,4 +1,5 @@
 //! Temporary document-to-render extraction, isolated for ara-sim's edit-world projection.
+pub(crate) mod bounds;
 pub(crate) mod channels;
 pub mod gesture;
 mod ghosts;
@@ -51,6 +52,17 @@ impl DocumentView {
     pub fn new(store: &Store, doc: &str) -> Result<Self, Vec<Diagnostic>> {
         Ok(Self::with_entities(store, Arc::new(resolve(store, doc)?)))
     }
+    /// Present an unavailable active document as an empty scene. Navigation keeps
+    /// its identity so undo/redo or a file reload can restore the same view. This
+    /// does not relax document validation for authoring commands.
+    pub fn for_presentation(store: &Store, doc: &str) -> Result<Self, Vec<Diagnostic>> {
+        match Self::new(store, doc) {
+            Err(_) if !document_available(store, doc) => {
+                Ok(Self::with_entities(store, Arc::new(Resolved::new())))
+            }
+            result => result,
+        }
+    }
     /// The view of `entities`, the open scene already resolved at the store's current
     /// revision (no second resolve), with the import settings parsed.
     pub fn with_entities(store: &Store, entities: Arc<Resolved>) -> Self {
@@ -67,14 +79,17 @@ impl DocumentView {
     }
     /// Model sources the scene references, other than the `known` paths, each checked
     /// on disk once: `Some(entity)` (one that uses it; it draws a placeholder) when
-    /// the file is missing. In path order.
+    /// the file is missing. Resolve identities and physical paths through the
+    /// workspace's current index and reference root. In logical path order.
     pub(crate) fn missing_sources(
         &self,
         root: &Path,
+        workspace: &ara_doc::Workspace,
         known: &BTreeSet<String>,
     ) -> Vec<(String, Option<String>)> {
         // One disk check per path, not per entity: scenes reuse a few models widely.
         let mut checked: BTreeMap<String, Option<String>> = BTreeMap::new();
+        let mut references: BTreeSet<&str> = BTreeSet::new();
         for (id, entity) in self.entities.iter() {
             let Some(reference) = entity
                 .record
@@ -84,14 +99,23 @@ impl DocumentView {
             else {
                 continue;
             };
+            // Repeated instances share a raw reference. Borrow it for this call
+            // before parsing or resolving identities; the first entity still wins.
+            if !references.insert(reference) {
+                continue;
+            }
             let Some(path) = ara_schema::grammar::parse_ref(reference)
                 .ok()
-                .and_then(|r| r.path.map(str::to_owned))
+                .and_then(|r| {
+                    r.id.and_then(|id| workspace.index().path_of(id))
+                        .or(r.path)
+                        .map(str::to_owned)
+                })
             else {
                 continue;
             };
             if !known.contains(&path) && !checked.contains_key(&path) {
-                let missing = !root.join(&path).is_file();
+                let missing = !root.join(workspace.storage_path(&path)).is_file();
                 checked.insert(path, missing.then(|| id.clone()));
             }
         }
@@ -102,6 +126,20 @@ impl DocumentView {
     pub(crate) fn ghosts(&self) -> &BTreeMap<String, ara_doc::Record> {
         &self.ghosts
     }
+}
+
+#[cfg(test)]
+mod path_benchmark;
+#[cfg(test)]
+#[path = "path_tests.rs"]
+mod path_tests;
+/// Whether a document identifier or indexed path currently names a loaded document.
+pub fn document_available(store: &Store, doc: &str) -> bool {
+    store
+        .workspace()
+        .find(doc)
+        .and_then(|id| store.workspace().doc(id.as_str()))
+        .is_some()
 }
 /// Resolve one loaded scene and its prefab graph, preserving diagnostics.
 pub fn resolve(store: &Store, doc: &str) -> Result<Resolved, Vec<Diagnostic>> {

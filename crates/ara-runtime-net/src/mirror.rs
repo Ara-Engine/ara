@@ -1,4 +1,5 @@
 //! A networked client's presentation world.
+mod control;
 mod entities;
 use super::*;
 use ara_input::Injection;
@@ -69,6 +70,8 @@ pub struct NetMirror {
     created: Instant,
     join_ms: Option<f64>,
     script_components: Vec<String>,
+    /// Last received controlled actor identity; this is a cache of authoritative spawn metadata.
+    controlled: Option<String>,
 }
 
 impl NetMirror {
@@ -117,6 +120,7 @@ impl NetMirror {
             created: Instant::now(),
             join_ms: None,
             script_components,
+            controlled: Some(avatar),
         })
     }
 
@@ -307,6 +311,13 @@ impl NetMirror {
                 }
             }
         }
+        control::adopt(
+            world,
+            &spawns,
+            &self.entities,
+            self.player,
+            &mut self.controlled,
+        );
         Ok(())
     }
 }

@@ -9,10 +9,14 @@ use ara_runtime_render::fidelity::native::{self, FrameChange, NativeConfig, Prep
 use ara_runtime_render::{PresentationImage, fidelity::vfx::Effects};
 mod content;
 mod convergence;
+mod diagnostics;
+mod picking;
 mod preview;
+mod probes;
 mod recovery;
 #[cfg(test)]
 mod scene_switch;
+pub(super) mod selection;
 mod startup;
 pub(super) use preview::{GamePreview, PreviewCamera};
 pub(super) use startup::prepare_renderer;
@@ -1035,8 +1039,8 @@ mod tests {
     }
 
     fn exercise_scene_view(ray_tracing: bool) -> anyhow::Result<()> {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/renderer-unification/scene-view")
+        let root = crate::test_target()
+            .join("renderer-unification/scene-view")
             .join(format!("{}-{ray_tracing}", std::process::id()));
         std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels"))?;
         std::fs::write(

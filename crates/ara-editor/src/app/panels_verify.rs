@@ -2,12 +2,15 @@
 use super::*;
 use ara_platform::Event;
 use std::collections::BTreeMap;
+mod paths;
+use paths::Paths;
 
 pub(super) struct Verification {
     phase: u32,
     age: u32,
     phase_started: Instant,
     job: Option<String>,
+    paths: Option<Paths>,
     material: String,
     vfx: String,
     animation: String,
@@ -26,8 +29,13 @@ pub(super) struct Verification {
 }
 
 pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
+    if root.join("ara.project.json").exists() {
+        ara_host::project_layout::require_current_layout(root)
+            .map_err(|diagnostic| diagnostic.to_string())?;
+    }
     if !root.join("ara.project.json").exists() {
-        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels"))?;
+        let content = root.join(ara_doc::AUTHORING_ROOT);
+        std::fs::create_dir_all(content.join("levels"))?;
         std::fs::write(
             root.join("ara.project.json"),
             ara_json::to_canonical_string(
@@ -35,30 +43,21 @@ pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
             ),
         )?;
         std::fs::write(
-            root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),
+            content.join("levels/main.scene"),
             ara_json::to_canonical_string(
                 &json!({"$schema":"ara://schema/scene/1","id":"sc_golden00","records":{}}),
             ),
         )?;
     }
-    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("models"))?;
-    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("textures"))?;
+    let content = ara_host::project::authored_root(root);
+    std::fs::create_dir_all(content.join("models"))?;
+    std::fs::create_dir_all(content.join("textures"))?;
     let mesh = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../ara-render/examples/assets/Avocado.glb");
-    if !root
-        .join(ara_doc::AUTHORING_ROOT)
-        .join("models/Avocado.glb")
-        .exists()
-    {
-        std::fs::copy(
-            mesh,
-            root.join(ara_doc::AUTHORING_ROOT)
-                .join("models/Avocado.glb"),
-        )?;
+    if !content.join("models/Avocado.glb").exists() {
+        std::fs::copy(mesh, content.join("models/Avocado.glb"))?;
     }
-    let texture = root
-        .join(ara_doc::AUTHORING_ROOT)
-        .join("textures/checker.png");
+    let texture = content.join("textures/checker.png");
     if !texture.exists() {
         image::RgbaImage::from_fn(128, 128, |x, y| {
             image::Rgba(if (x / 16 + y / 16) % 2 == 0 {
@@ -76,9 +75,7 @@ pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
         ("ContainerBlueVariantLarge", [52, 92, 150]),
         ("concrete_road_barrier_arm_2k", [180, 120, 60]),
     ] {
-        let path = root
-            .join(ara_doc::AUTHORING_ROOT)
-            .join(format!("textures/{name}.png"));
+        let path = content.join(format!("textures/{name}.png"));
         if !path.exists() {
             image::RgbaImage::from_fn(64, 64, |x, y| {
                 let shade = 0.75 + 0.25 * (((x / 8 + y / 8) % 2) as f32);
@@ -94,6 +91,10 @@ pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "panels_verify/fixture_tests.rs"]
+mod fixture_tests;
 pub(super) fn resource(editor: &mut Editor, domain: &str) -> ara_ui::Result<String> {
     let preferred = format!(
         "samples/{domain}.{}",
@@ -157,15 +158,12 @@ impl Verification {
         }
         editor.action("editor.focus", json!({"panel":"scene"}))?;
         editor.action("editor.focus", json!({"panel":"assets"}))?;
-        let job =
-            editor.action("editor.asset.import", json!({"path":"models/Avocado.glb"}))?["job"]
-                .as_str()
-                .map(str::to_owned);
         Ok(Self {
             phase: 0,
             age: 0,
             phase_started: Instant::now(),
-            job,
+            job: None,
+            paths: None,
             material,
             vfx,
             animation,
@@ -249,31 +247,55 @@ impl Verification {
         let mut clipboard = OsClipboard;
         match self.phase {
             0 => {
+                if self.paths.is_none() {
+                    let Some(paths) = Paths::read(shell) else {
+                        return Ok(false);
+                    };
+                    self.job =
+                        editor.action("editor.asset.import", json!({"path":paths.mesh}))?["job"]
+                            .as_str()
+                            .map(str::to_owned);
+                    if self.job.is_none() {
+                        return Err("Native mesh import returned no job".into());
+                    }
+                    self.paths = Some(paths);
+                    return Ok(false);
+                }
                 if !self.job_done(editor)? {
                     return Ok(false);
                 }
                 self.interactions.push("isolated mesh import completed");
-                self.job = editor.action(
-                    "editor.asset.import",
-                    json!({"path":"textures/checker.png"}),
-                )?["job"]
-                    .as_str()
-                    .map(str::to_owned);
+                let paths = self
+                    .paths
+                    .as_ref()
+                    .ok_or("Panel fixture paths were removed")?;
+                self.job =
+                    editor.action("editor.asset.import", json!({"path":paths.checker}))?["job"]
+                        .as_str()
+                        .map(str::to_owned);
                 self.next();
             }
             1 => {
                 if !self.job_done(editor)? {
                     return Ok(false);
                 }
+                let paths = self
+                    .paths
+                    .as_ref()
+                    .ok_or("Panel fixture paths were removed")?;
                 editor.action(
                     "editor.workspace",
-                    json!({"asset":"models/Avocado.glb","folder":"models"}),
+                    json!({"asset":paths.mesh,"folder":paths.models}),
                 )?;
                 shell.rebuild(editor)?;
                 self.next();
             }
             2 => {
-                let Some(point) = shell.asset_point("models/Avocado.glb") else {
+                let paths = self
+                    .paths
+                    .as_ref()
+                    .ok_or("Panel fixture paths were removed")?;
+                let Some(point) = shell.asset_point(&paths.mesh) else {
                     return Ok(false);
                 };
                 let rect = shell.viewport().ok_or("asset drag scene viewport")?;
@@ -296,12 +318,10 @@ impl Verification {
                     .ok_or("import settings doc")?
                     .to_string();
                 editor.apply_to(&doc,vec![json!({"cmd":"import.configure","args":{"source":"models/Avocado.glb","settings":{"lodCount":2},"preset":"fast"}})],"Verify reimport settings")?;
-                self.job = editor.action(
-                    "editor.asset.reimport",
-                    json!({"path":"models/Avocado.glb"}),
-                )?["job"]
-                    .as_str()
-                    .map(str::to_owned);
+                self.job =
+                    editor.action("editor.asset.reimport", json!({"path":paths.mesh}))?["job"]
+                        .as_str()
+                        .map(str::to_owned);
                 self.next();
             }
             3 => {
@@ -311,9 +331,13 @@ impl Verification {
                 // Assets navigates folders (UX v2): the models folder shows the mesh
                 // tile and its import preview, then samples shows the material and
                 // VFX tiles. The project root lists only folders.
-                if editor.state.asset_folder == "models" {
+                let paths = self
+                    .paths
+                    .as_ref()
+                    .ok_or("Panel fixture paths were removed")?;
+                if editor.state.asset_folder == paths.models {
                     shell.rebuild(editor)?;
-                    if self.age < 240 || !shell.asset_previews_ready(&["models/Avocado.glb"]) {
+                    if self.age < 240 || !shell.asset_previews_ready(&[paths.mesh.as_str()]) {
                         return Ok(false);
                     }
                     self.interactions
@@ -339,17 +363,17 @@ impl Verification {
                     self.capture_pair("assets", editor, shell, gpu, ui, renderer, scene_view)?;
                     editor.action(
                         "editor.workspace",
-                        json!({"asset":"samples/material.graph","folder":"samples"}),
+                        json!({"asset":paths.material,"folder":paths.samples}),
                     )?;
                     shell.rebuild(editor)?;
                     return Ok(false);
                 }
                 shell.rebuild(editor)?;
                 // Textures with long names: the grid, then the same folder as a list.
-                if editor.state.asset_folder == "textures" {
+                if editor.state.asset_folder == paths.textures {
                     let textures = [
-                        "textures/dry_ground_01_diff_2k.png",
-                        "textures/rusty_corrugated_iron_nor_gl_2k.png",
+                        paths.long_textures[0].as_str(),
+                        paths.long_textures[1].as_str(),
                     ];
                     if editor.state.asset_grid {
                         if !shell.asset_previews_ready(&textures) {
@@ -371,8 +395,7 @@ impl Verification {
                     self.capture_pair("assets-list", editor, shell, gpu, ui, renderer, scene_view)?;
                     editor.action("editor.workspace", json!({"grid": true}))?;
                 } else {
-                    if !shell.asset_previews_ready(&["samples/material.graph", "samples/vfx.graph"])
-                    {
+                    if !shell.asset_previews_ready(&[paths.material.as_str(), paths.vfx.as_str()]) {
                         return Ok(false);
                     }
                     self.capture_pair(
@@ -386,7 +409,7 @@ impl Verification {
                     )?;
                     editor.action(
                         "editor.workspace",
-                        json!({"asset":"textures/dry_ground_01_diff_2k.png","folder":"textures"}),
+                        json!({"asset":paths.long_textures[0],"folder":paths.textures}),
                     )?;
                     shell.rebuild(editor)?;
                     return Ok(false);

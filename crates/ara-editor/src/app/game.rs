@@ -1,41 +1,33 @@
-//! The Game view's GPU side (D19): the selected Play client's shared surface,
-//! imported on the editor's device and shown as UI texture `game-view`. Each frame:
-//! poll the play host, import a new surface generation when one appears (keep the
-//! old one on screen until the new one has a frame), show the newest frame,
-//! release the one it replaces, and ask for a resize when the panel changed size.
-//! While Play runs, the host's `play.status` is read twice a second (ten times while
-//! the world starts) so the Game view shows the start's phase and progress, a start
-//! that failed, or a faulted world, instead of a bare "Starting Play…".
-use std::time::{Duration, Instant};
-
-use crate::gpu::UiDevice as Gpu;
+//! D19 imports and displays every embedded rendering player at once. Each player
+//! keeps its own surface generation, newest frame, resize cadence and UI texture.
+use crate::{Editor, gpu::UiDevice as Gpu, shell::Shell};
 use ara_editor_gpu::{NativeUi, PlaySurface};
+use std::{
+    collections::BTreeMap,
+    time::{Duration, Instant},
+};
+mod player;
+use player::PlayerView;
 
-use crate::{Editor, shell::Shell};
-
-/// UI texture of the Game view image (`<image src='game-view'>`).
+/// Legacy single Game image, retained for the preview/placeholder registration contract.
 pub fn texture() -> u32 {
     ara_ui::source::stable_id("game-view") as u32 & 0x7fff_ffff
 }
+/// Distinct native UI image for an embedded player (0 authority, 1–16 clients).
+pub fn player_texture(player: usize) -> u32 {
+    ara_ui::source::stable_id(&format!("game-view-{player}")) as u32 & 0x7fff_ffff
+}
 
-/// The surfaces this window shows, per Play world and client.
+/// Surfaces belong to a world and player; selecting input never discards another player's view.
 #[derive(Default)]
 pub struct GameView {
     world: Option<String>,
-    player: usize,
-    shown: Option<PlaySurface>,
-    pending: Option<PlaySurface>,
-    resized: Option<Instant>,
-    /// The UI scale the shown player last received (at start, then with resizes).
-    scale: Option<f32>,
-    frames: Vec<Instant>,
+    views: BTreeMap<usize, PlayerView>,
     checked: Option<Instant>,
-    /// The world `checked` refers to: a new Play is read at once.
     checked_world: Option<String>,
 }
-
 impl GameView {
-    /// Advance one editor frame; true when the Game view shows a new frame.
+    /// Poll the shared mailbox once and show each client's newest completed frame.
     pub fn update(
         &mut self,
         editor: &mut Editor,
@@ -50,120 +42,87 @@ impl GameView {
         surfaces.poll();
         let world = editor
             .play_world
-            .clone()
-            .filter(|w| surfaces.worlds().any(|s| s == w))
-            .or_else(|| surfaces.worlds().next().map(str::to_owned));
-        let players: Vec<usize> = world
             .as_deref()
-            .map(|w| surfaces.surfaces(w).iter().map(|s| s.player).collect())
-            .unwrap_or_default();
-        shell.game_players = players.clone();
-        let player = players
-            .iter()
-            .copied()
-            .find(|p| *p == shell.game_client)
-            .or_else(|| players.first().copied());
-        // A different world or client: let go of everything shown.
-        if world != self.world || player != Some(self.player) || player.is_none() {
-            self.close(editor, ui)?;
-            self.world = world.clone();
-            self.player = player.unwrap_or(0);
-            // Play started at the Game view's scale (`Editor::embed_play`).
-            self.scale = Some(shell.game_scale);
+            .filter(|world| surfaces.worlds().any(|known| known == *world));
+        if world != self.world.as_deref() {
+            let next = world.map(str::to_owned);
+            self.close_views(Some(surfaces), ui)?;
+            self.world = next;
             shell.game_live = false;
+            shell.game_captured = false;
         }
-        let (Some(world), Some(player)) = (world, player) else {
-            return Ok(false);
-        };
-        let Some(surfaces) = editor.play_surfaces.as_mut() else {
-            return Ok(false);
-        };
-        let Some(state) = surfaces
-            .surfaces(&world)
-            .into_iter()
-            .find(|s| s.player == player)
-        else {
-            return Ok(false);
-        };
-        let generation = state.generation;
-        let size = state.size;
-        let known =
-            |s: &Option<PlaySurface>| s.as_ref().is_some_and(|s| s.generation() == generation);
-        if !known(&self.shown) && !known(&self.pending) {
-            // SAFETY: `gpu` is the device `ui` was created on and outlives the
-            // surface; this runs on the window thread between UI frames.
-            let imported = unsafe { ui.import_play_surface(gpu, state.surface) }?;
-            if let Some(old) = self.pending.replace(imported) {
-                ui.close_play_surface(old)?;
+        let players: Vec<_> = self
+            .world
+            .as_deref()
+            .map(|world| {
+                surfaces
+                    .surfaces(world)
+                    .iter()
+                    .map(|state| state.player)
+                    .collect()
+            })
+            .unwrap_or_default();
+        if shell.game_players != players {
+            shell.game_players = players;
+            shell.play_controls.revision += 1;
+        }
+        if !shell.game_players.contains(&shell.game_client) {
+            shell.game_client = shell.game_players.first().copied().unwrap_or(0);
+            shell.game_captured = false;
+        }
+        let removed: Vec<_> = self
+            .views
+            .keys()
+            .copied()
+            .filter(|player| !shell.game_players.contains(player))
+            .collect();
+        for player in removed {
+            if let Some(mut view) = self.views.remove(&player) {
+                view.close(self.world.as_deref(), player, Some(surfaces), ui)?;
             }
+            shell.play_controls.players.remove(&player);
         }
-        let mut showed = false;
-        if let Some(frame) = surfaces.take(&world, player) {
-            if self
-                .pending
-                .as_ref()
-                .is_some_and(|p| p.generation() == frame.generation)
-                && let Some(next) = self.pending.take()
-                && let Some(old) = self.shown.replace(next)
-                && let Some(previous) = ui.close_play_surface(old)?
+        let Some(world) = self.world.as_deref() else {
+            if !shell.play_controls.players.is_empty() {
+                shell.play_controls.players.clear();
+                shell.play_controls.revision += 1;
+            }
+            shell.game_live = false;
+            return Ok(false);
+        };
+        let mut changed = false;
+        for &player in &shell.game_players {
+            let view = self.views.entry(player).or_default();
+            changed |= view.update(
+                world,
+                player,
+                shell.game_target,
+                shell.game_scale,
+                surfaces,
+                ui,
+                gpu,
+            )?;
+            let info = view.info();
+            let previous = shell.play_controls.players.insert(player, info);
+            if previous.is_none_or(|old| old.live != info.live) {
+                shell.play_controls.revision += 1;
+            }
+            if shell.game_stats
+                && previous != Some(info)
+                && let Some(index) = shell.ui.find(&format!("game-stats-text-{player}"))
             {
-                surfaces.release(&world, player, previous);
-            }
-            if let Some(surface) = self
-                .shown
-                .as_mut()
-                .filter(|s| s.generation() == frame.generation)
-            {
-                if let Some(previous) = surface.show(ui, texture(), frame)? {
-                    surfaces.release(&world, player, previous);
-                }
-                showed = true;
-                let now = Instant::now();
-                self.frames.push(now);
-                self.frames
-                    .retain(|t| now.duration_since(*t) < Duration::from_secs(1));
-                // The rate over the frames seen (up to a second); none until a quarter
-                // second has passed, so a fresh start never reads "1 fps".
-                let span = self
-                    .frames
-                    .first()
-                    .map_or(0., |first| now.duration_since(*first).as_secs_f64());
-                shell.game_fps = if span < 0.25 {
-                    0
-                } else {
-                    ((self.frames.len() - 1) as f64 / span).round() as u32
-                };
-                shell.game_live = true;
-                // Stats update in place, without rebuilding the panel every frame.
-                if let Some(i) = shell.ui.find("game-stats-text") {
-                    shell
-                        .ui
-                        .set_text(i, &crate::shell::game_stats_text(shell.game_fps, size))?;
-                }
-            } else {
-                surfaces.release(&world, player, frame);
+                shell
+                    .ui
+                    .set_text(index, &crate::shell::game_stats_text(info.fps, info.size))?;
             }
         }
-        shell.game_size = size;
-        // Follow the panel's size (physical pixels) and UI scale, at most a few times
-        // a second.
-        let wanted = shell.game_target;
-        if wanted[0] >= 16
-            && wanted[1] >= 16
-            && (wanted != size || self.scale != Some(shell.game_scale))
-            && self
-                .resized
-                .is_none_or(|t| t.elapsed() > Duration::from_millis(150))
-        {
-            surfaces.resize(&world, player, wanted, shell.game_scale);
-            self.scale = Some(shell.game_scale);
-            self.resized = Some(Instant::now());
-        }
-        Ok(showed)
+        let shown = shell.play_controls.players.get(&shell.game_client);
+        shell.game_live = shown.is_some_and(|view| view.live);
+        shell.game_fps = shown.map_or(0, |view| view.fps);
+        shell.game_size = shown.map_or([0; 2], |view| view.size);
+        Ok(changed)
     }
-
-    /// The shown world's start progress, failed start or classified fault
-    /// (`play.status`): ten times a second while it starts, twice a second after.
+    /// Startup/status is polled on a cadence, never once per client or display frame.
     fn check_status(&mut self, editor: &mut Editor, shell: &mut Shell) {
         if editor.state.playing.is_none() {
             shell.game_fault = None;
@@ -180,28 +139,27 @@ impl GameView {
         let every = if shell.game_start.is_some() { 100 } else { 500 };
         if self
             .checked
-            .is_some_and(|t| t.elapsed() < Duration::from_millis(every))
+            .is_some_and(|at| at.elapsed() < Duration::from_millis(every))
         {
             return;
         }
         self.checked = Some(Instant::now());
         shell.read_play_status(editor);
     }
-
-    /// Stops showing every surface and returns their frames to the players.
-    pub fn close(&mut self, editor: &mut Editor, ui: &mut NativeUi) -> ara_ui::Result<()> {
-        for surface in [self.shown.take(), self.pending.take()]
-            .into_iter()
-            .flatten()
-        {
-            if let Some(frame) = ui.close_play_surface(surface)?
-                && let (Some(world), Some(surfaces)) =
-                    (self.world.as_deref(), editor.play_surfaces.as_ref())
-            {
-                surfaces.release(world, self.player, frame);
-            }
+    fn close_views(
+        &mut self,
+        surfaces: Option<&ara_play_host::embed::Surfaces>,
+        ui: &mut NativeUi,
+    ) -> ara_ui::Result<()> {
+        for (player, mut view) in std::mem::take(&mut self.views) {
+            view.close(self.world.as_deref(), player, surfaces, ui)?;
         }
-        self.frames.clear();
+        Ok(())
+    }
+    /// Release every player before the editor drops its UI device.
+    pub fn close(&mut self, editor: &mut Editor, ui: &mut NativeUi) -> ara_ui::Result<()> {
+        self.close_views(editor.play_surfaces.as_ref(), ui)?;
+        self.world = None;
         Ok(())
     }
 }

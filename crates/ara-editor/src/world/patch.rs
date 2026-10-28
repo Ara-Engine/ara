@@ -31,7 +31,7 @@ const SCENE_WIDE: [&str; 9] = [
     "Environment",
     "SkyAtmosphere",
     "HeightFog",
-    "ReflectionCapture",
+    "ReflectionProbe",
     "PostProcessVolume",
     "Terrain",
     "TerrainChunk",

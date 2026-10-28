@@ -4,6 +4,22 @@ use ara_asset::{
 };
 use ara_render::scene::{Mesh, Vertex};
 use std::{collections::BTreeMap, path::Path, time::Duration};
+
+/// Resolve storage input against the same authored boundary used by snapshots.
+/// Thumbnail/cache workers supply physical keys from validated current projects.
+fn source_path(root: &Path, storage: &str) -> anyhow::Result<String> {
+    let authored = ara_host::project::authored_root(root);
+    let prefix = authored
+        .strip_prefix(root)?
+        .to_string_lossy()
+        .replace('\\', "/");
+    let mut workspace = ara_doc::Workspace::default();
+    workspace.set_reference_root(&prefix);
+    super::paths::source(&workspace, storage)
+        .map(str::to_owned)
+        .map_err(anyhow::Error::msg)
+}
+
 /// Read the import settings belonging to an authored-relative preview source.
 fn settings(root: &Path, path: &str) -> Option<ara_asset::ImportSettings> {
     std::fs::read_to_string(
@@ -25,12 +41,16 @@ fn settings(root: &Path, path: &str) -> Option<ara_asset::ImportSettings> {
             })
     })
 }
+
+/// Load a thumbnail from a project-relative storage path. The worker snapshots
+/// its media with an authored-relative SourceAsset path; sidecar I/O stays physical.
 pub(super) fn load(root: &Path, path: &str) -> anyhow::Result<Vec<Mesh>> {
-    let settings = settings(root, path);
+    let logical = source_path(root, path)?;
+    let settings = settings(root, &logical);
     let importer = ara_importers::FbxImporter;
     let source = SourceAsset {
         id: "as_preview0".into(),
-        path: path.into(),
+        path: logical,
         importer: "ara.fbx".into(),
         version: settings
             .as_ref()
@@ -133,10 +153,10 @@ fn decode(bytes: &[u8], entity: u64, name: String) -> anyhow::Result<Mesh> {
 
 fn mapping(
     root: &Path,
-    path: &str,
+    logical: &str,
     settings: &ara_asset::ImportSettings,
 ) -> anyhow::Result<std::path::PathBuf> {
-    let value = serde_json::json!({"path":path,"importer":settings.importer,"version":settings.version,"preset":settings.preset,"settings":settings.settings});
+    let value = serde_json::json!({"path":logical,"importer":settings.importer,"version":settings.version,"preset":settings.preset,"settings":settings.settings});
     let key = ara_asset::Digest::of(
         ara_json::to_canonical_string(&ara_json::sort_keys(&value)).as_bytes(),
     );
@@ -144,6 +164,7 @@ fn mapping(
         .join(".ara/cache/editor-meshes")
         .join(format!("{key}.json")))
 }
+/// Publish the derived cache mapping for SourceAsset's authored-relative path.
 pub(super) fn publish(
     root: &Path,
     source: &SourceAsset,
@@ -167,12 +188,14 @@ pub(super) fn publish(
     )?;
     Ok(())
 }
+/// Read the derived mesh cache for a project-relative storage media path, off-frame.
 pub(crate) fn cached(
     root: &Path,
     path: &str,
     settings: &ara_asset::ImportSettings,
 ) -> anyhow::Result<Option<Vec<Mesh>>> {
-    let path = mapping(root, path, settings)?;
+    let logical = source_path(root, path)?;
+    let path = mapping(root, &logical, settings)?;
     let Some(key) = std::fs::read_to_string(path)
         .ok()
         .and_then(|text| ara_json::parse(&text).ok())
@@ -198,9 +221,50 @@ pub(crate) fn cached(
 mod tests {
     use super::*;
     #[test]
+    fn thumbnail_storage_paths_convert_once_and_preserve_real_game_folders() -> anyhow::Result<()> {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let base = crate::test_target()
+            .join("editor-mesh-source-paths")
+            .join(format!(
+                "{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+        for (name, storage, logical) in [
+            (
+                "modern",
+                format!("{}/assets/model.fbx", ara_doc::AUTHORING_ROOT),
+                "assets/model.fbx",
+            ),
+            (
+                "modern-nested",
+                format!("{}/game/assets/model.fbx", ara_doc::AUTHORING_ROOT),
+                "game/assets/model.fbx",
+            ),
+        ] {
+            let root = base.join(name);
+            std::fs::create_dir_all(&root)?;
+            let marker = serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION});
+            std::fs::write(
+                root.join("ara.project.json"),
+                ara_json::to_canonical_string(&marker),
+            )?;
+            assert_eq!(source_path(&root, &storage)?, logical);
+            assert_eq!(
+                ara_host::project::authored_root(&root).join(logical),
+                root.join(&storage)
+            );
+            assert!(source_path(&root, "settings/model.fbx").is_err());
+            assert!(source_path(&root, "game/assets/model.fbx").is_err());
+            assert!(source_path(&root, "../model.fbx").is_err());
+        }
+        Ok(())
+    }
+    #[test]
     fn fbx_preview_reads_the_authored_sidecar_settings() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../target/ara-editor/fbx-preview-paths")
+        let root = crate::test_target()
+            .join("ara-editor/fbx-preview-paths")
             .join(std::process::id().to_string());
         let sidecar = root
             .join(ara_doc::AUTHORING_ROOT)

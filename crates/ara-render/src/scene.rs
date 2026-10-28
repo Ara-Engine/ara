@@ -131,6 +131,15 @@ pub enum CameraSpec {
         /// Visible world width and height in metres.
         world_size: glam::Vec2,
     },
+    /// Orthographic editor view with an arbitrary orientation and target aspect.
+    OrthographicLookAt {
+        /// Camera position in metres.
+        position: Vec3,
+        /// Aim point in metres.
+        target: Vec3,
+        /// Visible vertical span in metres; horizontal span follows the target aspect.
+        vertical_size: f32,
+    },
     /// Perspective camera looking at an arbitrary point.
     LookAt {
         /// Camera position in metres.
@@ -154,7 +163,7 @@ pub enum CameraSpec {
         vertical_fov: f32,
     },
 }
-/// Resolved camera with a stable reversed-Z infinite projection.
+/// Resolved camera with a stable reversed-Z projection.
 pub struct Camera {
     /// World-space eye position.
     pub position: Vec3,
@@ -162,10 +171,12 @@ pub struct Camera {
     pub forward: Vec3,
     /// View matrix.
     pub view: Mat4,
-    /// Infinite-far reversed-Z projection (near 0.1 m).
+    /// Reversed-Z projection; perspective uses an infinite far plane.
     pub projection: Mat4,
 }
 impl CameraSpec {
+    /// Near-plane distance of oriented orthographic requests, in metres.
+    pub const ORTHOGRAPHIC_NEAR: f32 = 0.01;
     /// Resolve a request using the target's actual aspect ratio.
     pub fn resolve(&self, size: [u32; 2]) -> anyhow::Result<Camera> {
         anyhow::ensure!(!size.contains(&0), "Camera extent must be nonzero");
@@ -190,8 +201,46 @@ impl CameraSpec {
                 ),
             });
         }
+        if let Self::OrthographicLookAt {
+            position,
+            target,
+            vertical_size,
+        } = *self
+        {
+            anyhow::ensure!(
+                position.is_finite()
+                    && target.is_finite()
+                    && vertical_size.is_finite()
+                    && vertical_size > 0.
+                    && (vertical_size * aspect).is_finite(),
+                "Invalid oriented orthographic camera"
+            );
+            let forward = (target - position)
+                .try_normalize()
+                .ok_or_else(|| anyhow::anyhow!("Camera target equals position"))?;
+            let up = if forward.dot(Vec3::Y).abs() > 0.99 {
+                Vec3::Z
+            } else {
+                Vec3::Y
+            };
+            return Ok(Camera {
+                position,
+                forward,
+                view: Mat4::look_at_rh(position, target, up),
+                projection: Mat4::orthographic_rh(
+                    -vertical_size * aspect * 0.5,
+                    vertical_size * aspect * 0.5,
+                    -vertical_size * 0.5,
+                    vertical_size * 0.5,
+                    1_000_000.,
+                    Self::ORTHOGRAPHIC_NEAR,
+                ),
+            });
+        }
         let (position, target, fov) = match *self {
-            Self::Orthographic { .. } => unreachable!("orthographic request resolved above"),
+            Self::Orthographic { .. } | Self::OrthographicLookAt { .. } => {
+                unreachable!("orthographic request resolved above")
+            }
             Self::LookAt {
                 position,
                 target,
@@ -284,6 +333,55 @@ pub fn sphere(entity: u64, name: String, centre: Vec3, radius: f32, material: us
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn oriented_orthographic_is_parallel_at_any_axis_and_target_aspect() {
+        for position in [
+            Vec3::new(0., 0., 10.),
+            Vec3::new(10., 0., 0.),
+            Vec3::new(0., 10., 0.),
+            Vec3::new(7., 4., 9.),
+        ] {
+            for size in [[1200, 600], [600, 1200]] {
+                let camera = CameraSpec::OrthographicLookAt {
+                    position,
+                    target: Vec3::ZERO,
+                    vertical_size: 4.,
+                }
+                .resolve(size)
+                .expect("valid orthographic view");
+                let right = camera.view.inverse().x_axis.truncate();
+                let matrix = camera.projection * camera.view;
+                let first = matrix * right.extend(1.);
+                let deeper = matrix * (right + camera.forward * 10.).extend(1.);
+                let expected = 2. / (4. * size[0] as f32 / size[1] as f32);
+                assert!((first.x / first.w - expected).abs() < 1e-5);
+                assert!((first.x / first.w - deeper.x / deeper.w).abs() < 1e-5);
+                assert!(camera.view.is_finite() && camera.projection.is_finite());
+                let near =
+                    matrix * (position + camera.forward * CameraSpec::ORTHOGRAPHIC_NEAR).extend(1.);
+                let far = matrix * (position + camera.forward * 1_000_000.).extend(1.);
+                assert!(near.z > far.z, "depth must remain reversed-Z");
+            }
+        }
+        assert!(
+            CameraSpec::OrthographicLookAt {
+                position: Vec3::ZERO,
+                target: Vec3::ZERO,
+                vertical_size: 4.
+            }
+            .resolve([800, 600])
+            .is_err()
+        );
+        assert!(
+            CameraSpec::OrthographicLookAt {
+                position: Vec3::Z,
+                target: Vec3::ZERO,
+                vertical_size: f32::NAN
+            }
+            .resolve([800, 600])
+            .is_err()
+        );
+    }
     #[test]
     fn framed_bounds_fit_portrait_and_landscape() {
         for size in [[800, 300], [300, 800]] {

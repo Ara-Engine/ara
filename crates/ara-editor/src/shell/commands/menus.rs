@@ -21,6 +21,10 @@ pub(crate) enum Dynamic {
     Windows,
     /// Layouts saved under `.ara/layouts`, run with `layout.load`.
     SavedLayouts,
+    /// Nearest prefab, variant and base destinations for a context's overrides.
+    PrefabSources,
+    /// Cached canonical and legacy build profiles, selected through typed preferences.
+    BuildProfiles,
 }
 impl Dynamic {
     /// The registry command dynamic entries run.
@@ -29,6 +33,8 @@ impl Dynamic {
             Self::RecentScenes => "file.open_scene",
             Self::Windows => "window.focus_window",
             Self::SavedLayouts => "layout.load",
+            Self::PrefabSources => "prefab.apply_to",
+            Self::BuildProfiles => "build.profile.select",
         }
     }
 }
@@ -41,6 +47,19 @@ pub(crate) struct Menu {
 use Item::{Command as C, Separator as S, Sub};
 /// Asset commands, under File › Assets.
 const ASSETS: &[Item] = &[
+    Sub(
+        "Bookmarks",
+        &[
+            C("assets.favourite.toggle"),
+            C("assets.favourite.open"),
+            S,
+            C("assets.search.save"),
+            C("assets.search.apply"),
+            C("assets.search.remove"),
+            C("assets.search.restore"),
+            C("assets.search.scope"),
+        ],
+    ),
     Sub(
         "Create",
         &[
@@ -57,6 +76,7 @@ const ASSETS: &[Item] = &[
     C("assets.import"),
     C("assets.reimport"),
     C("assets.reimport_changed"),
+    C("assets.refresh"),
     S,
     C("assets.open"),
     C("assets.show"),
@@ -65,6 +85,7 @@ const ASSETS: &[Item] = &[
     C("assets.references"),
     S,
     C("assets.rename"),
+    C("assets.move"),
     C("assets.duplicate"),
     C("assets.delete"),
     S,
@@ -75,6 +96,7 @@ const ASSETS: &[Item] = &[
 ];
 /// Play commands, under Edit › Play (the title bar has Play, Pause and Step too).
 const PLAY: &[Item] = &[
+    C("play.options"),
     C("play.start"),
     C("play.pause"),
     C("play.step"),
@@ -82,6 +104,7 @@ const PLAY: &[Item] = &[
     C("play.restart"),
     C("play.simulate"),
     C("play.eject"),
+    C("play.possess"),
     S,
     Sub(
         "Mode",
@@ -97,12 +120,19 @@ const PLAY: &[Item] = &[
     C("play.start_paused"),
     C("play.network_profile"),
     S,
+    C("play.inspect"),
+    C("play.runtime.patch"),
+    C("play.runtime.discard"),
+    C("play.keep"),
+    C("play.keep_driven"),
+    S,
     C("play.review"),
     C("play.settings"),
 ];
 /// Tools, under Window › Tools.
 const TOOLS: &[Item] = &[
     C("window.profiler"),
+    C("window.lighting"),
     C("tools.gpu_capture"),
     C("tools.why"),
     C("tools.references"),
@@ -145,11 +175,13 @@ pub(crate) const MENUS: &[Menu] = &[
                 "Build & Export",
                 &[
                     C("build.current"),
+                    C("build.destination"),
                     C("build.run"),
                     C("build.open_folder"),
                     S,
                     C("build.profile.create"),
                     C("build.profiles"),
+                    Sub("Selected Profile", &[Item::Dynamic(Dynamic::BuildProfiles)]),
                     C("build.package"),
                 ],
             ),
@@ -166,6 +198,16 @@ pub(crate) const MENUS: &[Menu] = &[
             C("edit.undo"),
             C("edit.redo"),
             C("edit.history"),
+            Sub(
+                "History",
+                &[
+                    C("history.inspect"),
+                    C("history.copy"),
+                    S,
+                    C("history.older"),
+                    C("history.newer"),
+                ],
+            ),
             S,
             C("edit.cut"),
             C("edit.copy"),
@@ -175,6 +217,21 @@ pub(crate) const MENUS: &[Menu] = &[
             C("edit.delete"),
             C("edit.rename"),
             C("edit.copy_reference"),
+            S,
+            C("hierarchy.reveal"),
+            Sub(
+                "Visibility and Picking",
+                &[
+                    C("edit.hide"),
+                    C("edit.unhide_selected"),
+                    C("edit.lock"),
+                    S,
+                    C("edit.hide_descendants"),
+                    C("edit.unhide_descendants"),
+                    C("edit.lock_descendants"),
+                    C("edit.unlock_descendants"),
+                ],
+            ),
             S,
             C("edit.select_all"),
             C("edit.deselect"),
@@ -234,6 +291,16 @@ pub(crate) const MENUS: &[Menu] = &[
         mnemonic: 'V',
         items: &[
             Sub(
+                "Hierarchy",
+                &[
+                    C("hierarchy.reveal"),
+                    S,
+                    C("hierarchy.filter.save"),
+                    C("hierarchy.filter.apply"),
+                    C("hierarchy.filter.remove"),
+                ],
+            ),
+            Sub(
                 "Camera",
                 &[
                     C("view.camera.perspective"),
@@ -252,6 +319,8 @@ pub(crate) const MENUS: &[Menu] = &[
                     C("view.camera.speed_up"),
                     C("view.camera.speed_down"),
                     C("view.camera.bookmarks"),
+                    C("view.camera.bookmark.save"),
+                    C("view.camera.bookmark.delete"),
                     C("view.camera.pilot"),
                 ],
             ),
@@ -333,6 +402,17 @@ pub(crate) const MENUS: &[Menu] = &[
                     C("create.light.spot"),
                     C("create.light.sky"),
                     C("create.light.probe"),
+                    C("create.fog"),
+                ],
+            ),
+            Sub(
+                "Post-processing",
+                &[
+                    C("create.post.global"),
+                    C("create.post.box"),
+                    C("create.post.sphere"),
+                    S,
+                    C("window.lighting"),
                 ],
             ),
             C("create.camera"),
@@ -401,6 +481,7 @@ pub(crate) const MENUS: &[Menu] = &[
             C("window.problems"),
             C("window.agents"),
             C("window.profiler"),
+            C("window.lighting"),
             C("window.history"),
             S,
             Sub("Tools", TOOLS),
@@ -473,6 +554,8 @@ pub(crate) enum Context {
     Canvas,
     /// A console row.
     Console,
+    /// A real immutable transaction in History.
+    History,
     /// A profiler span or frame.
     Profiler,
     /// A status bar chip.
@@ -499,7 +582,29 @@ pub(crate) enum Context {
 /// Context-menu layout for a target kind.
 pub(crate) fn context(kind: Context) -> &'static [Item] {
     match kind {
+        Context::History => &[
+            C("history.inspect"),
+            C("history.copy"),
+            S,
+            C("edit.undo"),
+            C("edit.redo"),
+            S,
+            C("history.older"),
+            C("history.newer"),
+        ],
         Context::Entity => &[
+            C("create.group"),
+            C("hierarchy.reveal"),
+            C("lighting.inspect"),
+            Sub(
+                "Reflection Probe",
+                &[
+                    C("lighting.probe.recapture"),
+                    C("lighting.probe.cancel"),
+                    C("lighting.probe.refresh"),
+                    C("lighting.probe.copy"),
+                ],
+            ),
             Sub(
                 "Create Child",
                 &[
@@ -519,6 +624,15 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("select.children"),
             C("edit.hide"),
             C("edit.lock"),
+            Sub(
+                "Selected Branches",
+                &[
+                    C("edit.hide_descendants"),
+                    C("edit.unhide_descendants"),
+                    C("edit.lock_descendants"),
+                    C("edit.unlock_descendants"),
+                ],
+            ),
             S,
             C("create.prefab"),
             Sub(
@@ -526,6 +640,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
                 &[
                     C("prefab.open"),
                     C("prefab.apply_all"),
+                    Sub("Apply To", &[Item::Dynamic(Dynamic::PrefabSources)]),
                     C("prefab.revert_all"),
                     S,
                     C("prefab.unpack"),
@@ -535,6 +650,8 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
         ],
         Context::Hierarchy => &[
             C("create.empty"),
+            C("create.group"),
+            C("hierarchy.reveal"),
             Sub(
                 "Create",
                 &[
@@ -551,6 +668,8 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("edit.unhide_all"),
         ],
         Context::Viewport => &[
+            C("create.group"),
+            C("hierarchy.reveal"),
             Sub(
                 "Create",
                 &[
@@ -577,6 +696,8 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
         ],
         Context::Asset => &[
             Sub("Create", ASSET_CREATE),
+            C("assets.favourite.toggle"),
+            C("assets.refresh"),
             C("assets.open_ide"),
             C("assets.open"),
             C("assets.reveal"),
@@ -585,17 +706,30 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             S,
             C("assets.reimport"),
             C("assets.rename"),
+            C("assets.move"),
+            C("assets.duplicate"),
             C("assets.delete"),
         ],
         Context::Folder => &[
+            C("assets.favourite.toggle"),
+            C("assets.refresh"),
             C("assets.open"),
             C("assets.reveal"),
+            C("assets.rename"),
+            C("assets.move"),
+            C("assets.duplicate"),
+            C("assets.delete"),
             S,
             Sub("Create", ASSET_CREATE),
             C("assets.import"),
         ],
         Context::Assets => &[
             Sub("Create", ASSET_CREATE),
+            C("assets.favourite.toggle"),
+            C("assets.favourite.open"),
+            C("assets.search.save"),
+            C("assets.search.apply"),
+            C("assets.refresh"),
             C("assets.import"),
             C("assets.reveal"),
             C("assets.rebuild_thumbnails"),
@@ -609,6 +743,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("field.copy_path"),
             S,
             C("prefab.apply_override"),
+            Sub("Apply To", &[Item::Dynamic(Dynamic::PrefabSources)]),
             C("prefab.revert_override"),
             S,
             C("field.why"),
@@ -655,7 +790,12 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("graph.frame"),
             C("graph.select_all"),
         ],
-        Context::Console => &[C("console.copy"), C("console.clear")],
+        Context::Console => &[
+            C("console.copy"),
+            C("console.collapse"),
+            C("console.clear_on_play"),
+            C("console.clear"),
+        ],
         Context::Profiler => &[
             C("profiler.record"),
             C("profiler.freeze"),
@@ -733,6 +873,10 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("view.quality.epic"),
         ],
         Context::HierarchyFilter => &[
+            C("hierarchy.filter.save"),
+            C("hierarchy.filter.apply"),
+            C("hierarchy.filter.remove"),
+            S,
             C("hierarchy.filter.all"),
             S,
             C("hierarchy.filter.lights"),
@@ -765,6 +909,10 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("view.hide_overlays"),
         ],
         Context::Play => &[
+            C("play.options"),
+            C("play.simulate"),
+            C("play.eject"),
+            C("play.possess"),
             C("play.mode.local"),
             C("play.mode.host"),
             C("play.mode.dedicated"),
@@ -774,6 +922,13 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("play.start_paused"),
             S,
             C("play.settings"),
+            C("play.network_profile"),
+            S,
+            C("play.inspect"),
+            C("play.runtime.patch"),
+            C("play.runtime.discard"),
+            C("play.keep"),
+            C("play.keep_driven"),
         ],
     }
 }

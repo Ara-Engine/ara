@@ -188,7 +188,10 @@ pub fn run(command: &mut Command, log: &Path, timeout: Duration) -> Result<Strin
         if started.elapsed() > timeout {
             #[cfg(windows)]
             {
+                use std::os::windows::process::CommandExt;
+                // Timeout cleanup remains behind the export progress UI.
                 let _ = Command::new("taskkill.exe")
+                    .creation_flags(0x0800_0000)
                     .args(["/PID", &child.id().to_string(), "/T", "/F"])
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())

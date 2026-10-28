@@ -5,6 +5,7 @@ impl Shell {
     pub(super) fn asset_tree(&mut self, editor: &Editor, out: &mut String, width: f32) {
         let folder = &editor.state.asset_folder;
         out.push_str(&format!("<scroll id='asset-folders' style='flex-basis:0px;flex-grow:{width};min-width:0px;min-height:0px;padding:4px;gap:0px;background:var(--panel-header)'><panel id='asset-folder-content' style='flex-shrink:0;gap:0px'>"));
+        self.asset_bookmarks_sidebar(editor, out);
         self.bindings.insert(
             ara_ui::source::stable_id("asset-folder-root"),
             Binding::Protocol("editor.workspace", json!({"folder":""})),
@@ -139,5 +140,17 @@ mod tests {
         assert!(!visible("Assets/Art/Models", &expanded));
         expanded.insert("Assets".into());
         assert!(visible("Assets/Art/Models", &expanded));
+    }
+    #[test]
+    fn semantic_folder_projection_keeps_authored_build_target_and_project_settings_branches() {
+        let items = vec![
+            assets::Asset::folder("game/target/builds".into(), Some("target/builds".into())),
+            assets::Asset::folder("game/packages/Art".into(), Some("packages/Art".into())),
+            assets::Asset::folder("settings/builds".into(), None),
+        ];
+        let folders = folders(&items);
+        for path in ["game/target/builds", "game/packages/Art", "settings/builds"] {
+            assert!(folders.contains(path), "{path}");
+        }
     }
 }

@@ -31,7 +31,7 @@ use std::{
 };
 
 /// Bumped whenever the bake or the cache layout changes.
-const VERSION: u32 = 5;
+const VERSION: u32 = 6;
 const MAGIC: &[u8; 8] = b"ARAGI\0\0\x01";
 
 /// Residency used only while baking (full-resolution albedo for the caches).

@@ -52,6 +52,7 @@ pub(super) fn title(panel: &str) -> &str {
         "vfx" => "VFX",
         "animation" => "Animation",
         "profiler" => "Profiler",
+        "lighting" => "Lighting",
         "scene" => "Scene",
         "game" => "Game",
         "hierarchy" => "Hierarchy",
@@ -61,6 +62,7 @@ pub(super) fn title(panel: &str) -> &str {
         "problems" => "Problems",
         "agents" => "Agents",
         "settings" => "Settings",
+        "history" => "History",
         _ => panel,
     }
 }
@@ -71,7 +73,15 @@ pub(super) fn title(panel: &str) -> &str {
 pub(super) fn keep_alive(panel: &str) -> bool {
     matches!(
         panel,
-        "hierarchy" | "inspector" | "assets" | "console" | "problems" | "agents" | "settings"
+        "hierarchy"
+            | "inspector"
+            | "assets"
+            | "console"
+            | "problems"
+            | "agents"
+            | "settings"
+            | "lighting"
+            | "history"
     )
 }
 /// One icon per concept (Appendix B).
@@ -83,6 +93,7 @@ pub(super) fn panel_icon(panel: &str) -> &'static str {
         "vfx" => "sparkles",
         "animation" => "person-standing",
         "profiler" => "gauge",
+        "lighting" => "sun",
         "hierarchy" => "list-tree",
         "inspector" => "sliders-horizontal",
         "assets" => "folder",
@@ -90,6 +101,7 @@ pub(super) fn panel_icon(panel: &str) -> &'static str {
         "problems" => "triangle-alert",
         "agents" => "bot",
         "settings" => "settings-2",
+        "history" => "clock",
         _ => "square",
     }
 }
@@ -291,14 +303,17 @@ impl Shell {
         editor: &mut Editor,
         out: &mut String,
     ) -> ara_ui::Result<()> {
-        #[cfg(feature = "hotpatch")]
-        {
-            ara_hotpatch::call!(Self::draw_panel, self, panel, editor, out)
-        }
-        #[cfg(not(feature = "hotpatch"))]
-        {
-            self.draw_panel(panel, editor, out)
-        }
+        self.with_panel_boundary(panel, editor, out, |shell, editor, out| {
+            #[cfg(feature = "hotpatch")]
+            {
+                ara_hotpatch::call!(Self::draw_panel, shell, panel, editor, out)
+            }
+            #[cfg(not(feature = "hotpatch"))]
+            {
+                shell.draw_panel(panel, editor, out)
+            }
+        });
+        Ok(())
     }
 
     /// Build one panel through the current Rust generation, retaining its authoring state.
@@ -315,6 +330,7 @@ impl Shell {
             "material" => self.material_panel(editor, out)?,
             "vfx" => self.vfx_panel(editor, out)?,
             "profiler" => self.profiler_panel(editor, out)?,
+            "lighting" => self.lighting_panel(editor, out)?,
             "animation" => self.animation_panel(editor, out)?,
             "inspector" => self.inspector_panel(editor, out)?,
             "assets" => {
@@ -328,6 +344,7 @@ impl Shell {
             "problems" => self.problems_panel(editor, out),
             "agents" => self.agents_panel(editor, out),
             "settings" => self.settings_panel(editor, out),
+            "history" => self.history_panel(editor, out),
             other => self.empty(
                 out,
                 &format!("unknown-{other}"),

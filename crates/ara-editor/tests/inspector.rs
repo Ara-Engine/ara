@@ -86,7 +86,10 @@ impl Project {
             .action("editor.layout.show", json!({"panel":"assets"}))
             .unwrap();
         editor
-            .action("editor.workspace", json!({"folder":"models"}))
+            .action(
+                "editor.workspace",
+                json!({"folder":format!("{}/models",ara_doc::AUTHORING_ROOT)}),
+            )
             .unwrap();
         // Hierarchy shares the right column with the Inspector and Assets is open:
         // a tall window keeps every Inspector field the tests click on screen.
@@ -712,10 +715,28 @@ fn dropping_an_asset_from_assets_fills_the_field() {
     assert!(shell.drop_at(&mut editor).unwrap());
     assert_eq!(model(&editor), "@models/crate.gltf#as_crate0001");
     // A texture dropped on the model field is refused, with the reason.
+    let revision = editor.host.store().revision();
     shell.pointer = centre(&shell, &card(&shell, "rock"));
     shell.begin_drag();
     shell.pointer = centre(&shell, "asset-field-MeshRenderer-model");
-    assert!(shell.drop_at(&mut editor).is_err());
+    shell.content_drag_over(&editor, 0.).unwrap();
+    let preview = shell.content_drag_report();
+    assert_eq!(preview["feedback"]["valid"], false);
+    assert!(
+        preview["feedback"]["reason"]
+            .as_str()
+            .is_some_and(|reason| reason.contains("not rock.png"))
+    );
+    assert!(
+        shell.drop_at(&mut editor).unwrap(),
+        "invalid drops are consumed with feedback"
+    );
+    assert_eq!(
+        editor.host.store().revision(),
+        revision,
+        "refused drops produce no authoring ops"
+    );
+    assert!(!shell.content_pending());
     assert_eq!(model(&editor), "@models/crate.gltf#as_crate0001");
     shell.rebuild(&mut editor).unwrap();
     assert!(
@@ -767,7 +788,7 @@ fn clicking_an_asset_in_assets_selects_it() {
     shell.dispatch(&mut editor).unwrap();
     assert_eq!(
         editor.state.asset_path.as_deref(),
-        Some("models/crate.gltf")
+        Some(format!("{}/models/crate.gltf", ara_doc::AUTHORING_ROOT).as_str())
     );
     assert_eq!(model(&editor), Value::Null);
 }
@@ -881,6 +902,17 @@ fn material_overrides_add_slots_by_picking_a_material() {
             .ui
             .find("asset-field-MeshRenderer-materialOverrides-0-material")
             .is_some()
+    );
+    let primitive = shell
+        .ui
+        .find("nest-edit-MeshRenderer-materialOverrides-0-primitive")
+        .expect("new slot detail");
+    assert_eq!(
+        shell.input.focused(),
+        Some(ara_ui::source::stable_id(
+            &shell.ui.nodes[primitive].element.id
+        )),
+        "Add should reveal and focus its new item without a second row click"
     );
     // The slot's primitive is a number field.
     type_into(

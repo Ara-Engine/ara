@@ -718,7 +718,10 @@ fn import_settings_are_typed_attributed_and_undoable() {
     .unwrap();
     let mut editor = project.open();
     let result = editor
-        .action("editor.asset.import", json!({"path":"paint.png"}))
+        .action(
+            "editor.asset.import",
+            json!({"path":format!("{}/paint.png",ara_doc::AUTHORING_ROOT)}),
+        )
         .unwrap();
     editor
         .action("jobs.cancel", json!({"job":result["job"]}))
@@ -1132,11 +1135,14 @@ fn tests_resolve_isolated_profile_directories_under_target() {
 
 /// The Scene quality is a user preference: it round-trips through the isolated
 /// profile and never lands in the project. The project's default is
-/// `rendering.quality` in ara.project.json, edited through the typed settings command.
+/// `rendering.quality` in settings/project.json, edited through the typed settings command.
 #[test]
-fn scene_quality_persists_as_a_preference_and_the_project_default_in_its_manifest() {
+fn scene_quality_persists_as_a_user_preference_and_canonical_project_policy() {
     use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
     let project = Project::new();
+    let original_marker: Value =
+        serde_json::from_str(&std::fs::read_to_string(project.0.join("ara.project.json")).unwrap())
+            .unwrap();
     let profile = ara_editor::settings::config_dir()
         .unwrap()
         .join(format!("quality-roundtrip-{}", std::process::id()));
@@ -1161,11 +1167,20 @@ fn scene_quality_persists_as_a_preference_and_the_project_default_in_its_manifes
     let saved: Value =
         serde_json::from_str(&std::fs::read_to_string(&preferences).unwrap()).unwrap();
     assert_eq!(saved["viewport.quality"], "epic");
-    let manifest: Value =
+    let policy: Value = serde_json::from_str(
+        &std::fs::read_to_string(project.0.join(ara_host::project_policy::PREFERENCES)).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(policy["rendering"]["quality"], "medium");
+    assert!(!policy.to_string().contains("viewport"), "{policy}");
+    let marker: Value =
         serde_json::from_str(&std::fs::read_to_string(project.0.join("ara.project.json")).unwrap())
             .unwrap();
-    assert_eq!(manifest["rendering"]["quality"], "medium");
-    assert!(!manifest.to_string().contains("viewport"), "{manifest}");
+    assert_eq!(
+        marker, original_marker,
+        "Quality edits preserve project identity metadata"
+    );
+    assert!(marker.get("rendering").is_none());
 
     let mut editor = Editor::open_with(&project.0, Some(preferences.clone())).unwrap();
     assert_eq!(
@@ -1175,6 +1190,18 @@ fn scene_quality_persists_as_a_preference_and_the_project_default_in_its_manifes
     assert_eq!(
         editor.state.project_quality(),
         QualityChoice::Preset(QualityPreset::Medium)
+    );
+    assert!(
+        editor
+            .host
+            .store()
+            .workspace()
+            .doc(ara_host::project_policy::PREFERENCES_ID)
+            .is_some()
+    );
+    assert_eq!(
+        ara_host::project_policy::policy(editor.host.store().workspace(), "rendering"),
+        Some(&json!({"quality":"medium"}))
     );
     // Clearing the override falls back to the project's default.
     editor

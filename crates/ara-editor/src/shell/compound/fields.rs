@@ -25,7 +25,7 @@ impl Shell {
             row.value
         };
         let target = &format!("{}#{pointer}", field.path);
-        let set = |to: Value| set_commands(selection, field, pointer, to);
+        let set = |to: Value| set_commands(editor, selection, field, pointer, to);
         let id = format!("nest-edit-{rid}");
         let text_box = |shell: &mut Self,
                         out: &mut String,
@@ -44,7 +44,31 @@ impl Shell {
                         .map(|unit| unit.symbol().to_owned()),
                 ),
             );
-            out.push_str(&format!("<field id='{id}' class='{}' style='flex-grow:1;flex-basis:0px' text='{}' label='{}' description='{}' action='Dispatch' />",if numeric{"number"}else{""},escape(&text),escape(&sentence(pointer.rsplit('/').next().unwrap_or(pointer))),escape(desc.map_or("",|d|d.doc.as_str()))));
+            let metrics = if numeric {
+                let integral = matches!(
+                    ty,
+                    ValueType::I32
+                        | ValueType::I64
+                        | ValueType::U8
+                        | ValueType::U16
+                        | ValueType::U32
+                        | ValueType::U64
+                );
+                let step = desc
+                    .and_then(|desc| desc.editor.step)
+                    .unwrap_or(if integral { 1. } else { 0.01 });
+                let mut attributes = format!(" step='{step}'");
+                if let Some(min) = desc.and_then(|desc| desc.range).and_then(|range| range.min) {
+                    attributes.push_str(&format!(" min='{min}'"));
+                }
+                if let Some(max) = desc.and_then(|desc| desc.range).and_then(|range| range.max) {
+                    attributes.push_str(&format!(" max='{max}'"));
+                }
+                attributes
+            } else {
+                String::new()
+            };
+            out.push_str(&format!("<field id='{id}' class='{}'{metrics} style='flex-grow:1;flex-basis:0px' text='{}' label='{}' description='{}' action='Dispatch' />",if numeric{"number"}else{""},escape(&text),escape(&sentence(pointer.rsplit('/').next().unwrap_or(pointer))),escape(desc.map_or("",|d|d.doc.as_str()))));
         };
         if ty.is_number() {
             let range = desc.and_then(|d| d.range);
@@ -212,12 +236,19 @@ impl Shell {
                 let Some(Shape::Enum { variants }) = db.get(name).map(|t| &t.shape) else {
                     return;
                 };
-                let options: Vec<String> = variants.iter().map(|v| v.name.clone()).collect();
-                self.bindings.insert(
-                    ara_ui::source::stable_id(&id),
-                    Binding::EnumMenu(target.to_owned(), options),
+                self.choice_button(
+                    &id,
+                    name,
+                    choices::Select {
+                        destination: choices::Destination::Field(target.to_owned()),
+                        options: variants
+                            .iter()
+                            .map(|variant| (json!(variant.name), sentence(&variant.name)))
+                            .collect(),
+                        current: value.clone(),
+                    },
+                    out,
                 );
-                out.push_str(&format!("<button id='{id}' style='flex-grow:1;flex-basis:0px;justify-content:start' label='{}' action='Dispatch'><text id='{id}-value' class='fill' text='{}' />{}</button>",escape(name),escape(&sentence(value.as_str().unwrap_or(""))),icons::icon_in(&id,"chevron-down","icon-sm")));
             }
             ValueType::Json => {
                 let text = if value.is_null() {

@@ -2,8 +2,9 @@
 //! keycaps. Prefixes: `@` entities and assets, `#` scenes and assets, `?` help.
 //! Engine (content) commands keep their generated parameter form.
 use super::commands::{Avail, Target, entries, registered_menu_path};
-use super::panels::display;
 use super::*;
+mod parameters;
+pub(super) use parameters::{FORM_CSS, State as ParameterState};
 
 /// One palette row.
 pub(super) struct Item {
@@ -110,9 +111,12 @@ impl Shell {
             }
             if mode == '>' {
                 let catalog = editor
-                    .action("schema.list", json!({"kind":"command"}))
+                    .action("schema.list", json!({}))
                     .unwrap_or(Value::Null);
                 for item in catalog["items"].as_array().into_iter().flatten() {
+                    if !matches!(item["kind"].as_str(), Some("command" | "job")) {
+                        continue;
+                    }
                     let Some(name) = item["name"].as_str() else {
                         continue;
                     };
@@ -185,7 +189,8 @@ impl Shell {
                 let Some(s) = score(&asset.path) else {
                     continue;
                 };
-                let scene = workspace.find(&asset.path).and_then(|id| {
+                let logical = asset.authored_path.as_deref().unwrap_or(&asset.path);
+                let scene = workspace.find(logical).and_then(|id| {
                     workspace
                         .doc(id.as_str())
                         .filter(|d| d.kind == "scene")
@@ -237,6 +242,7 @@ impl Shell {
         items
     }
     pub(super) fn palette(&mut self, editor: &mut Editor, out: &mut String) -> ara_ui::Result<()> {
+        self.guard_palette_generation(editor);
         let width = (self.ui.size[0] - 32.).min(640.);
         // A popover centred below a point near the top: a click outside closes it.
         out.push_str(&format!(
@@ -257,7 +263,7 @@ impl Shell {
         out.push_str(&format!("<panel id='palette-search-wrap' style='height:32px;flex-shrink:0'><field id='palette-search' class='search-input' style='height:32px;padding-top:6px;padding-left:30px;font-size:13px' label='Search commands' text='{}' action='Dispatch' /><image id='palette-search-icon' class='search-icon' style='top:8px;left:8px' src='icon-search' tint='true' />{}</panel>",escape(&query),if query.is_empty(){"<text id='palette-placeholder' class='placeholder' style='top:6px;left:30px;font-size:13px' text='Run a command  ·  @ entities  ·  # assets  ·  ? help' />"}else{""}));
         if let Some(name) = self.palette_command.clone() {
             self.palette_form(editor, out, &name)?;
-            out.push_str("</panel>");
+            out.push_str("</popover>");
             return Ok(());
         }
         let items = self.palette_items(editor, &query);
@@ -278,7 +284,7 @@ impl Shell {
                     "<text id='palette-group-{index}' class='palette-group' text='{group}' />"
                 ));
             }
-            let id = format!("command-{index}");
+            let id = item.row_id(editor);
             let active = index == self.palette_active;
             out.push_str(&format!("<button id='{id}' class='palette-result{}' label='{}' description='{}' action='Dispatch'{}>{}<panel id='{id}-copy' class='palette-copy'>",if active{" palette-active"}else{""},escape(&item.title),escape(item.reason.as_deref().unwrap_or(&item.detail)),if item.reason.is_some(){" disabled='true'"}else{""},if active{icons::icon_in(&id,item.icon,"on-selection")}else{icons::icon(&id,item.icon)}));
             highlight(out, &id, &item.title, &term, active);
@@ -348,44 +354,23 @@ impl Shell {
             out.push_str("</scroll>");
             return Ok(());
         }
-        out.push_str(&format!(
-            "<text id='palette-command' class='accent' text='{}' />",
-            escape(name)
-        ));
-        let schema = editor
-            .host
-            .catalog()
-            .iter()
-            .find(|m| m.name == name)
-            .map(|m| m.params.clone())
-            .or_else(|| editor.command_schemas.get(name).cloned());
-        if let Some(schema) = schema
-            && let Some(properties) = schema["properties"].as_object()
-        {
-            for (key, prop) in properties {
-                if key == "session" {
-                    continue;
-                }
-                let id = format!("param-{key}");
-                self.bindings.insert(
-                    ara_ui::source::stable_id(&id),
-                    Binding::PaletteParam(key.clone()),
-                );
-                let value = self
-                    .palette_params
-                    .get(key)
-                    .map(display)
-                    .unwrap_or_default();
-                out.push_str(&format!("<panel id='param-row-{key}' class='prop-row'><text id='param-label-{key}' class='prop-label' style='width:140px' text='{}' /><panel id='param-value-{key}' class='prop-value'><field id='{id}' text='{}' action='Dispatch' description='{}' style='flex-grow:1' /></panel></panel>",escape(key),escape(&value),escape(prop["description"].as_str().unwrap_or(""))));
-            }
-        }
-        out.push_str(&self.bind_button(
-            "palette-run",
-            "Run command",
-            Binding::PaletteRun,
-            "primary",
-        ));
-        Ok(())
+        self.palette_parameters(editor, name, out)
+    }
+}
+
+impl Item {
+    fn row_id(&self, editor: &Editor) -> String {
+        let identity = match &self.binding {
+            Binding::Command(id, target) => format!("command:{id}:{target:?}"),
+            Binding::CommandOwned(id, target) => format!("command:{id}:{target:?}"),
+            Binding::Palette(command) => format!("form:{command}"),
+            _ => format!("{}:{}:{}", self.group, self.id, self.title),
+        };
+        let identity = format!(
+            "{identity}:{}:{:?}:{}",
+            editor.state.doc, editor.state.selection, self.title
+        );
+        format!("command-{:016x}", ara_ui::source::stable_id(&identity))
     }
 }
 /// Title text with matched characters in the accent color.
@@ -445,6 +430,10 @@ pub(super) fn fuzzy(value: &str, query: &str) -> Option<(usize, Vec<usize>)> {
     let score = spread + positions.first().copied().unwrap_or(0);
     Some((score, positions))
 }
+#[cfg(test)]
+#[path = "palette/form_tests.rs"]
+mod form_tests;
+
 #[cfg(test)]
 mod tests {
     #[test]

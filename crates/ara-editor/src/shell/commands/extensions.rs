@@ -78,23 +78,26 @@ pub(crate) fn registered_menu_path(catalog: &Catalog, id: &str) -> String {
     catalog
         .menus
         .iter()
-        .find(|m| m.command == id)
+        .filter(|m| m.command == id)
+        .min_by(|a, b| a.path.cmp(&b.path))
         .map(|m| {
             m.path
                 .rsplit_once('/')
-                .map_or("", |(p, _)| p)
+                .map_or(m.path.as_str(), |(p, _)| p)
                 .replace('/', " › ")
         })
         .unwrap_or_else(|| menu_path(id))
 }
 pub(crate) fn bar_titles(catalog: &Catalog) -> Vec<&str> {
     let mut titles: Vec<_> = menus::MENUS.iter().map(|m| m.title).collect();
+    let mut extra = std::collections::BTreeSet::new();
     for menu in &catalog.menus {
-        if let Some((root, _)) = menu.path.split_once('/')
+        if let Some(root) = menu.path.split('/').next().filter(|root| !root.is_empty())
             && !titles.contains(&root)
         {
-            titles.push(root);
+            extra.insert(root);
         }
     }
+    titles.extend(extra);
     titles
 }

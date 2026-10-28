@@ -4,6 +4,19 @@ use std::path::{Path, PathBuf};
 
 use super::*;
 
+#[path = "scripts/modules.rs"]
+mod module_discovery;
+pub(super) use module_discovery::ModuleList;
+#[path = "scripts/ide.rs"]
+mod ide;
+pub(crate) use ide::IdeRequest;
+#[cfg(test)]
+#[path = "scripts/focus_tests.rs"]
+mod focus_tests;
+#[cfg(test)]
+#[path = "scripts/job_poll_tests.rs"]
+mod job_poll_tests;
+
 struct NoClipboard;
 impl ara_ui_text::Clipboard for NoClipboard {
     fn read(&mut self) -> ara_ui_text::Result<String> {
@@ -19,78 +32,6 @@ pub(crate) fn modules(root: &Path) -> Result<Vec<PathBuf>, Vec<ara_diag::Diagnos
     ara_play_host::script_modules(root)
 }
 
-#[derive(Default)]
-pub(super) struct ModuleList {
-    paths: Vec<PathBuf>,
-}
-impl ModuleList {
-    fn update(
-        &mut self,
-        result: Result<Vec<PathBuf>, Vec<ara_diag::Diagnostic>>,
-    ) -> Vec<ara_diag::Diagnostic> {
-        match result {
-            Ok(paths) => {
-                self.paths = paths;
-                Vec::new()
-            }
-            Err(diagnostics) => diagnostics,
-        }
-    }
-}
-
-impl Shell {
-    pub(crate) fn script_modules(&mut self, editor: &mut Editor) -> Vec<PathBuf> {
-        let diagnostics = self.script_modules.update(modules(editor.host.root()));
-        if !diagnostics.is_empty() {
-            self.status_note = Some(
-                "C# module discovery failed; showing the last good module list. See Problems."
-                    .into(),
-            );
-            editor.report_failure(&crate::editor::EditorError(
-                ara_proto::RpcError::from_diagnostics(diagnostics),
-            ));
-        }
-        self.script_modules.paths.clone()
-    }
-}
-
-#[cfg(test)]
-mod module_tests {
-    use super::*;
-    #[test]
-    fn failed_discovery_reports_diagnostics_and_keeps_the_last_good_module_list() {
-        let mut modules = ModuleList::default();
-        let good = vec![PathBuf::from(".ara/scripts/game")];
-        assert!(modules.update(Ok(good.clone())).is_empty());
-        let error = ara_diag::Diagnostic::error(
-            ara_script::codes::UNKNOWN_MODULE,
-            "combat references missing core",
-        );
-        let diagnostics = modules.update(Err(vec![error.clone()]));
-        assert_eq!(diagnostics, vec![error]);
-        assert_eq!(modules.paths, good);
-        assert!(modules.update(Ok(vec![])).is_empty());
-        assert!(
-            modules.paths.is_empty(),
-            "a successful empty inventory replaces the last good list"
-        );
-    }
-}
-
-/// Open in VS Code when available, otherwise use the system's file association.
-pub(crate) fn open_in_ide(folder: &Path, file: &Path) -> ara_ui::Result<()> {
-    let code = if cfg!(windows) { "code.cmd" } else { "code" };
-    if std::process::Command::new(code)
-        .arg(folder)
-        .arg(file)
-        .spawn()
-        .is_ok()
-    {
-        return Ok(());
-    }
-    ops::open_external(file)
-}
-
 #[derive(Clone)]
 pub(super) struct Rename {
     pub path: String,
@@ -99,6 +40,21 @@ pub(super) struct Rename {
 }
 
 impl Shell {
+    /// Reveal a diagnostic's exact source coordinates in the configured editor.
+    pub(crate) fn open_script_location(
+        &mut self,
+        editor: &Editor,
+        path: &str,
+        line: Option<u32>,
+        column: Option<u32>,
+    ) -> ara_ui::Result<()> {
+        let (root, file) = ide::resolve_target(editor.host.root(), Path::new(path))?;
+        let line = line.unwrap_or(1).max(1);
+        let column = column.unwrap_or(1).max(1);
+        self.status_note = Some(format!("{}:{line}:{column}", file.display()));
+        self.request_script_ide(editor, &root, &file, Some((line, column)))
+    }
+
     /// Create a script in the targeted folder, then focus its inline name before compiling.
     pub(crate) fn create_script(
         &mut self,
@@ -109,35 +65,50 @@ impl Shell {
     ) -> ara_ui::Result<()> {
         let folder = match target {
             commands::Target::Folder(p) => p.clone(),
+            commands::Target::Asset(p)
+                if self
+                    .browser
+                    .items
+                    .iter()
+                    .any(|asset| asset.path == *p && asset.kind == "folder") =>
+            {
+                p.clone()
+            }
             commands::Target::Asset(p) => p.rsplit_once('/').map_or("", |(p, _)| p).to_owned(),
             _ => editor.state.asset_folder.clone(),
         };
+        let logical_folder = self.browser.authored_folder_ref(&folder)?;
         let stem = if template == "system" {
             "NewSystem"
         } else {
             "NewBehaviour"
         };
+        let path = (1..=10_000)
+            .map(|n| {
+                let name = if n == 1 {
+                    stem.to_owned()
+                } else {
+                    format!("{stem}{n}")
+                };
+                if logical_folder.is_empty() {
+                    format!("{name}.cs")
+                } else {
+                    format!("{logical_folder}/{name}.cs")
+                }
+            })
+            .find(|p| {
+                ops::authored::available(&self.browser.files, editor.host.store().workspace(), p)
+                    && !self
+                        .browser
+                        .items
+                        .iter()
+                        .any(|a| a.kind == "cs" && names::file_name(&a.path) == names::file_name(p))
+            })
+            .ok_or("No unused script name")?;
+        // ScriptService emits project-relative source file operations. Its path is
+        // physical storage, while document/reference commands use logical paths.
         let path =
-            (1..)
-                .map(|n| {
-                    let name = if n == 1 {
-                        stem.to_owned()
-                    } else {
-                        format!("{stem}{n}")
-                    };
-                    if folder.is_empty() {
-                        format!("{name}.cs")
-                    } else {
-                        format!("{folder}/{name}.cs")
-                    }
-                })
-                .find(|p| {
-                    !editor.host.root().join(p).exists()
-                        && !self.browser.items.iter().any(|a| {
-                            a.kind == "cs" && names::file_name(&a.path) == names::file_name(p)
-                        })
-                })
-                .ok_or("No unused script name")?;
+            ops::authored::storage(&self.browser.files, editor.host.store().workspace(), &path)?;
         let created = editor.action(
             "script.create",
             json!({"path":path,"template":template,"compile":false}),
@@ -204,8 +175,7 @@ impl Shell {
                 self.ui.nodes[field].dirty.paint = true;
             }
             let id = ara_ui::source::stable_id("asset-rename-value");
-            if self.input.focused() != Some(id) {
-                self.input.focus(&mut self.ui, id)?;
+            if self.input.focused() != Some(id) && self.input.focus_if_available(&mut self.ui, id) {
                 self.ui
                     .edit(field, ara_ui_text::EditEvent::SelectAll, &mut NoClipboard)?;
             }
@@ -236,29 +206,9 @@ impl Shell {
         Ok(true)
     }
 
-    pub(crate) fn open_script_ide(&self, editor: &Editor, path: &str) -> ara_ui::Result<()> {
-        if !self.open_ide {
-            return Ok(());
-        }
-        let file = editor.host.root().join(path);
-        let configured = editor
-            .state
-            .settings
-            .get("scripts.ide")
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        if !configured.is_empty() && configured != "system" {
-            std::process::Command::new(configured)
-                .arg(editor.host.root())
-                .arg(&file)
-                .spawn()?;
-            return Ok(());
-        }
-        if configured == "system" {
-            ops::open_external(&file)
-        } else {
-            open_in_ide(editor.host.root(), &file)
-        }
+    pub(crate) fn open_script_ide(&mut self, editor: &Editor, path: &str) -> ara_ui::Result<()> {
+        let (root, file) = ide::resolve_target(editor.host.root(), Path::new(path))?;
+        self.request_script_ide(editor, &root, &file, None)
     }
 
     pub(super) fn poll_script_job(&mut self, editor: &mut Editor) -> ara_ui::Result<bool> {
@@ -280,8 +230,14 @@ impl Shell {
                 result["result"]["component"].as_str().unwrap_or("Script")
             )
         } else {
-            result["diagnostics"][0]["message"]
-                .as_str()
+            result["diagnostics"]
+                .as_array()
+                .and_then(|diagnostics| {
+                    diagnostics
+                        .iter()
+                        .find(|diagnostic| diagnostic["severity"] == "error")
+                })
+                .and_then(|diagnostic| diagnostic["message"].as_str())
                 .unwrap_or("Script compilation failed; see Problems")
                 .to_owned()
         });

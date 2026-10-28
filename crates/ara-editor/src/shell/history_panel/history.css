@@ -1,0 +1,16 @@
+.history-toolbar { height:auto; min-height:32px; flex-wrap:wrap; flex-shrink:0; }
+.history-toolbar-action { flex-shrink:0; }
+.history-count { height:auto; white-space:normal; padding:6px; flex-shrink:0; }
+.history-content { flex-grow:1; flex-basis:0px; min-width:0px; min-height:0px; flex-direction:row; gap:6px; }
+.history-transactions { flex-grow:1; flex-basis:0px; min-width:0px; min-height:0px; gap:2px; padding:4px; }
+.history-entry { height:auto; min-height:66px; flex-shrink:0; flex-direction:column; align-items:start; gap:3px; padding:6px; background:transparent; border-width:1px; border-color:var(--separator-strong); }
+.history-entry:hover { background:var(--hover-surface); }
+.history-entry-on { background:var(--selection-surface); color:var(--selection-foreground); }
+.history-entry-on:hover { background:var(--selection-surface); }
+.history-entry-copy { white-space:normal; height:auto; min-width:0px; flex-shrink:0; color:inherit; }
+.history-why { font-size:var(--font-size-body); }
+.history-detail { flex-grow:1.3; flex-basis:0px; min-width:0px; min-height:0px; gap:8px; padding:8px; }
+.history-detail-copy { white-space:normal; height:auto; min-width:0px; flex-shrink:0; }
+.history-detail-head { flex-direction:row; align-items:center; gap:6px; flex-wrap:wrap; flex-shrink:0; }
+.history-reason { font-size:var(--font-size-heading); }
+.history-op { height:auto; min-height:40px; gap:4px; padding:6px; flex-shrink:0; border-width:1px; border-color:var(--separator-strong); }

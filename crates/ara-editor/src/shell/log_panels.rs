@@ -1,7 +1,7 @@
 //! Console and Problems, both read from the project's diagnostics bus (`logs`, the
 //! same stream `ara logs` and agents read):
 //! - **Console** is the chronological log: severity toggles with counts, collapse by
-//!   code, clear, search, time, origin and a source link per row; a selected row
+//!   message and source identity, clear, search, time, origin and a source link per row; a selected row
 //!   expands its details and fixes.
 //! - **Problems** is what is wrong now: errors and warnings grouped by file or
 //!   document, with one-click fixes and "Why", the catalog's explanation.
@@ -16,6 +16,9 @@
 use super::commands::Target;
 use super::*;
 use std::collections::BTreeMap;
+mod compile;
+mod stack;
+pub(crate) use compile::CompilationView;
 
 /// Console and Problems filters: panel-local view state (neither navigation nor undo).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -26,8 +29,10 @@ pub(crate) struct LogView {
     pub warnings: bool,
     /// Console shows info messages.
     pub info: bool,
-    /// Console merges rows with the same code into one.
+    /// Console merges repetitions of the same message, origin and source location.
     pub collapse: bool,
+    /// Clear previous messages when Play starts from this editor.
+    pub clear_on_play: bool,
     /// Console shows only records after this bus cursor (Clear).
     pub since: u64,
     /// Problems shows errors.
@@ -42,6 +47,7 @@ impl Default for LogView {
             warnings: true,
             info: true,
             collapse: false,
+            clear_on_play: false,
             since: 0,
             problem_errors: true,
             problem_warnings: true,
@@ -52,11 +58,61 @@ impl Default for LogView {
 /// One bus record, as `logs` returns it.
 struct Entry {
     seq: u64,
+    first: u64,
     count: u64,
+    sampled: u64,
     at: u64,
     origin: String,
     diagnostic: ara_diag::Diagnostic,
 }
+
+/// Borrowed identity keeps distinct errors sharing one code visible without per-row key allocations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Identity<'a> {
+    code: ara_diag::Code,
+    severity: ara_diag::Severity,
+    message: &'a str,
+    origin: &'a str,
+    file: Option<&'a str>,
+    doc: Option<&'a str>,
+    record: Option<&'a str>,
+    path: Option<&'a str>,
+    line: Option<u32>,
+    column: Option<u32>,
+    command: Option<usize>,
+    module: Option<&'a str>,
+    producer: Option<&'a str>,
+    profile: Option<&'a str>,
+    world: Option<&'a str>,
+    player: Option<u64>,
+}
+impl Entry {
+    fn identity(&self) -> Identity<'_> {
+        let location = &self.diagnostic.location;
+        let data = self.diagnostic.data.as_deref();
+        Identity {
+            code: self.diagnostic.code,
+            severity: self.diagnostic.severity,
+            message: &self.diagnostic.message,
+            origin: &self.origin,
+            file: location.file.as_deref(),
+            doc: location.doc.as_deref(),
+            record: location.record.as_deref(),
+            path: location.path.as_deref(),
+            line: location.line,
+            column: location.column,
+            command: location.command,
+            module: data.and_then(|data| data["module"].as_str()),
+            producer: data.and_then(|data| data["compile"]["producer"].as_str()),
+            profile: data.and_then(|data| data["compile"]["profile"].as_str()),
+            world: data.and_then(|data| data["play"]["world"].as_str()),
+            player: data.and_then(|data| data["play"]["player"].as_u64()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;
 
 fn entries(editor: &mut Editor, since: u64, severity: &str) -> Vec<Entry> {
     let logs = editor
@@ -69,16 +125,21 @@ fn entries(editor: &mut Editor, since: u64, severity: &str) -> Vec<Entry> {
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|e| {
-            Some(Entry {
-                seq: e["seq"].as_u64()?,
-                count: e["count"].as_u64().unwrap_or(1),
-                at: e["at"].as_u64().unwrap_or(0),
-                origin: e["origin"].as_str().unwrap_or("engine").to_owned(),
-                diagnostic: serde_json::from_value(e["diagnostic"].clone()).ok()?,
-            })
-        })
+        .filter_map(entry)
         .collect()
+}
+
+fn entry(e: &Value) -> Option<Entry> {
+    let seq = e["seq"].as_u64()?;
+    Some(Entry {
+        seq,
+        first: e["first"].as_u64().unwrap_or(seq),
+        count: e["count"].as_u64().unwrap_or(1),
+        sampled: e["sampled"].as_u64().unwrap_or(0),
+        at: e["at"].as_u64().unwrap_or(0),
+        origin: e["origin"].as_str().unwrap_or("engine").to_owned(),
+        diagnostic: serde_json::from_value(e["diagnostic"].clone()).ok()?,
+    })
 }
 
 /// Whether a record is about this computer (its GPU loader and overlay layers), not
@@ -164,7 +225,7 @@ fn source(editor: &Editor, d: &ara_diag::Diagnostic) -> Option<(String, Binding)
         Some(line) => format!("{path}:{line}"),
         None => path.clone(),
     };
-    Some((label, Binding::Command("assets.show", Target::Asset(path))))
+    Some((label, Binding::Diagnostic(d.clone())))
 }
 
 /// Local wall-clock `HH:MM:SS` of a Unix time in milliseconds.
@@ -207,6 +268,13 @@ fn local_offset_minutes() -> i64 {
 }
 
 impl Shell {
+    pub(crate) fn clear_console(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        let logs = editor.action("logs", json!({"limit":1}))?;
+        self.log_view.since = logs["cursor"].as_u64().unwrap_or(0);
+        self.console_open = None;
+        Ok(())
+    }
+
     pub(super) fn console_panel(&mut self, editor: &mut Editor, out: &mut String) {
         let view = self.log_view;
         let (machine, all): (Vec<Entry>, Vec<Entry>) = entries(editor, view.since, "info")
@@ -234,6 +302,14 @@ impl Shell {
             "layers",
             editor,
             view.collapse,
+        );
+        self.tool_icon(
+            out,
+            "console-clear-play",
+            "console.clear_on_play",
+            "play",
+            editor,
+            view.clear_on_play,
         );
         out.push_str("<panel id='console-sep' class='toolbar-sep' />");
         for (id, command, severity, on) in [
@@ -282,15 +358,15 @@ impl Shell {
                         .contains(&query)
             })
             .collect();
-        // Collapse keeps the newest row of each code and sums its occurrences.
-        let mut totals: BTreeMap<String, u64> = BTreeMap::new();
+        // Keep the newest repetition of each diagnostic identity and sum its occurrences.
+        let mut totals: BTreeMap<Identity<'_>, u64> = BTreeMap::new();
         if view.collapse {
             for e in &rows {
-                *totals.entry(e.diagnostic.code.to_string()).or_default() += e.count;
+                *totals.entry(e.identity()).or_default() += e.count;
             }
             let mut seen = std::collections::BTreeSet::new();
             rows.reverse();
-            rows.retain(|e| seen.insert(e.diagnostic.code.to_string()));
+            rows.retain(|e| seen.insert(e.identity()));
             rows.reverse();
         }
         if rows.is_empty() && machine.is_empty() {
@@ -319,10 +395,7 @@ impl Shell {
         }
         for e in rows.iter().rev().take(300).rev() {
             let count = if view.collapse {
-                totals
-                    .get(&e.diagnostic.code.to_string())
-                    .copied()
-                    .unwrap_or(e.count)
+                totals.get(&e.identity()).copied().unwrap_or(e.count)
             } else {
                 e.count
             };
@@ -390,6 +463,7 @@ impl Shell {
     /// subjects, the catalog's explanation and the fixes as buttons.
     fn log_details(&mut self, out: &mut String, id: &str, d: &ara_diag::Diagnostic) {
         out.push_str(&format!("<panel id='{id}-details' class='log-details'><text id='{id}-code' class='mono caption' text='{}' />",escape(&d.code.to_string())));
+        self.log_stack_details(out, id, d);
         if let Some(doc) = d.code.doc() {
             out.push_str(&format!("<text id='{id}-title' class='fg' text='{}' /><text id='{id}-explain' class='dialog-text' text='{}' />",escape(doc.title),escape(doc.explanation)));
             if !doc.causes.is_empty() {
@@ -434,10 +508,28 @@ impl Shell {
     }
 
     pub(super) fn problems_panel(&mut self, editor: &mut Editor, out: &mut String) {
+        // Move the read model for this render so rows can borrow cached entries
+        // while button construction mutates the Shell, without copying history.
+        let compilation = std::mem::take(&mut self.compile_problems);
+        self.problems_with_compilation(editor, out, &compilation);
+        self.compile_problems = compilation;
+    }
+
+    fn problems_with_compilation(
+        &mut self,
+        editor: &mut Editor,
+        out: &mut String,
+        compilation: &CompilationView,
+    ) {
         let view = self.log_view;
-        let (machine, all): (Vec<Entry>, Vec<Entry>) = entries(editor, 0, "warning")
+        let (machine, fresh): (Vec<Entry>, Vec<Entry>) = entries(editor, 0, "warning")
             .into_iter()
-            .partition(|e| machine(&e.diagnostic));
+            .partition(|entry| machine(&entry.diagnostic));
+        let all: Vec<&Entry> = fresh
+            .iter()
+            .filter(|entry| compilation.fallback(entry))
+            .chain(compilation.entries())
+            .collect();
         let errors = all
             .iter()
             .filter(|e| e.diagnostic.severity == ara_diag::Severity::Error)
@@ -466,6 +558,10 @@ impl Shell {
         }
         self.search(out, "problems", editor);
         out.push_str("</panel>");
+        let notice = compilation.notice();
+        if let Some(notice) = &notice {
+            out.push_str(&format!("<text id='problems-compile-status' class='caption wrap-text' style='flex-shrink:0;padding:6px' text='{}' />",escape(notice)));
+        }
         let query = editor
             .state
             .searches
@@ -507,7 +603,7 @@ impl Shell {
             groups.entry(group).or_default().push(e);
         }
         if groups.is_empty() && machine.is_empty() {
-            self.empty(out, "problems-empty", "circle-check", if all.is_empty() { "No problems" } else { "No matching problems" }, "Errors and warnings from documents, imports, scripts and Play are listed here by file, with fixes.", &[]);
+            self.empty(out, "problems-empty", if notice.is_some(){"info"}else{"circle-check"}, if notice.is_some(){"Compilation coverage is incomplete"}else if all.is_empty() { "No problems" } else { "No matching problems" }, notice.as_deref().unwrap_or("Errors and warnings from documents, imports, scripts and Play are listed here by file, with fixes."), &[]);
             return;
         }
         out.push_str("<scroll id='problems-scroll' class='body log-list'>");
@@ -522,6 +618,9 @@ impl Shell {
         for (n, (group, rows)) in groups.iter().enumerate() {
             let gid = format!("problem-group-{n}");
             out.push_str(&format!("<panel id='{gid}' class='problem-group'>{}<text id='{gid}-path' class='fg' text='{}' /><text id='{gid}-count' class='caption' text='{}' /></panel>",icons::icon(&gid,if group=="Project"{"folder"}else{"file"}),escape(group),rows.len()));
+            if rows.len() > 200 {
+                out.push_str(&format!("<text id='{gid}-window' class='caption wrap-text' text='Showing 200 of {} problems in this group. Search filters all retained rows.' />",rows.len()));
+            }
             for e in rows.iter().take(200) {
                 let id = format!("problem-{}", e.seq);
                 let (icon, tint) = severity_icon(e.diagnostic.severity);

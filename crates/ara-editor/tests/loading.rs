@@ -97,7 +97,10 @@ fn import_progress_shows_in_the_status_bar_assets_and_the_scene() {
         .action("editor.layout.show", json!({"panel":"assets"}))
         .unwrap();
     editor
-        .action("editor.workspace", json!({"folder":"models"}))
+        .action(
+            "editor.workspace",
+            json!({"folder":format!("{}/models",ara_doc::AUTHORING_ROOT)}),
+        )
         .unwrap();
     let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
     let start = Instant::now();

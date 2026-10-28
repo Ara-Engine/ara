@@ -98,7 +98,10 @@ impl SnapCaption {
                 }
             };
             let max = hit(point("window-maximize")?)?;
-            let menu = hit(point("menu-title-0")?)?;
+            let menu_id = shell
+                .menu_header_node("File")
+                .ok_or("Chrome verification menu missing")?;
+            let menu = hit(point(menu_id)?)?;
             let left =
                 shell.ui.nodes[shell.shown_node("titlebar-left").ok_or("Caption left")?].rect;
             let caption = hit([(left.x + left.w - 8.) * scale, 18. * scale])?;

@@ -65,7 +65,7 @@ fn play_starts_in_the_background_and_shows_its_progress() {
     shell.show_play_row_for_test(
         &mut editor,
         json!({"status":"starting","progress":{"phase":"assets","completed":3,"total":12,"elapsedMs":2450}}),
-    );
+    ).unwrap();
     assert_eq!(
         text(&shell, "game-starting-phase").as_deref(),
         Some("Preparing assets")
@@ -113,12 +113,53 @@ fn play_starts_in_the_background_and_shows_its_progress() {
     shell.show_play_row_for_test(
         &mut editor,
         json!({"status":"starting","progress":{"phase":"assets","completed":3,"total":12,"elapsedMs":2450}}),
-    );
+    ).unwrap();
     assert!(shell.ui.find("game-stop").is_some());
     assert_eq!(
         text(&shell, "status-play-text").as_deref(),
         Some("Starting Play…")
     );
+    shell.show_play_row_for_test(
+        &mut editor,
+        json!({"status":"starting","restart":true,"commandsRefreshing":true,"progress":{"phase":"pool","elapsedMs":3500}}),
+    ).unwrap();
+    for id in ["game-starting-title", "status-play-text"] {
+        assert_eq!(
+            text(&shell, id).as_deref(),
+            Some("Restarting Play…"),
+            "{id}; playing={:?}; panel error={:?}; game text={:?}",
+            editor.state.playing,
+            text(&shell, "panel-error-game-detail"),
+            shell
+                .ui
+                .nodes
+                .iter()
+                .filter(|node| node.element.id.starts_with("game-"))
+                .filter_map(|node| node
+                    .text
+                    .as_ref()
+                    .map(|text| (&node.element.id, &text.value)))
+                .collect::<Vec<_>>()
+        );
+    }
+    assert_eq!(
+        text(&shell, "game-command-refresh").as_deref(),
+        Some("Refreshing C# commands…")
+    );
+    assert!(shell.move_play_row_for_test(
+        json!({"status":"starting","restart":true,"progress":{"phase":"pool","elapsedMs":3700}})
+    ));
+    assert_eq!(
+        text(&shell, "game-starting-title").as_deref(),
+        Some("Restarting Play…")
+    );
+    assert!(!shell.move_play_row_for_test(
+        json!({"status":"starting","progress":{"phase":"pool","elapsedMs":3800}})
+    ));
+    shell.show_play_row_for_test(
+        &mut editor,
+        json!({"status":"starting","progress":{"phase":"assets","completed":3,"total":12,"elapsedMs":2450}}),
+    ).unwrap();
     // Over a camera preview the start is a hint on the view Play starts with, with
     // the same progress updated in place; Play's first (lit) frame replaces it.
     shell.show_game_preview_for_test(&mut editor, [640, 360]);

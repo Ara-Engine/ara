@@ -74,6 +74,15 @@ impl Placement {
                 target: local(*target),
                 vertical_fov: *vertical_fov,
             },
+            CameraSpec::OrthographicLookAt {
+                position,
+                target,
+                vertical_size,
+            } => CameraSpec::OrthographicLookAt {
+                position: local(*position),
+                target: local(*target),
+                vertical_size: *vertical_size / self.scale,
+            },
             CameraSpec::FrameBounds {
                 min,
                 max,

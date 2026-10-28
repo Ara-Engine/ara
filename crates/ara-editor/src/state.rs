@@ -5,7 +5,7 @@ use ara_ops::{Author, Store, TxnMeta};
 use ara_render_fidelity::presets::{QualityChoice, QualityPreset};
 use ara_schema::{FieldPath, Schema, SchemaDb};
 use ara_ui::docking::{Axis, DockDrop, DockLayout, DockNode, Floating};
-use glam::{Quat, Vec3};
+use glam::Vec3;
 pub(crate) use layout_file::{MIGRATION_NOTICE, restore as restore_layout};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -13,6 +13,10 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
 };
+
+#[cfg(test)]
+#[path = "camera_tests.rs"]
+mod camera_tests;
 
 /// Editor transform handle mode.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
@@ -28,7 +32,17 @@ pub enum Tool {
     /// Move, rotate or scale with the handle grabbed in the combined gizmo.
     Universal,
 }
-/// Perspective scene camera; this is editor state, never gameplay state.
+/// Projection used by the editor's scene camera.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CameraProjection {
+    /// Depth changes apparent size, as through a perspective lens.
+    #[default]
+    Perspective,
+    /// Parallel sight lines retain world-space dimensions at every depth.
+    Orthographic,
+}
+/// Scene camera; this is editor state, never gameplay state.
 /// Fields missing from older saved state take their defaults.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
@@ -44,6 +58,10 @@ pub struct Camera {
     /// Vertical field of view in degrees, within [`Camera::FOV_RANGE`]; set it with
     /// [`Camera::set_fov`]. Matches a scene `Camera.fov` for parity shots.
     pub fov_y_degrees: f32,
+    /// Perspective or parallel scene projection.
+    pub projection: CameraProjection,
+    /// Visible vertical span in metres when using orthographic projection.
+    pub orthographic_height: f32,
 }
 impl Default for Camera {
     fn default() -> Self {
@@ -53,6 +71,8 @@ impl Default for Camera {
             pitch: 0.4,
             distance: 10.,
             fov_y_degrees: Self::DEFAULT_FOV,
+            projection: CameraProjection::Perspective,
+            orthographic_height: 10.,
         }
     }
 }
@@ -94,6 +114,13 @@ impl Camera {
     }
     /// Renderer-neutral view request.
     pub fn spec(&self) -> ara_render::scene::CameraSpec {
+        if self.projection == CameraProjection::Orthographic {
+            return ara_render::scene::CameraSpec::OrthographicLookAt {
+                position: self.position(),
+                target: self.target,
+                vertical_size: self.orthographic_height,
+            };
+        }
         ara_render::scene::CameraSpec::LookAt {
             position: self.position(),
             target: self.target,
@@ -102,26 +129,167 @@ impl Camera {
     }
     /// Pan in the camera's image plane, in logical pixels.
     pub fn pan(&mut self, delta: [f32; 2]) {
-        let right = Vec3::new(self.yaw.cos(), 0., -self.yaw.sin());
-        let forward = (self.target - self.position()).normalize();
-        let up = right.cross(forward);
-        self.target += (-right * delta[0] + up * delta[1]) * self.distance * 0.0015;
+        if !delta.iter().all(|value| value.is_finite()) {
+            return;
+        }
+        let Some((right, up, _)) = self.basis() else {
+            return;
+        };
+        let scale = if self.projection == CameraProjection::Orthographic {
+            self.orthographic_height * 0.0015
+        } else {
+            self.distance * 0.0015
+        };
+        self.target += (-right * delta[0] + up * delta[1]) * scale;
     }
     /// Rotate without permitting upside-down orbit singularities.
     pub fn orbit(&mut self, delta: [f32; 2]) {
+        if !delta.iter().all(|value| value.is_finite()) {
+            return;
+        }
         self.yaw -= delta[0] * 0.005;
         self.pitch = (self.pitch + delta[1] * 0.005).clamp(-1.54, 1.54);
     }
+    /// Turn a fly camera around its own position, leaving orbit's pivot semantics intact.
+    pub fn look(&mut self, delta: [f32; 2]) {
+        let position = self.position();
+        self.orbit(delta);
+        let offset = self.position() - self.target;
+        self.target = position - offset;
+    }
     /// Exponential dolly, bounded to useful editor scales.
     pub fn zoom(&mut self, amount: f32) {
-        self.distance = (self.distance * (-amount * 0.12).exp()).clamp(0.05, 100_000.);
+        if !amount.is_finite() {
+            return;
+        }
+        if self.projection == CameraProjection::Orthographic {
+            self.orthographic_height =
+                (self.orthographic_height * (-amount * 0.12).exp()).clamp(0.01, 1_000_000.);
+        } else {
+            self.distance = (self.distance * (-amount * 0.12).exp()).clamp(0.05, 100_000.);
+        }
     }
     /// Fly in view-local coordinates at a speed supplied by the input controller.
     pub fn fly(&mut self, direction: Vec3, metres: f32) {
-        let rotation = Quat::from_rotation_y(self.yaw) * Quat::from_rotation_x(-self.pitch);
-        self.target += rotation * direction * metres;
+        if !direction.is_finite() || !metres.is_finite() {
+            return;
+        }
+        if let Some((right, up, forward)) = self.basis() {
+            self.target +=
+                (right * direction.x + up * direction.y - forward * direction.z) * metres;
+        }
+    }
+    /// Switch projection while preserving the visible height at the orbit pivot.
+    pub fn set_projection(&mut self, projection: CameraProjection) {
+        if projection == self.projection {
+            return;
+        }
+        let tangent = (self.fov_y_degrees.to_radians() * 0.5).tan();
+        if projection == CameraProjection::Orthographic {
+            self.orthographic_height = (2. * self.distance * tangent).clamp(0.01, 1_000_000.);
+        } else {
+            self.distance = (self.orthographic_height / (2. * tangent)).clamp(0.05, 100_000.);
+        }
+        self.projection = projection;
+    }
+    /// World-space image-plane axes and viewing direction, matching CameraSpec.
+    pub fn basis(&self) -> Option<(Vec3, Vec3, Vec3)> {
+        let forward = (self.target - self.position()).try_normalize()?;
+        let seed = if forward.dot(Vec3::Y).abs() > 0.99 {
+            Vec3::Z
+        } else {
+            Vec3::Y
+        };
+        let right = forward.cross(seed).try_normalize()?;
+        Some((right, right.cross(forward), forward))
+    }
+    /// A finite pointer ray from NDC coordinates (right/up), using actual viewport pixels.
+    /// Orthographic origins follow the near plane; perspective origins stay at the eye.
+    pub fn ray(&self, size: [u32; 2], ndc: [f32; 2]) -> Option<(Vec3, Vec3)> {
+        if !ndc.iter().all(|value| value.is_finite()) {
+            return None;
+        }
+        let camera = self.spec().resolve(size).ok()?;
+        if self.projection == CameraProjection::Orthographic {
+            let (right, up, _) = self.basis()?;
+            let origin = camera.position
+                + right
+                    * (ndc[0] * self.orthographic_height * size[0] as f32 / size[1] as f32 * 0.5)
+                + up * (ndc[1] * self.orthographic_height * 0.5)
+                + camera.forward * ara_render::scene::CameraSpec::ORTHOGRAPHIC_NEAR;
+            return origin.is_finite().then_some((origin, camera.forward));
+        }
+        let inverse = (camera.projection * camera.view).inverse();
+        let near = inverse * glam::Vec4::new(ndc[0], ndc[1], 1., 1.);
+        if !near.is_finite() || near.w.abs() < 1e-8 {
+            return None;
+        }
+        let near = near.truncate() / near.w;
+        let ray = (camera.position, (near - camera.position).try_normalize()?);
+        (ray.0.is_finite() && ray.1.is_finite()).then_some(ray)
+    }
+    /// Metres per logical pixel at a pivot, for constant-size transform handles.
+    pub fn world_per_pixel(&self, pivot: Vec3, height: f32) -> Option<f32> {
+        if !height.is_finite() || height <= 0. || !pivot.is_finite() {
+            return None;
+        }
+        let value = if self.projection == CameraProjection::Orthographic {
+            self.orthographic_height / height
+        } else {
+            2. * (pivot - self.position()).dot(self.basis()?.2).max(0.01)
+                * (self.fov_y_degrees.to_radians() * 0.5).tan()
+                / height
+        };
+        (value.is_finite() && value > 0.).then_some(value)
+    }
+    /// Whether this camera can produce finite matrices and a meaningful view.
+    pub fn is_valid(&self) -> bool {
+        self.yaw.is_finite()
+            && self.pitch.is_finite()
+            && self.distance.is_finite()
+            && self.distance > 0.
+            && self.fov_y_degrees.is_finite()
+            && Self::FOV_RANGE.contains(&self.fov_y_degrees)
+            && self.orthographic_height.is_finite()
+            && self.orthographic_height > 0.
+            && self.spec().resolve([1, 1]).is_ok()
     }
 }
+/// The kind of browser location retained by a project-local favourite.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum AssetFavouriteKind {
+    /// A project-relative storage folder, including the empty project root.
+    Folder,
+    /// A project-relative storage file inspected by the Assets browser.
+    Asset,
+}
+
+/// A named Assets query, including its type tokens and folder search scope.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, Hash, Schema)]
+#[serde(rename_all = "camelCase", default)]
+pub struct SavedAssetSearch {
+    /// Exact browser query; type filters remain ordinary `type:` query tokens.
+    pub query: String,
+    /// Project-relative storage folder captured when the search was saved.
+    pub folder: String,
+    /// Search recursively within the saved folder instead of the whole project.
+    pub folder_only: bool,
+}
+
+pub(crate) fn valid_asset_bookmark_path(path: &str, folder: bool) -> bool {
+    (folder && path.is_empty())
+        || (!path.is_empty()
+            && path.len() <= 4096
+            && !path.contains(['\\', ':'])
+            && !path.chars().any(char::is_control)
+            && path.split('/').all(|part| !matches!(part, "" | "." | "..")))
+}
+
+pub(crate) fn valid_asset_search_name(name: &str) -> bool {
+    !name.trim().is_empty() && name.chars().count() <= 80 && !name.chars().any(char::is_control)
+}
+
 /// Serializable editor navigation and dock state.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -204,6 +372,8 @@ pub struct EditorState {
     pub follow: Option<String>,
     /// Each scene's last camera, restored when the scene is reopened.
     pub scene_cameras: BTreeMap<String, Camera>,
+    /// Named camera views per scene, recorded as ordinary navigation ops.
+    pub camera_bookmarks: BTreeMap<String, BTreeMap<String, Camera>>,
     /// Scenes the human opened, newest first (File > Open Recent).
     pub recent_scenes: Vec<String>,
     /// Selected source media path; separate from entity selection.
@@ -214,6 +384,12 @@ pub struct EditorState {
     pub asset_sidebar_width: f32,
     /// Explicitly expanded asset folders; all other folders start closed.
     pub asset_expanded_folders: BTreeSet<String>,
+    /// Favourite storage paths and their kind, persisted with the project layout.
+    pub asset_favourites: BTreeMap<String, AssetFavouriteKind>,
+    /// Named query/type/folder scopes, persisted with the project layout.
+    pub asset_saved_searches: BTreeMap<String, SavedAssetSearch>,
+    /// Restrict nonempty Assets queries to the current folder and descendants.
+    pub asset_search_folder_only: bool,
     /// Show thumbnail cards instead of compact asset rows.
     pub asset_grid: bool,
     /// Active material, effect or animation document identity.
@@ -296,11 +472,15 @@ impl Default for EditorState {
             presence: BTreeMap::new(),
             follow: None,
             scene_cameras: BTreeMap::new(),
+            camera_bookmarks: BTreeMap::new(),
             recent_scenes: Vec::new(),
             asset_path: None,
             asset_folder: String::new(),
             asset_sidebar_width: 168.,
             asset_expanded_folders: BTreeSet::new(),
+            asset_favourites: BTreeMap::new(),
+            asset_saved_searches: BTreeMap::new(),
+            asset_search_folder_only: false,
             asset_grid: true,
             resource: None,
             canvas: Default::default(),
@@ -340,13 +520,21 @@ impl EditorState {
             || self.hidden != other.hidden
             || self.quality != other.quality
             || self.render_quality != other.render_quality
+            || self.render_choice() != other.render_choice()
     }
     pub(crate) fn panels_changed(&self, other: &Self) -> bool {
         self.doc != other.doc
+            || self.camera.projection != other.camera.projection
+            || self.camera.fov_y_degrees != other.camera.fov_y_degrees
+            || self.camera.orthographic_height != other.camera.orthographic_height
+            || self.camera_bookmarks != other.camera_bookmarks
             || self.asset_path != other.asset_path
             || self.asset_folder != other.asset_folder
             || self.asset_sidebar_width != other.asset_sidebar_width
             || self.asset_expanded_folders != other.asset_expanded_folders
+            || self.asset_favourites != other.asset_favourites
+            || self.asset_saved_searches != other.asset_saved_searches
+            || self.asset_search_folder_only != other.asset_search_folder_only
             || self.asset_grid != other.asset_grid
             || self.resource != other.resource
             || self.canvas_add != other.canvas_add
@@ -419,7 +607,7 @@ impl EditorState {
             self.reduce_motion = v;
         }
     }
-    /// The project's default quality (`ara.project.json` `rendering.quality`).
+    /// The project's default quality (`settings/project.json` `rendering.quality`, with legacy fallback).
     pub fn project_quality(&self) -> QualityChoice {
         self.settings
             .get("rendering.quality")
@@ -488,7 +676,7 @@ fn home(panel: &str) -> &'static str {
     match panel {
         "hierarchy" => "outline",
         "inspector" => "right",
-        "assets" | "console" | "problems" | "agents" => "bottom",
+        "assets" | "console" | "problems" | "agents" | "history" => "bottom",
         _ => "view",
     }
 }
@@ -517,9 +705,7 @@ pub fn show_panel(
                     .map(|n| format!("window-{n}"))
                     .find(|id| dock.floating().iter().all(|f| &f.id != id))
                     .unwrap_or_default();
-                // A closed panel floats from nowhere: open it, then tear it off.
-                move_panel(dock, panel, "view")?;
-                dock.float(panel, &id, rect.unwrap_or([160, 120, w, h]))?;
+                dock.open_floating(panel, &id, rect.unwrap_or([160, 120, w, h]))?;
             }
             None => move_panel(dock, panel, home(panel))?,
         }
@@ -794,6 +980,7 @@ impl Navigation {
                 {
                     state.asset_expanded_folders = folders;
                 }
+                layout_file::restore_asset_bookmarks(&saved, &mut state);
             }
             if let Ok((layout, migrated)) = restore_layout(&text) {
                 layout_migrated = migrated;
@@ -840,6 +1027,9 @@ impl Navigation {
         let layout_changed = candidate.layout != self.state.layout
             || candidate.asset_sidebar_width != self.state.asset_sidebar_width
             || candidate.asset_expanded_folders != self.state.asset_expanded_folders
+            || candidate.asset_favourites != self.state.asset_favourites
+            || candidate.asset_saved_searches != self.state.asset_saved_searches
+            || candidate.asset_search_folder_only != self.state.asset_search_folder_only
             || candidate.floating != self.state.floating
             || candidate.collapsed_areas != self.state.collapsed_areas;
         let value =
@@ -931,6 +1121,27 @@ mod render_quality_text {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn showing_floating_tools_preserves_the_main_views_active_tab() -> ara_ui::Result<()> {
+        for active in ["scene", "game"] {
+            for panel in ["settings", "material", "vfx", "animation", "profiler"] {
+                let mut dock = default_dock()?;
+                dock.activate(active)?;
+                let main = dock.root().clone();
+                show_panel(&mut dock, panel, None)?;
+                assert_eq!(dock.root(), &main, "Opening {panel} must preserve {active}");
+                assert_eq!(dock.floating().len(), 1);
+                assert!(
+                    matches!(&dock.floating()[0].root, DockNode::Area { tabs, active: 0, .. } if tabs == &[panel])
+                );
+                show_panel(&mut dock, panel, None)?;
+                assert_eq!(dock.root(), &main);
+                assert_eq!(dock.floating().len(), 1);
+            }
+        }
+        Ok(())
+    }
 
     #[test]
     fn quality_is_derived_from_the_override_the_project_and_the_gpu() {

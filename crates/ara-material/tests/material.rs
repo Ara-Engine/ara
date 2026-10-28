@@ -10,6 +10,14 @@ use common::{assets, example, root, schema};
 use serde_json::json;
 use std::{collections::BTreeMap, path::PathBuf};
 
+/// Targets these tests compile. The Mac's slangc cannot load dxc for DXIL
+/// (docs/dev/macos.md: Windows is the canonical cook host).
+const TARGETS: &[ShaderTarget] = if cfg!(target_os = "macos") {
+    &[ShaderTarget::Spirv]
+} else {
+    &[ShaderTarget::Spirv, ShaderTarget::Dxil]
+};
+
 const EXAMPLES: &[&str] = &[
     "painted-metal",
     "car-paint",
@@ -86,7 +94,7 @@ fn generated_examples_compile_to_spirv_and_dxil() {
     let compiler = ShaderCompiler::discover();
     for name in EXAMPLES {
         let generated = generate(&example(name), &Instance::default()).unwrap();
-        for target in [ShaderTarget::Spirv, ShaderTarget::Dxil] {
+        for &target in TARGETS {
             let compiled = compiler
                 .compile(&generated, target)
                 .unwrap_or_else(|e| panic!("{name}/{target:?}: {e}"));

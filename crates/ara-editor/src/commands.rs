@@ -8,10 +8,14 @@ use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
+mod duplicate_drag;
+pub(crate) mod nested;
 
 pub(crate) fn register(registry: &mut Registry, db: &mut SchemaDb) {
+    nested::register(registry, db);
     crate::fixes::register(registry, db);
     registry
+        .command::<duplicate_drag::DuplicateDrag>(db)
         .command::<Duplicate>(db)
         .command::<Unpack>(db)
         .command::<InstantiateMesh>(db);
@@ -96,8 +100,8 @@ fn remap(db: &SchemaDb, record: &mut ara_doc::Record, ids: &BTreeMap<String, ara
         use ara_schema::ValueType;
         match (ty, value) {
             (ValueType::Entity, Value::String(id)) => {
-                if let Some(mapped) = ids.get(id) {
-                    *id = mapped.to_string();
+                if let Some(mapped) = remap_address(ids, id) {
+                    *id = mapped;
                 }
             }
             (ValueType::Option(inner), value) if !value.is_null() => visit(db, inner, value, ids),
@@ -134,6 +138,27 @@ fn remap(db: &SchemaDb, record: &mut ara_doc::Record, ids: &BTreeMap<String, ara
             ids,
         );
     }
+    if let Some(overrides) = record.get_mut("overrides").and_then(Value::as_object_mut) {
+        for (path, value) in overrides {
+            let path = path.rsplit('/').next().unwrap_or(path);
+            let Ok(path) = path.parse::<ara_schema::FieldPath>() else {
+                continue;
+            };
+            if let Some(entity) = db.get("Entity")
+                && let Ok(resolved) = db.resolve_path(entity, &path)
+            {
+                visit(db, &resolved.ty, value, ids);
+            }
+        }
+    }
+}
+/// References into linked prefab instances follow a copied outer root without flattening its content.
+fn remap_address(ids: &BTreeMap<String, ara_doc::RecordId>, address: &str) -> Option<String> {
+    if let Some(mapped) = ids.get(address) {
+        return Some(mapped.to_string());
+    }
+    let (root, inner) = address.split_once('/')?;
+    ids.get(root).map(|mapped| format!("{mapped}/{inner}"))
 }
 /// Convert a prefab instance into ordinary records while preserving its resolved values.
 #[derive(Schema, Deserialize)]
@@ -237,6 +262,8 @@ struct InstantiateMeshParams {
     name: Option<String>,
     /// Optional parent.
     parent: Option<EntityRef>,
+    /// Optional sibling insertion position; omitted appends after existing siblings.
+    index: Option<u32>,
     /// Placement in parent-local metres.
     #[ara(unit=Meters)]
     position: Option<[f32; 3]>,
@@ -262,6 +289,12 @@ impl Command for InstantiateMesh {
         });
         let mut record = ara_doc::Record::new();
         record.insert("name".into(), name.into());
+        let order = cx.read().order_at(
+            p.parent.as_ref().map(|parent| parent.0.as_str()),
+            p.index,
+            None,
+        )?;
+        record.insert("order".into(), order.to_string().into());
         if let Some(parent) = p.parent {
             cx.read().target(&parent.0)?;
             record.insert("parent".into(), parent.0.into());

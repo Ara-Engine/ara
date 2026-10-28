@@ -6,14 +6,26 @@ impl App {
             let mission = bot::component(&world.runtime, "e_run", "SalvageRun");
             mission["won"] == true || mission["lost"] == true
         });
-        if completed {
+        if completed || self.screen != Screen::Game {
             self.mapper.apply(DeviceEvent::FocusLost);
         }
+        if let Some(surface) = self
+            .window
+            .as_mut()
+            .and_then(|window| window.game_ui.as_mut())
+        {
+            self.router.sync(surface)?;
+        }
+        self.sync_text_input()?;
         let Some(window) = &mut self.window else {
             return Ok(());
         };
         let events = window.raw_events()?;
         for event in events {
+            if matches!(event, Event::FocusLost) {
+                self.mapper.apply(DeviceEvent::FocusLost);
+                self.rebinding = None;
+            }
             if let Event::Key {
                 scancode,
                 pressed: true,
@@ -42,6 +54,16 @@ impl App {
                     repeat: false
                 }
             ) {
+                if self.router.composing() {
+                    if let Some(surface) = self
+                        .window
+                        .as_mut()
+                        .and_then(|window| window.game_ui.as_mut())
+                    {
+                        self.router.event(surface, &event)?;
+                    }
+                    continue;
+                }
                 match self.screen {
                     Screen::Game => {
                         if let Some(world) = &mut self.world
@@ -55,8 +77,24 @@ impl App {
                     Screen::Settings => self.screen(self.settings_return)?,
                     _ => {}
                 }
+                continue;
             }
-            if self.screen == Screen::Game && !completed {
+            let mut ui_handled = false;
+            if let Some(surface) = self
+                .window
+                .as_mut()
+                .and_then(|window| window.game_ui.as_mut())
+            {
+                ui_handled = self.router.event(surface, &event)?;
+                if self.router.text_active(surface) {
+                    self.mapper.apply(DeviceEvent::FocusLost);
+                }
+                let actions = self.router.actions(surface);
+                for action in actions {
+                    self.action(&action.name)?;
+                }
+            }
+            if self.screen == Screen::Game && !completed && !ui_handled {
                 match event {
                     Event::Key {
                         scancode,
@@ -82,8 +120,6 @@ impl App {
                     }
                     _ => {}
                 }
-            } else if let Some(surface) = self.window.as_mut().and_then(|w| w.game_ui.as_mut()) {
-                self.router.event(surface, &event)?;
             }
         }
         let actions = self
@@ -94,6 +130,18 @@ impl App {
             .unwrap_or_default();
         for action in actions {
             self.action(&action.name)?;
+        }
+        self.sync_text_input()?;
+        Ok(())
+    }
+
+    fn sync_text_input(&self) -> Result<()> {
+        if let Some(window) = &self.window {
+            let active = window
+                .game_ui
+                .as_ref()
+                .is_some_and(|surface| self.router.text_active(surface));
+            window.ui_text_input(active)?;
         }
         Ok(())
     }

@@ -1,5 +1,8 @@
 //! Grid/handle projection and picking use the actual renderer camera and ID channel.
+pub(crate) mod diagnostics;
 mod gizmo;
+#[cfg(test)]
+mod tests;
 use crate::{
     gpu::Overlay,
     state::{Camera, EditorState, Tool},
@@ -130,6 +133,7 @@ impl Outlines {
 }
 /// Project a world point into a logical UI viewport, rejecting points behind the camera.
 pub fn project(camera: &Camera, rect: Box2, point: Vec3) -> Option<[f32; 2]> {
+    let orthographic = camera.projection == crate::state::CameraProjection::Orthographic;
     let camera = camera
         .spec()
         .resolve([rect.w.max(1.) as u32, rect.h.max(1.) as u32])
@@ -139,6 +143,9 @@ pub fn project(camera: &Camera, rect: Box2, point: Vec3) -> Option<[f32; 2]> {
         return None;
     }
     let ndc = clip.truncate() / clip.w;
+    if !ndc.is_finite() || (orthographic && !(0. ..=1.).contains(&ndc.z)) {
+        return None;
+    }
     Some([
         rect.x + (ndc.x + 1.) * 0.5 * rect.w,
         rect.y + (1. - ndc.y) * 0.5 * rect.h,
@@ -146,21 +153,17 @@ pub fn project(camera: &Camera, rect: Box2, point: Vec3) -> Option<[f32; 2]> {
 }
 /// Intersect a pointer ray with the ground plane for drag-to-place.
 pub fn ground_point(camera: &Camera, rect: Box2, point: [f32; 2]) -> Option<Vec3> {
-    let c = camera
-        .spec()
-        .resolve([rect.w.max(1.) as u32, rect.h.max(1.) as u32])
-        .ok()?;
-    let inverse = (c.projection * c.view).inverse();
+    if !rect.w.is_finite() || !rect.h.is_finite() || rect.w <= 0. || rect.h <= 0. {
+        return None;
+    }
     let x = (point[0] - rect.x) / rect.w * 2. - 1.;
     let y = 1. - (point[1] - rect.y) / rect.h * 2.;
-    let near = inverse * glam::Vec4::new(x, y, 1., 1.);
-    let near = near.truncate() / near.w;
-    let direction = (near - c.position).normalize();
+    let (origin, direction) = camera.ray([rect.w.max(1.) as u32, rect.h.max(1.) as u32], [x, y])?;
     if direction.y.abs() < 0.00001 {
         return None;
     }
-    let t = -c.position.y / direction.y;
-    (t > 0.).then_some(c.position + direction * t)
+    let t = -origin.y / direction.y;
+    (t.is_finite() && t > 0.).then_some(origin + direction * t)
 }
 /// One grabbable part of the transform gizmo.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -259,19 +262,28 @@ impl Handles {
         self.pivot + (u * angle.cos() + v * angle.sin()) * self.length
     }
     /// The plane handle with normal `axis`: the square between 20 % and 40 % along the
-    /// other two arms, in their world plane, projected (a parallelogram on screen).
-    /// `None` while either arm is foreshortened, when the square would be a sliver.
+    /// other two arms, in their world plane, projected into the viewport.
+    /// `None` while either arm is foreshortened or the projected square is less
+    /// than four logical pixels thick. Paint and picking share this visibility rule.
     pub fn plane_quad(&self, axis: usize) -> Option<[[f32; 2]; 4]> {
+        self.plane_shape(axis).map(|shape| shape.corners)
+    }
+    fn plane_shape(&self, axis: usize) -> Option<PlaneQuad> {
+        if axis >= 3 {
+            return None;
+        }
         let (a, b) = ((axis + 1) % 3, (axis + 2) % 3);
         let o = Vec2::from(self.origin);
-        if (Vec2::from(self.ends[a]) - o).length() < 20.
-            || (Vec2::from(self.ends[b]) - o).length() < 20.
+        let arms = [Vec2::from(self.ends[a]) - o, Vec2::from(self.ends[b]) - o];
+        if arms
+            .iter()
+            .any(|arm| !arm.is_finite() || arm.length_squared() < 400.)
         {
             return None;
         }
         let (u, v) = (self.axes[a] * self.length, self.axes[b] * self.length);
         let corner = |s: f32, t: f32| project(&self.camera, self.rect, self.pivot + u * s + v * t);
-        Some([
+        PlaneQuad::new([
             corner(0.2, 0.2)?,
             corner(0.4, 0.2)?,
             corner(0.4, 0.4)?,
@@ -291,25 +303,28 @@ pub fn plane_point(
     pivot: Vec3,
     normal: Vec3,
 ) -> Option<Vec3> {
-    let c = camera
-        .spec()
-        .resolve([rect.w.max(1.) as u32, rect.h.max(1.) as u32])
-        .ok()?;
-    let inverse = (c.projection * c.view).inverse();
-    let near = inverse
-        * glam::Vec4::new(
+    if !rect.w.is_finite()
+        || !rect.h.is_finite()
+        || rect.w <= 0.
+        || rect.h <= 0.
+        || !pivot.is_finite()
+        || !normal.is_finite()
+    {
+        return None;
+    }
+    let (origin, direction) = camera.ray(
+        [rect.w.max(1.) as u32, rect.h.max(1.) as u32],
+        [
             (pointer[0] - rect.x) / rect.w * 2. - 1.,
             1. - (pointer[1] - rect.y) / rect.h * 2.,
-            1.,
-            1.,
-        );
-    let direction = (near.truncate() / near.w - c.position).normalize_or_zero();
+        ],
+    )?;
     let denominator = direction.dot(normal);
     if denominator.abs() < 0.0001 {
         return None;
     }
-    let t = (pivot - c.position).dot(normal) / denominator;
-    (t > 0.).then_some(c.position + direction * t)
+    let t = (pivot - origin).dot(normal) / denominator;
+    (t.is_finite() && t > 0.).then_some(origin + direction * t)
 }
 /// Resolve the selected pivot and orientation into image-space transform handles.
 pub fn handles(view: &DocumentView, state: &EditorState, rect: Box2) -> Option<Handles> {
@@ -331,8 +346,7 @@ pub fn handles(view: &DocumentView, state: &EditorState, rect: Box2) -> Option<H
         matrix.transform_point3(Vec3::ZERO)
     };
     // Constant screen size: convert the arm's pixels to metres at the pivot's depth.
-    let depth = (pivot - state.camera.position()).length().max(0.01);
-    let per_pixel = 2. * depth * (50f32.to_radians() * 0.5).tan() / rect.h.max(1.);
+    let per_pixel = state.camera.world_per_pixel(pivot, rect.h)?;
     let size = state.number("viewport.gizmoSize", 100.) as f32 / 100.;
     let length = ARM * size * per_pixel;
     let origin = project(&state.camera, rect, pivot)?;
@@ -355,6 +369,9 @@ pub fn handles(view: &DocumentView, state: &EditorState, rect: Box2) -> Option<H
 }
 /// The handle under the pointer within the hit target, nearest first.
 pub fn hit(handles: &Handles, pointer: [f32; 2]) -> Option<Handle> {
+    if !Vec2::from(pointer).is_finite() || !Vec2::from(handles.origin).is_finite() {
+        return None;
+    }
     if handles.tool == Tool::Universal {
         let scale = handles.for_tool(Tool::Scale);
         let p = Vec2::from(pointer);
@@ -400,8 +417,8 @@ pub fn hit(handles: &Handles, pointer: [f32; 2]) -> Option<Handle> {
     if handles.tool == Tool::Translate {
         for axis in 0..3 {
             if handles
-                .plane_quad(axis)
-                .is_some_and(|quad| inside(&quad, p, 2.))
+                .plane_shape(axis)
+                .is_some_and(|quad| quad.contains(p, 2.))
             {
                 return Some(Handle::Plane(axis));
             }
@@ -411,7 +428,7 @@ pub fn hit(handles: &Handles, pointer: [f32; 2]) -> Option<Handle> {
         .filter_map(|axis| {
             let b = Vec2::from(handles.ends[axis]);
             let ab = b - o;
-            if ab.length() < 4. {
+            if !ab.is_finite() || ab.length_squared() < 16. {
                 return None;
             }
             // Extend past the tip to cover the arrowhead.
@@ -422,17 +439,54 @@ pub fn hit(handles: &Handles, pointer: [f32; 2]) -> Option<Handle> {
         .min_by(|a, b| a.1.total_cmp(&b.1))
         .map(|(handle, _)| handle)
 }
-/// Whether `p` lies inside the convex quad, or within `margin` pixels of it.
-fn inside(quad: &[[f32; 2]; 4], p: Vec2, margin: f32) -> bool {
-    let corners = quad.map(Vec2::from);
-    let area: f32 = (0..4)
-        .map(|n| corners[n].perp_dot(corners[(n + 1) % 4]))
-        .sum();
-    (0..4).all(|n| {
-        let (a, b) = (corners[n], corners[(n + 1) % 4]);
-        let edge = b - a;
-        edge.length() < 0.001 || area.signum() * edge.perp_dot(p - a) / edge.length() > -margin
-    })
+/// A visible convex plane square with inward unit normals for its hit margin.
+/// Edge-on projections have no interior and must never become infinite hit strips.
+struct PlaneQuad {
+    corners: [[f32; 2]; 4],
+    inward: [Vec2; 4],
+}
+impl PlaneQuad {
+    fn new(corners: [[f32; 2]; 4]) -> Option<Self> {
+        let points = corners.map(Vec2::from);
+        if points.iter().any(|point| !point.is_finite()) {
+            return None;
+        }
+        let edges: [Vec2; 4] = std::array::from_fn(|n| points[(n + 1) % 4] - points[n]);
+        let lengths = edges.map(Vec2::length);
+        if lengths
+            .iter()
+            .any(|length| !length.is_finite() || *length < 0.001)
+        {
+            return None;
+        }
+        // Translate before taking cross products: screen-space offsets can otherwise
+        // erase a small square's area through cancellation of large products.
+        let area = (points[1] - points[0]).perp_dot(points[2] - points[0])
+            + (points[2] - points[0]).perp_dot(points[3] - points[0]);
+        let longest = lengths.into_iter().fold(0_f32, f32::max);
+        if !area.is_finite() || area.abs() / (2. * longest) < 4. {
+            return None;
+        }
+        let winding = area.signum();
+        for n in 0..4 {
+            let turn = winding * edges[n].perp_dot(edges[(n + 1) % 4]);
+            if !turn.is_finite() || turn <= 0. {
+                return None;
+            }
+        }
+        let inward =
+            std::array::from_fn(|n| Vec2::new(-edges[n].y, edges[n].x) * (winding / lengths[n]));
+        Some(Self { corners, inward })
+    }
+    fn contains(&self, point: Vec2, margin: f32) -> bool {
+        point.is_finite()
+            && margin.is_finite()
+            && margin >= 0.
+            && (0..4).all(|n| {
+                let distance = self.inward[n].dot(point - Vec2::from(self.corners[n]));
+                distance.is_finite() && distance >= -margin
+            })
+    }
 }
 /// The corners of a screen square of half-size `half` around `centre`.
 fn square(centre: Vec2, half: f32) -> [[f32; 2]; 4] {

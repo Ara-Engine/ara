@@ -70,7 +70,11 @@ impl Shell {
         } else {
             label
         };
-        let scrub = matches!(field.widget, Widget::Number { .. }) && !field.read_only && !inactive;
+        let probe_resolution = field.path == "ReflectionProbe.captureResolution";
+        let scrub = matches!(field.widget, Widget::Number { .. })
+            && !probe_resolution
+            && !field.read_only
+            && !inactive;
         let tag = if scrub { "button" } else { "panel" };
         if scrub {
             self.bindings.insert(
@@ -164,7 +168,7 @@ impl Shell {
                         .filter(|v| !v.is_null())
                         .map(display)
                         .unwrap_or_else(|| "—".into());
-                    out.push_str(&format!("<field id='{alpha}' class='number' style='width:44px' text='{}' label='Alpha' description='Opacity 0–1' action='Dispatch' />",escape(&alpha_value)));
+                    out.push_str(&format!("<field id='{alpha}' class='number' min='0' max='1' step='0.01' style='width:52px' text='{}' label='Alpha' description='Opacity 0–1' action='Dispatch' />",escape(&alpha_value)));
                 }
             }
             Widget::Vector {
@@ -190,7 +194,7 @@ impl Shell {
                         Binding::Scrub(field.path.clone(), Some(axis)),
                     );
                     out.push_str(&format!("<panel id='axis-cell-{id}-{axis}' class='vector-cell'><button id='{axis_id}' class='axis axis-{}' cursor='ew-resize' label='Scrub {} {}' description='Drag to scrub. Shift: fine, Ctrl: coarse. Esc cancels.' action='Dispatch'><text id='{axis_id}-label' text='{}' /></button>",["x","y","z","w"][axis],escape(&sentence(&field.label)),["X","Y","Z","W"][axis],["X","Y","Z","W"][axis]));
-                    out.push_str(&format!("<field id='{widget}' class='number vector-input' text='{}' action='Dispatch' label='{} {}' description='{}' />",escape(&value),escape(&field.path),["X","Y","Z","W"][axis],escape(&field.doc)));
+                    out.push_str(&format!("<field id='{widget}' class='number vector-input' step='0.01' text='{}' action='Dispatch' label='{} {}' description='{}' />",escape(&value),escape(&field.path),["X","Y","Z","W"][axis],escape(&field.doc)));
                     out.push_str("</panel>");
                 }
                 if !unit.is_empty() {
@@ -217,38 +221,25 @@ impl Shell {
                     ));
                 }
             }
+            Widget::Number { .. } if probe_resolution => self.probe_resolution_select(field, out),
             Widget::Enum { options } => {
-                let current = if field.mixed {
-                    "—".to_owned()
-                } else {
-                    field.value.as_str().unwrap_or("").to_owned()
-                };
-                if options.len() <= 3 && options.iter().map(String::len).sum::<usize>() < 26 {
-                    out.push_str(&format!(
-                        "<panel id='enum-{id}' class='segment' style='flex-grow:1;flex-basis:0px'>"
-                    ));
-                    for (n, option) in options.iter().enumerate() {
-                        let calls = crate::inspector::edit_commands(
-                            &editor.state.selection,
-                            &field.path,
-                            &json!(option),
-                        );
-                        let button = format!("enum-{id}-{n}");
-                        self.bindings.insert(
-                            ara_ui::source::stable_id(&button),
-                            Binding::Content(calls, format!("Set {}", field.label)),
-                        );
-                        out.push_str(&format!("<button id='{button}' class='segment-button{}' style='flex-grow:1' label='{}' action='Dispatch'><text id='{button}-label' text='{}' /></button>",if current==*option{" selected"}else{""},escape(option),escape(&sentence(option))));
-                    }
-                    out.push_str("</panel>");
-                } else {
-                    let button = format!("enum-{id}");
-                    self.bindings.insert(
-                        ara_ui::source::stable_id(&button),
-                        Binding::EnumMenu(field.path.clone(), options.clone()),
-                    );
-                    out.push_str(&format!("<button id='{button}' style='flex-grow:1;flex-basis:0px;justify-content:start' label='{}' description='{}' action='Dispatch'><text id='{button}-value' class='fill' text='{}' />{}</button>",escape(&field.label),escape(&field.doc),escape(&sentence(&current)),icons::icon_in(&button,"chevron-down","icon-sm")));
-                }
+                self.choice_button(
+                    &format!("enum-{id}"),
+                    &field.label,
+                    choices::Select {
+                        destination: choices::Destination::Field(field.path.clone()),
+                        options: options
+                            .iter()
+                            .map(|option| (json!(option), sentence(option)))
+                            .collect(),
+                        current: if field.mixed {
+                            Value::Null
+                        } else {
+                            field.value.clone()
+                        },
+                    },
+                    out,
+                );
             }
             Widget::Asset { kind } => {
                 let reference = field.value.as_str().unwrap_or("");
@@ -338,7 +329,16 @@ impl Shell {
                     out.push_str(&format!("<slider id='{slider}' style='flex-grow:1;flex-basis:0px;min-width:24px' min='{min}' max='{max}' step='{step}' value='{}' label='{}' description='{}' action='Dispatch' />",field.value.as_f64().unwrap_or((*min+*max)*0.5).clamp(*min,*max),escape(&sentence(&field.label)),escape(&field.doc)));
                 }
                 let numeric = matches!(field.widget, Widget::Number { .. });
-                out.push_str(&format!("<field id='{widget}' class='{}' style='{}' text='{}' action='Dispatch' description='{}' label='{}' />",if numeric{"number"}else{""},if numeric && matches!(field.widget, Widget::Number{slider:true,..}){"width:56px"}else{"flex-grow:1;flex-basis:0px"},escape(&if field.mixed{"—".into()}else{display(&field.value)}),escape(&field.doc),escape(&field.path)));
+                let bounds = if let Widget::Number { min, max, step, .. } = field.widget {
+                    format!(
+                        "step='{step}' {}{}",
+                        min.map(|min| format!("min='{min}' ")).unwrap_or_default(),
+                        max.map(|max| format!("max='{max}' ")).unwrap_or_default()
+                    )
+                } else {
+                    String::new()
+                };
+                out.push_str(&format!("<field id='{widget}' class='{}' {bounds} style='{}' text='{}' action='Dispatch' description='{}' label='{}' />",if numeric{"number"}else{""},if numeric && matches!(field.widget, Widget::Number{slider:true,..}){"width:64px"}else{"flex-grow:1;flex-basis:0px"},escape(&if field.mixed{"—".into()}else{display(&field.value)}),escape(&field.doc),escape(&field.path)));
                 if !unit.is_empty() {
                     out.push_str(&format!(
                         "<text id='unit-{id}' class='inspector-unit' text='{}' />",
