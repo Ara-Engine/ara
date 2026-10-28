@@ -1,6 +1,7 @@
 //! Scene-host acceptance uses the production SDL ingress and completed native UI targets.
 use super::*;
 use sdl3_sys::{events::*, scancode::SDL_Scancode, video::SDL_WindowID};
+mod pixels;
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Act {
@@ -14,6 +15,7 @@ pub(super) enum Act {
 
 pub(super) struct Check {
     entity: Option<String>,
+    corners: Option<[glam::Vec3; 8]>,
     camera: crate::state::Camera,
     selection: Vec<String>,
     revision: u64,
@@ -27,6 +29,7 @@ impl Default for Check {
     fn default() -> Self {
         Self {
             entity: None,
+            corners: None,
             camera: crate::state::Camera::default(),
             selection: Vec::new(),
             revision: 0,
@@ -235,12 +238,36 @@ impl Check {
                 .ok_or("Scene docking proof requires visible procedural box geometry; run --verify-docking --sample on a fresh scratch project")?;
             editor.action("editor.layout.show", json!({"panel":"scene"}))?;
             editor.action("editor.view", json!({"gizmos":false,"gameView":false}))?;
+            editor.action(
+                "editor.settings.set",
+                json!({"key":"viewport.outline","value":true}),
+            )?;
             editor.action("editor.select", json!({"entities":[entity]}))?;
             shell.rebuild(editor)?;
             let rect = shell
                 .viewport()
                 .ok_or("Scene prepare has no main viewport")?;
-            editor.action("editor.frame", json!({"aspect":rect.w/rect.h}))?;
+            // Fit once for the narrowest detached host, before any measured gesture.
+            // The following detach/resize/orbit cases preserve this camera normally.
+            editor.action("editor.frame", json!({"aspect":(rect.w/rect.h).min(0.6)}))?;
+            let resolved = view.entities();
+            let world = crate::world::world_transform(resolved, &entity)
+                .ok_or("Scene proof box transform missing")?;
+            let renderer: ara_runtime::components::MeshRenderer = serde_json::from_value(
+                resolved
+                    .get(&entity)
+                    .and_then(|entity| entity.record.get("MeshRenderer"))
+                    .ok_or("Scene proof box renderer missing")?
+                    .clone(),
+            )?;
+            let half = glam::Vec3::from_array(renderer.size) * 0.5;
+            self.corners = Some(std::array::from_fn(|index| {
+                world.transform_point3(glam::Vec3::new(
+                    if index & 1 == 0 { -half.x } else { half.x },
+                    if index & 2 == 0 { -half.y } else { half.y },
+                    if index & 4 == 0 { -half.z } else { half.z },
+                ))
+            }));
             self.entity = Some(entity);
             shell.rebuild(editor)?;
             return Ok(());
@@ -345,8 +372,8 @@ impl Check {
         Ok(())
     }
 
-    /// Inspect only the owning target's interior; chrome and grid strokes cannot
-    /// turn a stretched black placeholder into a dense, varied scene image.
+    /// Correlate the rendered selection silhouette with the actual fixture geometry.
+    /// A flat shaded box is valid; black, uniform and grid-only substitutes are not.
     pub fn capture(
         &mut self,
         editor: &Editor,
@@ -399,7 +426,31 @@ impl Check {
             ui.display.commands.iter().any(|draw|matches!(draw,ara_ui::paint::Draw::Image{node:draw_node,image,..} if *draw_node==node && *image==overlay::viewport_image()))
         });
         let marquee=ui.display.commands.iter().any(|draw|matches!(draw,ara_ui::paint::Draw::Rect{node,..}|ara_ui::paint::Draw::Border{node,..} if *node==ara_ui::source::stable_id("scene-marquee")));
-        let non_placeholder = samples == 1024 && dense > samples / 2 && colors.len() > 16;
+        let projected = self.corners.and_then(|corners| {
+            corners
+                .into_iter()
+                .map(|corner| overlay::project(&editor.state.camera, rect, corner))
+                .collect::<Option<Vec<_>>>()
+        });
+        let accent = ui
+            .sheet
+            .color_token("--accent")
+            .map(|color| [color.0, color.1, color.2]);
+        let muted = ui
+            .sheet
+            .color_token("--muted-foreground")
+            .map(|color| [color.0, color.1, color.2]);
+        let outline_colors = accent
+            .zip(muted)
+            .map(|(accent, muted)| pixels::outline_colors(accent, muted));
+        let silhouette = pixels::inspect(
+            image,
+            rect,
+            host.dpi,
+            projected.as_deref().unwrap_or(&[]),
+            outline_colors,
+        );
+        let non_placeholder = samples == 1024 && dense > samples / 2 && silhouette.matches_geometry;
         if self
             .observations
             .last()
@@ -407,7 +458,7 @@ impl Check {
         {
             self.observations.pop();
         }
-        self.observations.push(json!({"stage":stage,"surface":host.surface,"window":window.map(|float|float.sdl),"target":target,"dpi":host.dpi,"viewport":rect,"windowRect":window.map(|float|float.rect),"physical":image.dimensions(),"registeredSceneImage":registered,"sceneSamples":samples,"denseSceneSamples":dense,"quantizedColors":colors.len(),"sampledSceneImage":non_placeholder,"marqueeVisible":marquee,"camera":editor.state.camera,"selection":editor.state.selection,"revision":editor.host.store().revision()}));
+        self.observations.push(json!({"stage":stage,"surface":host.surface,"window":window.map(|float|float.sdl),"target":target,"dpi":host.dpi,"viewport":rect,"windowRect":window.map(|float|float.rect),"physical":image.dimensions(),"registeredSceneImage":registered,"sceneSamples":samples,"denseSceneSamples":dense,"quantizedColors":colors.len(),"scenePixelProof":silhouette,"sampledSceneImage":non_placeholder,"marqueeVisible":marquee,"camera":editor.state.camera,"selection":editor.state.selection,"revision":editor.host.store().revision()}));
     }
 
     pub fn ready(&self) -> bool {
