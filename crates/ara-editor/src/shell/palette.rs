@@ -111,9 +111,12 @@ impl Shell {
             }
             if mode == '>' {
                 let catalog = editor
-                    .action("schema.list", json!({"kind":"command"}))
+                    .action("schema.list", json!({}))
                     .unwrap_or(Value::Null);
                 for item in catalog["items"].as_array().into_iter().flatten() {
+                    if !matches!(item["kind"].as_str(), Some("command" | "job")) {
+                        continue;
+                    }
                     let Some(name) = item["name"].as_str() else {
                         continue;
                     };

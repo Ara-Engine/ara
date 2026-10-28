@@ -180,7 +180,7 @@ fn native_palette_result_opens_a_generated_engine_form_and_escape_leaves_authori
                     .get("label")
                     .is_some_and(|label| label == "transform.set")
         })
-        .expect("Registered engine command result")
+        .unwrap_or_else(|| panic!("Registered engine command/job result: {command}"))
         .element
         .id
         .clone();
@@ -402,6 +402,7 @@ fn generated_scalar_numeric_parameter_scrubs_clamps_and_rejects_invalid_text_wit
     let revision = editor.host.store().revision();
     open_form(&mut shell, &mut editor, "entity.reparent", &mut clip);
     type_control(&mut shell, &mut editor, "param-index", "2", &mut clip);
+    point(&mut shell, &mut editor, "param-index", &mut clip);
     let index = shell.ui.find("param-index").unwrap();
     let node = &shell.ui.nodes[index];
     assert_eq!(
@@ -413,6 +414,19 @@ fn generated_scalar_numeric_parameter_scrubs_clamps_and_rejects_invalid_text_wit
         node.rect.x + node.rect.w - 8.,
         node.rect.y + node.rect.h * 0.5,
     ];
+    assert!(
+        node.clip.contains(point[0], point[1])
+            && shell.ui.hit_test(point[0], point[1]) == Some(index)
+            && shell.ui.scrollbar_at(point).is_none(),
+        "The visible numeric grip must remain a field target, clear of the scroll track: rect={:?}, clip={:?}, hit={:?}, scrollbar={:?}",
+        node.rect,
+        node.clip,
+        shell
+            .ui
+            .hit_test(point[0], point[1])
+            .map(|i| &shell.ui.nodes[i].element.id),
+        shell.ui.scrollbar_at(point)
+    );
     shell
         .event(InputEvent::PointerDown(point), &mut clip)
         .unwrap();
@@ -420,7 +434,13 @@ fn generated_scalar_numeric_parameter_scrubs_clamps_and_rejects_invalid_text_wit
     shell
         .event(InputEvent::PointerMove(moved), &mut clip)
         .unwrap();
-    assert!(shell.input.scrubbing());
+    assert!(
+        shell.input.scrubbing(),
+        "Numeric grip did not retain capture: captured={:?}, focused={:?}, scrolling={}",
+        shell.input.captured(),
+        shell.input.focused(),
+        shell.input.scrolling()
+    );
     assert_eq!(shell.palette_params["index"].as_u64(), Some(2));
     shell
         .event(InputEvent::PointerUp(moved), &mut clip)

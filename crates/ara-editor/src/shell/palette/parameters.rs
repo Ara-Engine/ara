@@ -3,7 +3,7 @@ use super::*;
 
 pub(crate) const FORM_CSS: &str = "
 .palette-form-title { white-space:normal;flex-shrink:0; }
-.palette-form-scroll { min-width:0px;min-height:0px;flex-basis:auto;flex-shrink:1;gap:8px; }
+.palette-form-scroll { min-width:0px;min-height:0px;flex-basis:auto;flex-shrink:1;gap:8px;padding-right:12px; }
 .palette-parameter { min-width:0px;flex-shrink:0;gap:3px; }
 .palette-parameter-label { font-size:12px;white-space:normal; }
 .palette-parameter-control { width:100%;max-width:100%;min-width:0px; }

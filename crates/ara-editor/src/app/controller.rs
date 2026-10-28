@@ -284,6 +284,9 @@ impl Controller {
         scene_view: &viewport::SceneView,
         clipboard: &mut dyn ara_ui_text::Clipboard,
     ) -> ara_ui::Result<(bool, bool, bool)> {
+        if matches!(event, Event::Key { pressed: true, .. }) {
+            editor.input_active();
+        }
         if matches!(event, Event::FocusLost) {
             shell.native_focus_lost(clipboard)?;
             self.keys.clear();
