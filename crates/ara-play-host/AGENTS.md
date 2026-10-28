@@ -97,7 +97,8 @@ without joining it; omitted/false keeps the synchronous world-ready response.
   batch through `Cx::apply` (agent edits enter review as usual).
 - Faults: exit code + `ARA_PLAYER_CRASH` stderr line + 5 s silence (extended by
   announced busy phases; player liveness runs on an independent IO thread) →
-  `player_panicked | player_crashed | player_unresponsive | player_exited`, logged with a
+  `player_panicked | player_crashed | player_unresponsive | player_exited` (a Unix signal
+  death or Windows NTSTATUS exception is a crash, with `signal` in the fault), logged with a
   `play.restart` fix; `play.status` holds the structured fault.
 - `play.stop` removes the active world and returns `status: "stopping"` immediately.
   An owned worker sends STOP and reaps its children; `play.status.stopping` lists

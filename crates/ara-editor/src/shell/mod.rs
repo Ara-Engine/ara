@@ -22,6 +22,9 @@ mod cursors;
 mod dialog;
 mod dock_drag;
 mod drag;
+#[path = "quality_tests/geometry.rs"]
+pub(crate) mod feedback_geometry;
+mod feedback_quality;
 pub(crate) mod icons;
 mod imports;
 mod input;
@@ -1843,7 +1846,7 @@ impl Shell {
     }
 }
 /// Hidden nodes every surface keeps for in-place updates: tooltip and drop label.
-const POPUP_TAIL: &str = "<tooltip id='tooltip' class='tooltip'><text id='tooltip-text' class='tooltip-copy' text='' /></tooltip><panel id='drop-label' class='drop-label' style='left:0px;top:0px;width:140px;height:28px;flex-direction:row;gap:6px;background:var(--raised);color:var(--foreground);border-width:1px;border-color:var(--primary)'><image id='drop-label-icon' class='icon fg' src='icon-square' tint='true' /><text id='drop-label-text' text='' /></panel>";
+const POPUP_TAIL: &str = "<tooltip id='tooltip' class='tooltip'><text id='tooltip-text' class='tooltip-copy' text='' /></tooltip><feedback id='drop-label' class='drop-label'><text id='drop-label-text' class='drop-label-copy' text='' /></feedback>";
 impl Shell {
     /// Show (or hide) the gizmo readout pill next to the pointer, without a rebuild.
     pub fn show_readout(&mut self, readout: Option<(String, [f32; 2])>) {

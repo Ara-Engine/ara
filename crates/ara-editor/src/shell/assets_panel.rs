@@ -296,7 +296,10 @@ impl Shell {
         // Short drawers put the name beside a smaller thumbnail.
         let compact = height < TILE[1] + 16.;
         let ([card_width, card_height], thumbnail) = if compact {
-            (SIDE_TILE, 48.)
+            // Keep one complete target between the grid's top/bottom gutters
+            // when a readable status rail reduces the browser's remaining room.
+            let height = (height - GAP * 2.).clamp(40., SIDE_TILE[1]);
+            ([SIDE_TILE[0], height], (height - 16.).min(48.))
         } else {
             (TILE, 64.)
         };
@@ -382,7 +385,17 @@ impl Shell {
             }
             let lines = self
                 .name_fit
-                .lines(&mut self.text, names::stem(file), caption, 11., 2)
+                .lines(
+                    &mut self.text,
+                    names::stem(file),
+                    caption,
+                    11.,
+                    if compact && card_height < SIDE_TILE[1] {
+                        1
+                    } else {
+                        2
+                    },
+                )
                 .to_vec();
             out.push_str(&format!(
                 "<panel id='{id}-label' class='{}'>",
