@@ -2,6 +2,85 @@
 use super::*;
 use ara_ui::input::InputEvent;
 
+#[test]
+fn native_view_show_gizmo_and_orientation_rows_toggle_both_ways_and_update_checkmarks()
+-> ara_ui::Result<()> {
+    for command in ["view.show.gizmos", "view.show.orientation"] {
+        let (mut editor, mut shell) = prefab_source_tests::open(true)?;
+        let mut clipboard = Clipboard::default();
+        let before = (editor.state.hide_gizmos, editor.state.hide_orientation);
+        let content_revision = editor.host.store().revision();
+        let original = if command == "view.show.gizmos" {
+            before.0
+        } else {
+            before.1
+        };
+        for expected_hidden in [!original, original] {
+            let (id, point) = header(&shell, "View");
+            press(&mut shell, &mut editor, &mut clipboard, &id, point)?;
+            release(&mut shell, &mut editor, &mut clipboard, point)?;
+            paint(&mut shell, &mut editor)?;
+            assert_eq!(shell.menu.as_ref().and_then(MenuState::bar), Some("View"));
+            let show = shell
+                .menu_item_node(&editor, "Show")
+                .expect("View Show submenu");
+            let node = &shell.ui.nodes[shell.ui.find(&show).expect("Retained Show submenu")];
+            let point = [
+                node.rect.x + node.rect.w * 0.5,
+                node.rect.y + node.rect.h * 0.5,
+            ];
+            press(&mut shell, &mut editor, &mut clipboard, &show, point)?;
+            release(&mut shell, &mut editor, &mut clipboard, point)?;
+            paint(&mut shell, &mut editor)?;
+            assert_eq!(
+                shell.menu.as_ref().expect("Open Show submenu").open,
+                ["Show"]
+            );
+            let (id, point) = row(&shell, command);
+            let visible_before = if command == "view.show.gizmos" {
+                !editor.state.hide_gizmos
+            } else {
+                !editor.state.hide_orientation
+            };
+            let icon = &shell.ui.nodes[shell
+                .ui
+                .find(&format!("{id}-c-icon"))
+                .expect("Visible menu check or command icon")];
+            assert_eq!(
+                icon.element.attrs.get("src").map(String::as_str) == Some("icon-check"),
+                visible_before,
+                "Before the click, the checkmark must represent visibility"
+            );
+            press(&mut shell, &mut editor, &mut clipboard, &id, point)?;
+            release(&mut shell, &mut editor, &mut clipboard, point)?;
+            assert!(shell.menu.is_none());
+            assert_eq!(
+                shell.recent_commands.first().map(String::as_str),
+                Some(command)
+            );
+            let actual = if command == "view.show.gizmos" {
+                editor.state.hide_gizmos
+            } else {
+                editor.state.hide_orientation
+            };
+            assert_eq!(
+                actual, expected_hidden,
+                "Native menu command must toggle {command}"
+            );
+            assert_eq!(
+                editor.host.store().revision(),
+                content_revision,
+                "Visibility is navigation, not authored content"
+            );
+        }
+        assert_eq!(
+            (editor.state.hide_gizmos, editor.state.hide_orientation),
+            before
+        );
+    }
+    Ok(())
+}
+
 #[derive(Default)]
 struct Clipboard(String);
 impl ara_ui_text::Clipboard for Clipboard {
@@ -115,12 +194,33 @@ fn held_row_cannot_rebind_to_another_command_or_new_callback_generation() -> ara
             editor.state.hide_gizmos, gizmos,
             "Release must not run the replacement"
         );
+        assert!(
+            shell.recent_commands.is_empty(),
+            "Stale release must not dispatch either command"
+        );
         let (fresh, fresh_point) = row(&shell, "view.show.gizmos");
         press(&mut shell, &mut editor, &mut clipboard, &fresh, fresh_point)?;
         release(&mut shell, &mut editor, &mut clipboard, fresh_point)?;
+        assert!(
+            shell.menu.is_none(),
+            "Fresh click must activate and close the menu"
+        );
+        assert_eq!(
+            shell.recent_commands.first().map(String::as_str),
+            Some("view.show.gizmos")
+        );
         assert_ne!(
             editor.state.hide_gizmos, gizmos,
             "Fresh current-menu input remains usable"
+        );
+        shell.open_bar_title("Custom", false);
+        paint(&mut shell, &mut editor)?;
+        let (again, again_point) = row(&shell, "view.show.gizmos");
+        press(&mut shell, &mut editor, &mut clipboard, &again, again_point)?;
+        release(&mut shell, &mut editor, &mut clipboard, again_point)?;
+        assert_eq!(
+            editor.state.hide_gizmos, gizmos,
+            "A second native click restores the original visibility"
         );
     }
     let (mut editor, mut shell) = prefab_source_tests::open(true)?;
@@ -146,6 +246,10 @@ fn held_row_cannot_rebind_to_another_command_or_new_callback_generation() -> ara
         "Identical command IDs can contain new extension code"
     );
     release(&mut shell, &mut editor, &mut clipboard, point)?;
+    assert!(
+        shell.recent_commands.is_empty(),
+        "An old callback generation must not dispatch"
+    );
     assert_eq!(editor.state.hide_gizmos, before);
     Ok(())
 }
@@ -184,6 +288,14 @@ fn unchanged_held_command_survives_sibling_removal_and_keyboard_focus_tracks_ide
         "The actual row must have moved"
     );
     release(&mut shell, &mut editor, &mut clipboard, point)?;
+    assert!(
+        shell.menu.is_none(),
+        "The retained capture must activate and close its menu"
+    );
+    assert_eq!(
+        shell.recent_commands.first().map(String::as_str),
+        Some("view.show.gizmos")
+    );
     assert_ne!(
         editor.state.hide_gizmos, before,
         "The retained capture still means the same command"
