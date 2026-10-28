@@ -64,7 +64,11 @@ fn project() -> PathBuf {
             .transact(ara_ops::TxnMeta::by(ara_ops::Author::Human), [edit])
             .unwrap();
         let text = ara_doc::write(store.workspace().doc(id.as_str()).unwrap(), store.schema());
-        std::fs::write(dir.join("content/art").join(format!("{png}.import.json")), text).unwrap();
+        std::fs::write(
+            dir.join("content/art").join(format!("{png}.import.json")),
+            text,
+        )
+        .unwrap();
     }
     dir
 }

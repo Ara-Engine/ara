@@ -90,12 +90,20 @@ fn legacy_projects_are_rejected_before_indexing_or_creating_state() {
         fs::create_dir_all(root.join(authored)).expect("legacy folder");
         fs::write(root.join("ara.project.json"), marker).expect("marker");
         fs::write(root.join(authored).join("main.scene"), "legacy scene").expect("scene");
-        let error = ara_host::Project::open(&root).err().expect("migration required");
+        let error = ara_host::Project::open(&root)
+            .err()
+            .expect("migration required");
         assert_eq!(error.code, ara_diag::codes::PROJECT_MIGRATION_REQUIRED);
         assert!(error.message.contains(label));
         assert!(error.message.contains("ara project migrate"));
-        assert_eq!(fs::read_to_string(root.join("ara.project.json")).expect("unchanged"), marker);
-        assert_eq!(fs::read_to_string(root.join(authored).join("main.scene")).expect("unchanged"), "legacy scene");
+        assert_eq!(
+            fs::read_to_string(root.join("ara.project.json")).expect("unchanged"),
+            marker
+        );
+        assert_eq!(
+            fs::read_to_string(root.join(authored).join("main.scene")).expect("unchanged"),
+            "legacy scene"
+        );
         assert!(!root.join(".ara").exists());
         assert!(!root.join(ara_doc::AUTHORING_ROOT).exists());
     }

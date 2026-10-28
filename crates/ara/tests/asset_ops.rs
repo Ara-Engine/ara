@@ -195,7 +195,11 @@ fn legacy_project_asset_journey_requires_explicit_migration() {
     fs::write(root.join("ara.project.json"), "{}").expect("legacy marker");
     let output = run(&root, &["check"]);
     assert!(!output.status.success());
-    let text = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(text.contains("ARA1914"), "{text}");
     assert!(!root.join("content").exists());
 }

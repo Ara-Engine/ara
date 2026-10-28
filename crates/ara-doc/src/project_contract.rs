@@ -36,7 +36,10 @@ impl ProjectLayout {
 /// Detects a marker's layout without probing folders or modifying the project.
 /// The explicit marker wins over coincidental folders named `content` or `game`.
 pub fn detect_project_layout(marker: &serde_json::Value) -> ProjectLayout {
-    match marker.get("layoutVersion").and_then(serde_json::Value::as_u64) {
+    match marker
+        .get("layoutVersion")
+        .and_then(serde_json::Value::as_u64)
+    {
         Some(version) if version >= PROJECT_LAYOUT_VERSION => ProjectLayout::Current,
         Some(3) => ProjectLayout::Preview3,
         _ => ProjectLayout::Root,
@@ -50,15 +53,25 @@ mod tests {
 
     #[test]
     fn explicit_marker_selects_the_layout_and_missing_version_is_legacy() {
-        for marker in [json!({}), json!({"layoutVersion":1}), json!({"layoutVersion":2})] {
+        for marker in [
+            json!({}),
+            json!({"layoutVersion":1}),
+            json!({"layoutVersion":2}),
+        ] {
             assert_eq!(detect_project_layout(&marker), ProjectLayout::Root);
         }
-        assert_eq!(detect_project_layout(&json!({"layoutVersion":3})).authoring_root(), "game");
-        for version in [4,5] {
+        assert_eq!(
+            detect_project_layout(&json!({"layoutVersion":3})).authoring_root(),
+            "game"
+        );
+        for version in [4, 5] {
             let layout = detect_project_layout(&json!({"layoutVersion":version}));
             assert!(layout.is_current());
             assert_eq!(layout.authoring_root(), AUTHORING_ROOT);
         }
-        assert_eq!(detect_project_layout(&json!({"main":"content/level.scene"})), ProjectLayout::Root);
+        assert_eq!(
+            detect_project_layout(&json!({"main":"content/level.scene"})),
+            ProjectLayout::Root
+        );
     }
 }
