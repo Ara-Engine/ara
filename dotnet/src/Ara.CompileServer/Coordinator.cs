@@ -134,7 +134,6 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     /// </summary>
     internal void Change(uint slot, IReadOnlyCollection<string> paths, uint origin, long tEvent, SourceClaim? claim = null)
     {
-        TraceClaim("request", new { slot, paths, origin, claim });
         var canonical = paths.Select(ProjectInventory.ProjectPath).ToArray();
         if (origin == AbiConst.OriginAgent && claim is not null)
         {
@@ -161,16 +160,19 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     internal void OnWatcher(uint slot, IReadOnlyCollection<string> paths, long tEvent)
     {
         uint origin;
-        var current = paths.Select(ProjectInventory.ProjectPath).Select(path => (Path: path, Hash: SourceClaims.Hash(path))).ToArray();
+        var canonical = paths.Select(ProjectInventory.ProjectPath).ToArray();
+        var current = canonical.Where(path => ModuleWatcher.IsSourceInput(path) && !Directory.Exists(path))
+            .Select(path => (Path: path, Hash: SourceClaims.Hash(path))).ToArray();
         lock (_lock)
         {
             // Evaluate every path, including a human overwrite that invalidates an old echo.
             var matches = current.Select(p => _claims.Matches(p.Path, p.Hash)).ToArray();
             origin = matches.Length > 0 && matches.All(match => match) ? AbiConst.OriginAgent : AbiConst.OriginHuman;
-            TraceClaim("watch", new { slot, paths = current.Select(p => new { path = p.Path, hash = p.Hash }).ToArray(), origin });
         }
         var w = new Work(WorkKind.Change, slot, origin, tEvent);
-        w.Paths.UnionWith(paths);
+        // Keep directory changes for module/editor-boundary validation, without
+        // letting their metadata echoes change the authorship of source bytes.
+        w.Paths.UnionWith(canonical);
         Enqueue(w);
     }
 
@@ -321,7 +323,6 @@ internal sealed class Coordinator : ICompileContext, IDisposable
 
     void Run(Work w, CancellationToken ct)
     {
-        TraceClaim("compile", new { slot = w.Slot, origin = w.Origin, paths = w.Paths.ToArray() });
         if (w.Kind == WorkKind.Recover)
         {
             CompileState(true);
@@ -574,12 +575,6 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         _out.Send(MessageKind.CompileState, new Protocol.Writer().Bool(active).ToArray());
     }
 
-    void TraceClaim(string stage, object data)
-    {
-        // [DEBUG-claim] One probe at the claim/watcher/scheduler boundary; remove before checkpoint.
-        if (System.Environment.GetEnvironmentVariable("ARA_SOURCE_CLAIM_TRACE") is not { } path) return;
-        lock (_lock) File.AppendAllText(path + "-" + System.Environment.ProcessId + ".jsonl", JsonSerializer.Serialize(new { stage, data }) + "\n");
-    }
     void Log(uint level, string text) => _out.Send(MessageKind.Log, new Protocol.Writer().U32(level).Str(text).ToArray());
 
     /// <summary>

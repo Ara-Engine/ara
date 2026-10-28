@@ -10,6 +10,9 @@ namespace Ara.CompileServer;
 /// </summary>
 internal sealed class ModuleWatcher : IDisposable
 {
+    /// <summary>Actual compiler inputs; directory notices still trigger inventory validation.</summary>
+    internal static bool IsSourceInput(string path) => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(ProjectInventory.ManifestSuffix, StringComparison.OrdinalIgnoreCase);
     const double SettleMs = 1.0;
 
     readonly Action<uint, IReadOnlyCollection<string>, long> _changed;
@@ -35,7 +38,7 @@ internal sealed class ModuleWatcher : IDisposable
             NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.Size,
             InternalBufferSize = 64 * 1024,
         };
-        static bool Relevant(string path) => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) || path.EndsWith(ProjectInventory.ManifestSuffix, StringComparison.OrdinalIgnoreCase) || !Path.HasExtension(path);
+        static bool Relevant(string path) => IsSourceInput(path) || !Path.HasExtension(path);
         FileSystemEventHandler on = (_, e) => { if (Relevant(e.FullPath)) _events.Add((slot, e.FullPath, Stopwatch.GetTimestamp())); };
         w.Changed += on;
         w.Created += on;

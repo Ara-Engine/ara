@@ -6,8 +6,10 @@ namespace Ara.CompileServer.Tests;
 /// <summary>Attribution follows materialized source edits, independently of worker latency.</summary>
 public sealed class SourceClaimTests
 {
-    [Fact]
-    public void Delayed_source_replace_materialization_preserves_agent_origin()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Delayed_source_replace_materialization_preserves_agent_origin(bool directoryEcho)
     {
         var root = InstalledTools.Scratch("delayed-source-claim");
         var path = Path.Combine(root, "Code.cs");
@@ -33,7 +35,7 @@ public sealed class SourceClaimTests
         File.WriteAllText(path, after);
         // Deliver the real watcher's settled change synchronously: no timer or sleep
         // determines whether attribution is inspected before or after expiry.
-        coordinator.OnWatcher(0, [path], Stopwatch.GetTimestamp());
+        coordinator.OnWatcher(0, directoryEcho ? [root, path] : [path], Stopwatch.GetTimestamp());
         var delta = capture.Next().Delta();
         Assert.Equal(AbiConst.OriginAgent, delta.Origin);
         coordinator.Change(0, [path], AbiConst.OriginAgent, Stopwatch.GetTimestamp(), claim with { Phase = "materialized" });
@@ -80,6 +82,28 @@ public sealed class SourceClaimTests
         Assert.True(coordinator.WaitIdle(TimeSpan.FromSeconds(60)));
         File.WriteAllText(path, first);
         coordinator.OnWatcher(0, [path], Stopwatch.GetTimestamp());
+        Assert.Equal(AbiConst.OriginHuman, capture.Next().Delta().Origin);
+    }
+
+    [Fact]
+    public void A_mixed_batch_of_claimed_and_unclaimed_source_bytes_remains_human_work()
+    {
+        var root = InstalledTools.Scratch("mixed-source-claim");
+        var path = Path.Combine(root, "Code.cs");
+        var human = Path.Combine(root, "Other.cs");
+        File.WriteAllText(path, "public static class Work { public static int Run() => 1; }");
+        File.WriteAllText(human, "public static class Other { public static int Run() => 1; }");
+        const string after = "public static class Work { public static int Run() => 2; }";
+        var capture = new Capture();
+        using var coordinator = new Coordinator(capture, null) { AgentQuiet = TimeSpan.Zero };
+        coordinator.Hello(true, "Baseline");
+        coordinator.Watch(0, "game", root, true, [typeof(Behaviour).Assembly.Location], [], "gameplay", watch: false);
+        capture.Next();
+        var claim = new SourceClaim("agent-job", Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(after))), "preparing");
+        coordinator.Change(0, [path], AbiConst.OriginAgent, Stopwatch.GetTimestamp(), claim);
+        File.WriteAllText(path, after);
+        File.WriteAllText(human, "public static class Other { public static int Run() => 3; }");
+        coordinator.OnWatcher(0, [root, path, human], Stopwatch.GetTimestamp());
         Assert.Equal(AbiConst.OriginHuman, capture.Next().Delta().Origin);
     }
 }

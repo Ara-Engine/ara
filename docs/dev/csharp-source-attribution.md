@@ -11,6 +11,9 @@ watch event's actual bytes with pending revisions and the last known agent write
 echo. Matching bytes retain agent origin; unrelated bytes are human work. A mixed
 human/agent watch batch is human work. These are attribution receipts, not locks:
 human saves remain immediate and retain D20 scheduling priority.
+Directory notices remain in the compile work set for module/editor-boundary
+validation, but their metadata echoes do not change source-byte attribution.
+The watcher's shared input predicate identifies `.cs` and module manifests.
 
 The source job reports `materialized` only after the host's file worker finishes.
 That retires only the matching edit and verifies its current hash before asking
@@ -30,5 +33,6 @@ bytes use the revision receipt instead of claiming a path for a timed window.
 directly. The old two-second policy deterministically reported human origin after
 a three-second advance before writing; the revision receipt preserves agent origin.
 The tests also cover unrelated human saves while pending, duplicate write echoes,
-later human reverts, and cancelling one of two outstanding revisions. The Windows
+later human reverts, directory echoes, genuinely mixed human/agent source batches,
+and cancelling one of two outstanding revisions. The Windows
 C# Play test exercises the actual source job, transaction, materialization and reload.
