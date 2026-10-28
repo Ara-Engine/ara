@@ -1,0 +1,91 @@
+diff --git a/crates/ara-editor/src/app/mod.rs b/crates/ara-editor/src/app/mod.rs
+index 45c87e633..9bc4807bb 100644
+--- a/crates/ara-editor/src/app/mod.rs
++++ b/crates/ara-editor/src/app/mod.rs
+@@ -21,6 +21,7 @@ mod hierarchy_verify;
+ mod history_verify;
+ mod import_drops;
+ mod import_verify;
++mod import_defaults_verify;
+ mod input_verify;
+ mod journey;
+ mod lighting_verify;
+@@ -100,6 +101,7 @@ pub fn before_open_project(options: &Options) -> ara_ui::Result<bool> {
+ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+     if options.verify_behaviours {
+         content_drags::fixture(&mut options)?;
++        import_defaults_verify::prepare(&options)?;
+         hierarchy_verify::prepare(&options)?;
+         std::fs::write(
+             options.output.join("verification-scope.json"),
+@@ -422,6 +424,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+     let mut hierarchy_check = None;
+     let mut collection_check = None;
+     let mut bookmarks_check = None;
++    let mut import_defaults_check = None;
+     let mut lighting_check = None;
+     let mut pilot_check = None;
+     let mut snapping_check = None;
+@@ -704,6 +707,20 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+             if bookmarks_check
+                 .as_ref()
+                 .is_some_and(bookmarks_verify::BookmarksCheck::finished)
++                && import_defaults_check.is_none()
++            {
++                import_defaults_check = Some(import_defaults_verify::ImportDefaultsCheck::new(
++                    &editor,
++                    &options.output,
++                )?);
++            }
++            if let Some(check) = &mut import_defaults_check {
++                let scale = crate::native::points_to_logical(window.raw(), main_dpi);
++                check.inject(&mut editor, &mut shell, &window, scale, &mut events)?;
++            }
++            if import_defaults_check
++                .as_ref()
++                .is_some_and(import_defaults_verify::ImportDefaultsCheck::finished)
+                 && lighting_check.is_none()
+             {
+                 lighting_check = Some(lighting_verify::LightingCheck::new(
+@@ -900,6 +917,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                 } else if let Some(check) = script_check.as_mut().filter(|check| !check.finished())
+                 {
+                     check.clipboard()
++                } else if let Some(check) = import_defaults_check.as_mut().filter(|check| !check.finished()) {
++                    check.clipboard()
+                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
+                     check.clipboard()
+                 } else if let Some(check) = pilot_check.as_mut().filter(|check| !check.finished()) {
+@@ -1120,6 +1139,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                 } else if let Some(check) = script_check.as_mut().filter(|check| !check.finished())
+                 {
+                     check.clipboard()
++                } else if let Some(check) = import_defaults_check.as_mut().filter(|check| !check.finished()) {
++                    check.clipboard()
+                 } else if let Some(check) = input_check.as_mut().filter(|check| !check.finished()) {
+                     check.clipboard()
+                 } else if let Some(check) = pilot_check.as_mut().filter(|check| !check.finished()) {
+@@ -2205,6 +2226,10 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+             if let Some(check) = &mut bookmarks_check {
+                 check.end(&editor, &mut shell, &mut gpu)?;
+             }
++            if let Some(check) = &mut import_defaults_check {
++                check.end(&editor, &mut shell, &mut gpu)?;
++            }
++
+             if let Some(check) = &mut input_check {
+                 check.end(
+                     &editor,
+@@ -2400,6 +2425,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                 .ok_or("The Assets bookmarks journey did not start")?;
+             check.write()?;
+             check.validate()?;
++            let check = import_defaults_check
++                .as_ref()
++                .ok_or("The import defaults journey did not start")?;
++            check.write()?;
++            check.validate()?;
++
+             let check = script_check
+                 .as_ref()
+                 .ok_or("The native C# iteration journey did not start")?;

@@ -1,0 +1,14 @@
+fn renderer_debug_mode(c: &Ctx, name: &str) -> Avail {
+    let Some(caps) = c.probe_debug_capabilities else {
+        return Avail::Blocked("Waiting for this Scene renderer's debug-view capabilities".into());
+    };
+    let (available, key) = match name {
+        "gi_diffuse" => (caps.gi_diffuse, "giDiffuse"),
+        "overdraw" => (caps.overdraw, "overdraw"),
+        _ => return Avail::Blocked("Unknown renderer debug view".into()),
+    };
+    if available { mode(c, name) }
+    else { Avail::Blocked(caps.reasons.get(key).cloned().unwrap_or_else(||
+        "This renderer does not currently provide the requested debug view".into())) }
+}
+

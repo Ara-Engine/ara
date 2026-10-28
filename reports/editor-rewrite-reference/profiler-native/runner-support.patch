@@ -1,0 +1,38 @@
+diff --git a/run-native.ps1 b/run-native.ps1
+--- a/run-native.ps1
++++ b/run-native.ps1
+@@ -1,4 +1,4 @@
+-param([Parameter(Mandatory=$true)][string]$CheckpointSHA,[ValidateSet('behaviours','behaviours-core','docking','monkey')][string]$Mode='behaviours',[string]$Project,[UInt64]$Seed=104729,[int]$Seconds=1800,[ValidateSet('correctness-shared','correctness-queued','timing-exclusive')][string]$EvidenceMode='timing-exclusive',[string]$MonkeyReplay)
++param([Parameter(Mandatory=$true)][string]$CheckpointSHA,[ValidateSet('behaviours','behaviours-core','profiler','docking','monkey')][string]$Mode='behaviours',[string]$Project,[UInt64]$Seed=104729,[int]$Seconds=1800,[ValidateSet('correctness-shared','correctness-queued','timing-exclusive')][string]$EvidenceMode='timing-exclusive',[string]$MonkeyReplay)
+ $ErrorActionPreference='Stop'
+ if($EvidenceMode -eq 'correctness-shared' -and $Mode -ne 'monkey'){throw 'Shared correctness mode is restricted to the offscreen editor monkey'}
+ $source='D:/AraBuild/ux-editor-source'
+@@ -47,7 +47,7 @@
+ $env:RUSTC_WRAPPER=''
+ $env:ARA_SHARED_BUILD_DIR=''
+ [Diagnostics.Process]::GetCurrentProcess().PriorityClass='BelowNormal'
+-if ($Mode -in @('behaviours','behaviours-core')) {$Project="$run/unused-project"}
++if ($Mode -in @('behaviours','behaviours-core','profiler')) {$Project="$run/unused-project"}
+ elseif (!(Test-Path -LiteralPath "$Project/ara.project.json")) {throw 'A fresh scratch project is required'}
+ if ($Mode -eq 'monkey') {
+  $absolute=[IO.Path]::GetFullPath($Project)
+diff --git a/run-native-gate-guarded.ps1 b/run-native-gate-guarded.ps1
+--- a/run-native-gate-guarded.ps1
++++ b/run-native-gate-guarded.ps1
+@@ -1,6 +1,6 @@
+ param(
+     [string]$CheckpointSHA,
+-    [ValidateSet('behaviours','behaviours-core','docking')][string]$Mode='behaviours',
++    [ValidateSet('behaviours','behaviours-core','profiler','docking')][string]$Mode='behaviours',
+     [string]$Project,
+     [UInt64]$Seed=104729,
+     [ValidateSet('correctness-queued')][string]$EvidenceMode='correctness-queued',
+@@ -22,7 +22,7 @@
+ function Invoke-NativeGateGuarded {
+     param(
+         [Parameter(Mandatory=$true)][ValidatePattern('^[0-9a-fA-F]{8}$')][string]$CheckpointSHA,
+-        [ValidateSet('behaviours','behaviours-core','docking')][string]$Mode='behaviours',
++        [ValidateSet('behaviours','behaviours-core','profiler','docking')][string]$Mode='behaviours',
+         [string]$Project,[UInt64]$Seed=104729,
+         [ValidateSet('correctness-queued')][string]$EvidenceMode='correctness-queued',
+         [string]$GateDirectory='D:/AraBuild',

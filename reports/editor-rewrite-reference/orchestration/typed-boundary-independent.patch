@@ -1,0 +1,1713 @@
+diff --git a/crates/ara-editor/src/app/boundary_verify.rs b/crates/ara-editor/src/app/boundary_verify.rs
+index d8127dd2..4c479b5b 100644
+--- a/crates/ara-editor/src/app/boundary_verify.rs
++++ b/crates/ara-editor/src/app/boundary_verify.rs
+@@ -24,6 +24,16 @@ const CASES: &[Case] = &[
+         kind: ProbeFailure::Panic,
+         label: "assets-caught-panic",
+     },
++    Case {
++        panel: "inspector",
++        kind: ProbeFailure::Style,
++        label: "inspector-invalid-style",
++    },
++    Case {
++        panel: "assets",
++        kind: ProbeFailure::Widget,
++        label: "assets-invalid-widget",
++    },
+ ];
+ 
+ pub(super) struct BoundaryCheck {
+diff --git a/crates/ara-editor/src/app/mod.rs b/crates/ara-editor/src/app/mod.rs
+index 0e65452a..671330ff 100644
+--- a/crates/ara-editor/src/app/mod.rs
++++ b/crates/ara-editor/src/app/mod.rs
+@@ -1752,7 +1752,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                     )
+                     .map_err(String::from)?;
+             }
+-            if let Some(probe) = &mut probe {
++            if probe.is_some() || monkey.is_some() {
+                 let cpu_ms = frame_start.elapsed().as_secs_f64() * 1000.;
+                 let ui_wait_ms = gpu.take_gpu_wait().as_secs_f64() * 1000.;
+                 // Unavailable when the device was replaced this frame.
+@@ -1761,6 +1761,11 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                     .host_wait_stats()
+                     .elapsed_since(Some(waits_before))
+                     .map(|waited| waited.as_secs_f64() * 1000.);
++                let stats = if probe.is_none() {
++                    shell.take_stats()
++                } else {
++                    Default::default()
++                };
+                 let sample = responsiveness::Sample {
+                     cpu_ms,
+                     host_wait_ms,
+@@ -1782,10 +1787,22 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                     present_ms,
+                     presented,
+                     game_frame,
++                    rebuilds: stats.rebuilds,
++                    rebuild_ms: stats.rebuild_ms,
++                    mount_ms: stats.mount_ms,
++                    reconcile_ms: stats.reconcile_ms,
++                    frame_ms: stats.frame_ms,
++                    rows_ms: stats.rows_ms,
++                    work: stats.work,
+                     presentation_ready: renderer.presentation_ready(),
+                     ..Default::default()
+                 };
+-                probe.end(&editor, &mut shell, sample);
++                if let Some(runner) = &mut monkey {
++                    runner.record_frame_with_stages(frame_start.elapsed(), &sample);
++                }
++                if let Some(probe) = &mut probe {
++                    probe.end(&editor, &mut shell, sample);
++                }
+             }
+             if let Some(check) = &mut drag_check {
+                 check.end(&editor, &mut shell, &mut gpu, &floats)?;
+@@ -1817,12 +1834,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+                     break;
+                 }
+             }
+-            if let Some(runner) = &mut monkey {
+-                runner.record_frame(frame_start.elapsed());
+-                if runner.finished() {
+-                    game.close(&mut editor, &mut gpu)?;
+-                    break;
+-                }
++            if monkey.as_ref().is_some_and(monkey::Monkey::finished) {
++                game.close(&mut editor, &mut gpu)?;
++                break;
+             }
+             if let Some(check) = &mut content_drags {
+                 check.end(
+diff --git a/crates/ara-editor/src/app/monkey.rs b/crates/ara-editor/src/app/monkey.rs
+index 820d7f18..8f73d519 100644
+--- a/crates/ara-editor/src/app/monkey.rs
++++ b/crates/ara-editor/src/app/monkey.rs
+@@ -8,6 +8,7 @@ mod play;
+ #[cfg(test)]
+ #[allow(clippy::unwrap_used)]
+ mod tests;
++mod typed;
+ mod watchdog;
+ 
+ use crate::{
+@@ -48,6 +49,7 @@ pub(super) struct Monkey {
+     replay: Option<VecDeque<Recorded>>,
+     clipboard: MemoryClipboard,
+     play: play::State,
++    typed: typed::State,
+     actions: u64,
+     workload_actions: u64,
+     cleanup_actions: u64,
+@@ -105,6 +107,7 @@ impl Monkey {
+             replay: None,
+             clipboard: MemoryClipboard::default(),
+             play: play::State::default(),
++            typed: typed::State::default(),
+             actions: 0,
+             workload_actions: 0,
+             cleanup_actions: 0,
+@@ -234,7 +237,7 @@ impl Monkey {
+             }
+             let action = if !self.held_buttons.is_empty() || !self.held_keys.is_empty() {
+                 Action::FocusLost
+-            } else if let Some(action) = self.play.drain() {
++            } else if let Some(action) = self.play.drain().or_else(|| self.typed.drain()) {
+                 action
+             } else {
+                 return Ok(false);
+@@ -244,12 +247,22 @@ impl Monkey {
+                 action,
+                 cleanup: true,
+             }
++        } else if let Some(action) = self
++            .typed
++            .discovery_action()
++            .filter(|_| !self.generator.queued())
++        {
++            Recorded {
++                action,
++                cleanup: false,
++            }
+         } else {
+             let generator = &mut self.generator;
++            let typed = &mut self.typed;
+             let before = self.play.cleanup_actions();
+             let action = self.play.next(|| {
+                 generator.initialize(editor);
+-                generator.next(shell)
++                generator.next(editor, shell, typed)
+             });
+             Recorded {
+                 action,
+@@ -267,7 +280,10 @@ impl Monkey {
+         let mut play_event = None;
+         let result = catch_unwind(AssertUnwindSafe(|| {
+             let before = self.play.before(editor)?;
+-            let result = run(&action, editor, shell, &mut self.clipboard);
++            let result = match self.typed.run(&action, editor, shell) {
++                Some(result) => result,
++                None => run(&action, editor, shell, &mut self.clipboard),
++            };
+             play_event = self.play.after(editor, &before)?;
+             result
+         }));
+@@ -296,6 +312,9 @@ impl Monkey {
+             }
+         };
+         match &action {
++            Action::TypedCommand { .. } => {
++                *self.methods.entry("cmd.apply".into()).or_default() += 1;
++            }
+             Action::Command { id, target } => {
+                 *self.commands.entry(id.clone()).or_default() += 1;
+                 if accepted {
+@@ -328,6 +347,16 @@ impl Monkey {
+                 json!({"phase":"playInventory","step":self.actions-1,"inventory":inventory}),
+             )?;
+         }
++        if let Some(catalog) = self.typed.take_catalog() {
++            std::fs::write(
++                self.output.join("monkey-typed-catalog.json"),
++                ara_json::to_canonical_string(&catalog),
++            )?;
++            self.write_event(json!({"phase":"typedCatalog","step":self.actions-1,"catalog":"monkey-typed-catalog.json","names":catalog["names"],"errors":catalog["errors"]}))?;
++        }
++        for result in self.typed.take_events() {
++            self.write_event(json!({"phase":"typedResult","step":self.actions-1,"result":result}))?;
++        }
+         self.write_event(json!({"phase":"end","step":self.actions-1,"outcome":outcome,"actionMs":at.elapsed().as_secs_f64()*1000.}))?;
+         if self.actions.is_multiple_of(64) || self.finished() {
+             self.read_diagnostics(editor)?;
+@@ -337,14 +366,33 @@ impl Monkey {
+     }
+ 
+     /// Record the complete production-loop frame supplied by the window owner.
++    #[allow(dead_code, reason = "CPU/replay consumers retain the frame-only API")]
+     pub fn record_frame(&mut self, elapsed: Duration) {
++        self.record_frame_inner(elapsed, None);
++    }
++
++    /// Attach production phase timings only to slow frames; normal frames allocate
++    /// no stage JSON and use the same counters as [`Self::record_frame`].
++    pub fn record_frame_with_stages(
++        &mut self,
++        elapsed: Duration,
++        stages: &super::responsiveness::Sample,
++    ) {
++        self.record_frame_inner(elapsed, Some(stages));
++    }
++
++    fn record_frame_inner(
++        &mut self,
++        elapsed: Duration,
++        stages: Option<&super::responsiveness::Sample>,
++    ) {
+         self.frames += 1;
+         self.watchdog.progress(self.actions, None);
+         let ms = elapsed.as_secs_f64() * 1000.;
+         self.max_frame_ms = self.max_frame_ms.max(ms);
+         if elapsed >= SPIKE {
+             self.spikes += 1;
+-            self.slowest.push(json!({"frame":self.frames,"step":self.actions.saturating_sub(1),"milliseconds":ms,"action":self.last_action}));
++            self.slowest.push(json!({"frame":self.frames,"step":self.actions.saturating_sub(1),"milliseconds":ms,"action":self.last_action,"stages":stages}));
+             self.slowest.sort_by(|a, b| {
+                 b["milliseconds"]
+                     .as_f64()
+@@ -374,7 +422,10 @@ impl Monkey {
+             || self.max_steps.is_some_and(|n| self.workload_actions >= n)
+     }
+     fn resources_drained(&self) -> bool {
+-        self.play.drained() && self.held_buttons.is_empty() && self.held_keys.is_empty()
++        self.play.drained()
++            && self.typed.drained()
++            && self.held_buttons.is_empty()
++            && self.held_keys.is_empty()
+     }
+     fn track_held(&mut self, action: &Action) {
+         match action {
+@@ -442,6 +493,7 @@ impl Monkey {
+             && self.started.elapsed() >= self.budget
+             && self.native_events > 0
+             && self.missing_command_cases().is_empty()
++            && self.typed.complete()
+     }
+ 
+     /// Count events actually offered to route_event, rather than generated events
+@@ -550,7 +602,8 @@ impl Monkey {
+                 "commandEdgeCases":self.command_cases,"commandCallbacksAccepted":self.command_successes,
+                 "protocolMethods":self.methods,"unvisitedCommands":unvisited,
+                 "uiActions":self.ui_actions,
+-                "coverageComplete":missing_cases.is_empty(),"missingCommandEdgeCases":missing_cases,
++                "shellCommandCoverageComplete":missing_cases.is_empty(),
++                "coverageComplete":missing_cases.is_empty() && self.typed.complete(),"missingCommandEdgeCases":missing_cases,
+                 "edgeCasesPerCommand":actions::edge_case_count(),"nativeEventsRouted":self.native_events,
+                 "journal":"monkey-events.jsonl",
+                 "replayedJournal":self.replay.is_some(),
+@@ -561,6 +614,7 @@ impl Monkey {
+                 "exactReplay":"--monkey-replay <original-output>/monkey-events.jsonl --output <new-output>",
+                 "limits":["Command coverage counts attempted edge targets; disabled or deferred commands can reject before their implementation runs. Accepted callbacks are counted separately.","Protocol method probes include malformed envelopes and stale sessions; a method attempt is not complete implementation coverage.","The watchdog persists permanent stalls independently; an external process timeout is required to end a permanently stalled editor.","Long frames and watchdog stalls are reported separately; hangs is their lower bound because their intervals can overlap.","NaN and infinity reach numeric controls as text because JSON cannot represent non-finite numbers."]
+             }),
++            self.typed.report(),
+         ] {
+             let Value::Object(fields) = section else {
+                 return Err("Monkey report section is not an object".into());
+diff --git a/crates/ara-editor/src/app/monkey/actions.rs b/crates/ara-editor/src/app/monkey/actions.rs
+index dc99fb4e..0ddf6cbc 100644
+--- a/crates/ara-editor/src/app/monkey/actions.rs
++++ b/crates/ara-editor/src/app/monkey/actions.rs
+@@ -30,6 +30,14 @@ impl Clipboard for MemoryClipboard {
+ #[derive(Debug, Serialize, Deserialize)]
+ #[serde(tag = "kind", rename_all = "camelCase")]
+ pub(in crate::app) enum Action {
++    TypedCommand {
++        name: String,
++        doc: String,
++        args: Value,
++        case: String,
++        #[serde(default)]
++        changed_fields: usize,
++    },
+     Command {
+         id: String,
+         target: Target,
+@@ -90,6 +98,16 @@ impl Action {
+         clipboard: &mut dyn Clipboard,
+     ) -> ara_ui::Result<()> {
+         match self {
++            Self::TypedCommand {
++                name,
++                doc,
++                args,
++                case,
++                ..
++            } => {
++                editor.action("cmd.apply", json!({"doc":doc,"why":format!("Editor monkey: {name} ({case})"),"commands":[{"cmd":name,"args":args}]}))?;
++                shell.rebuild(editor)
++            }
+             Self::Command { id, target } => shell.run_command(editor, id, target),
+             Self::Protocol {
+                 method,
+@@ -259,6 +277,10 @@ impl Generator {
+         }
+     }
+ 
++    pub fn queued(&self) -> bool {
++        !self.pending.is_empty()
++    }
++
+     #[cfg(test)]
+     pub(super) fn enqueue(&mut self, actions: impl IntoIterator<Item = Action>) {
+         self.pending.extend(actions);
+@@ -281,15 +303,22 @@ impl Generator {
+         }
+     }
+ 
+-    pub fn next(&mut self, shell: &Shell) -> Action {
++    pub fn next(
++        &mut self,
++        editor: &Editor,
++        shell: &Shell,
++        typed: &mut super::typed::State,
++    ) -> Action {
+         if let Some(action) = self.pending.pop_front() {
+             return action;
+         }
+         // Native input must already run during coverage, even when expensive
+         // commands consume most of the budget. Pending gestures stay contiguous.
+         let specs = commands::all();
+-        let covered = self.command_cursor + self.method_cursor;
++        let covered = self.command_cursor + self.method_cursor + typed.generated;
+         if (self.command_cursor < specs.len() * TARGET_CASES
++            || typed.pending()
++            || !typed.drained()
+             || self.method_cursor < self.methods.len() * PARAM_CASES)
+             && covered > 0
+             && covered.is_multiple_of(32)
+@@ -304,6 +333,9 @@ impl Generator {
+             self.command_cursor += 1;
+             return registry_action(spec.id, target);
+         }
++        if let Some(action) = typed.next(editor) {
++            return action;
++        }
+         if self.method_cursor < self.methods.len() * PARAM_CASES {
+             let method = self.methods[self.method_cursor / PARAM_CASES].clone();
+             let params = edge_params(self.method_cursor % PARAM_CASES);
+diff --git a/crates/ara-editor/src/app/monkey/native.rs b/crates/ara-editor/src/app/monkey/native.rs
+index 1fde86ae..35db2cfa 100644
+--- a/crates/ara-editor/src/app/monkey/native.rs
++++ b/crates/ara-editor/src/app/monkey/native.rs
+@@ -38,7 +38,10 @@ impl Adapter {
+         main: &Surface,
+         floats: &[Surface],
+     ) -> ara_ui::Result<Option<Input>> {
+-        if matches!(action, Action::Command { .. } | Action::Protocol { .. }) {
++        if matches!(
++            action,
++            Action::Command { .. } | Action::Protocol { .. } | Action::TypedCommand { .. }
++        ) {
+             return Ok(None);
+         }
+         let mut events = Vec::new();
+@@ -150,7 +153,7 @@ impl Adapter {
+                 tab(surface, *reverse, &mut events);
+                 tap(surface, 40, &mut events);
+             }
+-            Action::Command { .. } | Action::Protocol { .. } => {}
++            Action::Command { .. } | Action::Protocol { .. } | Action::TypedCommand { .. } => {}
+         }
+         Ok(Some(Input {
+             events,
+diff --git a/crates/ara-editor/src/app/monkey/tests.rs b/crates/ara-editor/src/app/monkey/tests.rs
+index 69794714..c9c00b7e 100644
+--- a/crates/ara-editor/src/app/monkey/tests.rs
++++ b/crates/ara-editor/src/app/monkey/tests.rs
+@@ -239,8 +239,9 @@ fn native_inputs_interleave_the_complete_command_edge_sweep() {
+     let mut native_seen = BTreeSet::new();
+     let required = commands::all().len() * actions::edge_case_count();
+     let mut reached_protocol = false;
++    let mut typed = typed::State::default();
+     for _ in 0..required * 2 + 128 {
+-        let action = generator.next(&shell);
++        let action = generator.next(&editor, &shell, &mut typed);
+         if let Action::Command { id, target } = &action {
+             cases_seen
+                 .entry(id.clone())
+@@ -287,6 +288,230 @@ fn native_inputs_interleave_the_complete_command_edge_sweep() {
+     }
+ }
+ 
++#[test]
++fn typed_catalog_and_seven_case_sweep_follow_real_host_descriptors_in_fixed_order() {
++    let project = Project::new();
++    let (mut editor, mut shell) = project.open();
++    let revision = editor.host.store().revision();
++    let mut typed = typed::State::default();
++    let mut discovery = Vec::new();
++    while let Some(action) = typed.discovery_action() {
++        discovery.push(serde_json::to_value(&action).unwrap());
++        typed
++            .run(&action, &mut editor, &mut shell)
++            .unwrap()
++            .unwrap();
++    }
++    assert_eq!(discovery.len(), 3);
++    assert_eq!(discovery[0]["method"], "schema.list");
++    assert_eq!(discovery[0]["params"]["kind"], "command");
++    assert_eq!(discovery[2]["method"], "jobs.list");
++    let listed = editor
++        .action("schema.list", json!({"kind":"command"}))
++        .unwrap();
++    let expected: BTreeSet<_> = listed["items"]
++        .as_array()
++        .unwrap()
++        .iter()
++        .map(|entry| entry["name"].as_str().unwrap().to_owned())
++        .collect();
++    let report = typed.report();
++    assert_eq!(report["typedCommandCatalogErrors"], json!([]));
++    assert_eq!(report["typedCommandCatalog"], json!(expected));
++    assert_eq!(
++        report["typedCommandCoverageComplete"], false,
++        "Generation is not execution"
++    );
++    let mut actual = BTreeMap::<String, Vec<String>>::new();
++    let mut ordered = Vec::new();
++    let mut references = false;
++    let mut numeric = false;
++    let mut nan_text = false;
++    while let Some(action) = typed.next(&editor) {
++        let Action::TypedCommand {
++            name,
++            doc,
++            args,
++            case,
++            changed_fields,
++        } = action
++        else {
++            panic!("Catalog generation must not produce unrecorded side effects");
++        };
++        assert!(editor.host.store().workspace().doc(&doc).is_some());
++        if name == "transform.set" {
++            references |= case == "missingOrDeletedReferences"
++                && args.to_string().contains("e_deleted001")
++                && changed_fields > 0;
++            numeric |= case == "hugePositiveNumbers"
++                && args["position"][0].as_f64() == Some(1e308)
++                && changed_fields > 0;
++            nan_text |=
++                case == "nanAsText" && args.to_string().contains("\"NaN\"") && changed_fields > 0;
++        }
++        ordered.push((name.clone(), case.clone()));
++        actual.entry(name).or_default().push(case);
++    }
++    assert_eq!(actual.keys().cloned().collect::<BTreeSet<_>>(), expected);
++    assert!(actual.values().all(|cases| cases.len() == 7));
++    assert!(ordered.windows(2).all(|pair| pair[0].0 <= pair[1].0));
++    assert!(
++        references && numeric && nan_text,
++        "Schema-directed values must reach actual transform args"
++    );
++    assert_eq!(editor.host.store().revision(), revision);
++    assert!(
++        !typed.complete(),
++        "Generated probes must not count as offered cmd.apply calls"
++    );
++}
++
++#[test]
++fn typed_calls_report_actual_commits_and_replay_exact_doc_args_and_case() {
++    let project = Project::new();
++    let (mut editor, mut shell) = project.open();
++    let output = project.0.join("typed-recording");
++    let mut runner = Monkey::new(97, Duration::from_secs(30), Some(5), &output).unwrap();
++    for _ in 0..3 {
++        runner.step(&mut editor, &mut shell).unwrap();
++    }
++    runner.generator.enqueue([
++        Action::TypedCommand {
++            name: "entity.create".into(),
++            doc: "sc_monkey01".into(),
++            args: json!({"id":"e_typedprobe","name":"Typed probe","components":{"Transform":{}}}),
++            case: "registeredExample".into(),
++            changed_fields: 0,
++        },
++        Action::TypedCommand {
++            name: "transform.set".into(),
++            doc: "sc_monkey01".into(),
++            args: json!({"entities":["e_typedprobe"],"position":["NaN",0,0]}),
++            case: "nanAsText".into(),
++            changed_fields: 1,
++        },
++    ]);
++    while !runner.finished() {
++        runner.step(&mut editor, &mut shell).unwrap();
++    }
++    runner.finish_with(&mut editor).unwrap();
++    let report: Value =
++        serde_json::from_str(&std::fs::read_to_string(output.join("monkey.json")).unwrap())
++            .unwrap();
++    assert_eq!(report["typedCommandCounts"]["entity.create"]["attempts"], 1);
++    assert_eq!(report["typedCommandCounts"]["entity.create"]["accepted"], 1);
++    assert_eq!(
++        report["typedCommandCounts"]["entity.create"]["committedTransactions"],
++        1
++    );
++    assert_eq!(report["typedCommandCounts"]["transform.set"]["attempts"], 1);
++    assert_eq!(report["typedCommandCounts"]["transform.set"]["accepted"], 0);
++    assert_eq!(
++        report["typedCommandCounts"]["transform.set"]["committedTransactions"],
++        0
++    );
++    assert_eq!(report["typedCommandCoverageComplete"], false);
++    let replay_project = Project::new();
++    let (mut replay_editor, mut replay_shell) = replay_project.open();
++    let replay_output = replay_project.0.join("typed-replay");
++    let journal = output.join("monkey-events.jsonl");
++    let mut replay =
++        Monkey::from_journal(&journal, Duration::from_secs(30), &replay_output).unwrap();
++    while !replay.finished() {
++        replay.step(&mut replay_editor, &mut replay_shell).unwrap();
++    }
++    replay.finish_with(&mut replay_editor).unwrap();
++    let actions = |path: &Path| {
++        std::fs::read_to_string(path)
++            .unwrap()
++            .lines()
++            .map(|line| serde_json::from_str::<Value>(line).unwrap())
++            .filter(|row| row["phase"] == "begin")
++            .map(|row| row["action"].clone())
++            .collect::<Vec<_>>()
++    };
++    assert_eq!(
++        actions(&journal),
++        actions(&replay_output.join("monkey-events.jsonl"))
++    );
++    assert_eq!(
++        replay.typed.report()["typedCommandCounts"]["entity.create"]["committedTransactions"],
++        1
++    );
++    assert!(
++        replay_editor
++            .host
++            .store()
++            .workspace()
++            .doc("sc_monkey01")
++            .unwrap()
++            .record("e_typedprobe")
++            .is_some()
++    );
++}
++
++#[test]
++fn production_stage_measurements_are_retained_only_for_spikes_and_count_each_frame_once() {
++    let project = Project::new();
++    let mut runner = Monkey::new(
++        7,
++        Duration::from_secs(30),
++        Some(1),
++        &project.0.join("stages"),
++    )
++    .unwrap();
++    let stages = super::super::responsiveness::Sample {
++        tick_ms: 7.,
++        geometry_ms: 12.,
++        host_wait_ms: Some(80.),
++        ..Default::default()
++    };
++    runner.record_frame_with_stages(Duration::from_millis(4), &stages);
++    assert!(runner.slowest.is_empty());
++    runner.record_frame_with_stages(Duration::from_millis(125), &stages);
++    runner.record_frame(Duration::from_millis(3));
++    assert_eq!(runner.frames, 3);
++    assert_eq!(runner.spikes, 1);
++    assert_eq!(runner.slowest.len(), 1);
++    assert_eq!(runner.slowest[0]["stages"]["tick_ms"], 7.);
++    assert_eq!(runner.slowest[0]["stages"]["host_wait_ms"], 80.);
++}
++
++#[test]
++fn a_rejected_catalog_discovery_cannot_report_complete_typed_coverage() {
++    let project = Project::new();
++    let (mut editor, mut shell) = project.open();
++    let revision = editor.host.store().revision();
++    let mut typed = typed::State::default();
++    let invalid = Action::Protocol {
++        method: "schema.list".into(),
++        params: json!({"kind":"unknown-kind"}),
++        raw: false,
++    };
++    assert!(
++        typed
++            .run(&invalid, &mut editor, &mut shell)
++            .unwrap()
++            .is_err()
++    );
++    while let Some(action) = typed.discovery_action() {
++        typed
++            .run(&action, &mut editor, &mut shell)
++            .unwrap()
++            .unwrap();
++    }
++    let report = typed.report();
++    assert_eq!(report["typedCommandCatalogReady"], true);
++    assert!(
++        !report["typedCommandCatalogErrors"]
++            .as_array()
++            .unwrap()
++            .is_empty()
++    );
++    assert_eq!(report["typedCommandCoverageComplete"], false);
++    assert_eq!(editor.host.store().revision(), revision);
++}
++
+ #[test]
+ fn exact_replay_preserves_recorded_actions_and_multilingual_text() {
+     let project = Project::new();
+diff --git a/crates/ara-editor/src/app/monkey/typed.rs b/crates/ara-editor/src/app/monkey/typed.rs
+new file mode 100644
+index 00000000..c2d98134
+--- /dev/null
++++ b/crates/ara-editor/src/app/monkey/typed.rs
+@@ -0,0 +1,335 @@
++//! Discover the actual typed catalog and probe it through ordinary cmd.apply.
++mod cases;
++mod jobs;
++use super::{Action, Editor, Shell};
++use serde_json::{Value, json};
++use std::collections::{BTreeMap, BTreeSet};
++
++#[derive(Clone, Copy, Default)]
++enum Discovery {
++    #[default]
++    List,
++    Describe,
++    Jobs,
++    Ready,
++}
++struct Command {
++    name: String,
++    schema: Value,
++    example: Value,
++}
++#[derive(Default)]
++struct Counts {
++    attempts: u64,
++    accepted: u64,
++    committed: BTreeSet<String>,
++    cases: BTreeSet<String>,
++    changed: BTreeMap<String, usize>,
++    rejected_diagnostics: BTreeMap<String, u64>,
++}
++#[derive(Default)]
++pub(super) struct State {
++    discovery: Discovery,
++    names: BTreeSet<String>,
++    commands: Vec<Command>,
++    errors: Vec<String>,
++    cursor: usize,
++    pub generated: usize,
++    counts: BTreeMap<String, Counts>,
++    jobs: jobs::Jobs,
++    events: Vec<Value>,
++    catalog_pending: bool,
++}
++impl State {
++    pub fn discovery_action(&self) -> Option<Action> {
++        let (method, params) = match self.discovery {
++            Discovery::List => ("schema.list", json!({"kind":"command"})),
++            Discovery::Describe => ("schema.describe", json!({"names":self.names})),
++            Discovery::Jobs => ("jobs.list", json!({})),
++            Discovery::Ready => return None,
++        };
++        Some(Action::Protocol {
++            method: method.into(),
++            params,
++            raw: false,
++        })
++    }
++    pub fn pending(&self) -> bool {
++        self.cursor < self.commands.len() * cases::NAMES.len()
++    }
++    pub fn next(&mut self, editor: &Editor) -> Option<Action> {
++        if let Some(action) = self.jobs.next(false) {
++            self.generated += 1;
++            return Some(action);
++        }
++        let command = self.commands.get(self.cursor / cases::NAMES.len())?;
++        let case = self.cursor % cases::NAMES.len();
++        let (args, changed_fields) = cases::probe(&command.example, &command.schema, case);
++        let action = Action::TypedCommand {
++            name: command.name.clone(),
++            doc: anchor(editor, &command.name),
++            args,
++            case: cases::NAMES[case].into(),
++            changed_fields,
++        };
++        self.cursor += 1;
++        self.generated += 1;
++        Some(action)
++    }
++    /// None leaves native UI routing and unrelated protocol actions untouched.
++    pub fn run(
++        &mut self,
++        action: &Action,
++        editor: &mut Editor,
++        shell: &mut Shell,
++    ) -> Option<ara_ui::Result<()>> {
++        if let Action::TypedCommand {
++            name,
++            doc,
++            args,
++            case,
++            changed_fields,
++        } = action
++        {
++            let count = self.counts.entry(name.clone()).or_default();
++            count.attempts += 1;
++            count.cases.insert(case.clone());
++            count.changed.insert(case.clone(), *changed_fields);
++            let result = editor.action("cmd.apply", json!({"doc":doc,"why":format!("Editor monkey: {name} ({case})"),"commands":[{"cmd":name,"args":args}]}));
++            let event = match &result {
++                Ok(output) => {
++                    self.counts.entry(name.clone()).or_default().accepted += 1;
++                    self.commit(name, output);
++                    self.jobs.returned(name, output);
++                    json!({"name":name,"case":case,"hostAccepted":true,"txn":output["txn"],"job":output["job"]})
++                }
++                Err(error) => {
++                    let mut codes = Vec::new();
++                    for diagnostic in error
++                        .0
++                        .data
++                        .as_ref()
++                        .and_then(|v| v["diagnostics"].as_array())
++                        .into_iter()
++                        .flatten()
++                    {
++                        if let Some(code) = diagnostic["code"].as_str() {
++                            codes.push(code.to_owned());
++                            *self
++                                .counts
++                                .entry(name.clone())
++                                .or_default()
++                                .rejected_diagnostics
++                                .entry(code.into())
++                                .or_default() += 1;
++                        }
++                    }
++                    json!({"name":name,"case":case,"hostAccepted":false,"rpcCode":error.0.code,"diagnosticCodes":codes})
++                }
++            };
++            self.events.push(event);
++            return Some(
++                result
++                    .map_err(|e| -> Box<dyn std::error::Error> { Box::new(e) })
++                    .and_then(|_| shell.rebuild(editor)),
++            );
++        }
++        let Action::Protocol {
++            method,
++            params,
++            raw: false,
++        } = action
++        else {
++            return None;
++        };
++        let discover = matches!(
++            (&self.discovery, method.as_str()),
++            (Discovery::List, "schema.list")
++                | (Discovery::Describe, "schema.describe")
++                | (Discovery::Jobs, "jobs.list")
++        );
++        let job = params["job"].as_str().filter(|id| self.jobs.owns(id));
++        let owned_job = job.is_some() && matches!(method.as_str(), "jobs.status" | "jobs.cancel");
++        if !discover && !owned_job {
++            return None;
++        }
++        let result = editor.action(method, params.clone());
++        match result {
++            Ok(output) => {
++                if discover {
++                    self.discovered(&output);
++                }
++                if let Some(job) = job
++                    && let Some(command) = self.jobs.observe(job, &output)
++                {
++                    self.commit(&command, &output["result"]);
++                    self.events.push(json!({"job":job,"command":command,"status":output["status"],"txn":output["result"]["txn"]}));
++                }
++                Some(shell.rebuild(editor))
++            }
++            Err(error) => {
++                if discover {
++                    self.errors.push(format!("{method}: {error}"));
++                    self.advance_discovery();
++                }
++                Some(Err(Box::new(error)))
++            }
++        }
++    }
++    fn commit(&mut self, name: &str, output: &Value) {
++        if let Some(txn) = output["txn"].as_str() {
++            self.counts
++                .entry(name.into())
++                .or_default()
++                .committed
++                .insert(txn.into());
++        }
++    }
++    fn discovered(&mut self, response: &Value) {
++        match self.discovery {
++            Discovery::List => {
++                if let Some(items) = response["items"].as_array() {
++                    for item in items {
++                        if item["kind"] == "command" {
++                            if let Some(name) = item["name"].as_str() {
++                                self.names.insert(name.into());
++                            } else {
++                                self.errors.push("Command catalog entry has no name".into());
++                            }
++                        }
++                    }
++                    if self.names.is_empty() {
++                        self.errors.push("Typed command catalog is empty".into());
++                    }
++                } else {
++                    self.errors.push("schema.list returned no items".into());
++                }
++            }
++            Discovery::Describe => {
++                if let Some(items) = response["items"].as_array() {
++                    let items: BTreeMap<_, _> = items
++                        .iter()
++                        .filter_map(|v| v["name"].as_str().map(|n| (n, v)))
++                        .collect();
++                    for name in &self.names {
++                        let Some(item) = items.get(name.as_str()) else {
++                            self.errors.push(format!("No descriptor for {name}"));
++                            continue;
++                        };
++                        let Some(example) = item["examples"]
++                            .as_array()
++                            .and_then(|v| v.first())
++                            .filter(|v| v.is_object())
++                        else {
++                            self.errors.push(format!("No object example for {name}"));
++                            continue;
++                        };
++                        if !item["params"].is_object() {
++                            self.errors.push(format!("No params schema for {name}"));
++                            continue;
++                        }
++                        self.commands.push(Command {
++                            name: name.clone(),
++                            schema: item["params"].clone(),
++                            example: example.clone(),
++                        });
++                    }
++                } else {
++                    self.errors.push("schema.describe returned no items".into());
++                }
++                self.catalog_pending = true;
++            }
++            Discovery::Jobs => {
++                if let Err(error) = self.jobs.baseline(response) {
++                    self.errors.push(error);
++                }
++            }
++            Discovery::Ready => {}
++        }
++        self.advance_discovery();
++    }
++    fn advance_discovery(&mut self) {
++        self.discovery = match self.discovery {
++            Discovery::List => {
++                if self.names.is_empty() {
++                    Discovery::Jobs
++                } else {
++                    Discovery::Describe
++                }
++            }
++            Discovery::Describe => Discovery::Jobs,
++            Discovery::Jobs | Discovery::Ready => Discovery::Ready,
++        };
++    }
++    pub fn take_catalog(&mut self) -> Option<Value> {
++        std::mem::take(&mut self.catalog_pending).then(|| json!({"names":self.names,"errors":self.errors,"commands":self.commands.iter().map(|c| json!({"name":c.name,"params":c.schema,"example":c.example})).collect::<Vec<_>>()}))
++    }
++    pub fn take_events(&mut self) -> Vec<Value> {
++        std::mem::take(&mut self.events)
++    }
++    pub fn drain(&mut self) -> Option<Action> {
++        self.jobs.next(true)
++    }
++    pub fn drained(&self) -> bool {
++        self.jobs.drained()
++    }
++    pub fn complete(&self) -> bool {
++        matches!(self.discovery, Discovery::Ready)
++            && self.errors.is_empty()
++            && self.missing().is_empty()
++            && !self.names.is_empty()
++    }
++    fn missing(&self) -> Vec<Value> {
++        self.names
++            .iter()
++            .filter_map(|name| {
++                let seen = self.counts.get(name);
++                let missing: Vec<_> = cases::NAMES
++                    .iter()
++                    .filter(|case| seen.is_none_or(|c| !c.cases.contains(**case)))
++                    .collect();
++                (!missing.is_empty()).then(|| json!({"command":name,"cases":missing}))
++            })
++            .collect()
++    }
++    pub fn report(&self) -> Value {
++        json!({"typedCommandCatalogReady":matches!(self.discovery, Discovery::Ready),"typedCommandCatalog":self.names,
++            "typedCommandCatalogErrors":self.errors,"typedCommandCoverageComplete":self.complete(),"missingTypedCommandEdgeCases":self.missing(),
++            "typedCommandCases":cases::NAMES,"typedCommandCounts":self.counts.iter().map(|(name,c)| (name,json!({"attempts":c.attempts,"accepted":c.accepted,"committedTransactions":c.committed.len(),"cases":c.cases,"changedFields":c.changed,"rejectedDiagnostics":c.rejected_diagnostics}))).collect::<BTreeMap<_,_>>(),
++            "typedCommandJobs":self.jobs.report(),"typedCommandCatalogFile":"monkey-typed-catalog.json",
++            "typedCommandLimits":["Attempted probes can reject at schema, document-kind, permission or reference validation; accepted and confirmed transaction counts are separate.","Seven cases use the first registered example and its schema. changedFields=0 means the case has no applicable values; it does not invent numeric/reference fields.","NaN is a string in JSON probes, never an IEEE NaN; native numeric-field NaN text events remain in the UI sweep.","Anchors use available authored document kinds; examples can require objects absent in the scratch fixture."]})
++    }
++}
++
++fn anchor(editor: &Editor, command: &str) -> String {
++    let workspace = editor.host.store().workspace();
++    let domain = if command.contains("animation") {
++        "animation"
++    } else if command.contains("material") {
++        "material"
++    } else if command.contains("vfx") {
++        "vfx"
++    } else if command.starts_with("graph.") || command.starts_with("editor.graph.") {
++        "graph"
++    } else {
++        "scene"
++    };
++    workspace
++        .docs()
++        .map(|(_, d)| d)
++        .find(|d| {
++            if domain == "scene" || domain == "animation" {
++                d.kind == domain
++            } else {
++                d.kind == "graph"
++                    && (domain == "graph"
++                        || d.record("g_meta")
++                            .and_then(|r| r.get("domain"))
++                            .and_then(Value::as_str)
++                            == Some(domain))
++            }
++        })
++        .map(|d| d.id.to_string())
++        .or_else(|| workspace.find("ara.project.json").map(ToString::to_string))
++        .unwrap_or_else(|| editor.state.doc.clone())
++}
+diff --git a/crates/ara-editor/src/app/monkey/typed/cases.rs b/crates/ara-editor/src/app/monkey/typed/cases.rs
+new file mode 100644
+index 00000000..c04d5595
+--- /dev/null
++++ b/crates/ara-editor/src/app/monkey/typed/cases.rs
+@@ -0,0 +1,101 @@
++//! Seven bounded schema-aware probes, rather than a field Cartesian product.
++use serde_json::{Value, json};
++
++pub(super) const NAMES: [&str; 7] = [
++    "emptyArgs",
++    "registeredExample",
++    "missingOrDeletedReferences",
++    "emptyValues",
++    "hugePositiveNumbers",
++    "hugeNegativeNumbers",
++    "nanAsText",
++];
++
++pub(super) fn probe(example: &Value, schema: &Value, case: usize) -> (Value, usize) {
++    if case == 0 {
++        return (json!({}), 0);
++    }
++    let mut value = example.clone();
++    if case == 1 {
++        return (value, 0);
++    }
++    let changed = mutate(&mut value, schema, schema, case, 0);
++    (value, changed)
++}
++
++fn mutate(value: &mut Value, schema: &Value, root: &Value, case: usize, depth: usize) -> usize {
++    if depth >= 16 {
++        return 0;
++    }
++    if let Some(reference) = schema["$ref"].as_str().and_then(|r| r.strip_prefix('#'))
++        && let Some(schema) = root.pointer(reference)
++    {
++        return mutate(value, schema, root, case, depth + 1);
++    }
++    if let Some(alternatives) = schema["anyOf"].as_array()
++        && let Some(schema) = alternatives.iter().find(|s| s["type"] != "null")
++    {
++        return mutate(value, schema, root, case, depth + 1);
++    }
++    let numeric =
++        value.is_number() || matches!(schema["type"].as_str(), Some("number" | "integer"));
++    if numeric && (4..=6).contains(&case) {
++        *value = match case {
++            4 => json!(1e308),
++            5 => json!(-1e308),
++            _ => json!("NaN"),
++        };
++        return 1;
++    }
++    if case == 2 {
++        let pattern = schema["pattern"].as_str().unwrap_or_default();
++        let text = value.as_str().unwrap_or_default();
++        if pattern.starts_with("^@") || text.starts_with('@') {
++            *value = json!("@levels/deleted.scene#sc_deleted001");
++            return 1;
++        }
++        if pattern.contains("[a-z]{1,3}_") || ara_doc::RecordId::parse(text).is_ok() {
++            *value = json!("e_deleted001");
++            return 1;
++        }
++    }
++    if case == 3 && matches!(value, Value::String(_) | Value::Array(_)) {
++        *value = if value.is_array() {
++            json!([])
++        } else {
++            json!("")
++        };
++        return 1;
++    }
++    match value {
++        Value::Object(object) => {
++            let mut changed = 0;
++            // Optional numeric parameters missing from examples are important too.
++            if (4..=6).contains(&case)
++                && let Some(properties) = schema["properties"].as_object()
++            {
++                for (name, child) in properties {
++                    if !object.contains_key(name) {
++                        let mut candidate = Value::Null;
++                        let count = mutate(&mut candidate, child, root, case, depth + 1);
++                        if count > 0 {
++                            object.insert(name.clone(), candidate);
++                        }
++                    }
++                }
++            }
++            for (name, value) in object.iter_mut() {
++                let child = schema["properties"]
++                    .get(name)
++                    .unwrap_or(&schema["additionalProperties"]);
++                changed += mutate(value, child, root, case, depth + 1);
++            }
++            changed
++        }
++        Value::Array(array) => array
++            .iter_mut()
++            .map(|value| mutate(value, &schema["items"], root, case, depth + 1))
++            .sum(),
++        _ => 0,
++    }
++}
+diff --git a/crates/ara-editor/src/app/monkey/typed/jobs.rs b/crates/ara-editor/src/app/monkey/typed/jobs.rs
+new file mode 100644
+index 00000000..b13c07c2
+--- /dev/null
++++ b/crates/ara-editor/src/app/monkey/typed/jobs.rs
+@@ -0,0 +1,129 @@
++//! Only exact jobs returned by this run's typed calls are owned or cancelled.
++use super::{Action, Value, json};
++use std::collections::{BTreeMap, BTreeSet};
++
++#[derive(Default)]
++pub(super) struct Jobs {
++    baseline: BTreeSet<String>,
++    owned: BTreeMap<String, Job>,
++}
++struct Job {
++    command: String,
++    status: Value,
++    cancel_sent: bool,
++}
++impl Jobs {
++    pub fn baseline(&mut self, response: &Value) -> Result<(), String> {
++        let jobs = response["jobs"]
++            .as_array()
++            .ok_or("jobs.list returned no inventory")?;
++        self.baseline = jobs
++            .iter()
++            .filter_map(|j| j["job"].as_str().map(str::to_owned))
++            .collect();
++        Ok(())
++    }
++    pub fn returned(&mut self, command: &str, response: &Value) {
++        let Some(id) = response["job"].as_str() else {
++            return;
++        };
++        if self.baseline.contains(id) {
++            return;
++        }
++        self.owned.entry(id.into()).or_insert_with(|| Job {
++            command: command.into(),
++            status: json!({"job":id,"status":"running"}),
++            cancel_sent: false,
++        });
++    }
++    pub fn owns(&self, id: &str) -> bool {
++        self.owned.contains_key(id)
++    }
++    pub fn observe(&mut self, id: &str, response: &Value) -> Option<String> {
++        let job = self.owned.get_mut(id)?;
++        // Cancellation responses can be acknowledgements, not final status.
++        if response["status"].is_string() {
++            job.status = response.clone();
++        }
++        Some(job.command.clone())
++    }
++    pub fn next(&mut self, cancel: bool) -> Option<Action> {
++        let (id, job) = self.owned.iter_mut().find(|(_, j)| !terminal(&j.status))?;
++        let cancel = cancel && !job.cancel_sent && job.status["cancellable"] == true;
++        if cancel {
++            job.cancel_sent = true;
++        }
++        Some(Action::Protocol {
++            method: if cancel { "jobs.cancel" } else { "jobs.status" }.into(),
++            params: json!({"job":id}),
++            raw: false,
++        })
++    }
++    pub fn drained(&self) -> bool {
++        self.owned.values().all(|job| terminal(&job.status))
++    }
++    pub fn report(&self) -> Value {
++        json!({"baselineJobs":self.baseline,"ownedJobs":self.owned.iter().map(|(id,j)| {
++            json!({"job":id,"command":j.command,"status":j.status["status"],"cancellable":j.status["cancellable"],"progress":j.status["progress"],"message":j.status["message"],"diagnostics":j.status["diagnostics"],"cancelRequested":j.cancel_sent})
++        }).collect::<Vec<_>>(),"drained":self.drained()})
++    }
++}
++fn terminal(value: &Value) -> bool {
++    matches!(
++        value["status"].as_str(),
++        Some("done" | "failed" | "cancelled")
++    )
++}
++
++#[cfg(test)]
++#[allow(clippy::unwrap_used)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn drain_only_cancels_returned_owned_jobs_after_authority_marks_them_cancellable() {
++        let mut jobs = Jobs::default();
++        jobs.baseline(
++            &json!({"jobs":[{"job":"jb_baseline","status":"running","cancellable":true}]}),
++        )
++        .unwrap();
++        jobs.returned("folder.create", &json!({"job":"jb_baseline"}));
++        assert!(jobs.drained());
++        jobs.returned("folder.create", &json!({"job":"jb_owned"}));
++        let next = |jobs: &mut Jobs| serde_json::to_value(jobs.next(true).unwrap()).unwrap();
++        assert_eq!(
++            next(&mut jobs)["method"],
++            "jobs.status",
++            "Unknown cancellability requires a status read"
++        );
++        jobs.observe(
++            "jb_owned",
++            &json!({"status":"running","cancellable":false,"progress":0.99}),
++        );
++        assert_eq!(
++            next(&mut jobs)["method"],
++            "jobs.status",
++            "Committing must finish without speculative cancellation"
++        );
++        jobs.observe(
++            "jb_owned",
++            &json!({"status":"running","cancellable":true,"progress":0.2}),
++        );
++        let cancel = next(&mut jobs);
++        assert_eq!(cancel["method"], "jobs.cancel");
++        assert_eq!(cancel["params"]["job"], "jb_owned");
++        jobs.observe("jb_owned", &json!({"cancelled":true}));
++        assert!(
++            !jobs.drained(),
++            "An acknowledgement is not an observed terminal job"
++        );
++        assert_eq!(next(&mut jobs)["method"], "jobs.status");
++        jobs.observe(
++            "jb_owned",
++            &json!({"status":"cancelled","cancellable":false}),
++        );
++        assert!(jobs.drained());
++        assert!(jobs.next(true).is_none());
++        assert!(!jobs.owns("jb_baseline"));
++    }
++}
+diff --git a/crates/ara-editor/src/shell/mod.rs b/crates/ara-editor/src/shell/mod.rs
+index e3e73490..26a065c1 100644
+--- a/crates/ara-editor/src/shell/mod.rs
++++ b/crates/ara-editor/src/shell/mod.rs
+@@ -333,6 +333,7 @@ pub struct Shell {
+     tooltip_delay: ara_ui::popover::HoverDelay,
+     tooltip_clock: std::time::Instant,
+     panel_failures: BTreeMap<String, panel_boundary::Failure>,
++    panel_compilation: panel_boundary::Compilation,
+     field_request: Option<String>,
+     /// Each graph page's canvas (`graph_panel::GRAPH_PAGES`).
+     graphs: BTreeMap<&'static str, graph_panel::GraphCanvas>,
+@@ -646,6 +647,7 @@ impl Shell {
+             tooltip_delay: Default::default(),
+             tooltip_clock: std::time::Instant::now(),
+             panel_failures: BTreeMap::new(),
++            panel_compilation: Default::default(),
+             field_request: None,
+             canvas_display: Default::default(),
+             graphs: BTreeMap::new(),
+@@ -937,9 +939,6 @@ impl Shell {
+         result
+     }
+     fn mount_markup(&mut self, editor: &mut Editor, markup: &str) -> ara_ui::Result<()> {
+-        self.ui
+-            .set_theme_tokens(self.styles.tokens(editor.state.light));
+-        self.ui.set_stylesheet(&self.stylesheet(editor))?;
+         let reconciling = std::time::Instant::now();
+         // Area headers and tab bodies are parts: an unchanged one keeps its retained
+         // subtree, virtual rows included.
+@@ -1114,6 +1113,7 @@ impl Shell {
+         editor: &mut Editor,
+         window: &ara_ui::docking::Floating,
+     ) -> ara_ui::Result<()> {
++        self.prepare_panel_validation(editor)?;
+         self.parts.clear();
+         self.hidden_bodies.clear();
+         let mut markup = String::from(
+@@ -1158,6 +1158,7 @@ impl Shell {
+         {
+             self.modal_return_focus = self.input.focused();
+         }
++        self.prepare_panel_validation(editor)?;
+         self.parts.clear();
+         self.hidden_bodies.clear();
+         let mut markup = String::from("<ui id='editor'>");
+diff --git a/crates/ara-editor/src/shell/panel_boundary.rs b/crates/ara-editor/src/shell/panel_boundary.rs
+index 70ad7cb1..3ccf1f96 100644
+--- a/crates/ara-editor/src/shell/panel_boundary.rs
++++ b/crates/ara-editor/src/shell/panel_boundary.rs
+@@ -3,6 +3,14 @@ use super::{Editor, Shell, escape};
+ use ara_ui::source::stable_id;
+ use std::panic::{AssertUnwindSafe, catch_unwind};
+ 
++/// One successful generated body per panel, invalidated with stylesheet or theme.
++#[derive(Default)]
++pub(super) struct Compilation {
++    valid: std::collections::BTreeMap<String, blake3::Hash>,
++    #[cfg(test)]
++    checks: usize,
++}
++
+ /// Controlled failure kind for the isolated, offscreen panel recovery journey.
+ #[derive(Clone, Copy, Debug)]
+ pub(crate) enum ProbeFailure {
+@@ -10,6 +18,10 @@ pub(crate) enum ProbeFailure {
+     Error,
+     /// Unwind inside the production panel boundary after its real staged render.
+     Panic,
++    /// Emit an unsupported inline property after its real staged render.
++    Style,
++    /// Emit a nonfinite widget value after its real staged render.
++    Widget,
+ }
+ 
+ /// An explicitly armed one-shot probe; ordinary shells and soak processes keep `None`.
+@@ -19,11 +31,25 @@ pub(super) struct Probe {
+     correlation: String,
+ }
+ impl Probe {
+-    fn fail(self) -> ara_ui::Result<()> {
++    fn emit(self, out: &mut String) -> ara_ui::Result<()> {
+         let message = format!("Panel recovery verification {}", self.correlation);
+         match self.kind {
+             ProbeFailure::Error => Err(message.into()),
+             ProbeFailure::Panic => panic!("{message}"),
++            ProbeFailure::Style => {
++                out.push_str(&format!(
++                    "<panel id='panel-probe-style-{}' style='align-self:stretch' />",
++                    escape(&self.correlation)
++                ));
++                Ok(())
++            }
++            ProbeFailure::Widget => {
++                out.push_str(&format!(
++                    "<slider id='panel-probe-widget-{}' min='0' max='1' value='NaN' />",
++                    escape(&self.correlation)
++                ));
++                Ok(())
++            }
+         }
+     }
+ }
+@@ -65,6 +91,41 @@ impl Failure {
+ }
+ 
+ impl Shell {
++    /// Prepare the active surface once before its panels render, so validation
++    /// and mounting use identical styles. Changes invalidate cached checks once.
++    pub(super) fn prepare_panel_validation(&mut self, editor: &Editor) -> ara_ui::Result<()> {
++        let theme_changed = self
++            .ui
++            .set_theme_tokens(self.styles.tokens(editor.state.light));
++        let stylesheet_changed = self.ui.set_stylesheet(&self.stylesheet(editor))?;
++        if theme_changed || stylesheet_changed {
++            self.panel_compilation.valid.clear();
++        }
++        Ok(())
++    }
++
++    /// Validate only changed generated bodies, using the actual part's root and
++    /// the same compiler as reconciliation. No runtime nodes or layout are made.
++    fn validate_panel(&mut self, panel: &str, body: &str) -> ara_ui::Result<()> {
++        let fingerprint = blake3::hash(body.as_bytes());
++        if self.panel_compilation.valid.get(panel) == Some(&fingerprint) {
++            return Ok(());
++        }
++        #[cfg(test)]
++        {
++            self.panel_compilation.checks += 1;
++        }
++        let markup = format!(
++            "<panel id='body-{}' class='tab-body'>{body}</panel>",
++            escape(panel)
++        );
++        self.ui.validate_markup(&markup)?;
++        self.panel_compilation
++            .valid
++            .insert(panel.to_owned(), fingerprint);
++        Ok(())
++    }
++
+     /// Arm a render failure only in the hidden native recovery fixture. This is an
+     /// internal journey seam, never an editor command, registry entry or global flag.
+     pub(crate) fn arm_panel_probe(
+@@ -121,6 +182,8 @@ impl Shell {
+     /// Clear a panel's quarantine before retrying its normal retained render.
+     pub(crate) fn retry_panel(&mut self, panel: &str) -> bool {
+         self.bodies.remove(panel);
++        self.memos.remove(panel);
++        self.panel_compilation.valid.remove(panel);
+         self.panel_failures.remove(panel).is_some()
+     }
+ 
+@@ -147,11 +210,25 @@ impl Shell {
+         let mut body = String::new();
+         let result = catch_unwind(AssertUnwindSafe(|| -> ara_ui::Result<()> {
+             render(self, editor, &mut body)?;
+-            if let Some(probe) = self.panel_probe.take_if(|probe| probe.panel == panel)
++            let correlation = if let Some(probe) =
++                self.panel_probe.take_if(|probe| probe.panel == panel)
+                 && self.offscreen
+             {
+-                probe.fail()?;
+-            }
++                let correlation = probe.correlation.clone();
++                probe.emit(&mut body)?;
++                Some(correlation)
++            } else {
++                None
++            };
++            self.validate_panel(panel, &body)
++                .map_err(|error| -> Box<dyn std::error::Error> {
++                    match correlation {
++                        Some(correlation) => {
++                            format!("Panel recovery verification {correlation}: {error}").into()
++                        }
++                        None => error,
++                    }
++                })?;
+             Ok(())
+         }));
+         let staged = std::mem::replace(&mut self.bindings, previous);
+diff --git a/crates/ara-editor/src/shell/panel_boundary/tests.rs b/crates/ara-editor/src/shell/panel_boundary/tests.rs
+index 70d62928..f76b79ab 100644
+--- a/crates/ara-editor/src/shell/panel_boundary/tests.rs
++++ b/crates/ara-editor/src/shell/panel_boundary/tests.rs
+@@ -97,3 +97,232 @@ fn returned_panel_error_uses_the_same_recovery_path() {
+     });
+     assert!(markup.contains("still works"));
+ }
++
++#[test]
++fn generated_markup_style_and_widget_errors_preserve_other_panels_and_bindings() {
++    let project = Project::new();
++    let mut editor = Editor::open(&project.0).unwrap();
++    let mut shell = Shell::new(&mut editor, [1000., 700.]).unwrap();
++    let revision = editor.host.store().revision();
++    for (index, (generated, reason)) in [
++        (
++            "<panel id='bad-style' style='align-self:stretch' />",
++            "align-self",
++        ),
++        (
++            "<slider id='bad-widget' min='0' max='1' value='NaN' />",
++            "nonfinite",
++        ),
++        ("<panel id='unfinished'>", "ARA4001"),
++        (
++            "<panel id='repeat'><text id='repeat' /></panel>",
++            "Duplicate",
++        ),
++        ("<text id='raw-color' style='color:#123456' />", "ARA4018"),
++    ]
++    .into_iter()
++    .enumerate()
++    {
++        let previous = shell.bindings.clone();
++        let partial = stable_id("invalid-panel-partial-binding");
++        let mut markup = String::new();
++        shell.with_panel_boundary("inspector", &mut editor, &mut markup, |shell, _, out| {
++            out.push_str(generated);
++            shell
++                .bindings
++                .insert(partial, Binding::Command("file.quit", Target::None));
++            Ok(())
++        });
++        assert!(markup.contains("panel-error-inspector"), "{generated}");
++        assert!(
++            shell.panel_failures["inspector"].message.contains(reason),
++            "{}",
++            shell.panel_failures["inspector"].message
++        );
++        assert!(!shell.panel_failures["inspector"].panicked);
++        assert!(!shell.bindings.contains_key(&partial));
++        assert!(
++            previous
++                .iter()
++                .all(|(key, value)| shell.bindings.get(key) == Some(value)),
++            "Another panel's binding changed"
++        );
++        assert_eq!(shell.bindings.len(), previous.len() + 1);
++        shell.with_panel_boundary("inspector", &mut editor, &mut markup, |_, _, _| {
++            panic!("Quarantine must not continuously retry bad markup");
++        });
++        shell.rebuild(&mut editor).unwrap();
++        shell.frame().unwrap();
++        assert!(shell.shown_node("body-hierarchy").is_some());
++        assert!(shell.bindings.contains_key(&stable_id("search-hierarchy")));
++        assert!(shell.shown_node("panel-error-inspector-retry").is_some());
++        let logs = editor
++            .action("logs", json!({"codes":["ARA4500"],"group":true,"limit":30}))
++            .unwrap();
++        assert_eq!(
++            logs["summary"]["occurrences"],
++            index + 1,
++            "Failure must report once, not once per rebuild"
++        );
++        assert_eq!(editor.host.store().revision(), revision);
++        assert!(shell.retry_panel("inspector"));
++        shell.rebuild(&mut editor).unwrap();
++        shell.frame().unwrap();
++        assert!(shell.shown_node("panel-error-inspector").is_none());
++    }
++}
++
++#[test]
++fn compilation_cache_checks_only_changed_panels_and_invalidates_with_surface_styles() {
++    let project = Project::new();
++    let mut editor = Editor::open(&project.0).unwrap();
++    let mut shell = Shell::new(&mut editor, [1000., 700.]).unwrap();
++    shell.prepare_panel_validation(&editor).unwrap();
++    shell.panel_compilation.valid.clear();
++    let before = shell.panel_compilation.checks;
++    let body = "<text id='panel-cached-value' text='First value' />";
++    for _ in 0..20 {
++        shell.validate_panel("inspector", body).unwrap();
++    }
++    assert_eq!(shell.panel_compilation.checks, before + 1);
++    assert_eq!(shell.panel_compilation.valid.len(), 1);
++    shell.prepare_panel_validation(&editor).unwrap();
++    shell.validate_panel("inspector", body).unwrap();
++    assert_eq!(
++        shell.panel_compilation.checks,
++        before + 1,
++        "Identical stylesheet/theme preparation must preserve checks"
++    );
++    shell
++        .validate_panel(
++            "inspector",
++            "<text id='panel-cached-value' text='New value' />",
++        )
++        .unwrap();
++    assert_eq!(shell.panel_compilation.checks, before + 2);
++    assert_eq!(
++        shell.panel_compilation.valid.len(),
++        1,
++        "Only the current fingerprint is retained per panel"
++    );
++    editor
++        .action("editor.theme", json!({"light":!editor.state.light}))
++        .unwrap();
++    shell.prepare_panel_validation(&editor).unwrap();
++    assert!(shell.panel_compilation.valid.is_empty());
++    shell.validate_panel("inspector", body).unwrap();
++    assert_eq!(shell.panel_compilation.checks, before + 3);
++    shell.ui.set_stylesheet("panel { gap:1px; }").unwrap();
++    shell.prepare_panel_validation(&editor).unwrap();
++    assert!(
++        shell.panel_compilation.valid.is_empty(),
++        "The prepared surface stylesheet changed"
++    );
++    shell.validate_panel("inspector", body).unwrap();
++    assert_eq!(shell.panel_compilation.checks, before + 4);
++}
++
++#[test]
++fn compiler_probes_keep_correlation_and_retry_memoized_panels() {
++    let project = Project::new();
++    std::fs::write(
++        project.0.join(".ara-behaviour-fixture"),
++        "isolated fixture\n",
++    )
++    .unwrap();
++    let mut editor = Editor::open(&project.0).unwrap();
++    editor
++        .action("editor.layout.show", json!({"panel":"assets"}))
++        .unwrap();
++    let mut shell = Shell::new(&mut editor, [1100., 750.]).unwrap();
++    shell.offscreen = true;
++    for (panel, kind, reason) in [
++        ("inspector", ProbeFailure::Style, "align-self"),
++        ("assets", ProbeFailure::Widget, "nonfinite"),
++    ] {
++        let correlation = format!("native-compiler-probe-{panel}");
++        shell
++            .arm_panel_probe(&editor, panel, kind, &correlation)
++            .unwrap();
++        shell.rebuild(&mut editor).unwrap();
++        shell.frame().unwrap();
++        let failure = &shell.panel_failures[panel];
++        assert!(!failure.panicked);
++        assert!(failure.message.contains(reason), "{}", failure.message);
++        assert!(
++            failure.message.contains(&correlation),
++            "{}",
++            failure.message
++        );
++        assert!(!shell.panel_probe_armed());
++        assert!(
++            shell
++                .shown_node(&format!("panel-error-{panel}-retry"))
++                .is_some()
++        );
++        assert!(shell.retry_panel(panel));
++        assert!(!shell.memos.contains_key(panel));
++        shell.rebuild(&mut editor).unwrap();
++        shell.frame().unwrap();
++        assert!(!shell.panel_failures.contains_key(panel));
++        assert!(shell.shown_node(&format!("panel-error-{panel}")).is_none());
++    }
++}
++
++/// Explicit CPU evidence only; ordinary tests never produce timing artifacts.
++#[test]
++#[ignore = "Run explicitly for panel validation cache-hit/miss CPU evidence"]
++fn panel_compilation_cache_cpu_benchmark() {
++    use std::{hint::black_box, time::Instant};
++    let project = Project::new();
++    let mut editor = Editor::open(&project.0).unwrap();
++    let mut shell = Shell::new(&mut editor, [1440., 900.]).unwrap();
++    shell.frame().unwrap();
++    let nodes = shell.ui.nodes.len();
++    let body = (0..500)
++        .map(|i| {
++            format!(
++                "<field id='benchmark-{i}' text='Inspector property {i}' style='width:180px' />"
++            )
++        })
++        .collect::<String>();
++    let changed = body.replace("Inspector property 0", "Inspector property X");
++    for _ in 0..16 {
++        shell.validate_panel("inspector", &body).unwrap();
++    }
++    let samples = 500_u32;
++    let baseline = Instant::now();
++    for _ in 0..samples {
++        black_box(&body);
++    }
++    let baseline = baseline.elapsed().as_nanos();
++    let hit = Instant::now();
++    for _ in 0..samples {
++        shell.validate_panel("inspector", black_box(&body)).unwrap();
++    }
++    let hit = hit.elapsed().as_nanos();
++    let miss_samples = 64_u32;
++    let miss = Instant::now();
++    for i in 0..miss_samples {
++        shell
++            .validate_panel(
++                "inspector",
++                black_box(if i % 2 == 0 { &changed } else { &body }),
++            )
++            .unwrap();
++    }
++    let miss = miss.elapsed().as_nanos();
++    let work = shell.ui.frame(&mut shell.text).unwrap();
++    assert_eq!(shell.ui.nodes.len(), nodes);
++    assert_eq!(work, ara_ui::Work::default());
++    let metadata = json!({"schemaVersion":1,"benchmark":"panel-compilation-cache","os":std::env::consts::OS,"architecture":std::env::consts::ARCH,"debugAssertions":cfg!(debug_assertions),"input":{"elements":501,"utf8Bytes":body.len(),"fingerprint":"blake3","stylesheet":"current editor surface"},"baseline":{"iterations":samples,"totalNanoseconds":baseline},"cacheHit":{"iterations":samples,"totalNanoseconds":hit},"cacheMiss":{"iterations":miss_samples,"totalNanoseconds":miss},"runtimeNodesCreated":shell.ui.nodes.len()-nodes,"layoutPasses":work.layout_passes,"textShapes":work.shaped});
++    let output = crate::test_target().join("panel-validation-benchmarks");
++    std::fs::create_dir_all(&output).unwrap();
++    let path = output.join(format!(
++        "{}-{}.json",
++        std::process::id(),
++        NEXT.fetch_add(1, Ordering::Relaxed)
++    ));
++    std::fs::write(&path, ara_json::to_canonical_string(&metadata)).unwrap();
++    println!("Panel validation benchmark: {}", path.display());
++}
+diff --git a/crates/ara-ui/src/reconcile.rs b/crates/ara-ui/src/reconcile.rs
+index f5e0c375..b6b25b32 100644
+--- a/crates/ara-ui/src/reconcile.rs
++++ b/crates/ara-ui/src/reconcile.rs
+@@ -74,6 +74,14 @@ enum Source {
+ }
+ 
+ impl Ui {
++    /// Validate generated markup against this surface's current stylesheet and
++    /// editor policy before publishing it. Uses reconciliation's source, style and
++    /// widget checks without changing the retained tree, input, text or layout.
++    pub fn validate_markup(&self, markup: &str) -> Result<()> {
++        let elements = source::compile(markup)?;
++        self.validate(elements.iter(), &HashMap::new())
++    }
++
+     /// Update the retained tree to `markup` (same stylesheet and theme). Nodes match by
+     /// ID and tag; see the module docs for what a kept node retains. A kept node's text
+     /// follows the markup, except a kept input: it keeps its live edit (caret,
+@@ -641,3 +649,7 @@ impl Assembly<'_> {
+         index
+     }
+ }
++
++#[cfg(test)]
++#[path = "reconcile/validation_tests.rs"]
++mod validation_tests;
+diff --git a/crates/ara-ui/src/reconcile/validation_tests.rs b/crates/ara-ui/src/reconcile/validation_tests.rs
+new file mode 100644
+index 00000000..b2c8a2f6
+--- /dev/null
++++ b/crates/ara-ui/src/reconcile/validation_tests.rs
+@@ -0,0 +1,65 @@
++//! Generated panel checks share reconciliation's compiler without touching live state.
++use super::*;
++
++#[test]
++fn markup_validation_matches_reconcile_without_changing_retained_controls() -> Result<()> {
++    let mut ui = Ui::editor(
++        "<ui id='root'><field id='draft' text='Keep this draft' /><scroll id='list' /></ui>",
++        crate::theme::EDITOR_CSS,
++        [600., 400.],
++    )?;
++    let mut text = ara_ui_text::TextSystem::bundled()?;
++    ui.frame(&mut text)?;
++    let before = ui.inspect();
++    let draft = ui.find("draft").ok_or("Draft control missing")?;
++    let input = match ui.widgets.get(&stable_id("draft")) {
++        Some(Widget::Input(input)) => input.value().to_owned(),
++        _ => return Err("Draft input state missing".into()),
++    };
++    for markup in [
++        "<panel id='bad' style='align-self:stretch' />",
++        "<panel id='bad' style='color:#123456' />",
++        "<panel id='bad' style='color:var(--missing-panel-token)' />",
++        "<panel id='bad'><text id='bad' /></panel>",
++        "<panel id='bad'>",
++        "<slider id='bad' value='NaN' />",
++        "<dropdown id='bad' selected='NaN' />",
++    ] {
++        let validation = ui
++            .validate_markup(markup)
++            .err()
++            .ok_or("Invalid generated markup was accepted")?;
++        let reconciliation = ui
++            .reconcile(markup)
++            .err()
++            .ok_or("Reconcile accepted invalid generated markup")?;
++        assert_eq!(
++            validation.to_string(),
++            reconciliation.to_string(),
++            "{markup}"
++        );
++        assert_eq!(
++            ui.inspect(),
++            before,
++            "Validation/rejection changed the retained tree"
++        );
++        assert_eq!(ui.find("draft"), Some(draft));
++        assert!(
++            matches!(ui.widgets.get(&stable_id("draft")),Some(Widget::Input(value)) if value.value()==input)
++        );
++    }
++    ui.validate_markup(
++        "<panel id='fresh'><slider id='amount' min='0' max='10' value='3' /></panel>",
++    )?;
++    assert!(
++        ui.find("fresh").is_none(),
++        "Validation must not mount the prospective panel"
++    );
++    assert_eq!(ui.inspect(), before);
++    assert_eq!(
++        ui.frame(&mut text)?,
++        crate::Work::default(),
++        "Validation dirtied live layout/text/paint"
++    );
++    Ok(())
++}

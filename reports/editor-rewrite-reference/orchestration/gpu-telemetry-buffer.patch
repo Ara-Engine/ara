@@ -1,0 +1,17 @@
+diff --git a/crates/ara-dev/src/gpu.rs b/crates/ara-dev/src/gpu.rs
+--- a/crates/ara-dev/src/gpu.rs
++++ b/crates/ara-dev/src/gpu.rs
+@@ -305,10 +305,9 @@ fn locked_inner<T>(
+         let report = guard.finish()?;
+         *LAST_READING.lock().expect("guard evidence") =
+             Some(serde_json::json!({"report":path,"reading":report,"status":report.status()}));
+-        eprintln!(
+-            "ARA_DEV_GPU_READING {}",
+-            serde_json::json!({"status":report.status(),"report":path,"diagnostic":report.diagnostic(),"reading":report})
+-        );
++        // Avoid one unbuffered native stderr write per JSON fragment.
++        let telemetry = serde_json::json!({"status":report.status(),"report":path,"diagnostic":report.diagnostic(),"reading":report}).to_string();
++        eprintln!("ARA_DEV_GPU_READING {telemetry}");
+         if report.invalid() {
+             result = Err(crate::gpu_guard::invalid_error(report.detail()));
+         }

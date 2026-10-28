@@ -1,0 +1,2995 @@
+diff --git a/crates/ara-asset-host/src/service/bindings.rs b/crates/ara-asset-host/src/service/bindings.rs
+--- a/crates/ara-asset-host/src/service/bindings.rs
++++ b/crates/ara-asset-host/src/service/bindings.rs
+@@ -5,6 +5,8 @@
+ use ara_schema::SchemaDb;
+ use serde_json::{Value, json};
+ use std::collections::BTreeMap;
++#[cfg(test)]
++mod defaults_tests;
+ 
+ pub(super) type AssetHashes = BTreeMap<String, (String, String, ara_asset::Digest)>;
+ 
+@@ -14,6 +16,7 @@
+     pub workspace: Workspace,
+     pub versions: BTreeMap<String, String>,
+     pub preset: ara_asset::CookPreset,
++    pub policy: ara_asset::ProjectImportSettings,
+     pub asset_hashes: AssetHashes,
+ }
+ 
+@@ -105,15 +108,20 @@
+                 "the sidecar for `{path}` was authored by a newer importer; update Ara or install that importer before preparing this asset"
+             )));
+         }
+-        self.validate_settings(&settings.importer, &settings.settings)?;
++        let (effective, preset) = self.policy.resolved_settings(
++            &settings.importer,
++            settings.preset,
++            &settings.settings,
++        )?;
++        self.validate_settings(&settings.importer, &effective)?;
+         Ok(SourceAsset {
+-            preset: Some(settings.preset.unwrap_or(self.preset)),
++            preset: Some(preset),
+             thread_budget: 2,
+             id,
+             path: path.to_owned(),
+             importer: settings.importer.clone(),
+             version: installed.clone(),
+-            settings: settings.settings.clone(),
++            settings: effective,
+             target: if cfg!(target_os = "windows") {
+                 TargetPlatform::Windows
+             } else if cfg!(target_os = "macos") {
+diff --git a/crates/ara-asset-host/src/service/bindings/defaults_tests.rs b/crates/ara-asset-host/src/service/bindings/defaults_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-asset-host/src/service/bindings/defaults_tests.rs
+@@ -0,0 +1,82 @@
++//! Effective cook inputs must not become explicit sidecar overrides.
++use super::*;
++
++fn bindings() -> Bindings {
++    let root = crate::service::tests::scratch();
++    crate::service::tests::write_project(root.path());
++    let mut bindings = crate::service::tests::bindings(root.path());
++    ara_asset::register_schema(&mut bindings.schema);
++    ara_importers::registry()
++        .expect("installed registry")
++        .register_schemas(&mut bindings.schema);
++    bindings
++        .versions
++        .insert("ara.texture".into(), "fixture".into());
++    bindings.policy.defaults.texture = Some(ara_asset::TextureSettings {
++        max_dimension: 512,
++        ..Default::default()
++    });
++    bindings
++}
++fn raw() -> ImportSettings {
++    ImportSettings {
++        importer: "ara.texture".into(),
++        version: "fixture".into(),
++        settings: json!({}),
++        ..Default::default()
++    }
++}
++#[test]
++fn authoritative_policy_cooks_effectively_but_new_sources_remain_inherited() {
++    let bindings = bindings();
++    let source = bindings
++        .template("tex.png", "as_defaults".into(), &raw())
++        .expect("binding");
++    assert_eq!(source.settings["maxDimension"], 512);
++    let document = crate::service::import_entries::sidecar_document(&source, None, &bindings)
++        .expect("new sidecar");
++    let record = document.record("i_settings").expect("settings");
++    assert_eq!(record["settings"], json!({}));
++    assert!(!record.contains_key("preset"));
++}
++#[test]
++fn foreign_and_existing_explicit_overrides_are_preserved_independently() {
++    let mut bindings = bindings();
++    let mut original = raw();
++    original.settings = json!({"maxDimension":2048,"mipmaps":false});
++    let mut document =
++        ara_doc::Document::new("import", ara_doc::AssetId::parse("as_foreign").expect("ID"));
++    document
++        .apply(
++            ara_asset::SidecarCommand::InitializeInherited(original.clone())
++                .edit(document.id.clone())
++                .expect("edit"),
++            &bindings.schema,
++        )
++        .expect("fixture");
++    let text = ara_doc::write(&document, &bindings.schema);
++    let source = bindings
++        .template("tex.png", "as_defaults".into(), &original)
++        .expect("binding");
++    let preserved =
++        crate::service::import_entries::sidecar_document(&source, Some(text.as_bytes()), &bindings)
++            .expect("foreign");
++    assert_eq!(ara_doc::write(&preserved, &bindings.schema), text);
++    let storage = bindings.workspace.storage_path("tex.png.import.json");
++    bindings.workspace.insert(storage, document);
++    let source = bindings
++        .existing("tex.png")
++        .expect("existing read")
++        .expect("source");
++    assert_eq!(source.settings["maxDimension"], 2048);
++    assert_eq!(source.settings["mipmaps"], false);
++    assert_eq!(
++        bindings
++            .workspace
++            .doc("as_foreign")
++            .expect("unchanged sidecar")
++            .record("i_settings")
++            .expect("settings")["settings"],
++        original.settings
++    );
++}
+diff --git a/crates/ara-asset-host/src/service/import_entries.rs b/crates/ara-asset-host/src/service/import_entries.rs
+--- a/crates/ara-asset-host/src/service/import_entries.rs
++++ b/crates/ara-asset-host/src/service/import_entries.rs
+@@ -32,7 +32,9 @@
+     let edit = ara_asset::SidecarCommand::InitializeInherited(ara_asset::ImportSettings {
+         importer: binding.importer.clone(),
+         version: binding.version.clone(),
+-        settings: binding.settings.clone(),
++        // The binding is an effective cook input. A genuinely new sidecar has
++        // no explicit overrides; materializing project defaults would freeze them.
++        settings: serde_json::json!({}),
+         preset: None,
+         dependencies: Vec::new(),
+     })
+diff --git a/crates/ara-asset-host/src/service/prepare.rs b/crates/ara-asset-host/src/service/prepare.rs
+--- a/crates/ara-asset-host/src/service/prepare.rs
++++ b/crates/ara-asset-host/src/service/prepare.rs
+@@ -64,9 +64,10 @@
+         workspace: frozen.workspace,
+         versions: Default::default(),
+         preset: Default::default(),
++        policy: Default::default(),
+         asset_hashes: Default::default(),
+     };
+-    bindings.preset = ["settings/ara.imports", "ara.imports"]
++    bindings.policy = ["settings/ara.imports", "ara.imports"]
+         .into_iter()
+         .find_map(|path| {
+             bindings
+@@ -82,8 +83,8 @@
+         })
+         .transpose()
+         .map_err(|error| one(Diagnostic::error(codes::INVALID_PARAMS, error.to_string())))?
+-        .unwrap_or_default()
+-        .preset;
++        .unwrap_or_default();
++    bindings.preset = bindings.policy.preset;
+     let imports: Vec<_> = params
+         .commands
+         .iter()
+diff --git a/crates/ara-asset-host/src/service/tests.rs b/crates/ara-asset-host/src/service/tests.rs
+--- a/crates/ara-asset-host/src/service/tests.rs
++++ b/crates/ara-asset-host/src/service/tests.rs
+@@ -1,5 +1,4 @@
+ //! Disposable authority tests; production workers never touch the user's profile.
+-mod deletion_echo;
+ mod echo;
+ use super::{
+     AssetService, bindings::Bindings, import_entries::entry_metadata, inventory::Inventory,
+@@ -59,6 +58,7 @@
+         workspace,
+         versions: Default::default(),
+         preset: Default::default(),
++        policy: Default::default(),
+         asset_hashes: Default::default(),
+     }
+ }
+diff --git a/crates/ara-asset/src/import_defaults.rs b/crates/ara-asset/src/import_defaults.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-asset/src/import_defaults.rs
+@@ -0,0 +1,150 @@
++//! Shared reflected importer policies; workers and project defaults use the same types.
++use crate::CookPreset;
++use ara_schema::Schema;
++use serde::{Deserialize, Serialize};
++
++/// Semantic texture usage selects transfer functions, mip filtering and BC format.
++#[derive(
++    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ara_schema::Schema,
++)]
++#[ara(module = "asset")]
++#[serde(rename_all = "camelCase")]
++pub enum TextureUsage {
++    /// sRGB color (alpha remains linear), BC7 sRGB.
++    #[default]
++    Color,
++    /// Linear RGBA data, BC7 UNORM.
++    Linear,
++    /// Tangent-space normals, normalized mips and BC5 XY.
++    Normal,
++    /// A single linear scalar channel, BC4.
++    Mask,
++    /// Nonnegative linear radiance, BC6H UFLOAT.
++    Hdr,
++    /// A colour lookup table strip (post-process volumes' grading): values kept as
++    /// authored, uncompressed RGBA half floats, without mips.
++    Lut,
++}
++/// Declarative texture import settings.
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ara_schema::Schema)]
++#[ara(module = "asset")]
++#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
++pub struct TextureSettings {
++    /// Optional quality override; absent inherits the source/project preset.
++    /// Changing it does not re-encode other texture tasks.
++    pub preset: Option<CookPreset>,
++    /// How color/normal/mask values are interpreted.
++    pub usage: TextureUsage,
++    /// Generate the complete mip chain through 1×1.
++    #[ara(default = true)]
++    pub mipmaps: bool,
++    /// Invert normal Y for DirectX-authored tangent-space inputs.
++    pub flip_normal_y: bool,
++    /// Source channel for BC4, R=0/G=1/B=2/A=3.
++    #[ara(range(min = 0, max = 3))]
++    pub mask_channel: u8,
++    /// Maximum permitted source dimension (decode limits are also enforced).
++    #[ara(default = 16384, range(min = 1, max = 16384))]
++    pub max_dimension: u32,
++}
++impl Default for TextureSettings {
++    fn default() -> Self {
++        Self {
++            preset: None,
++            usage: TextureUsage::Color,
++            mipmaps: true,
++            flip_normal_y: false,
++            mask_channel: 0,
++            max_dimension: 16384,
++        }
++    }
++}
++
++/// Deterministic geometry cook policy.
++#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ara_schema::Schema)]
++#[ara(module = "asset")]
++#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
++pub struct MeshSettings {
++    /// Texture quality overrides by image URI or #image-index (FBX: #texture-id).
++    /// Other images inherit the model/project preset and retain their cached work.
++    #[serde(default)]
++    pub texture_presets: std::collections::BTreeMap<String, ara_asset::CookPreset>,
++    /// Maximum LODs including the original (1–8). Skin/morph meshes retain at most four.
++    #[ara(default = 8, range(min = 1, max = 8))]
++    pub lod_count: u32,
++    /// Relative simplification error ceiling; skin/morph meshes clamp this to 1%.
++    #[ara(default = 0.1, range(min = 0))]
++    pub lod_error: f32,
++    /// Cook a versioned virtual-geometry DAG for each static material primitive.
++    /// Skinned and morph-deformed meshes retain the classic path.
++    #[ara(default = true)]
++    pub virtual_geometry: bool,
++    /// glTF base-color image URI (or #image-index) to companion opacity image URI.
++    /// The mask's red channel multiplies existing alpha; paths are relative to the model.
++    #[serde(default)]
++    pub opacity_maps: std::collections::BTreeMap<String, String>,
++}
++impl Default for MeshSettings {
++    fn default() -> Self {
++        Self {
++            texture_presets: std::collections::BTreeMap::new(),
++            lod_count: 8,
++            lod_error: 0.1,
++            virtual_geometry: true,
++            opacity_maps: std::collections::BTreeMap::new(),
++        }
++    }
++}
++
++/// Audio use selects resident effects or streamed music/dialogue.
++#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
++#[ara(module = "asset", name = "AudioImportUse")]
++#[serde(rename_all = "camelCase")]
++pub enum AudioImportUse {
++    /// Resident sound effect.
++    #[default]
++    ShortEffect,
++    /// Streamed music encoded as Opus.
++    Music,
++    /// Streamed dialogue encoded as Opus.
++    Dialogue,
++}
++
++/// Codec for resident sound effects; streamed audio always uses Opus.
++#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
++#[ara(module = "asset", name = "AudioEffectCodec")]
++#[serde(rename_all = "camelCase")]
++pub enum AudioEffectCodec {
++    /// Signed 16-bit PCM.
++    #[default]
++    Pcm,
++    /// IMA ADPCM.
++    Adpcm,
++}
++
++/// Audio sidecar settings, validated identically by authoring commands and workers.
++#[derive(Debug, Clone, PartialEq, Schema, Serialize, Deserialize)]
++#[ara(module = "asset", name = "AudioImportSettings")]
++#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
++pub struct AudioImportSettings {
++    /// Resident effect, streamed music or streamed dialogue.
++    pub usage: AudioImportUse,
++    /// Codec for resident effects.
++    pub codec: AudioEffectCodec,
++    /// Stereo Opus bitrate for music/dialogue, in bits per second.
++    #[ara(default = 128000, range(min = 6000, max = 512000))]
++    pub opus_bitrate: i32,
++    /// Resident decoded PCM budget in bytes; streamed cooking uses bounded blocks.
++    #[ara(default = 67108864, range(min = 65536))]
++    pub decoded_budget: u64,
++}
++impl Default for AudioImportSettings {
++    fn default() -> Self {
++        Self {
++            usage: AudioImportUse::default(),
++            codec: AudioEffectCodec::default(),
++            opus_bitrate: 128000,
++            decoded_budget: 64 * 1024 * 1024,
++        }
++    }
++}
+diff --git a/crates/ara-asset/src/lib.rs b/crates/ara-asset/src/lib.rs
+--- a/crates/ara-asset/src/lib.rs
++++ b/crates/ara-asset/src/lib.rs
+@@ -5,6 +5,7 @@
+ mod encoder;
+ mod graph;
+ mod hot_reload;
++mod import_defaults;
+ mod importer;
+ mod metrics;
+ mod preset;
+@@ -18,6 +19,10 @@
+ pub use encoder::{BlockEncoder, EncoderEndpoint, ImportServices};
+ pub use graph::DependencyGraph;
+ pub use hot_reload::{ApplyPolicy, AssetChanged, AssetSlot, FileWatcher, HotReload, ReloadEvent};
++pub use import_defaults::{
++    AudioEffectCodec, AudioImportSettings, AudioImportUse, MeshSettings, TextureSettings,
++    TextureUsage,
++};
+ pub use importer::{
+     Artifact, ArtifactKind, Cancellation, Digest, ImportContext, ImportInput, ImportOutput,
+     Importer, ImporterRegistry, Progress, TargetPlatform,
+@@ -25,7 +30,8 @@
+ pub use metrics::{ImportMetrics, ImportStage, StageTimer, StageTimes};
+ pub use preset::{CookPreset, DEFAULT_THREAD_BUDGET};
+ pub use project_settings::{
+-    LEGACY_PROJECT_IMPORT_SETTINGS_FILE, PROJECT_IMPORT_SETTINGS_FILE, ProjectImportSettings,
++    ImporterDefaults, LEGACY_PROJECT_IMPORT_SETTINGS_FILE, PROJECT_IMPORT_SETTINGS_FILE,
++    ProjectImportSettings,
+ };
+ pub use sidecar::{ImportSettings, Sidecar, SidecarCommand, VersionCheck, register_schema};
+ pub use source::{AssetPipeline, SourceAsset, snapshot};
+diff --git a/crates/ara-asset/src/project_settings.rs b/crates/ara-asset/src/project_settings.rs
+--- a/crates/ara-asset/src/project_settings.rs
++++ b/crates/ara-asset/src/project_settings.rs
+@@ -11,13 +11,127 @@
+ pub const LEGACY_PROJECT_IMPORT_SETTINGS_FILE: &str = "ara.imports";
+ 
+ /// Defaults inherited by import sidecars which do not specify a preset.
+-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
++#[derive(Debug, Clone, Default, PartialEq, Schema, Serialize, Deserialize)]
+ #[ara(record(prefix = "pi"), module = "asset")]
+ #[serde(rename_all = "camelCase", default, deny_unknown_fields)]
+ pub struct ProjectImportSettings {
+     /// Default texture encoding quality. Balanced opens new projects quickly;
+     /// HighQuality performs the full search. Source/texture overrides take priority.
+     pub preset: CookPreset,
++    /// Typed importer-wide defaults. Explicit source settings take priority.
++    pub defaults: ImporterDefaults,
++}
++
++/// Optional policies use the exact settings schemas consumed by installed workers.
++#[derive(Debug, Clone, Default, PartialEq, Schema, Serialize, Deserialize)]
++#[ara(module = "asset")]
++#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
++pub struct ImporterDefaults {
++    /// PNG/JPEG/HDR/EXR texture import defaults; absent inherits built-in policy.
++    pub texture: Option<crate::TextureSettings>,
++    /// glTF model import defaults, including embedded texture policy.
++    pub gltf: Option<crate::MeshSettings>,
++    /// FBX model import defaults; glTF-only opacity maps are not supported.
++    pub fbx: Option<crate::MeshSettings>,
++    /// Audio use, codec, streaming bitrate and decoded-memory budget defaults.
++    pub audio: Option<crate::AudioImportSettings>,
++}
++
++impl ProjectImportSettings {
++    /// Merge typed per-importer policy with explicit source keys. Workers supply
++    /// built-in defaults for every remaining absent field.
++    pub fn effective_settings(
++        &self,
++        importer: &str,
++        source: &serde_json::Value,
++    ) -> Result<serde_json::Value> {
++        let defaults = match importer {
++            "ara.texture" => self
++                .defaults
++                .texture
++                .as_ref()
++                .map(serde_json::to_value)
++                .transpose()?,
++            "ara.gltf" => self
++                .defaults
++                .gltf
++                .as_ref()
++                .map(serde_json::to_value)
++                .transpose()?,
++            "ara.fbx" => self
++                .defaults
++                .fbx
++                .as_ref()
++                .map(serde_json::to_value)
++                .transpose()?,
++            "ara.audio" => self
++                .defaults
++                .audio
++                .as_ref()
++                .map(serde_json::to_value)
++                .transpose()?,
++            _ => None,
++        };
++        let mut effective = defaults.unwrap_or_else(|| serde_json::json!({}));
++        if !source.is_null() {
++            let overrides = source
++                .as_object()
++                .ok_or_else(|| Error::Invalid("source import settings must be an object".into()))?;
++            for (key, value) in overrides {
++                effective[key] = value.clone();
++            }
++        }
++        Ok(effective)
++    }
++    /// Source texture keys win over source quality, then typed texture policy,
++    /// then the global texture/model quality. Audio retains its engine preset.
++    pub fn effective_preset(
++        &self,
++        importer: &str,
++        source_preset: Option<CookPreset>,
++        source: &serde_json::Value,
++        effective: &serde_json::Value,
++    ) -> Result<CookPreset> {
++        if importer == "ara.texture"
++            && let Some(value) = source.get("preset").filter(|value| !value.is_null())
++        {
++            return Ok(serde_json::from_value(value.clone())?);
++        }
++        if let Some(preset) = source_preset {
++            return Ok(preset);
++        }
++        if importer == "ara.texture"
++            && let Some(value) = effective.get("preset").filter(|value| !value.is_null())
++        {
++            return Ok(serde_json::from_value(value.clone())?);
++        }
++        Ok(
++            if matches!(importer, "ara.texture" | "ara.gltf" | "ara.fbx") {
++                self.preset
++            } else {
++                CookPreset::default()
++            },
++        )
++    }
++    /// Exact settings and quality supplied to dependency discovery and cooking.
++    /// Resolve the worker's nested texture preset too, so a project field cannot
++    /// override an explicit source quality or fragment cache invalidation.
++    pub fn resolved_settings(
++        &self,
++        importer: &str,
++        source_preset: Option<CookPreset>,
++        source: &serde_json::Value,
++    ) -> Result<(serde_json::Value, CookPreset)> {
++        let mut settings = self.effective_settings(importer, source)?;
++        let preset = self.effective_preset(importer, source_preset, source, &settings)?;
++        if importer == "ara.texture"
++            && settings.get("preset").is_some_and(|value| !value.is_null())
++            && settings["preset"] != serde_json::json!(preset)
++        {
++            settings["preset"] = serde_json::json!(preset);
++        }
++        Ok((settings, preset))
++    }
+ }
+ 
+ impl ProjectImportSettings {
+@@ -57,7 +171,7 @@
+     }
+ 
+     /// Initial project document; callers persist it through the canonical writer.
+-    pub fn document(self) -> Result<Document> {
++    pub fn document(&self) -> Result<Document> {
+         let mut doc = Document::new(
+             "imports",
+             AssetId::parse("ip_project").map_err(Error::Invalid)?,
+@@ -73,7 +187,7 @@
+         Ok(doc)
+     }
+     /// Canonical initial project policy for project/template creation.
+-    pub fn canonical_text(self) -> Result<String> {
++    pub fn canonical_text(&self) -> Result<String> {
+         let mut db = SchemaDb::new();
+         crate::register_schema(&mut db);
+         Ok(ara_doc::write(&self.document()?, &db))
+@@ -86,7 +200,7 @@
+         let _ = db.add_kind(DocKindDesc {
+             name: "imports".into(),
+             version: 1,
+-            doc: "Project texture import defaults, overridden by individual sources/textures."
++            doc: "Typed per-importer project defaults and global texture quality, overridden by explicit source settings."
+                 .into(),
+             id_prefix: "ip".into(),
+             extension: "imports".into(),
+diff --git a/crates/ara-asset/src/source.rs b/crates/ara-asset/src/source.rs
+--- a/crates/ara-asset/src/source.rs
++++ b/crates/ara-asset/src/source.rs
+@@ -64,7 +64,21 @@
+     worker: &ProcessWorker,
+     cancellation: &Cancellation,
+ ) -> Result<ImportInput> {
++    let mut db = SchemaDb::new();
++    crate::register_schema(&mut db);
++    let policy = crate::ProjectImportSettings::read(root, &db)?;
++    snapshot_with_policy(root, asset, worker, cancellation, &policy)
++}
++fn snapshot_with_policy(
++    root: &Path,
++    asset: &SourceAsset,
++    worker: &ProcessWorker,
++    cancellation: &Cancellation,
++    policy: &crate::ProjectImportSettings,
++) -> Result<ImportInput> {
+     let _trace = crate::trace::Scope::new("source.snapshot", &asset.path);
++    let (settings, preset) =
++        policy.resolved_settings(&asset.importer, asset.preset, &asset.settings)?;
+     let project_root = root
+         .canonicalize()
+         .map_err(|e| io_at(e, &root.display().to_string()))?;
+@@ -81,7 +95,7 @@
+         &asset.importer,
+         &asset.version,
+         source.clone(),
+-        asset.settings.clone(),
++        settings.clone(),
+         cancellation,
+     )? {
+         cancellation.check()?;
+@@ -90,27 +104,6 @@
+         dependencies.insert(uri, bytes);
+     }
+     cancellation.check()?;
+-    let mut preset = match asset.preset {
+-        Some(preset) => preset,
+-        None if matches!(
+-            asset.importer.as_str(),
+-            "ara.texture" | "ara.gltf" | "ara.fbx"
+-        ) =>
+-        {
+-            let mut db = SchemaDb::new();
+-            crate::register_schema(&mut db);
+-            crate::ProjectImportSettings::read(&project_root, &db)?.preset
+-        }
+-        None => crate::CookPreset::default(),
+-    };
+-    if asset.importer == "ara.texture"
+-        && let Some(value) = asset
+-            .settings
+-            .get("preset")
+-            .filter(|value| !value.is_null())
+-    {
+-        preset = serde_json::from_value(value.clone())?;
+-    }
+     Ok(ImportInput {
+         preset,
+         thread_budget: asset.thread_budget,
+@@ -118,7 +111,7 @@
+         source,
+         importer: asset.importer.clone(),
+         version: asset.version.clone(),
+-        settings: asset.settings.clone(),
++        settings,
+         target: asset.target,
+         dependencies,
+         asset_dependencies: asset.asset_dependencies.clone(),
+@@ -168,7 +161,7 @@
+     watcher: FileWatcher,
+     sources: BTreeMap<String, SourceAsset>,
+     configurations: BTreeMap<String, ImportSettings>,
+-    project_preset: Option<crate::CookPreset>,
++    project_policy: Option<crate::ProjectImportSettings>,
+     epochs: BTreeMap<String, u64>,
+     snapshots: BTreeMap<String, Cancellation>,
+     snapshot_changes: BTreeSet<String>,
+@@ -188,7 +181,7 @@
+         let root = root.as_ref().canonicalize()?;
+         let authored_root = authored_root(&root)?;
+         let watcher = FileWatcher::new(&root)?;
+-        let project_preset = Some(crate::ProjectImportSettings::read(&root, &schema)?.preset);
++        let project_policy = Some(crate::ProjectImportSettings::read(&root, &schema)?);
+         let worker = worker.with_memo(cache.worker_memo_root());
+         let (tx, rx) = mpsc::channel();
+         Ok(Self {
+@@ -199,7 +192,7 @@
+             watcher,
+             sources: BTreeMap::new(),
+             configurations: BTreeMap::new(),
+-            project_preset,
++            project_policy,
+             epochs: BTreeMap::new(),
+             snapshots: BTreeMap::new(),
+             snapshot_changes: BTreeSet::new(),
+@@ -256,25 +249,39 @@
+         Ok(())
+     }
+ 
+-    /// Applies a command-authored project policy without waiting for its file save.
+-    /// Explicit source overrides and non-texture importers keep their generations.
++    /// Update the global quality while retaining every typed per-importer policy.
++    /// Existing callers can keep using this preset-only compatibility entry point.
+     pub fn configure_project(&mut self, preset: crate::CookPreset) -> Result<bool> {
+-        if self.project_preset == Some(preset) {
++        let mut policy = self.project_policy.clone().unwrap_or_default();
++        policy.preset = preset;
++        self.configure_project_settings(policy)
++    }
++    /// Apply an authoritative in-memory policy before its debounced file save.
++    /// Re-request only sources whose effective settings or quality actually change.
++    pub fn configure_project_settings(
++        &mut self,
++        policy: crate::ProjectImportSettings,
++    ) -> Result<bool> {
++        if self.project_policy.as_ref() == Some(&policy) {
+             return Ok(false);
+         }
+-        self.project_preset = Some(preset);
+-        let affected: Vec<_> = self
+-            .sources
+-            .iter()
+-            .filter(|(_, source)| {
+-                source.preset.is_none()
+-                    && matches!(
+-                        source.importer.as_str(),
+-                        "ara.texture" | "ara.gltf" | "ara.fbx"
+-                    )
+-            })
+-            .map(|(id, _)| id.clone())
+-            .collect();
++        let previous = self.project_policy.as_ref();
++        let mut affected = Vec::new();
++        for (id, source) in &self.sources {
++            let next =
++                policy.resolved_settings(&source.importer, source.preset, &source.settings)?;
++            let changed = match previous {
++                None => true,
++                Some(previous) => {
++                    previous.resolved_settings(&source.importer, source.preset, &source.settings)?
++                        != next
++                }
++            };
++            if changed {
++                affected.push(id.clone());
++            }
++        }
++        self.project_policy = Some(policy);
+         for id in affected {
+             self.request(&id)?;
+         }
+@@ -314,7 +321,7 @@
+         let worker = self.worker.clone();
+         let schema = Arc::clone(&self.schema);
+         let configuration = self.configurations.get(id).cloned();
+-        let project_preset = self.project_preset;
++        let project_policy = self.project_policy.clone();
+         let known_assets: BTreeMap<_, _> = self
+             .sources
+             .iter()
+@@ -386,13 +393,12 @@
+                         }
+                     }
+                 }
+-                if matches!(
+-                    asset.importer.as_str(),
+-                    "ara.texture" | "ara.gltf" | "ara.fbx"
+-                ) {
+-                    asset.preset = asset.preset.or(project_preset);
+-                }
+-                snapshot(&root, &asset, &worker, &cancellation)
++                match project_policy {
++                    Some(policy) => {
++                        snapshot_with_policy(&root, &asset, &worker, &cancellation, &policy)
++                    }
++                    None => snapshot(&root, &asset, &worker, &cancellation),
++                }
+             })();
+             let _ = tx.send(SnapshotResult {
+                 asset: asset.id,
+@@ -440,19 +446,8 @@
+         }
+         let mut invalidated = BTreeSet::new();
+         if policy_changed {
+-            self.project_preset = None;
+-            invalidated.extend(
+-                self.sources
+-                    .iter()
+-                    .filter(|(_, asset)| {
+-                        asset.preset.is_none()
+-                            && matches!(
+-                                asset.importer.as_str(),
+-                                "ara.texture" | "ara.gltf" | "ara.fbx"
+-                            )
+-                    })
+-                    .map(|(id, _)| id.clone()),
+-            );
++            self.project_policy = None;
++            invalidated.extend(self.sources.keys().cloned());
+         }
+         let mut handled = Vec::new();
+         for path in &self.snapshot_changes {
+@@ -530,6 +525,78 @@
+ mod tests {
+     use super::*;
+     #[test]
++    fn authoritative_type_default_change_requeues_only_inheriting_sources_before_file_save() {
++        let directory = tempfile::tempdir().expect("pipeline scratch");
++        let root = directory.path();
++        std::fs::write(
++            root.join("ara.project.json"),
++            ara_json::to_canonical_string(
++                &serde_json::json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
++            ),
++        )
++        .expect("marker");
++        std::fs::create_dir(root.join(ara_doc::AUTHORING_ROOT)).expect("authored root");
++        let mut db = SchemaDb::new();
++        crate::register_schema(&mut db);
++        let cache = Arc::new(crate::FileCache::new(root).expect("private cache"));
++        let mut pipeline = AssetPipeline::new(
++            root,
++            ProcessWorker::new(root.join("never-launched-worker")),
++            cache,
++            Arc::new(db),
++        )
++        .expect("pipeline");
++        for (id, settings) in [
++            ("as_inherit", serde_json::json!({})),
++            (
++                "as_explicit",
++                serde_json::to_value(crate::TextureSettings::default()).expect("explicit settings"),
++            ),
++        ] {
++            pipeline
++                .register(SourceAsset {
++                    preset: Some(crate::CookPreset::Fast),
++                    thread_budget: 1,
++                    id: id.into(),
++                    path: format!("{id}.png"),
++                    importer: "ara.texture".into(),
++                    version: "fixture".into(),
++                    settings,
++                    target: crate::TargetPlatform::Linux,
++                    asset_dependencies: Default::default(),
++                })
++                .expect("source");
++        }
++        let mut policy = crate::ProjectImportSettings::default();
++        policy.defaults.texture = Some(crate::TextureSettings {
++            usage: crate::TextureUsage::Normal,
++            ..Default::default()
++        });
++        assert!(
++            pipeline
++                .configure_project_settings(policy.clone())
++                .expect("policy")
++        );
++        assert_eq!(pipeline.epochs.get("as_inherit"), Some(&1));
++        assert_eq!(pipeline.epochs.get("as_explicit"), None);
++        assert!(
++            !pipeline
++                .configure_project_settings(policy)
++                .expect("same policy")
++        );
++        // Missing fixture media stops before dependency discovery or process launch.
++        // Drain its owned snapshot thread before deleting the private test directory.
++        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
++        while !pipeline.snapshots.is_empty() {
++            pipeline.poll().expect("poll");
++            assert!(
++                std::time::Instant::now() < deadline,
++                "snapshot failed to retire"
++            );
++            std::thread::yield_now();
++        }
++    }
++    #[test]
+     fn source_open_rejects_old_projects_and_accepts_explicit_authored_roots() {
+         let directory = tempfile::tempdir().expect("source scratch");
+         let root = directory.path();
+diff --git a/crates/ara-asset/tests/contracts.rs b/crates/ara-asset/tests/contracts.rs
+--- a/crates/ara-asset/tests/contracts.rs
++++ b/crates/ara-asset/tests/contracts.rs
+@@ -14,6 +14,7 @@
+     );
+     let settings = ProjectImportSettings {
+         preset: CookPreset::HighQuality,
++        ..Default::default()
+     };
+     let text = settings.canonical_text().unwrap();
+     let path = root.path().join(PROJECT_IMPORT_SETTINGS_FILE);
+@@ -36,6 +37,7 @@
+     assert_eq!(PROJECT_IMPORT_SETTINGS_FILE, "settings/ara.imports");
+     let legacy = ProjectImportSettings {
+         preset: CookPreset::Balanced,
++        ..Default::default()
+     };
+     std::fs::write(
+         root.path().join(LEGACY_PROJECT_IMPORT_SETTINGS_FILE),
+@@ -45,6 +47,7 @@
+     std::fs::create_dir(root.path().join("settings")).unwrap();
+     let scoped = ProjectImportSettings {
+         preset: CookPreset::HighQuality,
++        ..Default::default()
+     };
+     std::fs::write(
+         root.path().join("settings/ara.imports"),
+diff --git a/crates/ara-asset/tests/import_defaults.rs b/crates/ara-asset/tests/import_defaults.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-asset/tests/import_defaults.rs
+@@ -0,0 +1,164 @@
++//! Typed policy precedence and action identity, with no worker or filesystem I/O.
++use ara_asset::*;
++use serde_json::{Value, json};
++
++fn input(policy: &ProjectImportSettings, source: Value, preset: Option<CookPreset>) -> ImportInput {
++    let (settings, preset) = policy
++        .resolved_settings("ara.texture", preset, &source)
++        .expect("resolved input");
++    ImportInput {
++        preset,
++        thread_budget: 2,
++        source_path: "image.png".into(),
++        source: vec![1, 2, 3],
++        importer: "ara.texture".into(),
++        version: "fixture".into(),
++        settings,
++        target: TargetPlatform::Windows,
++        dependencies: Default::default(),
++        asset_dependencies: Default::default(),
++    }
++}
++#[test]
++fn typed_defaults_round_trip_the_existing_importer_schemas() {
++    let policy = ProjectImportSettings {
++        defaults: ImporterDefaults {
++            texture: Some(TextureSettings {
++                usage: TextureUsage::Normal,
++                ..Default::default()
++            }),
++            gltf: Some(MeshSettings {
++                lod_count: 2,
++                ..Default::default()
++            }),
++            audio: Some(AudioImportSettings {
++                usage: AudioImportUse::Music,
++                ..Default::default()
++            }),
++            ..Default::default()
++        },
++        ..Default::default()
++    };
++    let mut db = ara_schema::SchemaDb::new();
++    register_schema(&mut db);
++    let text = policy.canonical_text().expect("canonical typed policy");
++    let read = ara_doc::read(&text, PROJECT_IMPORT_SETTINGS_FILE, &db, None);
++    assert!(read.diags.iter().all(|d| !d.is_error()), "{:?}", read.diags);
++    let doc = read.doc.expect("policy document");
++    let actual: ProjectImportSettings =
++        serde_json::from_value(json!(doc.record("pi_settings").expect("record")))
++            .expect("typed policy");
++    assert_eq!(actual, policy);
++    assert!(
++        serde_json::from_value::<ProjectImportSettings>(
++            json!({"defaults":{"texture":{"invented":true}}})
++        )
++        .is_err()
++    );
++}
++#[test]
++fn explicit_source_fields_and_quality_win_without_crossing_importer_types() {
++    let policy = ProjectImportSettings {
++        defaults: ImporterDefaults {
++            texture: Some(TextureSettings {
++                preset: Some(CookPreset::HighQuality),
++                usage: TextureUsage::Normal,
++                max_dimension: 1024,
++                ..Default::default()
++            }),
++            gltf: Some(MeshSettings {
++                lod_count: 2,
++                ..Default::default()
++            }),
++            audio: Some(AudioImportSettings {
++                opus_bitrate: 96000,
++                ..Default::default()
++            }),
++            ..Default::default()
++        },
++        ..Default::default()
++    };
++    let cooked = input(
++        &policy,
++        json!({"maxDimension":4096,"mipmaps":false}),
++        Some(CookPreset::Fast),
++    );
++    assert_eq!(cooked.settings["usage"], "normal");
++    assert_eq!(cooked.settings["maxDimension"], 4096);
++    assert_eq!(cooked.settings["mipmaps"], false);
++    assert_eq!(cooked.settings["preset"], "fast");
++    assert_eq!(cooked.preset, CookPreset::Fast);
++    assert_eq!(
++        input(
++            &policy,
++            json!({"preset":"balanced"}),
++            Some(CookPreset::Fast)
++        )
++        .preset,
++        CookPreset::Balanced
++    );
++    assert_eq!(
++        policy
++            .effective_settings("ara.gltf", &json!({}))
++            .expect("mesh")["lodCount"],
++        2
++    );
++    assert_eq!(
++        policy
++            .effective_settings("ara.audio", &json!({}))
++            .expect("audio")["opusBitrate"],
++        96000
++    );
++    assert_eq!(
++        policy
++            .effective_settings("ara.fbx", &json!({}))
++            .expect("FBX remains unconfigured"),
++        json!({})
++    );
++}
++#[test]
++fn defaults_change_action_hash_without_sidecar_edits_and_explicit_overrides_stay_stable() {
++    let original = ProjectImportSettings::default();
++    for raw in [json!({}), json!({"preset":null,"mipmaps":false})] {
++        let resolved = input(&original, raw.clone(), Some(CookPreset::Fast));
++        let mut legacy = resolved.clone();
++        legacy.settings = raw;
++        assert_eq!(
++            resolved.settings, legacy.settings,
++            "absent/null preset keys retain the historical no-policy input"
++        );
++        assert_eq!(
++            resolved.key().expect("resolved key"),
++            legacy.key().expect("legacy no-policy key")
++        );
++    }
++    let mut changed = original.clone();
++    changed.defaults.texture = Some(TextureSettings {
++        usage: TextureUsage::Normal,
++        ..Default::default()
++    });
++    let source = json!({});
++    assert_ne!(
++        input(&original, source.clone(), None).key().expect("key"),
++        input(&changed, source, None).key().expect("new key")
++    );
++    let explicit =
++        serde_json::to_value(TextureSettings::default()).expect("all explicit source keys");
++    assert_eq!(
++        input(&original, explicit.clone(), Some(CookPreset::Fast))
++            .key()
++            .expect("key"),
++        input(&changed, explicit, Some(CookPreset::Fast))
++            .key()
++            .expect("overridden key")
++    );
++    changed.defaults.texture = None;
++    assert_eq!(
++        input(&original, json!({}), None)
++            .key()
++            .expect("original key"),
++        input(&changed, json!({}), None)
++            .key()
++            .expect("reset restores key")
++    );
++}
+diff --git a/crates/ara-editor/src/shell/choices.rs b/crates/ara-editor/src/shell/choices.rs
+--- a/crates/ara-editor/src/shell/choices.rs
++++ b/crates/ara-editor/src/shell/choices.rs
+@@ -17,6 +17,11 @@
+         doc: String,
+         key: String,
+     },
++    ImportBatch {
++        group: String,
++        key: String,
++    },
++    ImportGroup,
+     Field(String),
+     Append {
+         field: String,
+@@ -185,6 +190,13 @@
+                 self.drafts
+                     .insert(format!("@import|{doc}|{key}"), value.to_string());
+                 self.commit_import_fields(editor)?;
++            }
++            Destination::ImportBatch { group, key } => {
++                self.import_batch_value(editor, group, key, value)?
++            }
++            Destination::ImportGroup => {
++                self.commit_import_fields(editor)?;
++                self.choose_import_group(value)?;
+             }
+             Destination::Field(path) => {
+                 editor.apply(
+diff --git a/crates/ara-editor/src/shell/commands/table.rs b/crates/ara-editor/src/shell/commands/table.rs
+--- a/crates/ara-editor/src/shell/commands/table.rs
++++ b/crates/ara-editor/src/shell/commands/table.rs
+@@ -1149,7 +1149,9 @@
+             Ok(())
+         }),
+         later("assets.clear_cache", "Clear Cache", "trash", "", "Clearing caches while jobs run is unsafe; delete .ara/cache with the editor closed."),
+-        later("assets.import_defaults", "Import Defaults…", "settings-2", "", "Per-type import defaults arrive with the Assets settings page."),
++        cmd("assets.import_defaults", "Import Defaults…", "settings-2", "", "Edit project-wide texture quality and typed per-importer defaults.", |s,e,_|s.import_defaults(e)),
++        cmd("assets.import_defaults.close", "Back to Selection", "arrow-left", "", "Close import defaults and return to the current Inspector selection.", |s,e,_|s.close_import_defaults(e)),
++        cmd("assets.import_defaults.reset", "Reset Import Type Defaults", "rotate-ccw", "", "Remove the selected importer's project defaults in one undoable action.", |s,e,t|s.reset_import_defaults(e,t)),
+     ]);
+     // Play
+     c.extend([
+diff --git a/crates/ara-editor/src/shell/import_batch.rs b/crates/ara-editor/src/shell/import_batch.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/shell/import_batch.rs
+@@ -0,0 +1,235 @@
++//! Compatible selected importers share controls; their documents remain independent.
++mod commands;
++mod defaults;
++#[cfg(test)]
++mod tests;
++mod view;
++use super::*;
++
++#[derive(Clone, Debug, PartialEq, Eq)]
++struct Source {
++    doc: String,
++    source: String,
++}
++#[derive(Clone)]
++struct Group {
++    importer: String,
++    sources: Vec<Source>,
++    project: bool,
++}
++
++/// Retained compatible cohorts; control targets capture the exact selected documents.
++#[derive(Default)]
++pub(crate) struct State {
++    groups: BTreeMap<String, Group>,
++    filter: Option<String>,
++    defaults_open: bool,
++    default_type: String,
++}
++
++/// One edited override; lowering merges with each latest independent sidecar.
++pub(super) enum Change {
++    Setting {
++        doc: String,
++        field: String,
++        value: Value,
++    },
++    Preset {
++        doc: String,
++        preset: Option<ara_asset::CookPreset>,
++    },
++    ProjectField {
++        importer: String,
++        field: String,
++        value: Value,
++    },
++    ProjectPreset(ara_asset::CookPreset),
++    Reset(String),
++}
++
++impl Shell {
++    /// Native bool/numeric/Select actions commit once; text retains an explicit draft.
++    pub(crate) fn import_batch_value(
++        &mut self,
++        editor: &mut Editor,
++        group: &str,
++        key: &str,
++        value: Value,
++    ) -> ara_ui::Result<()> {
++        let changes = self.import_batch_changes(group, key, value)?;
++        commands::apply(editor, changes, "Edit selected importer settings")?;
++        Ok(())
++    }
++    pub(super) fn import_batch_changes(
++        &self,
++        group: &str,
++        key: &str,
++        value: Value,
++    ) -> ara_ui::Result<Vec<Change>> {
++        if group == "@project" {
++            return Ok(vec![Change::ProjectPreset(serde_json::from_value(value)?)]);
++        }
++        if let Some(doc) = group.strip_prefix("@source:") {
++            return Ok(vec![if key == "$preset" {
++                Change::Preset {
++                    doc: doc.into(),
++                    preset: if value.is_null() {
++                        None
++                    } else {
++                        Some(serde_json::from_value(value)?)
++                    },
++                }
++            } else {
++                Change::Setting {
++                    doc: doc.into(),
++                    field: key.into(),
++                    value,
++                }
++            }]);
++        }
++        if let Some(importer) = group.strip_prefix("@default:") {
++            settings(importer)?;
++            return Ok(vec![Change::ProjectField {
++                importer: importer.into(),
++                field: key.into(),
++                value,
++            }]);
++        }
++        let cohort = self
++            .import_batch
++            .groups
++            .get(group)
++            .ok_or("The import selection changed; choose the files again")?;
++        cohort
++            .sources
++            .iter()
++            .map(|source| {
++                if key == "$preset" {
++                    Ok(Change::Preset {
++                        doc: source.doc.clone(),
++                        preset: if value.is_null() {
++                            None
++                        } else {
++                            Some(serde_json::from_value(value.clone())?)
++                        },
++                    })
++                } else {
++                    Ok(Change::Setting {
++                        doc: source.doc.clone(),
++                        field: key.into(),
++                        value: value.clone(),
++                    })
++                }
++            })
++            .collect()
++    }
++
++    /// Draft keys retain a cohort identity, never apply to a later selection.
++    pub(crate) fn import_batch_field(
++        &mut self,
++        editor: &mut Editor,
++        group: &str,
++        key: &str,
++        value: Value,
++    ) -> ara_ui::Result<bool> {
++        if value.is_boolean() || value.is_number() {
++            self.import_batch_value(editor, group, key, value)?;
++            return Ok(true);
++        }
++        let text = value
++            .as_str()
++            .ok_or("Importer text field emitted a non-text value")?;
++        self.drafts
++            .insert(format!("@import-batch|{group}|{key}"), text.into());
++        Ok(false)
++    }
++
++    pub(super) fn choose_import_group(&mut self, value: Value) -> ara_ui::Result<()> {
++        let group = value.as_str().ok_or("Choose a compatible importer type")?;
++        if self.import_batch.defaults_open {
++            settings(group)?;
++            self.import_batch.default_type = group.into();
++            return Ok(());
++        }
++        if !self
++            .import_batch
++            .groups
++            .values()
++            .any(|candidate| candidate.importer == group)
++        {
++            return Err("That importer type is no longer selected".into());
++        }
++        self.import_batch.filter = Some(group.into());
++        Ok(())
++    }
++}
++
++pub(super) fn apply_changes(
++    editor: &mut Editor,
++    changes: Vec<Change>,
++    why: &str,
++) -> ara_ui::Result<bool> {
++    commands::apply(editor, changes, why)
++}
++pub(super) fn inherited_defaults(
++    editor: &Editor,
++    importer: &str,
++    mut builtin: Value,
++) -> ara_ui::Result<Value> {
++    let inherited = commands::policy(editor)?.effective_settings(importer, &json!({}))?;
++    if let Some(fields) = inherited.as_object() {
++        for (key, value) in fields {
++            builtin[key] = value.clone();
++        }
++    }
++    Ok(builtin)
++}
++pub(super) fn enum_values(options: Vec<String>, nullable: bool) -> Vec<(Value, String)> {
++    let mut values = Vec::new();
++    if nullable {
++        values.push((Value::Null, "Use source/global quality".into()));
++    }
++    values.extend(
++        options
++            .into_iter()
++            .map(|option| (json!(option), super::inspector_panel::sentence(&option))),
++    );
++    values
++}
++pub(super) fn numeric_bounds(
++    db: &ara_schema::SchemaDb,
++    field: Option<&ara_schema::FieldDesc>,
++) -> String {
++    if let Some(crate::inspector::Widget::Number { min, max, step, .. }) =
++        field.map(|field| crate::inspector::widget(db, field))
++    {
++        let mut out = format!("step='{step}'");
++        if let Some(min) = min {
++            out.push_str(&format!(" min='{min}'"));
++        }
++        if let Some(max) = max {
++            out.push_str(&format!(" max='{max}'"));
++        }
++        out
++    } else {
++        String::new()
++    }
++}
++
++fn settings(importer: &str) -> ara_ui::Result<(Value, &'static str)> {
++    Ok(match importer {
++        "ara.texture" => (
++            ara_json::to_value(&ara_importers::TextureSettings::default())?,
++            "TextureSettings",
++        ),
++        "ara.audio" => (
++            ara_json::to_value(&ara_importers::audio::Settings::default())?,
++            "AudioImportSettings",
++        ),
++        "ara.gltf" | "ara.fbx" => (
++            ara_json::to_value(&ara_importers::MeshSettings::default())?,
++            "MeshSettings",
++        ),
++        _ => return Err(format!("Importer {importer} has no editable shared schema").into()),
++    })
++}
+diff --git a/crates/ara-editor/src/shell/import_batch/commands.rs b/crates/ara-editor/src/shell/import_batch/commands.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/shell/import_batch/commands.rs
+@@ -0,0 +1,146 @@
++//! One guarded typed batch; a failed sidecar validates before any document changes.
++use super::*;
++
++pub(super) fn apply(editor: &mut Editor, changes: Vec<Change>, why: &str) -> ara_ui::Result<bool> {
++    let revision = editor.host.store().revision();
++    let commands = lower(editor, changes)?;
++    if commands.is_empty() {
++        return Ok(false);
++    }
++    editor.apply(commands, why, Some(revision))?;
++    Ok(true)
++}
++
++pub(super) fn lower(editor: &Editor, changes: Vec<Change>) -> ara_ui::Result<Vec<Value>> {
++    let workspace = editor.host.store().workspace();
++    let mut patches =
++        BTreeMap::<String, (String, Value, Option<Option<ara_asset::CookPreset>>)>::new();
++    let mut project = serde_json::Map::new();
++    let policy = policy(editor)?;
++    let stored = serde_json::to_value(&policy.defaults)?;
++
++    for change in changes {
++        match &change {
++            Change::ProjectPreset(preset) => {
++                project.insert("preset".into(), json!(preset));
++                continue;
++            }
++            Change::Reset(importer) => {
++                project.insert("resetType".into(), json!(type_key(importer)?));
++                continue;
++            }
++            Change::ProjectField {
++                importer,
++                field,
++                value,
++            } => {
++                let kind = type_key(importer)?;
++                let mut current = project
++                    .get(kind)
++                    .cloned()
++                    .or_else(|| stored.get(kind).filter(|v| !v.is_null()).cloned())
++                    .unwrap_or(settings(importer)?.0);
++                if current.get(field).is_none() {
++                    return Err(
++                        "That importer default field is not part of the shared schema".into(),
++                    );
++                }
++                current[field] = value.clone();
++                project.insert(kind.into(), current);
++                continue;
++            }
++            _ => {}
++        }
++        let doc = match &change {
++            Change::Setting { doc, .. } | Change::Preset { doc, .. } => doc,
++            _ => return Err("Unexpected import policy edit".into()),
++        };
++        if !patches.contains_key(doc) {
++            let document = workspace
++                .doc(doc)
++                .filter(|doc| doc.kind == "import")
++                .ok_or("An import sidecar was removed or changed kind")?;
++            let source = workspace
++                .path_of(doc)
++                .map(|path| workspace.reference_path(path))
++                .and_then(|path| path.strip_suffix(".import.json"))
++                .ok_or("An import sidecar no longer has a source")?;
++            let record = document
++                .record("i_settings")
++                .ok_or("An import sidecar has no settings record")?;
++            let importer = record
++                .get("importer")
++                .and_then(Value::as_str)
++                .ok_or("An import sidecar has no importer identity")?;
++            let expected = ara_importers::commands::importer_for_source(source)
++                .map_err(|error| error.to_string())?;
++            if importer != expected {
++                return Err("An import sidecar changed importer; choose its files again".into());
++            }
++            let current = match record.get("settings") {
++                None | Some(Value::Null) => json!({}),
++                Some(Value::Object(settings)) => Value::Object(settings.clone()),
++                _ => return Err("An import sidecar has malformed settings".into()),
++            };
++            patches.insert(doc.clone(), (source.into(), current, None));
++        }
++        let (_, current, preset) = patches.get_mut(doc).ok_or("Import patch disappeared")?;
++        match change {
++            Change::Setting { field, value, .. } => {
++                current[&field] = value;
++            }
++            Change::Preset { preset: value, .. } => *preset = Some(value),
++            _ => return Err("Unexpected import policy edit".into()),
++        }
++    }
++    let mut commands = patches
++        .into_values()
++        .map(|(source, current, preset)| {
++            let mut args = json!({"source":source,"settings":current});
++            if let Some(preset) = preset {
++                match preset {
++                    Some(preset) => args["preset"] = json!(preset),
++                    None => args["useProjectPreset"] = json!(true),
++                }
++            }
++            json!({"cmd":"import.configure","args":args})
++        })
++        .collect::<Vec<_>>();
++    if !project.is_empty() {
++        commands.push(json!({"cmd":"import.project.configure","args":project}));
++    }
++    Ok(commands)
++}
++
++pub(super) fn policy(editor: &Editor) -> ara_ui::Result<ara_asset::ProjectImportSettings> {
++    let workspace = editor.host.store().workspace();
++    let doc = workspace
++        .docs()
++        .find(|(path, _)| *path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE)
++        .or_else(|| {
++            workspace
++                .docs()
++                .find(|(path, _)| *path == ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE)
++        })
++        .map(|(_, doc)| doc);
++    match doc {
++        None => Ok(ara_asset::ProjectImportSettings::default()),
++        Some(doc) => {
++            let record = doc
++                .record("pi_settings")
++                .ok_or("Project import policy has no pi_settings record")?;
++            let policy: ara_asset::ProjectImportSettings = serde_json::from_value(json!(record))?;
++            Ok(policy)
++        }
++    }
++}
++
++pub(super) fn type_key(importer: &str) -> ara_ui::Result<&'static str> {
++    match importer {
++        "ara.texture" | "texture" => Ok("texture"),
++        "ara.gltf" | "gltf" => Ok("gltf"),
++        "ara.fbx" | "fbx" => Ok("fbx"),
++        "ara.audio" | "audio" => Ok("audio"),
++        _ => Err("Choose an installed importer type".into()),
++    }
++}
+diff --git a/crates/ara-editor/src/shell/import_batch/defaults.rs b/crates/ara-editor/src/shell/import_batch/defaults.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/shell/import_batch/defaults.rs
+@@ -0,0 +1,113 @@
++//! Project scope uses the same reflected fields as per-source importers.
++use super::*;
++impl Shell {
++    pub(crate) fn import_defaults_open(&self) -> bool {
++        self.import_batch.defaults_open
++    }
++    pub(crate) fn import_defaults(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
++        self.commit_import_fields(editor)?;
++        self.import_batch.defaults_open = true;
++        if self.import_batch.default_type.is_empty() {
++            self.import_batch.default_type = "ara.texture".into();
++        }
++        self.menu = None;
++        editor.action("editor.palette", json!({"open":false}))?;
++        editor.action("editor.layout.show", json!({"panel":"inspector"}))?;
++        editor.action("editor.focus", json!({"panel":"inspector"}))?;
++        self.rebuild(editor)
++    }
++    pub(crate) fn close_import_defaults(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
++        self.commit_import_fields(editor)?;
++        self.import_batch.defaults_open = false;
++        self.rebuild(editor)
++    }
++    pub(crate) fn reset_import_defaults(
++        &mut self,
++        editor: &mut Editor,
++        target: &crate::shell::commands::Target,
++    ) -> ara_ui::Result<()> {
++        let importer = match target {
++            crate::shell::commands::Target::Text(value) => value.as_str(),
++            _ => self.import_batch.default_type.as_str(),
++        };
++        let importer = format!("ara.{}", commands::type_key(importer)?);
++        let prefix = format!("@import-batch|@default:{importer}|");
++        self.drafts.retain(|key, _| !key.starts_with(&prefix));
++        commands::apply(
++            editor,
++            vec![Change::Reset(importer)],
++            "Reset importer type defaults",
++        )?;
++        self.rebuild(editor)
++    }
++    pub(crate) fn import_defaults_panel(
++        &mut self,
++        editor: &Editor,
++        out: &mut String,
++    ) -> ara_ui::Result<()> {
++        let importer = self.import_batch.default_type.clone();
++        settings(&importer)?;
++        let policy = commands::policy(editor)?;
++        out.push_str("<scroll id='import-defaults-inspector' style='flex-grow:1;flex-basis:0px;min-height:0px;padding:8px;gap:8px'><text id='import-defaults-title' class='heading' text='Project import defaults' /><text id='import-defaults-scope' class='caption' style='white-space:normal' text='Explicit source fields take priority, then these typed defaults, then built-in importer values. Existing sources which inherit changed fields are reimported; each completed edit has one Undo.' />");
++        self.choice_button(
++            "import-defaults-type",
++            "Importer type",
++            choices::Select {
++                destination: choices::Destination::ImportGroup,
++                current: json!(importer),
++                options: ["ara.texture", "ara.gltf", "ara.fbx", "ara.audio"]
++                    .into_iter()
++                    .map(|value| (json!(value), view::label(value).into()))
++                    .collect(),
++            },
++            out,
++        );
++        self.choice_button(
++            "import-defaults-quality",
++            "Global texture quality",
++            choices::Select {
++                destination: choices::Destination::ImportBatch {
++                    group: "@project".into(),
++                    key: "$preset".into(),
++                },
++                current: json!(policy.preset),
++                options: vec![
++                    (json!("fast"), "Fast".into()),
++                    (json!("balanced"), "Balanced".into()),
++                    (json!("highQuality"), "High quality".into()),
++                ],
++            },
++            out,
++        );
++        self.import_fields(
++            editor,
++            &format!("@default:{importer}"),
++            &Group {
++                importer: importer.clone(),
++                sources: Vec::new(),
++                project: true,
++            },
++            out,
++        )?;
++        out.push_str(&self.bind_button(
++            "import-defaults-reset",
++            "Reset this type to built-in defaults",
++            Binding::Command(
++                "assets.import_defaults.reset",
++                crate::shell::commands::Target::Text(importer),
++            ),
++            "quiet",
++        ));
++        out.push_str(&self.bind_button(
++            "import-defaults-close",
++            "Back to selection",
++            Binding::Command(
++                "assets.import_defaults.close",
++                crate::shell::commands::Target::None,
++            ),
++            "quiet",
++        ));
++        out.push_str("</scroll>");
++        Ok(())
++    }
++}
+diff --git a/crates/ara-editor/src/shell/import_batch/tests.rs b/crates/ara-editor/src/shell/import_batch/tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/shell/import_batch/tests.rs
+@@ -0,0 +1,294 @@
++//! Real authority tests: cross-document atomicity and latest independent overrides.
++#![allow(clippy::unwrap_used)]
++use super::*;
++use std::{
++    path::PathBuf,
++    sync::atomic::{AtomicU64, Ordering},
++};
++
++struct Project(PathBuf);
++impl Project {
++    fn new() -> Self {
++        static NEXT: AtomicU64 = AtomicU64::new(0);
++        let root = std::path::absolute(crate::test_target())
++            .unwrap()
++            .join("import-batch")
++            .join(format!(
++                "{}-{}",
++                std::process::id(),
++                NEXT.fetch_add(1, Ordering::Relaxed)
++            ));
++        std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT)).unwrap();
++        std::fs::write(root.join("ara.project.json"),ara_json::to_canonical_string(&json!({"layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION,"name":"Import batch","main":"main.scene"}))).unwrap();
++        std::fs::write(
++            root.join(ara_doc::AUTHORING_ROOT).join("main.scene"),
++            ara_json::to_canonical_string(
++                &json!({"$schema":"ara://schema/scene/1","id":"sc_importbatch","records":{}}),
++            ),
++        )
++        .unwrap();
++        Self(root)
++    }
++    fn open(&self) -> Editor {
++        let mut editor =
++            Editor::open_with(&self.0, Some(self.0.join(".ara/test-user.json"))).unwrap();
++        editor.apply(vec![
++            json!({"cmd":"import.initialize","args":{"source":"a.png","id":"as_batcha","settings":{"maxDimension":512,"mipmaps":true}}}),
++            json!({"cmd":"import.initialize","args":{"source":"b.png","id":"as_batchb","settings":{"maxDimension":2048,"mipmaps":false}}}),
++            json!({"cmd":"import.initialize","args":{"source":"other.wav","id":"as_batchc","settings":{"opusBitrate":128000}}}),
++        ],"Create typed import batch fixture",None).unwrap();
++        editor
++    }
++}
++impl Drop for Project {
++    fn drop(&mut self) {
++        assert!(
++            self.0
++                .starts_with(std::path::absolute(crate::test_target()).unwrap())
++        );
++        let _ = std::fs::remove_dir_all(&self.0);
++    }
++}
++fn records(editor: &Editor) -> Value {
++    let workspace = editor.host.store().workspace();
++    json!([
++        workspace.doc("as_batcha").unwrap().records(),
++        workspace.doc("as_batchb").unwrap().records(),
++        workspace.doc("as_batchc").unwrap().records()
++    ])
++}
++fn setting(doc: &str, field: &str, value: Value) -> Change {
++    Change::Setting {
++        doc: doc.into(),
++        field: field.into(),
++        value,
++    }
++}
++
++#[test]
++fn independent_mixed_sources_commit_one_transaction_and_one_undo_redo() {
++    let project = Project::new();
++    let mut editor = project.open();
++    let before = records(&editor);
++    let revision = editor.host.store().revision();
++    commands::apply(
++        &mut editor,
++        vec![
++            setting("as_batcha", "flipNormalY", json!(true)),
++            setting("as_batchb", "flipNormalY", json!(true)),
++        ],
++        "Batch flip normals",
++    )
++    .unwrap();
++    let after = records(&editor);
++    assert_eq!(editor.host.store().revision(), revision + 1);
++    assert_eq!(after[0]["i_settings"]["settings"]["maxDimension"], 512);
++    assert_eq!(after[1]["i_settings"]["settings"]["maxDimension"], 2048);
++    assert_eq!(after[0]["i_settings"]["settings"]["mipmaps"], true);
++    assert_eq!(after[1]["i_settings"]["settings"]["mipmaps"], false);
++    assert_eq!(after[2], before[2], "incompatible audio type untouched");
++    editor.action("history.undo", json!({})).unwrap();
++    assert_eq!(records(&editor), before);
++    editor.action("history.redo", json!({})).unwrap();
++    assert_eq!(records(&editor), after);
++}
++
++#[test]
++fn latest_other_field_change_is_preserved_and_invalid_member_rolls_back_every_source() {
++    let project = Project::new();
++    let mut editor = project.open();
++    editor.apply(vec![json!({"cmd":"import.configure","args":{"source":"b.png","settings":{"maxDimension":4096,"mipmaps":false}}})],
++        "Concurrent independent import setting",None).unwrap();
++    commands::apply(
++        &mut editor,
++        vec![
++            setting("as_batcha", "flipNormalY", json!(true)),
++            setting("as_batchb", "flipNormalY", json!(true)),
++        ],
++        "Batch after independent change",
++    )
++    .unwrap();
++    assert_eq!(
++        records(&editor)[1]["i_settings"]["settings"]["maxDimension"],
++        4096
++    );
++    let before = records(&editor);
++    let revision = editor.host.store().revision();
++    assert!(
++        commands::apply(
++            &mut editor,
++            vec![
++                setting("as_batcha", "mipmaps", json!(false)),
++                setting("as_batchb", "maxDimension", json!(0))
++            ],
++            "Reject complete batch"
++        )
++        .is_err()
++    );
++    assert_eq!(records(&editor), before);
++    assert_eq!(editor.host.store().revision(), revision);
++}
++
++#[test]
++fn deleted_sidecar_rejects_batch_and_preset_inheritance_is_one_atomic_edit() {
++    let project = Project::new();
++    let mut editor = project.open();
++    let before = records(&editor);
++    commands::apply(
++        &mut editor,
++        vec![
++            Change::Preset {
++                doc: "as_batcha".into(),
++                preset: Some(ara_asset::CookPreset::Fast),
++            },
++            Change::Preset {
++                doc: "as_batchb".into(),
++                preset: Some(ara_asset::CookPreset::Fast),
++            },
++        ],
++        "Batch quality",
++    )
++    .unwrap();
++    editor.action("history.undo", json!({})).unwrap();
++    assert_eq!(records(&editor), before);
++    let revision = editor.host.store().revision();
++    assert!(
++        commands::apply(
++            &mut editor,
++            vec![
++                setting("as_batcha", "mipmaps", json!(false)),
++                setting("as_missing", "mipmaps", json!(false))
++            ],
++            "Reject deleted reference"
++        )
++        .is_err()
++    );
++    assert_eq!(records(&editor), before);
++    assert_eq!(editor.host.store().revision(), revision);
++}
++
++struct Clip;
++impl ara_ui_text::Clipboard for Clip {
++    fn read(&mut self) -> ara_ui_text::Result<String> {
++        Ok(String::new())
++    }
++    fn write(&mut self, _: &str) -> ara_ui_text::Result<()> {
++        Ok(())
++    }
++}
++fn click(shell: &mut Shell, editor: &mut Editor, id: &str) {
++    let node = &shell.ui.nodes[shell.shown_node(id).unwrap()];
++    let rect = node.rect.intersection(node.clip);
++    assert!(
++        rect.w > 1. && rect.h >= node.rect.h * 0.75,
++        "{id}: {:?}, clip {:?}",
++        node.rect,
++        node.clip
++    );
++    let point = [rect.x + rect.w * 0.5, rect.y + rect.h * 0.5];
++    shell
++        .event(ara_ui::input::InputEvent::PointerDown(point), &mut Clip)
++        .unwrap();
++    shell
++        .event(ara_ui::input::InputEvent::PointerUp(point), &mut Clip)
++        .unwrap();
++    shell.dispatch(editor).unwrap();
++    shell.frame().unwrap();
++}
++#[test]
++fn mounted_multi_selection_type_select_and_mixed_toggle_use_the_real_input_path() {
++    let project = Project::new();
++    let mut editor = project.open();
++    let mut shell = Shell::new(&mut editor, [1200., 900.]).unwrap();
++    shell.offscreen = true;
++    let (browser, mut publication) = assets::scan_fixture::controlled(ara_doc::AUTHORING_ROOT);
++    shell.browser = browser;
++    let items = [("a.png", "png"), ("b.png", "png"), ("other.wav", "wav")]
++        .into_iter()
++        .map(|(logical, kind)| {
++            let mut asset = assets::Asset::unindexed(
++                format!("{}/{logical}", ara_doc::AUTHORING_ROOT),
++                kind.into(),
++            );
++            asset.authored_path = Some(logical.into());
++            asset
++        })
++        .collect::<Vec<_>>();
++    let keys = items
++        .iter()
++        .map(|asset| ara_ui::source::stable_id(&asset.path))
++        .collect::<Vec<_>>();
++    let primary = items[0].path.clone();
++    let generation = publication.start();
++    publication.publish(generation, items).unwrap();
++    assert!(shell.poll_assets());
++    editor
++        .action(
++            "editor.workspace",
++            json!({"asset":primary,"folder":ara_doc::AUTHORING_ROOT,"grid":false}),
++        )
++        .unwrap();
++    shell.asset_selection.set_selected(keys);
++    shell.asset_selection_path = editor.state.asset_path.clone();
++    shell.rebuild(&mut editor).unwrap();
++    shell.frame().unwrap();
++    click(&mut shell, &mut editor, "import-batch-type");
++    shell.key(&mut editor, 77, true, &mut Clip).unwrap();
++    shell.key(&mut editor, 40, true, &mut Clip).unwrap();
++    shell.frame().unwrap();
++    assert_eq!(shell.import_batch.filter.as_deref(), Some("ara.texture"));
++    assert!(shell.shown_node("import-batch-mipmaps-mixed").is_some());
++    let before = records(&editor);
++    let revision = editor.host.store().revision();
++    click(&mut shell, &mut editor, "import-batch-mipmaps");
++    let after = records(&editor);
++    assert_eq!(editor.host.store().revision(), revision + 1);
++    assert_eq!(after[0]["i_settings"]["settings"]["mipmaps"], true);
++    assert_eq!(after[1]["i_settings"]["settings"]["mipmaps"], true);
++    assert_eq!(after[0]["i_settings"]["settings"]["maxDimension"], 512);
++    assert_eq!(after[1]["i_settings"]["settings"]["maxDimension"], 2048);
++    assert_eq!(after[2], before[2]);
++    editor.action("history.undo", json!({})).unwrap();
++    assert_eq!(records(&editor), before);
++}
++
++#[test]
++fn schema_driven_project_fields_update_one_type_and_reset_is_one_undo() {
++    let project = Project::new();
++    let mut editor = project.open();
++    let mut shell = Shell::new(&mut editor, [1200., 900.]).unwrap();
++    shell.offscreen = true;
++    shell.import_defaults(&mut editor).unwrap();
++    shell.frame().unwrap();
++    assert!(shell.shown_node("import-defaults-inspector").is_some());
++    shell
++        .import_batch_value(
++            &mut editor,
++            "@default:ara.audio",
++            "opusBitrate",
++            json!(96000),
++        )
++        .unwrap();
++    let policy = commands::policy(&editor).unwrap();
++    assert_eq!(policy.defaults.audio.unwrap().opus_bitrate, 96000);
++    assert!(policy.defaults.texture.is_none());
++    let revision = editor.host.store().revision();
++    shell
++        .reset_import_defaults(
++            &mut editor,
++            &crate::shell::commands::Target::Text("audio".into()),
++        )
++        .unwrap();
++    assert_eq!(editor.host.store().revision(), revision + 1);
++    assert!(commands::policy(&editor).unwrap().defaults.audio.is_none());
++    editor.action("history.undo", json!({})).unwrap();
++    assert_eq!(
++        commands::policy(&editor)
++            .unwrap()
++            .defaults
++            .audio
++            .unwrap()
++            .opus_bitrate,
++        96000
++    );
++}
+diff --git a/crates/ara-editor/src/shell/import_batch/view.rs b/crates/ara-editor/src/shell/import_batch/view.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-editor/src/shell/import_batch/view.rs
+@@ -0,0 +1,317 @@
++//! Type-filtered multi-edit without taking values from a representative source.
++use super::*;
++
++impl Shell {
++    pub(super) fn multi_import_panel(
++        &mut self,
++        editor: &Editor,
++        out: &mut String,
++    ) -> ara_ui::Result<bool> {
++        let selected = self.asset_selection.selected();
++        let primary = editor.state.asset_path.as_deref();
++        if selected.len() < 2
++            || primary.is_none_or(|path| !selected.contains(&ara_ui::source::stable_id(path)))
++        {
++            return Ok(false);
++        }
++        let workspace = editor.host.store().workspace();
++        let mut groups = BTreeMap::<String, Group>::new();
++        let mut skipped = 0;
++        for asset in &self.browser.items {
++            if !selected.contains(&ara_ui::source::stable_id(&asset.path)) {
++                continue;
++            }
++            let Some(source) = asset.authored_path.as_deref() else {
++                skipped += 1;
++                continue;
++            };
++            let Some(doc) = crate::asset_tools::paths::import_document(workspace, source) else {
++                skipped += 1;
++                continue;
++            };
++            let Some(record) = doc.record("i_settings") else {
++                skipped += 1;
++                continue;
++            };
++            let importer = record
++                .get("importer")
++                .and_then(Value::as_str)
++                .ok_or("A selected import has no importer identity")?;
++            if settings(importer).is_err() {
++                skipped += 1;
++                continue;
++            }
++            groups
++                .entry(importer.into())
++                .or_insert_with(|| Group {
++                    importer: importer.into(),
++                    sources: Vec::new(),
++                    project: false,
++                })
++                .sources
++                .push(Source {
++                    doc: doc.id.to_string(),
++                    source: source.into(),
++                });
++        }
++        let mut captured = BTreeMap::new();
++        for (_, mut group) in groups {
++            group.sources.sort_by(|a, b| a.doc.cmp(&b.doc));
++            let signature = group
++                .sources
++                .iter()
++                .map(|source| format!("{}:{}", source.doc, source.source))
++                .collect::<Vec<_>>()
++                .join("|");
++            let token = format!(
++                "{}-{:x}",
++                group.importer,
++                ara_ui::source::stable_id(&signature)
++            );
++            captured.insert(token, group);
++        }
++        self.import_batch.groups = captured;
++        if self.import_batch.filter.as_ref().is_none_or(|filter| {
++            !self
++                .import_batch
++                .groups
++                .values()
++                .any(|group| &group.importer == filter)
++        }) {
++            self.import_batch.filter = self
++                .import_batch
++                .groups
++                .values()
++                .next()
++                .map(|group| group.importer.clone());
++        }
++        out.push_str("<scroll id='import-inspector' style='flex-grow:1;flex-basis:0px;min-height:0px;padding:8px;gap:8px'>");
++        out.push_str(&format!("<text id='import-batch-title' class='heading' text='{} selected sources' /><text id='import-batch-scope' class='caption' style='white-space:normal' text='Edit one compatible importer type at a time. Changes apply to every source in that type in one undoable transaction. {skipped} selected files have no editable import sidecar.' />",selected.len()));
++        if self.import_batch.groups.is_empty() {
++            out.push_str("<text id='import-batch-empty' class='caption' style='white-space:normal' text='Import the selected source files first, then edit their shared settings.' /></scroll>");
++            return Ok(true);
++        }
++        let options = self
++            .import_batch
++            .groups
++            .values()
++            .map(|group| {
++                (
++                    json!(group.importer),
++                    format!(
++                        "{} ({} sources)",
++                        label(&group.importer),
++                        group.sources.len()
++                    ),
++                )
++            })
++            .collect();
++        self.choice_button(
++            "import-batch-type",
++            "Compatible importer",
++            choices::Select {
++                destination: choices::Destination::ImportGroup,
++                current: json!(self.import_batch.filter),
++                options,
++            },
++            out,
++        );
++        let (token, group) = self
++            .import_batch
++            .groups
++            .iter()
++            .find(|(_, group)| Some(&group.importer) == self.import_batch.filter.as_ref())
++            .map(|(token, group)| (token.clone(), group.clone()))
++            .ok_or("Compatible import group disappeared")?;
++        out.push_str(&format!("<text id='import-batch-targets' class='caption' style='white-space:normal' text='Editing {} {} sources; other selected types remain unchanged.' />",group.sources.len(),escape(label(&group.importer))));
++        self.import_fields(editor, &token, &group, out)?;
++        let presets = group
++            .sources
++            .iter()
++            .map(|source| {
++                workspace
++                    .doc(&source.doc)
++                    .and_then(|doc| doc.record("i_settings"))
++                    .and_then(|r| r.get("preset"))
++                    .cloned()
++                    .unwrap_or(Value::Null)
++            })
++            .collect::<Vec<_>>();
++        let preset = presets
++            .first()
++            .filter(|first| presets.iter().all(|value| value == *first))
++            .cloned()
++            .unwrap_or(json!("mixed"));
++        self.choice_button(
++            "import-batch-preset",
++            if preset == "mixed" {
++                "Quality (mixed)"
++            } else {
++                "Cook quality"
++            },
++            choices::Select {
++                destination: choices::Destination::ImportBatch {
++                    group: token,
++                    key: "$preset".into(),
++                },
++                current: preset,
++                options: vec![
++                    (Value::Null, "Use project/default quality".into()),
++                    (json!("fast"), "Fast".into()),
++                    (json!("balanced"), "Balanced".into()),
++                    (json!("highQuality"), "High quality".into()),
++                ],
++            },
++            out,
++        );
++        out.push_str(&self.bind_button(
++            "import-batch-defaults",
++            "Project texture quality…",
++            Binding::Command(
++                "assets.import_defaults",
++                super::super::commands::Target::None,
++            ),
++            "quiet",
++        ));
++        out.push_str("</scroll>");
++        Ok(true)
++    }
++    pub(super) fn import_fields(
++        &mut self,
++        editor: &Editor,
++        token: &str,
++        group: &Group,
++        out: &mut String,
++    ) -> ara_ui::Result<()> {
++        let workspace = editor.host.store().workspace();
++        let (mut defaults, schema) = settings(&group.importer)?;
++        let policy = commands::policy(editor)?;
++        let inherited = policy.effective_settings(&group.importer, &json!({}))?;
++        if let Some(inherited) = inherited.as_object() {
++            for (key, value) in inherited {
++                defaults[key] = value.clone();
++            }
++        }
++        let db = editor.host.store().schema();
++        let fields = db
++            .get(schema)
++            .ok_or("Installed importer schema unavailable")?
++            .fields();
++        let defaults = defaults
++            .as_object()
++            .ok_or("Importer defaults are not an object")?;
++        for (key, default) in defaults {
++            if group.importer == "ara.fbx" && key == "opacityMaps" {
++                continue;
++            }
++            let metadata = fields
++                .iter()
++                .find(|field| field.name == *key)
++                .ok_or("Shared importer field is not reflected")?;
++            let mut common = group.project.then_some(default);
++            let mut mixed = false;
++            for source in &group.sources {
++                let current = workspace
++                    .doc(&source.doc)
++                    .and_then(|doc| doc.record("i_settings"))
++                    .and_then(|record| record.get("settings"))
++                    .and_then(|settings| settings.get(key))
++                    .unwrap_or(default);
++                match common {
++                    None => common = Some(current),
++                    Some(old) if old != current => mixed = true,
++                    _ => {}
++                }
++            }
++            let value = if mixed {
++                Value::Null
++            } else {
++                common.cloned().unwrap_or_else(|| default.clone())
++            };
++            let id = format!("import-batch-{key}");
++            let name = super::super::inspector_panel::sentence(key);
++            let help = if mixed {
++                format!(
++                    "{} Mixed values across {} sources; editing sets all compatible sources.",
++                    metadata.doc,
++                    group.sources.len()
++                )
++            } else {
++                metadata.doc.clone()
++            };
++            out.push_str(&format!("<panel id='{id}-row' class='prop-row'><panel id='{id}-label-cell' class='prop-label' style='width:42%'><text id='{id}-label' text='{}' description='{}' /></panel><panel id='{id}-value' class='prop-value'>",escape(&name),escape(&help)));
++            self.bindings.insert(
++                ara_ui::source::stable_id(&id),
++                Binding::ImportBatchField(token.to_owned(), key.clone()),
++            );
++            match crate::inspector::widget(db, metadata) {
++                crate::inspector::Widget::Bool => {
++                    out.push_str(&format!("<toggle id='{id}' checked='{}' label='{}' description='{}' action='Dispatch' />",value.as_bool().unwrap_or(false),escape(&name),escape(&help)));
++                }
++                crate::inspector::Widget::Enum { options } => self.choice_button(
++                    &format!("{id}-options"),
++                    &if mixed {
++                        "Mixed values".into()
++                    } else {
++                        name.clone()
++                    },
++                    choices::Select {
++                        destination: choices::Destination::ImportBatch {
++                            group: token.to_owned(),
++                            key: key.clone(),
++                        },
++                        options: enum_values(
++                            options,
++                            matches!(&metadata.ty, ara_schema::ValueType::Option(_)),
++                        ),
++                        current: value,
++                    },
++                    out,
++                ),
++                widget => {
++                    let bounds = match widget {
++                        crate::inspector::Widget::Number { min, max, step, .. } => {
++                            let mut bounds = format!("class='number' step='{step}'");
++                            if let Some(min) = min {
++                                bounds.push_str(&format!(" min='{min}'"));
++                            }
++                            if let Some(max) = max {
++                                bounds.push_str(&format!(" max='{max}'"));
++                            }
++                            bounds
++                        }
++                        _ => String::new(),
++                    };
++                    let text = self
++                        .drafts
++                        .get(&format!("@import-batch|{token}|{key}"))
++                        .cloned()
++                        .unwrap_or_else(|| {
++                            if mixed {
++                                String::new()
++                            } else {
++                                panels::display(&value)
++                            }
++                        });
++                    out.push_str(&format!("<field id='{id}' {bounds} style='flex-grow:1;flex-basis:0px' text='{}' placeholder='{}' label='{}' description='{}' action='Dispatch' />",escape(&text),if mixed{"Mixed values"}else{""},escape(&name),escape(&help)));
++                }
++            }
++            if mixed {
++                out.push_str(&format!(
++                    "<text id='{id}-mixed' class='caption' text='Mixed' />"
++                ));
++            }
++            out.push_str("</panel></panel>");
++        }
++        Ok(())
++    }
++}
++pub(super) fn label(importer: &str) -> &str {
++    match importer {
++        "ara.texture" => "Texture",
++        "ara.gltf" => "glTF model",
++        "ara.fbx" => "FBX model",
++        "ara.audio" => "Audio",
++        _ => importer,
++    }
++}
+diff --git a/crates/ara-editor/src/shell/import_panel.rs b/crates/ara-editor/src/shell/import_panel.rs
+--- a/crates/ara-editor/src/shell/import_panel.rs
++++ b/crates/ara-editor/src/shell/import_panel.rs
+@@ -7,6 +7,9 @@
+ mod namespace;
+ impl Shell {
+     pub(super) fn import_panel(&mut self, editor: &Editor, out: &mut String) -> ara_ui::Result<()> {
++        if self.multi_import_panel(editor, out)? {
++            return Ok(());
++        }
+         let path = editor
+             .state
+             .asset_path
+@@ -98,6 +101,7 @@
+                     "MeshSettings",
+                 ),
+             };
++            let defaults = import_batch::inherited_defaults(editor, &settings.importer, defaults)?;
+             let db = editor.host.store().schema();
+             let metadata = db.get(schema).and_then(|ty| {
+                 if let ara_schema::Shape::Struct { fields, .. } = &ty.shape {
+@@ -108,6 +112,9 @@
+             });
+             if let Some(fields) = defaults.as_object() {
+                 for (key, default) in fields {
++                    if settings.importer == "ara.fbx" && key == "opacityMaps" {
++                        continue;
++                    }
+                     let value = settings.settings.get(key).unwrap_or(default);
+                     let id = format!("import-setting-{key}");
+                     let desc = metadata.and_then(|fields| fields.iter().find(|f| f.name == *key));
+@@ -141,12 +148,12 @@
+                                     doc: doc.id.to_string(),
+                                     key: key.clone(),
+                                 },
+-                                options: options
+-                                    .iter()
+-                                    .map(|option| {
+-                                        (json!(option), super::inspector_panel::sentence(option))
+-                                    })
+-                                    .collect(),
++                                options: import_batch::enum_values(
++                                    options,
++                                    desc.is_some_and(|field| {
++                                        matches!(&field.ty, ara_schema::ValueType::Option(_))
++                                    }),
++                                ),
+                                 current: value.clone(),
+                             },
+                             out,
+@@ -164,20 +171,32 @@
+                                     _ => panels::display(value),
+                                 }
+                             });
+-                        out.push_str(&format!("<field id='{id}' class='{}' style='flex-grow:1;flex-basis:0px' text='{}' action='Dispatch' label='{}' description='{}' />",if value.is_number(){"number"}else{""},escape(&draft),escape(&name),escape(help)));
++                        let bounds = import_batch::numeric_bounds(db, desc);
++                        out.push_str(&format!("<field id='{id}' class='{}' {bounds} style='flex-grow:1;flex-basis:0px' text='{}' action='Dispatch' label='{}' description='{}' />",if value.is_number(){"number"}else{""},escape(&draft),escape(&name),escape(help)));
+                     }
+                     out.push_str("</panel></panel>");
+                 }
+             }
+-            out.push_str(&format!("<panel id='import-quality-row' class='prop-row'><panel id='import-quality-label-cell' class='prop-label' style='width:{label}px'><text id='import-quality-label' text='Quality' description='Final cook quality: Fast iterates, High quality ships' /></panel><panel id='import-quality-value' class='prop-value'><panel id='import-quality' class='segment'>"));
+-            for (preset, name) in [
+-                (ara_asset::CookPreset::Fast, "Fast"),
+-                (ara_asset::CookPreset::Balanced, "Balanced"),
+-                (ara_asset::CookPreset::HighQuality, "High"),
+-            ] {
+-                out.push_str(&self.bind_button(&format!("import-quality-{preset:?}"),name,Binding::ResourceContent(doc.id.to_string(),vec![json!({"cmd":"import.configure","args":{"source":source,"preset":preset}})],"Change import quality".into()),if Some(preset)==settings.preset{"segment-button selected"}else{"segment-button"}));
+-            }
+-            out.push_str("</panel></panel></panel><panel id='import-actions' class='row' style='flex-shrink:0;padding:8px;padding-left:12px'>");
++            out.push_str(&format!("<panel id='import-quality-row' class='prop-row'><panel id='import-quality-label-cell' class='prop-label' style='width:{label}px'><text id='import-quality-label' text='Quality' description='Source cook quality; absent follows project/default quality' /></panel><panel id='import-quality-value' class='prop-value'>"));
++            self.choice_button(
++                "import-quality",
++                "Cook quality",
++                choices::Select {
++                    destination: choices::Destination::ImportBatch {
++                        group: format!("@source:{}", doc.id),
++                        key: "$preset".into(),
++                    },
++                    current: json!(settings.preset),
++                    options: vec![
++                        (Value::Null, "Use project/default quality".into()),
++                        (json!("fast"), "Fast".into()),
++                        (json!("balanced"), "Balanced".into()),
++                        (json!("highQuality"), "High quality".into()),
++                    ],
++                },
++                out,
++            );
++            out.push_str("</panel></panel><panel id='import-actions' class='row' style='flex-shrink:0;padding:8px;padding-left:12px'>");
+             out.push_str(&self.bind_button(
+                 "asset-reimport",
+                 "Reimport",
+@@ -273,49 +292,31 @@
+         let keys = self
+             .drafts
+             .keys()
+-            .filter(|k| k.starts_with("@import|"))
++            .filter(|k| k.starts_with("@import|") || k.starts_with("@import-batch|"))
+             .cloned()
+             .collect::<Vec<_>>();
+         if keys.is_empty() {
+             return Ok(false);
+         }
+-        // Per sidecar document: its source path and the edited settings object.
+-        let mut documents = BTreeMap::<String, (String, Value)>::new();
++        let mut changes = Vec::new();
+         for key in &keys {
+             let mut parts = key.split('|');
+-            let _ = parts.next();
++            let kind = parts.next().ok_or("invalid import draft kind")?;
+             let doc = parts.next().ok_or("invalid import draft")?;
+             let field = parts.next().ok_or("invalid import field")?;
+-            if !documents.contains_key(doc) {
+-                let workspace = editor.host.store().workspace();
+-                let source = workspace
+-                    .path_of(doc)
+-                    .map(|path| workspace.reference_path(path))
+-                    .and_then(|p| p.strip_suffix(".import.json"))
+-                    .ok_or("import document disappeared")?
+-                    .to_owned();
+-                let settings = workspace
+-                    .doc(doc)
+-                    .and_then(|d| d.record("i_settings"))
+-                    .and_then(|r| r.get("settings"))
+-                    .filter(|s| s.is_object())
+-                    .cloned()
+-                    .unwrap_or_else(|| json!({}));
+-                documents.insert(doc.into(), (source, settings));
+-            }
+-            let (_, settings) = documents.get_mut(doc).ok_or("import draft missing")?;
+             let text = self.drafts.get(key).ok_or("import draft missing")?;
+-            settings[field] = serde_json::from_str(text).unwrap_or_else(|_| json!(text));
+-        }
+-        for (doc, (source, settings)) in documents {
+-            editor.apply_to(
+-                &doc,
+-                vec![
+-                    json!({"cmd":"import.configure","args":{"source":source,"settings":settings}}),
+-                ],
+-                "Edit importer settings",
+-            )?;
+-        }
++            let value = serde_json::from_str(text).unwrap_or_else(|_| json!(text));
++            if kind == "@import-batch" {
++                changes.extend(self.import_batch_changes(doc, field, value)?);
++            } else {
++                changes.push(import_batch::Change::Setting {
++                    doc: doc.into(),
++                    field: field.into(),
++                    value,
++                });
++            }
++        }
++        import_batch::apply_changes(editor, changes, "Edit importer settings")?;
+         for key in keys {
+             self.drafts.remove(&key);
+         }
+diff --git a/crates/ara-editor/src/shell/input.rs b/crates/ara-editor/src/shell/input.rs
+--- a/crates/ara-editor/src/shell/input.rs
++++ b/crates/ara-editor/src/shell/input.rs
+@@ -543,10 +543,14 @@
+                                 .map(str::to_owned)
+                                 .unwrap_or_else(|| action.value.to_string()),
+                         );
+-                        if action.value.is_boolean() {
++                        if action.value.is_boolean() || action.value.is_number() {
+                             self.commit_import_fields(editor)?;
+                             rebuild = true;
+                         }
++                    }
++                    Binding::ImportBatchField(group, key) => {
++                        rebuild |=
++                            self.import_batch_field(editor, group, key, action.value.clone())?;
+                     }
+                     Binding::Scrub(_, _) => {}
+                     Binding::NestedScrub { .. } => {}
+diff --git a/crates/ara-editor/src/shell/inspector_panel.rs b/crates/ara-editor/src/shell/inspector_panel.rs
+--- a/crates/ara-editor/src/shell/inspector_panel.rs
++++ b/crates/ara-editor/src/shell/inspector_panel.rs
+@@ -52,6 +52,9 @@
+         editor: &mut Editor,
+         out: &mut String,
+     ) -> ara_ui::Result<()> {
++        if self.import_defaults_open() {
++            return self.import_defaults_panel(editor, out);
++        }
+         if editor.state.focus == "material" {
+             return self.material_inspector(editor, out);
+         }
+diff --git a/crates/ara-editor/src/shell/mod.rs b/crates/ara-editor/src/shell/mod.rs
+--- a/crates/ara-editor/src/shell/mod.rs
++++ b/crates/ara-editor/src/shell/mod.rs
+@@ -58,6 +58,7 @@
+ mod hierarchy_actions;
+ mod hierarchy_filters;
+ mod history_panel;
++mod import_batch;
+ mod import_panel;
+ #[cfg(test)]
+ mod inspector_capture;
+@@ -342,6 +343,7 @@
+     resolver: crate::world::SceneResolver,
+     /// The import settings `document_view` shares across revisions.
+     import_settings: crate::world::ImportsCache,
++    import_batch: import_batch::State,
+     /// The (document, store revision, workspace generation) `resolved` last answered.
+     resolved_key: Option<(String, u64, u64)>,
+     tooltip_text: Option<String>,
+@@ -450,6 +452,7 @@
+     AssetRenameValue,
+     ResourceContent(String, Vec<Value>, String),
+     ImportField(String, String),
++    ImportBatchField(String, String),
+     ResourceText(String, String),
+     ResourceApply,
+     PreviewShape(bool),
+@@ -672,6 +675,7 @@
+             built: (u64::MAX, u64::MAX),
+             resolver: Default::default(),
+             import_settings: Default::default(),
++            import_batch: Default::default(),
+             resolved_key: None,
+             tooltip_text: None,
+             tooltip_target: None,
+diff --git a/crates/ara-hub-service/tests/registry.rs b/crates/ara-hub-service/tests/registry.rs
+--- a/crates/ara-hub-service/tests/registry.rs
++++ b/crates/ara-hub-service/tests/registry.rs
+@@ -54,6 +54,7 @@
+     .expect("marker");
+     let text = ProjectImportSettings {
+         preset: CookPreset::HighQuality,
++        ..Default::default()
+     }
+     .canonical_text()
+     .expect("canonical");
+diff --git a/crates/ara-import-worker/tests/process.rs b/crates/ara-import-worker/tests/process.rs
+--- a/crates/ara-import-worker/tests/process.rs
++++ b/crates/ara-import-worker/tests/process.rs
+@@ -47,6 +47,7 @@
+         root.path().join(PROJECT_IMPORT_SETTINGS_FILE),
+         ProjectImportSettings {
+             preset: CookPreset::HighQuality,
++            ..Default::default()
+         }
+         .canonical_text()
+         .unwrap(),
+diff --git a/crates/ara-importers/src/audio.rs b/crates/ara-importers/src/audio.rs
+--- a/crates/ara-importers/src/audio.rs
++++ b/crates/ara-importers/src/audio.rs
+@@ -6,63 +6,12 @@
+     Artifact, ArtifactKind, Error, ImportContext, ImportInput, ImportOutput, Importer,
+ };
+ use ara_audio::importer::{AudioUse, CookCodec, CookSettings, Importer as _};
+-use ara_schema::Schema;
+-use serde::{Deserialize, Serialize};
+ use serde_json::{Value, json};
+ 
+-/// Audio use selects resident effects or streamed music/dialogue.
+-#[derive(Debug, Clone, Copy, Default, Schema, Serialize, Deserialize)]
+-#[ara(module = "asset", name = "AudioImportUse")]
+-#[serde(rename_all = "camelCase")]
+-pub enum Usage {
+-    /// Resident sound effect.
+-    #[default]
+-    ShortEffect,
+-    /// Streamed music encoded as Opus.
+-    Music,
+-    /// Streamed dialogue encoded as Opus.
+-    Dialogue,
+-}
+-
+-/// Codec for resident sound effects; streamed audio always uses Opus.
+-#[derive(Debug, Clone, Copy, Default, Schema, Serialize, Deserialize)]
+-#[ara(module = "asset", name = "AudioEffectCodec")]
+-#[serde(rename_all = "camelCase")]
+-pub enum EffectCodec {
+-    /// Signed 16-bit PCM.
+-    #[default]
+-    Pcm,
+-    /// IMA ADPCM.
+-    Adpcm,
+-}
+-
+-/// Audio sidecar settings, validated identically by authoring commands and workers.
+-#[derive(Debug, Clone, Schema, Serialize, Deserialize)]
+-#[ara(module = "asset", name = "AudioImportSettings")]
+-#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+-pub struct Settings {
+-    /// Resident effect, streamed music or streamed dialogue.
+-    pub usage: Usage,
+-    /// Codec for resident effects.
+-    pub codec: EffectCodec,
+-    /// Stereo Opus bitrate for music/dialogue, in bits per second.
+-    #[ara(default = 128000, range(min = 6000, max = 512000))]
+-    pub opus_bitrate: i32,
+-    /// Resident decoded PCM budget in bytes; streamed cooking uses bounded blocks.
+-    #[ara(default = 67108864, range(min = 65536))]
+-    pub decoded_budget: u64,
+-}
+-impl Default for Settings {
+-    fn default() -> Self {
+-        let defaults = CookSettings::default();
+-        Self {
+-            usage: Usage::default(),
+-            codec: EffectCodec::default(),
+-            opus_bitrate: defaults.opus_bitrate,
+-            decoded_budget: defaults.decoded_budget as u64,
+-        }
+-    }
+-}
++/// Shared reflected audio import policy.
++pub use ara_asset::{
++    AudioEffectCodec as EffectCodec, AudioImportSettings as Settings, AudioImportUse as Usage,
++};
+ 
+ /// The `ara.audio` importer.
+ pub struct AudioAsset {
+diff --git a/crates/ara-importers/src/commands.rs b/crates/ara-importers/src/commands.rs
+--- a/crates/ara-importers/src/commands.rs
++++ b/crates/ara-importers/src/commands.rs
+@@ -7,6 +7,8 @@
+ use ara_schema::{AssetRef, Schema, SchemaDb, Validator};
+ use serde::Deserialize;
+ use serde_json::{Value, json};
++#[cfg(test)]
++mod project_defaults_tests;
+ 
+ fn invalid(message: impl ToString) -> Diagnostic {
+     Diagnostic::error(codes::INVALID_PARAMS, message.to_string())
+@@ -238,18 +240,54 @@
+ #[serde(rename_all = "camelCase", deny_unknown_fields)]
+ pub struct ImportProjectConfigureParams {
+     /// Default texture quality for sources and model textures without an override.
+-    pub preset: CookPreset,
++    pub preset: Option<CookPreset>,
++    /// Texture defaults, using the exact installed texture settings schema.
++    pub texture: Option<crate::TextureSettings>,
++    /// glTF model defaults, overridden independently by explicit source keys.
++    pub gltf: Option<crate::MeshSettings>,
++    /// FBX model defaults; glTF-only opacity maps are rejected.
++    pub fbx: Option<crate::MeshSettings>,
++    /// Audio defaults, using the exact installed audio settings schema.
++    pub audio: Option<crate::audio::Settings>,
++    /// Remove one importer policy and return that type to built-in defaults.
++    pub reset_type: Option<ImportDefaultsType>,
++}
++/// Built-in importer policies which can return to their engine defaults.
++#[derive(Debug, Clone, Copy, Schema, Deserialize)]
++#[ara(module = "asset")]
++#[serde(rename_all = "camelCase")]
++pub enum ImportDefaultsType {
++    /// PNG/JPEG/HDR/EXR textures.
++    Texture,
++    /// glTF models and their embedded texture policy.
++    Gltf,
++    /// FBX models and their embedded texture policy.
++    Fbx,
++    /// Resident and streamed audio.
++    Audio,
+ }
+ struct ConfigureProject;
+ impl Command for ConfigureProject {
+     type Params = ImportProjectConfigureParams;
+     type Output = Value;
+     const NAME: &'static str = "import.project.configure";
+-    const SUMMARY: &'static str = "Set the project's default texture import quality.";
++    const SUMMARY: &'static str =
++        "Configure global texture quality and typed per-importer project defaults.";
+     fn examples() -> Vec<Value> {
+         vec![json!({"preset":"balanced"})]
+     }
+     fn run(cx: &mut EditCtx<'_, '_>, p: Self::Params) -> Result<Value, Diagnostic> {
++        if p.preset.is_none()
++            && p.texture.is_none()
++            && p.gltf.is_none()
++            && p.fbx.is_none()
++            && p.audio.is_none()
++            && p.reset_type.is_none()
++        {
++            return Err(invalid(
++                "Choose a project preset, typed importer defaults, or resetType",
++            ));
++        }
+         let existing = cx
+             .read()
+             .workspace()
+@@ -259,14 +297,85 @@
+                     || *path == ara_asset::LEGACY_PROJECT_IMPORT_SETTINGS_FILE
+             })
+             .map(|(path, doc)| (path.to_owned(), doc.id.clone()));
++        let mut policy = match &existing {
++            Some((_, id)) => serde_json::from_value::<ProjectImportSettings>(Value::Object(
++                cx.read()
++                    .workspace()
++                    .doc(id.as_str())
++                    .and_then(|doc| doc.record("pi_settings"))
++                    .ok_or_else(|| invalid("project import policy has no settings record"))?
++                    .clone(),
++            ))
++            .map_err(invalid)?,
++            None => ProjectImportSettings::default(),
++        };
++        let defaults_changed = p.texture.is_some()
++            || p.gltf.is_some()
++            || p.fbx.is_some()
++            || p.audio.is_some()
++            || p.reset_type.is_some();
++        let conflict = match p.reset_type {
++            Some(ImportDefaultsType::Texture) => p.texture.is_some(),
++            Some(ImportDefaultsType::Gltf) => p.gltf.is_some(),
++            Some(ImportDefaultsType::Fbx) => p.fbx.is_some(),
++            Some(ImportDefaultsType::Audio) => p.audio.is_some(),
++            None => false,
++        };
++        if conflict {
++            return Err(invalid(
++                "Choose either typed defaults or resetType for the same importer",
++            ));
++        }
++        for (importer, value) in [
++            ("ara.texture", p.texture.as_ref().map(serde_json::to_value)),
++            ("ara.gltf", p.gltf.as_ref().map(serde_json::to_value)),
++            ("ara.fbx", p.fbx.as_ref().map(serde_json::to_value)),
++            ("ara.audio", p.audio.as_ref().map(serde_json::to_value)),
++        ] {
++            if let Some(value) = value {
++                validate_settings(importer, &value.map_err(invalid)?, cx.read().schema())?;
++            }
++        }
++        if let Some(preset) = p.preset {
++            policy.preset = preset;
++        }
++        if let Some(value) = p.texture {
++            policy.defaults.texture = Some(value);
++        }
++        if let Some(value) = p.gltf {
++            policy.defaults.gltf = Some(value);
++        }
++        if let Some(value) = p.fbx {
++            policy.defaults.fbx = Some(value);
++        }
++        if let Some(value) = p.audio {
++            policy.defaults.audio = Some(value);
++        }
++        match p.reset_type {
++            Some(ImportDefaultsType::Texture) => policy.defaults.texture = None,
++            Some(ImportDefaultsType::Gltf) => policy.defaults.gltf = None,
++            Some(ImportDefaultsType::Fbx) => policy.defaults.fbx = None,
++            Some(ImportDefaultsType::Audio) => policy.defaults.audio = None,
++            None => {}
++        }
+         let record = ara_doc::RecordId::parse("pi_settings").map_err(invalid)?;
+         let (path, id) = if let Some((path, id)) = existing {
+-            cx.apply_edit(ara_doc::Edit::Set {
+-                doc: id.clone(),
+-                id: record,
+-                path: ara_schema::FieldPath::field("preset"),
+-                value: Some(json!(p.preset)),
+-            })?;
++            if p.preset.is_some() {
++                cx.apply_edit(ara_doc::Edit::Set {
++                    doc: id.clone(),
++                    id: record.clone(),
++                    path: ara_schema::FieldPath::field("preset"),
++                    value: Some(json!(policy.preset)),
++                })?;
++            }
++            if defaults_changed {
++                cx.apply_edit(ara_doc::Edit::Set {
++                    doc: id.clone(),
++                    id: record,
++                    path: ara_schema::FieldPath::field("defaults"),
++                    value: Some(json!(policy.defaults)),
++                })?;
++            }
+             (path, id)
+         } else {
+             let id =
+@@ -274,7 +383,7 @@
+             cx.apply_edit(ara_doc::Edit::Create {
+                 doc: id.clone(),
+                 id: record,
+-                record: serde_json::to_value(ProjectImportSettings { preset: p.preset })
++                record: serde_json::to_value(&policy)
+                     .map_err(invalid)?
+                     .as_object()
+                     .cloned()
+@@ -282,6 +391,6 @@
+             })?;
+             (PROJECT_IMPORT_SETTINGS_FILE.to_owned(), id)
+         };
+-        Ok(json!({"id":id,"path":path,"preset":p.preset}))
+-    }
+-}
++        Ok(json!({"id":id,"path":path,"preset":policy.preset,"defaults":policy.defaults}))
++    }
++}
+diff --git a/crates/ara-importers/src/commands/project_defaults_tests.rs b/crates/ara-importers/src/commands/project_defaults_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/crates/ara-importers/src/commands/project_defaults_tests.rs
+@@ -0,0 +1,114 @@
++//! Actual schema, typed command rollback and Undo; no worker or profile is opened.
++#![allow(clippy::unwrap_used)]
++use super::*;
++use ara_cmd::{Batch, Session};
++use ara_doc::{AssetId, Document, Workspace};
++use ara_ops::{Author, Store};
++
++fn authority() -> (Registry, Store) {
++    let mut db = SchemaDb::new();
++    ara_doc::register(&mut db);
++    let mut registry = Registry::builtin(&mut db);
++    register(&mut registry, &mut db).unwrap();
++    let mut workspace = Workspace::default();
++    workspace.insert(
++        "main.scene",
++        Document::new("scene", AssetId::parse("sc_defaults").unwrap()),
++    );
++    (registry, Store::new(db, workspace))
++}
++fn record(store: &Store) -> Value {
++    json!(
++        store
++            .workspace()
++            .doc("ip_project")
++            .unwrap()
++            .record("pi_settings")
++            .unwrap()
++    )
++}
++fn apply(registry: &Registry, store: &mut Store, args: Value) {
++    registry
++        .apply(
++            store,
++            &Batch::new("main.scene", [("import.project.configure", args)]),
++            &Session::human(),
++        )
++        .unwrap();
++}
++
++#[test]
++fn typed_type_defaults_preserve_legacy_preset_and_reset_one_type_with_one_undo() {
++    let (registry, mut store) = authority();
++    apply(&registry, &mut store, json!({"preset":"fast"}));
++    apply(
++        &registry,
++        &mut store,
++        json!({"texture":{"usage":"normal","maxDimension":1024},"audio":{"usage":"music","opusBitrate":96000}}),
++    );
++    let before = record(&store);
++    assert_eq!(before["preset"], "fast");
++    assert_eq!(before["defaults"]["texture"]["usage"], "normal");
++    assert_eq!(before["defaults"]["audio"]["opusBitrate"], 96000);
++    let revision = store.revision();
++    apply(&registry, &mut store, json!({"resetType":"texture"}));
++    assert_eq!(store.revision(), revision + 1);
++    let reset = record(&store);
++    assert!(reset["defaults"]["texture"].is_null());
++    assert_eq!(reset["defaults"]["audio"], before["defaults"]["audio"]);
++    store.undo_last(&Author::Human).unwrap();
++    assert_eq!(record(&store), before);
++    store.redo_last(&Author::Human).unwrap();
++    assert_eq!(record(&store), reset);
++}
++#[test]
++fn invalid_typed_range_or_incompatible_field_rolls_back_the_whole_policy_batch() {
++    let (registry, mut store) = authority();
++    apply(&registry, &mut store, json!({"preset":"balanced"}));
++    for invalid in [
++        json!({"texture":{"maxDimension":0}}),
++        json!({"audio":{"opusBitrate":1}}),
++        json!({"fbx":{"opacityMaps":{"image":"mask.png"}}}),
++        json!({"texture":{"invented":true}}),
++        json!({"resetType":"audio","audio":{}}),
++    ] {
++        let before = record(&store);
++        let revision = store.revision();
++        let batch = Batch::new(
++            "main.scene",
++            [
++                ("import.project.configure", json!({"preset":"highQuality"})),
++                ("import.project.configure", invalid),
++            ],
++        );
++        assert!(
++            registry
++                .apply(&mut store, &batch, &Session::human())
++                .is_err()
++        );
++        assert_eq!(record(&store), before);
++        assert_eq!(store.revision(), revision);
++    }
++}
++#[test]
++fn moved_types_are_the_same_public_settings_and_audio_defaults_remain_exact() {
++    use std::any::TypeId;
++    assert_eq!(
++        TypeId::of::<crate::TextureSettings>(),
++        TypeId::of::<ara_asset::TextureSettings>()
++    );
++    assert_eq!(
++        TypeId::of::<crate::MeshSettings>(),
++        TypeId::of::<ara_asset::MeshSettings>()
++    );
++    assert_eq!(
++        TypeId::of::<crate::audio::Settings>(),
++        TypeId::of::<ara_asset::AudioImportSettings>()
++    );
++    let shared = crate::audio::Settings::default();
++    let runtime = ara_audio::importer::CookSettings::default();
++    assert_eq!(shared.opus_bitrate, runtime.opus_bitrate);
++    assert_eq!(shared.decoded_budget, runtime.decoded_budget as u64);
++    assert!(matches!(shared.usage, crate::audio::Usage::ShortEffect));
++    assert!(matches!(shared.codec, crate::audio::EffectCodec::Pcm));
++}
+diff --git a/crates/ara-importers/src/mesh.rs b/crates/ara-importers/src/mesh.rs
+--- a/crates/ara-importers/src/mesh.rs
++++ b/crates/ara-importers/src/mesh.rs
+@@ -2,7 +2,6 @@
+ use ara_asset::{Error, Result};
+ use ara_asset_format::{Builder, Kind, Mesh, Meshlet, QuantizedVertex, SkinExtra};
+ use bytemuck::{Pod, Zeroable};
+-use serde::{Deserialize, Serialize};
+ mod lods;
+ 
+ /// Off: current fresh-project ABBA shows no clear win after faster texture prep.
+@@ -35,41 +34,8 @@
+     /// Original source vertex, retained through tangent splits and fetch remapping.
+     pub source_index: u32,
+ }
+-/// Deterministic geometry cook policy.
+-#[derive(Debug, Clone, Serialize, Deserialize, ara_schema::Schema)]
+-#[ara(module = "asset")]
+-#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
+-pub struct MeshSettings {
+-    /// Texture quality overrides by image URI or #image-index (FBX: #texture-id).
+-    /// Other images inherit the model/project preset and retain their cached work.
+-    #[serde(default)]
+-    pub texture_presets: std::collections::BTreeMap<String, ara_asset::CookPreset>,
+-    /// Maximum LODs including the original (1–8). Skin/morph meshes retain at most four.
+-    #[ara(default = 8, range(min = 1, max = 8))]
+-    pub lod_count: u32,
+-    /// Relative simplification error ceiling; skin/morph meshes clamp this to 1%.
+-    #[ara(default = 0.1, range(min = 0))]
+-    pub lod_error: f32,
+-    /// Cook a versioned virtual-geometry DAG for each static material primitive.
+-    /// Skinned and morph-deformed meshes retain the classic path.
+-    #[ara(default = true)]
+-    pub virtual_geometry: bool,
+-    /// glTF base-color image URI (or #image-index) to companion opacity image URI.
+-    /// The mask's red channel multiplies existing alpha; paths are relative to the model.
+-    #[serde(default)]
+-    pub opacity_maps: std::collections::BTreeMap<String, String>,
+-}
+-impl Default for MeshSettings {
+-    fn default() -> Self {
+-        Self {
+-            texture_presets: std::collections::BTreeMap::new(),
+-            lod_count: 8,
+-            lod_error: 0.1,
+-            virtual_geometry: true,
+-            opacity_maps: std::collections::BTreeMap::new(),
+-        }
+-    }
+-}
++/// Shared reflected geometry import policy.
++pub use ara_asset::MeshSettings;
+ 
+ pub(crate) fn normalize(v: [f32; 3]) -> [f32; 3] {
+     let length = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+diff --git a/crates/ara-importers/src/texture.rs b/crates/ara-importers/src/texture.rs
+--- a/crates/ara-importers/src/texture.rs
++++ b/crates/ara-importers/src/texture.rs
+@@ -6,7 +6,6 @@
+ };
+ use ara_asset_format::{TextureFormat, write_ktx2};
+ use rayon::prelude::*;
+-use serde::{Deserialize, Serialize};
+ mod gpu_input;
+ mod mips;
+ mod pixels;
+@@ -27,62 +26,9 @@
+ }
+ mod memo;
+ 
+-/// Semantic texture usage selects transfer functions, mip filtering and BC format.
+-#[derive(
+-    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ara_schema::Schema,
+-)]
+-#[ara(module = "asset")]
+-#[serde(rename_all = "camelCase")]
+-pub enum TextureUsage {
+-    /// sRGB color (alpha remains linear), BC7 sRGB.
+-    #[default]
+-    Color,
+-    /// Linear RGBA data, BC7 UNORM.
+-    Linear,
+-    /// Tangent-space normals, normalized mips and BC5 XY.
+-    Normal,
+-    /// A single linear scalar channel, BC4.
+-    Mask,
+-    /// Nonnegative linear radiance, BC6H UFLOAT.
+-    Hdr,
+-    /// A colour lookup table strip (post-process volumes' grading): values kept as
+-    /// authored, uncompressed RGBA half floats, without mips.
+-    Lut,
+-}
+-/// Declarative texture import settings.
+-#[derive(Debug, Clone, Serialize, Deserialize, ara_schema::Schema)]
+-#[ara(module = "asset")]
+-#[serde(rename_all = "camelCase", default, deny_unknown_fields)]
+-pub struct TextureSettings {
+-    /// Optional quality override; absent inherits the source/project preset.
+-    /// Changing it does not re-encode other texture tasks.
+-    pub preset: Option<CookPreset>,
+-    /// How color/normal/mask values are interpreted.
+-    pub usage: TextureUsage,
+-    /// Generate the complete mip chain through 1×1.
+-    #[ara(default = true)]
+-    pub mipmaps: bool,
+-    /// Invert normal Y for DirectX-authored tangent-space inputs.
+-    pub flip_normal_y: bool,
+-    /// Source channel for BC4, R=0/G=1/B=2/A=3.
+-    #[ara(range(min = 0, max = 3))]
+-    pub mask_channel: u8,
+-    /// Maximum permitted source dimension (decode limits are also enforced).
+-    #[ara(default = 16384, range(min = 1, max = 16384))]
+-    pub max_dimension: u32,
+-}
+-impl Default for TextureSettings {
+-    fn default() -> Self {
+-        Self {
+-            preset: None,
+-            usage: TextureUsage::Color,
+-            mipmaps: true,
+-            flip_normal_y: false,
+-            mask_channel: 0,
+-            max_dimension: 16384,
+-        }
+-    }
+-}
++/// Shared reflected texture settings and usage.
++pub use ara_asset::{TextureSettings, TextureUsage};
++
+ /// PNG, JPEG, Radiance HDR and OpenEXR importer with optional worker BCn encoding.
+ /// Without an explicit encoding service, compression uses the qualified ISPC path.
+ pub struct TextureImporter;
+diff --git a/crates/ara-play-host/src/assets.rs b/crates/ara-play-host/src/assets.rs
+--- a/crates/ara-play-host/src/assets.rs
++++ b/crates/ara-play-host/src/assets.rs
+@@ -60,7 +60,7 @@
+         .collect()
+ }
+ 
+-fn project_preset(imports: &[ImportDoc]) -> Result<ara_asset::CookPreset, String> {
++fn project_policy(imports: &[ImportDoc]) -> Result<ara_asset::ProjectImportSettings, String> {
+     imports
+         .iter()
+         .find(|(path, _, _)| path == ara_asset::PROJECT_IMPORT_SETTINGS_FILE)
+@@ -73,7 +73,6 @@
+             serde_json::from_value::<ara_asset::ProjectImportSettings>(serde_json::Value::Object(
+                 record.clone(),
+             ))
+-            .map(|settings| settings.preset)
+         })
+         .transpose()
+         .map_err(|error| error.to_string())
+@@ -300,10 +299,10 @@
+         imports: Vec<ImportDoc>,
+         revision: u64,
+     ) -> Result<(), String> {
+-        let project_preset = project_preset(&imports)?;
++        let project_policy = project_policy(&imports)?;
+         let project_changed = self
+             .pipeline
+-            .configure_project(project_preset)
++            .configure_project_settings(project_policy)
+             .map_err(|error| error.to_string())?;
+         self.progress_stale |= project_changed;
+         let mut current = BTreeMap::new();
+@@ -573,11 +572,15 @@
+             ),
+         ];
+         assert_eq!(
+-            super::project_preset(&imports).expect("scoped policy"),
++            super::project_policy(&imports)
++                .expect("scoped policy")
++                .preset,
+             ara_asset::CookPreset::Balanced
+         );
+         assert_eq!(
+-            super::project_preset(&imports[..1]).expect("legacy policy"),
++            super::project_policy(&imports[..1])
++                .expect("legacy policy")
++                .preset,
+             ara_asset::CookPreset::HighQuality
+         );
+     }
+@@ -627,6 +630,7 @@
+         std::fs::create_dir_all(root.path().join("settings")).expect("settings");
+         let policy = ara_asset::ProjectImportSettings {
+             preset: ara_asset::CookPreset::HighQuality,
++            ..Default::default()
+         };
+         std::fs::write(
+             root.path().join(ara_asset::PROJECT_IMPORT_SETTINGS_FILE),

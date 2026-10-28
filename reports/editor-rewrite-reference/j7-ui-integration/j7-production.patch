@@ -1,0 +1,392 @@
+diff --git a/crates/ara-editor/src/app/viewport/probes.rs b/crates/ara-editor/src/app/viewport/probes.rs
+index f5736b5c4..51bf2145e 100644
+--- a/crates/ara-editor/src/app/viewport/probes.rs
++++ b/crates/ara-editor/src/app/viewport/probes.rs
+@@ -209,16 +209,70 @@ impl SceneView {
+         self.convergence.reset();
+     }
+ 
+-    /// True means PENDING, matching VQ's forthcoming poll_probe_retirement API.
+-    /// The compile-only backend cannot create a job. Unexpected active work must
+-    /// remain owned until that real retirement seam lands; absence is not proof.
++    /// Retain this exact raster owner until its bake/hash/cache work has retired.
++    /// No submission, fence wait or filesystem work runs on this owner tick.
+     pub(in crate::app) fn probe_retirement_pending(
+         &mut self,
+-        _renderer: &mut ara_render::Renderer,
++        renderer: &mut ara_render::Renderer,
+     ) -> Result<bool, Diagnostic> {
+-        Err(Diagnostic::error(
+-            codes::PROBE_UNSUPPORTED,
+-            "This renderer checkpoint has no probe-job retirement polling API; active ownership is retained",
++        let raster = self.raster.as_mut().ok_or_else(|| Diagnostic::error(
++            codes::PROBE_MISSING,
++            "The retiring probe raster owner is missing; retirement cannot be confirmed",
++        ))?;
++        raster.poll_probe_retirement(renderer).map_err(|error| Diagnostic::error(
++            crate::codes::RENDER, format!("Probe retirement polling failed: {error}"),
+         ))
+     }
++
++    /// One explicit native-verification observation of the completed Scene image.
++    /// Request metadata does not establish the mode: inspect the retained raster
++    /// presentation and current source before reading its already completed output.
++    pub(in crate::app) fn completed_debug_view_observation(
++        &self,
++        renderer: &mut ara_render::Renderer,
++        editor: &Editor,
++        requested: &str,
++        scene_ready: bool,
++    ) -> ara_ui::Result<Option<serde_json::Value>> {
++        use ara_render::capture::{CaptureRequest, ViewMode};
++        let expected = match requested {
++            "gi_diffuse" => ViewMode::GiDiffuse,
++            "overdraw" => ViewMode::Overdraw,
++            _ => return Err("Unknown native debug-view observation".into()),
++        };
++        if !scene_ready || self.frame_pending || renderer.scene_frame_pending()
++            || !renderer.presentation_ready() || !renderer.is_native()
++            || self.raster_presentation.as_ref().map(|(mode, _)| *mode) != Some(expected)
++            || self.validate_probe_frame(editor, &editor.state.doc, editor.host.store().revision()).is_err()
++        {
++            return Ok(None);
++        }
++        let request = CaptureRequest {
++            camera: editor.state.camera.spec(), size: renderer.size(), mode: expected,
++            deterministic: true,
++            exposure: self.raster_frame.as_ref().map_or(1.0, |frame| frame.environment.exposure),
++            settle_frames: 1, tick: 0, seed: 7, marks: None,
++        };
++        // The caller requests this only once per measured mode. This reads the
++        // completed live image; it never asks capture() to render another frame.
++        let captured = renderer.capture_completed(&request)?;
++        Ok(Some(serde_json::json!({
++            "mode":expected.name(), "completed":true, "current":true,
++            "completedModeSource":"SceneView.raster_presentation",
++            "doc":editor.state.doc, "sourceRevision":editor.host.store().revision(),
++            "sceneHash":captured.metadata.scene_hash,
++            "size":[captured.image.width(),captured.image.height()],
++            "overdraw":captured.metadata.overdraw,
++            "readbackScope":"one requested completed native image; no re-render"
++        })))
++    }
++}
++
++#[cfg(test)]
++mod completed_debug_tests {
++    #[test]
++    fn debug_mode_names_cannot_fall_back_to_lit() {
++        assert_eq!(super::super::view_mode("gi_diffuse"), ara_render::capture::ViewMode::GiDiffuse);
++        assert_eq!(super::super::view_mode("overdraw"), ara_render::capture::ViewMode::Overdraw);
++    }
+ }
+diff --git a/crates/ara-editor/src/app/probes.rs b/crates/ara-editor/src/app/probes.rs
+index 604b1137b..f58db765b 100644
+--- a/crates/ara-editor/src/app/probes.rs
++++ b/crates/ara-editor/src/app/probes.rs
+@@ -112,6 +112,7 @@ impl Owner {
+     ) -> ara_ui::Result<Update> {
+         let mut update = Update::default();
+         update.changed |= self.flush(editor);
++        self.cancel_eligible(editor, scene);
+         if !self.outgoing.is_empty() {
+             return Ok(self.update(scene, update));
+         }
+@@ -130,29 +131,10 @@ impl Owner {
+             };
+             self.request(editor, scene, request);
+         }
+-        if due {
+-            self.cancel_eligible(editor, scene);
+-        }
+-        if due
+-            && self.retirement_pending
+-            && (self.draining
+-                || self.jobs.is_empty()
+-                || self.jobs.iter().any(|(job, sub)| {
+-                    !sub.terminal_queued && editor.probe_captures.cancel_requested(job)
+-                }))
+-        {
+-            match scene.probe_retirement_pending(renderer) {
+-                Ok(false) => {
+-                    self.blocker = None;
+-                    self.retirement_pending = false;
+-                    update.changed = true;
+-                    update.scene_dirty = true;
+-                }
+-                Ok(true) => {
+-                    self.blocker = Some("Probe GPU/cache retirement is still pending".into())
+-                }
+-                Err(diagnostic) => self.blocker = Some(diagnostic.message),
+-            }
++        self.cancel_eligible(editor, scene);
++        if self.poll_retirement(editor, scene, renderer) {
++            update.changed = true;
++            update.scene_dirty = true;
+         }
+         if due && self.outgoing.len() < EVENTS {
+             self.snapshot(editor, scene);
+@@ -276,7 +258,7 @@ impl Owner {
+         if self.bound_doc.as_deref() != Some(editor.state.doc.as_str())
+             || !scene.probe_has_binding(root)
+         {
+-            if !self.jobs.is_empty() {
++            if !self.jobs.is_empty() || self.retirement_pending {
+                 return Err(vec![Diagnostic::error(codes::PROBE_STALE,
+                     "The previous probe owner is retiring; wait before binding a replacement Scene").doc(&editor.state.doc)]);
+             }
+@@ -334,6 +316,42 @@ impl Owner {
+         }
+     }
+ 
++    /// Deliver cancel intent before the next Scene preparation can record work.
++    /// Progress stays rate-limited; cancellation and retirement never wait for it.
++    pub(super) fn poll_cancellations(
++        &mut self, editor: &mut Editor, scene: &mut SceneView, renderer: &mut Renderer,
++    ) -> bool {
++        self.cancel_eligible(editor, scene);
++        self.poll_retirement(editor, scene, renderer)
++    }
++
++    fn poll_retirement(
++        &mut self, editor: &mut Editor, scene: &mut SceneView, renderer: &mut Renderer,
++    ) -> bool {
++        if !self.retirement_pending || !(self.draining || self.jobs.is_empty()
++            || self.jobs.iter().any(|(job, sub)| {
++                !sub.terminal_queued && editor.probe_captures.cancel_requested(job)
++            }))
++        {
++            return false;
++        }
++        match scene.probe_retirement_pending(renderer) {
++            Ok(false) => {
++                self.blocker = None;
++                self.retirement_pending = false;
++                true
++            }
++            Ok(true) => {
++                self.blocker = Some("Probe GPU/cache retirement is still pending".into());
++                false
++            }
++            Err(diagnostic) => {
++                self.blocker = Some(diagnostic.message);
++                false
++            }
++        }
++    }
++
+     fn cancel_eligible(&mut self, editor: &mut Editor, scene: &mut SceneView) {
+         for (job, sub) in &self.jobs {
+             if sub.terminal_queued || self.cancel_sent.contains(&sub.backend.0) {
+diff --git a/crates/ara-editor/src/probe_capture/bridge.rs b/crates/ara-editor/src/probe_capture/bridge.rs
+index 956f99e6b..fbbe5bbca 100644
+--- a/crates/ara-editor/src/probe_capture/bridge.rs
++++ b/crates/ara-editor/src/probe_capture/bridge.rs
+@@ -223,7 +223,8 @@ impl Bridge {
+ 
+     /// Returns a backend token only when cancellation cannot cancel another live
+     /// Host subscriber, including one from a different session sharing this generation.
+-    pub(crate) fn cancel_target(&self, job: &str) -> Option<ProbeJob> {
++    pub(crate) fn cancel_target(&mut self, job: &str) -> Option<ProbeJob> {
++        self.collect();
+         let tracked = self.tracked.get(job)?;
+         let backend = tracked.backend?;
+         (tracked.cancelled
+diff --git a/crates/ara-editor/src/app/viewport.rs b/crates/ara-editor/src/app/viewport.rs
+index 0ada16ea5..22821c73f 100644
+--- a/crates/ara-editor/src/app/viewport.rs
++++ b/crates/ara-editor/src/app/viewport.rs
+@@ -554,6 +554,7 @@ impl SceneView {
+             if !self.raster_snapshot_dirty
+                 && !self.convergence.needs_frame()
+                 && !self.preview_needs_frame()
++                && self.raster.as_ref().is_none_or(|raster| !raster.needs_frame())
+             {
+                 // A completion only publishes its retained image. It must not
+                 // turn an exhausted convergence budget into another submission.
+@@ -890,6 +891,7 @@ impl SceneView {
+             return self.frame_pending;
+         }
+         self.frame_pending
++            || self.raster.as_ref().is_some_and(|raster| raster.needs_frame())
+             || self.recovery.pending()
+             || self.content_job.is_some()
+             || self.content_ready.is_some()
+@@ -984,6 +986,8 @@ fn view_mode(name: &str) -> ViewMode {
+         "shadowCascades" => ViewMode::ShadowCascades,
+         "wireframe" => ViewMode::Wireframe,
+         "litWireframe" => ViewMode::LitWireframe,
++        "gi_diffuse" => ViewMode::GiDiffuse,
++        "overdraw" => ViewMode::Overdraw,
+         _ => ViewMode::Lit,
+     }
+ }
+diff --git a/crates/ara-editor/src/shell/probes.rs b/crates/ara-editor/src/shell/probes.rs
+index 66a45f41f..ccb6f2e1d 100644
+--- a/crates/ara-editor/src/shell/probes.rs
++++ b/crates/ara-editor/src/shell/probes.rs
+@@ -120,6 +120,26 @@ impl State {
+ }
+ 
+ impl Shell {
++    /// Renderer-owned capability snapshot for native view command availability.
++    pub(crate) fn probe_debug_capabilities(
++        &self, editor: &Editor,
++    ) -> Option<&ara_runtime_render::probes::RenderCapabilities> {
++        (self.probe_ui.doc == editor.state.doc && self.probe_ui.available)
++            .then_some(self.probe_ui.capabilities.as_ref()).flatten()
++    }
++
++    /// Read-only native proof projection; never polls, changes or re-logs jobs.
++    pub(crate) fn probe_report(&self) -> Value {
++        json!({"available":self.probe_ui.available,"error":self.probe_ui.error,
++            "snapshot":self.probe_ui.snapshot,
++            "jobs":self.probe_ui.job_order.iter().filter_map(|id| {
++                self.probe_ui.jobs.get(id).map(|job| json!({
++                    "job":id,"doc":job.doc,"entities":job.entities,
++                    "status":job.latest,"error":job.error
++                }))
++            }).collect::<Vec<_>>()})
++    }
++
+     /// Shared registry/menu disabled reason; querying a command never touches the renderer.
+     pub(crate) fn probe_capture_blocker(
+         &self,
+diff --git a/crates/ara-editor/src/shell/commands/mod.rs b/crates/ara-editor/src/shell/commands/mod.rs
+index 44dd4b49f..29e5cbdd8 100644
+--- a/crates/ara-editor/src/shell/commands/mod.rs
++++ b/crates/ara-editor/src/shell/commands/mod.rs
+@@ -86,6 +86,8 @@ pub(crate) struct Ctx<'a> {
+     pub probe_capture_blocker: Option<&'a str>,
+     /// Cached reason why no owned capture request can be cancelled.
+     pub probe_cancel_blocker: Option<&'a str>,
++    /// Last current-Scene renderer capabilities; None is truthfully unavailable.
++    pub probe_debug_capabilities: Option<&'a ara_runtime_render::probes::RenderCapabilities>,
+     /// Build menu state.
+     pub build: BuildState,
+ }
+@@ -250,6 +252,7 @@ impl Shell {
+             pilot: self.pilot_active(),
+             probe_capture_blocker: self.probe_capture_blocker(editor, target),
+             probe_cancel_blocker: self.probe_cancel_blocker(editor, target),
++            probe_debug_capabilities: self.probe_debug_capabilities(editor),
+             starting: editor.state.playing.is_none()
+                 && (self.game_start.is_some() || editor.play_world.is_some()),
+             build: BuildState {
+diff --git a/crates/ara-editor/src/actions.rs b/crates/ara-editor/src/actions.rs
+index eb139c8de..fad1aa2f2 100644
+--- a/crates/ara-editor/src/actions.rs
++++ b/crates/ara-editor/src/actions.rs
+@@ -348,6 +348,7 @@ impl EditorService {
+                 probe_cancel_blocker: Some(
+                     "Capture cancellation requires the owning editor window",
+                 ),
++                probe_debug_capabilities: None,
+                 // The window's build job is not visible here; the project's state is.
+                 build: crate::shell::commands::BuildState {
+                     running: false,
+diff --git a/crates/ara-editor/src/shell/commands/table.rs b/crates/ara-editor/src/shell/commands/table.rs
+index 59c769b7e..699540029 100644
+--- a/crates/ara-editor/src/shell/commands/table.rs
++++ b/crates/ara-editor/src/shell/commands/table.rs
+@@ -239,6 +239,20 @@ fn is(c: &Ctx, key: &str, value: &str) -> Avail {
+ fn mode(c: &Ctx, mode: &str) -> Avail {
+     Avail::Checked(c.state.view_mode == mode)
+ }
++fn renderer_debug_mode(c: &Ctx, name: &str) -> Avail {
++    let Some(caps) = c.probe_debug_capabilities else {
++        return Avail::Blocked("Waiting for this Scene renderer's debug-view capabilities".into());
++    };
++    let (available, key) = match name {
++        "gi_diffuse" => (caps.gi_diffuse, "giDiffuse"),
++        "overdraw" => (caps.overdraw, "overdraw"),
++        _ => return Avail::Blocked("Unknown renderer debug view".into()),
++    };
++    if available { mode(c, name) }
++    else { Avail::Blocked(caps.reasons.get(key).cloned().unwrap_or_else(||
++        "This renderer does not currently provide the requested debug view".into())) }
++}
++
+ fn flag(c: &Ctx, key: &str) -> Avail {
+     Avail::Checked(setting(c, key).as_bool().unwrap_or(false))
+ }
+@@ -947,8 +961,8 @@ fn build() -> Vec<Spec> {
+         .when(|c| mode(c, "litWireframe")),
+     ]);
+     c.extend([
+-        later("view.mode.overdraw", "Overdraw", "", "", "ara-render has no overdraw visualisation yet."),
+-        later("view.mode.gi_debug", "GI Debug", "", "", "GI debug views live in ara-render-fidelity captures; live viewport output is not wired yet."),
++        cmd("view.mode.overdraw", "Overdraw", "", "", "Native opaque and alpha-tested fragments before depth rejection; transparent and VFX passes are excluded. Heat legend: 0 black, 1 blue, 2 green, 4 yellow, 8 orange, 16+ red.", |_,e,_|view(e,json!({"viewMode":"overdraw"}))).when(|c|renderer_debug_mode(c,"overdraw")),
++        cmd("view.mode.gi_debug", "GI Diffuse", "", "", "Native diffuse indirect light on opaque surfaces; background black. The actual renderer explains unavailable data instead of showing Lit.", |_,e,_|view(e,json!({"viewMode":"gi_diffuse"}))).when(|c|renderer_debug_mode(c,"gi_diffuse")),
+         cmd("view.show.grid", "Grid", "grid-2x2", "", "Show the ground grid.", |_, e, _| toggle(e, "viewport.grid")).when(|c| flag(c, "viewport.grid")),
+         cmd("view.show.outline", "Selection Outline", "", "", "Outline selected entities.", |_, e, _| toggle(e, "viewport.outline")).when(|c| flag(c, "viewport.outline")),
+         cmd("view.show.gizmos", "Transform Gizmo", "move-3d", "", "Show transform handles on the selection.", |_, e, _| view(e, json!({"gizmos": e.state.hide_gizmos}))).when(|c| Avail::Checked(!c.state.hide_gizmos)),
+diff --git a/crates/ara-editor/src/app/mod.rs b/crates/ara-editor/src/app/mod.rs
+index 70b4d51af..525c389e4 100644
+--- a/crates/ara-editor/src/app/mod.rs
++++ b/crates/ara-editor/src/app/mod.rs
+@@ -1191,6 +1191,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
+             server.pump(&mut editor);
+             let server_ms = measure_authority.then(|| tick_at.elapsed().as_secs_f64() * 1000.);
+             editor.tick();
++            // Cancellation reaches the retained bake before the next Scene GPU unit.
++            scene_dirty |= probe_owner.poll_cancellations(&mut editor, &mut scene_view, &mut renderer);
+             let pilot_changed = pilot::update(&controller, &mut editor, &mut shell, false);
+             dirty |= pilot_changed;
+             scene_dirty |= pilot_changed;
+diff --git a/crates/ara-editor/src/shell/probes/tests.rs b/crates/ara-editor/src/shell/probes/tests.rs
+index 3b3a6b7c8..a68891a1e 100644
+--- a/crates/ara-editor/src/shell/probes/tests.rs
++++ b/crates/ara-editor/src/shell/probes/tests.rs
+@@ -240,3 +240,30 @@ fn terminal_history_is_bounded_without_hiding_any_active_or_unknown_subscription
+     assert!((0..64).all(|index| state.jobs.contains_key(&format!("job-{index:03}"))));
+     assert_eq!(state.job_order.len(), 96);
+ }
++
++#[test]
++fn native_debug_commands_use_current_renderer_capabilities_and_preserve_real_reasons() {
++    let mut f = Fixture::new();
++    let target = commands::Target::None;
++    let gi = commands::get("view.mode.gi_debug").unwrap();
++    let overdraw = commands::get("view.mode.overdraw").unwrap();
++    assert!(matches!(gi.run, commands::Run::Do(_)));
++    assert!(matches!(overdraw.run, commands::Run::Do(_)));
++    let before = f.editor.host.store().revision();
++    f.shell.probe_ui.current_doc(&f.editor.state.doc);
++    f.shell.probe_ui.available = true;
++    let mut caps = ara_runtime_render::probes::RenderCapabilities::default();
++    caps.reasons.insert("giDiffuse".into(), "The renderer is still acquiring GI data".into());
++    caps.reasons.insert("overdraw".into(), "This rendering path has no fragment-count pass".into());
++    f.shell.probe_ui.capabilities = Some(caps);
++    assert_eq!(gi.avail(&f.shell.ctx(&f.editor,&target)), commands::Avail::Blocked("The renderer is still acquiring GI data".into()));
++    assert_eq!(overdraw.avail(&f.shell.ctx(&f.editor,&target)), commands::Avail::Blocked("This rendering path has no fragment-count pass".into()));
++    let caps = f.shell.probe_ui.capabilities.as_mut().unwrap();
++    caps.gi_diffuse = true; caps.overdraw = true;
++    f.editor.state.view_mode = "gi_diffuse".into();
++    assert_eq!(gi.avail(&f.shell.ctx(&f.editor,&target)), commands::Avail::Checked(true));
++    assert_eq!(overdraw.avail(&f.shell.ctx(&f.editor,&target)), commands::Avail::Checked(false));
++    f.shell.probe_ui.doc = "sc_old_scene".into();
++    assert!(matches!(gi.avail(&f.shell.ctx(&f.editor,&target)), commands::Avail::Blocked(_)), "another Scene's capability must not enable the command");
++    assert_eq!(f.editor.host.store().revision(), before);
++}
+diff --git a/crates/ara-editor/src/probe_capture/tests.rs b/crates/ara-editor/src/probe_capture/tests.rs
+index f3fa8b7ed..790349609 100644
+--- a/crates/ara-editor/src/probe_capture/tests.rs
++++ b/crates/ara-editor/src/probe_capture/tests.rs
+@@ -394,3 +394,16 @@ fn owner_backpressure_and_scene_close_cannot_report_false_retirement() {
+     assert!(!f.bridge.busy());
+     assert_eq!(f.job(&queued.job)["status"], "failed");
+ }
++
++#[test]
++fn cancellation_intent_is_visible_before_the_owner_pops_its_cancel_request() {
++    let mut f = Fixture::new();
++    let task = f.queue("e_probe");
++    f.started(&task, 91);
++    assert_eq!(f.cancel(&task)["cancelRequested"], true);
++    // The pre-render cancellation owner has not pumped try_recv yet.
++    assert_eq!(f.bridge.cancel_target(&task.job).map(|job| job.0), Some(91));
++    assert!(matches!(f.bridge.try_recv(), Some(Request::Cancel {job,..}) if job == task.job));
++    f.status(&task, 91, true, false, 1.0);
++    assert!(!f.bridge.busy());
++}

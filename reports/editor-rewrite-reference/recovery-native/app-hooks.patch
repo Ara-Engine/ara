@@ -1,0 +1,41 @@
+diff --git a/crates/ara-editor/src/app/mod.rs b/crates/ara-editor/src/app/mod.rs
+--- a/crates/ara-editor/src/app/mod.rs
++++ b/crates/ara-editor/src/app/mod.rs
+@@ -1776,7 +1776,10 @@
+             let mut gpu_surface_submissions = 0;
+             let mut main_ui_submitted_this_frame = false;
+-            dirty |= profiler_check
+-                .as_ref()
+-                .is_some_and(profiler_verify::ProfilerCheck::wants_frame);
++            dirty |= profiler_check
++                .as_ref()
++                .is_some_and(profiler_verify::ProfilerCheck::wants_frame);
++            dirty |= recovery_check
++                .as_ref()
++                .is_some_and(recovery_verify::RecoveryCheck::wants_frame);
+             let mut native_presentations = 0;
+             // A window that cannot show anything (minimized, occluded; the probe's
+@@ -2289,7 +2289,20 @@
+                 check.end(&mut editor, &mut shell, &mut gpu, ready)?;
+             }
+-            if let Some(check) = &mut profiler_check {
+-                let ready =
+-                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
++            if let Some(check) = &mut recovery_check {
++                check.end(
++                    &mut editor,
++                    &mut shell,
++                    &mut gpu,
++                    main_ui_submitted_this_frame,
++                    frame_start.elapsed().as_secs_f64() * 1000.,
++                )?;
++                if check.finished() {
++                    game.close(&mut editor, &mut gpu)?;
++                    break;
++                }
++            }
++            if let Some(check) = &mut profiler_check {
++                let ready =
++                    verification_scene_ready(&renderer, &scene_view, &editor, last_revision);
+                 check.end(
+                     &editor,
