@@ -120,7 +120,10 @@ fn diagnostics_are_kept_for_display_and_terminal_result_keeps_exact_outcome_and_
     let mut reply = Some(done);
     assert!(state.poll(Instant::now(), |_| reply.take()));
     let retained = state.terminal.front().unwrap();
-    assert_eq!(retained.diagnostics, [diagnostic.clone()]);
+    assert_eq!(
+        retained.diagnostics.as_slice(),
+        std::slice::from_ref(&diagnostic)
+    );
     assert_eq!(retained.players[0].diagnostics, [diagnostic]);
     assert_eq!(retained.players[0].modules, ["Gameplay"]);
     assert!(matches!(
