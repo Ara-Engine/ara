@@ -37,6 +37,8 @@ public sealed class DevModuleLoader : IModuleLoader
         public readonly string Name = name;
         public readonly string Profile = profile;
         public readonly IReadOnlyList<string> References = references;
+        public string Dir = "";
+        public bool Hot, Watch;
         // Installed (tick thread, under the loader lock).
         public ModuleLoadContext? Alc;
         public Assembly? Asm;
@@ -60,6 +62,8 @@ public sealed class DevModuleLoader : IModuleLoader
     readonly object _lock = new();
     int _created;
     CompileClient? _client;
+    string? _serverDll;
+    long _recovery;
     ulong _compileBinding;
     readonly HashSet<(uint Slot, ulong Binding)> _compileBound = [];
 
@@ -81,6 +85,7 @@ public sealed class DevModuleLoader : IModuleLoader
         using var doc = JsonDocument.Parse(configJson);
         var root = doc.RootElement;
         var server = root.TryGetProperty("compileServer", out var cs) && cs.ValueKind == JsonValueKind.String ? cs.GetString() : null;
+        _serverDll = server;
         var waiting = new List<Module>();
         var rc = 0;
         foreach (var spec in root.GetProperty("modules").EnumerateArray())
@@ -95,7 +100,7 @@ public sealed class DevModuleLoader : IModuleLoader
             Module m;
             lock (_lock)
             {
-                m = new Module((uint)_modules.Count, name, refs, profile);
+                m = new Module((uint)_modules.Count, name, refs, profile) { Dir = dir, Hot = hot, Watch = watch };
                 _modules.Add(m);
             }
             if (assembly is not null && !watch)
@@ -110,7 +115,7 @@ public sealed class DevModuleLoader : IModuleLoader
                 }
                 catch (Exception e)
                 {
-                    Diag.Report(AraCodes.LoadFailed, "error", $"module `{name}`: cannot load `{assembly}`: {e.Message}");
+                    Diag.ReportException(AraCodes.LoadFailed, "error", $"module `{name}`: cannot load `{assembly}`: {e.Message}", e);
                     m.Failed = true;
                     m.Ready.Set();
                     rc = 1;
@@ -133,7 +138,7 @@ public sealed class DevModuleLoader : IModuleLoader
             }
             catch (Exception e)
             {
-                Diag.Report(AraCodes.CompileServer, "error", $"compile server: {e.Message}");
+                Diag.ReportException(AraCodes.CompileServer, "error", $"compile server: {e.Message}", e);
                 return 1;
             }
         }
@@ -165,7 +170,7 @@ public sealed class DevModuleLoader : IModuleLoader
     /// generated <c>Register</c> and pre-JITs the entry points (compile-client thread), then
     /// queues one swap for the next tick boundary. If any module fails, none is staged.
     /// </summary>
-    void Stage(IReadOnlyList<(Module M, byte[] Pe, byte[] Pdb, uint Generation, bool Hot, ReloadReport Report)> batch)
+    void Stage(IReadOnlyList<(Module M, byte[] Pe, byte[] Pdb, uint Generation, bool Hot, ReloadReport Report)> batch, ulong recovery = 0)
     {
         Dictionary<string, Assembly> view;
         lock (_lock) view = _modules.Where(m => m.Staged is not null).ToDictionary(m => m.Name, m => m.Staged!);
@@ -207,7 +212,7 @@ public sealed class DevModuleLoader : IModuleLoader
                     Module = builder,
                     Hot = hot,
                     Report = report,
-                    Installed = () => Install(m, alc, asm, generation),
+                    Installed = () => Install(m, alc, asm, generation, hot),
                     Rejected = _ => Reject(m, alc),
                 };
                 staged[^1] = (m, alc, asm, swap, relink, image, symbols);
@@ -239,9 +244,10 @@ public sealed class DevModuleLoader : IModuleLoader
                     s.M.Chain.Clear();
                 }
             }
-        Enqueue(new SwapUpdate { Modules = [.. staged.Select(s => s.Swap)] });
+        Enqueue(new SwapUpdate { Modules = [.. staged.Select(s => s.Swap)],
+            Completed = recovery == 0 ? null : success => CompleteRecovery(recovery, success ? "reloaded" : "failed", batch.Select(b => b.M.Name).ToArray()) });
         foreach (var s in staged) s.M.Ready.Set();
-        CheckLeaks();
+        CheckLeaks(allowRestart: recovery == 0);
     }
 
     /// <summary>The names of every module <paramref name="m"/> references, directly or through another module.</summary>
@@ -258,12 +264,12 @@ public sealed class DevModuleLoader : IModuleLoader
     static uint Micros(ulong ns) => (uint)Math.Min(uint.MaxValue, ns / 1000);
 
     /// <summary>Tick thread: the new generation is live; unload the previous one.</summary>
-    void Install(Module m, ModuleLoadContext alc, Assembly asm, uint generation)
+    void Install(Module m, ModuleLoadContext alc, Assembly asm, uint generation, bool hot)
     {
         lock (_lock)
         {
             var old = m.Alc;
-            (m.Alc, m.Asm, m.Generation) = (alc, asm, generation);
+            (m.Alc, m.Asm, m.Generation, m.Hot) = (alc, asm, generation, hot);
             if (old is not null)
             {
                 old.Unload();
@@ -288,7 +294,7 @@ public sealed class DevModuleLoader : IModuleLoader
     /// subscription, a cache holding its types): report it once, with an L4 restart request.
     /// Only natural collections are counted; nothing is forced on the game's behalf.
     /// </summary>
-    void CheckLeaks()
+    void CheckLeaks(bool allowRestart = true)
     {
         var gen2 = GC.CollectionCount(2);
         List<Retired> leaked;
@@ -302,7 +308,7 @@ public sealed class DevModuleLoader : IModuleLoader
         {
             Diag.Report(AraCodes.GenerationLeaked, "warning",
                 $"module `{r.Name}`: a retired generation is still alive after two full collections; something pins its types (static events, caches). Restart the play process (L4) to reclaim it");
-            Enqueue(new ErrorUpdate { Slot = r.Slot, Report = new ReloadReport { Kind = AbiConst.ReloadL4, TReceived = Host.Now(), TStaged = Host.Now() } });
+            if (allowRestart) Enqueue(new ErrorUpdate { Slot = r.Slot, Report = new ReloadReport { Kind = AbiConst.ReloadL4, TReceived = Host.Now(), TStaged = Host.Now() } });
         }
     }
 
@@ -337,11 +343,13 @@ public sealed class DevModuleLoader : IModuleLoader
             if (Find(slot) is not { } m) return;
             batch.Add((m, pe, pdb, generation, hot, Report(kind, escalation, origin, t, transfer, received)));
         }
-        try { Stage(batch); }
+        var recovery = r.Remaining > 0 ? r.U64() : 0;
+        try { Stage(batch, recovery); }
         catch (Exception e)
         {
             var names = string.Join(", ", batch.Select(b => $"`{b.Item1.Name}`"));
-            Diag.Report(AraCodes.LoadFailed, "error", $"module {names}: {e.Message} (the last good code keeps running)");
+            Diag.ReportException(AraCodes.LoadFailed, "error", $"module {names}: {e.Message} (the last good code keeps running)", e);
+            if (recovery != 0) CompleteRecovery(recovery, "failed", batch.Select(b => b.Item1.Name).ToArray());
         }
     }
 
@@ -450,13 +458,60 @@ public sealed class DevModuleLoader : IModuleLoader
     /// <inheritdoc/>
     public int RequestCompile(string json)
     {
-        if (_client is null) return -1;
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
+        if (root.TryGetProperty("recovery", out var recovery)) return RequestRecovery(recovery.GetUInt64());
+        if (_client is null) return -1;
         if (Find(root.GetProperty("module").GetString() ?? "") is not { } m) return -2;
         var paths = root.GetProperty("paths").EnumerateArray().Select(p => p.GetString() ?? "").Where(p => p.Length > 0).ToList();
         _client.Change(m.Slot, paths, root.GetProperty("origin").GetUInt32());
         return 0;
+    }
+
+    int RequestRecovery(ulong ticket)
+    {
+        if (ticket == 0 || ticket > long.MaxValue || Interlocked.CompareExchange(ref _recovery, (long)ticket, 0) != 0) return -3;
+        ThreadPool.QueueUserWorkItem(_ =>
+        {
+            using var binding = Activate();
+            string[] names = [];
+            try
+            {
+                Module[] modules;
+                lock (_lock) modules = _modules.ToArray();
+                names = modules.Select(m => m.Name).ToArray();
+                if (modules.Length == 0) { CompleteRecovery(ticket, "unchanged", names); return; }
+                if (_client is null || !_client.Connected)
+                {
+                    _client?.Dispose();
+                    if (_serverDll is null) throw new InvalidOperationException("No compile server is configured for explicit recovery");
+                    _client = new CompileClient(_serverDll, this, checked(++_compileBinding));
+                    foreach (var module in modules)
+                        _client.Watch(module.Slot, module.Name, module.Dir, module.Hot, module.References, module.Profile,
+                            module.Watch, initial: false, generation: checked(module.Generation + 1));
+                }
+                _client.Recover(ticket);
+            }
+            catch (Exception error)
+            {
+                Diag.ReportException(AraCodes.CompileServer, "error", $"Script recovery failed: {error.Message}", error);
+                CompleteRecovery(ticket, "failed", names);
+            }
+        });
+        return 0;
+    }
+
+    internal void CompleteRecovery(ulong ticket, string outcome, string[] modules)
+    {
+        if (Interlocked.CompareExchange(ref _recovery, 0, (long)ticket) != (long)ticket) return;
+        Enqueue(new RecoveryCompletion(ticket, outcome, modules));
+    }
+
+    internal void RecoveryDisconnected(CompileClient client)
+    {
+        if (!ReferenceEquals(client, _client)) return;
+        var pending = Interlocked.Read(ref _recovery);
+        if (pending != 0) CompleteRecovery((ulong)pending, "failed", []);
     }
 
     /// <inheritdoc/>

@@ -33,7 +33,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     /// <summary>How long watcher events on a path an agent claimed count as agent edits.</summary>
     static readonly long ClaimTicks = 2 * Stopwatch.Frequency;
 
-    enum WorkKind { Initial, Change, Heat, Rebuild }
+    enum WorkKind { Initial, Change, Heat, Rebuild, Recover }
 
     sealed class Work(WorkKind kind, uint slot, uint origin, long tEvent)
     {
@@ -45,6 +45,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         internal readonly HashSet<string> Paths = new(ModuleState.Paths);
         internal bool Hot;
         internal Escalation Escalation;
+        internal ulong Recovery;
     }
 
     readonly IMessageSink _out;
@@ -98,7 +99,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     /// folder. A reference to a module that is not watched yet is refused with a diagnostic.
     /// </summary>
     internal void Watch(uint slot, string name, string dir, bool hot, IReadOnlyList<string> assemblies,
-        IReadOnlyList<string> references, string profile, bool watch)
+        IReadOnlyList<string> references, string profile, bool watch, bool initial = true, uint generation = 0)
     {
         lock (_lock)
         {
@@ -110,14 +111,21 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                     $"module `{name}` references {string.Join(", ", missing.Select(m => $"`{m}`"))}, which the compile server does not have; modules load after the modules they reference, and references cannot form a cycle")], 0, AbiConst.OriginHuman, supplied: attempt);
                 return;
             }
-            var m = new ModuleSession(slot, name, dir, hot, assemblies, references, profile, _analysis);
+            var m = new ModuleSession(slot, name, dir, hot, assemblies, references, profile, _analysis) { InitialGeneration = generation };
             _modules.Add(m);
             _bySlot[slot] = m;
             _byName[name] = m;
             if (watch) _watcher.Watch(slot, m.WatchDirectory);
             foreach (var a in assemblies) WatchReference(a);
-            _human.AddLast(new Work(WorkKind.Initial, slot, AbiConst.OriginHuman, 0));
+            if (initial) _human.AddLast(new Work(WorkKind.Initial, slot, AbiConst.OriginHuman, 0));
         }
+        _wake.Set();
+    }
+
+    /// <summary>Explicit recovery always validates current inputs and emits one atomic fresh-image swap.</summary>
+    internal void Recover(ulong ticket)
+    {
+        lock (_lock) _human.AddLast(new Work(WorkKind.Recover, 0, AbiConst.OriginHuman, Stopwatch.GetTimestamp()) { Recovery = ticket });
         _wake.Set();
     }
 
@@ -261,6 +269,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 if (_bySlot.TryGetValue(w.Slot, out var failed))
                     SendDiagnostics(failed.Slot, failed.Dir, [], [(AraCodes.CompileServer, "error", e.Message)], 0, w.Origin, validated: false);
                 Log(2, $"module {w.Slot}: {e}");
+                if (w.Recovery != 0) RecoveryFinished(w.Recovery, "failed");
             }
             finally
             {
@@ -292,6 +301,12 @@ internal sealed class Coordinator : ICompileContext, IDisposable
 
     void Run(Work w, CancellationToken ct)
     {
+        if (w.Kind == WorkKind.Recover)
+        {
+            CompileState(true);
+            RecoverAll(w.Recovery, ct);
+            return;
+        }
         if (!_bySlot.TryGetValue(w.Slot, out var m)) return;
         if (w.Kind == WorkKind.Heat && m.State is { } current && current.Hot == (w.Hot && Enc)) return;
         Begin(m.Slot, m.Name, m.Profile);
@@ -320,6 +335,49 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 Handle(Evaluated(m.Full(w.Escalation, null, this, ct), ct), w.Origin, ct);
                 break;
         }
+    }
+
+    void RecoveryFinished(ulong ticket, string outcome) =>
+        _out.Send(MessageKind.RecoveryFinished, new Protocol.Writer().U64(ticket).Str(outcome).Strs(_modules.Select(m => m.Name).ToArray()).ToArray());
+
+    void RecoverAll(ulong ticket, CancellationToken cancellation)
+    {
+        if (_modules.Count == 0) { RecoveryFinished(ticket, "unchanged"); return; }
+        _cascade = [];
+        var outcomes = new List<Outcome>();
+        try
+        {
+            foreach (var module in _modules)
+            {
+                Begin(module.Slot, module.Name, module.Profile);
+                var outcome = module.Initial(this, cancellation);
+                outcomes.Add(outcome);
+                if (_restartSent || outcome.Kind != OutcomeKind.Image)
+                {
+                    outcome.Extra.Add((AraCodes.RestartRequired, "error", "Script recovery cannot activate this module graph or changed engine bindings. Stop Play and reopen the project; no restart was performed."));
+                    foreach (var pending in outcomes)
+                        SendDiagnostics(pending.Module.Slot, pending.Module.Dir, pending.Problems,
+                            [.. pending.Extra, (AraCodes.LoadFailed, "error", "Script recovery failed; all modules retain their last good code and fault state.")], 0, AbiConst.OriginHuman, validated: false);
+                    RecoveryFinished(ticket, "failed");
+                    return;
+                }
+                _cascade[module] = outcome;
+            }
+            cancellation.ThrowIfCancellationRequested();
+            if (_restartSent || outcomes.Any(o => !o.Module.MatchesCurrent(o, this)))
+            {
+                foreach (var pending in outcomes)
+                    SendDiagnostics(pending.Module.Slot, pending.Module.Dir, pending.Problems,
+                        [(AraCodes.LoadFailed, "error", "Script inputs changed during recovery; retry. Nothing was activated.")], 0, AbiConst.OriginHuman, validated: false);
+                RecoveryFinished(ticket, "failed");
+                return;
+            }
+            foreach (var outcome in outcomes) outcome.Module.Commit(outcome);
+            foreach (var outcome in outcomes)
+                SendDiagnostics(outcome.Module.Slot, outcome.Module.Dir, outcome.Problems, outcome.Extra, 0, AbiConst.OriginHuman, validated: true);
+            SendReload(outcomes, AbiConst.OriginHuman, ticket);
+        }
+        finally { _cascade = null; }
     }
 
     static Outcome Evaluated(Outcome outcome, CancellationToken cancellation)
@@ -423,7 +481,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     /// <inheritdoc/>
     public bool HasDependents(ModuleSession module) => _modules.Any(m => m.References.Contains(module.Name));
 
-    void SendReload(List<Outcome> outcomes, uint origin)
+    void SendReload(List<Outcome> outcomes, uint origin, ulong recovery = 0)
     {
         var w = new Protocol.Writer().Now().U32((uint)outcomes.Count);
         foreach (var o in outcomes)
@@ -432,6 +490,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             w.U32(o.Module.Slot).U32(s.Generation).Bool(s.Hot).U32(o.ReloadKind).U32((uint)o.Escalation).U32(origin)
                 .Timing(o.Timing.ToTiming()).Bytes(o.Image?.Pe ?? []).Bytes(o.Image?.Pdb ?? []);
         }
+        w.U64(recovery);
         _out.Send(MessageKind.Reload, w.ToArray());
         foreach (var o in outcomes)
             Log(0, $"module `{o.Module.Name}` generation {o.Next!.Generation} ({Kind(o)}, {(Escalation)o.Escalation}): {o.Timing}" +

@@ -456,6 +456,20 @@ impl ScriptHost {
         }
     }
 
+    /// Queues an explicit, current-input recovery of the whole loaded module graph.
+    /// Engine-private control: no new native ABI slot and no simulation tick is advanced.
+    pub fn request_recovery(&self, ticket: u64) -> bool {
+        let json = json!({"recovery": ticket}).to_string();
+        // SAFETY: the request span remains valid for this call; managed code only queues work.
+        unsafe {
+            (self.api.request_compile)(
+                self.ctx.handle(),
+                json.as_ptr(),
+                u32::try_from(json.len()).unwrap_or(u32::MAX),
+            ) == 0
+        }
+    }
+
     /// True if a staged reload is waiting for the next [`ScriptHost::tick_boundary`].
     pub fn pending(&self) -> bool {
         // SAFETY: plain call into the runtime.
@@ -711,11 +725,15 @@ impl ScriptHost {
 
     /// Diagnostics reported since the last call (faults, compile errors, registration).
     pub fn take_diagnostics(&self) -> Vec<Diagnostic> {
+        self.ctx.take_diagnostics()
+    }
+
+    /// Lock-free hint for a paused player's diagnostic pump. False never acquires
+    /// the queue lock; true is drained through [`Self::take_diagnostics`].
+    pub fn has_diagnostics(&self) -> bool {
         self.ctx
-            .diagnostics
-            .lock()
-            .map(|mut d| std::mem::take(&mut *d))
-            .unwrap_or_default()
+            .diagnostics_pending
+            .load(std::sync::atomic::Ordering::Acquire)
     }
 
     /// The Schema DB with every C# module's types registered (`reflection.json` source).
