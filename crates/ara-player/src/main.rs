@@ -1053,8 +1053,13 @@ impl Player {
             }
             method::COMMANDS => world.commands(),
             method::COMPILE => {
+                let claim = params
+                    .get("sourceClaim")
+                    .filter(|value| !value.is_null())
+                    .map(|value| parse::<ara_script::SourceClaim>(value.clone()))
+                    .transpose()?;
                 let compile: ara_play::Compile = parse(params)?;
-                world.compile(&compile)
+                world.compile(&compile, claim.as_ref())
             }
             method::SNAPSHOT => world.snapshot()?,
             method::CAPTURE_AUDIO => {

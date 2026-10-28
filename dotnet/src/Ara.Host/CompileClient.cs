@@ -70,9 +70,11 @@ internal sealed class CompileClient : IDisposable
         Protocol.Send(_pipe, MessageKind.Recover, new Protocol.Writer().U64(ticket).ToArray());
 
     /// <summary>Asks for a compile of changed files; agent edits are coalesced and run behind human ones.</summary>
-    internal void Change(uint slot, IReadOnlyCollection<string> paths, uint origin)
+    internal void Change(uint slot, IReadOnlyCollection<string> paths, uint origin, string? claim = null)
     {
-        try { Protocol.Send(_pipe, MessageKind.Change, new Protocol.Writer().U32(slot).Strs(paths).U32(origin).ToArray()); }
+        var payload = new Protocol.Writer().U32(slot).Strs(paths).U32(origin);
+        if (claim is not null) payload.Str(claim);
+        try { Protocol.Send(_pipe, MessageKind.Change, payload.ToArray()); }
         catch (IOException) { /* the server is gone; ReadLoop reports it */ }
     }
 
