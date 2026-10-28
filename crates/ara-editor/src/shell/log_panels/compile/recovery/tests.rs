@@ -34,7 +34,7 @@ impl Scope {
             .data(json!({"module":module,"play":self.value()}))
     }
     fn marker(self, ticket: u64, outcome: &str, modules: &[&str]) -> Diagnostic {
-        Diagnostic::info(ara_diag::Code(935), "C# recovery finished")
+        Diagnostic::info(ara_script::codes::RECOVERY_RESULT, "C# recovery finished")
             .subject(Subject::system(format!("script-recovery/{ticket}")))
             .data(json!({"play":self.value(),"recovery":{"schema":1,"ticket":ticket,"outcome":outcome,"modules":modules}}))
     }
@@ -179,7 +179,7 @@ fn repeated_fault_after_reload_uses_latest_store_sequence_and_becomes_active_aga
     let rows = store.query(&Filter::default());
     let row = rows
         .iter()
-        .find(|row| row.diagnostic.code == ara_diag::Code(912))
+        .find(|row| row.diagnostic.code == ara_script::codes::COMMAND_FAULT)
         .unwrap();
     assert_eq!(row.first, 1);
     assert_eq!(row.count, 2);
@@ -231,16 +231,18 @@ fn malformed_or_unscoped_markers_and_unowned_fault_families_cannot_clear_problem
     emit(&mut store, LIVE.fault("Gameplay", 910, "scoped fault"));
     emit(
         &mut store,
-        Diagnostic::error(ara_diag::Code(910), "legacy fault").data(json!({"module":"Gameplay"})),
+        Diagnostic::error(ara_script::codes::SYSTEM_FAULT, "legacy fault")
+            .data(json!({"module":"Gameplay"})),
     );
     emit(&mut store, LIVE.fault("Gameplay", 913, "future fault"));
     emit(
         &mut store,
-        Diagnostic::error(ara_diag::Code(910), "missing module").data(json!({"play":LIVE.value()})),
+        Diagnostic::error(ara_script::codes::SYSTEM_FAULT, "missing module")
+            .data(json!({"play":LIVE.value()})),
     );
     emit(
         &mut store,
-        Diagnostic::warning(ara_diag::Code(910), "warning contribution")
+        Diagnostic::warning(ara_script::codes::SYSTEM_FAULT, "warning contribution")
             .data(json!({"module":"Gameplay","play":LIVE.value()})),
     );
     poll(&mut view, &store);

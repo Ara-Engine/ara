@@ -38,7 +38,8 @@ fn picked_slot(draw: &ara_runtime::extract::Draw, renderer: &Value) -> ara_ui::R
     }
 }
 impl Shell {
-    /// Resolve a picked native draw to its subtree-local material slot. Source geometry is borrowed.
+    /// Cache a picked native draw's subtree-local material slot. Source geometry
+    /// is borrowed; target validation runs after layout and again on release.
     pub fn content_material_hit(
         &mut self,
         editor: &Editor,
@@ -58,10 +59,14 @@ impl Shell {
             };
             if !drag.session.active()
                 || !is_material(asset)
-                || !matches!(drag.session.feedback(), Some(Feedback::Reject { reason, .. }) if reason == NO_MATERIAL_TARGET)
+                || drag.session.pointer().surface != surface
+                || !self
+                    .viewport()
+                    .is_some_and(|rect| rect.contains(self.pointer[0], self.pointer[1]))
             {
                 return Ok(false);
             }
+            drag.material_hit = None;
             let resolved = self.resolved(editor)?;
             let Some(renderer) = resolved
                 .get(&draw.address)
@@ -72,16 +77,12 @@ impl Shell {
             let Some(primitive) = picked_slot(draw, renderer)? else {
                 return Ok(false);
             };
-            let feedback = self.material_drop_feedback(editor, asset, &draw.address, primitive)?;
-            if matches!(feedback, Feedback::Accept { .. }) {
-                drag.material_hit = Some(MaterialPlacement {
-                    surface,
-                    pointer: self.pointer,
-                    entity: draw.address.to_owned(),
-                    primitive,
-                });
-            }
-            drag.session.preview(feedback);
+            drag.material_hit = Some(MaterialPlacement {
+                surface,
+                pointer: self.pointer,
+                entity: draw.address.to_owned(),
+                primitive,
+            });
             Ok(true)
         })();
         self.drag = Some(Drag::Content(drag));

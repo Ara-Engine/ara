@@ -94,15 +94,10 @@ impl CollectionCheck {
                 native::button(window, false, events)?;
             }
             5 if act.drag() => {
-                let row = proof::row(shell, act, 100, true)
-                    .ok_or("Native drag destination item100 is no longer visible")?;
-                self.drag_motion(
-                    shell,
-                    window,
-                    [row.x + row.w * 0.6, row.y + row.h - 1.],
-                    scale,
-                    events,
+                let point = proof::neutral_after_point(shell, act, 100).ok_or(
+                    "Native drag destination item100 left the neutral scroll band before release",
                 )?;
+                self.drag_motion(shell, window, point, scale, events)?;
             }
             5 => {
                 native::shortcut(window, 4, events)?;

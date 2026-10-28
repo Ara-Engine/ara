@@ -104,7 +104,7 @@ fn slow_recovery_polls_are_bounded_coalesced_and_round_robin_without_releasing_t
 fn diagnostics_are_kept_for_display_and_terminal_result_keeps_exact_outcome_and_modules() {
     let mut state = State::default();
     state.start(request("play:one"), |_| Ok(ScriptRecoveryTicket(1)));
-    let diagnostic=ara_diag::Diagnostic::error(ara_diag::Code(912),"original rich command fault")
+    let diagnostic=ara_diag::Diagnostic::error(ara_script::codes::COMMAND_FAULT,"original rich command fault")
         .data(json!({"module":"Gameplay","play":{"world":"play:one","player":0,"source":"incarnation","binding":1},
             "exception":{"schema":1,"type":"Outer","message":"original","frames":[],"inners":[],"truncated":false}}));
     let mut done = status(1, "play:one", true);
