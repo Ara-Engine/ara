@@ -66,7 +66,8 @@ unsupported retained-code changes. Patched simulation sessions are explicitly
 tainted for replay/networking. Shipping/export players exclude this feature.
 The Windows rust-lld facade and initial Windows/Mac evidence are in
 [`S11`](../spikes/s11-rust-hotpatch/RESULT.md). This does not change D17's toolchain
-or add dx as a build prerequisite. Actual engine-path latency is not measured yet.
+or add dx as a build prerequisite. Windows render/ECS/editor paths preserve their
+PID and state; S11 records their measured latency and current limitations.
 
 ## Spike results (M0)
 

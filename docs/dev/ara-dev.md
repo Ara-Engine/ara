@@ -875,6 +875,11 @@ pinned upstream revision, applies the small checked-in native watcher patch, and
 builds the optional tool with the engine's pinned Rust toolchain. `--plan` prints
 the revision and destination without downloading or building. `ARA_DX` selects an
 already prepared tool. A missing version or native-fix capability reports ARA7600.
+Prepared tools need native protocol 4 and workspace capture capability 1. Re-run
+`hotpatch --install-dx` after upgrading: it backs up and replaces a recognized
+older tool patch while preserving unrecognized source edits. This fixes warm
+Cargo baselines that otherwise acknowledge a patch without rebuilding its edited
+library. Missing captures now reject the patch with ARA7602.
 
 ```
 cargo run -p ara-dev -- hotpatch --plan -- player
@@ -886,7 +891,8 @@ The initial fat build is expensive. Subsequent edits use Subsecond's thin linkin
 and hot function table; the `hotpatch` profile favors compiler latency. The driver
 isolates Cargo outputs, config and crash files under `<CARGO_TARGET_DIR>/ara-hotpatch`
 (the checkout's `target/ara-hotpatch` when unset), uses
-four BelowNormal build jobs on Windows (two jobs on Mac), and binds dx to loopback.
+the caller's `CARGO_BUILD_JOBS` budget (two when unset), runs build children
+BelowNormal on Windows, and binds dx to loopback.
 It forwards native arguments as data, without shell execution.
 
 Windows uses an MSVC-shaped facade over the pinned rust-lld plus the installed
@@ -910,8 +916,15 @@ The optional native watcher patch bypasses RSX diffing only when Ara sets
 `ARA_NATIVE_RUST_PATCH`. Stock alpha.3 can silently miss an undo/redo save after a
 multi-file patch because its file snapshots become stale. The prepared CLI
 replays every native Rust save, including saves queued during compilation.
-Native capability v2 also drains queued saves after a failed compile; upstream
-only drains them after a successful build.
+Native capability v4 drains queued saves after failed compilation, deduplicates
+identical file notifications, and supports lab-admitted patch requests. It also
+selects Ara's explicit `RUSTC` facade for dependency replay and prevents a custom
+workspace linker from doing a redundant executable link before the real patch
+link. Windows snapshots wait for an active writer to close, including the gap
+between truncating a file and writing its new contents. Upstream only drains
+pending changes after successful builds. Reused compiler invocations take their
+Ara contract and settings from the current session. Native build-input changes
+retain the running process and request an explicit rebuild.
 
 The CLI prerelease is required for its fix to uncaptured workspace replay (#5903).
 Ara keeps Bevy's Subsecond 0.7.10 runtime; the prerelease's patch-table schema is
@@ -957,10 +970,35 @@ which older readers refuse; unpatched artifacts retain format 1. Release hosts f
 enabled, and ara-export rejects a marked development executable both when making
 and when unpacking a runtime template.
 
-`ara-dev lab` can call `hotpatch::available` before choosing its Rust reload
-strategy; a missing/incompatible tool selects its existing warm-restart path.
-ARA7602 requires rebuilding/restarting rather than retrying an incompatible patch.
-No lab state or file-control protocol is owned by the hotpatch module.
+`ara-dev hotpatch -- lab` selects the lab's Rust reload strategy seam. This
+experimental adapter supports one shared player; ordinary `ara-dev lab` retains
+its multi-track warm restart behavior. Missing or incompatible dx selects warm
+restart with ARA7600. Body patches are built under lab admission, bound to the
+exact source revision and player PID, and acknowledged after frame-boundary
+publication. Incompatible source/layout edits establish a new baseline and use
+the existing rebuild and warm restart strategy. The lab owns sessions and GPU
+admission; the adapter owns its dx baseline and Rust publication handshake.
+Cached patch batches and launchers are scoped to that DX process. Entering or
+leaving the hotpatch command restores the cached normal player template; saved
+scene selections survive the transition. If that template was deleted, only the
+disposable binary receipt is invalidated and the lab builds a new one.
+
+For manual latency investigations, `ARA_HOTPATCH_TRACE_DIR` writes timestamped
+events off the idle frame path. The opt-in scripts `measure-latency.ps1` and
+`analyze-latency.ps1` in S11 separate watching, compiler work, links, validation,
+publication and observed output. `ARA_HOTPATCH_EXPERIMENT` selects per-crate
+codegen-unit/incremental and lld-thread experiments. These settings never affect
+ordinary Cargo commands. For example, point it at a JSON file containing
+`{"crates":{"ara_render_fidelity":{"codegen_units":64}}}` to tune that crate
+alone. Optional `--cranelift-crate <name>` requires an explicitly
+selected nightly with `rustc-codegen-cranelift-preview`; it uses panic=abort in
+the isolated hotpatch profile. It does not change the pinned stable toolchain.
+
+`ARA_HOTPATCH_LATENCY=1` lets the hidden render/editor proof admit concurrent CPU
+work while retaining the GPU-load check. It measures the shared development
+workflow, not quiet-machine frame performance or D26 acceptance. Defaults retain
+the ordinary foreign-CPU guard. No latency capture should be cited as a renderer
+performance benchmark.
 
 For a windowless real-renderer proof without game imports:
 
@@ -980,11 +1018,15 @@ entity/query/system alive and verifies replay, restore and network refusal after
 patch. Captures prove behavior, not D26 performance.
 
 Measured evidence and current limitations: [S11](../../spikes/s11-rust-hotpatch/RESULT.md).
-Its initial 0.39 s Mac result is a minimal loop measurement, not editor latency.
-Windows' actual fidelity/system/panel first edits measured 21.87 / 3.85 / 20.59 s;
-repeated edits varied up to 34.57 s. This is currently an experimental functional
-lane, above the 2–3 s latency target. Mac ECS/editor and the lab strategy adapter
-remain pending.
+Windows warm medians after the native watcher/link corrections are 2.476 s for
+fidelity recording, 2.149 s for the small real-ECS probe (1.388 s with a targeted
+16-CGU setting), and 15.205 s for editor panels. Mac ECS/editor warm medians are
+0.494 / 2.976 s on main 792064a7 plus the owned timing/runtime fixes. The initial
+0.39 s Mac result is only a minimal loop; native raster-pass edits previously
+passed around one second. Full stage tables and substantial shared-disk tails
+are in S11. Editor compilation still misses the Windows 2–3 s target; no blanket
+engine profile change is justified. The lab adapter's resident-player validation
+is still pending.
 
 ## Gate usage
 

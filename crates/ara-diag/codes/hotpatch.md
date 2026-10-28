@@ -12,9 +12,12 @@ Causes:
 
 Fixes:
 - Run `ara-dev hotpatch --install-dx` to prepare the pinned optional CLI with the native Rust save fix.
-- Or point ARA_DX at an already prepared 0.8.0-alpha.3 tool (native capability v2).
+- Or point ARA_DX at an already prepared 0.8.0-alpha.3 tool (native protocol v4, workspace capture v1).
+- Older prepared tools can miss warm Cargo dependency captures; reinstall before continuing. Known tool patches are backed up during upgrade; unrecognized source edits are preserved and require a separate source cache.
 - Launch with ara-dev hotpatch. Read docs/dev/ara-dev.md for Windows setup.
 - Repair the existing MSVC C++/Windows SDK installation if link or editbin cannot be located.
+- Optional `--cranelift-crate` experiments need an explicitly selected nightly and its `rustc-codegen-cranelift-preview` component. Stable LLVM remains the default; ordinary builds never require this component.
+- Keep Windows PDB generation enabled: dx reads those symbols to construct its jump table.
 
 ## ARA7601 hotpatch::APPLIED: Rust patch applied
 owner: ara-hotpatch
@@ -39,10 +42,12 @@ Causes:
 - A type/resource layout, function signature, static, build input or source set changed.
 - An async, generic, impl Trait or unreviewed closure-bearing body changed.
 - The patch library could not be loaded for this process.
+- A changed workspace crate has no compiler capture in the selected host; the driver refuses to acknowledge an unchanged dependency.
 
 Fixes:
 - Rebuild and restart through ara-dev hotpatch to establish a new source baseline.
 - Keep live edits within synchronous, layout-stable function bodies.
+- Use the matching player/editor target and reinstall the optional CLI when its capture capability is outdated.
 
 ## ARA7603 hotpatch::DETERMINISM: Rust-patched simulation is not reproducible
 owner: ara-hotpatch

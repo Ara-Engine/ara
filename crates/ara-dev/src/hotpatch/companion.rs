@@ -29,10 +29,7 @@ pub(super) fn prepare(root: &Path, artifacts: &Path) -> Result<PathBuf> {
         ])
         .env("CARGO_TARGET_DIR", directory.join("build"))
         .env("CARGO_BUILD_BUILD_DIR", directory.join("build"))
-        .env(
-            "CARGO_BUILD_JOBS",
-            if cfg!(target_os = "macos") { "2" } else { "4" },
-        )
+        .env("CARGO_BUILD_JOBS", super::tool::build_jobs())
         .env("RUSTC_WRAPPER", "")
         .stdout(fs::File::create(&log)?);
     eprintln!("Building editor + matching Play companion before the initial dx build...");

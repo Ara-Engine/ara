@@ -1,8 +1,21 @@
 # S11: Rust hotpatch checkpoints (2026-10-27)
 
-**Windows functional checkpoint:** all three actual dispatch paths patch without
-restarting. This remains an experimental dev feature: observed edits exceed the
-2–3 s target and vary substantially on this shared PC with D: build outputs.
+**Preview-4 latency pass:** Windows fidelity recording has a 2.476 s warm median;
+the small real-ECS system probe has a 2.149 s default median (1.388 s with a
+targeted 16-CGU setting). Editor default warm median is 15.205 s. Lab publication
+and corrected warm-cache rendering are verified. This remains an off-by-default experimental dev feature, with
+material shared-disk tails. The later sections contain stage timings and lever
+comparisons; the original functional checkpoint below is retained as history.
+
+**Warm-cache correctness finding (2026-10-28):** a new lab baseline could reuse
+Cargo dependencies without capturing their compiler invocations. DX then
+acknowledged a tip-only patch while the edited library's pixels stayed unchanged.
+The apparent 5.171 s result in `lab-native-r5` is invalid as render latency.
+The earlier cold-baseline raster captures do show the exposure change and restore.
+The corrective CLI now locates Cargo's separate build directory, normalizes
+hyphenated package names, and rejects uncaptured changes. Windows verification
+of that correction passed offscreen; prepared tools must advertise workspace
+capture capability 1 in addition to native protocol 4.
 
 | Windows native CLI v2 | First body edit | Repeat body edit | Restore/recovery |
 | --- | ---: | ---: | ---: |
@@ -13,8 +26,10 @@ restarting. This remains an experimental dev feature: observed edits exceed the
 These are save-to-observed-output wall times, including workspace replay,
 compilation, linking, delivery and output sampling. They are not DX's shorter
 tip-only compile timer. Each row kept its process and state alive. Mac raster
-rendering previously passed around 1 s; Mac ECS/editor measurements remain pending
-AC power (the latest SSH battery check could not connect). No Mac build was run.
+rendering previously passed around 1 s. The earlier Mac ECS/editor checkpoint
+measured 0.494 s / 2.976 s on AC. The current-main follow-up below observes
+0.453 s / 3.036 s, plus 3.017 s after fresh workspace captures over warm
+dependencies; its editor timing-guard caveat is retained. The Mac slot is released.
 
 ## Live/rebuild contract
 
@@ -30,9 +45,15 @@ AC power (the latest SSH battery check could not connect). No Mac build was run.
 | Shader-only edits | Existing independent shader reload/cohort checks |
 | Replay, snapshot restore or network continuation after any applied Rust patch | Refuse with ARA7603; process/header/hash are marked, including legacy-reader format rejection |
 | Editor's separately built Play companion | Keeps built code; player Rust iteration uses its own driver/baseline |
+| Shared lab Rust strategy | Native hotpatch on verified Windows targets; Mac currently selects rebuild plus warm restart |
 | Shipping/export executable | Feature is off by default, release compilation rejects runtime opt-in, export rejects the marker |
 
-The lab adapter is still pending; its default remains rebuild plus warm restart.
+The lab adapter is implemented against `ReloadStrategy`. The cold-baseline
+resident Raster player preserved its PID and visibly applied and restored four
+exposure edits. A subsequent warm-cache run exposed the capture bug described
+above; its corrected end-to-end verification passed offscreen without a timing
+lease, as explicitly requested. No latency claim is made from that run.
+Ordinary lab defaults to rebuild plus warm restart.
 Source inputs must remain stable while the compiler reads them. The source guard
 is a conservative compatibility policy, not arbitrary Rust ABI/state migration.
 
@@ -376,3 +397,501 @@ checks, including the real MSVC editbin regression. Logs:
 One ara-dev fixture run found the machine's installed sccache instead of exercising
 its intended missing-cache path. The final run uses the pinned compiler's bin
 directory without the user Cargo tool directory, as in the preceding native gate.
+
+## Windows latency investigation (2026-10-28)
+
+The accepted functional checkpoint is `b7f59228`. The next pass keeps its
+body/layout policy, frame publication, persisted ECS state and determinism guards.
+All builds use D: and BelowNormal priority with hidden GPU hosts. The initial
+comparisons used four jobs; the final optional-backend and lab runs use two,
+matching the updated shared-PC budget. Other agents and the integration gate
+are active; these are observed development latencies, not isolated CPU benchmarks.
+Mac ECS/editor measurements completed in the later exclusive slot; their results
+and cleanup are recorded below.
+
+Manual `measure-latency.ps1` alternates one body and its exact original, verifies
+the same PID and actual output, and restores sources in `finally`. Each compiler
+configuration has one first sample followed by three warm samples. First samples
+are retained separately; they are not part of the warm median. `analyze-latency.ps1`
+correlates file-watch, rustc, linker, transport and frame-application timestamps.
+Linker spans nested inside rustc are subtracted from compiler wall time to avoid
+double counting. Rustc CPU time helps identify scheduling/IO delay. Optional
+tracing adds no filesystem access to an idle frame check.
+
+### Causes established so far
+
+1. Windows saves generate repeated write/data notifications. The native v2 fix
+   queued them even when the content was identical. In the fresh ECS baseline,
+   four saves produced six applied generations. Deduplication produced exactly
+   twenty generations for twenty subsequent measured saves.
+2. With Ara's custom lld facade, upstream `BuildRequest::cargo_build` supplies a
+   custom linker even for Fat/Thin mode. This makes rustc perform an executable
+   link before dx's separate patch link. Native mode now uses upstream's no-link
+   interception for the first step and retains the configured lld for the real
+   link. Traces distinguish the two; this is not a switch away from lld.
+3. Dependency replay uses `Command::new("rustc")` with Cargo's captured PATH.
+   On Windows that selected the real compiler ahead of Ara's facade. Native
+   replay now selects explicit `RUSTC`; otherwise compatibility checks, per-crate
+   experiments and changed-crate traces can be bypassed. Earlier render records
+   with no changed-crate trace cannot establish that those experiments applied.
+   The Cargo workspace wrapper also honors its explicit compiler argument in
+   native mode. Cached invocations restore the current Ara contract/trace/settings
+   environment, rather than a previous fat build's session paths. Native build
+   input changes report ARA7602 instead of letting dx restart the process itself;
+   the lab owns the explicit rebuild and warm restart decision.
+4. Incremental compilation was already enabled (`-C incremental`, 256 codegen
+   units, line-table debug info). The old 33.203 s ECS outlier rebuilt only its
+   small tip crate; it was not evidence of recompiling large ara-sim consumers.
+   The old 33.060 s editor sample included a queued stale build followed by the
+   requested build. Shared IO/CPU delays remain material: one new run overlapped
+   disk cleanup and spent ~16 s wall time for ~0.75 s rustc CPU. That entire run
+   is excluded from speed comparisons, not silently folded into the baseline.
+
+Primary implementation evidence is pinned dx revision
+`cb27832398e8a3fa30a0fc8d6917c6d8a86fa71a`, `packages/cli/src/build/{request,link,patch}.rs`,
+and the reviewed embedded `dx-native-watch.patch`. The official
+[Cargo profile reference](https://doc.rust-lang.org/cargo/reference/profiles.html)
+documents the incremental and codegen-unit controls. The optional
+[Cranelift backend](https://github.com/rust-lang/rust/blob/main/compiler/rustc_codegen_cranelift/Readme.md)
+needs a separately selected nightly/component; its Windows/macOS unwinding
+limitations require an aborting isolated profile. Stable LLVM remains the default.
+
+### Completed ECS lever comparison
+
+This named system runs in a real Bevy/Ara Session but lives in the small probe
+crate. These numbers do not claim that editing ara-sim itself costs the same.
+
+| Configuration | Warm median | Warm range | Evidence |
+| --- | ---: | ---: | --- |
+| Duplicate notifications enabled, old double link | 6.079 s | 5.056–7.704 s | latency-before-r3-sim |
+| Deduplicated, existing incremental/256 CGUs | 3.056 s | 3.032–3.194 s | latency-after-r1-sim |
+| Deduplicated, 16 CGUs for the system probe | 2.576 s | 2.377–2.625 s | same run |
+| Deduplicated, 64 CGUs | 3.021 s | 2.764–3.030 s | same run |
+| Deduplicated, incremental disabled | 2.926 s | 2.844–3.002 s | same run |
+| Deduplicated, lld threads=4 | 2.929 s | 2.923–3.030 s | same run |
+
+Each evidence directory is under `target/hotpatch-proof/` and contains raw
+latency, stage, trace and driver records. Twenty edits retained PID 39964, the
+same entity and forward-moving component state. The initial no-redundant-link
+ECS run retained PID 24024: its 16-CGU warm median was 2.395 s, but a 4.743 s
+outlier prevents claiming a reliable 3 s ceiling under shared load. Do not
+change engine-wide codegen settings from this small-crate result.
+
+Per-stage accounting below uses the actual median-total warm sample from each
+configuration, so columns refer to one edit and add to its observed total. The
+compile column includes the compiler-facade guard. The dx link column includes
+the redundant nested link in these pre-link-fix runs. The remaining driver column
+includes Cargo/cache handling and symbol-table construction/delivery.
+
+| ECS probe | Watch | Compile + guard | dx links | Other driver | Receiver validation | Boundary + apply | Observed output | Total |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Before | 2 ms | 1,685 ms | 3,363 ms | 336 ms | 567 ms | 22 ms | 105 ms | 6,079 ms |
+| Deduplicated | 1 ms | 919 ms | 1,400 ms | 179 ms | 504 ms | 5 ms | 48 ms | 3,056 ms |
+| Plus 16 CGUs | 2 ms | 715 ms | 1,262 ms | 137 ms | 428 ms | 17 ms | 16 ms | 2,576 ms |
+
+Disabling Windows PDB output is rejected as a setup error: dx reads global
+symbols from the fat and patch PDBs to construct its jump table. It is not a
+supported linker optimization. No engine crate splits are included in this pass.
+
+### Actual fidelity recording, explicit replay and one real link
+
+PID 34232 survived 28 alternating exposure edits in the actual
+`ara_render_fidelity::FidelityView::record_frame` path. Every sample checked the
+rendered output, not just an applied event. One additional generation exposed a
+remaining watcher duplicate; its source-snapshot correction is being validated
+separately before selecting defaults. The initial fat build took about six
+minutes after changing the compiler facade; that is excluded from edit latency.
+
+| Configuration (changed crate unless specified) | First sample | Warm median | Warm range |
+| --- | ---: | ---: | ---: |
+| Incremental, 256 CGUs | 6.448 s | 4.083 s | 3.583–4.809 s |
+| 16 CGUs | 5.059 s | 5.063 s | 4.007–7.139 s |
+| Host only, 16 CGUs | 4.000 s | 3.259 s | 3.002–4.423 s |
+| Changed crate and host, 16 CGUs | 3.286 s | 2.748 s | 2.221–4.723 s |
+| 64 CGUs | 2.764 s | 2.325 s | 2.144–2.684 s |
+| Incremental disabled | 2.821 s | 4.318 s | 2.805–8.438 s |
+| lld threads=4 | 2.750 s | 3.411 s | 2.864–4.038 s |
+
+Evidence: `target/hotpatch-proof/latency-explicit-replay-r2-fidelity/`.
+The 16-CGU changed-crate setting is not a universal improvement. The 64-CGU
+samples meet the warm target in this run; the shared-machine ordering and small
+sample count do not establish a guaranteed ceiling. Confirm it against another
+baseline before making it a default.
+
+| Fidelity recording | Watch | Changed rustc | Host rustc | Compiler guard | dx link | Other driver | Receiver validation | Boundary + apply | Observed output | Total |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 256 CGUs | 2 ms | 1,189 ms | 1,919 ms | 58 ms | 99 ms | 277 ms | 341 ms | 131 ms | 67 ms | 4,083 ms |
+| 64 CGUs | 1 ms | 734 ms | 675 ms | 44 ms | 80 ms | 220 ms | 307 ms | 241 ms | 24 ms | 2,325 ms |
+
+These are the actual median-total warm samples, with rounded columns. Their
+changed-crate CPU times were 938 and 625 ms; host CPU times were 438 and 422 ms.
+The larger change in host wall time therefore includes scheduling/IO variation,
+not just different compiler effort. Publication includes Subsecond's library
+loading and address relocation. One incremental-off sample spent 1.367 s in
+publication under shared load; idle-boundary nanosecond measurements do not
+describe that work. DLL loading stays at the boundary rather than moving
+potential library initializers onto a concurrent render/simulation worker.
+
+The watcher correction uses a short Windows read handle that shares reading and
+atomic rename, while waiting asynchronously for an active writer to close.
+This follows the documented [Rust share-mode contract](https://doc.rust-lang.org/std/os/windows/fs/trait.OpenOptionsExt.html#tymethod.share_mode)
+and [Windows sharing rules](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew).
+It preserves legitimate empty/deleted-source rejection instead of skipping empty
+files. The manual harness can hold a truncating writer open for 0–500 ms to
+reproduce the notification race. No engine-frame lock or additional dependency
+is introduced.
+
+### Writer-close regression and confirmation
+
+The delayed-write repro is deterministic: hold a truncating writer open for
+150 ms before writing the complete 5,119-byte ECS source. With the snapshot
+protection disabled, all four saves produced empty snapshots and transient
+ARA7602 compiler rejections before recovering. With protection enabled, the
+same four saves produced zero empty snapshots and zero rejections, with one
+applied generation per save. PIDs 27132 and 26452 respectively retained the
+entity, forward-moving state and determinism guards.
+
+Evidence: `latency-writer-{off,on}-r1-sim` under `target/hotpatch-proof/`;
+`source_snapshot` events record byte counts and duplicate decisions, never source
+contents. Native mode also retains legitimate empty-file events so a real empty
+source is rejected rather than silently ignored.
+
+The final ordinary ECS run retained PID 15276 for sixteen edits/generations:
+
+| Small ECS probe | Warm median | Warm range |
+| --- | ---: | ---: |
+| Existing incremental/256 CGUs | 2.149 s | 1.533–2.478 s |
+| 1 CGU | 3.004 s | 1.464–28.630 s |
+| 4 CGUs | 1.759 s | 1.504–3.466 s |
+| 16 CGUs | 1.388 s | 1.382–1.421 s |
+
+Evidence: `target/hotpatch-proof/latency-snapshot-r1-sim/`. The 28.630 s
+sample used only 516 ms of rustc CPU, 4.344 s rustc wall time, 4.285 s inside
+Ara's linker wrapper and another 19.36 s before dx delivered the patch. DX
+classified 23.698 s as `Patch: Link`; PDB symbol matching afterward took about
+10 ms. This reproduces a long tail outside large-crate compilation. Additional
+dx link/cleanup/metadata/HTML timing boundaries distinguish the remaining tail;
+do not attribute it to PDB parsing or Cargo locks without that evidence.
+
+The render confirmation uses the same final watcher/compiler fixes. Disabling
+deduplication, writer protection and the no-link correction yielded four saves
+but five applied generations, warm median 4.031 s (3.909–6.393 s), PID 27792.
+Enabling them yielded sixteen saves and sixteen generations in PID 24648.
+Interleaving the unchanged 256-CGU and 64-CGU configurations twice gave:
+
+| Fidelity recording, six warm samples each | Warm median | Warm range |
+| --- | ---: | ---: |
+| Default 256 CGUs | 2.476 s | 2.345–3.234 s |
+| 64 CGUs | 2.766 s | 2.259–2.986 s |
+
+Evidence: `latency-snapshot-{before,after}-r1-fidelity`. The earlier 64-CGU win
+does not repeat against an interleaved baseline; keep the existing engine profile
+instead of installing a blanket codegen-unit override. A small system/host leaf
+can still benefit from fewer units. All source edits were restored and both
+render confirmation hosts exited gracefully.
+
+### macOS preview-4 ECS confirmation
+
+The dedicated Mac checkout is based on main `792064a7` (which contains verified
+Metal main `857a6aee`), with the owned timing/runtime/native-DX corrections from
+this latency pass applied. It does not import unmerged lab or GPU changes.
+AC was checked before each step; builds run one at a time with two Cargo jobs.
+
+Four ECS system edits retained PID 8972 and entity 4294967293, with forward
+component state and the replay/restore/network refusal checks passing. Default
+incremental/256-CGU latency was 0.497 s first, then 0.494/0.493/0.494 s: warm
+median **0.494 s**. DX's link phase was 34–35 ms; the system crate's rustc wall
+time was 228–238 ms. Evidence is copied to
+`target/hotpatch-proof/mac-p4/native-r1-sim/` on Windows. The manual controller
+is in `mac-measure/`; it needs only the existing .NET 10 SDK and performs no
+NuGet package downloads.
+
+The actual editor retained PID 19775 and its session across four panel edits:
+3.284 s first, then 2.976/2.929/3.092 s, warm median **2.976 s**. Changed and
+restored PNGs were visually inspected through the production capture path.
+The small 800×600 Retina capture has clipped baseline chrome; that existing
+layout behavior is outside this hotpatch change. The panel marker itself is
+visible and restored correctly. Evidence: `mac-p4/native-r1-editor/` and
+`mac-p4/editor-captures/` under the Windows proof directory.
+
+| macOS representative warm edit, ms | Watch | rustc + guard | dx link | Driver + validation | Boundary + apply | Output observation | Total |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ECS | 10 | 233 | 34 | 165 | 32 | 18 | 494 |
+| Editor panel | 12 | 2,330 | 123 | 228 | 149 | 134 | 2,976 |
+
+Mac link values come from DX phase profiling; there is no MSVC linker-facade
+span on this platform. The analyzer leaves unavailable linker/CPU counters null
+rather than misreporting zero work. The editor compilation splits into 2,009 ms
+for `ara-editor`, 290 ms for its small host and 31 ms for guards. Actual native
+raster-pass editing previously passed around one second; it was not rerun in
+this slot, and is distinct from the new Windows fidelity recording measurements.
+
+Both Mac hosts exited gracefully. Sources were restored, evidence copied off
+host, and all owned current driver/DX/companion/fat/thin build targets cleaned.
+The Mac was released with no DX/Cargo/rustc/caffeinate process and 31.8 GiB free.
+`machine.txt` records the main revision, AC state and exact tool hashes;
+`cleanup.log` records scoped removal. Mac lab validation belongs to the lab agent
+and remains separate from these direct ECS/editor measurements.
+
+The Windows editor lever run also exposed an 82.565 s tail: changed crate
+14.573 s, host crate 53.707 s, links 4.676 s, and boundary publication 7.249 s.
+The host compiler used only 1.156 s CPU. DX's finer phase profile assigns
+53.743 s to compilation and 4.727 s to linking, rather than cleanup or PDB
+matching. A nearby three-second PDH sample measured the D:/E: physical disk at
+~181 ms per transfer with queue length 17, while memory remained ~8 GiB free
+and multiple other Cargo/rustc processes were active. Evidence:
+`target/hotpatch-research/windows-editor-{load,disk}-20261028.json` and
+`latency-snapshot-after-r1-editor/`. This is evidence of a shared storage delay,
+not grounds to hide the tail or weaken publication/compatibility checks.
+
+### Windows editor lever comparison and final stage checkpoint
+
+The unmodified editor console and the patched panel were captured through the
+production editor protocol. PID 43232 and its session survived all 28 saves,
+with exactly 28 applied generations. The restored host exited gracefully and
+released its GPU queue. Captures were visually inspected.
+
+| Editor configuration | Warm median | Warm range |
+| --- | ---: | ---: |
+| Before native corrections | 23.107 s | 17.977–35.386 s |
+| Default incremental/256 CGUs | 15.205 s | 11.686–15.471 s |
+| Changed editor crate, 16 CGUs | 15.604 s | 14.151–15.820 s |
+| Small bin-only host, 16 CGUs | 12.062 s | 10.006–19.316 s |
+| Editor and host, 16 CGUs | 12.048 s | 11.723–82.565 s |
+| Editor, 64 CGUs | 34.439 s | 10.451–43.125 s |
+| Editor incremental disabled | 18.216 s | 16.899–25.618 s |
+| lld threads=4 | 12.932 s | 12.049–21.311 s |
+
+Evidence: `latency-snapshot-{before,after}-r1-editor`. Shared-machine order and
+the small sample count prevent promoting a blanket profile setting from this
+table. Retain the existing profile. The editor remains above the latency target.
+
+The following stage table uses a single representative warm edit per row, nearest
+its configuration's median total. All columns are milliseconds and add to the
+observed total, subject to rounding. Compilation includes the compatibility
+facade; driver includes cache/symbol-table delivery and receiver validation.
+The render-after representative is 2.545 s; its six-sample median is 2.476 s.
+
+| Windows path | Watch | rustc + guard | dx links | Driver + validation | Boundary + apply | Output observation | Total |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Render before | 1 | 2,173 | 1,355 | 454 | 14 | 33 | 4,031 |
+| Render after | 2 | 1,428 | 529 | 527 | 34 | 25 | 2,545 |
+| ECS before | 2 | 1,685 | 3,363 | 903 | 22 | 105 | 6,079 |
+| ECS after, default | 1 | 1,409 | 114 | 466 | 134 | 25 | 2,149 |
+| ECS after, probe 16 CGUs | 1 | 464 | 490 | 397 | 12 | 23 | 1,388 |
+| Editor before | 1 | 13,725 | 7,898 | 1,092 | 212 | 178 | 23,107 |
+| Editor after, default | 1 | 13,065 | 837 | 892 | 144 | 266 | 15,205 |
+
+In that editor-after edit, the changed `ara-editor` crate took 7.200 s and the
+bin-only host 5.785 s, plus 81 ms of facade work. Before the corrections, links
+cost 6.668–14.389 s per warm editor edit; afterward default warm links cost
+0.837–1.114 s. The old 34.568 s ECS result was a small-tip compiler tail, while
+the old 33.060 s editor result included a queued stale build. They have different
+causes; neither establishes that all reverse workspace consumers were rebuilt.
+
+Recommend moving synchronous pass recording and panel drawing behind small leaf
+crate boundaries, with stable handles/contexts supplied by their existing owners.
+The small ECS leaf takes hundreds of milliseconds of compiler work; editor
+compilation takes seconds even after removing redundant links. The measured
+fidelity crate already reaches the target median, so prioritize a panel leaf and
+the unusually costly editor host rather than splitting every engine crate.
+No engine crate refactoring is included. Recheck shared storage contention before
+using these wall times to set universal compiler defaults.
+
+### Optional Cranelift: real Windows system patches
+
+The named system probe was compiled and patched with
+`rustc 1.101.0-nightly (16d1ffac1 2026-10-26)` plus the optional
+`rustc-codegen-cranelift-preview` component. Only `ara_hotpatch_sim_probe` uses
+Cranelift; dependencies keep LLVM. An isolated panic=abort hotpatch profile is
+required. The pinned stable toolchain and ordinary Cargo builds are unchanged.
+
+Interleaved A/B runs used the same nightly, abort profile, 256 CGUs, two
+BelowNormal build jobs, native DX v4, target disk and body-edit controller:
+
+| Run | Backend | Warm median | Warm range | PID |
+| --- | --- | ---: | ---: | ---: |
+| A1 | Cranelift | 1.541 s | 1.506–1.590 s | 44336 |
+| B1 | LLVM control | 1.968 s | 1.833–2.010 s | 43156 |
+| A2 | Cranelift | 1.618 s | 1.605–1.774 s | 42608 |
+| B2 | LLVM control | 4.172 s | 3.151–4.629 s | 48728 |
+
+Each run retained its PID/entity/state, passed the replay/restore/network guards,
+and applied exactly four generations for four edits. Compiler traces confirm
+`-Zcodegen-backend=cranelift` in all five named-crate invocations (fat + four
+patches) in each A run, and zero in either B run. The slower B2 shows continued
+shared-machine variation; do not interpret the total difference as pure codegen
+speed. A1's changed-crate compiler wall time was 451–614 ms across warm edits.
+
+Evidence: `latency-{cranelift,nightly-llvm-control}-r{1,2}-sim` under the proof
+directory, and `target/hotpatch-research/cranelift-toolchain.txt`. This proves
+hybrid-backend live patching of the small ECS leaf on Windows, not editor/render
+Cranelift support or a Mac backend measurement. Keep stable LLVM as the default;
+the targeted stable 16-CGU probe also reached 1.388 s in its separate run.
+Missing/wrong nightly components are diagnosed as ARA7600 rather than installed
+or required by ordinary builds. Panics abort this optional host; see the official
+[Cranelift support and unwind limits](https://github.com/rust-lang/rust/blob/main/compiler/rustc_codegen_cranelift/Readme.md).
+
+### Lab native player startup: Windows resource collision
+
+The first real player baseline compiled its fat dependency archive in 1,893.6 s
+on the shared SATA target with two BelowNormal jobs, then failed its fat link at
+2,001.7 s. DX adds `.winres/resource.lib`; the player's own build script embeds
+`ara-game.lib`. Both define icon IDs 1–6, which rust-lld correctly rejects.
+Evidence: `target/hotpatch-proof/lab-native-r1/status-build-failed.json` and
+`D:/AraBuild/hotpatch-target/ara-hotpatch/lab/1793145478487947/dx.out.log`.
+
+The native linker facade now drops only DX's generated resource when Ara's
+branded resource is present. It keeps Ara's icon and does not use `/FORCE` or
+suppress unrelated link errors. Both the raw DX capture and direct arguments
+use that rule. The dependency cache is retained for the corrected retry; this
+cold cost is separate from warm edit latency.
+
+The corrected full-player retry completed its fat archive at 1,878.63 s and
+reported build success at 1,897.03 s; its hidden `--help` host exited normally
+at 1,902.75 s. This confirms the resource collision is fixed in the full player,
+in addition to the isolated lld regression. The subsequent normal `perf` build
+for lab export tools is a separate cold setup step, not a body-patch sample.
+
+Retry evidence is in `target/hotpatch-proof/lab-native-r4/`. Its owner record
+pins the preserved compiler facade and corrected linker facade separately;
+keeping the compiler path avoids another Cargo configuration invalidation.
+The adapter overrides the normal lab builder's job budget with the caller's
+two jobs. The lab owner's `build_started` event still reports its hardcoded
+four; that diagnostic is not the effective Cargo job count.
+
+### Lab publication, cache lifetime and warm-baseline capture
+
+The cold R4 player fell back to Raster after `vkCreateDevice` failed in its RT
+startup path. Editing the inactive FidelityView path acknowledged a table update
+but did not change pixels, so those saves are excluded from rendered latency.
+Four subsequent Raster exposure edits visibly changed and restored captures in
+the same native PID 34572 (launcher PID 49556), generations 5–8:
+
+| Raster operation | Save to frame-boundary acknowledgement | Save to captured sweep |
+| --- | ---: | ---: |
+| First body edit | 24.591 s | 29.029 s |
+| Restore | 16.205 s | 21.105 s |
+| Repeat body edit | 15.017 s | 19.124 s |
+| Restore | 18.391 s | 24.526 s |
+
+This full-player result includes cumulative earlier FidelityView edits and extra
+workspace replay. It is separate from the dedicated FidelityView probe's 2.476 s
+median. The fresh scene freeze used the ordinary player template and its matching
+PDB successfully. An unsupported declaration caused a new baseline and warm
+restart in 272.128 s from source watch to generation zero; both PIDs changed,
+the saved selection survived, and compilation took 219.149 s. Retained evidence
+also records a 543 ms early-read error in the manual observer.
+
+R5's apparent 5.171 s warm median was a false success: the Raster dependency's
+compiler capture was absent and its pixels stayed unchanged. Cargo kept its
+intermediates outside DX's new generation directory; upstream invalidation also
+compared underscore crate names with hyphenated package folders. The optional
+CLI now recaptures from the actual build root and rejects an uncaptured changed
+crate with ARA7602 instead of acknowledging tip-only compilation. Two upstream
+regression tests cover these cases. Native protocol stays at 4, and Ara requires
+workspace-capture capability 1. The installer upgrades only its recorded patch,
+backs up those bytes, and preserves unrecognized source edits.
+
+Patch batches and generated launchers belong to one DX lifetime. Entering or
+leaving hotpatch mode restores the cached ordinary template and removes old PID
+batch metadata. A missing template invalidates only the disposable binary receipt;
+scene selections remain intact. Missing DX selects ordinary warm restart with
+the caller's build budget. Focused cache, installer and policy tests pass without
+requiring DX in a fresh clone.
+
+Evidence: `target/hotpatch-proof/lab-native-r4/{raster,rebuild-measurement.json,
+fresh-freeze-result.json}`, `lab-native-r5/INVALID.md`, `lab-cache-fallback/`,
+and `target/hotpatch-research/capture-{final,budget}-*.log`.
+
+The corrected R7 functional run kept native PID **40208** through generations
+1–4: exposure increased twice and restored twice. Actual `ara_render` compiler
+replays are present. Sampled image luma increased by 0.30236 on both edits and
+returned within 0.00004 of baseline on both restores; captures were visually
+inspected. This ran hidden/offscreen without the shared timing lease, at the
+coordinator's explicit request. Its elapsed times are excluded from latency
+results. Formal corrected full-player timing remains for the announced quiet
+window. Evidence: `target/hotpatch-proof/lab-native-r7-functional/functional.json`,
+its `trace/`, and `baseline/`, `body-1/`, `body-3/`, `restore-2/`, `restore-4/` PNGs.
+The earlier R7 lab launch timed out behind timing tickets before any source edit;
+it is not a patch measurement or a correctness failure.
+
+### Current-main Mac follow-up and warm-cache proof (2026-10-28)
+
+The reserved session used current main `b3fb6dc7eb314eb2226b2a3ac632c89e9af1f5aa`
+(after `6881a800`) plus Windows checkpoint `e178d9638627c568a35b1d40f7b2ab152a677450`.
+The isolated verification merge is `094bdb4823ccc8d4bb5083258ed5c3834a81e67b`.
+Its three conflicts were ordering-only CLI/Cargo-feature conflicts; main's ordering
+was retained. Other Mac checkouts were untouched. Jobs ran serially on AC,
+with two Rust jobs, nice 10, job-scoped caffeinate and hidden/offscreen hosts.
+The slot lasted approximately 32 minutes, including evidence transfer and cleanup.
+
+All times below are save-to-observed-output wall times. Warm statistics exclude
+the first edit and include three samples. The editor rows are **observations,
+not quiet-window certified timings**, for the guard issue described below.
+
+| Current-main Mac path | First edit | Warm median | Warm range | Native PID |
+| --- | ---: | ---: | ---: | ---: |
+| Real ECS system | 496.614 ms | 453.446 ms | 453.378–455.025 ms | 86771 |
+| Real editor panel | 3,372.920 ms | 3,035.705 ms | 3,031.562–3,090.412 ms | 236 |
+| Editor after fresh captures over warm dependencies | 3,256.035 ms | 3,016.692 ms | 3,010.665–3,058.527 ms | 2883 |
+
+Each run applied exactly four generations while preserving its PID. The ECS
+probe preserved its entity and verified replay, restore and network refusals.
+The editor's production protocol captured the live panel marker and its restore;
+both sets of PNGs were visually inspected. Scene/entity state stayed present.
+
+For the warm-cache regression, the original `.captured-args` directory was moved
+into evidence while keeping dependencies and incremental state. The ordinary
+matching-companion check reused its build in 4.11 s. The corrected DX baseline
+then recreated the editor library capture, and every body edit replayed the real
+`ara_editor` crate and changed its panel output. The new `ara_editor.lib.json`
+SHA-256 is `e86b4957c29ee307b29b2d55123a373eacac3ffcfe32e459a075520de8303063`.
+This validates the common CLI capture path through the direct editor lane;
+the Mac lab adapter still deliberately uses warm restart.
+
+Representative warm samples below are nearest their median; all columns are
+milliseconds. Compile includes the source guard. Native Mac link time comes
+from DX phase profiling, subtracted from the remaining driver span. Unavailable
+per-rustc CPU counters remain null. The editor timing caveat applies to this table.
+
+| Mac path | Watch | rustc + guard | dx link | Driver + validation | Boundary + apply | Output observation | Total |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ECS | 11 | 222 | 33 | 147 | 32 | 8 | 453 |
+| Editor | 12 | 2,378 | 104 | 229 | 150 | 163 | 3,036 |
+| Editor, fresh captures | 12 | 2,356 | 104 | 234 | 155 | 156 | 3,017 |
+
+The fresh-capture editor sample spends 2,027.843 ms in `ara_editor`, 304.142 ms
+in its small host and 24.489 ms in guards. It has no silent tip-only shortcut.
+The ~2–3 s target remains unmet by the Windows editor and narrowly missed by
+these observed Mac panel captures. Existing leaf-crate recommendations stand;
+no engine crate split is included.
+
+Both editor runs held `ara-dev gpu` timing admission. Their raw reports marked
+all edit windows CPU-contaminated, with no GPU contaminants, sampler errors or
+monitoring gaps. A separate counter-units bug was identified in
+`gpu_guard/macos.rs`: raw rusage Mach ticks are compared with system counters
+converted to nanoseconds. Apple's [task accounting](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/task.c#L6391)
+and [rusage implementation](https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/kern/bsd_kern.c)
+establish that clock distinction. A read-only host query returned a timebase of
+125/3. Clock-corrected rescoring, with the original 10%/three-sample policy,
+still overlaps three first-run samples and one warm-cache sample. Raw reports
+and derived reports are retained; no guard code or threshold was changed and
+no subset is promoted as the overall quiet median. The guard owner needs the
+units fix before formal Mac timing validation.
+
+Evidence is copied to `target/hotpatch-proof/mac-cache-p4/`: raw traces, stage
+tables, captures, both capture generations, guard reports, timebase metadata,
+source/tool identities, and cleanup receipts. The raw final archive SHA-256 is
+`ac5923c021c9ae806a2a7446d1364164418cc312d6cd8cdc00cbcf68ab38eb49`.
+The analyzer ignores macOS AppleDouble metadata sidecars; these are not trace
+events. Replay counts and real captured output are required alongside table
+acknowledgements.
+
+Owned driver, companion, intermediate and DX generation build output was cleaned.
+Final cleanup increased free space by 15.70 GiB, leaving 31 GiB free; the finished
+DX build cache had already been cleaned earlier. Evidence and the installed tool
+remain. An initial misquoted inventory command left an unscoped caffeinate
+process; its verified PID 72793 was stopped, and the release check found no
+Cargo/rustc/DX/caffeinate process or dirty source. The Mac was released with
+**Mac free (hotpatch done)** at 04:55 UTC, ahead of the lab/VQ/fidelity queue.
