@@ -15,15 +15,15 @@ fn logical_pointer(actual: [f32; 2], expected: [f32; 2]) {
 fn captured_motion_then_press_keeps_the_game_target_at_independent_window_scales()
 -> ara_ui::Result<()> {
     let root = crate::test_target().join(format!("game-input-scales-{}", std::process::id()));
-    std::fs::create_dir_all(root.join("levels"))?;
+    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels"))?;
     std::fs::write(
         root.join("ara.project.json"),
         ara_json::to_canonical_string(
-            &json!({"name":"Game input scale fixture","main":"levels/main.scene"}),
+            &json!({"name":"Game input scale fixture","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
         ),
     )?;
     std::fs::write(
-        root.join("levels/main.scene"),
+        root.join(ara_doc::AUTHORING_ROOT).join("levels/main.scene"),
         ara_json::to_canonical_string(
             &json!({"$schema":"ara://schema/scene/1","id":"sc_gamescal1","records":{}}),
         ),
@@ -104,18 +104,23 @@ fn captured_motion_then_press_keeps_the_game_target_at_independent_window_scales
 fn floating_game_capture_routes_motion_and_press_to_its_retained_surface() -> ara_ui::Result<()> {
     let root =
         crate::test_target().join(format!("floating-game-input-scales-{}", std::process::id()));
-    std::fs::create_dir_all(root.join("levels"))?;
+    std::fs::create_dir_all(root.join(ara_doc::AUTHORING_ROOT).join("levels"))?;
     for (path, value) in [
         (
             "ara.project.json",
-            json!({"name":"Floating Game input","main":"levels/main.scene"}),
+            json!({"name":"Floating Game input","main":"levels/main.scene","layoutVersion":ara_doc::PROJECT_LAYOUT_VERSION}),
         ),
         (
             "levels/main.scene",
             json!({"$schema":"ara://schema/scene/1","id":"sc_floatinput","records":{}}),
         ),
     ] {
-        std::fs::write(root.join(path), ara_json::to_canonical_string(&value))?;
+        let physical = if path == "ara.project.json" {
+            root.join(path)
+        } else {
+            root.join(ara_doc::AUTHORING_ROOT).join(path)
+        };
+        std::fs::write(physical, ara_json::to_canonical_string(&value))?;
     }
     let mut editor = Editor::open(&root)?;
     let mut shell = Shell::new(&mut editor, [1280., 800.])?;
