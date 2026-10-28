@@ -19,7 +19,11 @@ impl Fixture {
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
         std::fs::create_dir_all(root.join("project")).unwrap();
-        std::fs::write(root.join("project/ara.project.json"), "{}").unwrap();
+        std::fs::write(
+            root.join("project/ara.project.json"),
+            r#"{"layoutVersion":4}"#,
+        )
+        .unwrap();
         Self(root)
     }
 
