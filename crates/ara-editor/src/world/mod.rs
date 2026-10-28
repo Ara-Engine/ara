@@ -79,10 +79,12 @@ impl DocumentView {
     }
     /// Model sources the scene references, other than the `known` paths, each checked
     /// on disk once: `Some(entity)` (one that uses it; it draws a placeholder) when
-    /// the file is missing. In path order.
+    /// the file is missing. Resolve identities and physical paths through the
+    /// workspace's current index and reference root. In logical path order.
     pub(crate) fn missing_sources(
         &self,
         root: &Path,
+        workspace: &ara_doc::Workspace,
         known: &BTreeSet<String>,
     ) -> Vec<(String, Option<String>)> {
         // One disk check per path, not per entity: scenes reuse a few models widely.
@@ -98,12 +100,16 @@ impl DocumentView {
             };
             let Some(path) = ara_schema::grammar::parse_ref(reference)
                 .ok()
-                .and_then(|r| r.path.map(str::to_owned))
+                .and_then(|r| {
+                    r.id.and_then(|id| workspace.index().path_of(id))
+                        .or(r.path)
+                        .map(str::to_owned)
+                })
             else {
                 continue;
             };
             if !known.contains(&path) && !checked.contains_key(&path) {
-                let missing = !root.join(&path).is_file();
+                let missing = !root.join(workspace.storage_path(&path)).is_file();
                 checked.insert(path, missing.then(|| id.clone()));
             }
         }
@@ -115,6 +121,10 @@ impl DocumentView {
         &self.ghosts
     }
 }
+
+#[cfg(test)]
+#[path = "path_tests.rs"]
+mod path_tests;
 /// Whether a document identifier or indexed path currently names a loaded document.
 pub fn document_available(store: &Store, doc: &str) -> bool {
     store

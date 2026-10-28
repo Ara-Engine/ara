@@ -177,7 +177,8 @@ impl Shell {
                     &editor.state.doc,
                     entity,
                 ) {
-                    out.push(Row::Command {id:kind.command(),target:Target::Text(json!({"entity":entity,"path":path,"destination":format!("@{}#{}",source.path,source.entity)}).to_string()),label:Some(source.path),path:String::new(),checked:None});
+                    let logical = editor.host.store().workspace().reference_path(&source.path);
+                    out.push(Row::Command {id:kind.command(),target:Target::Text(json!({"entity":entity,"path":path,"destination":format!("@{logical}#{}",source.doc)}).to_string()),label:Some(logical.to_owned()),path:String::new(),checked:None});
                 }
             }
             Dynamic::RecentScenes => {
@@ -830,6 +831,7 @@ impl Shell {
         Ok(true)
     }
 }
+
 impl Shell {
     /// Viewport right-click: an entity menu for a picked object, else the empty-space menu.
     pub(crate) fn open_viewport_menu(
@@ -845,3 +847,7 @@ impl Shell {
         self.rebuild(editor)
     }
 }
+
+#[cfg(test)]
+#[path = "menu/prefab_source_tests.rs"]
+mod prefab_source_tests;

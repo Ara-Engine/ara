@@ -486,7 +486,9 @@ impl Editor {
     /// later surfaces as a failed import instead.
     pub fn report_missing_sources(&mut self, view: &DocumentView) {
         let root = self.host.root().to_owned();
-        for (path, missing) in view.missing_sources(&root, &self.sources_checked) {
+        for (path, missing) in
+            view.missing_sources(&root, self.host.store().workspace(), &self.sources_checked)
+        {
             self.sources_checked.insert(path.clone());
             if let Some(entity) = missing {
                 self.report(

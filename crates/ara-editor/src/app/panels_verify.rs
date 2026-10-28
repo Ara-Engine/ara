@@ -29,8 +29,8 @@ pub(super) struct Verification {
 }
 
 pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
-    let content = root.join(ara_doc::AUTHORING_ROOT);
     if !root.join("ara.project.json").exists() {
+        let content = root.join(ara_doc::AUTHORING_ROOT);
         std::fs::create_dir_all(content.join("levels"))?;
         std::fs::write(
             root.join("ara.project.json"),
@@ -45,6 +45,7 @@ pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
             ),
         )?;
     }
+    let content = ara_host::project::authored_root(root);
     std::fs::create_dir_all(content.join("models"))?;
     std::fs::create_dir_all(content.join("textures"))?;
     let mesh = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -86,6 +87,10 @@ pub(super) fn fixtures(root: &std::path::Path) -> ara_ui::Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "panels_verify/fixture_tests.rs"]
+mod fixture_tests;
 pub(super) fn resource(editor: &mut Editor, domain: &str) -> ara_ui::Result<String> {
     let preferred = format!(
         "samples/{domain}.{}",

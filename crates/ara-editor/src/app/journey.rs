@@ -314,7 +314,8 @@ impl Journey {
                         && j["name"].as_str().is_some_and(|n| n.contains("rock.glb"))
                 });
                 if indexed && !busy {
-                    editor.action("editor.workspace", json!({"asset": "rock.glb"}))?;
+                    let storage = editor.host.store().workspace().storage_path("rock.glb");
+                    editor.action("editor.workspace", json!({"asset": storage}))?;
                     shell.rebuild(editor)?;
                     return Ok(self.age > 60);
                 }
