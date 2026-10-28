@@ -1968,6 +1968,7 @@ dependencies = [
  "ara-terrain",
  "ara-world",
  "glam 0.34.1",
+ "libm",
  "serde_json",
 ]
 
