@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Ara.Hosting;
 
@@ -30,10 +31,11 @@ public sealed class DevModuleLoader : IModuleLoader
 
     void Enqueue(PendingUpdate update) => (_runtime ?? throw new InvalidOperationException("loader is not attached")).Enqueue(update);
 
-    sealed class Module(uint slot, string name, IReadOnlyList<string> references)
+    sealed class Module(uint slot, string name, IReadOnlyList<string> references, string profile)
     {
         public readonly uint Slot = slot;
         public readonly string Name = name;
+        public readonly string Profile = profile;
         public readonly IReadOnlyList<string> References = references;
         // Installed (tick thread, under the loader lock).
         public ModuleLoadContext? Alc;
@@ -58,6 +60,8 @@ public sealed class DevModuleLoader : IModuleLoader
     readonly object _lock = new();
     int _created;
     CompileClient? _client;
+    ulong _compileBinding;
+    readonly HashSet<(uint Slot, ulong Binding)> _compileBound = [];
 
     /// <inheritdoc/>
     public bool CanReload => _client is not null;
@@ -91,7 +95,7 @@ public sealed class DevModuleLoader : IModuleLoader
             Module m;
             lock (_lock)
             {
-                m = new Module((uint)_modules.Count, name, refs);
+                m = new Module((uint)_modules.Count, name, refs, profile);
                 _modules.Add(m);
             }
             if (assembly is not null && !watch)
@@ -123,7 +127,7 @@ public sealed class DevModuleLoader : IModuleLoader
             }
             try
             {
-                _client ??= new CompileClient(server, this);
+                _client ??= new CompileClient(server, this, checked(++_compileBinding));
                 _client.Watch(m.Slot, name, dir, hot, refs, profile, watch);
                 waiting.Add(m);
             }
@@ -395,13 +399,22 @@ public sealed class DevModuleLoader : IModuleLoader
     }
 
     /// <summary>A <see cref="MessageKind.Diagnostics"/>: report them; errors record a failed reload.</summary>
-    internal void OnDiagnostics(Protocol.Reader r)
+    internal void OnDiagnostics(CompileClient client, Protocol.Reader r)
     {
         var (slot, errors, json, serverUs, origin) = (r.U32(), r.U32(), r.Str(), r.U64(), r.U32());
-        using (var doc = JsonDocument.Parse(json))
-            foreach (var d in doc.RootElement.EnumerateArray())
-                Host.Diagnostic(System.Text.Encoding.UTF8.GetBytes(d.GetRawText()));
-        if (errors == 0 || Find(slot) is not { } m) return;
+        var m = Find(slot);
+        foreach (var node in JsonNode.Parse(json)!.AsArray())
+        {
+            var row = node!.AsObject();
+            if (m is not null && CompileDiagnosticScope.Bind(row, m.Name, m.Profile, client.DiagnosticInstance, client.DiagnosticBinding))
+            {
+                if (ReferenceEquals(client, _client) && _compileBound.Add((slot, client.DiagnosticBinding)))
+                    Host.Diagnostic(JsonSerializer.SerializeToUtf8Bytes(CompileDiagnosticScope.Binding(row)));
+                if ((string?)row["data"]?["compile"]?["phase"] == "bound") continue;
+            }
+            Host.Diagnostic(JsonSerializer.SerializeToUtf8Bytes(row));
+        }
+        if (errors == 0 || m is null) return;
         if (!m.Ready.IsSet)
         {
             m.Failed = true;

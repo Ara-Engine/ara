@@ -75,6 +75,8 @@ internal sealed class Outcome(ModuleSession module, OutcomeKind kind)
     /// <summary>Host-coded diagnostics to send with <see cref="Problems"/>.</summary>
     internal List<(string Code, string Severity, string Message)> Extra = [];
     internal Phases Timing = new(0, 0);
+    /// <summary>True only when the evaluated snapshot represents current module inputs.</summary>
+    internal bool ValidatedInputs;
 
     internal int ErrorCount => Problems.Count(d => d.Severity == DiagnosticSeverity.Error) + Extra.Count(e => e.Severity == "error");
 }

@@ -9,7 +9,9 @@ use ara_host::Cx;
 use ara_play::{Event, ScriptScene, method};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
+mod diagnostics;
 mod write;
+pub(crate) use diagnostics::DiagnosticSources;
 pub(crate) use write::SourceWrites;
 
 /// The .NET JIT host and compile server players load C# modules with.
@@ -127,7 +129,7 @@ impl PlayService {
         let mut reloaded = Vec::new();
         for (id, world) in &mut self.worlds {
             for (index, (_, player)) in world.players.iter_mut().enumerate() {
-                for event in std::mem::take(&mut player.events) {
+                for mut event in std::mem::take(&mut player.events) {
                     if let Event::Reload {
                         tick,
                         level,
@@ -145,11 +147,23 @@ impl PlayService {
                             ),
                         ));
                     }
-                    match &event {
+                    match &mut event {
                         Event::Diagnostic { diagnostic } => {
                             if let Ok(d) = serde_json::from_value::<Diagnostic>(diagnostic.clone())
                             {
-                                cx.log(d);
+                                match self.script_diagnostics.scope(
+                                    id,
+                                    index,
+                                    &player.incarnation,
+                                    d,
+                                ) {
+                                    Ok(d) => {
+                                        *diagnostic = serde_json::to_value(&d)
+                                            .expect("diagnostics serialize to JSON");
+                                        cx.log(d);
+                                    }
+                                    Err(d) => cx.log(d),
+                                }
                             }
                         }
                         Event::Restart => {

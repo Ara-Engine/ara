@@ -35,7 +35,7 @@ public sealed class ProjectSessionTests
         try
         {
             using var initial = await Call(first, "--compile-project");
-            Assert.Empty(initial.RootElement.GetProperty("diagnostics").EnumerateArray());
+            InstalledTools.AssertNoProblems(initial.RootElement.GetProperty("diagnostics").EnumerateArray());
             File.WriteAllText(source, before.Replace("public int Value;", "public int Value; /// <summary>Ratio.</summary>\n public float Ratio;", StringComparison.Ordinal));
             using var changed = await Call(first, "--compile-project");
             var game = changed.RootElement.GetProperty("modules").EnumerateArray().Single(m => m.GetProperty("name").GetString() == "game");

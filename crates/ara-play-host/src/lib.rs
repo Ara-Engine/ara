@@ -185,6 +185,7 @@ pub struct PlayService {
     headless_automation: bool,
     headless_capture: bool,
     source_writes: scripts::SourceWrites,
+    script_diagnostics: scripts::DiagnosticSources,
 }
 
 impl PlayService {
@@ -220,6 +221,7 @@ impl PlayService {
             headless_automation: false,
             headless_capture: false,
             source_writes: scripts::SourceWrites::default(),
+            script_diagnostics: scripts::DiagnosticSources::default(),
         }
     }
 
