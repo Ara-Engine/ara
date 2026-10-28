@@ -285,18 +285,29 @@ impl Bridge {
 
     pub(crate) fn busy(&mut self) -> bool {
         self.collect();
-        !self.tracked.is_empty() || !self.pending.is_empty()
+        !self.tracked.is_empty() || self.pending_work() != 0
+    }
+
+    // Read-model refreshes own no renderer generation, file task or Host job.
+    // They remain deliverable but must not manufacture a shutdown obligation.
+    fn pending_work(&self) -> usize {
+        self.pending
+            .iter()
+            .filter(|request| !matches!(request, Request::Refresh))
+            .count()
     }
 
     /// Resource proof reports retirement, separately from a cancelled Host receipt.
     pub(crate) fn resource_report(&mut self) -> Value {
         self.collect();
-        json!({"activeHostJobs":self.tracked.len(),"pendingRequests":self.pending.len(),
+        let pending_work = self.pending_work();
+        json!({"activeHostJobs":self.tracked.len(),"pendingRequests":pending_work,
+            "pendingRefreshes":self.pending.len() - pending_work,
             "unassigned":self.tracked.values().filter(|t|t.backend.is_none()).count(),
             "cancelRequested":self.tracked.values().filter(|t|t.cancelled).count(),
             "ownerGenerations":self.tracked.values().filter_map(|t|t.backend).collect::<std::collections::BTreeSet<_>>().len(),
             "jobs":self.tracked.iter().map(|(job,t)|json!({"job":job,"session":t.session,"doc":t.doc,
                 "backend":t.backend,"binding":t.binding,"cancelRequested":t.cancelled,"cancellable":t.cancellable})).collect::<Vec<_>>(),
-            "draining":self.draining,"requestChannelClosed":self.disconnected,"retired":self.tracked.is_empty() && self.pending.is_empty()})
+            "draining":self.draining,"requestChannelClosed":self.disconnected,"retired":self.tracked.is_empty() && pending_work == 0})
     }
 }

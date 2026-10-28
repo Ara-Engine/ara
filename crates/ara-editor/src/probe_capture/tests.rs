@@ -6,6 +6,19 @@ use fixture::*;
 use serde_json::json;
 
 #[test]
+fn a_read_only_refresh_remains_deliverable_without_creating_a_retirement_obligation() {
+    let mut f = Fixture::new();
+    f.query(None, None);
+    assert!(!f.bridge.busy());
+    let report = f.bridge.resource_report();
+    assert_eq!(report["activeHostJobs"], 0);
+    assert_eq!(report["pendingRequests"], 0);
+    assert_eq!(report["pendingRefreshes"], 1);
+    assert_eq!(report["retired"], true);
+    assert!(matches!(f.bridge.try_recv(), Some(Request::Refresh)));
+}
+
+#[test]
 fn invalidating_one_subscriber_preserves_a_later_same_scene_request() {
     let mut f = Fixture::new();
     let old = f.queue("e_probe");
