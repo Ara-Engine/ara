@@ -49,13 +49,12 @@ pub(in crate::app) fn fixture(options: &mut Options) -> ara_ui::Result<()> {
         root.join(".ara-behaviour-fixture"),
         "Ara deterministic editor behaviour fixture\n",
     )?;
-    std::fs::copy(
-        concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../ara-player/demo/assets/props/rock.glb"
-        ),
-        content.join("assets/rock.glb"),
-    )?;
+    let model = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../ara-player/demo")
+        .join(ara_doc::AUTHORING_ROOT)
+        .join("assets/props/rock.glb");
+    std::fs::copy(&model, content.join("assets/rock.glb"))
+        .map_err(|error| format!("Behaviour model fixture {}: {error}", model.display()))?;
     std::fs::write(
         output.join("sources/os-source.png"),
         include_bytes!("../../../../../assets/brand/icons/engine/ara-engine-64.png"),
