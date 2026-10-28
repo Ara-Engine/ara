@@ -4,6 +4,7 @@
 //! the OS windows in step with it, routes their input through the shell's
 //! surfaces, tracks cross-window tab drags and persists moved window rects.
 use super::*;
+mod recovery;
 
 /// One floating panel window.
 pub(super) struct Float {
@@ -141,10 +142,18 @@ impl Floats {
                 )?;
             }
             let title = format!("{} · Ara", panel_titles(&spec.root));
-            let window = if self.hidden {
-                Window::floating_hidden(&title, rect, main)?
+            let created = if self.hidden {
+                Window::floating_hidden(&title, rect, main)
             } else {
-                Window::floating(&title, rect, main)?
+                Window::floating(&title, rect, main)
+            };
+            let window = match created {
+                Ok(window) => window,
+                Err(error) => {
+                    recovery::redock(editor, shell, spec, error.as_ref())?;
+                    changed = true;
+                    continue;
+                }
             };
             // Native icons are cosmetic; Wayland may not support them.
             let _ = window.set_icon_png(include_bytes!(

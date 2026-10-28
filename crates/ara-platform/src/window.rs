@@ -135,8 +135,9 @@ impl Window {
                     },
             );
             if handle.is_null() {
+                let cause = error();
                 SDL_QuitSubSystem(SDL_INIT_VIDEO);
-                anyhow::bail!("SDL window: {}", error());
+                anyhow::bail!("SDL window: {cause}");
             }
             let window = Self {
                 handle,
