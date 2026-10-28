@@ -83,14 +83,38 @@ float2 coordinates(NativeUv transform,Varying v){float2 p=(transform.set==0?v.uv
 // resolution's mips (a negative mip bias the temporal resolve reconstructs);
 // shadow passes keep 1.
 static float footprint=1;
+// Resident map `id` (not 0xffffffff) at `uv` with explicit UV gradients: the hardware picks
+// the mip and, on the sampler's anisotropy (samplers[0], up to 16x), takes extra taps along
+// the footprint's long axis, so grazing surfaces stay sharp where a single isotropic LOD
+// blurs. The view holds only the resident levels, so the gradient LOD is already relative
+// to the first resident mip (native_sample.slangh ntSampleLevel subtracts info.y for the same
+// reason) and clamps to the tail. native_sample.slangh is a byte-identical contract copy
+// (ara-texture-stream, ara-render-fidelity), so grad sampling lives here.
+float4 ntSampleGrad(uint table,uint id,float2 uv,float2 dx,float2 dy){
+    uint image=buffers[NonUniformResourceIndex(table)].Load(id*32);
+    return textures[NonUniformResourceIndex(image)].SampleGrad(samplers[0],uv,dx,dy);
+}
+// A sampled normal texel as ntNormal (native_sample.slangh) decodes it: BC5 stores XY,
+// Z is reconstructed before glTF normalScale.
+float3 ntNormalTexel(uint table,uint id,float3 texel,float scale){
+    float3 n=texel*2-1;
+    uint encoding=buffers[NonUniformResourceIndex(table)].Load(id*32+16);
+    if(encoding==2)n.z=sqrt(max(0,1-dot(n.xy,n.xy)));
+    n.xy*=scale;
+    return dot(n,n)>1e-12?normalize(n):float3(0,0,1);
+}
+// Map `slot` of `m` at the fragment, anisotropically filtered over the pixel's UV
+// footprint scaled by `footprint` (gradients scale uniformly, so the mip shifts by
+// log2(footprint) and the anisotropy ratio is unchanged).
 float4 sampleMap(NativeMaterial m,uint slot,Varying v){
     uint id=slot<4?m.pbr.textures[min(slot,3)]:(slot==4?m.slots.x:m.slots.y);
     if(id==0xffffffff)return float4(slot==1?float3(0,0,1):float3(1),1);
     float2 uv=coordinates(m.uv[slot],v);
-    float lod=ntDesiredLod(root.sample,id,ddx(uv)*footprint,ddy(uv)*footprint);
-    if(slot==1)return float4(ntNormal(root.sample,id,uv,lod,m.pbr.surface.y),1);
+    float4 texel=ntSampleGrad(root.sample,id,uv,ddx(uv)*footprint,ddy(uv)*footprint);
+    if(slot==1)return float4(ntNormalTexel(root.sample,id,texel.xyz,m.pbr.surface.y),1);
     bool decode=slot==0?(m.pbr.flags.y&(1u<<25))!=0:slot==3 && (m.pbr.flags.y&(1u<<26))!=0;
-    return ntSampleColorLevel(root.sample,id,uv,lod,decode);
+    if(decode)texel.rgb=ntDecodeColor(texel.rgb);
+    return texel;
 }
 // Unit `v`, or `fallback` for zero-length or non-finite input (degenerate skinned or
 // UV-less tangent frames would otherwise turn shading into NaN/inf fireflies).

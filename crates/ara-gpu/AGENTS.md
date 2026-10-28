@@ -63,7 +63,8 @@ images and 128 storage buffers, clamped jointly to set/stage/pool limits (minimu
 `DeviceInfo` records both selected capacities. Binding 0 mirrors
 the first 128 slots for cached editor material previews only. All engine pipelines
 must be recooked; only `previewVertex`/`previewFragment` caches accept the old ABI.
-Binding 2 has three fixed trilinear samplers: material repeat, environment U
+Binding 2 has three fixed trilinear samplers: material repeat (up to 16x anisotropic
+where the device allows; native materials sample it with gradients), environment U
 repeat/V clamp, and temporal clamp, with native mip LODs enabled. Root constants are 32 bytes.
 Declare every resource reachable through root indices in the graph.
 
