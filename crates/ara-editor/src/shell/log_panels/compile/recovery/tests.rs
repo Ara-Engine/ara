@@ -231,12 +231,14 @@ fn malformed_or_unscoped_markers_and_unowned_fault_families_cannot_clear_problem
     emit(&mut store, LIVE.fault("Gameplay", 910, "scoped fault"));
     emit(
         &mut store,
-        Diagnostic::error(ara_script::codes::SYSTEM_FAULT, "legacy fault").data(json!({"module":"Gameplay"})),
+        Diagnostic::error(ara_script::codes::SYSTEM_FAULT, "legacy fault")
+            .data(json!({"module":"Gameplay"})),
     );
     emit(&mut store, LIVE.fault("Gameplay", 913, "future fault"));
     emit(
         &mut store,
-        Diagnostic::error(ara_script::codes::SYSTEM_FAULT, "missing module").data(json!({"play":LIVE.value()})),
+        Diagnostic::error(ara_script::codes::SYSTEM_FAULT, "missing module")
+            .data(json!({"play":LIVE.value()})),
     );
     emit(
         &mut store,
