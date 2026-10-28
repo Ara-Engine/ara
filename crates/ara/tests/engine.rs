@@ -411,7 +411,7 @@ fn docs_llms_writes_versioned_pages() {
         env!("CARGO_PKG_VERSION")
     )));
     assert!(llms.contains("[Command `entity.create`](commands/entity.create.md)"));
-    let transform = fs::read_to_string(docs.join("content/types/Transform.md")).expect("type page");
+    let transform = fs::read_to_string(docs.join("types/Transform.md")).expect("type page");
     assert!(transform.contains("| `rotation` | `vec3` |") && transform.contains("deg"));
     assert!(docs.join("methods/cmd.apply.md").exists());
     assert!(
@@ -553,7 +553,11 @@ fn installed_sdk_code_fixes_work_through_cli_and_mcp_apply_with_offline_undo() {
     );
     let project = root.join("project");
     fs::create_dir_all(project.join(ara_doc::AUTHORING_ROOT)).expect("project");
-    fs::write(project.join("ara.project.json"), "{}").expect("marker");
+    fs::write(
+        project.join("ara.project.json"),
+        r#"{"layoutVersion":4,"main":"main.scene"}"#,
+    )
+    .expect("marker");
     fs::write(
         project.join(ara_doc::AUTHORING_ROOT).join("main.scene"),
         r#"{"$schema":"ara://schema/scene/1","id":"sc_fix","records":{}}"#,

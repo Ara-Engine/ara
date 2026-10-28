@@ -815,25 +815,16 @@ impl State {
                     }
                 }
             }
-            // Exact prepared bytes are already queued with this transaction.
-            // A second canonical save would change raw bytes restored by Undo.
-            let materialized: BTreeSet<_> = txn
-                .ops
-                .iter()
-                .filter_map(|op| {
-                    if let ara_doc::Op::File { path, .. } = op {
-                        Some(ara_doc::file_state::path_key(path))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            self.files.changed.retain(|id, _| {
-                self.store
-                    .workspace()
-                    .path_of(id.as_str())
-                    .is_none_or(|path| !materialized.contains(&ara_doc::file_state::path_key(path)))
-            });
+            // Migration's prepared marker retains exact original bytes on Undo.
+            // Other native documents still need their normal save/Flush replay baseline.
+            if txn.ops.iter().any(|op| {
+                matches!(op, ara_doc::Op::File { path, .. }
+                if ara_doc::file_state::same_path(path, crate::project::MARKER))
+            }) {
+                self.files
+                    .changed
+                    .retain(|id, _| id.as_str() != "pj_project");
+            }
             self.refresh_project_settings();
             self.track_review(&txn);
             let summary = self.txn_summary(&txn);
