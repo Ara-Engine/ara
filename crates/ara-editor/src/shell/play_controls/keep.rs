@@ -188,7 +188,7 @@ impl Shell {
             Binding::Play(Action::KeepDriven),
         );
         out.push_str(&format!("<toggle id='keep-fields-driven' checked='{}' text='Include values written every tick' label='Include values written every tick' style='width:100%;height:auto;min-height:24px;padding-right:28px;white-space:normal' description='Driven fields such as physics poses require an explicit choice; they may immediately change again in Play' action='Dispatch'{} />",choice.include_driven,if pending {" disabled='true'"} else {""}));
-        out.push_str("<scroll id='keep-fields-scroll' style='max-height:280px;min-height:0px'><panel id='keep-fields-rows' style='flex-direction:column;gap:6px;min-width:0px'>");
+        out.push_str("<scroll id='keep-fields-scroll' style='max-height:280px;flex-basis:auto;flex-shrink:1;min-height:0px'><panel id='keep-fields-rows' style='flex-direction:column;gap:6px;min-width:0px'>");
         if choice.rows.is_empty() {
             out.push_str("<text id='keep-fields-empty' class='caption' text='No runtime differences for these entities.' />");
         }

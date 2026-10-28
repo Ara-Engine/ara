@@ -48,7 +48,9 @@ impl Shell {
         ))
     }
     pub(super) fn assets_panel(&mut self, editor: &Editor, out: &mut String) {
-        self.asset_selection_order(editor);
+        // Capture history against the previous entries, but repair active focus
+        // only after this publication replaces the displayed row model below.
+        self.observe_asset_history(editor);
         // Folder column and breadcrumb hide in narrow docks (see `narrow`).
         out.push_str("<panel id='asset-toolbar' class='toolbar'>");
         self.bindings.insert(
@@ -213,6 +215,7 @@ impl Shell {
             self.asset_rows.items.push((key, name, detail));
             self.asset_entries.insert(key, asset.clone());
         }
+        self.asset_selection_order(editor);
         if items.is_empty() {
             self.empty(
                 out,

@@ -8,6 +8,8 @@ mod jobs;
 mod keep;
 mod network;
 mod runtime;
+#[cfg(test)]
+mod tests;
 pub(crate) use network::conditions;
 
 pub(crate) fn player_label(player: usize, count: usize) -> String {
@@ -300,10 +302,10 @@ impl Shell {
         if !self.play_controls.options {
             return;
         }
-        out.push_str("<scroll id='play-options' style='max-height:260px;flex-shrink:0;min-height:0px'><panel id='play-options-body' style='flex-direction:column;padding:8px;gap:6px'>");
+        out.push_str("<scroll id='play-options' style='max-height:260px;flex-basis:auto;flex-shrink:1;min-height:0px'><panel id='play-options-body' style='flex-direction:column;padding:8px;gap:6px'>");
         out.push_str("<panel id='play-mode-row' class='row' style='gap:8px'><text id='play-mode-label' class='caption' text='Play mode' />");
         self.choice_button(
-            "play-mode",
+            "play-options-mode",
             "Play mode",
             choices::Select {
                 destination: choices::Destination::Setting("play.mode".into()),

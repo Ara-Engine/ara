@@ -3,6 +3,7 @@
 mod captures;
 mod fixture;
 mod measure;
+mod play_options;
 mod row_sizing;
 
 use super::*;
@@ -140,6 +141,7 @@ fn run_sweep(project: &Project, capture: &mut impl FnMut(&mut Shell, &str)) -> S
                 capture,
             );
         }
+        play_options::sweep(&mut editor, &mut shell, &mut sweep, scale, size, capture);
         shell.open_build_options(&mut editor).unwrap();
         sweep.context(
             &mut shell,

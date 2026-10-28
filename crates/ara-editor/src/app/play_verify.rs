@@ -5,6 +5,8 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
 };
+mod configuration;
+mod waits;
 const LIGHT: &str = "e_playprooflight";
 const ACTOR: &str = "e_playproofactor";
 const CAMERA: &str = "e_playproofcamera";
@@ -44,12 +46,16 @@ pub(super) struct PlayCheck {
     failed_frame: bool,
     began: Instant,
     before: u64,
+    initial: u64,
+    scene_before: Value,
+    configuration: Value,
     patch_tick: u64,
     step_began: Instant,
     probe: Option<(String, Instant)>,
     proofs: BTreeMap<String, Value>,
     trace: Vec<Value>,
     results: Vec<Value>,
+    waits: waits::Samples,
 }
 fn key(events: &mut Vec<(u32, Event)>, code: i32, pressed: bool) {
     events.push((
@@ -187,12 +193,16 @@ impl PlayCheck {
             failed_frame: false,
             began: Instant::now(),
             before: 0,
+            initial: 0,
+            scene_before: Value::Null,
+            configuration: Value::Null,
             patch_tick: 0,
             step_began: Instant::now(),
             probe: None,
             proofs: BTreeMap::new(),
             trace: Vec::new(),
             results: Vec::new(),
+            waits: Default::default(),
         })
     }
     pub fn finished(&self) -> bool {
@@ -230,7 +240,7 @@ impl PlayCheck {
             key(events, 225, true);
             tap(events, 62);
             key(events, 225, false);
-            self.results.push(json!({"journey":act.label(),"ok":false,"error":error.to_string(),"trace":self.trace,"proofs":self.proofs}));
+            self.results.push(json!({"journey":act.label(),"ok":false,"error":error.to_string(),"age":self.age,"trace":self.trace,"proofs":self.proofs,"initialScene":self.scene_before,"initialRevision":self.initial,"configuration":self.configuration,"waits":self.waits.values()}));
             self.advance();
             self.failed_frame = true;
             self.write()?;
@@ -238,8 +248,15 @@ impl PlayCheck {
         Ok(())
     }
     fn wait(&mut self) -> ara_ui::Result<()> {
+        if self.waits.record(
+            self.age,
+            self.began.elapsed(),
+            || json!({"kind":"startup_or_action","selector":null,"rect":null,"clip":null}),
+        ) {
+            self.write()?;
+        }
         if self.began.elapsed() > Duration::from_secs(180) {
-            return Err("Native Play story exceeded its bounded startup/action wait".into());
+            return Err(format!("Native Play story exceeded its bounded startup/action wait at age {}; last wait: {}",self.age,ara_json::to_canonical_string(self.waits.last())).into());
         }
         self.waiting = true;
         Ok(())
@@ -275,6 +292,9 @@ impl PlayCheck {
         shell.rebuild(editor)?;
         shell.input.blur(&mut shell.ui);
         self.before = editor.host.store().revision();
+        self.initial = self.before;
+        self.scene_before = configuration::scene(editor)?;
+        self.configuration = Value::Null;
         Ok(())
     }
     fn visible(
@@ -286,6 +306,12 @@ impl PlayCheck {
     ) -> ara_ui::Result<bool> {
         if control(shell, id).is_some() {
             return Ok(true);
+        }
+        if self
+            .waits
+            .record(self.age, self.began.elapsed(), || waits::control(shell, id))
+        {
+            self.write()?;
         }
         if let (Some(node), Some(scroll)) = (shell.shown_node(id), shell.shown_node("play-options"))
         {
@@ -390,6 +416,11 @@ impl PlayCheck {
                 .all(|player| player.live)
             || shell.play_runtime_report()["pending"] == true
         {
+            if self.waits.record(self.age, self.began.elapsed(), || {
+                waits::players(shell, count)
+            }) {
+                self.write()?;
+            }
             self.wait()?;
         }
         Ok(())
@@ -428,7 +459,7 @@ impl PlayCheck {
     ) -> ara_ui::Result<()> {
         let target = match self.age {
             2 => Some("game-options"),
-            4 => Some("play-mode"),
+            4 => Some("play-options-mode"),
             5 => Some("play-client-count"),
             6 => Some("play-process-mode"),
             7 => Some("play-network-1"),
@@ -446,7 +477,7 @@ impl PlayCheck {
                 self.setup(editor, shell)?;
             }
             2 => click(shell, "game-options", scale, events)?,
-            4 => select(shell, "play-mode", 1, scale, events)?,
+            4 => select(shell, "play-options-mode", 1, scale, events)?,
             5 => replace(shell, "play-client-count", "2", scale, events)?,
             6 => select(
                 shell,
@@ -456,7 +487,10 @@ impl PlayCheck {
                 events,
             )?,
             7 => select(shell, "play-network-1", 2, scale, events)?,
-            8 => tap(events, 62),
+            8 => {
+                self.configured_baseline(editor)?;
+                tap(events, 62);
+            }
             9 => self.ready(shell, 3)?,
             10 => {
                 self.read_proof(editor, "multi-before")?;
@@ -554,6 +588,7 @@ impl PlayCheck {
             2 => click(shell, "game-options", scale, events)?,
             4 => select(shell, "play-process-mode", 1, scale, events)?,
             6 => {
+                self.configured_baseline(editor)?;
                 key(events, 226, true);
                 tap(events, 62);
                 key(events, 226, false);
@@ -715,7 +750,10 @@ impl PlayCheck {
             }
             2 => click(shell, "game-options", scale, events)?,
             4 => click(shell, "play-start-paused", scale, events)?,
-            7 => tap(events, 62),
+            7 => {
+                self.configured_baseline(editor)?;
+                tap(events, 62);
+            }
             8 => self.ready(shell, 1)?,
             9 => click(shell, "play-inspect", scale, events)?,
             10 => {
@@ -982,7 +1020,7 @@ impl PlayCheck {
                     && editor.state.playing.is_none()
             };
             self.results.push(
-                json!({"journey":act.label(),"ok":ok,"trace":self.trace,"proofs":self.proofs}),
+                json!({"journey":act.label(),"ok":ok,"trace":self.trace,"proofs":self.proofs,"configuration":self.configuration,"waits":self.waits.values()}),
             );
             self.advance();
             self.write()?;
@@ -998,13 +1036,15 @@ impl PlayCheck {
         self.trace.clear();
         self.proofs.clear();
         self.probe = None;
+        self.waits.clear();
+        self.configuration = Value::Null;
         self.step_began = Instant::now();
     }
     pub fn write(&self) -> ara_ui::Result<()> {
         std::fs::write(
             self.output.join("play-behaviours.json"),
             ara_json::to_canonical_string(
-                &json!({"journeys":self.results,"completed":self.finished(),"passed":self.results.iter().filter(|result|result["ok"]==true).count(),"failed":self.failures().len()}),
+                &json!({"journeys":self.results,"completed":self.finished(),"passed":self.results.iter().filter(|result|result["ok"]==true).count(),"failed":self.failures().len(),"active":ACTS.get(self.index).map(|act|json!({"journey":act.label(),"age":self.age,"initialScene":self.scene_before,"initialRevision":self.initial,"configuration":self.configuration,"waits":self.waits.values()}))}),
             ),
         )?;
         Ok(())

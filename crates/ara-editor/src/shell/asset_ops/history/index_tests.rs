@@ -87,15 +87,31 @@ fn select(editor: &mut Editor, shell: &mut Shell, copied: bool) -> ara_ui::Resul
         "editor.workspace",
         json!({"folder":"game/Art","asset":primary}),
     )?;
+    // Native file selection addresses the current folder's displayed model.
+    // Install it before setting active focus, just as the browser does before
+    // accepting a row click; scanner publications alone do not replace rows.
+    shell.rebuild(editor)?;
     shell.asset_selection.set_selected(paths.map(stable_id));
     shell.asset_selection.focus(stable_id(primary));
     shell.asset_selection_path = Some(primary.into());
     Ok(Selection::read(shell, editor))
 }
-fn exact(editor: &Editor, shell: &mut Shell, expected: &Selection) {
+#[track_caller]
+fn exact(editor: &Editor, shell: &mut Shell, expected: &Selection, phase: &str) {
     shell.asset_selection_order(editor);
     let actual = Selection::read(shell, editor);
-    assert_eq!(&actual, expected);
+    assert_eq!(
+        &actual,
+        expected,
+        "phase {phase}; displayed keys {:?}; pending {}",
+        shell
+            .asset_rows
+            .items
+            .iter()
+            .map(|(key, _, _)| key)
+            .collect::<Vec<_>>(),
+        shell.asset_ops.history.pending()
+    );
     assert!(
         actual
             .asset
@@ -230,12 +246,13 @@ fn undo_redo_waits_for_post_save_snapshot_and_failed_scan_retry_keeps_exact_sele
     f.worker.publish(old, rows(true))?; // queued pre-Undo snapshot
     assert!(!f.shell.browser.poll());
     assert!(!f.shell.follow_asset_history(&mut f.editor)?);
-    exact(&f.editor, &mut f.shell, &f.after);
+    exact(&f.editor, &mut f.shell, &f.after, "pre-Undo scan retained");
     let undo = f.worker.start();
     f.worker.publish(undo, rows(false))?;
     assert!(f.shell.browser.poll());
     assert!(f.shell.follow_asset_history(&mut f.editor)?);
-    exact(&f.editor, &mut f.shell, &f.before);
+    f.shell.rebuild(&mut f.editor)?;
+    exact(&f.editor, &mut f.shell, &f.before, "fresh Undo followed");
 
     let undo_only = f.worker.start();
     f.editor.action("history.redo", json!({}))?;
@@ -245,14 +262,24 @@ fn undo_redo_waits_for_post_save_snapshot_and_failed_scan_retry_keeps_exact_sele
     f.worker.publish(undo_only, rows(false))?; // late Undo-era publication
     assert!(!f.shell.browser.poll());
     assert!(!f.shell.follow_asset_history(&mut f.editor)?);
-    exact(&f.editor, &mut f.shell, &f.before);
+    exact(
+        &f.editor,
+        &mut f.shell,
+        &f.before,
+        "Undo-only scan rejected during Redo",
+    );
     let failed = f.worker.start();
     f.worker.fail(failed)?;
     assert!(f.shell.browser.poll());
     assert!(f.shell.follow_asset_history(&mut f.editor)?);
     assert!(f.shell.asset_ops.history.pending());
     assert_eq!(f.shell.status_note.as_deref(), Some(HISTORY_SCAN_WAIT));
-    exact(&f.editor, &mut f.shell, &f.before);
+    exact(
+        &f.editor,
+        &mut f.shell,
+        &f.before,
+        "failed Redo scan retains navigation",
+    );
     let revision = f.editor.host.store().revision();
     retry(&mut f.editor, &mut f.shell, &mut f.worker)?;
     let redo = f.worker.start();
@@ -261,7 +288,8 @@ fn undo_redo_waits_for_post_save_snapshot_and_failed_scan_retry_keeps_exact_sele
     assert!(f.shell.follow_asset_history(&mut f.editor)?);
     assert!(!f.shell.asset_ops.history.pending());
     assert_ne!(f.shell.status_note.as_deref(), Some(HISTORY_SCAN_WAIT));
-    exact(&f.editor, &mut f.shell, &f.after);
+    f.shell.rebuild(&mut f.editor)?;
+    exact(&f.editor, &mut f.shell, &f.after, "fresh Redo followed");
     assert_eq!(
         f.editor.host.store().revision(),
         revision,
@@ -320,12 +348,23 @@ fn composed_rapid_reverts_reset_the_barrier_and_equal_fresh_rows_complete_it() -
     f.worker.publish(undo_only, rows(false))?;
     assert!(f.shell.browser.poll());
     assert!(!f.shell.follow_asset_history(&mut f.editor)?);
-    exact(&f.editor, &mut f.shell, &f.after);
+    exact(
+        &f.editor,
+        &mut f.shell,
+        &f.after,
+        "rapid reverts reject Undo-only scan",
+    );
     let fresh = f.worker.start();
     f.worker.publish(fresh, rows(true))?;
     assert!(f.shell.browser.poll());
     assert!(f.shell.follow_asset_history(&mut f.editor)?);
-    exact(&f.editor, &mut f.shell, &f.after);
+    f.shell.rebuild(&mut f.editor)?;
+    exact(
+        &f.editor,
+        &mut f.shell,
+        &f.after,
+        "rapid reverts follow fresh Redo scan",
+    );
     let barrier = f.shell.browser.refresh_after_current_scan();
     let equal = f.worker.start();
     f.worker.publish(equal, rows(true))?;
@@ -342,7 +381,12 @@ fn prepared_job_rejects_pre_receipt_rows_and_keeps_selection_through_timeout_and
     let old = f.worker.start();
     let revision = f.editor.host.store().revision();
     f.shell.poll_asset_operations(&mut f.editor)?;
-    exact(&f.editor, &mut f.shell, &f.before);
+    exact(
+        &f.editor,
+        &mut f.shell,
+        &f.before,
+        "prepared job awaiting barrier",
+    );
     f.worker.publish(old, rows(true))?;
     assert!(!f.shell.browser.poll());
     f.shell.poll_asset_operations(&mut f.editor)?;
@@ -354,7 +398,12 @@ fn prepared_job_rejects_pre_receipt_rows_and_keeps_selection_through_timeout_and
             .is_some_and(|job| job.following)
     );
     assert_eq!(f.shell.status_note.as_deref(), Some(JOB_SCAN_WAIT));
-    exact(&f.editor, &mut f.shell, &f.before);
+    exact(
+        &f.editor,
+        &mut f.shell,
+        &f.before,
+        "prepared job rejects pre-receipt scan",
+    );
     let failed = f.worker.start();
     f.worker.fail(failed)?;
     assert!(f.shell.browser.poll());
@@ -366,7 +415,12 @@ fn prepared_job_rejects_pre_receipt_rows_and_keeps_selection_through_timeout_and
             .as_ref()
             .is_some_and(|job| job.following)
     );
-    exact(&f.editor, &mut f.shell, &f.before);
+    exact(
+        &f.editor,
+        &mut f.shell,
+        &f.before,
+        "prepared job retains through failure",
+    );
     retry(&mut f.editor, &mut f.shell, &mut f.worker)?;
     let fresh = f.worker.start();
     f.worker.publish(fresh, rows(true))?;
@@ -380,7 +434,13 @@ fn prepared_job_rejects_pre_receipt_rows_and_keeps_selection_through_timeout_and
             .is_some_and(|job| !job.following)
     );
     assert_ne!(f.shell.status_note.as_deref(), Some(JOB_SCAN_WAIT));
-    exact(&f.editor, &mut f.shell, &f.after);
+    f.shell.rebuild(&mut f.editor)?;
+    exact(
+        &f.editor,
+        &mut f.shell,
+        &f.after,
+        "prepared job follows fresh snapshot",
+    );
     assert_eq!(f.editor.host.store().revision(), revision);
     Ok(())
 }
@@ -414,6 +474,11 @@ fn fresh_job_snapshot_does_not_replace_a_later_human_selection() -> ara_ui::Resu
             .as_ref()
             .is_some_and(|job| !job.following)
     );
-    exact(&f.editor, &mut f.shell, &human);
+    exact(
+        &f.editor,
+        &mut f.shell,
+        &human,
+        "fresh job respects later human selection",
+    );
     Ok(())
 }

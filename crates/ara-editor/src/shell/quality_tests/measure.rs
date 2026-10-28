@@ -14,6 +14,7 @@ pub(super) struct Sweep {
     pub measurements: Vec<Value>,
     pub violations: Vec<String>,
     pub contexts: Vec<String>,
+    identity_audits: Vec<Value>,
     measured_tooltips: usize,
     not_hoverable: Vec<Value>,
 }
@@ -28,6 +29,14 @@ impl Sweep {
     ) {
         shell.frame().unwrap();
         self.contexts.push(name.into());
+        let identities = ara_ui_test::audit_attached_ids(&shell.ui);
+        for finding in &identities {
+            self.violations
+                .push(format!("{name}: {}: {}", finding.code, finding.message));
+        }
+        self.identity_audits.push(json!({
+            "context":name,"surface":shell.current(),"diagnostics":identities,
+        }));
         let elements: Vec<_> = shell
             .ui
             .nodes
@@ -229,7 +238,7 @@ impl Sweep {
     pub fn write(&self, output: &std::path::Path) {
         std::fs::create_dir_all(output).unwrap();
         std::fs::write(output.join("quality-measurements.json"),ara_json::to_canonical_string(&json!({
-            "contexts":self.contexts,"tooltipCount":self.measured_tooltips,"notHoverableDescriptions":self.not_hoverable,"overlays":self.measurements,"violations":self.violations,
+            "contexts":self.contexts,"identityAudits":self.identity_audits,"tooltipCount":self.measured_tooltips,"notHoverableDescriptions":self.not_hoverable,"overlays":self.measurements,"violations":self.violations,
         }))).unwrap();
     }
 }
