@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835",
+  "key": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927",
   "stages": [
     {
-      "dxil": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835/fog_raster/fogRasterMain.dxil",
+      "dxil": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927/fog_raster/fogRasterMain.dxil",
       "dxil_hash": "512ba3fbb523e4af6cbe0dc7e25e5be09b2cfadcd22ede21a3629a88c7287a3c",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835/fog_raster/fogRasterMain.metallib",
+        "metallib": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927/fog_raster/fogRasterMain.metallib",
         "metallib_hash": "5e4b70eabe79cd7116a51a9c65bca7333da52239d6012bf961c4fd109d5a3f8d",
-        "reflection": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835/fog_raster/fogRasterMain.metal.json",
+        "reflection": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927/fog_raster/fogRasterMain.metal.json",
         "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
       },
       "source_entry": "fogRasterMain",
-      "spirv": "a6c0bbbde4f1ba00081781843c2b53580918b14b67f1fb77ffcd3494bc194835/fog_raster/fogRasterMain.spv",
+      "spirv": "d1d76c48e843a4625e1b922a4d6dfa83bd60a9a6576394c513b4e2049bfbb927/fog_raster/fogRasterMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "d7c3f61778ef8ad00b27277833ce63fd7d09a603a3ab98c1d73250e4b87956d8",
       "stage": "compute"

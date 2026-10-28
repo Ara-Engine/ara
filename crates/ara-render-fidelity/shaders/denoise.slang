@@ -24,7 +24,8 @@ float3 historyBox(Frame f,uint2 p,float3 history,uint signal,int spacing=1){
 // moving or animated views keep short histories, which showed the lattice as a
 // full-frame 2x2-block checkerboard. There each such pixel is rebuilt from this
 // frame's lattice samples in the surrounding 3x3 grid blocks on the same surface,
-// as one ordinary sample (w = 1); w = 0 when no sample is near.
+// as one ordinary sample (w = 1); w = 0 when no sample is near. Each sample is
+// re-tinted from its own F0 to this pixel's (`specularModulation`).
 float4 latticeSpecular(Frame f,uint2 p){
     uint slot=f.control.x;float4 world=pixel(f,WORLD+slot,p);float4 normal=pixel(f,NORMAL+slot,p);float3 n=normal.xyz;
     float tolerance=max(length(world.xyz-f.camera.xyz)*0.004,0.005);float3 sum=0;float total=0;
@@ -37,9 +38,9 @@ float4 latticeSpecular(Frame f,uint2 p){
         int2 q=glossy?clamp(int2(p)+int2(x,y),int2(0),int2(f.sizes.xy)-1):gridPoint(f,int2(p)+int2(x,y)*2);float4 lattice=extraPixel(f,SPEC_RAW,q);float4 w=pixel(f,WORLD+slot,q);
         if(lattice.w<=1 || w.w!=world.w)continue;
         float weight=pow(saturate(dot(pixel(f,NORMAL+slot,q).xyz,n)),8)*exp(-abs(dot(w.xyz-world.xyz,n))/tolerance);
-        sum+=lattice.rgb*weight;total+=weight;
+        sum+=lattice.rgb/specularModulation(f,q)*weight;total+=weight;
     }
-    return total>0?float4(sum/total,1):float4(0,0,0,0);
+    return total>0?float4(sum/total*specularModulation(f,p),1):float4(0,0,0,0);
 }
 void resolveSpecular(Frame f,uint2 p,uint directResidual){
     uint slot=f.control.x;float4 current=extraPixel(f,SPEC_RAW,p);
@@ -157,24 +158,27 @@ void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:S
     // Coalesced texture gathers preserve occupancy without a large shared halo.
     bool wide=step>4;
     if(!wide){
-        for(uint i=lane;i<width*width;i+=64){int2 at=int2(group.xy*8)+int2(i%width,i/width)-step;filterColour[i]=pixel(f,source,at).rgb;filterWorld[i]=pixel(f,WORLD+slot,at);float4 n=pixel(f,NORMAL+slot,at);filterGuide[i]=float4(n.xyz,length(filterWorld[i].xyz-f.camera.xyz));if(splitSignals)filterSpecular[i]=extraPixel(f,specSource,at).rgb;}
+        for(uint i=lane;i<width*width;i+=64){int2 at=int2(group.xy*8)+int2(i%width,i/width)-step;filterColour[i]=pixel(f,source,at).rgb;filterWorld[i]=pixel(f,WORLD+slot,at);float4 n=pixel(f,NORMAL+slot,at);filterGuide[i]=float4(n.xyz,length(filterWorld[i].xyz-f.camera.xyz));if(splitSignals)filterSpecular[i]=extraPixel(f,specSource,at).rgb/specularModulation(f,at);}
         GroupMemoryBarrierWithGroupSync();
     }
     if(any(p>=f.sizes.xy))return;
     uint2 local=tid.xy-group.xy*8+step;uint centerIndex=local.y*width+local.x;
     float3 center,specCenter=0;float4 guide,world;
-    if(wide){world=pixel(f,WORLD+slot,p);center=pixel(f,source,p).rgb;guide=float4(pixel(f,NORMAL+slot,p).xyz,length(world.xyz-f.camera.xyz));if(splitSignals)specCenter=extraPixel(f,specSource,p).rgb;}
+    if(wide){world=pixel(f,WORLD+slot,p);center=pixel(f,source,p).rgb;guide=float4(pixel(f,NORMAL+slot,p).xyz,length(world.xyz-f.camera.xyz));if(splitSignals)specCenter=extraPixel(f,specSource,p).rgb/specularModulation(f,p);}
     else{world=filterWorld[centerIndex];center=filterColour[centerIndex];guide=filterGuide[centerIndex];if(splitSignals)specCenter=filterSpecular[centerIndex];}
     float3 sum=0;float total=0;
     float2 temporalMoments=pixel(f,MOMENTS+slot,p).xy;float sigma=sqrt(max(temporalMoments.y-temporalMoments.x*temporalMoments.x,0.00001));float l=luminance(center);float historyCount=pixel(f,HISTORY+slot,p).w;
     // Geometry tolerance stays in world units; a larger image must not admit
     // samples through increasingly thick walls when its pixel radius grows.
     float scale=max(guide.w*0.001,0.003)*baseStep;float roughness=pixel(f,NORMAL+slot,p).w;
-    float3 specSum=0;float specTotal=0;float specL=splitSignals?luminance(specCenter):0;
+    // Specular taps are demodulated (each by its own F0) and restored with this pixel's
+    // `own` F0, so neighbours' textures and tints never blend in.
+    float3 own=splitSignals?specularModulation(f,p):float3(1);
+    float3 specSum=0;float specTotal=0;float specL=splitSignals?luminance(specCenter*own):0;
     float4 specMoments=splitSignals?extraPixel(f,SPEC_MOMENTS+slot,p):float4(0);float2 specMom=specMoments.xy;float specSigma=sqrt(max(specMom.y-specMom.x*specMom.x,0.00001));
     for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++){
         float3 n,c,spec=0;float4 neighborWorld;
-        if(wide){int2 q=int2(p)+int2(x,y)*step;neighborWorld=pixel(f,WORLD+slot,q);n=pixel(f,NORMAL+slot,q).xyz;c=pixel(f,source,q).rgb;if(splitSignals)spec=extraPixel(f,specSource,q).rgb;}
+        if(wide){int2 q=int2(p)+int2(x,y)*step;neighborWorld=pixel(f,WORLD+slot,q);n=pixel(f,NORMAL+slot,q).xyz;c=pixel(f,source,q).rgb;if(splitSignals)spec=extraPixel(f,specSource,q).rgb/specularModulation(f,q);}
         else{uint at=(int(local.y)+y*step)*width+int(local.x)+x*step;neighborWorld=filterWorld[at];n=filterGuide[at].xyz;c=filterColour[at];if(splitSignals)spec=filterSpecular[at];}
         float weight=(x==0?2:1)*(y==0?2:1);
         // Rough incident irradiance is smooth: a centre-dependent luminance
@@ -184,11 +188,15 @@ void atrousMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint lane:S
         if(splitSignals && mixedCoverage(specMoments.z) && (x!=0 || y!=0))weight=0;
         if(x==0 && y==0)weight=max(weight,1);sum+=c*weight;total+=weight;
         if(splitSignals){
-            float sw=weight*exp(-abs(luminance(spec)-specL)/(4*specSigma+0.02))*pow(max(dot(n,guide.xyz),0),lerp(256.,16.,roughness));
+            // Rough specular is sparse lattice samples (latticeSpecular): like rough
+            // irradiance, a centre-relative luminance rejection biased them dark (a
+            // rough metal shutter at half its reference radiance). Demodulation keeps
+            // texture detail instead, so the rejection fades out by the lattice cut.
+            float sw=weight*lerp(exp(-abs(luminance(spec*own)-specL)/(4*specSigma+0.02)),1,smoothstep(0.4,0.5,roughness))*pow(max(dot(n,guide.xyz),0),lerp(256.,16.,roughness));
             if(x==0 && y==0)sw=max(sw,1);specSum+=spec*sw;specTotal+=sw;
         }
     }uint packed=asuint(pixel(f,MOMENTS+slot,p).z);float3 modulation=max(float3(packed&1023,(packed>>10)&1023,(packed>>20)&1023)/1023.,float3(0.04));
-    float3 spec=specSum/max(specTotal,1e-6);
+    float3 spec=specSum/max(specTotal,1e-6)*own;
     // Imported AO attenuates the filtered indirect signal at remodulation, so its
     // texel detail stays sharp: diffuse by AO, specular by Lagarde's occlusion.
     float ao=world.w==0?1:pixel(f,DEPTH,p).y,nv=saturate(dot(guide.xyz,normalize(f.camera.xyz-world.xyz)));
