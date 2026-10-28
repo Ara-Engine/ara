@@ -26,6 +26,11 @@ fn captured_motion_then_press_keeps_the_game_target_at_independent_window_scales
         ara_ui::theme::EDITOR_CSS,
         [900., 600.],
     )?;
+    shell.frame()?;
+    let viewport = shell
+        .game_input_rect()
+        .ok_or("Missing retained Game target")?;
+    assert!(viewport.contains(600., 350.), "{viewport:?}");
     let revision = editor.host.store().revision();
     for (density, dpi) in [(1., 1.), (2., 2.), (1., 1.25), (2., 2.5)] {
         shell.game_captured = true;
