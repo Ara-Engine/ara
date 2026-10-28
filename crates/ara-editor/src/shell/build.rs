@@ -190,6 +190,11 @@ fn launch(game: &Path) -> anyhow::Result<Launch> {
     })
 }
 
+/// Locate the shipping C# manifest through the same platform-aware resolver as Run Build.
+pub(crate) fn scripts_manifest(game: &Path) -> anyhow::Result<PathBuf> {
+    Ok(launch(game)?.data.join("game/scripts.json"))
+}
+
 /// Log a build message (ARA4505 unless it carries an export code) on the bus, so
 /// Console and Problems show it.
 fn log(editor: &mut Editor, diagnostic: ara_diag::Diagnostic) {
@@ -851,6 +856,8 @@ mod tests {
             &game.join("data/ara-launch.json"),
             &json!({"contract":"ara.player.runtime/1","pack":"game.arapack"}),
         )?;
+        std::fs::create_dir_all(game.join("data/game"))?;
+        std::fs::write(game.join("data/game/scripts.json"), b"{}")?;
         manifest(&output, "Outpost.exe", "windows")?;
         let moved = scratch.0.join("relocated");
         std::fs::rename(&output, &moved)?;
@@ -861,6 +868,10 @@ mod tests {
         );
         assert_eq!(launch.data, dunce::canonicalize(moved.join("build/data"))?);
         assert_eq!(launch.report, dunce::canonicalize(moved.join("report"))?);
+        let scripts = scripts_manifest(&moved.join("build"))?;
+        assert!(scripts.is_file());
+        assert_eq!(scripts, launch.data.join("game/scripts.json"));
+        assert!(!moved.join("build/game/scripts.json").exists());
         assert!(
             !launch
                 .report
@@ -889,6 +900,11 @@ mod tests {
             game.join("Salvage.app/Contents/Resources/ara-launch.json"),
             b"{}",
         )?;
+        std::fs::create_dir_all(game.join("Salvage.app/Contents/Resources/game"))?;
+        std::fs::write(
+            game.join("Salvage.app/Contents/Resources/game/scripts.json"),
+            b"{}",
+        )?;
         manifest(&scratch.0, "Salvage.app/Contents/MacOS/Salvage", "macos")?;
         let launch = launch(&game)?;
         assert_eq!(
@@ -896,6 +912,10 @@ mod tests {
             dunce::canonicalize(game.join("Salvage.app/Contents/Resources"))?
         );
         assert!(launch.executable.ends_with("MacOS/Salvage"));
+        let scripts = scripts_manifest(&game)?;
+        assert!(scripts.is_file());
+        assert_eq!(scripts, launch.data.join("game/scripts.json"));
+        assert!(!game.join("game/scripts.json").exists());
         Ok(())
     }
 
