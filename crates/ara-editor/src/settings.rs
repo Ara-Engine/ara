@@ -667,15 +667,16 @@ impl Settings {
         self.reload(None);
         Ok(label)
     }
-    /// Label of the edit Undo (or Redo) would revert.
+    /// Original action title for Undo/Redo, following typed inverse transactions.
     pub fn next_label(&self, author: &Author, redo: bool) -> Option<String> {
         let txn = if redo {
-            let undo = self.store.next_redo(author)?;
-            self.store.txn(undo.reverts.as_ref()?)?
+            self.store.next_redo(author)?
         } else {
             self.store.next_undo(author)?
         };
-        txn.label.clone()
+        crate::transaction_label::original(&self.store, txn)?
+            .label
+            .clone()
     }
     fn reload(&mut self, changed: Option<Scope>) {
         let read = |id: &str| {

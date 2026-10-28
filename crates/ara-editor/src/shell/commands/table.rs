@@ -446,14 +446,12 @@ fn undo_label(c: &Ctx, redo: bool) -> String {
     } else {
         let author = ara_ops::Author::Human;
         let txn = if redo {
-            c.store
-                .next_redo(&author)
-                .and_then(|u| u.reverts.as_ref())
-                .and_then(|id| c.store.txn(id))
+            c.store.next_redo(&author)
         } else {
             c.store.next_undo(&author)
         };
-        txn.and_then(|t| t.why.clone().or_else(|| t.label.clone()))
+        txn.and_then(|txn| crate::transaction_label::original(c.store, txn))
+            .and_then(|txn| txn.why.clone().or_else(|| txn.label.clone()))
     };
     match label {
         // Long agent reasons are cut so the item's shortcut stays in the menu.

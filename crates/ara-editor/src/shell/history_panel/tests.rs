@@ -128,3 +128,45 @@ fn full_copy_keeps_real_ops_and_stale_transaction_actions_never_author() {
     assert_eq!(editor.host.store().revision(), revision);
     assert_eq!(shell.history_view.selected.as_ref(), Some(&txn.id));
 }
+
+#[test]
+fn menu_and_history_controls_keep_the_original_action_title_across_repeated_undo_redo() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    let title = "undo history action";
+    editor.apply(vec![json!({"cmd":"property.set","args":{"entity":ENTITY,"path":"name","value":"Repeated history"}})], title, None).unwrap();
+    let original = editor.host.store().history().last().unwrap().clone();
+    for _ in 0..3 {
+        for (command, verb) in [("edit.undo", "Undo"), ("edit.redo", "Redo")] {
+            shell.rebuild(&mut editor).unwrap();
+            shell.frame().unwrap();
+            let target = commands::Target::None;
+            let context = shell.ctx(&editor, &target);
+            let spec = commands::all()
+                .iter()
+                .find(|spec| spec.id == command)
+                .unwrap();
+            assert_eq!(
+                spec.title(&context),
+                format!("{verb} \u{201c}{title}\u{201d}")
+            );
+            let node = shell
+                .shown_node(if command == "edit.undo" {
+                    "history-undo"
+                } else {
+                    "history-redo"
+                })
+                .unwrap();
+            assert_eq!(
+                shell.ui.nodes[node]
+                    .element
+                    .attrs
+                    .get("description")
+                    .map(String::as_str),
+                Some(format!("{verb} your latest change: {title}").as_str())
+            );
+            shell.run_command(&mut editor, command, &target).unwrap();
+        }
+    }
+    assert_eq!(editor.host.store().txn(&original.id), Some(&original));
+}

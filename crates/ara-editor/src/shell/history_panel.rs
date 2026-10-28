@@ -145,7 +145,9 @@ impl Shell {
             ),
         ] {
             self.bind_command(id, command, commands::Target::None);
-            let why = next.map(projection::reason);
+            let why = next
+                .and_then(|txn| crate::transaction_label::original(store, txn))
+                .map(projection::reason);
             let description = why.map_or_else(
                 || format!("No human-author change to {}", label.to_lowercase()),
                 |why| format!("{label} your latest change: {why}"),

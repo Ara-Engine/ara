@@ -481,3 +481,57 @@ fn a_legacy_whole_map_history_entry_cannot_overwrite_a_new_host_projection() {
     assert_eq!(settings.value("build.profile"), "agent build");
     assert_eq!(settings.store.revision(), revision);
 }
+
+#[test]
+fn settings_undo_redo_titles_follow_original_transaction_identity_without_stripping_its_title() {
+    let project = Project::new();
+    let mut settings = Settings::open(&project.0, None).unwrap();
+    let title = "undo authored workflow";
+    let mut meta = TxnMeta::by(Author::Human);
+    meta.label = Some(title.into());
+    meta.why = Some("Keep an original action title containing undo".into());
+    settings
+        .store
+        .transact(
+            meta,
+            [Edit::Set {
+                doc: settings.doc.clone(),
+                id: RecordId::parse(super::USER).unwrap(),
+                path: FieldPath::field("EditorSettings")
+                    .child("values")
+                    .key("appearance.theme"),
+                value: Some(json!("light")),
+            }],
+        )
+        .unwrap();
+    settings.reload(Some(super::Scope::User));
+    let original = settings.store.history()[0].clone();
+    for _ in 0..3 {
+        assert_eq!(
+            settings.next_label(&Author::Human, false).as_deref(),
+            Some(title)
+        );
+        assert_eq!(settings.undo(&Author::Human, false).unwrap(), title);
+        assert_eq!(settings.value("appearance.theme"), "dark");
+        assert_eq!(
+            settings.next_label(&Author::Human, true).as_deref(),
+            Some(title)
+        );
+        assert_eq!(settings.undo(&Author::Human, true).unwrap(), title);
+        assert_eq!(settings.value("appearance.theme"), "light");
+    }
+    assert_eq!(
+        settings.next_label(&Author::Human, false).as_deref(),
+        Some(title)
+    );
+    assert_eq!(
+        settings.store.history()[0],
+        original,
+        "Presenting the original action leaves its attributed transaction intact"
+    );
+    assert_eq!(
+        settings.store.history()[1].label.as_deref(),
+        Some("undo undo authored workflow")
+    );
+    assert_eq!(settings.store.history().len(), 7);
+}

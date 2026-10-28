@@ -23,6 +23,7 @@ mod script_assets;
 pub mod settings;
 pub mod shell;
 pub mod state;
+mod transaction_label;
 mod transport;
 mod view_camera;
 pub mod world;
