@@ -39,8 +39,54 @@ pub(super) struct State {
     jobs: jobs::Jobs,
     events: Vec<Value>,
     catalog_pending: bool,
+    final_catalog: Option<BTreeSet<String>>,
 }
 impl State {
+    pub fn baseline_jobs(&mut self, response: &Value) -> Result<(), String> {
+        self.jobs.baseline(response)
+    }
+    /// Observe exact returned jobs from the same final authority inventory used
+    /// to detect jobs started through shell controls.
+    pub fn observe_jobs(&mut self, response: &Value) {
+        for job in response["jobs"].as_array().into_iter().flatten() {
+            if let Some(id) = job["job"].as_str()
+                && let Some(command) = self.jobs.observe(id, job)
+            {
+                self.commit(&command, &job["result"]);
+            }
+        }
+    }
+    pub fn validate_final_catalog(&mut self, response: &Value) -> Result<(), String> {
+        let items = response["items"]
+            .as_array()
+            .ok_or("Final schema.list returned no catalog")?;
+        let mut current = BTreeSet::new();
+        for item in items {
+            if item["kind"] == "command" {
+                current.insert(
+                    item["name"]
+                        .as_str()
+                        .ok_or("Final command catalog entry has no name")?
+                        .to_owned(),
+                );
+            }
+        }
+        if !self.names.is_empty()
+            && current != self.names
+            && self.final_catalog.as_ref() != Some(&current)
+        {
+            self.errors.push(format!(
+                "Typed command catalog changed during the run: added {:?}, removed {:?}",
+                current.difference(&self.names).collect::<Vec<_>>(),
+                self.names.difference(&current).collect::<Vec<_>>()
+            ));
+        }
+        self.final_catalog = Some(current);
+        Ok(())
+    }
+    pub fn final_catalog_matched(&self) -> bool {
+        !self.names.is_empty() && self.final_catalog.as_ref() == Some(&self.names)
+    }
     pub fn discovery_action(&self) -> Option<Action> {
         let (method, params) = match self.discovery {
             Discovery::List => ("schema.list", json!({"kind":"command"})),
@@ -278,6 +324,7 @@ impl State {
             && self.errors.is_empty()
             && self.missing().is_empty()
             && !self.names.is_empty()
+            && self.final_catalog.as_ref() == Some(&self.names)
     }
     fn missing(&self) -> Vec<Value> {
         self.names
@@ -294,6 +341,7 @@ impl State {
     }
     pub fn report(&self) -> Value {
         json!({"typedCommandCatalogReady":matches!(self.discovery, Discovery::Ready),"typedCommandCatalog":self.names,
+            "typedCommandCatalogFinal":self.final_catalog,"typedCommandCatalogFinalMatched":self.final_catalog_matched(),
             "typedCommandCatalogErrors":self.errors,"typedCommandCoverageComplete":self.complete(),"missingTypedCommandEdgeCases":self.missing(),
             "typedCommandCases":cases::NAMES,"typedCommandCounts":self.counts.iter().map(|(name,c)| (name,json!({"attempts":c.attempts,"accepted":c.accepted,"committedTransactions":c.committed.len(),"cases":c.cases,"changedFields":c.changed,"rejectedDiagnostics":c.rejected_diagnostics}))).collect::<BTreeMap<_,_>>(),
             "typedCommandJobs":self.jobs.report(),"typedCommandCatalogFile":"monkey-typed-catalog.json",

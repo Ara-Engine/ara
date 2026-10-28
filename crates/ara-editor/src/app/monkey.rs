@@ -5,6 +5,7 @@
 mod actions;
 pub(super) mod native;
 mod play;
+mod resources;
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests;
@@ -50,6 +51,8 @@ pub(super) struct Monkey {
     clipboard: MemoryClipboard,
     play: play::State,
     typed: typed::State,
+    resources: resources::Resources,
+    last_catalog_matched: Option<bool>,
     actions: u64,
     workload_actions: u64,
     cleanup_actions: u64,
@@ -108,6 +111,8 @@ impl Monkey {
             clipboard: MemoryClipboard::default(),
             play: play::State::default(),
             typed: typed::State::default(),
+            resources: resources::Resources::default(),
+            last_catalog_matched: None,
             actions: 0,
             workload_actions: 0,
             cleanup_actions: 0,
@@ -212,6 +217,14 @@ impl Monkey {
             return Err("The editor monkey requires a fresh scratch project marked .ara-monkey-fixture or .ara-behaviour-fixture".into());
         }
         shell.open_ide = false;
+        if !self.resources.initialized() {
+            // Instrumentation precedes every workload action, including queued
+            // fixture actions. It never borrows or clones authoring documents.
+            let inventory = editor.action("jobs.list", json!({}))?;
+            self.resources.baseline(&editor.session, &inventory)?;
+            self.typed.baseline_jobs(&inventory)?;
+            self.write_event(json!({"phase":"jobInventory","when":"startup","session":editor.session,"jobs":self.resources.report()["baselineJobs"]}))?;
+        }
         if self.actions == 0 {
             self.read_diagnostics(editor)?;
             self.baseline_diagnostics = std::mem::take(&mut self.diagnostics);
@@ -237,7 +250,12 @@ impl Monkey {
             }
             let action = if !self.held_buttons.is_empty() || !self.held_keys.is_empty() {
                 Action::FocusLost
-            } else if let Some(action) = self.play.drain().or_else(|| self.typed.drain()) {
+            } else if let Some(action) = self
+                .play
+                .drain()
+                .or_else(|| self.typed.drain())
+                .or_else(|| self.resources.next())
+            {
                 action
             } else {
                 return Ok(false);
@@ -357,6 +375,9 @@ impl Monkey {
         for result in self.typed.take_events() {
             self.write_event(json!({"phase":"typedResult","step":self.actions-1,"result":result}))?;
         }
+        if self.panics.is_empty() {
+            self.observe_shell_resources(editor, shell)?;
+        }
         self.write_event(json!({"phase":"end","step":self.actions-1,"outcome":outcome,"actionMs":at.elapsed().as_secs_f64()*1000.}))?;
         if self.actions.is_multiple_of(64) || self.finished() {
             self.read_diagnostics(editor)?;
@@ -424,6 +445,7 @@ impl Monkey {
     fn resources_drained(&self) -> bool {
         self.play.drained()
             && self.typed.drained()
+            && self.resources.drained()
             && self.held_buttons.is_empty()
             && self.held_keys.is_empty()
     }
@@ -502,6 +524,39 @@ impl Monkey {
         self.native_events += events;
     }
 
+    /// End-of-budget verification after shell polling catches jobs launched by a
+    /// ready modal or build callback later in the frame. Normal frames do no work.
+    pub fn observe_shell_resources(
+        &mut self,
+        editor: &mut Editor,
+        shell: &Shell,
+    ) -> ara_ui::Result<()> {
+        if !self.panics.is_empty() {
+            return Ok(());
+        }
+        if !self.budget_reached() && !self.replay.as_ref().is_some_and(VecDeque::is_empty) {
+            return Ok(());
+        }
+        self.resources.shell(shell.monkey_background_work());
+        self.refresh_end_inventory(editor)
+    }
+
+    fn refresh_end_inventory(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
+        let inventory = editor.action("jobs.list", json!({}))?;
+        self.resources.observe(&inventory)?;
+        self.typed.observe_jobs(&inventory);
+        self.resources.settle_files(editor);
+        let catalog = editor.action("schema.list", json!({"kind":"command"}))?;
+        self.typed.validate_final_catalog(&catalog)?;
+        let matched = self.typed.final_catalog_matched();
+        if self.resources.take_changed() || self.last_catalog_matched != Some(matched) {
+            self.write_event(json!({"phase":"jobInventory","when":"finish","step":self.actions,"resources":self.resources.report(),
+                "typedCommandCatalogFinalMatched":matched}))?;
+            self.last_catalog_matched = Some(matched);
+        }
+        Ok(())
+    }
+
     /// Persist the final summary even when an enclosing frame limit ended the run.
     pub fn finish(&mut self) -> ara_ui::Result<()> {
         self.journal.flush()?;
@@ -512,6 +567,9 @@ impl Monkey {
     /// actions, then write the authoritative final report.
     pub fn finish_with(&mut self, editor: &mut Editor) -> ara_ui::Result<()> {
         self.watchdog.progress(self.actions, None);
+        if self.resources.initialized() && self.panics.is_empty() {
+            self.refresh_end_inventory(editor)?;
+        }
         self.read_diagnostics(editor)?;
         self.final_diagnostics = true;
         self.finish()
@@ -615,6 +673,7 @@ impl Monkey {
                 "limits":["Command coverage counts attempted edge targets; disabled or deferred commands can reject before their implementation runs. Accepted callbacks are counted separately.","Protocol method probes include malformed envelopes and stale sessions; a method attempt is not complete implementation coverage.","The watchdog persists permanent stalls independently; an external process timeout is required to end a permanently stalled editor.","Long frames and watchdog stalls are reported separately; hangs is their lower bound because their intervals can overlap.","NaN and infinity reach numeric controls as text because JSON cannot represent non-finite numbers."]
             }),
             self.typed.report(),
+            json!({"hostJobResources":self.resources.report()}),
         ] {
             let Value::Object(fields) = section else {
                 return Err("Monkey report section is not an object".into());

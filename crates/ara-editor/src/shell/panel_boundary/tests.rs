@@ -291,17 +291,31 @@ fn panel_compilation_cache_cpu_benchmark() {
         shell.validate_panel("inspector", &body).unwrap();
     }
     let samples = 500_u32;
-    let baseline = Instant::now();
+    let overhead = Instant::now();
     for _ in 0..samples {
         black_box(&body);
     }
-    let baseline = baseline.elapsed().as_nanos();
+    let overhead = overhead.elapsed();
+    let checks = shell.panel_compilation.checks;
     let hit = Instant::now();
     for _ in 0..samples {
         shell.validate_panel("inspector", black_box(&body)).unwrap();
     }
-    let hit = hit.elapsed().as_nanos();
+    let hit = hit.elapsed();
+    let hit_checks = shell.panel_compilation.checks - checks;
+    assert_eq!(hit_checks, 0);
+    let uncached_samples = 64_u32;
+    let checks = shell.panel_compilation.checks;
+    let uncached = Instant::now();
+    for _ in 0..uncached_samples {
+        shell.panel_compilation.valid.remove("inspector");
+        shell.validate_panel("inspector", black_box(&body)).unwrap();
+    }
+    let uncached = uncached.elapsed();
+    let uncached_checks = shell.panel_compilation.checks - checks;
+    assert_eq!(uncached_checks, uncached_samples as usize);
     let miss_samples = 64_u32;
+    let checks = shell.panel_compilation.checks;
     let miss = Instant::now();
     for i in 0..miss_samples {
         shell
@@ -311,11 +325,23 @@ fn panel_compilation_cache_cpu_benchmark() {
             )
             .unwrap();
     }
-    let miss = miss.elapsed().as_nanos();
+    let miss = miss.elapsed();
+    let miss_checks = shell.panel_compilation.checks - checks;
+    assert_eq!(miss_checks, miss_samples as usize);
     let work = shell.ui.frame(&mut shell.text).unwrap();
     assert_eq!(shell.ui.nodes.len(), nodes);
     assert_eq!(work, ara_ui::Work::default());
-    let metadata = json!({"schemaVersion":1,"benchmark":"panel-compilation-cache","os":std::env::consts::OS,"architecture":std::env::consts::ARCH,"debugAssertions":cfg!(debug_assertions),"input":{"elements":501,"utf8Bytes":body.len(),"fingerprint":"blake3","stylesheet":"current editor surface"},"baseline":{"iterations":samples,"totalNanoseconds":baseline},"cacheHit":{"iterations":samples,"totalNanoseconds":hit},"cacheMiss":{"iterations":miss_samples,"totalNanoseconds":miss},"runtimeNodesCreated":shell.ui.nodes.len()-nodes,"layoutPasses":work.layout_passes,"textShapes":work.shaped});
+    let timing = |elapsed: std::time::Duration, iterations: u32, checks: usize| {
+        json!({
+            "iterations":iterations,"totalNanoseconds":elapsed.as_nanos(),
+            "nanosecondsPerCall":elapsed.as_secs_f64()*1e9/f64::from(iterations),"compilationChecks":checks
+        })
+    };
+    let metadata = json!({"schemaVersion":2,"benchmark":"panel-compilation-cache","os":std::env::consts::OS,"architecture":std::env::consts::ARCH,"debugAssertions":cfg!(debug_assertions),"input":{"elements":501,"utf8Bytes":body.len(),"fingerprint":"blake3","stylesheet":"current editor surface"},
+        "loopOverhead":timing(overhead,samples,0),"cacheHit":timing(hit,samples,hit_checks),
+        "uncachedValidation":timing(uncached,uncached_samples,uncached_checks),"cacheMissAlternatingBodies":timing(miss,miss_samples,miss_checks),
+        "uncachedNote":"Identical production validation with the current cache entry invalidated per call; invalidation cost is included. This is a counterfactual uncached mode, not a historical binary measurement.",
+        "runtimeNodesCreated":shell.ui.nodes.len()-nodes,"layoutPasses":work.layout_passes,"textShapes":work.shaped});
     let output = crate::test_target().join("panel-validation-benchmarks");
     std::fs::create_dir_all(&output).unwrap();
     let path = output.join(format!(

@@ -1852,6 +1852,9 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     break;
                 }
             }
+            if let Some(runner) = &mut monkey {
+                runner.observe_shell_resources(&mut editor, &shell)?;
+            }
             if monkey.as_ref().is_some_and(monkey::Monkey::finished) {
                 game.close(&mut editor, &mut gpu)?;
                 break;

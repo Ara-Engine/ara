@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default)]
 pub(super) struct Jobs {
+    baseline_collected: bool,
     baseline: BTreeSet<String>,
     owned: BTreeMap<String, Job>,
 }
@@ -14,6 +15,9 @@ struct Job {
 }
 impl Jobs {
     pub fn baseline(&mut self, response: &Value) -> Result<(), String> {
+        if self.baseline_collected {
+            return Ok(());
+        }
         let jobs = response["jobs"]
             .as_array()
             .ok_or("jobs.list returned no inventory")?;
@@ -21,6 +25,7 @@ impl Jobs {
             .iter()
             .filter_map(|j| j["job"].as_str().map(str::to_owned))
             .collect();
+        self.baseline_collected = true;
         Ok(())
     }
     pub fn returned(&mut self, command: &str, response: &Value) {
@@ -43,7 +48,8 @@ impl Jobs {
         let job = self.owned.get_mut(id)?;
         // Cancellation responses can be acknowledgements, not final status.
         if response["status"].is_string() {
-            job.status = response.clone();
+            job.status = json!({"status":response["status"],"cancellable":response["cancellable"],
+                "progress":response["progress"],"message":response["message"],"diagnostics":response["diagnostics"]});
         }
         Some(job.command.clone())
     }

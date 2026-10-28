@@ -213,6 +213,12 @@ fn an_elapsed_duration_without_coverage_or_native_input_is_not_a_soak_pass() {
     assert!(!runner.finished());
     // Exercise the acceptance predicate without waiting thirty minutes in a unit test.
     runner.started = Instant::now() - Duration::from_secs(1800);
+    // Use the real nonblocking resource/file drain, not a synthetic elapsed-time
+    // assertion that bypasses the final authority inventory.
+    while !runner.finished() {
+        runner.step(&mut editor, &mut shell).unwrap();
+        editor.tick();
+    }
     runner.finish_with(&mut editor).unwrap();
     assert!(runner.finished());
     assert!(
@@ -411,6 +417,9 @@ fn typed_calls_report_actual_commits_and_replay_exact_doc_args_and_case() {
         0
     );
     assert_eq!(report["typedCommandCoverageComplete"], false);
+    assert_eq!(report["hostJobResources"]["drained"], true);
+    assert_eq!(report["hostJobResources"]["hostUnsaved"], false);
+    assert_eq!(report["hostJobResources"]["fileFlushPending"], false);
     let replay_project = Project::new();
     let (mut replay_editor, mut replay_shell) = replay_project.open();
     let replay_output = replay_project.0.join("typed-replay");
@@ -510,6 +519,40 @@ fn a_rejected_catalog_discovery_cannot_report_complete_typed_coverage() {
     );
     assert_eq!(report["typedCommandCoverageComplete"], false);
     assert_eq!(editor.host.store().revision(), revision);
+}
+
+#[test]
+fn final_catalog_drift_is_detected_against_the_real_startup_authority_snapshot() {
+    let project = Project::new();
+    let (mut editor, mut shell) = project.open();
+    let mut typed = typed::State::default();
+    while let Some(action) = typed.discovery_action() {
+        typed
+            .run(&action, &mut editor, &mut shell)
+            .unwrap()
+            .unwrap();
+    }
+    let mut final_catalog = editor
+        .action("schema.list", json!({"kind":"command"}))
+        .unwrap();
+    typed.validate_final_catalog(&final_catalog).unwrap();
+    assert!(typed.final_catalog_matched());
+    // The authority may gain external C# commands after loading a module. Its
+    // descriptor must not silently fall outside a startup-only coverage claim.
+    final_catalog["items"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"name":"fixture.new.external.command","kind":"command"}));
+    typed.validate_final_catalog(&final_catalog).unwrap();
+    assert!(!typed.final_catalog_matched());
+    let report = typed.report();
+    assert!(
+        !report["typedCommandCatalogErrors"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(report["typedCommandCoverageComplete"], false);
 }
 
 #[test]

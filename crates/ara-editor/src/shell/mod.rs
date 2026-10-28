@@ -26,6 +26,7 @@ mod imports;
 mod input;
 mod keyboard;
 mod menu;
+mod monkey_support;
 mod motion;
 mod notices;
 mod ops;
