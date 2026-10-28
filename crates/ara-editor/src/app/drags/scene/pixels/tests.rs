@@ -66,7 +66,7 @@ fn flat_shaded_box_uses_actual_outline_geometry_at_wide_and_portrait_dpi() {
             assert!(
                 evidence.matches_geometry,
                 "{}",
-                serde_json::to_string(&evidence).unwrap()
+                serde_json::to_string(&evidence).expect("pixel evidence serializes")
             );
             assert_eq!(evidence.matched_edges, 4);
             assert_eq!(evidence.matched_samples, evidence.samples);
@@ -138,7 +138,7 @@ fn hover_composite_matches_the_producer_but_a_uniform_composite_does_not() {
     assert!(
         evidence.matches_geometry,
         "{}",
-        serde_json::to_string(&evidence).unwrap()
+        serde_json::to_string(&evidence).expect("pixel evidence serializes")
     );
     assert_eq!(evidence.matched_edges, 4);
     let uniform = image::RgbaImage::from_pixel(
