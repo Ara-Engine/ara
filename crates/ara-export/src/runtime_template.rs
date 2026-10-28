@@ -179,8 +179,14 @@ fn mach_o(player: &Path) -> Result<bool> {
     ))
 }
 
+/// Cooked JSON records the runtime reads beside pipeline manifests: a VFX effect's
+/// content hash (`ara-vfx-gpu` checks `<effect>/effect.json` before building it).
+/// Every other JSON without stages is offline cook state and stays out.
+const RUNTIME_RECORDS: &[&str] = &["effect.json"];
+
 /// Adds runtime artifacts named by manifests: SPIR-V/DXIL, or Metal libraries and
-/// their required converter reflection. Slang reflection is an offline cook cache.
+/// their required converter reflection, plus [`RUNTIME_RECORDS`]. Slang reflection
+/// is an offline cook cache.
 fn resources(
     root: &Path,
     directory: &Path,
@@ -206,7 +212,15 @@ fn resources(
             continue;
         }
         let value: serde_json::Value = serde_json::from_slice(&std::fs::read(&path)?)?;
+        let relative = path
+            .strip_prefix(root)?
+            .to_string_lossy()
+            .replace('\\', "/");
         let Some(stages) = value.get("stages").and_then(serde_json::Value::as_array) else {
+            if RUNTIME_RECORDS.contains(&name.as_str()) {
+                ara_pack::validate_path(&relative)?;
+                files.insert(format!("{prefix}/{relative}"), path.to_owned());
+            }
             continue;
         };
         ensure!(
@@ -214,10 +228,6 @@ fn resources(
             "empty cooked pipeline {}",
             path.display()
         );
-        let relative = path
-            .strip_prefix(root)?
-            .to_string_lossy()
-            .replace('\\', "/");
         ara_pack::validate_path(&relative)?;
         files.insert(format!("{prefix}/{relative}"), path.to_owned());
         manifests += 1;
@@ -339,6 +349,9 @@ mod tests {
             )
             .unwrap();
         }
+        let effect = scratch.path().join("crates/ara-vfx-gpu/cooked/campfire");
+        std::fs::create_dir_all(&effect).unwrap();
+        std::fs::write(effect.join("effect.json"), "{\"hash\":\"cooked\"}").unwrap();
         let first = scratch.path().join("first.zip");
         let second = scratch.path().join("second.zip");
         build_runtime_template(&player, scratch.path(), &first).unwrap();
@@ -376,6 +389,12 @@ mod tests {
                 "offline {file} must stay outside the runtime payload"
             );
         }
+        // The VFX runtime checks each effect's cooked hash record before building it.
+        assert!(
+            archive
+                .by_name("resources/ara-vfx-gpu/campfire/effect.json")
+                .is_ok()
+        );
         let unpacked = scratch.path().join("game");
         let executable =
             crate::runtime::unpack_template(&first, &unpacked, "ara-player.exe").unwrap();
