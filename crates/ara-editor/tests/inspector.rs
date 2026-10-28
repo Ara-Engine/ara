@@ -86,7 +86,10 @@ impl Project {
             .action("editor.layout.show", json!({"panel":"assets"}))
             .unwrap();
         editor
-            .action("editor.workspace", json!({"folder":"models"}))
+            .action(
+                "editor.workspace",
+                json!({"folder":format!("{}/models",ara_doc::AUTHORING_ROOT)}),
+            )
             .unwrap();
         // Hierarchy shares the right column with the Inspector and Assets is open:
         // a tall window keeps every Inspector field the tests click on screen.
