@@ -141,6 +141,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     let render_options = ara_runtime_render::RenderOptions {
         ray_tracing: args.ray_tracing.unwrap_or(scene.rendering.ray_tracing),
     };
+    perf.configure_rt(render_options.ray_tracing, quality);
     let scene = Arc::new(scene);
     let (mut world, build_ms, window, presenter) = if args.standalone.headless {
         let (world, build_ms) = World::build_packed(&scene, source, false)?;

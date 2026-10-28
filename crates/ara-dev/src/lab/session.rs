@@ -193,6 +193,7 @@ impl Session {
             json!({"measure":true,"frames":frames,"quality":preset}),
             Duration::from_secs(180),
         )?;
+        crate::perf::readiness::validate(&result["player"]).map_err(anyhow::Error::msg)?;
         self.selection.preset = preset.into();
         Ok(result)
     }

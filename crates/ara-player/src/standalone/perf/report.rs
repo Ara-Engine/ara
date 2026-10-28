@@ -73,6 +73,10 @@ impl Window {
             json!({"extension":info.timestamp_clock,"period_ns":info.timestamp_period_ns,"valid_bits":info.timestamp_valid_bits})
         });
         report["completed"] = json!(state == Outcome::Ready);
+        report["pass_presence"] = self
+            .pass_guard
+            .as_ref()
+            .map_or(Value::Null, |guard| guard.report());
         self.update_run(&mut report);
         report["arrival"] = self.arrival.report();
         if self.options.perf_wait_ready {
