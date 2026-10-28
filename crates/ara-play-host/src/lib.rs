@@ -818,6 +818,8 @@ impl PlayService {
         progress: Option<&starting::Reporter>,
     ) -> Result<Value, Vec<Diagnostic>> {
         let began = Instant::now();
+        ara_host::project_layout::require_current_layout(&self.root)
+            .map_err(|diagnostic| vec![diagnostic])?;
         starting::report(progress, "snapshot", 0, 1)?;
         let mode = p.mode.as_deref().unwrap_or("local");
         let clients = p.clients.unwrap_or(0) as usize;

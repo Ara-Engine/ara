@@ -173,6 +173,7 @@ impl Host {
     /// replays the journal (recovering edits a crash kept from disk) and registers
     /// the core and profiling services.
     pub fn open(project: Project, config: HostConfig) -> Result<Host, Diagnostic> {
+        crate::project_layout::require_current_layout(&project.root)?;
         Self::open_inner(project, config, true)
     }
 
@@ -190,6 +191,9 @@ impl Host {
         let state_dir = project.root.join(STATE_DIR);
         fs::create_dir_all(&state_dir).map_err(|e| io_error("create", &state_dir, e))?;
         let lock = lock(&state_dir)?;
+        if replay_native {
+            crate::project_layout::require_current_layout(&project.root)?;
+        }
         let (mut ws, per_file) = project.load(&[]);
         // Canonical import sidecars are editable documents too. Source-only legacy
         // identity stubs remain index entries until explicitly initialized.

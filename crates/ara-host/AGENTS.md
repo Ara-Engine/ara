@@ -1,19 +1,16 @@
 # ara-host
-One project's Engine Protocol host: sessions, Service registry, attributed history,
-review, checkpoints, persistence and reconciliation. Used by `ara serve`, offline CLI and tests.
+Project Engine Protocol host: sessions, services, attributed history, review, persistence and reconciliation; used by `ara serve`, CLI and tests.
 ## Public API
 - `Project::open(root)` (needs `ara.project.json`), `main_scene()` (`main` in the
   marker, else `scenes/main.scene`), `project::discover(start)`,
-  `project::no_project` (ARA1901 + `ara init` fix), `MARKER`, `STATE_DIR` (`.ara`).
-  Scans skip hidden dirs, `target/`, `node_modules/`, `spikes/`, top-level `builds/` and `packages/`, nested projects.
+  `project::no_project` (ARA1901 + `ara init` fix), `MARKER`, `STATE_DIR` (`.ara`). Scans skip hidden dirs, `target/`, `node_modules/`, `spikes/`, top-level `builds/` and `packages/`, nested projects.
 - `project::authored_files(root, db)`: one semantic inventory, sorted by unique storage_path;
   authored paths are reference-relative, metadata/settings have Project scope.
 - `project_layout::{AUTHORING_ROOT, authored_root(root)}`: one authored-root contract.
   Current projects use content-relative references and project-relative storage paths.
-- `project_layout`: `require_current_layout` rejects old layouts before open (ARA1914).
-  `migration_plan` is read-only; `migrate_project` submits one typed, journaled command
-  after consent and waits for its physical receipt. `Migration::apply` delegates to it.
-  Prior history stays append-only; Undo restores old bytes and closes normal authoring.
+- `project_layout`: `require_current_layout` rejects old opens (ARA1914). `migration_plan` is read-only.
+  `migrate_project` submits one typed, journaled command after consent and waits for its physical receipt; `Migration::apply` delegates.
+  History stays append-only; Undo restores old bytes and closes normal authoring.
 - `Workspace::insert_project_document` keeps root policy transactional without adding
   it to the asset index; `is_project_document` excludes it from portable game data.
 - `Host::open(project, HostConfig)`: takes `.ara/lock` (ARA1903 if held), loads
