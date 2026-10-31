@@ -430,7 +430,8 @@ impl VulkanDevice {
                 "Image was not allocated for shader storage".into(),
             ));
         }
-        let view = value.raw.view;
+        // sRGB colour images store through their UNORM alias (shaders encode).
+        let view = value.raw.storage_view.unwrap_or(value.raw.view);
         if self.heap.storage_full() {
             self.reclaim_storage()?;
         }

@@ -380,6 +380,9 @@ impl Drop for Gpu {
             }
             for image in &self.images {
                 self.device.destroy_image_view(image.view, None);
+                if let Some(storage) = image.storage_view {
+                    self.device.destroy_image_view(storage, None);
+                }
                 self.device.destroy_image(image.handle, None);
                 self.device.free_memory(image.memory, None);
             }

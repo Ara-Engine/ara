@@ -58,7 +58,7 @@ Owns the native GPU boundary. Vulkan uses ash revision
 ## Contracts
 
 The v3 heap uses runtime image/buffer arrays at bindings 5/1: up to 65,536 sampled images and 128 storage buffers, clamped jointly to set/stage/pool limits (minimum 128 images/64 buffers), plus 64 storage images and optional 16 acceleration structures.
-A full storage heap waits (bounded) for retired storage images' last use, then collects (`reclaim_storage`); window devices enable swapchain_maintenance1 present scaling.
+A full storage heap waits (bounded) for retired storage images' last use, then collects (`reclaim_storage`); Vulkan sRGB images created with STORAGE are MUTABLE_FORMAT|EXTENDED_USAGE with a UNORM `storage_view` (`storage_alias`) that `storage_image` publishes (shaders encode sRGB; Metal still needs the equivalent pixel-format view); window devices enable swapchain_maintenance1 present scaling.
 `DeviceInfo` records both selected capacities. Binding 0 mirrors the first 128 slots for cached editor
 material previews only. All engine pipelines must be recooked; only `previewVertex`/`previewFragment` caches accept the old ABI.
 Binding 2 has three fixed samplers: material repeat (up to 16x anisotropic where the
