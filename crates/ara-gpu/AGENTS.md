@@ -1,7 +1,6 @@
 # ara-gpu
 
-Owns the native GPU boundary. Vulkan uses ash revision
-`f4c2ca3e4f6b998d5254ad101a32f024d87cdec2`, matching S1.
+Owns the native GPU boundary. Vulkan uses ash revision `f4c2ca3e4f6b998d5254ad101a32f024d87cdec2`, matching S1.
 
 ## Public API
 
@@ -9,6 +8,7 @@ Owns the native GPU boundary. Vulkan uses ash revision
   extensions, features or acceleration descriptor capacity, even on an RT GPU.
   `new` retains optional RT. Windowed devices request KHR/EXT HIGH; denial retries MEDIUM.
 - `Device`: portable descriptors, queues, cooked pipelines, recording and retirement.
+- `DeviceInfo::ray_tracing_supported` is physical support; `ray_tracing` is logical enablement. User settings query the former.
 - `Command::CopyBufferRange` copies aligned ranges with checked capacities/overflow;
   it preserves unrelated destination bytes and is rejected inside rendering.
 - `VulkanDevice`: Vulkan backend; `context()` is read-only native integration access; `info()`, `wait_idle()` and `host_wait_stats()` are the portable forms both backends (`GpuDevice`) provide. Unsafe startup-only `split_loading` shares native lifetime with separate pools/arenas; serialize owners if graphics queues alias.

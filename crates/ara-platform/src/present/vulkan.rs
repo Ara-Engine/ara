@@ -276,6 +276,19 @@ impl Present {
     pub fn vsync(&self) -> bool {
         self.vsync
     }
+
+    /// Portable device form of `set_vsync`, used by game settings on either backend.
+    /// # Safety
+    /// The caller retains this presentation's device and window on their owner thread.
+    pub unsafe fn set_vsync_device(
+        &mut self,
+        gpu: &ara_gpu::GpuDevice,
+        window: &Window,
+        enabled: bool,
+    ) -> Result<bool> {
+        // SAFETY: the forwarded contract retains the same native owners.
+        unsafe { self.set_vsync(gpu.context(), window, enabled) }
+    }
     /// The swapchain's pixel extent.
     pub fn extent(&self) -> [u32; 2] {
         [self.extent.width, self.extent.height]

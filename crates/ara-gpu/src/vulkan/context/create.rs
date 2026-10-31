@@ -211,13 +211,13 @@ impl Gpu {
             if mesh_shading {
                 device_extensions.push(ash::ext::mesh_shader::NAME.as_ptr());
             }
-            let ray_tracing = enable_ray_tracing
-                && rt_extensions
+            let ray_tracing_supported = rt_extensions
                 && acceleration_features.acceleration_structure != 0
                 && ray.ray_query != 0
                 && acceleration_features
                     .descriptor_binding_acceleration_structure_update_after_bind
                     != 0;
+            let ray_tracing = enable_ray_tracing && ray_tracing_supported;
             if ray_tracing {
                 device_extensions.extend([
                     ash::khr::acceleration_structure::NAME.as_ptr(),
@@ -396,6 +396,7 @@ impl Gpu {
                     .map(|heap| heap.size / (1024 * 1024))
                     .sum(),
                 ray_tracing,
+                ray_tracing_supported,
                 texture_compression_bc: core_supported.texture_compression_bc != 0,
                 sampled_image_capacity,
                 storage_buffer_capacity,

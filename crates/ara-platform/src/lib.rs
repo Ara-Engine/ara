@@ -12,4 +12,4 @@ pub use chrome::WindowChrome;
 pub use cursor::SystemCursor;
 pub use live_repaint::with_live_repaint;
 pub use present::{Present, out_of_date};
-pub use window::{Event, GameWindowMode, Window};
+pub use window::{Event, GameWindowMode, MonitorMode, Window};

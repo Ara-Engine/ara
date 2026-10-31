@@ -9,6 +9,8 @@ Metal view presented through `ara_gpu::metal::present` (`src/present/metal.rs`).
 - `Window`: main-thread-only resizable/high-DPI Vulkan window; owns an SDL video
   subsystem reference. `extensions()` returns owned strings, and `size()` returns
   physical pixels. It is intentionally neither Send nor Sync.
+- `supported_modes` enumerates monitor IDs, physical resolutions and millihertz;
+  `set_display_mode` selects a monitor/refresh policy. Hidden windows never switch modes.
 - `Window::game`: borderless desktop fullscreen by default, explicit Windowed, or
   exclusive Fullscreen (closest display mode, desktop refresh). `set_game_mode`
   switches at runtime (game Settings menus) and `game_mode` reads it back; presenters

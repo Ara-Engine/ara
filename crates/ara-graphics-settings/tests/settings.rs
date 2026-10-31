@@ -168,6 +168,9 @@ fn startup_reconciles_disconnected_monitors_and_unsupported_output() {
     assert!(!state.applied.hdr && !state.applied.ray_tracing && !state.active_ray_tracing);
     assert_eq!(state.applied.monitor, 0);
     assert_eq!(state.diagnostics.len(), 3);
+    let defaults = service.request(Request::ResetToDefaults).unwrap();
+    assert!(!defaults.pending.ray_tracing && !defaults.pending.hdr);
+    service.request(Request::Apply).unwrap();
 }
 
 #[test]

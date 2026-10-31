@@ -25,6 +25,18 @@ pub struct Present {
 }
 
 impl Present {
+    /// Portable device form of `set_vsync`, used by game settings on either backend.
+    /// # Safety
+    /// The caller retains this presentation's device and window on their owner thread.
+    pub unsafe fn set_vsync_device(
+        &mut self,
+        gpu: &ara_gpu::GpuDevice,
+        window: &Window,
+        enabled: bool,
+    ) -> Result<bool> {
+        // SAFETY: the forwarded contract retains the same native owners.
+        unsafe { self.set_vsync(gpu, window, enabled) }
+    }
     /// Opt-in overlap, as on Vulkan: `present_image` returns once its copy is
     /// committed (GPU-ordered after the device's submitted work), and the next present
     /// waits for it first. Turning it off waits now.

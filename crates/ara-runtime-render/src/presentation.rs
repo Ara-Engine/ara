@@ -106,7 +106,18 @@ impl Presenter {
     /// Selects a user override, or the project's setting when no override exists.
     /// Auto chooses a raster tier; experimental RT also requires RenderOptions.
     pub fn set_quality(&mut self, quality: QualityChoice) {
+        self.graphics_plan_key = None;
         self.choice = quality;
+        if let Some(settings) = &mut self.graphics {
+            use ara_graphics_settings::Preset;
+            settings.preset = match quality {
+                QualityChoice::Auto => Preset::Auto,
+                QualityChoice::Preset(QualityPreset::Low) => Preset::Low,
+                QualityChoice::Preset(QualityPreset::Medium) => Preset::Medium,
+                QualityChoice::Preset(QualityPreset::High) => Preset::High,
+                QualityChoice::Preset(QualityPreset::Epic) => Preset::Epic,
+            };
+        }
     }
 
     /// Replaces the frame's authored look on the raster path (look development and
@@ -119,12 +130,16 @@ impl Presenter {
     /// upscaler studies and ground truth at native resolution); `None` keeps the
     /// preset's `raster_scale`. The ray-traced tiers keep their own scales.
     pub fn set_render_scale(&mut self, scale: Option<f32>) {
+        self.graphics_plan_key = None;
         self.render_scale = scale.map(|s| s.clamp(0.1, 1.));
     }
 
     /// Turns effects off for diagnosis (the editor's View > Rendering debug, sent
     /// with each Play); `full_resolution` renders at the display size.
     pub fn set_debug(&mut self, debug: ara_render::RenderDebug) {
+        if self.debug != debug {
+            self.graphics_plan_key = None;
+        }
         self.debug = debug;
     }
 
@@ -133,6 +148,7 @@ impl Presenter {
     /// path, as a GPU without ray queries would (A/B measurements). Applies from the
     /// next prepared frame.
     pub fn set_ray_queries(&mut self, enabled: bool) {
+        self.graphics_plan_key = None;
         self.ray_queries = enabled;
     }
 
@@ -289,12 +305,20 @@ impl Presenter {
             .context("presentation device initialized")?;
         renderer.gpu_mut().set_pass_timing(self.pass_timing);
         renderer.gpu_mut().reset_timing_window();
-        let mut plan = Plan::resolve(
-            self.choice,
-            &Capabilities::of(renderer.gpu()),
+        let caps = Capabilities::of(renderer.gpu());
+        let graphics_key = (
             self.size,
-            self.options,
-        )?;
+            self.options.ray_tracing,
+            caps.ray_tracing,
+            caps.device_local_mib,
+        );
+        let mut plan = match &self.graphics {
+            Some(_) if self.graphics_plan_key == Some(graphics_key) && self.plan.is_some() => {
+                self.plan.context("cached user graphics plan")?
+            }
+            Some(settings) => crate::graphics::plan(settings, &caps, self.size, self.options)?,
+            None => Plan::resolve(self.choice, &caps, self.size, self.options)?,
+        };
         renderer.set_debug(self.debug)?;
         let scale = self
             .render_scale
@@ -427,6 +451,7 @@ impl Presenter {
             }
         }
         self.plan = Some(plan);
+        self.graphics_plan_key = Some(graphics_key);
         self.stats.prepare = started.elapsed();
         Ok(())
     }

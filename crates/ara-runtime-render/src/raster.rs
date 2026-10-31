@@ -38,6 +38,9 @@ struct Preparation {
 /// Derived native content and VFX on a caller-owned renderer/device. It never
 /// discovers, cooks or imports assets; the resolver supplies published generations.
 pub struct RasterView {
+    resident_bytes: u64,
+    foliage_percent: u32,
+    budget_changed: bool,
     prepared: Option<Prepared>,
     effects: vfx::Effects,
     gi: Option<crate::gi::Acquisition>,
@@ -67,6 +70,16 @@ pub struct RasterView {
 }
 
 impl RasterView {
+    /// Replace texture residency and stable foliage density on the next prepare.
+    pub(crate) fn set_content_budget(&mut self, resident_bytes: u64, foliage_percent: u32) {
+        let resident_bytes = resident_bytes.clamp(128 * 1024 * 1024, 32768 * 1024 * 1024);
+        let foliage_percent = foliage_percent.min(100);
+        if (resident_bytes, foliage_percent) != (self.resident_bytes, self.foliage_percent) {
+            self.resident_bytes = resident_bytes;
+            self.foliage_percent = foliage_percent;
+            self.budget_changed = true;
+        }
+    }
     /// Borrow the currently prepared native scene for host picking and surface snapping.
     /// Geometry remains owned by this view and must not be retained across publication.
     pub fn scene(&self) -> Option<&ara_render::instanced::Scene> {
@@ -91,6 +104,9 @@ impl RasterView {
     pub fn new(cache: impl Into<PathBuf>) -> Self {
         let cache = cache.into();
         Self {
+            resident_bytes: 1024 * 1024 * 1024,
+            foliage_percent: 100,
+            budget_changed: false,
             prepared: None,
             effects: Default::default(),
             gi: Some(crate::gi::Acquisition::new(cache.clone())),
@@ -394,7 +410,7 @@ impl RasterView {
             scene_changed,
         } = preparation;
         let result = (|| {
-            let change = if replacement.is_some() {
+            let change = if replacement.is_some() || self.budget_changed {
                 FrameChange::Rebuild
             } else if snapshot_changed || self.prepared.is_none() {
                 self.prepared
@@ -415,14 +431,22 @@ impl RasterView {
                     // assets, while the presented scene continues accepting motion.
                     bake_content = Some(content.clone());
                 }
-                let config = texture_config();
+                let config = NativeConfig {
+                    resident_bytes: self.resident_bytes,
+                    ..texture_config()
+                };
                 let (mut prepared, key) = match replacement {
                     Some((mut prepared, key, native)) => {
                         prepared.scene = renderer.publish_native_content(native)?;
                         (prepared, Some(key))
                     }
                     None => {
-                        let mut prepared = native::prepare(frame, content, config)?;
+                        let mut prepared = native::prepare_with_foliage(
+                            frame,
+                            content,
+                            config,
+                            self.foliage_percent,
+                        )?;
                         prepared.enable_motion();
                         let textures = prepared.textures.fork_sources(config)?;
                         renderer.replace_native_scene(&prepared.scene, Box::new(textures))?;
@@ -448,6 +472,7 @@ impl RasterView {
                 }
                 prepared.enable_motion();
                 self.key = key.unwrap_or_else(|| content_key(&prepared));
+                self.budget_changed = false;
                 let arrivals = self
                     .prepared
                     .as_ref()

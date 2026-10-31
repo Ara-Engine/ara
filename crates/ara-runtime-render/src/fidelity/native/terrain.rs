@@ -105,6 +105,10 @@ impl Builder {
         let resident: std::collections::BTreeSet<_> = view.tiles.iter().copied().collect();
         let empty = RenderFrame::default();
         for instance in &data.foliage {
+            let identity = u64::from(instance.identity[0]) | u64::from(instance.identity[1]) << 32;
+            if identity % 100 >= u64::from(self.foliage_percent) {
+                continue;
+            }
             let p = instance.position_scale;
             let coord = ara_terrain::TileCoord {
                 x: ((p[0] - header.origin[0]) / header.tile_width()).floor() as i32,

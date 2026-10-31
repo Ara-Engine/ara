@@ -42,6 +42,7 @@ pub(super) fn device_info(device: &ProtocolObject<dyn MTLDevice>) -> DeviceInfo 
         device_local_mib: device.recommendedMaxWorkingSetSize() / (1024 * 1024),
         unified_device_local: device.hasUnifiedMemory(),
         ray_tracing: false,
+        ray_tracing_supported: hardware_ray_tracing(device),
         texture_compression_bc: device.supportsBCTextureCompression(),
         sampled_image_capacity: abi::TEXTURES,
         storage_buffer_capacity: abi::BUFFERS,

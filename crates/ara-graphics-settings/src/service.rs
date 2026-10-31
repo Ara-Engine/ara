@@ -100,7 +100,9 @@ impl Service {
     }
 
     /// Coalesce capability queries until the native owner can refresh display modes.
-    pub fn take_capabilities_refresh(&mut self) -> bool { std::mem::take(&mut self.capabilities_refresh) }
+    pub fn take_capabilities_refresh(&mut self) -> bool {
+        std::mem::take(&mut self.capabilities_refresh)
+    }
 
     /// Publish physical device/display capabilities. Never infer physical RT support
     /// from whether ray queries were enabled on the logical device.
@@ -181,9 +183,36 @@ impl Service {
             self.state.diagnostics.clear();
         }
         match request {
-            Request::Get => { self.capabilities_refresh = true; }
+            Request::Get => {
+                self.capabilities_refresh = true;
+            }
             Request::Set { settings } => self.state.pending = settings,
-            Request::ResetToDefaults => self.state.pending = self.state.defaults.clone(),
+            Request::ResetToDefaults => {
+                self.state.pending = self.state.defaults.clone();
+                let caps = &self.state.capabilities;
+                if self.state.pending.ray_tracing
+                    && caps.device_known
+                    && !caps.ray_tracing_supported
+                {
+                    self.state.pending.ray_tracing = false;
+                    self.state.diagnostics.push(Diagnostic::warning(
+                        INVALID,
+                        "project RT default is unavailable on this GPU; staging raster defaults",
+                    ));
+                }
+                if self.state.pending.hdr && !caps.hdr_supported {
+                    self.state.pending.hdr = false;
+                }
+                if self.state.pending.monitor != 0
+                    && caps.display_available
+                    && !caps
+                        .modes
+                        .iter()
+                        .any(|m| m.monitor == self.state.pending.monitor)
+                {
+                    self.state.pending.monitor = 0;
+                }
+            }
             Request::AutoDetect => {
                 self.state.pending.preset = Preset::Auto;
                 self.state.pending.groups = Default::default();
