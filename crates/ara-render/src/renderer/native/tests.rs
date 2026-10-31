@@ -4,6 +4,7 @@ use crate::{
     instanced,
 };
 mod budgets;
+mod decals;
 mod gbuffer;
 mod lens;
 mod paint;
@@ -98,6 +99,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
                 previous_world: Mat4::IDENTITY,
                 casts_shadows: true,
                 paint: None,
+                receives_decals: true,
             })
             .collect(),
         materials: vec![instanced::Material {
@@ -114,6 +116,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
         sun_lux: Vec3::splat(100.),
         environment: vec![[0.02, 0.03, 0.04, 1.]],
         environment_size: [1, 1],
+        decals: Vec::new(),
     };
     scene.materials.push(scene.materials[0]);
     scene
@@ -127,6 +130,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
             previous_world: Mat4::IDENTITY,
             casts_shadows: true,
             paint: None,
+            receives_decals: true,
         }));
     let mut renderer = Renderer::new_native(
         &scene,

@@ -48,6 +48,7 @@ pub mod assets;
 pub mod components;
 pub mod control;
 pub mod controller;
+pub mod decal;
 pub mod engine;
 pub mod extract;
 pub mod follow;
@@ -208,6 +209,7 @@ pub fn register_components(registry: &mut SimRegistry) -> std::result::Result<()
     registry.register_component::<components::StreamedWorld>()?;
     registry.register_component::<MeshRenderer>()?;
     registry.register_component::<paint::VertexPaint>()?;
+    registry.register_component::<decal::Decal>()?;
     registry.register_component::<Light>()?;
     registry.register_component::<Environment>()?;
     registry.register_component::<ara_components::render::SkyAtmosphere>()?;

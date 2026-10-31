@@ -54,6 +54,7 @@ fn fixture() -> Scene {
         sun_lux: Vec3::ONE,
         environment: vec![[1.0; 4]],
         environment_size: [1, 1],
+        decals: Vec::new(),
     }
 }
 

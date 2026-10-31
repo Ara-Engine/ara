@@ -11,6 +11,7 @@ use glam::Vec4;
 
 mod batches;
 mod culling;
+pub(in crate::renderer) mod decals;
 mod environment;
 pub(in crate::renderer) mod pipelines;
 mod prepared;
@@ -92,6 +93,8 @@ pub(super) struct Native {
     paint_dirty: bool,
     /// Published paint content and every update since (capture provenance).
     paint_digest: [u8; 32],
+    /// Deferred decals (`decals.rs`): records and this frame's visible list.
+    decals: decals::Decals,
 }
 
 impl Renderer {
@@ -873,6 +876,7 @@ impl Native {
                 gpu.storage_buffer(visible)?.index,
                 (outline, gpu.storage_buffer(outline)?.index),
                 (paint, gpu.storage_buffer(paint)?.index),
+                decals::Decals::new(gpu, &scene.decals, &mut owned)?,
             ))
         })();
         let (
@@ -884,6 +888,7 @@ impl Native {
             visible_index,
             (outline, outline_index),
             (paint, paint_index),
+            decals,
         ) = match prepared {
             Ok(result) => result,
             Err(error) => {
@@ -948,6 +953,7 @@ impl Native {
             paint_sources: scene.instances.iter().map(|i| i.paint.clone()).collect(),
             paint_dirty: true,
             paint_digest,
+            decals,
         };
         Ok(result)
     }
@@ -968,6 +974,9 @@ impl Native {
         visit(Resource::Buffer(self.instances), Access::HostWrite);
         visit(Resource::Buffer(self.visible), Access::HostWrite);
         visit(Resource::Buffer(self.outline), Access::HostWrite);
+        for buffer in [self.decals.records, self.decals.visible] {
+            visit(Resource::Buffer(buffer), Access::HostWrite);
+        }
         visit(
             Resource::Buffer(self.paint),
             if self.paint_dirty {
@@ -1299,6 +1308,12 @@ impl Native {
         hash.update(bytemuck::cast_slice(&self.material_data));
         hash.update(self.texture_digest);
         hash.update(self.paint_digest);
+        for decal in &self.decals.decals {
+            hash.update(decal.entity.to_le_bytes());
+            hash.update(bytemuck::bytes_of(&decal.world));
+            hash.update((decal.material as u64).to_le_bytes());
+            hash.update(bytemuck::cast_slice(&decal.opacity));
+        }
     }
 
     fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
@@ -1311,6 +1326,8 @@ impl Native {
             self.visible,
             self.outline,
             self.paint,
+            self.decals.records,
+            self.decals.visible,
         ] {
             gpu.retire(Resource::Buffer(buffer))?;
         }
@@ -1325,9 +1342,10 @@ fn host_buffer(gpu: &mut GpuDevice, size: usize, owned: &mut Vec<Resource>) -> R
     Ok(buffer)
 }
 
-/// An instance's GPU row. `meta`: material, skin-history bit 0 plus the paint
-/// buffer's bindless index in bits 1.., one plus its first paint word (zero
-/// without paint: `offset` `u32::MAX`), and the transform's determinant sign.
+/// An instance's GPU row. `meta`: material, skin-history bit 0, the paint buffer's
+/// bindless index in bits 1..31 and bit 31 set when it receives no decals (the decal
+/// pass reads it by the pixel's ID), one plus its first paint word (zero without
+/// paint: `offset` `u32::MAX`), and the transform's determinant sign.
 fn row(
     instance: &crate::instanced::Instance,
     previous: Mat4,
@@ -1339,7 +1357,8 @@ fn row(
     InstanceRow {
         meta: [
             instance.material as u32,
-            if painted { paint_index << 1 } else { 0 },
+            (if painted { paint_index << 1 } else { 0 })
+                | (u32::from(!instance.receives_decals) << 31),
             if painted { offset + 1 } else { 0 },
             instance.world.determinant().signum().to_bits(),
         ],

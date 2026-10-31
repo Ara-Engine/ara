@@ -22,6 +22,7 @@ pub(super) fn scene() -> NativeScene {
             previous_world: Mat4::IDENTITY,
             casts_shadows: true,
             paint: None,
+            receives_decals: true,
         })
         .collect();
     instances.extend((0..512).map(|i| instanced::Instance {
@@ -33,6 +34,7 @@ pub(super) fn scene() -> NativeScene {
         previous_world: Mat4::IDENTITY,
         casts_shadows: true,
         paint: None,
+        receives_decals: true,
     }));
     NativeScene {
         geometry: vec![instanced::Geometry {
@@ -66,6 +68,7 @@ pub(super) fn scene() -> NativeScene {
         sun_lux: Vec3::ONE,
         environment: vec![[0.02, 0.02, 0.02, 1.]],
         environment_size: [1, 1],
+        decals: Vec::new(),
     }
 }
 fn selected(renderer: &Renderer, pass: usize) -> Vec<u32> {

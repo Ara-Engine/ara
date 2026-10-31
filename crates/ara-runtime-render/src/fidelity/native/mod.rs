@@ -10,6 +10,7 @@ use ara_texture_stream::NativeResidency;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, sync::Arc};
 
+mod decals;
 mod document;
 mod geometry;
 pub use document::{document_frame, document_frame_selected};
@@ -83,6 +84,7 @@ pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> R
             sun_lux: glam30::Vec3::from_array(lux),
             environment: pixels,
             environment_size: size,
+            decals: Vec::new(),
         },
         textures: NativeResidency::new(config)?,
         texture_keys: BTreeMap::new(),
@@ -107,6 +109,7 @@ pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> R
     if let Some(terrain) = &frame.terrain {
         builder.terrain(terrain, &content)?;
     }
+    builder.decals(&frame.decals)?;
     if let Some(environment) = content.environment {
         builder.scene.environment = environment.pixels;
         builder.scene.environment_size = environment.size;
@@ -185,6 +188,7 @@ impl Builder {
             previous_world: world,
             casts_shadows: draw.casts_shadows,
             paint: paint(draw, self.scene.geometry[geometry].vertices.len()),
+            receives_decals: draw.receives_decals,
         });
         Ok(())
     }

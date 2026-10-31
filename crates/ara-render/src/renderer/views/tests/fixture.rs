@@ -34,6 +34,7 @@ pub(in crate::renderer) fn scene() -> instanced::Scene {
             previous_world: Mat4::IDENTITY,
             casts_shadows: true,
             paint: None,
+            receives_decals: true,
         }],
         materials: vec![instanced::Material {
             pbr: crate::scene::Material {
@@ -50,5 +51,6 @@ pub(in crate::renderer) fn scene() -> instanced::Scene {
         sun_lux: Vec3::splat(10.),
         environment: vec![[0.04, 0.04, 0.04, 1.]],
         environment_size: [1, 1],
+        decals: Vec::new(),
     }
 }

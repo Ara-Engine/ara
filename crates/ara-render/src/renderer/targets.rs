@@ -31,7 +31,11 @@ pub(super) fn request(render: [u32; 2], display: [u32; 2]) -> ResourcePreparatio
                 mip_levels: 1,
                 usage: vk::ImageUsageFlags::SAMPLED
                     | vk::ImageUsageFlags::TRANSFER_SRC
-                    | if target == DEPTH {
+                    // The decal pass blends into the G-buffer in place (storage; the sRGB
+                    // albedo stores through its UNORM alias view).
+                    | if matches!(target, ALBEDO | NORMAL | MATERIAL | EMISSIVE) {
+                        vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::STORAGE
+                    } else if target == DEPTH {
                         vk::ImageUsageFlags::DEPTH_STENCIL_ATTACHMENT
                     } else if (HISTORY0..=OUTPUT).contains(&target) {
                         vk::ImageUsageFlags::STORAGE

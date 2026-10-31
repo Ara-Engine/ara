@@ -246,6 +246,7 @@ impl Presenter {
             skin: None,
             casts_shadows: true,
             paint: None,
+            receives_decals: true,
         });
         let scene = self.scene(&warm, &[])?;
         let renderer = if let Some(gpu) = self.initial_device.take() {

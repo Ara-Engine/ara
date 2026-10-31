@@ -83,6 +83,7 @@ fn native_fidelity_traces_shared_transforms_and_independent_emissive_uv1() -> Re
                     previous_world: world,
                     casts_shadows: true,
                     paint: None,
+                    receives_decals: true,
                 }
             })
             .collect(),
@@ -93,6 +94,7 @@ fn native_fidelity_traces_shared_transforms_and_independent_emissive_uv1() -> Re
         sun_lux: Vec3::ZERO,
         environment: vec![[0.0, 0.0, 0.0, 1.0]],
         environment_size: [1, 1],
+        decals: Vec::new(),
     };
     let mut textures = NativeResidency::new(ara_texture_stream::NativeConfig {
         resident_bytes: 1024,

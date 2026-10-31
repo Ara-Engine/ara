@@ -44,6 +44,9 @@ struct AraSurface {
     float3 color;
     float opacity;
     float clip;
+    // Decal domain: specular level (0.5 is 4% F0) and ambient occlusion.
+    float specular;
+    float ambientOcclusion;
 };
 
 float4 ara_load(uint offset) {

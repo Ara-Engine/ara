@@ -32,6 +32,8 @@ pub(super) struct Bindings {
     tiles: Vec<ara_terrain::TileCoord>,
     environment: Environment,
     lights: Vec<ara_runtime::extract::LightView>,
+    /// Decal identities (`decals::identity`) and whether each drew.
+    decals: Vec<((u64, Option<[u8; 32]>, [u32; 3]), bool)>,
     scratch: Vec<ara_render::scene::Vertex>,
     live: bool,
 }
@@ -78,6 +80,11 @@ impl Bindings {
                 .map_or_else(Vec::new, |t| t.tiles.to_vec()),
             environment: frame.environment,
             lights: frame.lights.to_vec(),
+            decals: frame
+                .decals
+                .iter()
+                .map(|view| (super::decals::identity(view), view.material.is_some()))
+                .collect(),
             scratch: Vec::new(),
             live: false,
         })
@@ -256,6 +263,28 @@ impl Prepared {
                     link.palette.copy_from_slice(palette);
                     skins += 1;
                     self.changes.geometries.push(instance.geometry);
+                }
+            }
+        }
+        // Decals stream poses and parameters; new, removed or re-materialled ones rebuild.
+        if frame.decals.len() != bindings.decals.len()
+            || frame
+                .decals
+                .iter()
+                .zip(&bindings.decals)
+                .any(|(view, (known, _))| super::decals::identity(view) != *known)
+        {
+            return Ok(FrameChange::Rebuild);
+        }
+        let mut drawn = self.scene.decals.iter_mut();
+        for (view, (_, draws)) in frame.decals.iter().zip(&bindings.decals) {
+            if *draws
+                && let Some(decal) = drawn.next()
+            {
+                let before = (decal.world, decal.opacity, decal.fade_distance, decal.fade_angle, decal.sort_order, decal.fade_screen_size.to_bits());
+                super::decals::update(decal, view);
+                if before != (decal.world, decal.opacity, decal.fade_distance, decal.fade_angle, decal.sort_order, decal.fade_screen_size.to_bits()) {
+                    self.changes.decals = true;
                 }
             }
         }

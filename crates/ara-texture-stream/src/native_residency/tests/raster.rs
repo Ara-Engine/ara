@@ -86,6 +86,7 @@ fn native_raster_samples_compressed_raw_maps_with_independent_uvs_and_decode_pol
                 previous_world: Mat4::IDENTITY,
                 casts_shadows: true,
                 paint: None,
+                receives_decals: true,
             })
             .collect(),
         materials: vec![left, right],
@@ -95,6 +96,7 @@ fn native_raster_samples_compressed_raw_maps_with_independent_uvs_and_decode_pol
         sun_lux: Vec3::ZERO,
         environment: vec![[0., 0., 0., 1.]],
         environment_size: [1, 1],
+        decals: Vec::new(),
     };
     let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../target/ara-texture-stream/native-raster")

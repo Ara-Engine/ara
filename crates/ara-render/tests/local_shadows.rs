@@ -56,6 +56,7 @@ fn scene() -> Scene {
         previous_world: world,
         casts_shadows: true,
         paint: None,
+        receives_decals: true,
     };
     Scene {
         geometry: vec![Geometry {
@@ -89,6 +90,7 @@ fn scene() -> Scene {
         sun_lux: Vec3::ZERO,
         environment: vec![[0.01, 0.01, 0.01, 1.]],
         environment_size: [1, 1],
+        decals: Vec::new(),
     }
 }
 

@@ -209,8 +209,9 @@ float3 overdrawHeat(float count){
 void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);float3 color=pixel(root.materials,p).rgb;
     // Debug views read the render-size G-buffer pixel `r` under this display pixel.
     Frame g=f;g.extent.xy=f.sizes.xy;int2 r=int2((float2(p)+0.5)*float2(f.sizes.xy)/float2(f.extent.xy));
-    // albedo, and the vertex-colour views (11-15), which draw their colours as albedo.
-    if(f.temporal.z==1 || (f.temporal.z>=11 && f.temporal.z<=15))color=gbufferAlbedo(g,r).rgb;
+    // albedo, the vertex-colour views (11-15) and the decal coverage view (16), which
+    // draw their colours as albedo.
+    if(f.temporal.z==1 || (f.temporal.z>=11 && f.temporal.z<=16))color=gbufferAlbedo(g,r).rgb;
     else if(f.temporal.z==2)color=gbufferDepth(g,r)>0?gbufferNormal(g,r)*0.5+0.5:0.5;
     else if(f.temporal.z==3)color=float3(pow(pixel(f.extra.x,r).x,0.25));
     else if(f.temporal.z==4)color=float3(gbufferMaterial(g,r),0);

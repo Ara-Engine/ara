@@ -58,6 +58,11 @@ pub enum ViewMode {
     VertexColorBlue = 14,
     /// The vertex colour's alpha channel alone, as grey.
     VertexColorAlpha = 15,
+    /// Deferred decals per pixel on the overdraw heat legend (1 blue, 2 green, 4
+    /// yellow, 8 orange, 16 or more red) over the dimmed scene albedo: where decals
+    /// land, how many stack, and which surfaces refuse them. Only where
+    /// [`RenderCapabilities::decals`] holds.
+    DecalCoverage = 16,
 }
 impl ViewMode {
     /// Complete baseline debug capture set.
@@ -89,6 +94,7 @@ impl ViewMode {
             Self::VertexColorGreen => "vertex_color_green",
             Self::VertexColorBlue => "vertex_color_blue",
             Self::VertexColorAlpha => "vertex_color_alpha",
+            Self::DecalCoverage => "decal_coverage",
         }
     }
     /// Renders the lit scene (`Lit`, and under `LitWireframe`'s edges).
@@ -129,9 +135,13 @@ pub struct RenderCapabilities {
     /// [`ViewMode::Overdraw`] is available.
     pub overdraw: bool,
     /// The vertex-colour views ([`ViewMode::vertex_color`]) are available.
+    #[serde(default)]
     pub vertex_colors: bool,
+    /// Deferred decals draw and [`ViewMode::DecalCoverage`] is available.
+    #[serde(default)]
+    pub decals: bool,
     /// For each capability that is `false`, why (keys `reflectionProbes`,
-    /// `giDiffuse`, `overdraw`, `vertexColors`).
+    /// `giDiffuse`, `overdraw`, `vertexColors`, `decals`).
     pub reasons: std::collections::BTreeMap<String, String>,
 }
 /// Agent-visible capture contract; no wall-clock values enter rendering.

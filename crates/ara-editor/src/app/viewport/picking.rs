@@ -278,6 +278,7 @@ mod tests {
                     previous_world: *world,
                     casts_shadows: true,
                     paint: None,
+                    receives_decals: true,
                 })
                 .collect(),
             materials: Vec::new(),
@@ -287,6 +288,7 @@ mod tests {
             sun_lux: Vec3::ONE,
             environment: Vec::new(),
             environment_size: [0; 2],
+            decals: Vec::new(),
         }
     }
     #[test]

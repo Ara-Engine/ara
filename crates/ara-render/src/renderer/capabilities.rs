@@ -53,6 +53,14 @@ impl Renderer {
                 "the vertex-colour views draw the native raster renderer's geometry only",
             );
         }
+        if self.is_native() {
+            capabilities.decals = true;
+        } else {
+            deny(
+                "decals",
+                "deferred decals blend into the native raster renderer's G-buffer only",
+            );
+        }
         capabilities
     }
 
@@ -62,6 +70,7 @@ impl Renderer {
         let key = match mode {
             ViewMode::GiDiffuse => "giDiffuse",
             ViewMode::Overdraw => "overdraw",
+            ViewMode::DecalCoverage => "decals",
             _ if mode.vertex_color().is_some() => "vertexColors",
             _ => return None,
         };
@@ -69,6 +78,7 @@ impl Renderer {
         let available = match mode {
             ViewMode::GiDiffuse => capabilities.gi_diffuse,
             ViewMode::Overdraw => capabilities.overdraw,
+            ViewMode::DecalCoverage => capabilities.decals,
             _ => capabilities.vertex_colors,
         };
         (!available).then(|| {

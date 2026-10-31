@@ -134,7 +134,39 @@ impl Scene {
                 );
             }
         }
+        self.validate_decals()?;
         self.validate_parameters()
+    }
+
+    /// Checks decal boxes and parameters (also on every streamed decal edit).
+    pub fn validate_decals(&self) -> Result<()> {
+        for decal in &self.decals {
+            let w = decal.world;
+            ensure!(
+                w.is_finite()
+                    && w.x_axis.w.abs() < 1e-6
+                    && w.y_axis.w.abs() < 1e-6
+                    && w.z_axis.w.abs() < 1e-6
+                    && (w.w_axis.w - 1.0).abs() < 1e-6
+                    && w.determinant().abs() > 1e-12,
+                "native decal `{}` box must be finite, affine and invertible",
+                decal.name
+            );
+            ensure!(
+                decal.material < self.materials.len()
+                    && decal.opacity.iter().all(|o| (0.0..=1.0).contains(o))
+                    && decal.opacity_channel <= 4
+                    && decal.occlusion[1] <= 4.0
+                    && decal.occlusion[0].is_finite()
+                    && decal.specular.is_finite()
+                    && decal.fade_distance.iter().all(|d| d.is_finite() && *d >= 0.0)
+                    && decal.fade_angle.iter().all(|a| (0.0..=180.0).contains(a))
+                    && (0.0..=1.0).contains(&decal.fade_screen_size),
+                "invalid native decal `{}`",
+                decal.name
+            );
+        }
+        Ok(())
     }
 
     /// Checks mutable surface/light parameters without rewalking immutable vertex,

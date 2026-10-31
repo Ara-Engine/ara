@@ -14,6 +14,8 @@ pub struct Changes {
     /// Instances whose per-instance paint colours changed (`Instance::paint`, same
     /// length). Adding or removing paint changes grouping: replace the scene.
     pub paint: Vec<usize>,
+    /// Whether any decal's transform or parameters changed (same count and order).
+    pub decals: bool,
 }
 
 impl Changes {
@@ -23,6 +25,7 @@ impl Changes {
         self.materials.clear();
         self.geometries.clear();
         self.paint.clear();
+        self.decals = false;
     }
 }
 

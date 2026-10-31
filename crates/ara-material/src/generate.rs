@@ -188,6 +188,10 @@ pub fn generate(m: &Material, instance: &Instance) -> Result<Generated, Vec<Diag
         }
     }
     source.push_str("\nAraSurface ara_evaluate(AraMaterialInput input) {\n    AraSurface result;\n    result.baseColor = float3(1);\n    result.metallic = 0;\n    result.roughness = 0.5;\n    result.normal = float3(0, 0, 1);\n    result.emissive = float3(0);\n    result.opacityMask = 1;\n    result.clearCoat = 0;\n    result.clearCoatRoughness = 0.1;\n    result.transmission = 0;\n    result.color = float3(1);\n    result.opacity = 1;\n    result.clip = 1;\n");
+    // Decal-only outputs: other domains' evaluators (and embedders' AraSurface copies) never see them.
+    if m.domain == Domain::Decal {
+        source.push_str("    result.specular = 0.5;\n    result.ambientOcclusion = 1;\n");
+    }
     for id in checked
         .order
         .iter()

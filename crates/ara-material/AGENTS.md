@@ -104,7 +104,7 @@ compilation runs externally and only checked programs can generate shaders.
    RGB UNORM normals; TextureData is linear RGBA. Post sceneColor is already-linear
    at draw.textureIndex, resolved by the renderer. Include it in resource reads.
    UI outputs premultiplied linear RGB/alpha plus clipping, without surface variants.
-   Unlit/post output linear color; decals provide PBR channels and opacity.
+   Unlit/post output linear color; decals provide PBR channels, opacity, specular and ambientOcclusion (decal-only defaults).
 9. Cache modules by variant + template hash + compiler identity/options/target/ABI;
    driver PSOs additionally need device/driver/pass/state/vertex-layout keys. DXIL
    still needs Metal Shader Converter plus its reflection before Metal runtime use.

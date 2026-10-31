@@ -233,3 +233,23 @@ fn unrepresentable_vertex_colour_graphs_diagnose() {
         assert!(error.contains(expected), "{body}: {error}");
     }
 }
+
+#[test]
+fn decal_graphs_lower_opacity_occlusion_and_specular() {
+    let asset = compile(
+        "material D : decal budget 1 {
+            let red : ColorLinear = linear(1, 0, 0); let half : float = 0.5; let rough : float = 0.3;
+            let ao : float = 0.8; let spec : float = 0.25;
+            output baseColor = red; output opacity = half; output roughness = rough;
+            output ambientOcclusion = ao; output specular = spec;
+        }",
+    )
+    .unwrap();
+    let decal = asset.decal.clone().expect("a decal surface");
+    assert_eq!(asset.material.base_color, [1., 0., 0., 1.]);
+    assert_eq!(asset.material.roughness, 0.3);
+    assert_eq!((decal.opacity, decal.occlusion, decal.specular), (0.5, 0.8, 0.25));
+    assert!(decal.opacity_texture.is_none());
+    // Surface graphs are not decals.
+    assert!(graph("output baseColor = a;").unwrap().decal.is_none());
+}

@@ -112,6 +112,7 @@ mod tests {
                 base_color_decode_srgb: true,
                 emissive_decode_srgb: true,
                 paint_layers: Vec::new(),
+                decal: None,
             })
         };
         let draw = |entity, material| Draw {
@@ -132,6 +133,7 @@ mod tests {
             skin: None,
             casts_shadows: true,
             paint: None,
+            receives_decals: true,
         };
         let first = draw(1, asset(b"first"));
         let second = draw(2, asset(b"second"));

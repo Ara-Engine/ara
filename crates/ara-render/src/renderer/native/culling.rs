@@ -483,7 +483,7 @@ fn refract_rect(matrix: Mat4, bounds: [Vec3; 2]) -> [f32; 4] {
     [lo.x, lo.y, hi.x, hi.y]
 }
 
-fn planes(matrix: Mat4) -> [Vec4; 6] {
+pub(super) fn planes(matrix: Mat4) -> [Vec4; 6] {
     let x = matrix.row(0);
     let y = matrix.row(1);
     let z = matrix.row(2);

@@ -122,6 +122,7 @@ fn paint_layers_become_layer_materials_with_channel_weights() {
             layer([2, 0, 0, 0], [1.0, 0.0, 0.0, 1.0]),
             layer([1, 0, 0, 0], [0.0, 0.0, 1.0, 1.0]),
         ],
+        decal: None,
     });
     let mut layered = model_draw(1, &model);
     layered.material = Some(asset);
@@ -143,4 +144,64 @@ fn paint_layers_become_layer_materials_with_channel_weights() {
         scene.materials[b as usize].pbr.base_color,
         [0.0, 0.0, 1.0, 1.0]
     );
+}
+
+#[test]
+fn decals_map_to_native_decals_and_stream_their_poses() {
+    use ara_runtime::{
+        decal::{Decal, DecalView},
+        material::DecalSurface,
+    };
+    let asset = Arc::new(MaterialAsset {
+        asset: "gr_decal".into(),
+        digest: AssetDigest::of(b"decal"),
+        material: ModelMaterial {
+            base_color: [0.5, 0.5, 0.5, 1.0],
+            ..ModelMaterial::default()
+        },
+        textures: Vec::new(),
+        texture_generations: Vec::new(),
+        base_color_decode_srgb: false,
+        emissive_decode_srgb: false,
+        paint_layers: Vec::new(),
+        decal: Some(DecalSurface {
+            opacity: 0.75,
+            opacity_texture: None,
+            occlusion: 1.0,
+            occlusion_channel: 0,
+            specular: 0.5,
+        }),
+    });
+    let view = |x: f32, material: Option<Arc<MaterialAsset>>| DecalView {
+        entity: 7,
+        address: "e_decal".into(),
+        label: "Decal (e_decal)".into(),
+        world: glam::Mat4::from_translation(glam::Vec3::new(x, 0.0, 0.0)),
+        decal: Decal {
+            color: ara_schema::Color([1.0, 0.5, 1.0, 0.5]),
+            ..Decal::default()
+        },
+        material,
+    };
+    let mut frame = RenderFrame::default();
+    frame.draws.push(draw(1));
+    frame.decals.push(view(0.0, Some(Arc::clone(&asset))));
+    frame.decals.push(view(1.0, None));
+    let mut prepared = prepare(&frame, Content::default(), config()).unwrap();
+    let scene = &prepared.scene;
+    assert_eq!(scene.decals.len(), 1, "a decal without its material draws nothing");
+    let decal = &scene.decals[0];
+    assert_eq!(decal.opacity[0], 0.5, "colour alpha scales every channel");
+    assert_eq!(decal.opacity_channel, 4);
+    let row = scene.materials[decal.material];
+    assert_eq!(row.pbr.base_color, [0.5, 0.25, 0.5, 0.75], "tint and opacity factor");
+    assert!(scene.instances[0].receives_decals);
+
+    prepared.enable_motion();
+    frame.decals[0] = view(2.0, Some(Arc::clone(&asset)));
+    assert!(matches!(prepared.update_frame(&frame).unwrap(), FrameChange::Ready { .. }));
+    assert!(prepared.changes().decals);
+    assert_eq!(prepared.scene.decals[0].world.w_axis.x, 2.0);
+    frame.decals[0].decal.color.0[0] = 0.25;
+    assert_eq!(prepared.update_frame(&frame).unwrap(), FrameChange::Rebuild, "colour is in the row");
 }

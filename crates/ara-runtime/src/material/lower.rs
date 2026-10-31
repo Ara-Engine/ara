@@ -16,6 +16,7 @@ pub(super) struct Prepared {
     pub base_color_decode_srgb: bool,
     pub emissive_decode_srgb: bool,
     pub paint_layers: Vec<super::PaintLayer>,
+    pub decal: Option<super::DecalSurface>,
 }
 
 /// Surface outputs in evaluation order, with their defaults.
@@ -36,7 +37,7 @@ const MAX_PAINT_LAYERS: usize = 4;
 pub(super) fn surface(definition: &Material, source: &dyn AssetSource) -> Result<Prepared> {
     if definition.domain != Domain::Surface {
         return Err(RuntimeError(format!(
-            "{}: model material overrides require the surface domain",
+            "{}: model material overrides require the surface domain (decals use the decal domain)",
             definition.id
         )));
     }
@@ -85,6 +86,84 @@ pub(super) fn surface(definition: &Material, source: &dyn AssetSource) -> Result
         base_color_decode_srgb,
         emissive_decode_srgb,
         paint_layers: layers,
+        decal: None,
+    })
+}
+
+/// Lowers a decal-domain graph: its colour, ORM, normal and emissive outputs as a
+/// surface's, plus opacity (constant or one sampled channel), ambient occlusion
+/// (constant or one sampled channel) and a constant specular level. Vertex colours
+/// have no meaning on a projected decal.
+pub(super) fn decal(definition: &Material, source: &dyn AssetSource) -> Result<Prepared> {
+    let mut evaluate = Evaluator::new(definition, source);
+    let mut outputs = Vec::new();
+    for (name, default) in OUTPUTS {
+        outputs.push(match name {
+            // Decals have no mask/transmission/coat: their defaults pass through.
+            "opacityMask" | "transmission" | "clearCoat" | "clearCoatRoughness" => {
+                (name.to_owned(), Signal::Constant(default.to_vec()))
+            }
+            _ => evaluate.output(name, default)?,
+        });
+    }
+    let (material, base_color_decode_srgb, emissive_decode_srgb) =
+        build(&evaluate, &definition.id, outputs)?;
+    let (opacity_id, opacity) = evaluate.output("opacity", &[1.])?;
+    let (opacity, opacity_texture) = match opacity {
+        Signal::Constant(values) if values.len() == 1 && values[0].is_finite() => (values[0], None),
+        Signal::Sample(sample)
+            if sample.kind != SampleKind::Normal
+                && sample.channels.len() == 1
+                && sample.factors[0].is_finite() =>
+        {
+            (
+                sample.factors[0],
+                Some((sample.texture, sample.uv, sample.channels[0] as u32)),
+            )
+        }
+        _ => {
+            return Err(evaluate.bad(
+                &opacity_id,
+                "decal opacity must be constant or one texture channel times a factor (e.g. the base colour's alpha)",
+            ));
+        }
+    };
+    let (occlusion_id, occlusion) = evaluate.output("ambientOcclusion", &[1.])?;
+    let mut material = material;
+    let (occlusion, occlusion_channel) = match occlusion {
+        Signal::Constant(values) if values.len() == 1 && values[0].is_finite() => (values[0], 0),
+        Signal::Sample(sample)
+            if sample.kind != SampleKind::Normal
+                && sample.channels.len() == 1
+                && sample.factors[0].is_finite() =>
+        {
+            material.occlusion_texture = Some(sample.texture);
+            material.occlusion_uv = sample.uv;
+            (sample.factors[0], sample.channels[0] as u32)
+        }
+        _ => {
+            return Err(evaluate.bad(
+                &occlusion_id,
+                "decal ambient occlusion must be constant or one texture channel times a factor",
+            ));
+        }
+    };
+    let (specular_id, specular) = evaluate.output("specular", &[0.5])?;
+    let specular = evaluate.scalar(&specular_id, specular)?;
+    Ok(Prepared {
+        material,
+        textures: evaluate.textures,
+        generations: evaluate.generations,
+        base_color_decode_srgb,
+        emissive_decode_srgb,
+        paint_layers: Vec::new(),
+        decal: Some(super::DecalSurface {
+            opacity,
+            opacity_texture,
+            occlusion,
+            occlusion_channel,
+            specular,
+        }),
     })
 }
 

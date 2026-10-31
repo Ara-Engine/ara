@@ -742,6 +742,7 @@ mod tests {
                 previous_world: Mat4::IDENTITY,
                 casts_shadows: true,
                 paint: None,
+                receives_decals: true,
             }],
             materials: vec![material],
             textures: 0,
@@ -750,6 +751,7 @@ mod tests {
             sun_lux: Vec3::ZERO,
             environment: Vec::new(),
             environment_size: [0, 0],
+            decals: Vec::new(),
         }
     }
 

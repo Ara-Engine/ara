@@ -1,4 +1,4 @@
-//! Twenty native PSOs are retained by the renderer across content generations.
+//! Twenty-one native PSOs are retained by the renderer across content generations.
 use super::*;
 use ara_gpu::vulkan::{PipelinePreparation, PipelinePreparationId};
 
@@ -58,6 +58,10 @@ pub(in crate::renderer) struct NativePipelines {
     /// The vertex-colour debug views (`ViewMode::vertex_color`): every camera draw
     /// writes its vertex colour (or one channel) as G-buffer albedo.
     pub vertex_color: Pipeline,
+    /// Deferred decals (`native/decals.rs`, `shaders/decals.slang`): a 16x16-tile compute
+    /// pass blending every visible decal into the G-buffer between the opaque pass
+    /// and lighting.
+    pub decals: Pipeline,
 }
 
 impl NativePipelines {
@@ -73,7 +77,7 @@ impl NativePipelines {
 }
 
 /// Cooked recipe names, in `NativePipelines` field order.
-const RECIPES: [&str; 20] = [
+const RECIPES: [&str; 21] = [
     "native_shadow",
     "native_gbuffer",
     "native_forward",
@@ -94,6 +98,7 @@ const RECIPES: [&str; 20] = [
     "native_gbuffer_paint",
     "native_shadow_paint",
     "native_vertex_color",
+    "native_decals",
 ];
 
 #[derive(Default)]
@@ -153,6 +158,7 @@ impl Renderer {
                     gbuffer_paint,
                     shadow_paint,
                     vertex_color,
+                    decals,
                 ]: [Pipeline; RECIPES.len()] = handles
                     .try_into()
                     .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
@@ -177,6 +183,7 @@ impl Renderer {
                     gbuffer_paint,
                     shadow_paint,
                     vertex_color,
+                    decals,
                 }));
             }
         }

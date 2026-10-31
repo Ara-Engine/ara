@@ -62,6 +62,7 @@ pub fn warm_frame() -> RenderFrame {
         skin: None,
         casts_shadows: true,
         paint: None,
+        receives_decals: true,
     });
     warm
 }

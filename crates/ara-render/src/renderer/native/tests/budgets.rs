@@ -49,6 +49,7 @@ fn scene() -> NativeScene {
                     previous_world: world,
                     casts_shadows: true,
                     paint: None,
+                    receives_decals: true,
                 }
             })
             .collect(),
@@ -59,6 +60,7 @@ fn scene() -> NativeScene {
         sun_lux: Vec3::ONE,
         environment: vec![[0.02, 0.03, 0.04, 1.]],
         environment_size: [1, 1],
+        decals: Vec::new(),
     }
 }
 

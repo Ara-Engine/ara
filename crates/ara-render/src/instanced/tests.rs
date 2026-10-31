@@ -33,6 +33,7 @@ fn triangle() -> Scene {
             previous_world: Mat4::IDENTITY,
             casts_shadows: true,
             paint: None,
+            receives_decals: true,
         }],
         materials: vec![Material::default()],
         textures: 0,
@@ -41,6 +42,7 @@ fn triangle() -> Scene {
         sun_lux: Vec3::ONE,
         environment: vec![[1.0; 4]],
         environment_size: [1, 1],
+        decals: Vec::new(),
     }
 }
 
@@ -90,6 +92,7 @@ fn more_than_4096_instances_share_geometry_and_keep_mirrored_bounds() {
             previous_world: matrix,
             casts_shadows: true,
             paint: None,
+            receives_decals: true,
         });
     }
     scene.validate().unwrap();

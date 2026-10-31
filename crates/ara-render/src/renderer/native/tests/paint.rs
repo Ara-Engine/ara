@@ -39,6 +39,7 @@ fn scene() -> NativeScene {
             previous_world: Mat4::from_translation(Vec3::new(x, 0., 0.)),
             casts_shadows: false,
             paint: paint.map(|c| vec![instanced::pack_color(c); 4].into()),
+            receives_decals: true,
         };
     NativeScene {
         geometry: vec![instanced::Geometry {
@@ -83,6 +84,7 @@ fn scene() -> NativeScene {
         sun_lux: Vec3::splat(100.),
         environment: vec![[0.02, 0.03, 0.04, 1.]],
         environment_size: [1, 1],
+        decals: Vec::new(),
     }
 }
 

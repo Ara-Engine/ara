@@ -2539,6 +2539,111 @@ expression: out
         }
       }
     },
+    "Decal": {
+      "kind": "component",
+      "doc": "Projects a decal-domain material onto the opaque surfaces inside a box: the box is `size` metres around the entity, projecting along its local -Z (surfaces facing +Z receive it). Writes base colour, normal, roughness, metallic, emissive and ambient occlusion with per-channel opacity before lighting, so every light, shadow, reflection and GI term sees it. Translucent surfaces and renderers whose `MeshRenderer.receivesDecals` is off do not receive.",
+      "module": "render",
+      "fields": {
+        "material": {
+          "type": "option<asset>",
+          "doc": "Decal-domain material graph or material instance (`@path#id`); without one the decal draws nothing.",
+          "default": null
+        },
+        "size": {
+          "type": "vec3",
+          "doc": "Box size in metres: width (local X), height (local Y) and projection depth (local Z), centred on the entity. Entity scale multiplies it.",
+          "default": [1, 1, 1],
+          "unit": "m",
+          "range": [0.001, null]
+        },
+        "color": {
+          "type": "color",
+          "doc": "Linear multiplier on the material's base colour; alpha scales every channel's opacity (Unreal's DecalColor).",
+          "default": [1, 1, 1, 1]
+        },
+        "baseColorOpacity": {
+          "type": "f32",
+          "doc": "How strongly the decal replaces the surface's base colour.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "normalOpacity": {
+          "type": "f32",
+          "doc": "How strongly the decal's normal (blended in the surface's tangent frame) replaces the surface normal.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "roughnessOpacity": {
+          "type": "f32",
+          "doc": "How strongly the decal replaces roughness.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "metallicOpacity": {
+          "type": "f32",
+          "doc": "How strongly the decal replaces metalness.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "specularOpacity": {
+          "type": "f32",
+          "doc": "How strongly the decal's specular level applies. The G-buffer has no specular channel yet (dielectric F0 is fixed at 4%); the value is kept for it.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "emissiveOpacity": {
+          "type": "f32",
+          "doc": "How strongly the decal's emission replaces the surface's.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "occlusionOpacity": {
+          "type": "f32",
+          "doc": "How strongly the decal replaces material ambient occlusion.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "fadeStartDistance": {
+          "type": "f32",
+          "doc": "Camera distance where the decal starts fading out (metres; with `fadeEndDistance` zero it never fades by distance).",
+          "default": 0,
+          "unit": "m",
+          "range": [0, null]
+        },
+        "fadeEndDistance": {
+          "type": "f32",
+          "doc": "Camera distance where the decal has faded out and is no longer drawn.",
+          "default": 0,
+          "unit": "m",
+          "range": [0, null]
+        },
+        "fadeAngleStart": {
+          "type": "f32",
+          "doc": "Surfaces turned more than this many degrees from the projection axis start fading (stretching along steep sides stays hidden).",
+          "default": 60,
+          "unit": "deg",
+          "range": [0, 180]
+        },
+        "fadeAngleEnd": {
+          "type": "f32",
+          "doc": "Surfaces turned this many degrees or more no longer receive the decal.",
+          "default": 80,
+          "unit": "deg",
+          "range": [0, 180]
+        },
+        "sortOrder": {
+          "type": "i32",
+          "doc": "Draw order among overlapping decals: higher draws on top (Unreal's SortOrder).",
+          "default": 0
+        },
+        "fadeScreenSize": {
+          "type": "f32",
+          "doc": "Below this share of the screen height the decal fades out and is skipped (Unreal's FadeScreenSize); zero always draws.",
+          "default": 0.002,
+          "range": [0, 1]
+        }
+      }
+    },
     "DocCreateParams": {
       "kind": "params",
       "doc": "Parameters of `doc.create`.",
@@ -4749,6 +4854,11 @@ expression: out
         "castShadows": {
           "type": "bool",
           "doc": "Whether this geometry blocks light: off, it is still drawn, reflected and bounces light, but casts no shadow. Model nodes whose glTF `extras` set `castShadows: false` never cast, whatever this says.",
+          "default": true
+        },
+        "receivesDecals": {
+          "type": "bool",
+          "doc": "Whether decals project onto this geometry (Unreal's bReceivesDecals). Off for characters or moving props a level's decals should not stick to.",
           "default": true
         }
       }

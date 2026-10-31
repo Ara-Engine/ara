@@ -162,6 +162,9 @@ impl Native {
         for &i in &changes.geometries {
             ensure!(i < scene.geometry.len(), "Invalid native geometry row");
         }
+        if changes.decals {
+            scene.validate_decals()?;
+        }
         for &i in &changes.paint {
             let instance = scene.instances.get(i).context("Invalid native paint row")?;
             self.groups.validate_instance(i, instance)?;
@@ -245,6 +248,11 @@ impl Native {
             if self.groups.groups[self.groups.instance_group[i]].paint_shadow {
                 self.changes.caster(i, self.bounds[i], self.bounds[i]);
             }
+        }
+        // Snapshot callers report no rows: their decals rewrite (a few records).
+        if changes.decals || (snapshot && !scene.decals.is_empty()) {
+            scene.validate_decals()?;
+            self.decals.update(gpu, &scene.decals)?;
         }
         if !changes.instances.is_empty()
             || !changes.materials.is_empty()
@@ -357,6 +365,7 @@ impl Native {
         self.previous_vp = Some(camera.projection * camera.view);
         self.material_dirty = false;
         self.paint_dirty = false;
+        self.decals.dirty = false;
         if advance_geometry {
             self.pool.presented();
         }

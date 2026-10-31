@@ -267,6 +267,7 @@ pub(super) fn snapshot(task: &Task, version: u64) -> ProbeSnapshot {
             ]
             .into(),
             vertex_colors: false,
+            decals: false,
         },
         probes: vec![ProbeRow {
             doc: task.doc.clone(),
