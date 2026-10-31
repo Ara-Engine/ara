@@ -26,7 +26,10 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   4096-spp reference): raster matches the reference on walls, the opening and the back room
   (within ~10%); the metal ceiling is 2.4x short (0.0021 vs 0.0050) and the floor centre 1.6x
   (it reflects the ceiling). Ceiling = 0.0011 reflections (SSR-resolved, green in sources)
-  + 0.0011 diffuse: rough metal specular misses the sunlit floor/snow a wide lobe gathers.
+  + 0.0011 diffuse. With each reflection source off (`--without`): no screen reflections
+  ceiling 0.0033, floor centre 0.0028 (= reference), right wall 0.0045 (ref 0.0024); no
+  captures ceiling 0.0030. Screen traces and captures both return darker rough reflections
+  than the probes, while the probes overshoot on the right wall: per-source bias to fix.
   Original item: Bounce energy that matches the path
   tracer: screen-space GI over the probe field, a per-probe radiance cache with sky and
   emissive, multi-bounce, metals; temporal stability with no noise (D27). Measured against

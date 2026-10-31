@@ -64,7 +64,8 @@ pub struct CaptureArgs {
     #[arg(long)]
     marks: Option<u32>,
     /// Turn a rendering effect off to see what it contributes (repeatable).
-    #[arg(long, value_parser = ["ambient-occlusion", "shadows", "temporal-jitter"])]
+    #[arg(long, value_parser = ["ambient-occlusion", "shadows", "temporal-jitter",
+        "screen-reflections", "reflection-captures", "global-illumination"])]
     without: Vec<String>,
     /// Render at display resolution instead of the preset's upscaled scale.
     #[arg(long)]
@@ -157,6 +158,9 @@ fn render_debug(
         "ambientOcclusion": on("ambient-occlusion"),
         "shadows": on("shadows"),
         "temporalJitter": on("temporal-jitter"),
+        "screenReflections": on("screen-reflections"),
+        "reflectionCaptures": on("reflection-captures"),
+        "globalIllumination": on("global-illumination"),
         "fullResolution": full_resolution,
         "reflections": reflections.unwrap_or("lit"),
         "reference": reference.map(|(samples, bounces)| json!({"samples": samples, "bounces": bounces})),

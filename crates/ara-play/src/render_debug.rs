@@ -22,6 +22,15 @@ pub struct RenderDebug {
     pub full_resolution: bool,
     /// What the lit image shows of reflections (default `lit`).
     pub reflections: ReflectionView,
+    /// Screen-space reflections (default true); off, captures, probes and sky reflect.
+    #[ara(default = true)]
+    pub screen_reflections: bool,
+    /// Reflection captures (default true); off, probes and sky reflect.
+    #[ara(default = true)]
+    pub reflection_captures: bool,
+    /// Probe global illumination (default true); off, the sky lights everything.
+    #[ara(default = true)]
+    pub global_illumination: bool,
     /// Render the path-traced ground truth instead (default off): unbiased and
     /// undenoised, on GPUs with hardware ray tracing whatever the project's
     /// ray-tracing setting, to judge the real-time lighting against.
@@ -112,6 +121,9 @@ impl Default for RenderDebug {
             temporal_jitter: true,
             full_resolution: false,
             reflections: ReflectionView::Lit,
+            screen_reflections: true,
+            reflection_captures: true,
+            global_illumination: true,
             reference: None,
             exposure: None,
             view: BufferView::Lit,

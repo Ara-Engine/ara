@@ -1,5 +1,6 @@
 //! Rendering Debug panel: switches that turn one effect off at a time (ambient
-//! occlusion, shadows, temporal jitter) or Play's upscaling, to trace an artifact
+//! occlusion, shadows, screen reflections, reflection captures, global illumination,
+//! temporal jitter) or Play's upscaling, to trace an artifact
 //! such as flicker to its source. Each switch runs the same `view.debug.*` command
 //! as View > Rendering Debug, so the Scene view, a running Play and the next Play
 //! start all follow it.
@@ -14,7 +15,7 @@ struct Switch {
     on: fn(&ara_render::RenderDebug) -> bool,
 }
 
-const SWITCHES: [Switch; 6] = [
+const SWITCHES: [Switch; 9] = [
     Switch {
         command: "view.debug.ambient_occlusion",
         title: "Ambient occlusion",
@@ -26,6 +27,24 @@ const SWITCHES: [Switch; 6] = [
         title: "Shadows",
         help: "Sun and local-light shadows at every distance.",
         on: |d| d.shadows,
+    },
+    Switch {
+        command: "view.debug.screen_reflections",
+        title: "Screen reflections",
+        help: "Reflections traced on screen; off, captures, probes and sky reflect.",
+        on: |d| d.screen_reflections,
+    },
+    Switch {
+        command: "view.debug.reflection_captures",
+        title: "Reflection captures",
+        help: "Local reflection captures; off, probes and sky reflect.",
+        on: |d| d.reflection_captures,
+    },
+    Switch {
+        command: "view.debug.global_illumination",
+        title: "Global illumination",
+        help: "Probe bounce light and probe reflections; off, the sky lights everything.",
+        on: |d| d.global_illumination,
     },
     Switch {
         command: "view.debug.temporal_jitter",

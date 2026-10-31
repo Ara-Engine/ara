@@ -416,6 +416,10 @@ impl Renderer {
         }
         if let Some(gi) = &self.look.gi {
             gi.write(&mut look_frame, self.look.quality.gi_budget);
+            // RenderDebug::global_illumination: probes keep relighting, shading ignores them.
+            if !self.debug.global_illumination {
+                look_frame.gi_update[3] = 0f32.to_bits();
+            }
             look_frame.gi_gather = self.look.gather_indices();
         }
         look_frame.terrain[0] = self.look.quality.terrain_detail;

@@ -1202,6 +1202,9 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
             ara_play::ReflectionView::Reflections => ara_render::ReflectionView::Reflections,
             ara_play::ReflectionView::Sources => ara_render::ReflectionView::Sources,
         },
+        screen_reflections: debug.screen_reflections,
+        reflection_captures: debug.reflection_captures,
+        global_illumination: debug.global_illumination,
         reference: debug.reference.map(|r| ara_render::ReferenceTrace {
             samples: r.samples.clamp(8, 65536),
             bounces: r.bounces.clamp(1, 16),
@@ -1289,6 +1292,9 @@ mod cli_tests {
                 temporal_jitter: false,
                 full_resolution: true,
                 reflections: ara_render::ReflectionView::Sources,
+                screen_reflections: false,
+                reflection_captures: false,
+                global_illumination: false,
                 reference: Some(ara_render::ReferenceTrace {
                     samples: 2048,
                     bounces: 6,

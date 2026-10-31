@@ -20,6 +20,14 @@ pub struct RenderDebug {
     pub full_resolution: bool,
     /// What the lit image shows of reflections.
     pub reflections: ReflectionView,
+    /// Screen-space reflections; off, reflections come from captures, probes and sky.
+    pub screen_reflections: bool,
+    /// Reflection captures (authored and automatic); off, probes and sky reflect.
+    pub reflection_captures: bool,
+    /// Probe global illumination (bounce light and probe reflections); off, the sky
+    /// lights everything, as with no probe volume. The probes keep updating (the
+    /// frame record's shading weight is zero), so switching back is instant.
+    pub global_illumination: bool,
     /// Render the ground truth instead: the path tracer (ara-render-fidelity
     /// `Mode::Reference`), unbiased and undenoised, on GPUs with hardware ray
     /// tracing whatever the project's ray-tracing opt-in. For judging every real-time
@@ -58,7 +66,10 @@ mod camel_view {
     ];
 
     pub(super) fn serialize<S: Serializer>(view: &ViewMode, s: S) -> Result<S::Ok, S::Error> {
-        let name = NAMES.iter().find(|(v, _)| v == view).map_or("lit", |(_, n)| n);
+        let name = NAMES
+            .iter()
+            .find(|(v, _)| v == view)
+            .map_or("lit", |(_, n)| n);
         s.serialize_str(name)
     }
 
@@ -114,6 +125,9 @@ impl Default for RenderDebug {
             temporal_jitter: true,
             full_resolution: false,
             reflections: ReflectionView::Lit,
+            screen_reflections: true,
+            reflection_captures: true,
+            global_illumination: true,
             reference: None,
             exposure: None,
             view: crate::capture::ViewMode::Lit,
@@ -134,6 +148,12 @@ impl RenderDebug {
             quality.virtual_shadows = None;
             quality.horizon = None;
         }
+        if !self.screen_reflections {
+            quality.reflections = None;
+        }
+        if !self.reflection_captures {
+            quality.reflection_captures = None;
+        }
         quality
     }
 }
@@ -149,15 +169,19 @@ mod tests {
         let off = RenderDebug {
             ambient_occlusion: false,
             shadows: false,
+            screen_reflections: false,
+            reflection_captures: false,
+            global_illumination: false,
             ..RenderDebug::default()
         }
         .apply(quality);
+        assert!(off.reflections.is_none() && off.reflection_captures.is_none());
+        assert_eq!(off.gi_budget, quality.gi_budget);
         assert!(off.ambient_occlusion.is_none());
         assert!(off.shadows.far.is_none() && off.local_shadows.is_none());
         assert!(off.virtual_shadows.is_none() && off.horizon.is_none());
         // Cascades stay valid (the frame samples none of them instead).
         assert_eq!(off.shadows.cascades, quality.shadows.cascades);
-        assert_eq!(off.reflections, quality.reflections);
         off.validate().expect("debug quality stays valid");
     }
 }
