@@ -75,6 +75,12 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
 
 ## Tools
 
+- [~] **ara-render GPU test hang.** Since the decal/paint GPU tests joined (305aa08fb) and fog
+  (8bca7b715), `cargo test -p ara-render --lib` hangs in ~20-50% of runs at 8-16 test threads (0/5
+  at 4; every test passes alone). One thread sits in NtGdiDdDDIGetDeviceState inside the NVIDIA
+  driver, the rest wait behind it (D:AraScratchhangstacks.txt). The gate (1-2 threads) is
+  unaffected. Root-cause fix in progress with the area-lights merge.
+
 - [~] **Editor views: no noise, full quality, correct sizing.** Done (merge b1fb2bfd0): Game
   frames never drawn small or stretched (cover the panel until the new size arrives), whole
   physical pixels at fractional DPI, native-resolution embedded Game view (+~1 ms GPU),
