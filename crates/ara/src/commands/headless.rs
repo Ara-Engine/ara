@@ -74,6 +74,18 @@ pub struct CaptureArgs {
     /// trace blue, box-projected captures cyan, probes orange, sky magenta).
     #[arg(long, value_parser = ["reflections", "sources"])]
     reflections: Option<String>,
+    /// Render the path-traced ground truth (unbiased, undenoised) with this many
+    /// samples per pixel, to judge the real-time lighting against. Needs a GPU with
+    /// hardware ray tracing; ignores the project's ray-tracing setting.
+    #[arg(long, num_args = 0..=1, default_missing_value = "1024")]
+    reference: Option<u32>,
+    /// Scattering events per reference path (with `--reference`).
+    #[arg(long, default_value_t = 8, requires = "reference")]
+    bounces: u32,
+    /// Lock exposure at this EV100 (manual, no compensation) over every post-process
+    /// volume, so captures from different renderers compare at the same brightness.
+    #[arg(long, allow_hyphen_values = true)]
+    ev100: Option<f32>,
     /// Measure flicker: settle this many live frames, then report how much they change.
     #[arg(long)]
     stability: Option<u32>,
@@ -95,20 +107,29 @@ impl CaptureArgs {
             "path":self.path,"width":self.width,"height":self.height,"preset":self.preset,
             "ticks":self.ticks,"seed":self.seed,"marks":self.marks,"stability":self.stability,
             "video":self.video,"videoMove":self.video_move,"videoYaw":self.video_yaw,
-            "renderDebug":render_debug(&self.without, self.full_resolution, self.reflections.as_deref())})),
+            "renderDebug":render_debug(&self.without, self.full_resolution, self.reflections.as_deref(),
+                self.reference.map(|samples| (samples, self.bounces)), self.ev100)})),
             summary: protocol::pretty,
         }
     }
 }
 
-/// `capture`'s `renderDebug` for `--without`, `--full-resolution` and
-/// `--reflections`; omitted when every effect stays at its default.
+/// `capture`'s `renderDebug` for `--without`, `--full-resolution`,
+/// `--reflections`, `--reference` and `--ev100`; omitted when every effect stays at
+/// its default.
 fn render_debug(
     without: &[String],
     full_resolution: bool,
     reflections: Option<&str>,
+    reference: Option<(u32, u32)>,
+    ev100: Option<f32>,
 ) -> serde_json::Value {
-    if without.is_empty() && !full_resolution && reflections.is_none() {
+    if without.is_empty()
+        && !full_resolution
+        && reflections.is_none()
+        && reference.is_none()
+        && ev100.is_none()
+    {
         return serde_json::Value::Null;
     }
     let on = |name: &str| !without.iter().any(|w| w == name);
@@ -118,5 +139,26 @@ fn render_debug(
         "temporalJitter": on("temporal-jitter"),
         "fullResolution": full_resolution,
         "reflections": reflections.unwrap_or("lit"),
+        "reference": reference.map(|(samples, bounces)| json!({"samples": samples, "bounces": bounces})),
+        "exposure": ev100,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::render_debug;
+    use serde_json::json;
+
+    #[test]
+    fn capture_debug_flags_map_to_render_debug() {
+        assert!(render_debug(&[], false, None, None, None).is_null());
+        let debug = render_debug(&["shadows".into()], false, None, Some((2048, 6)), Some(-2.));
+        assert_eq!(debug["shadows"], false);
+        assert_eq!(debug["ambientOcclusion"], true);
+        assert_eq!(debug["reference"], json!({"samples": 2048, "bounces": 6}));
+        assert_eq!(debug["exposure"], -2.);
+        let lock = render_debug(&[], false, None, None, Some(7.));
+        assert!(lock["reference"].is_null());
+        assert_eq!(lock["exposure"], 7.);
+    }
 }

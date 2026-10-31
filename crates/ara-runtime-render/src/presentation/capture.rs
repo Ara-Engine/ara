@@ -114,7 +114,13 @@ impl Presenter {
             live.temporal = request.seed as u32;
             live.lighting_changed = false;
         }
-        for _ in 0..request.settle_frames.max(1) {
+        // The path-traced reference accumulates 8 samples a frame (ara-render-fidelity
+        // render.rs): present until its budget is reached.
+        let frames = match self.debug.reference {
+            Some(trace) => request.settle_frames.max(trace.samples.div_ceil(8) + 1),
+            None => request.settle_frames,
+        };
+        for _ in 0..frames.max(1) {
             self.present(frame)?;
         }
         self.stats.rebuilt |= prepared_stats.rebuilt;

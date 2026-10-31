@@ -205,6 +205,9 @@ pub struct FidelityPlan {
     /// `gather_events` and glossy specular traces at half rate (see
     /// [`FidelityView::set_bounded_reservoirs`]); Epic keeps full budgets.
     pub bounded_reservoirs: bool,
+    /// (samples, bounces): render the undenoised path-traced reference
+    /// ([`Mode::Reference`]) instead of hybrid transport, for diagnosis.
+    pub reference: Option<(u32, u32)>,
 }
 
 impl FidelityPlan {
@@ -214,7 +217,12 @@ impl FidelityPlan {
             render_size: self.render_size,
             display_size: self.display_size,
             tier: Tier::Rt,
-            mode: Mode::Hybrid,
+            mode: self
+                .reference
+                .map_or(Mode::Hybrid, |(samples, bounces)| Mode::Reference {
+                    samples,
+                    bounces,
+                }),
             upscaler: self.upscaler,
             probe_ray_budget: self.probe_ray_budget,
             reflection_cutoff: self.reflection_cutoff,
@@ -229,7 +237,9 @@ impl FidelityPlan {
         view.set_gather_events(self.gather_events)?;
         view.set_transport_stride(self.transport_stride)?;
         view.set_bounded_reservoirs(self.bounded_reservoirs);
+        // The reference samples every path independently: no reservoir reuse.
         let reservoirs = match self.reservoirs {
+            _ if self.reference.is_some() => false,
             Reservoirs::Off => false,
             Reservoirs::On => true,
             Reservoirs::ManyLights => view.scene.has_emitters || view.scene.many_local_lights,
@@ -537,6 +547,7 @@ impl Plan {
                 transport_stride: 4,
                 reservoirs: Reservoirs::On,
                 bounded_reservoirs: true,
+                reference: None,
             }),
             QualityPreset::High => RenderPath::Fidelity(FidelityPlan {
                 render_size: scaled(0.5),
@@ -548,6 +559,7 @@ impl Plan {
                 transport_stride: 4,
                 reservoirs: Reservoirs::On,
                 bounded_reservoirs: true,
+                reference: None,
             }),
             QualityPreset::Epic => RenderPath::Fidelity(FidelityPlan {
                 render_size: scaled(2.0 / 3.0),
@@ -559,6 +571,7 @@ impl Plan {
                 transport_stride: 4,
                 reservoirs: Reservoirs::On,
                 bounded_reservoirs: true,
+                reference: None,
             }),
         };
         Ok(Self {

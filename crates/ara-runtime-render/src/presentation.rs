@@ -289,12 +289,28 @@ impl Presenter {
             .context("presentation device initialized")?;
         renderer.gpu_mut().set_pass_timing(self.pass_timing);
         renderer.gpu_mut().reset_timing_window();
-        let mut plan = Plan::resolve(
-            self.choice,
-            &Capabilities::of(renderer.gpu()),
-            self.size,
-            self.options,
-        )?;
+        let capabilities = Capabilities::of(renderer.gpu());
+        // The path-traced reference (RenderDebug::reference) is ground truth: the
+        // ray-traced plan in reference mode at full resolution, whatever the preset
+        // and the project's ray-tracing opt-in, and no raster fallback.
+        let reference = self.debug.reference;
+        if reference.is_some() && !capabilities.ray_tracing {
+            anyhow::bail!(
+                "ARA6009: the path-traced reference needs hardware ray tracing, which this GPU does not have"
+            );
+        }
+        let (choice, options) = match reference {
+            Some(_) => (
+                QualityChoice::Preset(QualityPreset::Epic),
+                RenderOptions { ray_tracing: true },
+            ),
+            None => (self.choice, self.options),
+        };
+        let mut plan = Plan::resolve(choice, &capabilities, self.size, options)?;
+        if let (Some(trace), RenderPath::Fidelity(fidelity)) = (reference, &mut plan.path) {
+            fidelity.reference = Some((trace.samples, trace.bounces));
+            fidelity.render_size = fidelity.display_size;
+        }
         renderer.set_debug(self.debug)?;
         let scale = self
             .render_scale
@@ -339,7 +355,7 @@ impl Presenter {
                     let mut prepared = native::prepare(frame, resolve()?, texture_config())?;
                     prepared.enable_motion();
                     let bank = prepared.textures.fork_sources(texture_config())?;
-                    let look = crate::environment(frame);
+                    let look = crate::environment_locked(frame, self.debug.exposure);
                     match &mut self.live {
                         Some(live) => {
                             live.view.replace_native_scene(
@@ -408,7 +424,7 @@ impl Presenter {
                     )?;
                     live.plan = settings;
                 }
-                let look = crate::environment(frame);
+                let look = crate::environment_locked(frame, self.debug.exposure);
                 if live.look != look || live.tick.is_none() {
                     live.view.set_environment(&look)?;
                     live.look = look;
@@ -670,7 +686,7 @@ impl Presenter {
             } else {
                 let source = if let Some(live) = &mut self.live {
                     let renderer = self.renderer.as_mut().context("presentation device")?;
-                    let mut costs = live.render(renderer.gpu_mut(), frame)?;
+                    let mut costs = live.render(renderer.gpu_mut(), frame, self.debug.exposure)?;
                     costs.scene_update_ms = self.stats.gpu_ms;
                     self.stats.gpu_ms = costs.accounted_ms();
                     self.stats.gpu = Some(costs);

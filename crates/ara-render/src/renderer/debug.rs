@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Effects a debug view may turn off. The default keeps everything on.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct RenderDebug {
     /// Screen-space ambient occlusion.
@@ -20,6 +20,34 @@ pub struct RenderDebug {
     pub full_resolution: bool,
     /// What the lit image shows of reflections.
     pub reflections: ReflectionView,
+    /// Render the ground truth instead: the path tracer (ara-render-fidelity
+    /// `Mode::Reference`), unbiased and undenoised, on GPUs with hardware ray
+    /// tracing whatever the project's ray-tracing opt-in. For judging every real-time
+    /// approximation against; never for shipping frames.
+    pub reference: Option<ReferenceTrace>,
+    /// Lock exposure at this EV100 (manual exposure, no compensation), overriding
+    /// every post-process volume, so images from different renderers and presets
+    /// compare at the same brightness. Applied where hosts resolve the frame's look
+    /// (`ara_runtime_render::environment_locked`).
+    pub exposure: Option<f32>,
+}
+
+/// The path-traced reference's budget ([`RenderDebug::reference`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReferenceTrace {
+    /// Independent samples per pixel the image accumulates (8 per frame).
+    pub samples: u32,
+    /// Scattering events per path, 1 to 16.
+    pub bounces: u32,
+}
+
+impl Default for ReferenceTrace {
+    fn default() -> Self {
+        Self {
+            samples: 1024,
+            bounces: 8,
+        }
+    }
 }
 
 /// The reflection debug views: the lit image, the reflected light alone, or where
@@ -46,6 +74,8 @@ impl Default for RenderDebug {
             temporal_jitter: true,
             full_resolution: false,
             reflections: ReflectionView::Lit,
+            reference: None,
+            exposure: None,
         }
     }
 }

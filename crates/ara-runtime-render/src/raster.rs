@@ -337,7 +337,7 @@ impl RasterView {
             key,
             native,
         } = candidate;
-        let look = crate::environment(&frame);
+        let look = crate::environment_locked(&frame, renderer.debug().exposure);
         self.prepare_inner(
             renderer,
             &frame,

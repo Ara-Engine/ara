@@ -29,7 +29,7 @@ use anyhow::{Result, ensure};
 use ara_gpu::{
     Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, vk, vulkan::PassTiming,
 };
-pub use debug::{ReflectionView, RenderDebug};
+pub use debug::{ReferenceTrace, ReflectionView, RenderDebug};
 pub use frame::temporal_phases;
 use glam::{Mat4, Vec3};
 pub use native::{NativeContent, NativeSeed};

@@ -6,8 +6,9 @@ impl Live {
         &mut self,
         gpu: &mut GpuDevice,
         frame: &RenderFrame,
+        exposure_lock: Option<f32>,
     ) -> Result<GpuFrameCosts> {
-        let look = crate::environment(frame);
+        let look = crate::environment_locked(frame, exposure_lock);
         if self.look != look || self.tick.is_none() {
             self.view.set_environment(&look)?;
             self.look = look;

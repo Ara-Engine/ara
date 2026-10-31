@@ -316,7 +316,8 @@ impl Presenter {
         &self,
         frame: &RenderFrame,
     ) -> ara_render_fidelity::environment::FrameEnvironment {
-        self.look_override.unwrap_or_else(|| environment(frame))
+        self.look_override
+            .unwrap_or_else(|| environment_locked(frame, self.debug.exposure))
     }
 
     /// Uploads `frame`'s content (rebuilding only on structural change). A rebuild
@@ -954,6 +955,21 @@ const OVERVIEW: [f32; 3] = [12.0, 10.0, 12.0];
 pub fn environment(frame: &RenderFrame) -> ara_render_fidelity::environment::FrameEnvironment {
     let eye = frame.camera.map_or(OVERVIEW, |c| c.position);
     environment_at(frame, glam30::Vec3::from_array(eye))
+}
+
+/// [`environment`] under a diagnostic exposure lock (`RenderDebug::exposure`, EV100):
+/// manual exposure without compensation or its curve, over every volume.
+pub fn environment_locked(
+    frame: &RenderFrame,
+    lock: Option<f32>,
+) -> ara_render_fidelity::environment::FrameEnvironment {
+    let mut look = environment(frame);
+    if let Some(ev100) = lock {
+        look.ev100 = Some(ev100.clamp(-24., 32.));
+        look.compensation = 0.;
+        look.compensation_curve = Default::default();
+    }
+    look
 }
 
 /// The frame's authored look as seen from `eye` (an editor's Scene view camera):
