@@ -99,9 +99,15 @@ impl SceneView {
             request.size,
             ara_runtime_render::RenderOptions { ray_tracing: false },
         )?;
-        let RenderPath::Raster(plan) = plan.path else {
+        let preset = plan.preset;
+        let RenderPath::Raster(mut plan) = plan.path else {
             return Err("Game preview needs a raster plan".into());
         };
+        // At the scale embedded Play renders the panel (`Presenter::set_pixel_budget`).
+        let scale = preset.raster_scale_for(request.size);
+        plan.render_size = request
+            .size
+            .map(|v| ((v as f32 * scale).round() as u32).clamp(1, v));
         let exposure = self.raster_frame.as_ref().map_or(1., |frame| {
             ara_runtime_render::environment(frame).manual_exposure(frame.environment.exposure)
         });

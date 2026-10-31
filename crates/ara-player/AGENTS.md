@@ -59,7 +59,7 @@ presenter before hello and reuse its device at embed; surface-less services allo
   the one mapping windowed and embedded players share (WASD/arrows Move, Space Jump
   once per press, Left Shift Sprint, right-drag Look; focus loss releases all).
 - `embed.rs`: embedded players (D19): `play.embed {width, height, maxFps?}` before
-  `play.start` → headless presenter + `ExportRing` (3 slots); due frames render, copy,
+  `play.start` → headless presenter (`set_pixel_budget`) + `ExportRing` (3 slots); due frames render, copy,
   fence, announce (`play.frame`). Play entry publishes nothing (local sims hold) until
   `readiness().is_ready()` or 1.5 s (logged; frames unseen, so GI skips its fade). `play.release`, `play.device`,
   `play.resize` (a request answers the surface; a coalesced notice gets `play.surface`).
