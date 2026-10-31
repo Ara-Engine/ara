@@ -2360,7 +2360,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 );
             }
             if let Some(route) = &mut game_view_check {
-                route.end(&shell, &mut gpu, presented)?;
+                route.end(&mut editor, &shell, &mut gpu, presented)?;
                 if route.finished() {
                     route.write(&serde_json::to_value(renderer.gpu().info())?)?;
                     game.close(&mut editor, &mut gpu)?;

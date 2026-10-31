@@ -26,6 +26,8 @@ enum Step {
     Play,
     /// A layout or Game command under the running game.
     Change(&'static str),
+    /// Hold the default layout: the steady frame cost the phases compare against.
+    Steady,
     /// Stop Play.
     Stop,
 }
@@ -41,10 +43,13 @@ const STEPS: &[Step] = &[
     Step::Change("aspect-4x3"),
     Step::Change("aspect-21x9"),
     Step::Change("aspect-free"),
+    Step::Steady,
     Step::Stop,
 ];
 /// Frames each change is followed for (captured closely at first).
 const CHANGE_FRAMES: u32 = 90;
+/// Frames of the steady phase.
+const STEADY_FRAMES: u32 = 300;
 /// Live frames after Play shows its first frame.
 const LIVE_FRAMES: u32 = 120;
 /// Longest wait for the preview or for Play to go live.
@@ -60,6 +65,8 @@ pub(super) struct GameViewCheck {
     /// Frames since the phase's condition held (preview shown, Play live).
     since: Option<u32>,
     rows: Vec<Value>,
+    /// The embedded player's own frame costs (prepare, render, copy; ms) per phase.
+    costs: std::collections::BTreeMap<String, Vec<f64>>,
 }
 
 impl GameViewCheck {
@@ -71,6 +78,7 @@ impl GameViewCheck {
             started: Instant::now(),
             since: None,
             rows: Vec::new(),
+            costs: Default::default(),
         }
     }
     pub fn finished(&self) -> bool {
@@ -81,6 +89,7 @@ impl GameViewCheck {
             Step::Preview => "preview".into(),
             Step::Play => "play".into(),
             Step::Change(name) => name.into(),
+            Step::Steady => "steady".into(),
             Step::Stop => "stop".into(),
         }
     }
@@ -103,6 +112,7 @@ impl GameViewCheck {
             }
             Step::Play => shell.run_command(editor, "play.start", &target)?,
             Step::Stop => shell.run_command(editor, "play.stop", &target)?,
+            Step::Steady => {}
             Step::Change(name) => match name {
                 "collapse-outline" | "collapse-right" | "expand-right" | "expand-outline" => {
                     let (verb, area) = name.split_once('-').unwrap_or_default();
@@ -132,6 +142,7 @@ impl GameViewCheck {
     /// change, and advance when the phase ends.
     pub fn end(
         &mut self,
+        editor: &mut Editor,
         shell: &Shell,
         gpu: &mut NativeUi,
         presented: bool,
@@ -146,9 +157,15 @@ impl GameViewCheck {
             Some((node, size, drawn))
         });
         let ready = match step {
-            Step::Preview => shell.game_preview.is_some(),
+            // Imports settled too: Play then starts on the published scene.
+            Step::Preview => {
+                shell.game_preview.is_some()
+                    && shell
+                        .import_counts()
+                        .is_some_and(|(pending, _, _)| pending == 0)
+            }
             Step::Play => shell.game_live,
-            Step::Change(_) => true,
+            Step::Change(_) | Step::Steady => true,
             Step::Stop => !shell.game_live,
         };
         if ready && self.since.is_none() {
@@ -163,9 +180,19 @@ impl GameViewCheck {
                 Step::Preview => since == 60,
                 Step::Play => self.since.is_some() && (since < 30 || since % 30 == 0),
                 Step::Change(_) => self.age <= 20 || self.age % 30 == 0,
+                Step::Steady => self.age % 100 == 0,
                 Step::Stop => false,
             };
         let label = Self::label(step);
+        if let Some(surfaces) = editor.play_surfaces.as_mut() {
+            let costs = self.costs.entry(label.clone()).or_default();
+            costs.extend(
+                surfaces
+                    .take_timings()
+                    .iter()
+                    .map(|t| t.cost_us as f64 / 1000.),
+            );
+        }
         let capture = if capture_now {
             let name = format!("{label}-{:04}.png", self.age);
             self.save(gpu, placement.map(|p| p.0), &name)?
@@ -221,6 +248,7 @@ impl GameViewCheck {
             Step::Preview => since >= 90 || waited,
             Step::Play => since >= LIVE_FRAMES || waited,
             Step::Change(_) => self.age >= CHANGE_FRAMES,
+            Step::Steady => self.age >= STEADY_FRAMES,
             Step::Stop => since >= 30 || waited,
         };
         if done {
@@ -279,6 +307,15 @@ impl GameViewCheck {
                 } else if entry["fitAtAge"].is_null() {
                     entry["fitAtAge"] = row["age"].clone();
                 }
+            }
+        }
+        for (phase, costs) in &self.costs {
+            let mut sorted = costs.clone();
+            sorted.sort_by(f64::total_cmp);
+            let at = |q: f64| sorted.get(((sorted.len() as f64 - 1.) * q).round() as usize);
+            if let Some(entry) = phases.get_mut(phase) {
+                entry["playerFrameMs"] =
+                    json!({"frames": sorted.len(), "p50": at(0.5), "p95": at(0.95)});
             }
         }
         std::fs::create_dir_all(&self.output)?;
