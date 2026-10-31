@@ -150,6 +150,19 @@ impl GameViewCheck {
         let Some(&step) = STEPS.get(self.step) else {
             return Ok(());
         };
+        // The newest surface the player announced (a resize answered), next to the
+        // image shown: a gap is the wait for its first frame.
+        let surface = editor
+            .play_surfaces
+            .as_ref()
+            .zip(editor.play_world.as_deref())
+            .and_then(|(surfaces, world)| {
+                let states = surfaces.surfaces(world);
+                states
+                    .iter()
+                    .find(|s| s.player == shell.game_client)
+                    .map(|s| s.size)
+            });
         let dpi = gpu.dpi();
         let shown = shown_image(shell);
         let placement = shown.and_then(|(node, texture, size)| {
@@ -216,6 +229,7 @@ impl GameViewCheck {
                 "nodePixels": [(node.w * dpi).round(), (node.h * dpi).round()],
                 "target": shell.game_target,
                 "image": size,
+                "surface": surface,
                 "drawn": [drawn.x, drawn.y, drawn.w, drawn.h],
                 "coverage": cover,
                 "small": cover < 0.98,
