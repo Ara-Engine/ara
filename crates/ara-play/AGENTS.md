@@ -28,6 +28,8 @@ The play-mode wire contract between the edit-world owner (`ara` daemon, editor) 
 
 
 ## C# messages
+`play.graphics` carries `ara-graphics-settings::Request` under `request`; no request
+means Get. Preferences target one player and never enter replication or snapshots.
 
 `play.command` (`Command`), `play.commands`, `play.compile` (`Compile`: claim agent
 edits), `play.snapshot` (portable hex CBOR) and `Start.resume`; `play.event`

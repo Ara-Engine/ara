@@ -48,6 +48,7 @@ pub struct PendingPatch {
 
 /// The assigned world.
 pub struct World<R = Play> {
+    pub(crate) graphics_revision: u64,
     /// Portable native game UI; render state stays with the main-thread surface.
     pub ui: Option<ara_play::GameUi>,
     /// The simulation and presentation source, in its (network) role.
@@ -94,6 +95,7 @@ impl<R> World<R> {
     /// Attach the runtime's main-thread role without copying its ECS or metadata.
     pub(crate) fn map_runtime<T>(self, attach: impl FnOnce(R) -> Result<T>) -> Result<World<T>> {
         Ok(World {
+            graphics_revision: self.graphics_revision,
             ui: self.ui,
             runtime: attach(self.runtime)?,
             fault: self.fault,
@@ -273,7 +275,9 @@ impl World {
             .map(|(k, v)| Ok((k.clone(), Digest(unhex(v).map_err(|e| anyhow!(e))?))))
             .collect::<Result<BTreeMap<_, _>>>()?;
         let cache = PathBuf::from(&scene.cache);
-        let mut plugins: Vec<Box<dyn ara_runtime::plugin::RuntimePlugin>> = Vec::new();
+        let mut plugins: Vec<Box<dyn ara_runtime::plugin::RuntimePlugin>> = vec![Box::new(
+            crate::graphics::Plugin::new(&scene.rendering, id.as_str()),
+        )];
         if net.is_some() {
             plugins.push(Box::new(ara_runtime_net::NetPlugin));
         }
@@ -365,6 +369,7 @@ impl World {
         )?;
         Ok((
             World {
+                graphics_revision: 0,
                 ui: scene.ui.clone(),
                 runtime,
                 fault: None,

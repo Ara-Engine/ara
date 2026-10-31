@@ -72,6 +72,8 @@ pub mod method {
     pub const INSPECT: &str = "play.inspect";
     /// Read `entity.Component.field` values ([`crate::Read`]).
     pub const READ: &str = "play.read";
+    /// Local graphics preferences, distinct from gameplay and replicated state.
+    pub const GRAPHICS: &str = "play.graphics";
     /// Live edit applied at the next tick, acked after it ([`crate::Patch`]).
     pub const PATCH: &str = "play.patch";
     /// Set an editor-only view of the live world, or return to its gameplay camera.

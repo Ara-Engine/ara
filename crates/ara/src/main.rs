@@ -242,6 +242,8 @@ enum Command {
     Run(commands::headless::RunArgs),
     /// Render a scene or camera offscreen into a PNG; never opens a window.
     Capture(commands::headless::CaptureArgs),
+    /// Query or change local user graphics preferences in a running player.
+    Graphics(commands::graphics::GraphicsArgs),
     /// List agent changes awaiting review.
     Review,
     /// Accept agent changes: a transaction, an entity's changes, or `--all`.
@@ -396,6 +398,10 @@ fn protocol_call(command: Command) -> Option<Result<Call, Vec<Diagnostic>>> {
         Command::Run(args) => args.call(),
         Command::Fix(args) => args.call(),
         Command::Capture(args) => args.call(),
+        Command::Graphics(args) => match args.call() {
+            Ok(call) => call,
+            Err(diagnostics) => return Some(Err(diagnostics)),
+        },
         _ => return None,
     }))
 }

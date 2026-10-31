@@ -243,6 +243,9 @@ impl Windowed {
         let extensions = window.extensions()?;
         Ok((
             Self {
+                vsync: true,
+                frame_rate_cap: 0,
+                last_graphics_frame: None,
                 window,
                 game_ui: None,
                 present: None,

@@ -1648,6 +1648,7 @@ dependencies = [
  "ara-doc",
  "ara-editor-gpu",
  "ara-gpu",
+ "ara-graphics-settings",
  "ara-host",
  "ara-hotpatch",
  "ara-hub-service",
