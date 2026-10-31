@@ -49,8 +49,10 @@ void exposureMain(uint lane:SV_GroupIndex,uint3 group:SV_GroupID){
         for(uint stride=128;stride>0;stride/=2){if(lane<stride)reduce[lane]+=reduce[lane+stride];GroupMemoryBarrierWithGroupSync();}
         metered=exp2(reduce[0].x/max(reduce[0].y,1));
         float bright=exp2(-12+(highlight+0.5)/8);
-        ev=clamp(max(log2(metered/(0.18*1.2)),log2(bright/(1.2*HIGHLIGHT_HEADROOM))),l.metering.x,l.metering.y);
-        target=l.exposure.y/(1.2*exp2(ev));
+        // The compensation curve reads the unclamped scene EV100 (as Unreal's).
+        float sceneEv=log2(metered/(0.18*1.2));
+        ev=clamp(max(sceneEv,log2(bright/(1.2*HIGHLIGHT_HEADROOM))),l.metering.x,l.metering.y);
+        target=l.exposure.y*exp2(exposureCurve(l,sceneEv))/(1.2*exp2(ev));
     }else ev=log2(1/max(1.2*target,1e-12));
     if(lane!=0)return;
     // LOOK_SNAP: the meter applies at once (history reset, or new GI arriving);

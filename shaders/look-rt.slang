@@ -55,7 +55,7 @@ void rtReflectMain(uint3 tid:SV_DispatchThreadID){
             // Contact darkening where the camera sees the hit too.
             s.ao=min(s.ao,rtScreenVisibility(f,l,position,geometric));
             radiance=rtShadeHit(f,l,s,position,geometric,-d);travelled=hit.distance;
-        }else radiance=rtMiss(f,l,d,roughness);
+        }else radiance=rtMiss(f,l,d,roughness)*skyLight(l); // sky reflections take the sky light, as ibl's
         result=float4(min(radiance,float3(60000)),travelled);
     }
     images[NonUniformResourceIndex(root.materials)][p]=result;

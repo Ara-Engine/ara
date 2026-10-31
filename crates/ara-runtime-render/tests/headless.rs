@@ -84,9 +84,8 @@ fn demo_renders_moves_skins_and_relights_headless() {
     first.write(&root.join("demo-start.png")).unwrap();
     assert!(presenter.stats().rebuilt);
     assert!(presenter.renderer().unwrap().is_native());
-    // D29: the presentation device keeps optional ray tracing; the hybrid path keeps
-    // its acceleration structures in the renderer's own ray state, so the native
-    // geometry pool never builds the fidelity renderer's BLASes.
+    // The presentation device keeps optional ray tracing, but without the opt-in
+    // nothing traces rays, so the native geometry pool builds no BLASes.
     assert_eq!(
         presenter
             .renderer()

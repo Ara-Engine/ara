@@ -17,6 +17,8 @@ pub(crate) const REFLECTIONS: u32 = 16;
 pub(crate) const SNAP: u32 = 32;
 /// Shader flag: probe GI relight and the fog sample local-light shadows.
 pub(crate) const LOCAL_INDIRECT: u32 = 64;
+/// The reflection debug view shows sources (`RenderDebug::reflections`).
+pub(crate) const REFLECTION_SOURCES: u32 = 128;
 /// Exposure adaptation step; the renderer has no wall clock.
 const FRAME_SECONDS: f32 = 1. / 60.;
 
@@ -115,7 +117,7 @@ pub(crate) struct LookFrame {
     /// Params are reserved.
     pub capture_params: [[f32; 4]; 2],
     pub capture_info: [[u32; 4]; 2],
-    /// Hybrid ray queries (High/Epic on RT devices); zero: raster only.
+    /// Hybrid ray queries (the ray-tracing opt-in on RT devices); zero: raster only.
     pub rt_params: [[f32; 4]; 2],
     pub rt_info: [[u32; 4]; 2],
     /// Screen-space and ray-traced refraction; zero: none.
@@ -127,6 +129,11 @@ pub(crate) struct LookFrame {
     /// shadows need no row (the sun's angular radius is `sun_lux[3]`).
     pub shadow_params: [[f32; 4]; 2],
     pub shadow_info: [[u32; 4]; 2],
+    /// Automatic exposure's compensation curve (`AutoExposure::compensation_curve`):
+    /// two (EV100, stops) keys per row.
+    pub exposure_curve: [[f32; 4]; 4],
+    /// Probe radiance atlas (`GiGpu::radiance`): x sampled, y storage; zero: no probe GI.
+    pub gi_radiance: [u32; 4],
 }
 
 /// Per-frame inputs that are not part of the authored look.
@@ -210,7 +217,7 @@ impl LookFrame {
             gi_gather: [0; 4],
             ssr: [0.; 4],
             ssr_images: [0; 4],
-            weather: [sky.cloud_coverage, sky.cloud_height, 0., 0.],
+            weather: [sky.cloud_coverage, sky.cloud_height, look.sky_light, 0.],
             far_shadow: [[0.; 4]; 4],
             far_info: [0; 4],
             cascade_maps: [0; 4],
@@ -246,6 +253,16 @@ impl LookFrame {
             refract_info: [[0; 4]; 2],
             shadow_params: [[0.; 4]; 2],
             shadow_info: [[0; 4]; 2],
+            exposure_curve: {
+                let keys = automatic.map_or([[0.; 2]; super::EXPOSURE_CURVE_KEYS], |a| {
+                    a.compensation_curve
+                });
+                std::array::from_fn(|row| {
+                    let [a, b] = [keys[row * 2], keys[row * 2 + 1]];
+                    [a[0], a[1], b[0], b[1]]
+                })
+            },
+            gi_radiance: [0; 4],
         }
     }
 }

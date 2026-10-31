@@ -1197,6 +1197,11 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
         shadows: debug.shadows,
         temporal_jitter: debug.temporal_jitter,
         full_resolution: debug.full_resolution,
+        reflections: match debug.reflections {
+            ara_play::ReflectionView::Lit => ara_render::ReflectionView::Lit,
+            ara_play::ReflectionView::Reflections => ara_render::ReflectionView::Reflections,
+            ara_play::ReflectionView::Sources => ara_render::ReflectionView::Sources,
+        },
     }
 }
 
@@ -1261,6 +1266,7 @@ mod cli_tests {
                 shadows: false,
                 temporal_jitter: false,
                 full_resolution: true,
+                reflections: ara_render::ReflectionView::Sources,
             },
         ] {
             let wire: ara_play::RenderDebug =

@@ -568,6 +568,7 @@ impl RasterView {
                     gi.edit(self.mobility.worlds(), self.mobility.dynamic())?;
                 }
                 while let Some(delivery) = gi.poll(false) {
+                    self.captures.observe(&delivery);
                     queue_probe_gi(&mut self.gi_updates, delivery);
                 }
                 apply_probe_gi(renderer, &mut self.gi_updates, PROBES_PER_FRAME)?;
@@ -715,8 +716,15 @@ impl RasterView {
         }
         if let Some(gi) = &mut self.gi {
             while let Some(update) = gi.poll(true) {
+                self.captures.observe(&update);
                 queue_probe_gi(&mut self.gi_updates, update);
             }
+        }
+        // Captures placed before the probes arrived move to where the probes saw open space.
+        if let Some(prepared) = &self.prepared
+            && let Some(specs) = self.captures.after_probes(&prepared.scene, self.key)
+        {
+            renderer.set_reflection_captures(&specs)?;
         }
         renderer.complete_probe_preparation()?;
         apply_probe_gi(renderer, &mut self.gi_updates, usize::MAX)?;
@@ -760,6 +768,16 @@ impl RasterView {
         ensure!(request.settle_frames <= 1024, "Settle frame limit is 1024");
         self.reset_capture(renderer)?;
         self.wait_capture_effects(renderer, frame, &request.camera, request.mode)?;
+        // Automatic reflection captures bake once probe GI settles: a capture shows
+        // them baked, as live frames do (bounded, so a stuck bake cannot hang it).
+        let mut frames = 0;
+        while renderer.reflection_captures_baking() && frames < 240 {
+            self.render(renderer, frame, &request.camera, request.mode)?;
+            frames += 1;
+        }
+        if frames > 0 {
+            renderer.reset_capture_history()?;
+        }
         for _ in 0..request.settle_frames.max(4) {
             self.render(renderer, frame, &request.camera, request.mode)?;
         }

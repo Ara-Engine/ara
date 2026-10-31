@@ -9,6 +9,11 @@ use super::gpu::{
     TRANSMITTANCE,
 };
 use crate::graph::{Graph, PassId, ResourceId};
+
+/// Levels of the reflection colour pyramid (look-ssr.slang SSR_LEVELS): level k
+/// texels span 2^k render pixels, so moderately rough lobes stay screen-traced instead
+/// of fading to probes beyond a 16-pixel footprint.
+const SSR_LEVELS: u32 = 6;
 use ara_gpu::{
     Access, Queue, RootConstants,
     vulkan::{Command, Recorder},
@@ -212,6 +217,7 @@ impl LookGpu {
                     (gi[2], Access::ShaderRead),
                     (gi[3], Access::ShaderRead),
                     (gi[4], Access::Storage),
+                    (gi[5], Access::Storage),
                     (ids.frame, Access::ShaderRead),
                 ]
                 .into_iter()
@@ -242,12 +248,14 @@ impl LookGpu {
             return Vec::new();
         };
         let mut passes = Vec::new();
-        for level in 1..=4u32 {
-            const NAMES: [&str; 4] = [
+        for level in 1..=SSR_LEVELS {
+            const NAMES: [&str; SSR_LEVELS as usize] = [
                 "SSR.Pyramid1",
                 "SSR.Pyramid2",
                 "SSR.Pyramid3",
                 "SSR.Pyramid4",
+                "SSR.Pyramid5",
+                "SSR.Pyramid6",
             ];
             let id = graph.pass(
                 NAMES[level as usize - 1],
@@ -267,6 +275,8 @@ impl LookGpu {
             "SSR.Trace",
             Queue::Graphics,
             [
+                (history, Access::ShaderRead),
+                (ids.state, Access::ShaderRead),
                 (ids.image(SSR_PYRAMID), Access::ShaderRead),
                 (ids.image(SSR_TRACE), Access::Storage),
                 (ids.frame, Access::ShaderRead),
@@ -296,6 +306,7 @@ impl LookGpu {
                 (gi[1], Access::ShaderRead),
                 (gi[2], Access::ShaderRead),
                 (gi[4], Access::ShaderRead),
+                (gi[5], Access::ShaderRead),
                 (ids.image(GI_DIFFUSE), Access::Storage),
                 (ids.image(GI_SPECULAR), Access::Storage),
                 (ids.frame, Access::ShaderRead),
@@ -366,7 +377,7 @@ impl LookGpu {
             reads.push((ids.image(FROXELS), Access::ShaderRead));
         }
         if let Some(gi) = ids.gi {
-            reads.extend([1, 2, 4].map(|i| (gi[i], Access::ShaderRead)));
+            reads.extend([1, 2, 4, 5].map(|i| (gi[i], Access::ShaderRead)));
             reads.extend([GI_DIFFUSE, GI_SPECULAR].map(|i| (ids.image(i), Access::ShaderRead)));
         }
         if self.quality.ambient_occlusion.is_some() {

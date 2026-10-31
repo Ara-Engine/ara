@@ -128,9 +128,10 @@ impl Presenter {
         self.debug = debug;
     }
 
-    /// Enables (the default) or disables D29's hybrid ray queries on High/Epic: off,
-    /// an RT device renders those presets' raster path, as a GPU without ray queries
-    /// would (A/B measurements). Applies from the next prepared frame.
+    /// Enables (the default) or disables D29's hybrid ray queries where a plan has
+    /// them (only under the ray-tracing opt-in): off, an RT device renders the raster
+    /// path, as a GPU without ray queries would (A/B measurements). Applies from the
+    /// next prepared frame.
     pub fn set_ray_queries(&mut self, enabled: bool) {
         self.ray_queries = enabled;
     }
@@ -248,9 +249,9 @@ impl Presenter {
         let renderer = if let Some(gpu) = self.initial_device.take() {
             Renderer::with_device(scene, [64, 64], gpu)?
         } else {
-            // D29: one device with hardware ray queries where the GPU has them, so
-            // High/Epic add ray-traced reflections (and the opt-in fidelity renderer
-            // runs) without recreating the device when the preset changes.
+            // One device with hardware ray queries where the GPU has them, so the
+            // ray-tracing opt-in (the fidelity renderer) can switch on without
+            // recreating it. Nothing traces rays unless the options opt in.
             Renderer::new_hybrid(scene, [64, 64], &self.extensions, &self.cache)?
         };
         self.renderer = Some(renderer);

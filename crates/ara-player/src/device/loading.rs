@@ -37,8 +37,9 @@ impl Loading {
         Self::with_device(GpuDevice::new_raster(extensions, cache.join("loading"))?)
     }
 
-    /// The game device enables hardware ray queries where the GPU has them (D29:
-    /// High/Epic's hybrid path and the opt-in fidelity renderer share it).
+    /// The game device enables hardware ray queries where the GPU has them, so the
+    /// ray-tracing opt-in can switch on without reopening it; nothing traces rays
+    /// unless the project or game opts in.
     pub(crate) fn for_game(
         extensions: &[std::ffi::CString],
         cache: &Path,

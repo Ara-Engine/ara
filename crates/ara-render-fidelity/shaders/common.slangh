@@ -142,15 +142,16 @@ bool traceImpl(Frame f,float3 origin,float3 direction,float maximum,inout uint r
     if((buffers[f.scene.x].Load(0)&0x7fffffff)==0)return false;
 #ifndef RASTER
     RayDesc ray;ray.Origin=origin;ray.Direction=direction;ray.TMin=0.001;ray.TMax=maximum;
-    // Internal instance masks partition opaque and alpha-tested geometry. The
+    // Internal instance masks partition opaque (1) and alpha-tested (2) geometry,
+    // and their twins that cast no shadow (4, 8), which shadow rays skip. The
     // opaque traversal stays in hardware even in a forest or a masked interior.
     uint terminate=shadow?RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH:0;
-    RayQuery<RAY_FLAG_NONE> opaque;opaque.TraceRayInline(acceleration[f.scene.y],RAY_FLAG_FORCE_OPAQUE|terminate,1,ray);
+    RayQuery<RAY_FLAG_NONE> opaque;opaque.TraceRayInline(acceleration[f.scene.y],RAY_FLAG_FORCE_OPAQUE|terminate,shadow?1:5,ray);
     while(opaque.Proceed()){}
     bool found=opaque.CommittedStatus()==COMMITTED_TRIANGLE_HIT;
     if(found){hit.distance=opaque.CommittedRayT();hit.id=opaque.CommittedInstanceID();hit.primitive=opaque.CommittedPrimitiveIndex();hit.bary=opaque.CommittedTriangleBarycentrics();hit.front=opaque.CommittedTriangleFrontFace();if(shadow)return true;}
     if(buffers[f.scene.x].Load(16)==0){
-        ray.TMax=hit.distance;RayQuery<RAY_FLAG_NONE> masked;masked.TraceRayInline(acceleration[f.scene.y],RAY_FLAG_FORCE_NON_OPAQUE|terminate,2,ray);
+        ray.TMax=hit.distance;RayQuery<RAY_FLAG_NONE> masked;masked.TraceRayInline(acceleration[f.scene.y],RAY_FLAG_FORCE_NON_OPAQUE|terminate,shadow?2:10,ray);
         while(masked.Proceed()){if(masked.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE && accept(f,masked.CandidateInstanceID(),masked.CandidatePrimitiveIndex(),masked.CandidateTriangleBarycentrics(),rng))masked.CommitNonOpaqueTriangleHit();}
         if(masked.CommittedStatus()==COMMITTED_TRIANGLE_HIT){hit.distance=masked.CommittedRayT();hit.id=masked.CommittedInstanceID();hit.primitive=masked.CommittedPrimitiveIndex();hit.bary=masked.CommittedTriangleBarycentrics();hit.front=masked.CommittedTriangleFrontFace();found=true;}
     }return found;

@@ -86,6 +86,10 @@ float4 nativeWireFragment(WireVarying v):SV_Target0{
 struct ShadowVarying {float4 clip:SV_Position;float2 uv:TEXCOORD0;float2 uv1:TEXCOORD1;nointerpolation uint material:TEXCOORD2;};
 [shader("vertex")]
 ShadowVarying nativeShadowVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){Varying v=nativeVertex(vertex,instance,true,true);ShadowVarying s;s.clip=v.clip;s.uv=v.uv;s.uv1=v.uv1;s.material=v.material;return s;}
+// Opaque and masked casters also carry their instance for the facing test.
+struct ShadowCasterVarying {float4 clip:SV_Position;float2 uv:TEXCOORD0;float2 uv1:TEXCOORD1;nointerpolation uint material:TEXCOORD2;nointerpolation uint id:TEXCOORD3;};
+[shader("vertex")]
+ShadowCasterVarying nativeShadowCasterVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){Varying v=nativeVertex(vertex,instance,true,true);ShadowCasterVarying s;s.clip=v.clip;s.uv=v.uv;s.uv1=v.uv1;s.material=v.material;s.id=v.id;return s;}
 NativeMaterial material(uint id){return buffers[NonUniformResourceIndex(root.materials)].Load<NativeMaterial>(id*320);}
 float2 coordinates(NativeUv transform,Varying v){float2 p=(transform.set==0?v.uv:v.uv1)*transform.scale;float s,c;sincos(transform.rotation,s,c);return transform.offset+float2(c*p.x-s*p.y,s*p.x+c*p.y);}
 // Texture footprint scale of the pass (Frame.upscale.z, root word 4): surface()
@@ -290,8 +294,20 @@ GBuffer nativeGeometryFragment(Varying v,bool front:SV_IsFrontFace){return geome
 // The G-buffer for presets without terrain detail: terrain keeps its top projection.
 [shader("fragment")]
 GBuffer nativeGeometryTopFragment(Varying v,bool front:SV_IsFrontFace){return geometry<0>(v,front);}
+// Shadow casters, as Unreal's shadow depth pass culls them (SetupShadowCullMode): a
+// single-sided material casts only from the faces turned towards the light, a
+// double-sided one from both. Casting every back face let open shells (terrain sheets,
+// one-sided walls) block light arriving from behind them. The winding test is
+// backFace's: counter-clockwise front, reversed for mirrored instances.
 [shader("fragment")]
-void nativeShadowFragment(ShadowVarying shadow){Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);if(m.pbr.flags.x==1 && sampleMap(m,0,v).a*m.pbr.color.a<m.pbr.surface.w)discard;}
+void nativeShadowFragment(ShadowCasterVarying shadow,bool front:SV_IsFrontFace){
+    Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);
+    if((m.pbr.flags.y&DOUBLE_SIDED)==0){
+        bool mirrored=asfloat(buffers[NonUniformResourceIndex(root.material)].Load(128+(shadow.id-1)*192+12))<0;
+        if(front==mirrored)discard;
+    }
+    if(m.pbr.flags.x==1 && sampleMap(m,0,v).a*m.pbr.color.a<m.pbr.surface.w)discard;
+}
 // The overdraw view (ViewMode::Overdraw, Renderer `Overdraw.Count`): the camera's
 // draws again without the depth test, each fragment adding one to the count target
 // through premultiplied blending (alpha 0). Masked materials discard by the casters'

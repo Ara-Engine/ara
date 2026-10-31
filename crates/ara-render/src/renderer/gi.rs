@@ -103,6 +103,7 @@ impl Renderer {
             (Resource::Image(gi.moments), gi.surface_access[2]),
             (Resource::Image(gi.irradiance[0]), gi.access[0]),
             (Resource::Image(gi.irradiance[1]), gi.access[1]),
+            (Resource::Image(gi.radiance), gi.radiance_access),
         ];
         let mut commands = self.gpu.begin(Queue::Graphics);
         commands.barriers(resources.map(|(resource, before)| ara_gpu::Barrier {
@@ -119,6 +120,7 @@ impl Renderer {
         let gi = self.look.gi.as_mut().context("cleared probe volume")?;
         gi.surface_access = [Access::Storage; 3];
         gi.access = [Access::Storage; 2];
+        gi.radiance_access = Access::Storage;
         gi.cleared();
         self.gpu.assert_clean()?;
         Ok(())
@@ -263,7 +265,12 @@ impl Renderer {
         if let Some(old) = self.look.gi.take() {
             self.gpu.retire(Resource::Buffer(old.cache))?;
             self.gpu.retire(Resource::Buffer(old.meta))?;
-            for image in [old.moments, old.irradiance[0], old.irradiance[1]] {
+            for image in [
+                old.moments,
+                old.irradiance[0],
+                old.irradiance[1],
+                old.radiance,
+            ] {
                 self.gpu.retire(Resource::Image(image))?;
             }
             self.gpu.collect()?;
@@ -272,8 +279,9 @@ impl Renderer {
     }
 
     /// A volume for `update`'s lattice: storage for the surface cache, meta,
-    /// bordered moment tiles and both irradiance atlases, uninitialized until the
-    /// next frame clears it (`fresh`).
+    /// bordered moment tiles, both irradiance atlases and the radiance cache,
+    /// uninitialized until the next frame clears it (`fresh`; the relight writes
+    /// every radiance tile before shading reads it).
     fn empty_volume(&mut self, layout: ProbeLayout) -> Result<GiGpu> {
         ara_gpu::cpu_scope!("Raster.allocate_probe_volume");
         layout.validate()?;
@@ -325,6 +333,7 @@ impl Renderer {
             image(&mut self.gpu, 8, vk::Format::R16G16B16A16_SFLOAT)?,
             image(&mut self.gpu, 8, vk::Format::R16G16B16A16_SFLOAT)?,
         ];
+        let radiance = image(&mut self.gpu, 10, vk::Format::R16G16B16A16_SFLOAT)?;
         let volume = GiGpu {
             layout,
             probes: probes as u32,
@@ -343,10 +352,16 @@ impl Renderer {
                 self.gpu.storage_image(irradiance[1])?.index,
             ],
             moments_storage: self.gpu.storage_image(moments)?.index,
+            radiance_indices: [
+                self.gpu.sampled_image(radiance, false)?.index,
+                self.gpu.storage_image(radiance)?.index,
+            ],
             cache,
             meta,
             moments,
             irradiance,
+            radiance,
+            radiance_access: Access::Undefined,
             surface_access: [Access::Undefined; 3],
             access: [Access::Undefined; 2],
             fresh: true,

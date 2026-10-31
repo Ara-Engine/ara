@@ -14,7 +14,7 @@ struct Switch {
     on: fn(&ara_render::RenderDebug) -> bool,
 }
 
-const SWITCHES: [Switch; 4] = [
+const SWITCHES: [Switch; 6] = [
     Switch {
         command: "view.debug.ambient_occlusion",
         title: "Ambient occlusion",
@@ -32,6 +32,18 @@ const SWITCHES: [Switch; 4] = [
         title: "Temporal anti-aliasing jitter",
         help: "Off, edges go jagged but hold still: flicker that remains comes from something else.",
         on: |d| d.temporal_jitter,
+    },
+    Switch {
+        command: "view.debug.reflections",
+        title: "Reflections only",
+        help: "Only the reflected light, exposed like the lit image.",
+        on: |d| d.reflections == ara_render::ReflectionView::Reflections,
+    },
+    Switch {
+        command: "view.debug.reflection_sources",
+        title: "Reflection sources",
+        help: "Where each reflection comes from: screen green, capture trace blue, box-projected captures cyan, probes orange, sky magenta.",
+        on: |d| d.reflections == ara_render::ReflectionView::Sources,
     },
     Switch {
         command: "view.debug.full_resolution",

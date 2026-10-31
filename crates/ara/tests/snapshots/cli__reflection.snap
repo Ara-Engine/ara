@@ -2687,7 +2687,7 @@ expression: out
     },
     "Environment": {
       "kind": "component",
-      "doc": "Procedural sky radiance and camera exposure. The first in stable-ID order wins.",
+      "doc": "Procedural sky radiance and camera exposure. The first in stable-ID order wins. Above the horizon the sky is `lerp(sky, horizon, m^skyFalloff) + glow × m^glowFalloff` with m = 1 − sin(elevation), as Unreal's sky-dome materials grade it; below it fades to `ground` within 15°.",
       "module": "render",
       "fields": {
         "sky": {
@@ -2697,8 +2697,25 @@ expression: out
         },
         "horizon": {
           "type": "color",
-          "doc": "Horizon sky color (linear).",
+          "doc": "Sky color at the horizon (linear).",
           "default": [0.95, 0.62, 0.4, 1]
+        },
+        "skyFalloff": {
+          "type": "f32",
+          "doc": "How quickly the zenith color gives way to the horizon color toward the horizon: higher keeps the zenith color lower down.",
+          "default": 3,
+          "range": [0.1, 64]
+        },
+        "glow": {
+          "type": "color",
+          "doc": "Extra light added in a band just above the horizon (linear; black for none), such as a sunset glow.",
+          "default": [0, 0, 0, 1]
+        },
+        "glowFalloff": {
+          "type": "f32",
+          "doc": "Narrowness of the `glow` band: higher hugs the horizon more tightly.",
+          "default": 10,
+          "range": [0.1, 64]
         },
         "ground": {
           "type": "color",
@@ -2712,11 +2729,38 @@ expression: out
           "unit": "cd",
           "range": [0, null]
         },
+        "skyLight": {
+          "type": "f32",
+          "doc": "How strongly the sky lights the scene (ambient light, reflections, bounce and fog) relative to how bright it looks; 1 is physical. Lower it to calm sky fill indoors without dimming the sky itself (Unreal's sky light intensity).",
+          "default": 1,
+          "range": [0, 16]
+        },
         "exposure": {
           "type": "f32",
           "doc": "Linear camera exposure multiplier, applied before tone mapping.",
           "default": 0.0015,
           "range": [1e-7, null]
+        }
+      }
+    },
+    "ExposureKey": {
+      "kind": "struct",
+      "doc": "One key of an exposure compensation curve: at scene brightness `ev100` (the metered EV100), add `stops` of compensation.",
+      "module": "render",
+      "fields": {
+        "ev100": {
+          "type": "f32",
+          "doc": "Metered scene brightness (EV100) this key applies at.",
+          "default": 0,
+          "range": [-10, 24],
+          "examples": [0]
+        },
+        "stops": {
+          "type": "f32",
+          "doc": "Compensation in stops at that brightness; +1 doubles the image brightness.",
+          "default": 0,
+          "range": [-8, 8],
+          "examples": [0.5]
         }
       }
     },
@@ -6025,6 +6069,21 @@ expression: out
             }
           }
         },
+        "compensationCurve": {
+          "type": "option<list<ExposureKey>>",
+          "doc": "Extra compensation that follows the metered scene brightness (automatic exposure), as Unreal's exposure compensation curve: keys of scene EV100 and stops, linear between them and flat beyond the ends (at most eight). Lifting dark scenes more than bright ones keeps interiors readable without washing out daylight.",
+          "default": null,
+          "editor": {
+            "showIf": {
+              "field": "module",
+              "when": {
+                "oneOf": [
+                  "exposure"
+                ]
+              }
+            }
+          }
+        },
         "toneMapping": {
           "type": "option<ToneMapping>",
           "doc": "Display transform that compresses scene radiance into the screen's range.",
@@ -6713,7 +6772,7 @@ expression: out
     },
     "ReflectionProbe": {
       "kind": "component",
-      "doc": "An authored reflection probe (High and Epic): the renderer captures the lit scene around the entity into a six-face map, and smooth surfaces inside its box of influence reflect it, so mirrors and metals show the room around them, including what is off screen. The entity's Transform places the capture origin and orients and scales the box. Captures are derived runtime data (a recapture job; cached under `.ara/cache/probes`), never authored edits: a change to these settings, the geometry, materials, lighting or environment marks the capture stale, and the last valid capture stays in use until its replacement is published. Authored probes always capture at High and Epic; a scene without any gets automatic captures over its content only with the look-development opt-in `ARA_REFLECTION_CAPTURES=1`.",
+      "doc": "An authored reflection probe (High and Epic): the renderer captures the lit scene around the entity into a six-face map, and smooth surfaces inside its box of influence reflect it, so mirrors and metals show the room around them, including what is off screen. The entity's Transform places the capture origin and orients and scales the box. Captures are derived runtime data (a recapture job; cached under `.ara/cache/probes`), never authored edits: a change to these settings, the geometry, materials, lighting or environment marks the capture stale, and the last valid capture stays in use until its replacement is published. Authored probes always capture at High and Epic; a scene without any places captures itself where its probe volume saw enclosed open space (`ARA_REFLECTION_CAPTURES=0` turns that off).",
       "module": "render",
       "fields": {
         "enabled": {
@@ -6793,7 +6852,7 @@ expression: out
         },
         "rayTracing": {
           "type": "bool",
-          "doc": "Opt in to experimental hardware ray tracing for supported presets. False keeps every preset on raster and creates no ray-tracing presentation device. Takes effect when the player or editor GPU device is opened.",
+          "doc": "Opt in to hardware ray tracing on GPUs that support it: the ray-traced renderer for Medium and above. Off (the default), every preset is raster and traces no rays, whatever the GPU, as in Unreal.",
           "default": false
         }
       }

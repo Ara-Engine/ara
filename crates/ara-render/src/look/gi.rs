@@ -105,7 +105,7 @@ fn moment_filter() -> &'static [[f32; SURFACE_TEXELS]; SURFACE_TEXELS] {
 }
 
 /// Octahedral decode of `p` in 0..1 (`octDecode`, raster.slangh).
-fn oct_decode(p: glam::Vec2) -> glam::Vec3 {
+pub(crate) fn oct_decode(p: glam::Vec2) -> glam::Vec3 {
     let p = p * 2. - 1.;
     let mut n = glam::Vec3::new(p.x, p.y, 1. - p.x.abs() - p.y.abs());
     let t = (-n.z).clamp(0., 1.);
@@ -262,6 +262,13 @@ pub(crate) struct GiGpu {
     pub moments: Image,
     /// Relit irradiance (bordered 8x8 tiles), ping-ponged.
     pub irradiance: [Image; 2],
+    /// Relit radiance cache (bordered 10x10 tiles): what each probe sees along its 64
+    /// surface cache directions (rgb) and how far (a), filtered over relights in
+    /// place. Probe reflections read it (look-gi.slangh `giProbeReflection`).
+    pub radiance: Image,
+    /// Bindless indices of `radiance`: sampled, storage.
+    pub radiance_indices: [u32; 2],
+    pub radiance_access: Access,
     /// Bindless indices: cache, meta (buffers), moments (sampled).
     pub indices: [u32; 3],
     pub irradiance_sampled: [u32; 2],
@@ -435,6 +442,7 @@ impl GiGpu {
             self.irradiance_storage[write],
             self.indices[2],
         ];
+        frame.gi_radiance = [self.radiance_indices[0], self.radiance_indices[1], 0, 0];
     }
     /// Advances the ping-pong slot and update window after a completed frame.
     pub(crate) fn advance(&mut self, budget: u32) {

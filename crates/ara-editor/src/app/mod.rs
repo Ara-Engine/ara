@@ -2829,7 +2829,7 @@ fn headless(options: Options) -> ara_ui::Result<()> {
         if crate::world::gltf::render_settings(editor.host.store().workspace())?.ray_tracing {
             Renderer::new
         } else {
-            // D29: ray queries where the GPU has them (High/Epic hybrid reflections).
+            // Ray queries where the GPU has them, unused without the opt-in.
             Renderer::new_hybrid
         };
     let mut renderer = create_renderer(

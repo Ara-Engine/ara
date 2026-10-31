@@ -54,6 +54,10 @@ fn debug_modes() -> u32 {
 const COOLDOWN: u32 = 60;
 /// Live frames a bake waits for streamed textures before baking anyway.
 const TEXTURE_WAIT: u32 = 240;
+/// Extra bake rounds after automatic captures bake: each round sees the previous
+/// one (bakes shade with the ready captures), so metal facing metal reflects more
+/// than probe light. Without them a mirrored corridor of metals stays dark.
+const BOUNCES: u32 = 2;
 
 /// One reflection capture in world space, as the renderer bakes it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -618,10 +622,14 @@ pub(crate) struct Captures {
     copy: bool,
     cooldown: u32,
     waited: u32,
-    /// Bake frames are rendering: their shading must not read the captures.
+    /// Bake frames are rendering (a capture view is swapped in).
     pub baking: bool,
     /// A bake failed: captures stay off until new specs arrive.
     failed: bool,
+    /// The specs changed since the last plan built records from them.
+    unplanned: bool,
+    /// Bounce rounds left after the current round ([`BOUNCES`]).
+    bounces: u32,
     /// Per record: bakes completed into its column (explicit records' receipts).
     bakes: Vec<u64>,
     /// Explicit records' columns must be restored from retained images (a new atlas,
@@ -687,6 +695,7 @@ impl Captures {
         if self.specs != specs {
             self.specs = specs.to_vec();
             self.failed = false;
+            self.unplanned = true;
         }
         Ok(())
     }
@@ -716,6 +725,7 @@ impl Captures {
         if self.failed || self.specs.is_empty() {
             return Ok(Vec::new());
         }
+        self.unplanned = false;
         let mut records = self.specs.clone();
         records.sort_by(|a, b| {
             b.priority
@@ -738,6 +748,7 @@ impl Captures {
             self.layout = None;
             self.gpu = Some(CaptureGpu::new(gpu, layout.size)?);
             self.pending = records.iter().map(|r| !r.explicit).collect();
+            self.bounces = BOUNCES;
             self.ready = vec![false; records.len()];
             self.bakes = vec![0; records.len()];
             self.restore = records.iter().any(|r| r.explicit);
@@ -767,6 +778,7 @@ impl Captures {
                     continue;
                 }
                 self.pending[i] = true;
+                self.bounces = BOUNCES;
                 if self.progress.is_some_and(|(c, _)| c == i) {
                     self.progress = None;
                 }
@@ -795,6 +807,7 @@ impl Captures {
             for (pending, record) in self.pending.iter_mut().zip(&self.records) {
                 *pending |= !record.explicit;
             }
+            self.bounces = BOUNCES;
             if self
                 .progress
                 .is_some_and(|(c, _)| !self.records.get(c).is_some_and(|r| r.explicit))
@@ -869,6 +882,15 @@ impl Captures {
             self.rebaseline |= 1 << capture;
         }
         if !self.pending.contains(&true) {
+            // A round done: the next bounce bakes every automatic capture again,
+            // now shading with this round.
+            if self.bounces > 0 && self.records.iter().any(|r| !r.explicit) {
+                self.bounces -= 1;
+                for (pending, record) in self.pending.iter_mut().zip(&self.records) {
+                    *pending = !record.explicit;
+                }
+                return;
+            }
             self.cooldown = COOLDOWN;
             self.waited = 0;
         }
@@ -964,6 +986,19 @@ impl Captures {
         }
     }
 
+    /// Whether an automatic capture still waits for its bake: specs not yet planned,
+    /// or a record pending or not yet ready (none while failed).
+    pub(crate) fn awaiting_bake(&self) -> bool {
+        !self.failed
+            && self.specs.iter().any(|s| !s.explicit)
+            && (self.unplanned
+                || self
+                    .records
+                    .iter()
+                    .zip(self.pending.iter().zip(&self.ready))
+                    .any(|(record, (pending, ready))| !record.explicit && (*pending || !ready)))
+    }
+
     /// The atlas extent (texels).
     pub(crate) fn atlas_size(&self) -> Option<[u32; 2]> {
         Some(self.layout.as_ref()?.size)
@@ -985,7 +1020,10 @@ impl Captures {
 
     /// Whether shading reads captures this frame (`enabled`: the quality has them).
     fn active(&self, enabled: bool) -> bool {
-        enabled && !self.baking && !self.failed && self.gpu.is_some() && self.ready.contains(&true)
+        // Bakes shade with the ready captures too (their previous round), so captures
+        // reflect each other ([`BOUNCES`]); a bake writes only the scratch column until
+        // its prefilter, which no shading overlaps.
+        enabled && !self.failed && self.gpu.is_some() && self.ready.contains(&true)
     }
 
     /// Writes this frame's Look rows (zero rows: no captures): shading visits only

@@ -20,6 +20,24 @@ pub struct RenderDebug {
     pub temporal_jitter: bool,
     /// Render at display resolution instead of the preset's upscaled scale (default false).
     pub full_resolution: bool,
+    /// What the lit image shows of reflections (default `lit`).
+    pub reflections: ReflectionView,
+}
+
+/// The reflection debug views.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
+#[ara(module = "play")]
+#[serde(rename_all = "camelCase")]
+pub enum ReflectionView {
+    /// The lit image.
+    #[default]
+    Lit,
+    /// Only the reflected (indirect specular) light, exposed like the lit image.
+    Reflections,
+    /// Each pixel coloured by where its reflection comes from: on-screen trace green,
+    /// capture trace blue, box-projected captures cyan, probes orange, sky magenta;
+    /// surfaces too rough to trace dimmed.
+    Sources,
 }
 
 impl Default for RenderDebug {
@@ -29,6 +47,7 @@ impl Default for RenderDebug {
             shadows: true,
             temporal_jitter: true,
             full_resolution: false,
+            reflections: ReflectionView::Lit,
         }
     }
 }

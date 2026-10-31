@@ -26,7 +26,7 @@ struct Look {
     uint4 giGather;    // diffuse, specular (sampled), diffuse, specular (storage); half resolution
     float4 ssr;        // x max roughness, y max distance (m), z march steps, w intensity (scales hit confidence)
     uint4 ssrImages;   // pyramid, trace (sampled), pyramid, trace (storage)
-    float4 weather;    // x cloud coverage (0..1), y cloud layer altitude (m)
+    float4 weather;    // x cloud coverage (0..1), y cloud layer altitude (m), z sky light scale
     float4x4 farShadow; // light view-projection of the far shadow map
     uint4 farInfo;     // x far map (sampled), y texels per side, z drawn (0: none)
     uint4 cascadeMaps; // sampled cascade maps, in cascade order
@@ -66,8 +66,22 @@ struct Look {
     // shadowParams[0]: visibility-bitmask ambient light (look-ao.slang aoBitmaskMain), x
     // sample thickness (m), y bounce intensity; shadowInfo[0].x bit 0: last frame's colour
     // pyramid feeds the bounce. The soft sun shadows read sunLux.w; [1] is spare.
+    float4 exposureCurve[4]; // automatic exposure's compensation curve: (EV100, stops) keys xy, zw in rising EV
+    uint4 giRadiance;        // probe radiance atlas (look-gi.slangh giSampleRadiance): x sampled, y storage
 };
-static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64;
+static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64,LOOK_REFLECTION_SOURCES=128;
+// Automatic exposure's extra compensation (stops) at metered scene EV100 `ev`:
+// linear between the curve's keys, flat beyond its ends. Constant row indices only.
+float exposureCurve(Look l,float ev){
+    float2 a=l.exposureCurve[0].xy;float stops=a.y;bool done=ev<=a.x;
+    [unroll]for(uint i=0;i<8;i++){
+        float4 row=l.exposureCurve[i/2];float2 b=(i&1)==0?row.xy:row.zw;
+        if(!done && ev<=b.x){stops=lerp(a.y,b.y,saturate((ev-a.x)/max(b.x-a.x,1e-6)));done=true;}
+        if(!done)stops=b.y;
+        a=b;
+    }
+    return stops;
+}
 // The look record (a frame record row: uniform, so no NonUniformResourceIndex).
 Look look(Frame f){return buffers[f.look.x].Load<Look>(0);}
 // Exposure state (look-post.slang exposureMain): applied multiplier, the previous
@@ -92,6 +106,9 @@ float exposureScale(Frame f,float s){
 float hdrExposure(Frame f,Look l){return exposureScale(f,exposureState(l).x);}
 float3 exposeHdr(Frame f,Look l,float3 radiance){return min(radiance*hdrExposure(f,l),60000);}
 bool physicalSky(Look l){return (l.flags.y&LOOK_PHYSICAL_SKY)!=0;}
+// Scale of the light the sky casts (ambient, reflections, probe bounce, fog ambient)
+// over the sky drawn in the background (Look::sky_light; Unreal's sky light intensity).
+float skyLight(Look l){return l.weather.z;}
 float4 lut(uint index,float2 uv){return textures[NonUniformResourceIndex(index)].SampleLevel(samplers[2],uv,0);}
 float luminance(float3 c){return dot(c,float3(0.2126,0.7152,0.0722));}
 

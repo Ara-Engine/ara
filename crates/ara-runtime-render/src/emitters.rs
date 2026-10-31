@@ -49,7 +49,7 @@ fn luminance(c: Vec3) -> f32 {
 }
 
 /// Whether a material with (mean) `shading` lights the scene as emitter lights.
-pub(crate) fn is_emitter(shading: Shading) -> bool {
+pub(crate) fn is_emitter(shading: &Shading) -> bool {
     luminance(shading.emissive) > EMITTER_RADIANCE
 }
 
@@ -310,7 +310,7 @@ impl Job {
         let mut keys: BTreeMap<(usize, usize), usize> = BTreeMap::new();
         let (mut instances, mut sources) = (Vec::new(), Vec::new());
         for (instance, i) in scene.instances.iter().enumerate() {
-            let (Some(&s), Some(material), Some(geometry)) = (
+            let (Some(s), Some(material), Some(geometry)) = (
                 shading.get(i.material),
                 scene.materials.get(i.material),
                 scene.geometry.get(i.geometry),
@@ -424,7 +424,7 @@ pub(crate) fn emission_edited(
                     .flatten()
                     .unwrap_or([1.; 4]);
                 let e = m.pbr.emissive_roughness;
-                is_emitter(Shading {
+                is_emitter(&Shading {
                     emissive: Vec3::new(e[0] * map[0], e[1] * map[1], e[2] * map[2]),
                     ..Shading::default()
                 })
@@ -752,7 +752,7 @@ mod tests {
     const BRIGHT: Shading = Shading {
         albedo: Vec3::ONE,
         emissive: Vec3::splat(100.),
-        cutout: 0.,
+        cutout: None,
     };
 
     #[test]

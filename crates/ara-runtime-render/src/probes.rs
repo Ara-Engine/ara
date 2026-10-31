@@ -214,7 +214,8 @@ pub struct ProbeFilter<'a> {
 }
 
 /// Cache file format version (`<sourceHash>.capture`: header line, then the image).
-const CACHE_VERSION: u32 = 1;
+/// 2: the atlas alpha holds each texel's radial distance (traced reflections).
+const CACHE_VERSION: u32 = 2;
 
 /// The retained probe capture state of one view (see the module docs).
 #[derive(Debug)]

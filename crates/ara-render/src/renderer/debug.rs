@@ -18,6 +18,24 @@ pub struct RenderDebug {
     /// Render at display resolution instead of the preset's upscaled render scale.
     /// Applied where the render size is chosen (`ara-runtime-render`'s presenter).
     pub full_resolution: bool,
+    /// What the lit image shows of reflections.
+    pub reflections: ReflectionView,
+}
+
+/// The reflection debug views: the lit image, the reflected light alone, or where
+/// each pixel's reflection comes from.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ReflectionView {
+    /// The lit image.
+    #[default]
+    Lit,
+    /// Only the reflected (indirect specular) light, exposed like the lit image.
+    Reflections,
+    /// Each pixel coloured by the share of its reflection each source resolved:
+    /// on-screen trace green, capture trace blue, box-projected captures cyan,
+    /// probes orange, sky magenta; surfaces too rough to trace dimmed.
+    Sources,
 }
 
 impl Default for RenderDebug {
@@ -27,6 +45,7 @@ impl Default for RenderDebug {
             shadows: true,
             temporal_jitter: true,
             full_resolution: false,
+            reflections: ReflectionView::Lit,
         }
     }
 }

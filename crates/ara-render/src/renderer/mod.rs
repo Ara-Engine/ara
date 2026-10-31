@@ -28,7 +28,7 @@ use anyhow::{Result, ensure};
 use ara_gpu::{
     Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, vk, vulkan::PassTiming,
 };
-pub use debug::RenderDebug;
+pub use debug::{ReflectionView, RenderDebug};
 pub use frame::temporal_phases;
 use glam::{Mat4, Vec3};
 pub use native::{NativeContent, NativeSeed};
@@ -87,6 +87,10 @@ struct Pipelines {
     /// The gi_diffuse view's deferred lighting, per tier (`ViewMode::GiDiffuse`).
     lighting_gi: Pipeline,
     lighting_high_gi: Pipeline,
+    /// The reflection debug views' deferred lighting, per tier
+    /// ([`RenderDebug::reflections`]).
+    lighting_refl: Pipeline,
+    lighting_high_refl: Pipeline,
     forward: Pipeline,
     taa: Pipeline,
     tonemap: Pipeline,
@@ -204,9 +208,10 @@ impl Renderer {
         Self::new_device(scene, size, extensions, cache.into(), true)
     }
     /// Raster bootstrap like `new_raster`, on a device that also enables hardware
-    /// ray queries where the GPU has them (D29): High/Epic then add ray-traced
-    /// reflections (`Quality::ray_queries`) without recreating the device when the
-    /// preset changes. Other GPUs get the same raster-only device as `new_raster`.
+    /// ray queries where the GPU has them (D29), so a quality with
+    /// `Quality::ray_queries` (the ray-tracing opt-in) adds ray-traced reflections
+    /// without recreating the device. Other GPUs get the same raster-only device as
+    /// `new_raster`.
     pub fn new_hybrid(
         scene: Scene,
         size: [u32; 2],
@@ -266,6 +271,8 @@ impl Renderer {
             lighting_high: load("lighting_high")?,
             lighting_gi: load("lighting_gi")?,
             lighting_high_gi: load("lighting_high_gi")?,
+            lighting_refl: load("lighting_refl")?,
+            lighting_high_refl: load("lighting_high_refl")?,
             forward: load("forward")?,
             taa: load("taa")?,
             tonemap: load("tonemap")?,

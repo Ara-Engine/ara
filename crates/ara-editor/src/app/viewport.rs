@@ -2,7 +2,6 @@
 use super::*;
 use ara_render_fidelity::{
     FidelityView, FrameInput, PostSettings,
-    environment::FrameEnvironment,
     presets::{Capabilities, FidelityPlan, Plan, RenderPath},
 };
 use ara_runtime_render::fidelity::native::{self, FrameChange, NativeConfig, Prepared};
@@ -664,11 +663,7 @@ impl SceneView {
                     .style_unpublished(renderer, |asset| content.model_is_pending(asset))?;
             }
             // Volumes blend for the Scene view's camera.
-            let look = FrameEnvironment::resolve(
-                &frame.look,
-                editor.state.camera.position(),
-                frame.environment.exposure,
-            );
+            let look = ara_runtime_render::environment_at(frame, editor.state.camera.position());
             let raster = self.raster.as_mut().ok_or("raster view")?;
             let resolve = || content.content(frame, store.workspace(), store.schema());
             if self.raster_snapshot_dirty {
@@ -788,11 +783,7 @@ impl SceneView {
                 &editor.state.hidden,
             )?;
             // Volumes blend for the Scene view's camera.
-            let look = FrameEnvironment::resolve(
-                &frame.look,
-                editor.state.camera.position(),
-                frame.environment.exposure,
-            );
+            let look = ara_runtime_render::environment_at(&frame, editor.state.camera.position());
             let rebuild = scene_changed
                 || self
                     .prepared

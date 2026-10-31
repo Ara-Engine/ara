@@ -7,6 +7,9 @@
 // (copying the records into the device-local frame buffer when they changed), and
 // `captureTilesMain` lists the captures each 16x16 render tile can need.
 // Columns hold five bordered octahedral tiles (look-captures.slangh captureLevelY).
+// Alpha holds the radial distance from the capture point to what each texel saw
+// (CAPTURE_SKY for open sky): level 0 its texel's mean, coarser levels the nearest
+// over their footprint, so rays can be traced through the capture (captureTrace).
 #include "raster.slangh"
 #include "look.slangh"
 #include "look-shading.slangh"
@@ -24,12 +27,11 @@ int2 captureFold(int2 p,int n){
 // material the atlas (storage), entity the face or level, cascade the scratch
 // column's x, mode level 0's interior texels, sample the capture column's x.
 RWTexture2D<float4> captureAtlas(){return images[NonUniformResourceIndex(root.material)];}
-// Scratch radiance at level `k`, texel `p` of its bordered tile: level 0 holds
-// weighted sums of face samples (rgb, weight), the reduced levels plain radiance.
-float3 captureScratch(uint k,int2 p){
-    float4 v=captureAtlas()[uint2(root.cascade,captureLevelY(root.mode,k))+uint2(p)];
-    return k==0?v.rgb/max(v.a,1e-6):v.rgb;
-}
+// Scratch radiance at level `k`, texel `p` of its bordered tile, and in alpha the
+// distance (level 0 the mean of its four face samples, each in exactly one face, so
+// their quarter weights sum to one; reduced levels the nearest of their footprint).
+float4 captureScratchTexel(uint k,int2 p){return captureAtlas()[uint2(root.cascade,captureLevelY(root.mode,k))+uint2(p)];}
+float3 captureScratch(uint k,int2 p){return captureScratchTexel(k,p).rgb;}
 // Bilinear scratch radiance along `d` at level `k` (tiles keep their borders).
 float3 captureScratchAlong(uint k,float3 d){
     float n=float(root.mode>>k);float2 f=octEncode(d)*n+0.5;int2 b=int2(floor(f));float2 w=f-float2(b);
@@ -55,10 +57,14 @@ void captureFaceMain(uint3 tid:SV_DispatchThreadID){
         float4 h=mul(f.vp,float4(f.camera.xyz+d,1));if(h.w<=0)continue;
         float2 uv=saturate(float2(h.x/h.w*0.5+0.5,0.5-h.y/h.w*0.5));
         float3 c=textures[NonUniformResourceIndex(root.materials)].SampleLevel(samplers[2],uv,0).rgb/captureHdrExposure(f,l);
-        if(physicalSky(l)&&all(textures[NonUniformResourceIndex(f.extra.x)].GatherRed(samplers[2],uv)==0))c=skyRadiance(f,l,d,false);
+        bool open=all(textures[NonUniformResourceIndex(f.extra.x)].GatherRed(samplers[2],uv)==0);
+        if(physicalSky(l)&&open)c=skyRadiance(f,l,d,false);
         // Half floats: keep finite, bounded radiance (four samples sum below 65504 after the quarter).
         c=all(c==c)?clamp(c,0,60000):0;
-        sum+=float4(c,1);
+        // How far the face saw along this sample: the depth texel under it.
+        int2 px=clamp(int2(uv*float2(f.extent.xy)),int2(0),int2(f.extent.xy)-1);float depth=pixel(f.extra.x,px).x;
+        float seen=open||depth<=0?CAPTURE_SKY:min(length(worldAtDepth(f,float2(px)+0.5,depth)-f.camera.xyz),CAPTURE_SKY);
+        sum+=float4(c,seen);
     }
     uint2 p=uint2(root.cascade,0)+tid.xy;
     float4 previous=root.entity==0?0:captureAtlas()[p];
@@ -69,8 +75,8 @@ void captureFaceMain(uint3 tid:SV_DispatchThreadID){
 void captureMipMain(uint3 tid:SV_DispatchThreadID){
     uint k=root.entity;int n=int(root.mode>>k);if(any(tid.xy>=uint2(n+2,n+2)))return;
     int2 q=captureFold(int2(tid.xy)-1,n)*2+1;
-    float3 c=(captureScratch(k-1,q)+captureScratch(k-1,q+int2(1,0))+captureScratch(k-1,q+int2(0,1))+captureScratch(k-1,q+int2(1,1)))*0.25;
-    captureAtlas()[uint2(root.cascade,captureLevelY(root.mode,k))+tid.xy]=float4(c,1);
+    float4 a=captureScratchTexel(k-1,q),b=captureScratchTexel(k-1,q+int2(1,0)),c=captureScratchTexel(k-1,q+int2(0,1)),e=captureScratchTexel(k-1,q+int2(1,1));
+    captureAtlas()[uint2(root.cascade,captureLevelY(root.mode,k))+tid.xy]=float4((a.rgb+b.rgb+c.rgb+e.rgb)*0.25,min(min(a.a,b.a),min(c.a,e.a)));
 }
 // The capture's column (x `root.sample`): level 0 is the radiance itself; level k
 // GGX-prefilters roughness k/4 by filtered importance sampling (Krivanek & Colbert
@@ -82,6 +88,8 @@ void capturePrefilterMain(uint3 tid:SV_DispatchThreadID){
     while(k+1<CAPTURE_LEVELS&&tid.y>=captureLevelY(n0,k+1))k++;
     int n=int(n0>>k);if(tid.x>=uint(n+2))return;
     int2 q=captureFold(int2(tid.x,tid.y-captureLevelY(n0,k))-1,n);float3 result;
+    // The scratch level's distances carry over (prefiltering blurs radiance only).
+    float seen=captureScratchTexel(k,q+1).a;
     if(k==0)result=captureScratch(0,q+1);
     else{
         float3 dir=octDecode((float2(q)+0.5)/float(n));float a=float(k)/(CAPTURE_LEVELS-1);a*=a;float a2=a*a;
@@ -99,7 +107,7 @@ void capturePrefilterMain(uint3 tid:SV_DispatchThreadID){
         }
         result=sum/max(weight,1e-4);
     }
-    captureAtlas()[uint2(root.sample,captureLevelY(n0,k))+tid.xy]=float4(result,1);
+    captureAtlas()[uint2(root.sample,captureLevelY(n0,k))+tid.xy]=float4(result,seen);
 }
 // Relights each capture against its bake: the ambient irradiance at its capture
 // point (the mean over the six axes of what `ibl` would use: probe GI where the
@@ -123,8 +131,8 @@ void captureRefitMain(uint3 tid:SV_DispatchThreadID){
         float3 p=buffers[NonUniformResourceIndex(records)].Load<CaptureShade>(i*CAPTURE_RECORD+64).origin.xyz;
         uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x;
         float3 n=float3(k==0?1.:k==1?-1.:0.,k==2?1.:k==3?-1.:0.,k==4?1.:k==5?-1.:0.);
-        float3 ambient=envTex(irradiance,environmentUv(n)).rgb*horizonSky(l,p),gi=0,unused;float coverage=0;
-        if(giEnabled(l))coverage=giPoolLobes(l,l.giImages.y,p,n,n,float3(0,0,0),false,gi,unused)*giWeight(l);
+        float3 ambient=envTex(irradiance,environmentUv(n)).rgb*skyLight(l)*horizonSky(l,p),gi=0,unused;float coverage=0;
+        if(giEnabled(l))coverage=giPoolLobes(l,l.giImages.y,p,n,n,float3(0,0,0),1,false,gi,unused)*giWeight(l);
         captureAxes[tid.x]=lerp(ambient,gi,coverage);
     }
     GroupMemoryBarrierWithGroupSync();

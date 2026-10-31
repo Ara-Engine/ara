@@ -47,13 +47,20 @@ FullscreenVarying fullscreenVertex(uint id:SV_VertexID){FullscreenVarying o;floa
 // `rays` the hybrid path's ray-traced reflections (renderer::rt, D29), `gi` the
 // gi_diffuse view: the diffuse indirect light shading samples (ibl's diffuse share),
 // without direct light, emission, specular reflection, fog or the background.
-float4 lighting(FullscreenVarying v,bool high,bool rays=false,bool gi=false){
+// `refl`: the reflection debug views (ibl's `view`; LOOK_REFLECTION_SOURCES picks
+// sources over the reflected light alone).
+float4 lighting(FullscreenVarying v,bool high,bool rays=false,bool gi=false,bool refl=false){
     Frame f=frame();Look l=look(f);int2 p=int2(v.clip.xy);float2 uv=(float2(p)+0.5)/float2(f.extent.xy);bool covered;float3 world=gbufferWorld(f,p,covered);
     if(!covered)return float4(gi?0:exposeHdr(f,l,background(f,l,viewRay(f,float2(p)+0.5),uv)),1);
     Surface s;float4 a=gbufferAlbedo(f,p);float2 m=gbufferMaterial(f,p);s.albedo=a.rgb;s.alpha=1;s.transmission=0;
     // The material's occlusion map only where the frame has no dynamic occlusion (dynamicOcclusion).
     s.ao=min(dynamicOcclusion(l)?1:a.a,screenOcclusion(f,l,p,length(world-f.camera.xyz),high));s.normal=gbufferNormal(f,p);s.roughness=m.x;s.metal=m.y;s.emissive=gbufferEmissive(f,p);
     if(gi){float3 v=normalize(f.camera.xyz-world);return float4(exposeHdr(f,l,ibl(f,l,s,specularLobes(s,v),world,v,p,true,high,rays,true)),1);}
+    if(refl){
+        float3 v=normalize(f.camera.xyz-world);Lobes o=specularLobes(s,v);
+        float3 c=(l.flags.y&LOOK_REFLECTION_SOURCES)!=0?ibl(f,l,s,o,world,v,p,true,high,rays,false,2):ibl(f,l,s,o,world,v,p,true,high,rays,false,1);
+        return float4(exposeHdr(f,l,c),1);
+    }
     return float4(exposeHdr(f,l,applyFog(f,l,shade(f,l,s,world,p,true,high,rays),world,uv)),1);
 }
 [shader("fragment")]
@@ -68,6 +75,11 @@ float4 lightingHighRtFragment(FullscreenVarying v):SV_Target0 {return lighting(v
 float4 lightingGiFragment(FullscreenVarying v):SV_Target0 {return lighting(v,false,false,true);}
 [shader("fragment")]
 float4 lightingHighGiFragment(FullscreenVarying v):SV_Target0 {return lighting(v,true,false,true);}
+// The reflection debug views (RenderDebug::reflections), per tier.
+[shader("fragment")]
+float4 lightingReflFragment(FullscreenVarying v):SV_Target0 {return lighting(v,false,false,false,true);}
+[shader("fragment")]
+float4 lightingHighReflFragment(FullscreenVarying v):SV_Target0 {return lighting(v,true,false,false,true);}
 struct ForwardOut {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 emissive:SV_Target5;};
 [shader("fragment")]
 ForwardOut forwardFragment(Varying v){Frame f=frame();Surface s=surface(v);ForwardOut o;Look l=look(f);o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),hdrExposure(f,l));o.id=float(root.entity);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);return o;}

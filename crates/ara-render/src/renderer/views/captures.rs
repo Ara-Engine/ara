@@ -143,6 +143,11 @@ impl Renderer {
         }
         ready
     }
+    /// Whether an automatic reflection capture still waits for its bake (captures
+    /// render frames until none does, so they show baked captures).
+    pub fn reflection_captures_baking(&self) -> bool {
+        self.look.quality.reflection_captures.is_some() && self.views.captures.awaiting_bake()
+    }
     /// Authored probe `key`'s bake state, if the renderer holds its record.
     pub fn reflection_capture_status(&self, key: u64) -> Option<BakeStatus> {
         self.views.captures.status(key)

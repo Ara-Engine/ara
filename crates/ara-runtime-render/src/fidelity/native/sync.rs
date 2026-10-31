@@ -159,6 +159,9 @@ impl Prepared {
         if frame.draws.len() != bindings.links.len()
             || frame.environment.sky != bindings.environment.sky
             || frame.environment.horizon != bindings.environment.horizon
+            || frame.environment.sky_falloff != bindings.environment.sky_falloff
+            || frame.environment.glow != bindings.environment.glow
+            || frame.environment.glow_falloff != bindings.environment.glow_falloff
             || frame.environment.ground != bindings.environment.ground
             || frame.environment.intensity != bindings.environment.intensity
         {

@@ -20,6 +20,15 @@ float3 localIrradiance(Frame f,Look l,float3 p,float3 n){
 groupshared float3 radiance[64];
 groupshared float3 directions[64];
 groupshared float3 tile[36];
+groupshared float4 seen[64];
+// Distance (m) recorded for sky texels: reflections of the sky need no parallax.
+static const float GI_SKY_DISTANCE=10000;
+// Writes this probe's bordered 10x10 radiance tile (giSampleRadiance) from `seen`.
+void storeRadiance(Look l,uint id,uint lane){
+    for(uint i=lane;i<100;i+=64){
+        int2 p=int2(i%10,i/10)-1;images[NonUniformResourceIndex(l.giRadiance.y)][giTile(l,id,8)+p]=seen[octIndex(p,8)];
+    }
+}
 // Writes this probe's bordered 8x8 atlas tile from the 6x6 interior in `tile`.
 void storeTile(Look l,uint id,uint lane){
     int2 p=int2(lane%8,lane/8)-1;images[NonUniformResourceIndex(l.giImages.z)][giTile(l,id,6)+p]=float4(tile[octIndex(p,6)],1);
@@ -48,7 +57,8 @@ void giRelight(uint3 group,uint lane,bool pages){
     float4 meta=giMeta(l,id);
     if(meta.w<0.5){
         if(lane<36)tile[lane]=float3(0);
-        GroupMemoryBarrierWithGroupSync();storeTile(l,id,lane);return;
+        seen[lane]=0;
+        GroupMemoryBarrierWithGroupSync();storeTile(l,id,lane);storeRadiance(l,id,lane);return;
     }
     uint4 t=buffers[NonUniformResourceIndex(l.giBuffers.x)].Load<uint4>((id*64+lane)*16);
     float3 albedo=float3(t.x&255,(t.x>>8)&255,(t.x>>16)&255)/255.;float sky=float(t.x>>24)/255.;
@@ -62,8 +72,18 @@ void giRelight(uint3 group,uint lane,bool pages){
         irradiance+=giIrradiance(l,read,hit,normal);
         light=(1-sky)*(emissive+albedo/PI*irradiance);
     }
-    if(sky>0)light+=sky*(physicalSky(l)?skyRadiance(f,l,dir,false):envTex(f.extra.w,environmentUv(dir)).rgb);
-    radiance[lane]=light;directions[lane]=dir;GroupMemoryBarrierWithGroupSync();
+    if(sky>0)light+=sky*skyLight(l)*(physicalSky(l)?skyRadiance(f,l,dir,false):envTex(f.extra.w,environmentUv(dir)).rgb);
+    radiance[lane]=light;directions[lane]=dir;
+    // The radiance cache keeps what this texel sees, filtered over relights like the
+    // irradiance (a reset, or a non-finite history, starts it over).
+    {
+        float hysteresis=(l.flags.y&LOOK_RESET)!=0?0:l.giParams.x;
+        float4 value=float4(light,sky>0.5?GI_SKY_DISTANCE:distance);
+        float4 old=images[NonUniformResourceIndex(l.giRadiance.y)][giTile(l,id,8)+uint2(lane%8,lane/8)];
+        if(hysteresis>0 && all(isfinite(old)))value.rgb=lerp(value.rgb,old.rgb,hysteresis);
+        seen[lane]=value;
+    }
+    GroupMemoryBarrierWithGroupSync();
     if(lane<36){
         float3 n=octDecode((float2(lane%6,lane/6)+0.5)/6),sum=0;float normalization=0;
         for(uint j=0;j<64;j++){float w=max(dot(n,directions[j]),0);sum+=radiance[j]*w;normalization+=w;}
@@ -72,7 +92,7 @@ void giRelight(uint3 group,uint lane,bool pages){
         float hysteresis=(l.flags.y&LOOK_RESET)!=0?0:l.giParams.x;
         tile[lane]=lerp(value,old,hysteresis);
     }
-    GroupMemoryBarrierWithGroupSync();storeTile(l,id,lane);
+    GroupMemoryBarrierWithGroupSync();storeTile(l,id,lane);storeRadiance(l,id,lane);
 }
 [shader("compute")][numthreads(64,1,1)]
 void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){giRelight(group,lane,false);}
@@ -80,16 +100,18 @@ void giRelightMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){giRelight(gro
 [shader("compute")][numthreads(64,1,1)]
 void giRelightVsmMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){giRelight(group,lane,true);}
 // Two probe lobes per half-resolution pixel (the full-resolution pixel 2p): rgb
-// irradiance facing the normal (w: camera distance) and facing the specular lobe's
-// dominant direction (specularDirection, as ibl looks it up; w: volume coverage). Lighting upsamples them depth-aware, so the per-pixel cost
-// of the eight-probe visibility search drops fourfold.
+// irradiance facing the normal (w: camera distance) and the radiance the surface
+// reflects along its specular lobe's dominant direction (specularDirection, as ibl
+// looks it up; w: volume coverage). Lighting upsamples them depth-aware, so the
+// per-pixel cost of the eight-probe visibility search drops fourfold.
 [shader("compute")][numthreads(8,8,1)]
 void giGatherMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);uint2 half=(f.extent.xy+1)/2;if(any(tid.xy>=half))return;
     int2 p=int2(tid.xy)*2;bool covered;float3 world=gbufferWorld(f,p,covered);float4 diffuse=float4(0,0,0,1e9),specular=0;
     if(covered){
         float3 n=normalize(gbufferNormal(f,p)),v=normalize(f.camera.xyz-world.xyz),a,b;
-        float coverage=giPoolLobes(l,l.giImages.y,world.xyz,n,specularDirection(n,v,gbufferMaterial(f,p).x),v,true,a,b);
+        float roughness=gbufferMaterial(f,p).x;
+        float coverage=giPoolLobes(l,l.giImages.y,world.xyz,n,specularDirection(n,v,roughness),v,roughness,true,a,b);
         if(coverage>0){diffuse.rgb=a;specular=float4(b,coverage);}
         diffuse.w=length(world.xyz-f.camera.xyz);
     }

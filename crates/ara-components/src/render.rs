@@ -35,9 +35,9 @@ pub enum QualitySetting {
 pub struct RenderSettings {
     /// Default quality preset for Play, the editor's lit viewport and exported players.
     pub quality: QualitySetting,
-    /// Opt in to experimental hardware ray tracing for supported presets. False
-    /// keeps every preset on raster and creates no ray-tracing presentation device.
-    /// Takes effect when the player or editor GPU device is opened.
+    /// Opt in to hardware ray tracing on GPUs that support it: the ray-traced
+    /// renderer for Medium and above. Off (the default), every preset is raster and
+    /// traces no rays, whatever the GPU, as in Unreal.
     pub ray_tracing: bool,
 }
 
@@ -118,8 +118,9 @@ impl Default for HeightFog {
 /// under `.ara/cache/probes`), never authored edits: a change to these settings, the
 /// geometry, materials, lighting or environment marks the capture stale, and the last
 /// valid capture stays in use until its replacement is published. Authored probes
-/// always capture at High and Epic; a scene without any gets automatic captures over
-/// its content only with the look-development opt-in `ARA_REFLECTION_CAPTURES=1`.
+/// always capture at High and Epic; a scene without any places captures itself where
+/// its probe volume saw enclosed open space (`ARA_REFLECTION_CAPTURES=0` turns that
+/// off).
 #[derive(Debug, Clone, Copy, PartialEq, Component, Schema, Serialize, Deserialize)]
 #[ara(component, module = "render")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]

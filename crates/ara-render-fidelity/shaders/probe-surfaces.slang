@@ -13,6 +13,13 @@ uint unorm8(float v){return uint(round(saturate(v)*255));}
 uint halfBits(float v){uint x=asuint(max(v,0.));int e=int((x>>23)&255)-112;if(e<=0)return 0;if(e>=31)return 0x7bff;return (uint(e)<<10)|((x&0x7fffff)>>13);}
 // Root: pass = surface cache buffer, arg = statics buffer, pad0 = first probe.
 // One workgroup per probe, one lane per 8x8 octahedral cache texel.
+// gi_cpu::bounce_albedo: diffuse plus the specular lobe's directional albedo at
+// `roughness` seen from 60 degrees (Karis's EnvBRDFApprox; 0.45 F0 at roughness 1).
+float3 bounceAlbedo(float3 base,float metal,float roughness){
+    float r=saturate(roughness),x=1-r,y=0.0425-0.0275*r;float a004=min(x*x,exp2(-9.28*0.5))*x+y;
+    float scale=1.04-0.572*r-1.04*a004,bias=1.04*a004-0.04+0.022*r;
+    return max(base*(1-metal)+lerp(float3(0.04),base,metal)*scale+bias,0);
+}
 [shader("compute")][numthreads(64,1,1)]
 void probeSurfacesMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     Frame f=frame();uint id=group.x+root.pad0;if(id>=f.counts.w)return;
@@ -46,7 +53,9 @@ void probeSurfacesMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
         if(trace(f,origin,dir,RANGE,rng,h)){
             Surface s=surface(f,h.id,h.primitive,h.bary);t=h.distance;geometry++;centroid+=dir*t;
             bool front=dot(s.geometricNormal,dir)<0 || s.transmission>0;
-            if(front){if(dot(s.normal,-dir)<0)s.normal=-s.normal;albedo+=s.albedo*(1-s.metal);emissive+=s.emissive;normal+=s.normal;}
+            // Diffuse plus the specular lobe's directional albedo at the hit's roughness
+            // from 60 degrees (gi_cpu::bounce_albedo): metals bounce light rather than absorb it.
+            if(front){if(dot(s.normal,-dir)<0)s.normal=-s.normal;albedo+=bounceAlbedo(s.albedo,s.metal,s.roughness);emissive+=s.emissive;normal+=s.normal;}
             else normal-=dir;
         }
         moment1+=t;moment2+=t*t;

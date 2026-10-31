@@ -124,10 +124,44 @@
       "vertex_stride": 0
     }
   },
+  "lighting_high_refl": {
+    "entries": {
+      "fullscreenVertex": "vertex",
+      "lightingHighReflFragment": "fragment"
+    },
+    "source": "baseline.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        97
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "lighting_high_rt": {
     "entries": {
       "fullscreenVertex": "vertex",
       "lightingHighRtFragment": "fragment"
+    },
+    "source": "baseline.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        97
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "lighting_refl": {
+    "entries": {
+      "fullscreenVertex": "vertex",
+      "lightingReflFragment": "fragment"
     },
     "source": "baseline.slang",
     "state": {
@@ -903,7 +937,7 @@
   "native_shadow": {
     "entries": {
       "nativeShadowFragment": "fragment",
-      "nativeShadowVertex": "vertex"
+      "nativeShadowCasterVertex": "vertex"
     },
     "source": "native-raster.slang",
     "state": {

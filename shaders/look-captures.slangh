@@ -19,6 +19,8 @@ static const uint CAPTURE_TILES=CAPTURE_MAX*CAPTURE_SLOT,CAPTURE_TILE_CAPACITY=5
 // Debug modes: every surface a mirror of the captures alone; captures under no SSR;
 // no parallax (each capture an infinitely distant environment from its capture point).
 static const uint CAPTURE_DEBUG_MIRROR=1,CAPTURE_DEBUG_ONLY=2,CAPTURE_DEBUG_INFINITE=4;
+// Radial distance the bake stores for open sky (atlas alpha; half-float safe).
+static const float CAPTURE_SKY=60000;
 // One capture (look/captures.rs `CaptureSpec::record`), in two halves so pixels
 // outside its influence load only the first: a rigid local frame (metres) and its
 // influence box (fading over `influence.w` inside it); then the projection box rays
@@ -60,6 +62,50 @@ float3 captureLevel(Look l,CaptureShade c,float3 d,uint k){
     float n=float(c.tile.z>>k);float2 origin=float2(c.tile.x,c.tile.y+captureLevelY(c.tile.z,k))+1;
     float2 uv=(origin+octEncode(d)*n)/float2(l.captureInfo[1].xy);
     return textures[NonUniformResourceIndex(l.captureInfo[0].z)].SampleLevel(samplers[2],uv,0).rgb;
+}
+// Radial distance from capture `c`'s point to what it saw along `d`: level 0 the
+// texel's mean, level `k` the nearest within its 2^k texels (look-captures.slang).
+float captureSeen(Look l,CaptureShade c,float3 d,uint k){
+    int n=int(c.tile.z>>k);int2 t=clamp(int2(octEncode(d)*float(n)),int2(0),int2(n-1));
+    return textures[NonUniformResourceIndex(l.captureInfo[0].z)].Load(int3(int2(c.tile.x,c.tile.y+captureLevelY(c.tile.z,k))+1+t,0)).a;
+}
+// Traces the ray `o + t r` (unit `r`, t up to `reach`) through capture `c`'s
+// distances, a light-field probe trace (McGuire et al. 2017) marched in world space:
+// each step compares the point's distance from the capture point with what the
+// capture saw in its direction. Returns the hit's t; -1 when the ray stays in front
+// of everything the capture saw (it escapes, to what the capture shows past its
+// end); -2 when it only passed behind surfaces the capture cannot see past (the
+// capture cannot tell; other layers must). Steps grow with t (dense near the
+// surface, where contact detail is), each crossing refined by bisection and
+// accepted only within a few of the capture's texels of the surface it saw.
+float captureTrace(Look l,CaptureShade c,float3 o,float3 r,float reach){
+    static const uint STEPS=40;
+    float3 cp=c.origin.xyz;float previous=0;bool front=true,unknown=false;float texel=3.6/float(c.tile.z);
+    for(uint i=1;i<=STEPS;i++){
+        float t=reach*pow(float(i)/STEPS,1.6);float3 x=o+r*t-cp;float d=length(x);
+        bool ahead=d<=captureSeen(l,c,x/max(d,1e-5),0);
+        if(!ahead&&front){
+            float lo=previous,hi=t;
+            for(uint k=0;k<6;k++){float m=(lo+hi)*0.5;float3 y=o+r*m-cp;float e=length(y);if(e<=captureSeen(l,c,y/max(e,1e-5),0))lo=m;else hi=m;}
+            float3 y=o+r*hi-cp;float e=length(y);float s=captureSeen(l,c,y/max(e,1e-5),0);
+            if(e-s<max(0.06,e*texel*4)+(hi-lo))return hi;
+            unknown=true;
+        }
+        front=ahead;previous=t;
+    }
+    return unknown?-2:-1;
+}
+// The radiance capture `c` (relight `ratio`) shows of a reflection that travelled
+// `t` from `o` along `r` (t < 0: escaped, seen at the ray's end) for a lobe of
+// perceptual `roughness`: the lobe's width at the hit (2 t alpha), as an angle seen
+// from the capture point, picks the prefiltered level whose GGX lobe is as wide.
+float3 captureTraced(Look l,CaptureShade c,float4 ratio,float3 o,float3 r,float t,float reach,float roughness){
+    float3 q=o+r*(t<0?reach:t)-c.origin.xyz;float far=max(length(q),1e-4);
+    float a=roughness*roughness,angle=t<0?2*a:2*t*a/far;
+    float level=sqrt(saturate(angle*0.5))*(CAPTURE_LEVELS-1);
+    uint low=min(uint(level),CAPTURE_LEVELS-1),high=min(low+1,CAPTURE_LEVELS-1);
+    float3 d=t<0&&far>reach*4?r:q/far;
+    return lerp(captureLevel(l,c,d,low),captureLevel(l,c,d,high),level-float(low))*ratio.rgb;
 }
 // Specular radiance the captures in `mask` (a tile's, or every visible one for
 // forward surfaces) reflect at `world` along the GGX lobe of normal `n`, view `v`

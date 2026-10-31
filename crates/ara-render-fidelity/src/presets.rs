@@ -2,8 +2,9 @@
 //! resolution and work budgets. Hosts resolve a [`Plan`] once per view (and again on
 //! resize or device change); every plan keeps temporal antialiasing on.
 //!
-//! D27: every preset is raster by default ([`RasterPlan`], `ara_render::look::Quality`);
-//! the ray-traced fidelity renderer is an opt-in ([`RenderOptions::ray_tracing`]).
+//! Hardware ray tracing is off on every preset unless the project or game opts in
+//! ([`RenderOptions::ray_tracing`]), as in Unreal: by default every preset is raster
+//! ([`RasterPlan`], `ara_render::look::Quality`) and traces no rays.
 use crate::{FidelityView, Mode, PostSettings, Settings, Tier, Upscaler};
 use anyhow::{Result, bail};
 use ara_gpu::GpuDevice;
@@ -25,15 +26,11 @@ pub enum QualityPreset {
     /// Raster: 0.55 render scale, three cascades and bloom. Ray traced: ReSTIR at
     /// 0.4 scale, rough reflections from the probe field above roughness 0.35.
     Medium,
-    /// Raster: four 2048 cascades to 150 m; on RT devices (D29) hardware ray
-    /// queries reflect surfaces below roughness 0.3 and occlude rougher reflections
-    /// up to 0.6. Ray traced: ReSTIR at half scale, paths ending in the probe field
-    /// after one traced event.
+    /// Raster: four 2048 cascades to 150 m. Ray traced: ReSTIR at half scale,
+    /// paths ending in the probe field after one traced event.
     High,
-    /// Raster: four cascades to 250 m, the largest GI budget; on RT devices ray
-    /// queries reflect surfaces below roughness 0.5 and occlude rougher ones up
-    /// to 0.8. Ray traced: ReSTIR at two-thirds scale with two traced events before
-    /// the probe field.
+    /// Raster: four cascades to 250 m, the largest GI budget. Ray traced: ReSTIR
+    /// at two-thirds scale with two traced events before the probe field.
     Epic,
 }
 
@@ -250,15 +247,15 @@ pub struct RasterPlan {
     pub render_size: [u32; 2],
     /// Display resolution.
     pub display_size: [u32; 2],
-    /// Shadows, probe GI budget and post effects. D29: on devices with hardware ray
-    /// queries High and Epic keep `quality.ray_queries` (the hybrid path); other
-    /// devices resolve the same preset without it (the raster High/Epic path).
+    /// Shadows, probe GI budget and post effects. `quality.ray_queries` (D29's
+    /// hybrid reflections) is set only under the ray-tracing opt-in on a device
+    /// with hardware ray queries; default plans are pure raster.
     pub quality: Quality,
 }
 
 impl RasterPlan {
     /// Whether this plan adds hardware ray queries to the raster renderer (D29's
-    /// hybrid High/Epic path on RT devices).
+    /// hybrid path, only under the ray-tracing opt-in).
     pub fn hybrid(&self) -> bool {
         self.quality.ray_queries.is_some()
     }
@@ -267,8 +264,9 @@ impl RasterPlan {
 /// Renderer selection options.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RenderOptions {
-    /// Opt in to the ray-traced fidelity renderer for Medium and above on devices
-    /// with hardware ray queries (D27: raster is the default on every GPU).
+    /// Opt in to hardware ray tracing on devices with verified ray queries: the
+    /// ray-traced fidelity renderer for Medium and above. Off (the default), every
+    /// preset is raster and traces no rays, whatever the GPU.
     pub ray_tracing: bool,
 }
 
@@ -343,7 +341,8 @@ impl QualityPreset {
         };
         // D29 hybrid ray queries (High/Epic): mirror and glossy reflections below
         // the roughness cut, ray-traced occlusion of rougher ones up to the
-        // second cut. `Plan::resolve` drops them on devices without RT.
+        // second cut. `Plan::resolve` keeps them only under the ray-tracing
+        // opt-in on RT devices.
         let rays = |reflection_roughness, rough_roughness, distance| {
             Some(RayQueries {
                 reflection_roughness,
@@ -407,7 +406,7 @@ impl QualityPreset {
                 // (look-ao.slang aoBitmaskMain): six steps over-darkened against Cycles
                 // and cost 0.07 ms more at 1440p.
                 ambient_occlusion: ao(2, 3),
-                reflections: ssr(0.5, 30., 24),
+                reflections: ssr(0.6, 30., 32),
                 gi_budget: 2048,
                 bloom: true,
                 emitter_lights: 8,
@@ -436,7 +435,7 @@ impl QualityPreset {
             Self::Epic => Quality {
                 shadows: shadows(4, 2048, 250., (2048, 2000.)),
                 ambient_occlusion: ao(3, 8),
-                reflections: ssr(0.6, 50., 32),
+                reflections: ssr(0.6, 50., 48),
                 gi_budget: 4096,
                 bloom: true,
                 emitter_lights: 16,
@@ -482,21 +481,21 @@ pub struct Plan {
 }
 
 /// High/Epic local reflection captures (512-texel tiles, `captures` at most). Authored
-/// reflection probes always bake; automatic placement over scenes without probes stays
-/// off until its bakes pass the Showcase region-FLIP gate (`ARA_REFLECTION_CAPTURES=1`
-/// opts in for look development and A/B captures).
+/// reflection probes always bake; scenes without any place them automatically where
+/// the probe volume saw enclosed open space, and reflections trace through them
+/// (`ARA_REFLECTION_CAPTURES=0` turns automatic placement off, for A/B captures).
 fn reflection_captures(captures: u32) -> Option<ReflectionCaptures> {
     Some(ReflectionCaptures {
         resolution: 512,
         captures,
-        automatic: std::env::var_os("ARA_REFLECTION_CAPTURES").is_some_and(|v| v == "1"),
+        automatic: std::env::var_os("ARA_REFLECTION_CAPTURES").is_none_or(|v| v != "0"),
     })
 }
 
 impl Plan {
-    /// Resolves a choice for a device and display size. Every preset is raster
-    /// unless `options` opts in to ray tracing on a capable device; then Medium and
-    /// above use the fidelity renderer (Low stays raster). Raster runs every preset
+    /// Resolves a choice for a device and display size. Every preset is raster, with
+    /// no ray queries, unless `options` opts in to ray tracing on a capable device;
+    /// then Medium and above use the fidelity renderer (Low stays raster). Raster runs every preset
     /// on every device, so nothing is downgraded.
     pub fn resolve(
         choice: QualityChoice,
@@ -515,12 +514,9 @@ impl Plan {
         };
         let preset = requested;
         let scaled = |scale: f32| display_size.map(|v| ((v as f32 * scale).round() as u32).max(1));
-        // D29: High/Epic add hardware ray queries only where the device has them.
+        // D29's hybrid ray queries trace only under the opt-in on an RT device.
         let quality = Quality {
-            ray_queries: preset
-                .raster_quality()
-                .ray_queries
-                .filter(|_| capabilities.ray_tracing),
+            ray_queries: preset.raster_quality().ray_queries.filter(|_| traced),
             ..preset.raster_quality()
         };
         let raster = RenderPath::Raster(RasterPlan {
@@ -695,7 +691,7 @@ mod tests {
     }
 
     #[test]
-    fn high_and_epic_add_ray_queries_only_on_rt_devices() {
+    fn ray_queries_never_run_without_the_opt_in() {
         let raster = Capabilities {
             ray_tracing: false,
             ..RT
@@ -712,7 +708,7 @@ mod tests {
                 }
                 RenderPath::Fidelity(_) => unreachable!("raster by default"),
             };
-            assert_eq!(hybrid(&RT), preset >= QualityPreset::High, "{preset}");
+            assert!(!hybrid(&RT), "{preset}");
             assert!(!hybrid(&raster), "{preset}");
         }
     }

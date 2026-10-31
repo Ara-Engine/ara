@@ -1,4 +1,4 @@
-//! Fifteen native PSOs are retained by the renderer across content generations.
+//! Seventeen native PSOs are retained by the renderer across content generations.
 use super::*;
 use ara_gpu::vulkan::{PipelinePreparation, PipelinePreparationId};
 
@@ -59,7 +59,7 @@ impl NativePipelines {
 }
 
 /// Cooked recipe names, in `NativePipelines` field order.
-const RECIPES: [&str; 15] = [
+const RECIPES: [&str; 17] = [
     "native_shadow",
     "native_gbuffer",
     "native_forward",

@@ -270,20 +270,26 @@ float gatheredLobes(Frame f,Look l,int2 p,float distance,out float3 diffuse,out 
 // ones, rgb and a confidence like screenReflection. Read only by the `rays` PSO
 // variant (lighting_high_rt), never behind a runtime test.
 float4 rtReflection(Look l,int2 p){return pixel(l.rtInfo[1].z,p);}
-// Screen-space reflection at full-resolution pixel `p`: rgb radiance, a confidence
-// (zero without a hit). Upsampled from half resolution with depth-similar weights.
-float4 screenReflection(Frame f,Look l,int2 p){
+// Traced reflection (look-ssr.slang: on screen, then through the captures) at
+// full-resolution pixel `p`: rgb radiance, a confidence (zero without a hit), and in
+// `captured` the share of it the captures resolved. Upsampled from half resolution
+// with depth-similar weights.
+float4 screenReflection(Frame f,Look l,int2 p,out float captured){
+    captured=0;
     if((l.flags.y&LOOK_REFLECTIONS)==0)return 0;
     int2 half=int2((f.extent.xy+1)/2);float2 h=(float2(p)+0.5)*0.5-0.5;int2 b=int2(floor(h));float2 t=h-float2(b);
-    float depth=pixel(f.extra.x,p).x;float4 sum=0,nearest=0;float total=0,best=1e30;
+    float depth=pixel(f.extra.x,p).x;float4 sum=0,nearest=0;float total=0,best=1e30,fromCaptures=0,nearestCaptured=0;
     for(uint k=0;k<4;k++){
         int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float d=pixel(f.extra.x,q*2).x;float dz=abs(d/max(depth,1e-7)-1);
         float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-dz*40);float4 r=pixel(l.ssrImages.y,q);
-        sum+=r*w;total+=w;if(dz<best){best=dz;nearest=r;}
+        // A negative confidence marks a result mostly from the captures.
+        float c=r.a<0?1:0;r.a=abs(r.a);
+        sum+=r*w;fromCaptures+=c*w;total+=w;if(dz<best){best=dz;nearest=r;nearestCaptured=c;}
     }
     // Volume intensity (look.ssr.w) scales the hit confidence; probes fill the rest.
-    float4 r=total>1e-3?sum/total:nearest;r.w*=l.ssr.w;return r;
+    float4 r=total>1e-3?sum/total:nearest;captured=total>1e-3?fromCaptures/total:nearestCaptured;r.w*=l.ssr.w;return r;
 }
+float4 screenReflection(Frame f,Look l,int2 p){float captured;return screenReflection(f,l,p,captured);}
 // The direction probe and sky reflections are looked up along for a lobe of
 // perceptual `roughness` at normal `n`, viewed from `v`: GGX's dominant direction
 // (Lagarde and de Rousiers 2014), the mirror direction pulled towards the normal as
@@ -296,14 +302,11 @@ float3 specularDirection(float3 n,float3 v,float roughness){
 // Ambient light: the physical sky's IBL under a sky atmosphere, otherwise the
 // environment map's (32x16 irradiance, five-level 256x640 GGX prefilter strip for
 // roughness 0, .25, .5, .75, 1). Inside the probe volume, probe irradiance replaces
-// the sky's diffuse light and occludes its reflections by the ratio of probe to
-// sky irradiance facing the normal (sky visibility: a cosine lobe around the mirror
-// direction would count the ground below the horizon at grazing views); rough
-// reflections blend towards the probes' irradiance lobe by GGX's alpha (roughness
-// squared): a cosine lobe stands in for a GGX lobe only as the lobe widens, and at
-// mid roughness it would average the ground into grazing reflections. Reflections
-// are looked up along specularDirection, the
-// lobe's dominant direction. Outside the volume, the heightfield's sky visibility
+// the sky's diffuse light and the probes' radiance cache its reflections: what the
+// nearby probes see along the reflection, parallax-corrected, blending into their
+// irradiance lobe as roughness grows (giLatticeLobes), so an enclosed floor reflects
+// its ceiling and walls, never the sky beyond them. Reflections are looked up along
+// specularDirection, the lobe's dominant direction. Outside the volume, the heightfield's sky visibility
 // (look-horizon.slangh) occludes the sky's light instead. Reflected light takes the
 // compensated specular albedo of specularLobes' `o` (the split sum, scaled for multiple
 // scattering like direct light), diffuse light its Lambert base, and ambient occlusion
@@ -317,18 +320,20 @@ float3 specularDirection(float3 n,float3 v,float roughness){
 // reflections composited over screen-space ones (rtReflection) instead.
 // `diffuseOnly`: the diffuse share alone (the gi_diffuse view, lighting_gi and
 // lighting_high_gi), a compile-time constant like `high`.
-float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false,bool diffuseOnly=false) {
+// `view` (a compile-time constant; the lighting_refl PSOs): 1 returns the reflected
+// light alone, 2 a colour per reflection source weighted by its share (REFLECTION_*).
+float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false,bool diffuseOnly=false,uint view=0) {
     // Material occlusion policy (dynamicOcclusion) for forward surfaces and ray hits,
     // which have no screen-space occlusion of their own; deferred pixels arrive with it.
     if(!gathered && dynamicOcclusion(l))s.ao=1;
     uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x,prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;
     float3 reflected=specularDirection(s.normal,v,s.roughness);float2 uv=environmentUv(reflected);float level=s.roughness*4;float low=floor(level);float upper=min(low+1,4);
-    float3 spec=lerp(envTex(prefilter,float2(uv.x,(uv.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(uv.x,(uv.y*127+0.5+upper*128)/640)).rgb,frac(level));
-    float3 ambient=envTex(irradiance,environmentUv(s.normal)).rgb;
+    float3 spec=lerp(envTex(prefilter,float2(uv.x,(uv.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(uv.x,(uv.y*127+0.5+upper*128)/640)).rgb,frac(level))*skyLight(l);
+    float3 ambient=envTex(irradiance,environmentUv(s.normal)).rgb*skyLight(l);
     float coverage=0;float3 diffuseGi=0,specularGi=0;
     [branch]if(giEnabled(l)){
         if(gathered)coverage=gatheredLobes(f,l,p,length(world-f.camera.xyz),diffuseGi,specularGi);
-        else coverage=giPoolLobes(l,l.giImages.y,world,s.normal,reflected,v,true,diffuseGi,specularGi);
+        else coverage=giPoolLobes(l,l.giImages.y,world,s.normal,reflected,v,s.roughness,true,diffuseGi,specularGi);
         coverage*=giWeight(l);
     }
     // Where the probe volume does not reach (and across its fade), distant
@@ -336,9 +341,8 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
     // Inside it the sky term weighs under 1%: the lookup is skipped.
     float sky=coverage<0.99?horizonSky(l,world):1;float3 ambientSky=ambient*sky,specSky=spec*sky;
     [branch]if(coverage>0){
-        float occlusion=saturate(luminance(diffuseGi)/max(luminance(ambient),1e-4));
         ambient=lerp(ambientSky,diffuseGi,coverage);
-        spec=lerp(specSky,lerp(spec*occlusion,specularGi/PI,s.roughness*s.roughness),coverage);
+        spec=lerp(specSky,specularGi,coverage);
     }else{ambient=ambientSky;spec=specSky;}
     // High/Epic: local reflection captures (look-captures.slangh) replace probe and
     // sky reflections where they cover; screen-space (or ray) reflections stay on
@@ -348,15 +352,15 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
     // forward surfaces every visible one. Debug modes (`ARA_CAPTURE_DEBUG`): `mirror`
     // returns the captures alone along every mirror direction; `only` drops SSR
     // where captures cover.
-    float4 r=0;
-    if(gathered)r=rays?rtReflection(l,p):screenReflection(f,l,p);
+    float4 r=0;float captured=0,boxed=0;
+    if(gathered)r=rays?rtReflection(l,p):screenReflection(f,l,p,captured);
     if(high){
         uint debug=l.captureInfo[1].w;
         [branch]if(r.a<0.999||debug!=0){
             uint mask=gathered?captureTileMask(f,l,p):l.captureInfo[1].z;
             float4 c=captureReflection(l,world,s.normal,v,(debug&CAPTURE_DEBUG_MIRROR)!=0?0:s.roughness,mask);
             if(!diffuseOnly&&(debug&CAPTURE_DEBUG_MIRROR)!=0)return c.rgb;
-            spec=lerp(spec,c.rgb,c.a);
+            spec=lerp(spec,c.rgb,c.a);boxed=c.a;
             // Under a capture, SSR's low-confidence fringe fades into it smoothly.
             if(!rays&&(debug&CAPTURE_DEBUG_ONLY)==0)r.a=lerp(r.a,smoothstep(0.2,0.9,r.a),c.a);
             if((debug&CAPTURE_DEBUG_ONLY)!=0)r.a*=1-c.a;
@@ -381,6 +385,15 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
         // cavities inter-reflect, so rough metals are not darkened twice (probe lobes
         // already see their surroundings, then ambient occlusion again).
         incident=ambient*multiBounce(s.ao,s.albedo);specular=lerp(spec*multiBounce(specularOcclusion(o.nv,s.ao,s.roughness),o.f0),r.rgb,gathered?r.a:0);
+    }
+    if(view==1)return specular*o.albedo;
+    if(view==2){
+        // Screen green, capture trace blue, box-projected captures cyan, probes
+        // orange, sky magenta; surfaces too rough to trace are dimmed.
+        float screen=r.a*(1-captured),traced=r.a*captured,rest=1-r.a,box=rest*boxed,probes=rest*(1-boxed)*coverage,sky=rest-box-probes;
+        float3 c=screen*float3(0.1,0.85,0.1)+traced*float3(0.15,0.35,1)+box*float3(0,0.8,0.8)+probes*float3(1,0.45,0)+sky*float3(0.9,0.15,0.8);
+        float shade=0.55+0.45*saturate(dot(s.normal,v));
+        return c*shade*(s.roughness<l.ssr.x||(l.flags.y&LOOK_REFLECTIONS)==0?1:0.25)/max(hdrExposure(f,l),1e-6);
     }
     return diffuseOnly?incident*o.diffuse:incident*o.diffuse+specular*o.albedo;
 }

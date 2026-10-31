@@ -81,7 +81,7 @@ void fogMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);if(any(tid.xy>=uint2(64,36)))return;
     float2 uv=(float2(tid.xy)+0.5)/float2(64,36);float3 d=viewRay(f,uv*float2(f.extent.xy)),integral=0,trans=1;float previous=0;
     bool physical=physicalSky(l),fog=(l.flags.y&LOOK_FOG)!=0;float3 albedo=l.atmosphere.w*l.fog.rgb;float g=l.fog.w;
-    float3 ambient=physical?float3(0):environmentAmbient(f);float3 sun=f.sunDirection.xyz;
+    float3 ambient=physical?float3(0):environmentAmbient(f)*skyLight(l);float3 sun=f.sunDirection.xyz;
     uint lights=f.extent.z;float cosine=dot(d,sun);
     for(uint z=0;z<32;z++){
         float end=2*(exp2(log2(1+FOG_RANGE/2)*float(z+1)/32)-1),ds=end-previous;

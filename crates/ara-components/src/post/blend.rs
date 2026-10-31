@@ -113,6 +113,9 @@ pub struct PostValues {
     pub max_ev100: f32,
     /// Automatic adaptation rate, per second.
     pub adaptation_speed: f32,
+    /// Compensation by metered brightness (`PostOverride::compensation_curve`);
+    /// empty adds none.
+    pub compensation_curve: Vec<super::ExposureKey>,
     /// Display transform.
     pub tone_mapping: ToneMapping,
     /// Bloom energy fraction.
@@ -165,6 +168,7 @@ impl Default for PostValues {
             min_ev100: -2.,
             max_ev100: 16.,
             adaptation_speed: 2.,
+            compensation_curve: Vec::new(),
             tone_mapping: ToneMapping::Filmic,
             bloom: 0.04,
             white_balance: 6500.,
@@ -204,6 +208,10 @@ impl PostValues {
                 mix(&mut self.min_ev100, o.min_ev100, w);
                 mix(&mut self.max_ev100, o.max_ev100, w);
                 mix(&mut self.adaptation_speed, o.adaptation_speed, w);
+                // A curve is picked whole, like the tone mapping: keys do not blend.
+                if let Some(curve) = &o.compensation_curve {
+                    self.compensation_curve.clone_from(curve);
+                }
             }
             PostModule::ToneMapping => pick(&mut self.tone_mapping, o.tone_mapping),
             PostModule::Bloom => mix(&mut self.bloom, o.bloom, w),

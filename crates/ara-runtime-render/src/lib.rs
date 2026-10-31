@@ -950,15 +950,27 @@ fn lights(frame: &RenderFrame) -> Vec<scene::Light> {
 /// Where [`camera`] looks from when the world has no camera.
 const OVERVIEW: [f32; 3] = [12.0, 10.0, 12.0];
 
-/// The frame's authored look as seen from [`camera`]: post-process volumes blend by
-/// that eye position.
+/// The frame's authored look as seen from [`camera`] ([`environment_at`] its eye).
 pub fn environment(frame: &RenderFrame) -> ara_render_fidelity::environment::FrameEnvironment {
     let eye = frame.camera.map_or(OVERVIEW, |c| c.position);
-    ara_render_fidelity::environment::FrameEnvironment::resolve(
-        &frame.look,
-        glam30::Vec3::from_array(eye),
-        frame.environment.exposure,
-    )
+    environment_at(frame, glam30::Vec3::from_array(eye))
+}
+
+/// The frame's authored look as seen from `eye` (an editor's Scene view camera):
+/// post-process volumes blend by that position; the sky light comes from the
+/// frame's `Environment`. Every view resolves its look here, so none misses a term.
+pub fn environment_at(
+    frame: &RenderFrame,
+    eye: glam30::Vec3,
+) -> ara_render_fidelity::environment::FrameEnvironment {
+    ara_render_fidelity::environment::FrameEnvironment {
+        sky_light: frame.environment.sky_light,
+        ..ara_render_fidelity::environment::FrameEnvironment::resolve(
+            &frame.look,
+            eye,
+            frame.environment.exposure,
+        )
+    }
 }
 
 /// Hands the raster renderer the colour lookup table `look` selects from `frame`'s
@@ -1005,22 +1017,27 @@ pub fn camera(frame: &RenderFrame) -> Result<CameraSpec> {
     })
 }
 
-/// A small equirectangular sky gradient (zenith, horizon, ground) in cd/m².
+/// A small equirectangular sky gradient in cd/m², graded as [`Environment`] documents
+/// (Unreal's sky-dome form: m = 1 − sin(elevation) blends zenith into horizon and
+/// shapes the additive glow band). 128 rows keep a narrow glow band resolved.
 pub fn sky(env: &Environment) -> ([u32; 2], Vec<[f32; 4]>) {
     const W: u32 = 64;
-    const H: u32 = 32;
+    const H: u32 = 128;
     let sky = Vec3::from_slice(&env.sky.0[..3]);
     let horizon = Vec3::from_slice(&env.horizon.0[..3]);
+    let glow = Vec3::from_slice(&env.glow.0[..3]);
     let ground = Vec3::from_slice(&env.ground.0[..3]);
+    let at_horizon = horizon + glow;
     let mut pixels = Vec::with_capacity((W * H) as usize);
     for y in 0..H {
         let elevation =
             std::f32::consts::FRAC_PI_2 - (y as f32 + 0.5) / H as f32 * std::f32::consts::PI;
         let s = elevation.sin();
         let c = if s >= 0.0 {
-            horizon.lerp(sky, s.powf(0.6))
+            let m = 1.0 - s;
+            sky.lerp(horizon, m.powf(env.sky_falloff)) + glow * m.powf(env.glow_falloff)
         } else {
-            horizon.lerp(ground, (-s * 4.0).min(1.0))
+            at_horizon.lerp(ground, (-s * 4.0).min(1.0))
         } * env.intensity;
         for _ in 0..W {
             pixels.push([c.x.max(0.0), c.y.max(0.0), c.z.max(0.0), 1.0]);

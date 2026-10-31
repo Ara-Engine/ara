@@ -71,7 +71,7 @@ pub(super) struct Groups {
     pub geometry_instances: Vec<Vec<usize>>,
     pub material_instances: Vec<Vec<usize>>,
     pub batches: usize,
-    identities: Vec<(u64, usize, usize)>,
+    identities: Vec<(u64, usize, usize, bool)>,
 }
 impl Groups {
     pub(super) fn new(scene: &NativeScene, pool: &GeometryGpu) -> Result<Self> {

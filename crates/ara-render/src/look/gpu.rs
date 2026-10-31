@@ -194,7 +194,7 @@ pub(crate) struct LookIds {
     /// The colour lookup table (host-written between frames).
     pub lut: ResourceId,
     /// Surface caches, meta, moments, irradiance read and irradiance write.
-    pub gi: Option<[ResourceId; 5]>,
+    pub gi: Option<[ResourceId; 6]>,
     /// The far shadow map.
     pub far: Option<ResourceId>,
     /// The cascade maps, in cascade order.
@@ -637,6 +637,7 @@ impl LookGpu {
                         Resource::Image(gi.irradiance[write]),
                         state(gi.access[write]),
                     ),
+                    graph.import(Resource::Image(gi.radiance), state(gi.radiance_access)),
                 ]
             }),
         }
@@ -657,6 +658,7 @@ impl LookGpu {
             let (read, write) = (1 - gi.slot, gi.slot);
             gi.access[read] = final_states[ids[3].0].access;
             gi.access[write] = final_states[ids[4].0].access;
+            gi.radiance_access = final_states[ids[5].0].access;
         }
         if let (Some(far), Some(id)) = (&mut self.far, ids.far) {
             far.state = final_states[id.0];

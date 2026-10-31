@@ -16,6 +16,7 @@ pub(crate) mod horizon;
 mod lens;
 pub(crate) mod local;
 pub(crate) mod passes;
+pub mod placement;
 pub(crate) mod refract;
 pub(crate) mod translucent;
 pub(crate) mod vsm;
@@ -86,7 +87,8 @@ pub struct Quality {
     /// Motion blur where a look asks for it (the post pass's motion variant; needs the
     /// native renderer's motion vectors); `None` ignores looks' shutter.
     pub motion_blur: Option<MotionBlurQuality>,
-    /// Hardware ray queries of the hybrid High/Epic path (D29; `renderer::rt`):
+    /// Hardware ray queries of the hybrid path (D29; `renderer::rt`), set only under
+    /// the ray-tracing opt-in:
     /// deterministic mirror and glossy reflections below a roughness cut, which
     /// replace screen-space reflections there. They run only on native content on
     /// devices with ray queries; other devices keep the raster path of the same
@@ -348,6 +350,10 @@ pub struct Look {
     pub ao: AoTuning,
     /// Screen-space reflection strength and reach (where the quality runs them).
     pub ssr: SsrTuning,
+    /// Scale of the light the sky casts into the scene (its ambient light,
+    /// reflections, probe bounce and fog ambient) relative to the sky drawn in the
+    /// background; 1 is physical. Unreal's sky light intensity.
+    pub sky_light: f32,
 }
 impl Default for Look {
     fn default() -> Self {
@@ -361,6 +367,7 @@ impl Default for Look {
             lens: Lens::default(),
             ao: AoTuning::default(),
             ssr: SsrTuning::default(),
+            sky_light: 1.,
         }
     }
 }
@@ -380,6 +387,30 @@ pub struct AutoExposure {
     pub compensation: f32,
     /// Adaptation rate in inverse seconds (frames are taken as 1/60 s).
     pub adaptation: f32,
+    /// Extra compensation by the metered scene EV100 (Unreal's exposure compensation
+    /// curve): (EV100, stops) keys in rising EV order, linear between them and flat
+    /// beyond the ends. Build it with [`AutoExposure::curve`]; all zero adds none.
+    pub compensation_curve: [[f32; 2]; EXPOSURE_CURVE_KEYS],
+}
+/// Keys an exposure compensation curve holds ([`AutoExposure::compensation_curve`]).
+pub const EXPOSURE_CURVE_KEYS: usize = 8;
+impl AutoExposure {
+    /// A compensation curve from (EV100, stops) keys in any order: sorted, the first
+    /// [`EXPOSURE_CURVE_KEYS`] kept, the rest of the table repeating the last key.
+    pub fn curve(keys: &[[f32; 2]]) -> [[f32; 2]; EXPOSURE_CURVE_KEYS] {
+        let mut sorted: Vec<[f32; 2]> = keys
+            .iter()
+            .copied()
+            .filter(|k| k[0].is_finite() && k[1].is_finite())
+            .collect();
+        sorted.sort_by(|a, b| a[0].total_cmp(&b[0]));
+        let last = sorted.get(EXPOSURE_CURVE_KEYS.min(sorted.len()).wrapping_sub(1));
+        let mut table = [last.copied().unwrap_or([0.; 2]); EXPOSURE_CURVE_KEYS];
+        for (slot, key) in table.iter_mut().zip(&sorted) {
+            *slot = *key;
+        }
+        table
+    }
 }
 impl Default for AutoExposure {
     fn default() -> Self {
@@ -390,6 +421,7 @@ impl Default for AutoExposure {
             high_percentile: 0.95,
             compensation: 0.,
             adaptation: 2.,
+            compensation_curve: [[0.; 2]; EXPOSURE_CURVE_KEYS],
         }
     }
 }
@@ -493,6 +525,8 @@ impl Look {
         let g = &self.grading;
         anyhow::ensure!(
             (0.0..=0.25).contains(&self.bloom)
+                && self.sky_light.is_finite()
+                && self.sky_light >= 0.
                 && finite(&g.white_balance_gain)
                 && g.white_balance_gain.iter().all(|x| *x >= 0.)
                 && (0.25..=4.0).contains(&g.contrast)
@@ -502,7 +536,7 @@ impl Look {
                 && finite(&g.gain)
                 && (0.0..=1.0).contains(&g.lut_contribution)
                 && g.gamma.iter().all(|x| x.is_finite() && *x > 0.),
-            "Invalid look grading or bloom"
+            "Invalid look grading, bloom or sky light"
         );
         self.lens.validate(&self.ao, &self.ssr)?;
         if let Some(a) = self.auto_exposure {
@@ -513,7 +547,9 @@ impl Look {
                     && a.low_percentile < a.high_percentile
                     && a.high_percentile <= 1.
                     && a.adaptation > 0.
-                    && a.adaptation.is_finite(),
+                    && a.adaptation.is_finite()
+                    && a.compensation_curve.iter().flatten().all(|v| v.is_finite())
+                    && a.compensation_curve.windows(2).all(|k| k[0][0] <= k[1][0]),
                 "Invalid automatic exposure"
             );
         }

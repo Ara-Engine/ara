@@ -158,8 +158,8 @@ bool rtTrace(Frame f,Look l,float3 origin,float3 direction,float tmax,out RtHit 
             hit.barycentrics=q.CommittedTriangleBarycentrics();hit.front=q.CommittedTriangleFrontFace();hit.objectToWorld=q.CommittedObjectToWorld3x4();found=true;ray.TMax=hit.distance;
         }
     }
-    if((mask&RT_MASKED)!=0 && (l.rtInfo[1].w&RT_HAS_MASKED)!=0){
-        RayQuery<RAY_FLAG_NONE> q;q.TraceRayInline(acceleration[l.rtInfo[0].x],RAY_FLAG_FORCE_NON_OPAQUE,RT_MASKED,ray);
+    if(cutout!=0 && (l.rtInfo[1].w&RT_HAS_MASKED)!=0){
+        RayQuery<RAY_FLAG_NONE> q;q.TraceRayInline(acceleration[l.rtInfo[0].x],RAY_FLAG_FORCE_NON_OPAQUE,cutout,ray);
         while(q.Proceed()){
             if(q.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE
                 && rtAlphaAccept(l,q.CandidateInstanceID(),q.CandidatePrimitiveIndex(),q.CandidateTriangleBarycentrics(),q.CandidateTriangleRayT()*spread))

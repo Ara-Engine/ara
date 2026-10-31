@@ -354,6 +354,9 @@ pub(crate) const MENUS: &[Menu] = &[
                     C("view.debug.shadows"),
                     C("view.debug.temporal_jitter"),
                     S,
+                    C("view.debug.reflections"),
+                    C("view.debug.reflection_sources"),
+                    S,
                     C("view.debug.full_resolution"),
                     S,
                     C("view.debug.reset"),
@@ -896,6 +899,8 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("view.debug.ambient_occlusion"),
             C("view.debug.shadows"),
             C("view.debug.temporal_jitter"),
+            C("view.debug.reflections"),
+            C("view.debug.reflection_sources"),
             C("view.debug.full_resolution"),
         ],
         Context::HierarchyFilter => &[

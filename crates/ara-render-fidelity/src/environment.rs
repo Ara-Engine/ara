@@ -30,6 +30,9 @@ pub struct FrameEnvironment {
     pub adaptation: f32,
     /// Automatic metering limits.
     pub auto_exposure: AutoExposure,
+    /// Automatic exposure's compensation by metered brightness (raster renderer,
+    /// `ara_render::look::AutoExposure::compensation_curve`); all zero adds none.
+    pub compensation_curve: [[f32; 2]; ara_render::look::EXPOSURE_CURVE_KEYS],
     /// Display curve.
     pub tone_mapper: ToneMapper,
     /// Bloom energy fraction.
@@ -49,6 +52,10 @@ pub struct FrameEnvironment {
     pub lut: Option<u32>,
     /// Share of that table applied, from zero to one.
     pub lut_contribution: f32,
+    /// Scale of the sky's light (ambient, reflections, probe bounce) over the sky
+    /// drawn (raster renderer, `Look::sky_light`): `Environment.skyLight`, which
+    /// `resolve` leaves at 1 for the caller to set.
+    pub sky_light: f32,
 }
 
 impl FrameEnvironment {
@@ -91,6 +98,7 @@ impl FrameEnvironment {
                 compensation: 0.,
                 adaptation: 2.,
                 auto_exposure: AutoExposure::default(),
+                compensation_curve: [[0.; 2]; ara_render::look::EXPOSURE_CURVE_KEYS],
                 tone_mapper: ToneMapper::Filmic,
                 bloom: 0.04,
                 grading: Grading::default(),
@@ -100,6 +108,7 @@ impl FrameEnvironment {
                 ssr: Default::default(),
                 lut: None,
                 lut_contribution: 0.,
+                sky_light: 1.,
             };
         };
         let (low, high) = (p.min_ev100.min(p.max_ev100), p.min_ev100.max(p.max_ev100));
@@ -116,6 +125,12 @@ impl FrameEnvironment {
                 maximum_ev100: high.min(32.).max(low.max(-24.) + 0.01),
                 ..AutoExposure::default()
             },
+            compensation_curve: ara_render::look::AutoExposure::curve(
+                &p.compensation_curve
+                    .iter()
+                    .map(|k| [k.ev100, k.stops])
+                    .collect::<Vec<_>>(),
+            ),
             tone_mapper: match p.tone_mapping {
                 ToneMapping::Filmic => ToneMapper::Filmic,
                 ToneMapping::Neutral => ToneMapper::PbrNeutral,
@@ -153,6 +168,7 @@ impl FrameEnvironment {
                 u32::try_from(index).ok()
             }),
             lut_contribution: p.lut_contribution.clamp(0., 1.),
+            sky_light: 1.,
         }
     }
 
@@ -234,6 +250,7 @@ impl FrameEnvironment {
                 high_percentile: a.high_percentile,
                 compensation: self.compensation,
                 adaptation: self.adaptation,
+                compensation_curve: self.compensation_curve,
             }),
             bloom: self.bloom,
             grading: RasterGrading {
@@ -253,6 +270,7 @@ impl FrameEnvironment {
             lens: self.lens,
             ao: self.ao,
             ssr: self.ssr,
+            sky_light: self.sky_light,
             sky: self.atmosphere.filter(|a| a.physical_sky).map(|a| Sky {
                 sea_level: a.sea_level,
                 aerosols: a.aerosols,

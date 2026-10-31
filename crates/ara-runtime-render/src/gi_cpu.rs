@@ -9,8 +9,9 @@
 //! An edit only moves, adds or drops instances ([`Tracer::adopt`],
 //! [`Tracer::edit`]) and re-traces the probes it can change ([`affected`],
 //! [`rebake`]). Deforming (skinned) geometry and dynamic entities never enter the
-//! surfaces. Materials use their factors times each map's mean texel;
-//! alpha-tested surfaces count as opaque.
+//! surfaces. Materials use their factors times each map's mean texel, bouncing
+//! with [`bounce_albedo`]; alpha-tested and blended surfaces let rays through by the
+//! [`Cutout`] texel each hit lands on.
 use anyhow::{Context, Result, ensure};
 use ara_render::{
     instanced::{Geometry, Scene},
@@ -18,7 +19,10 @@ use ara_render::{
 };
 use ara_render_fidelity::probes::ProbeVolume;
 use glam30::{Mat3, Mat4, Vec2, Vec3};
-use std::collections::{BTreeSet, HashMap};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::Arc,
+};
 
 /// Longest probe ray, matching the GPU bake.
 const RANGE: f32 = 200.;
@@ -39,15 +43,66 @@ fn worker_threads() -> usize {
     std::thread::available_parallelism().map_or(2, |n| (n.get() / 2).max(1))
 }
 
-/// Diffuse albedo (metal removed), emissive radiance and the share of rays an
-/// alpha-tested or blended surface lets through.
-#[derive(Clone, Copy, Default, PartialEq)]
+/// Bounce albedo ([`bounce_albedo`]), emissive radiance and what an alpha-tested or
+/// blended surface lets through.
+#[derive(Clone, Default, PartialEq)]
 pub(crate) struct Shading {
     pub albedo: Vec3,
     pub emissive: Vec3,
-    /// Share of rays passing through, as the ray-traced bake's any-hit test
-    /// (alpha mask coverage, or one minus blend alpha); 0 is opaque.
-    pub cutout: f32,
+    /// The rays passing through, texel by texel; `None` is opaque.
+    pub cutout: Option<Arc<Cutout>>,
+}
+
+/// The share of rays an alpha-tested or blended surface lets through at each texel of
+/// its base colour (texture coordinates wrap), decided at the hit's own texel as the
+/// ray-traced bake's any-hit test (`nativeAccept`) does: all of them below an alpha
+/// test's cutoff, one minus alpha where blended. A material-wide mean share instead
+/// let every solid panel of a masked wall atlas leak the sky into the probes.
+#[derive(Debug, PartialEq)]
+pub(crate) struct Cutout {
+    size: [u32; 2],
+    /// Row-major shares in 255ths.
+    share: Vec<u8>,
+}
+
+impl Cutout {
+    /// From row-major texel shares in 0..=1; `None` when no texel lets a ray through.
+    pub(crate) fn new(size: [u32; 2], shares: impl IntoIterator<Item = f32>) -> Option<Self> {
+        let share: Vec<u8> = shares
+            .into_iter()
+            .map(|s| (s.clamp(0., 1.) * 255.).round() as u8)
+            .collect();
+        (size[0] > 0
+            && size[1] > 0
+            && share.len() == size[0] as usize * size[1] as usize
+            && share.iter().any(|&s| s > 0))
+        .then_some(Self { size, share })
+    }
+
+    /// The share at texture coordinate `uv` (nearest texel).
+    fn at(&self, uv: Vec2) -> f32 {
+        let [w, h] = self.size;
+        let texel = |t: f32, n: u32| ((t.rem_euclid(1.) * n as f32) as u32).min(n - 1) as usize;
+        f32::from(self.share[texel(uv.y, h) * w as usize + texel(uv.x, w)]) / 255.
+    }
+}
+
+/// The albedo a probe hit bounces light with: the diffuse share plus its specular
+/// lobe's directional albedo at its roughness, seen from 60 degrees (Karis's
+/// `EnvBRDFApprox`), so metals pass on the light they reflect. At roughness 1 it
+/// is Unreal's `EnvBRDFApproxFullyRough` (0.45 F0, as Lumen's surface cache stores
+/// every surface); smoother metals keep up to about 0.9 F0 instead of losing half.
+/// `probe-surfaces.slang` bakes the same.
+pub(crate) fn bounce_albedo(base: Vec3, metal: f32, roughness: f32) -> Vec3 {
+    let r = roughness.clamp(0., 1.);
+    let (x, y) = (1. - r, 0.0425 - 0.0275 * r);
+    let a004 = (x * x).min((-9.28f32 * 0.5).exp2()) * x + y;
+    let (scale, bias) = (
+        1.04 - 0.572 * r - 1.04 * a004,
+        1.04 * a004 - 0.04 + 0.022 * r,
+    );
+    let f0 = Vec3::splat(0.04).lerp(base, metal);
+    (base * (1. - metal) + f0 * scale + Vec3::splat(bias)).max(Vec3::ZERO)
 }
 
 /// Whether the ray `seed` passes a triangle of a surface with `cutout`: a
@@ -289,12 +344,29 @@ fn traverse(
 pub(crate) struct Mesh {
     nodes: Vec<Node>,
     triangles: Vec<Triangle>,
+    /// Each triangle's corner texture coordinates (set zero), read only for hits on
+    /// cut-out surfaces, so traversal never loads them.
+    uvs: Vec<[Vec2; 3]>,
 }
 
 impl Mesh {
-    fn new(mut triangles: Vec<Triangle>) -> Self {
-        let nodes = build(&mut triangles, Triangle::bounds, LEAF);
-        Self { nodes, triangles }
+    fn new(triangles: Vec<Triangle>) -> Self {
+        Self::with_uvs(
+            triangles
+                .into_iter()
+                .map(|t| (t, [Vec2::ZERO; 3]))
+                .collect(),
+        )
+    }
+
+    fn with_uvs(mut triangles: Vec<(Triangle, [Vec2; 3])>) -> Self {
+        let nodes = build(&mut triangles, |(t, _)| t.bounds(), LEAF);
+        let (triangles, uvs) = triangles.into_iter().unzip();
+        Self {
+            nodes,
+            triangles,
+            uvs,
+        }
     }
 
     /// The geometry's triangles at LOD `level` (or its coarsest).
@@ -328,7 +400,7 @@ impl Mesh {
                 normal = -normal;
             }
             let splat = [a, b, c].map(|v| v.terrain_weights.to_le_bytes());
-            triangles.push(Triangle {
+            let triangle = Triangle {
                 a: pa,
                 e1,
                 e2,
@@ -336,9 +408,10 @@ impl Mesh {
                 weights: std::array::from_fn(|i| {
                     (splat.iter().map(|w| u32::from(w[i])).sum::<u32>() / 3) as u8
                 }),
-            });
+            };
+            triangles.push((triangle, [a, b, c].map(|v| Vec2::from_array(v.uv))));
         }
-        Self::new(triangles)
+        Self::with_uvs(triangles)
     }
 
     /// Model bounds (empty when the mesh has no triangles).
@@ -355,17 +428,17 @@ impl Mesh {
         direction: Vec3,
         limit: f32,
     ) -> Option<(f32, Vec3, [u8; 4])> {
-        self.trace_cut(origin, direction, limit, 0., 0)
+        self.trace_cut(origin, direction, limit, None, 0)
     }
 
-    /// [`Self::trace`] through a surface with `cutout`: the ray `seed` passes the
-    /// triangles [`passes`] picks.
+    /// [`Self::trace`] through a surface with `cutout`: the ray `seed` passes each
+    /// hit as [`passes`] picks with the share at the hit's texel.
     fn trace_cut(
         &self,
         origin: Vec3,
         direction: Vec3,
         limit: f32,
-        cutout: f32,
+        cutout: Option<&Cutout>,
         seed: u32,
     ) -> Option<(f32, Vec3, [u8; 4])> {
         let mut normal = None;
@@ -397,7 +470,11 @@ impl Mesh {
                         continue;
                     }
                     let d = t.e2.dot(q) * inv;
-                    if d > 0.001 && d < limit && !passes(cutout, seed, index) {
+                    let through = |cutout: &Cutout| {
+                        let [a, b, c] = self.uvs[index as usize];
+                        passes(cutout.at(a + (b - a) * u + (c - a) * v), seed, index)
+                    };
+                    if d > 0.001 && d < limit && !cutout.is_some_and(through) {
                         limit = d;
                         closest = Some(d);
                         normal = Some((t.normal, t.weights));
@@ -598,7 +675,7 @@ impl Tracer {
                 world: Mat4::IDENTITY,
                 inverse: Mat4::IDENTITY,
                 normal: Mat3::IDENTITY,
-                shading: shading.get(instance.material).copied().unwrap_or_default(),
+                shading: shading.get(instance.material).cloned().unwrap_or_default(),
                 layers,
                 local,
                 bounds: EMPTY,
@@ -749,7 +826,7 @@ impl Tracer {
                     );
                     let mesh = &self.meshes[placed.mesh];
                     if let Some((t, n, w)) =
-                        mesh.trace_cut(o, d, limit, placed.shading.cutout, seed)
+                        mesh.trace_cut(o, d, limit, placed.shading.cutout.as_deref(), seed)
                     {
                         limit = t;
                         closest = Some(t);
@@ -764,7 +841,8 @@ impl Tracer {
             normal: (placed.normal * n).normalize_or_zero(),
             shading: Shading {
                 albedo: placed.layers.map_or(placed.shading.albedo, |l| l.albedo(w)),
-                ..placed.shading
+                emissive: placed.shading.emissive,
+                cutout: None,
             },
         })
     }
@@ -814,11 +892,15 @@ const MARGIN: f32 = 6.;
 /// single lattice's.
 const FINER: f32 = 0.5;
 
+/// Version of what a probe texel records (bump when the bake's shading changes,
+/// such as [`bounce_albedo`]).
+const SURFACE_VERSION: u32 = 4;
+
 /// The lattice rule's identity, part of the probe cache's file names
 /// (`gi.rs`): any change to the constants above misses older bakes.
 pub(crate) fn lattice_rule() -> String {
     format!(
-        "pool-p{PROBES}-f{FINE_PROBES}-l{LANDFORM_RADIUS}-g{CELL}-d{DENSITY}-m{MARGIN}-r{FINER}"
+        "s{SURFACE_VERSION}-pool-p{PROBES}-f{FINE_PROBES}-l{LANDFORM_RADIUS}-g{CELL}-d{DENSITY}-m{MARGIN}-r{FINER}"
     )
 }
 
@@ -1271,7 +1353,7 @@ mod tests {
             let (lo, hi) = tracer.bounds().context("static triangles")?;
             Ok(lattice(&ProbeVolume::automatic_within(lo, hi, PROBES)?))
         };
-        let shading = [Shading::default(); 2];
+        let shading = [Shading::default(), Shading::default()];
         let open = scene(vec![geometry(1, &[ground], Vec3::Y)]);
         let tracer = Tracer::new(&open, &shading, &BTreeSet::new());
         assert_eq!(layout(&tracer)?.lattices(), [single(&tracer)?]);
@@ -1443,7 +1525,7 @@ mod tests {
         ]);
         let through = |cutout: f32| {
             let canopy = Shading {
-                cutout,
+                cutout: Cutout::new([1, 1], [cutout]).map(Arc::new),
                 ..Shading::default()
             };
             let tracer = Tracer::new(&scene, &[Shading::default(), canopy], &BTreeSet::new());
@@ -1460,6 +1542,43 @@ mod tests {
         assert_eq!(through(1.), 1000);
         let half = through(0.5);
         assert!((400..600).contains(&half), "{half}");
+    }
+
+    #[test]
+    fn rays_pass_cut_out_surfaces_at_the_texel_they_hit() -> Result<()> {
+        // A unit quad whose texture's left half is cut out: every ray through that
+        // half passes, and the solid half stops every one (no mean share leaks).
+        let q = [
+            Vec3::ZERO,
+            Vec3::new(1., 0., 0.),
+            Vec3::new(1., 0., 1.),
+            Vec3::new(0., 0., 1.),
+        ];
+        let uv = |p: Vec3| Vec2::new(p.x, p.z);
+        let mesh = Mesh::with_uvs(
+            [(q[1], q[2]), (q[2], q[3])]
+                .map(|(b, c)| {
+                    let triangle = Triangle {
+                        a: q[0],
+                        e1: b - q[0],
+                        e2: c - q[0],
+                        normal: Vec3::Y,
+                        weights: [0; 4],
+                    };
+                    (triangle, [uv(q[0]), uv(b), uv(c)])
+                })
+                .into(),
+        );
+        let cutout = Cutout::new([2, 1], [1., 0.]).context("half the texels pass")?;
+        for i in 0..100 {
+            let x = (i as f32 + 0.5) / 100.;
+            let at = Vec3::new(x, 1., 0.1 + 0.8 * (i % 9) as f32 / 8.);
+            let hit = mesh
+                .trace_cut(at, Vec3::NEG_Y, RANGE, Some(&cutout), i)
+                .is_some();
+            assert_eq!(hit, x > 0.5, "x {x}");
+        }
+        Ok(())
     }
 
     #[test]

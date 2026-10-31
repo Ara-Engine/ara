@@ -460,6 +460,9 @@ impl Renderer {
             && self.targets.history.is_some()
         {
             look_frame.flags[1] |= crate::look::frame::REFLECTIONS;
+            if self.debug.reflections == super::ReflectionView::Sources {
+                look_frame.flags[1] |= crate::look::frame::REFLECTION_SOURCES;
+            }
             let ssr = self.look.look.ssr;
             look_frame.ssr = [
                 r.max_roughness,
@@ -1514,9 +1517,12 @@ impl Renderer {
                         // Frames that trace bind the variant reading their reflections;
                         // the gi_diffuse view reads none.
                         let high = self.look.quality.high_tier;
+                        let reflections = self.debug.reflections != super::ReflectionView::Lit;
                         let lighting = match self.rays.lighting() {
                             _ if gi_diffuse && high => self.pipelines.lighting_high_gi,
                             _ if gi_diffuse => self.pipelines.lighting_gi,
+                            _ if reflections && high => self.pipelines.lighting_high_refl,
+                            _ if reflections => self.pipelines.lighting_refl,
                             Some(rays) => rays,
                             None if high => self.pipelines.lighting_high,
                             None => self.pipelines.lighting,
@@ -1653,10 +1659,11 @@ impl Renderer {
                         &mut recorder,
                         look_pass,
                         self.frames(),
-                        // The reflection pyramid reads last frame's history; post passes
-                        // read this frame's.
+                        // The reflection pyramid and trace read last frame's history (the
+                        // trace samples it as the sharpest level); post passes read this
+                        // frame's.
                         match look_pass {
-                            LookPass::SsrPyramid(_) => {
+                            LookPass::SsrPyramid(_) | LookPass::SsrTrace => {
                                 self.targets.history.map_or(0, |h| self.targets.sampled[h])
                             }
                             LookPass::Dof(_) => self.targets.sampled[HDR],

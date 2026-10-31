@@ -181,6 +181,9 @@ impl Default for Light {
 }
 
 /// Procedural sky radiance and camera exposure. The first in stable-ID order wins.
+/// Above the horizon the sky is `lerp(sky, horizon, m^skyFalloff) + glow × m^glowFalloff`
+/// with m = 1 − sin(elevation), as Unreal's sky-dome materials grade it; below it
+/// fades to `ground` within 15°.
 #[derive(Debug, Clone, Copy, PartialEq, Component, Schema, Serialize, Deserialize)]
 #[ara(component, module = "render")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
@@ -188,15 +191,32 @@ pub struct Environment {
     /// Zenith sky color (linear).
     #[ara(default = [0.22, 0.32, 0.6, 1])]
     pub sky: Color,
-    /// Horizon sky color (linear).
+    /// Sky color at the horizon (linear).
     #[ara(default = [0.95, 0.62, 0.4, 1])]
     pub horizon: Color,
+    /// How quickly the zenith color gives way to the horizon color toward the horizon:
+    /// higher keeps the zenith color lower down.
+    #[ara(default = 3, range(min = 0.1, max = 64))]
+    pub sky_falloff: f32,
+    /// Extra light added in a band just above the horizon (linear; black for none),
+    /// such as a sunset glow.
+    #[ara(default = [0, 0, 0, 1])]
+    pub glow: Color,
+    /// Narrowness of the `glow` band: higher hugs the horizon more tightly.
+    #[ara(default = 10, range(min = 0.1, max = 64))]
+    pub glow_falloff: f32,
     /// Ground color seen below the horizon (linear).
     #[ara(default = [0.18, 0.16, 0.14, 1])]
     pub ground: Color,
     /// Sky radiance scale in candela per square metre.
     #[ara(default = 900, unit = Candela, range(min = 0))]
     pub intensity: f32,
+    /// How strongly the sky lights the scene (ambient light, reflections, bounce
+    /// and fog) relative to how bright it looks; 1 is physical. Lower it to calm
+    /// sky fill indoors without dimming the sky itself (Unreal's sky light
+    /// intensity).
+    #[ara(default = 1, range(min = 0, max = 16))]
+    pub sky_light: f32,
     /// Linear camera exposure multiplier, applied before tone mapping.
     #[ara(default = 0.0015, range(min = 0.0000001))]
     pub exposure: f32,
@@ -206,8 +226,12 @@ impl Default for Environment {
         Self {
             sky: Color([0.22, 0.32, 0.6, 1.0]),
             horizon: Color([0.95, 0.62, 0.4, 1.0]),
+            sky_falloff: 3.0,
+            glow: Color([0.0, 0.0, 0.0, 1.0]),
+            glow_falloff: 10.0,
             ground: Color([0.18, 0.16, 0.14, 1.0]),
             intensity: 900.0,
+            sky_light: 1.0,
             exposure: 0.0015,
         }
     }

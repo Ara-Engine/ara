@@ -69,6 +69,11 @@ pub struct CaptureArgs {
     /// Render at display resolution instead of the preset's upscaled scale.
     #[arg(long)]
     full_resolution: bool,
+    /// Reflection debug view: `reflections` (the reflected light alone) or `sources`
+    /// (where each pixel's reflection comes from: on-screen trace green, capture
+    /// trace blue, box-projected captures cyan, probes orange, sky magenta).
+    #[arg(long, value_parser = ["reflections", "sources"])]
+    reflections: Option<String>,
     /// Measure flicker: settle this many live frames, then report how much they change.
     #[arg(long)]
     stability: Option<u32>,
@@ -90,16 +95,20 @@ impl CaptureArgs {
             "path":self.path,"width":self.width,"height":self.height,"preset":self.preset,
             "ticks":self.ticks,"seed":self.seed,"marks":self.marks,"stability":self.stability,
             "video":self.video,"videoMove":self.video_move,"videoYaw":self.video_yaw,
-            "renderDebug":render_debug(&self.without, self.full_resolution)})),
+            "renderDebug":render_debug(&self.without, self.full_resolution, self.reflections.as_deref())})),
             summary: protocol::pretty,
         }
     }
 }
 
-/// `capture`'s `renderDebug` for `--without` and `--full-resolution`; omitted when
-/// every effect stays at its default.
-fn render_debug(without: &[String], full_resolution: bool) -> serde_json::Value {
-    if without.is_empty() && !full_resolution {
+/// `capture`'s `renderDebug` for `--without`, `--full-resolution` and
+/// `--reflections`; omitted when every effect stays at its default.
+fn render_debug(
+    without: &[String],
+    full_resolution: bool,
+    reflections: Option<&str>,
+) -> serde_json::Value {
+    if without.is_empty() && !full_resolution && reflections.is_none() {
         return serde_json::Value::Null;
     }
     let on = |name: &str| !without.iter().any(|w| w == name);
@@ -108,5 +117,6 @@ fn render_debug(without: &[String], full_resolution: bool) -> serde_json::Value 
         "shadows": on("shadows"),
         "temporalJitter": on("temporal-jitter"),
         "fullResolution": full_resolution,
+        "reflections": reflections.unwrap_or("lit"),
     })
 }
