@@ -27,8 +27,24 @@ enum RasterWork {
     Capture(u32),
     Prepare,
 }
+/// The camera and gizmo pose a Scene frame was rendered with (`SceneView::shown_frame`):
+/// overlays draw with the frame on screen, so gizmos never drift from the image while
+/// Scene frames lag the camera.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct FrameView {
+    pub camera: crate::state::Camera,
+    /// The gizmo drag offset of that frame (`GizmoState::offset`).
+    pub offset: glam::Mat4,
+    /// The document revision of that frame: a drag committed since moved the pivot
+    /// itself, so its offset no longer applies.
+    pub revision: u64,
+}
 #[derive(Default)]
 pub(super) struct SceneView {
+    /// Recent submitted frames by tag (`Renderer::set_frame_tag`), oldest first.
+    frames: std::collections::VecDeque<(u64, FrameView)>,
+    /// The live gizmo drag offset for the next frames, set by the main loop.
+    pub(super) gizmo_offset: glam::Mat4,
     raster: Option<ara_runtime_render::RasterView>,
     raster_frame: Option<ara_runtime::extract::RenderFrame>,
     raster_snapshot_dirty: bool,
@@ -694,6 +710,20 @@ impl SceneView {
                 view_mode(&editor.state.view_mode),
             )?;
         }
+        // Tag the frame with its camera and gizmo pose (`shown_frame`).
+        let tag = self.frames.back().map_or(1, |(tag, _)| tag + 1);
+        renderer.set_frame_tag(tag);
+        self.frames.push_back((
+            tag,
+            FrameView {
+                camera: editor.state.camera,
+                offset: self.gizmo_offset,
+                revision: editor.host.store().revision(),
+            },
+        ));
+        while self.frames.len() > 8 {
+            self.frames.pop_front();
+        }
         for _ in 0..settle.max(1) {
             raster.render(
                 renderer,
@@ -893,6 +923,23 @@ impl SceneView {
         PresentationImage::publish(&mut self.published, renderer.gpu_mut(), f.output(), size)?;
         self.revision = Some(revision);
         Ok(())
+    }
+    /// The camera and gizmo pose of the frame on screen, if it is a recent raster frame.
+    pub fn shown_frame(&self, renderer: &Renderer) -> Option<FrameView> {
+        let tag = renderer.shown_frame_tag();
+        self.frames
+            .iter()
+            .rev()
+            .find(|(t, _)| *t == tag)
+            .map(|(_, view)| *view)
+    }
+    /// Whether the raster Scene draws selection outlines into its frames.
+    pub fn draws_outlines(&self) -> bool {
+        self.raster.is_some()
+    }
+    /// One more frame for an image-only change (new outlines): no new convergence.
+    pub fn redraw(&mut self) {
+        self.convergence.redraw();
     }
     /// Whether a Scene frame is still on its way: one in flight to collect, or
     /// content being prepared for the next. After an edit these render at once

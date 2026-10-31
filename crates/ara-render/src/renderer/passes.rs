@@ -51,6 +51,10 @@ enum Recipe {
     /// The wire mask over the display output; `true` over the lit image (one
     /// colour), `false` over the wireframe view's background (per-entity colours).
     WireComposite(bool),
+    /// The selected rows into the outline mask (`renderer::outline`).
+    OutlineMask,
+    /// The selection outlines over the display output.
+    OutlineComposite,
     Look(LookPass),
     /// A hybrid ray-query pass (`renderer::rt`).
     Rays(super::rt::RtPass),
@@ -363,6 +367,18 @@ impl Renderer {
         // Edges come from the native draws (legacy content has none).
         self.look.frame_wire = mode.wire() && self.native.is_some();
         self.look.frame_overdraw = mode == ViewMode::Overdraw && self.native.is_some();
+        // Editor selection outlines: the primary view's live frames only (not
+        // captures, reflection-capture bakes or secondary views).
+        self.look.frame_outline = false;
+        if !capture
+            && !deterministic
+            && !self.secondary_active
+            && self.outlines.any()
+            && let Some(native) = &mut self.native
+        {
+            native.outline_rows(&mut self.gpu, &self.outlines)?;
+            self.look.frame_outline = true;
+        }
         let (sampled, storage) = self.look.indices();
         // Exposure snaps to its meter on a reset unless a host seeded it, and
         // while new probe GI converges or fades in (no adaptation swing as the
@@ -1000,6 +1016,16 @@ impl Renderer {
             declare(wire, Recipe::Wire);
             shaded.push(wire);
         }
+        if self.look.frame_outline {
+            // Hidden parts without the depth test, then the parts in view with it.
+            let mask = graph.pass(
+                "Outline.Mask",
+                Queue::Graphics,
+                [(ids[OUTLINE], Access::Color), (ids[DEPTH], Access::Depth)],
+            );
+            declare(mask, Recipe::OutlineMask);
+            shaded.push(mask);
+        }
         if self.look.frame_overdraw {
             // Every submitted fragment, before depth rejection: no depth attachment.
             let count = graph.pass(
@@ -1177,6 +1203,18 @@ impl Renderer {
                 ],
             );
             declare(composite, Recipe::WireComposite(mode.lit()));
+            shaded.push(composite);
+        }
+        if self.look.frame_outline && !deferred {
+            let composite = graph.pass(
+                "Outline.Composite",
+                Queue::Graphics,
+                [
+                    (ids[OUTLINE], Access::ShaderRead),
+                    (ids[OUTPUT], Access::Storage),
+                ],
+            );
+            declare(composite, Recipe::OutlineComposite);
             shaded.push(composite);
         }
         // A deferred frame has no output yet; `finish` produces it.
@@ -1629,6 +1667,8 @@ impl Renderer {
                         recorder.push(Command::EndRendering);
                     }
                     Recipe::WireComposite(lit) => self.record_wire_composite(&mut recorder, lit),
+                    Recipe::OutlineMask => self.record_outline_mask(&mut recorder, footprint),
+                    Recipe::OutlineComposite => self.record_outline_composite(&mut recorder),
                     Recipe::Tsr(tsr_pass) => self.tsr.record(&mut recorder, tsr_pass),
                     Recipe::Taa | Recipe::Tonemap => {
                         let taa = matches!(recipes[pass.id.0], Recipe::Taa);
@@ -1875,6 +1915,7 @@ impl Renderer {
         let wire_inputs = entity_ids
             .filter(|_| self.look.frame_wire)
             .map(|ids| (import(&mut graph, WIRE), ids));
+        let outline_mask = self.look.frame_outline.then(|| import(&mut graph, OUTLINE));
         let reactive = reactive
             .filter(|_| tsr)
             .map(|(image, index, state)| (graph.import(Resource::Image(image), state), index));
@@ -2017,6 +2058,17 @@ impl Renderer {
                 ],
             )
         });
+        let outline = outline_mask.map(|mask| {
+            graph.pass(
+                "Outline.Composite",
+                Queue::Graphics,
+                [
+                    (mask, Access::ShaderRead),
+                    (output, Access::Storage),
+                    (frame, Access::ShaderRead),
+                ],
+            )
+        });
         // Entity IDs end ready for picks and capture readbacks, as after a frame's
         // PresentationReady, when TSR or the wire composite read them here.
         graph.pass(
@@ -2051,6 +2103,8 @@ impl Renderer {
                     );
                 } else if wire == Some(pass.id) {
                     self.record_wire_composite(&mut recorder, true);
+                } else if outline == Some(pass.id) {
+                    self.record_outline_composite(&mut recorder);
                 } else if resolved.is_some_and(|(id, _, _)| id == pass.id) {
                     let taa_input = if dof {
                         self.look.sampled[DOF_COMPOSITE]

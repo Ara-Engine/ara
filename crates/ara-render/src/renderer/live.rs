@@ -30,6 +30,8 @@ pub(super) struct Output {
     labels: Vec<(u64, String)>,
     epoch: Option<u64>,
     written: bool,
+    /// The host's tag for the frame this pair holds (`Renderer::set_frame_tag`).
+    tag: u64,
 }
 impl Output {
     fn new(gpu: &mut GpuDevice, size: [u32; 2], id_size: [u32; 2]) -> Result<Self> {
@@ -52,6 +54,7 @@ impl Output {
             labels: Vec::new(),
             epoch: None,
             written: false,
+            tag: 0,
         })
     }
     fn retire(self, gpu: &mut GpuDevice) -> Result<()> {
@@ -134,6 +137,19 @@ impl Live {
 }
 
 impl Renderer {
+    /// Tag the following Scene frames with a host value (the editor's camera and
+    /// gizmo pose of that frame), so overlays can draw with the frame on screen.
+    pub fn set_frame_tag(&mut self, tag: u64) {
+        self.frame_tag = tag;
+    }
+    /// The tag of the Scene frame the UI shows (`set_frame_tag` when it was
+    /// submitted), or the current tag when frames complete synchronously.
+    pub fn shown_frame_tag(&self) -> u64 {
+        self.live
+            .as_ref()
+            .and_then(|live| live.shown.as_ref())
+            .map_or(self.frame_tag, |output| output.tag)
+    }
     /// Whether a Scene or secondary frame still owns shared frame data.
     pub fn scene_frame_pending(&self) -> bool {
         self.views.pending() || self.live.as_ref().is_some_and(Live::pending)
@@ -223,6 +239,7 @@ impl Renderer {
                 );
                 output.epoch = Some(self.entity_epoch);
             }
+            output.tag = self.frame_tag;
             output.copy(self)
         });
         self.last_timings = timings;
@@ -259,6 +276,7 @@ impl Renderer {
                 .map(|(id, name)| (*id, name.to_owned())),
         );
         output.epoch = Some(self.entity_epoch);
+        output.tag = self.frame_tag;
         self.gpu.begin_deferred_completion()?;
         let copied = output.copy(self);
         let mut completion = self.gpu.end_deferred_completion()?;

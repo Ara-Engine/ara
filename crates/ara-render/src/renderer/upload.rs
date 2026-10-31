@@ -120,6 +120,8 @@ impl Renderer {
             secondary_active: false,
             live: None,
             entity_epoch: 0,
+            outlines: outline::Outlines::default(),
+            frame_tag: 0,
             tsr: crate::tsr::Tsr::from_env(),
         })
     }

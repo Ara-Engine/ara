@@ -28,6 +28,10 @@ impl Convergence {
         self.remaining = self.remaining.max(self.budget);
         self.submitted = 0;
     }
+    /// One more frame without restarting convergence (an image-only change).
+    pub fn redraw(&mut self) {
+        self.remaining = self.remaining.max(1);
+    }
     pub fn needs_frame(&self) -> bool {
         self.remaining > 0
     }

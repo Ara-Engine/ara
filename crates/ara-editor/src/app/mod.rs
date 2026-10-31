@@ -507,6 +507,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         let mut scene_extent: Option<[u32; 2]> = None;
         // A Scene change whose frame is still in flight: collect and show it at once.
         let mut scene_followup = false;
+        // New selection outlines went to the renderer: show them in one more frame.
+        let mut outline_frame = false;
         let mut frames = 0u64;
         let mut exit_requested = false;
         let mut controller = controller::Controller::default();
@@ -1832,6 +1834,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             // work: it keeps polling every frame until shown, input or not.
             // A Rendering Debug switch changes the Scene image, not its input.
             scene_dirty |= renderer.debug() != editor.state.render_debug;
+            scene_dirty |= std::mem::take(&mut outline_frame);
             let scene_changed = scene_dirty;
             if scene_host.is_some()
                 && scene_view.needs_frame(editor.state.quality)
@@ -1916,6 +1919,8 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                         {
                             safe = probe_owner.prepare_replacement(&mut editor);
                         }
+                        // Frames carry the drag pose they show (`SceneView::shown_frame`).
+                        scene_view.gizmo_offset = controller.gizmo_state().offset;
                         if safe
                             && let Err(error) = scene_view.render(&mut renderer, &editor, &view, 1)
                         {
@@ -1933,25 +1938,49 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                             changed.insert(crate::world::render_id(id), "destructive-foreground");
                         }
                         let mut overlays = Vec::new();
-                        let diagnostic_markup_changed = shell.viewport_diagnostics.append(
-                            &mut overlays,
-                            &view,
-                            &editor.state,
-                            rect,
-                            scene_view.diagnostic_source(&editor),
-                            &shell.ui.sheet,
-                        )?;
-                        overlays.extend(overlay::build(
-                            &view,
-                            &editor.state,
-                            rect,
-                            &renderer,
-                            &changed,
-                            controller.gizmo_state(),
-                            &mut shell.outlines,
-                            editor.host.store().revision(),
-                            &shell.ui.sheet,
-                        )?);
+                        // Overlays draw with the camera and drag pose of the frame on
+                        // screen, as Unreal draws them inside its viewport frame: a Scene
+                        // frame that lags the camera carries its gizmos with it.
+                        let mut gizmo = controller.gizmo_state();
+                        let live_camera = editor.state.camera;
+                        if let Some(shown) = scene_view.shown_frame(&renderer) {
+                            editor.state.camera = shown.camera;
+                            gizmo.offset = if shown.revision == editor.host.store().revision() {
+                                shown.offset
+                            } else {
+                                glam::Mat4::IDENTITY
+                            };
+                        }
+                        shell.outlines.in_scene = scene_view.draws_outlines();
+                        let built = (|| -> ara_ui::Result<bool> {
+                            let diagnostic_markup_changed = shell.viewport_diagnostics.append(
+                                &mut overlays,
+                                &view,
+                                &editor.state,
+                                rect,
+                                scene_view.diagnostic_source(&editor),
+                                &shell.ui.sheet,
+                            )?;
+                            overlays.extend(overlay::build(
+                                &view,
+                                &editor.state,
+                                rect,
+                                &renderer,
+                                &changed,
+                                gizmo,
+                                &mut shell.outlines,
+                                editor.host.store().revision(),
+                                &shell.ui.sheet,
+                            )?);
+                            Ok(diagnostic_markup_changed)
+                        })();
+                        editor.state.camera = live_camera;
+                        let diagnostic_markup_changed = built?;
+                        if let Some(outlines) = shell.outlines.take_scene_outlines() {
+                            renderer.set_outlines(outlines);
+                            scene_view.redraw();
+                            outline_frame = true;
+                        }
                         shell.outlines.upload(&mut ui_renderer, &mut gpu)?;
                         if rect.contains(shell.pointer[0], shell.pointer[1])
                             && !editor.state.palette

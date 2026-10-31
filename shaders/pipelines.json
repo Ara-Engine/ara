@@ -917,6 +917,40 @@
       "vertex_stride": 0
     }
   },
+  "native_outline_hidden": {
+    "entries": {
+      "nativeOutlineFragment": "fragment",
+      "nativeOutlineVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        76
+      ],
+      "depth_format": 126,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "native_outline_visible": {
+    "entries": {
+      "nativeOutlineFragment": "fragment",
+      "nativeOutlineVertex": "vertex"
+    },
+    "source": "native-raster.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        76
+      ],
+      "depth_format": 126,
+      "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "native_overdraw": {
     "entries": {
       "nativeOverdrawFragment": "fragment",
@@ -979,6 +1013,20 @@
       ],
       "depth_format": 126,
       "depth_test": true,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "outline_composite": {
+    "entries": {
+      "outlineCompositeMain": "compute"
+    },
+    "source": "baseline.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
       "depth_write": false,
       "vertex_stride": 0
     }

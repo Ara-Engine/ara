@@ -9,6 +9,7 @@ mod hash;
 mod lab;
 mod live;
 mod native;
+mod outline;
 mod passes;
 pub mod post;
 mod readback;
@@ -32,6 +33,7 @@ pub use debug::{ReflectionView, RenderDebug};
 pub use frame::temporal_phases;
 use glam::{Mat4, Vec3};
 pub use native::{NativeContent, NativeSeed};
+pub use outline::Outlines;
 use std::path::{Path, PathBuf};
 pub use views::{ViewId, ViewOutput, ViewRequest};
 
@@ -49,7 +51,10 @@ const MOTION: usize = 10;
 /// Wireframe view modes' edge mask, or the overdraw view's fragment count (R16F,
 /// render size; `ViewMode::wire`, `ViewMode::Overdraw`).
 const WIRE: usize = 11;
-const TARGET_COUNT: usize = 12;
+/// Editor selection outlines' mask: each pixel's outline group, plus 128 where it is
+/// in view (R16F, render size; `outline`).
+const OUTLINE: usize = 12;
+const TARGET_COUNT: usize = 13;
 
 struct Mesh {
     /// Stable external identity, the key for `Renderer::update_mesh`.
@@ -96,6 +101,8 @@ struct Pipelines {
     tonemap: Pipeline,
     /// Draws the wire mask over the display image (`ViewMode::wire`).
     wire_composite: Pipeline,
+    /// Draws the selection outlines over the display image (`outline`).
+    outline_composite: Pipeline,
 }
 
 /// Pre-exposure of the raster HDR target (look.slangh `hdrExposure`): radiance is
@@ -157,6 +164,10 @@ pub struct Renderer {
     entity_epoch: u64,
     /// The selected temporal upscaler and Ara TSR's state (primary view only).
     tsr: crate::tsr::Tsr,
+    /// Editor selection outlines (`set_outlines`).
+    outlines: outline::Outlines,
+    /// The host's tag for the next Scene frames (`set_frame_tag`).
+    frame_tag: u64,
 }
 
 impl Renderer {
@@ -277,6 +288,7 @@ impl Renderer {
             taa: load("taa")?,
             tonemap: load("tonemap")?,
             wire_composite: load("wire_composite")?,
+            outline_composite: load("outline_composite")?,
         };
         let targets = Self::targets(&mut gpu, size, size)?;
         Self::upload_scene(

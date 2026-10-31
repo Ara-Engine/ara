@@ -46,7 +46,7 @@ editor verification route, with process-local empty VK_IMPLICIT_LAYER_PATH.
 Scene overlays are inserted immediately after the viewport image, before later
 UI controls/popovers. Grid and hover execute on the GPU against the scene ID map.
 The grid uses derivatives for antialiasing and distance fade, with theme axis tints.
-Outlines and hover (mode 5) group channels through an optional table
+The editor draws mode-5 outlines only when the Scene is not raster (a raster Scene draws its own: ara-render `Outlines`). Outlines and hover (mode 5) group channels through an optional table
 (`outline_groups`): a group outlines as one shape; ground (terrain) only against sky,
 void and other ground; edges are a 1 logical px antialiased band each side (distance to the
 nearest ID texel across the edge). `Icon` draws an uploaded white image tinted (mode 2). Gizmos draw antialiased `Line`s and filled convex `Quad`s (cones, plane squares,

@@ -44,6 +44,10 @@ pub(in crate::renderer) struct NativePipelines {
     /// The overdraw view's fragment count (`ViewMode::Overdraw`): the camera draws
     /// again without the depth test, adding one per kept fragment.
     pub overdraw: Pipeline,
+    /// The selection outline mask's whole silhouettes: no depth test (`outline`).
+    pub outline_hidden: Pipeline,
+    /// The selection outline mask's parts in view: against the frame's depth.
+    pub outline_visible: Pipeline,
 }
 
 impl NativePipelines {
@@ -75,6 +79,8 @@ const RECIPES: [&str; 17] = [
     "native_forward_lit_front",
     "native_forward_high_front",
     "native_overdraw",
+    "native_outline_hidden",
+    "native_outline_visible",
 ];
 
 #[derive(Default)]
@@ -129,6 +135,8 @@ impl Renderer {
                     forward_lit_front,
                     forward_high_front,
                     overdraw,
+                    outline_hidden,
+                    outline_visible,
                 ]: [Pipeline; RECIPES.len()] = handles
                     .try_into()
                     .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
@@ -148,6 +156,8 @@ impl Renderer {
                     forward_lit_front,
                     forward_high_front,
                     overdraw,
+                    outline_hidden,
+                    outline_visible,
                 }));
             }
         }

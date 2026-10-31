@@ -83,6 +83,14 @@ float4 nativeWireFragment(WireVarying v):SV_Target0{
     float3 pixels=v.bary/max(fwidth(v.bary),1e-6);
     return float4(saturate(1-min(pixels.x,min(pixels.y,pixels.z))),0,0,0);
 }
+// Editor selection outlines (Renderer `Outline.Mask`, renderer/outline.rs): the selected
+// instances again with the G-buffer's clip position, each writing its outline group
+// (root word 4): once without a depth test, so the whole silhouette counts, then
+// against the frame's depth, adding 128 where that surface is in view.
+[shader("vertex")]
+float4 nativeOutlineVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID):SV_Position{return nativeVertex(vertex,instance,false,true).clip;}
+[shader("fragment")]
+float4 nativeOutlineFragment():SV_Target0{return float4(float(root.cascade),0,0,0);}
 struct ShadowVarying {float4 clip:SV_Position;float2 uv:TEXCOORD0;float2 uv1:TEXCOORD1;nointerpolation uint material:TEXCOORD2;};
 [shader("vertex")]
 ShadowVarying nativeShadowVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){Varying v=nativeVertex(vertex,instance,true,true);ShadowVarying s;s.clip=v.clip;s.uv=v.uv;s.uv1=v.uv1;s.material=v.material;return s;}

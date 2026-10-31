@@ -58,6 +58,12 @@ pub(super) struct Native {
     instance_index: u32,
     visible: Buffer,
     visible_index: u32,
+    /// Selection outlines (`renderer::outline`): the colour table, then one row per
+    /// instance at most, sized with the content so selecting allocates nothing.
+    outline: Buffer,
+    outline_index: u32,
+    /// The selected rows' draws by outline group (`outline_rows`).
+    outline_batches: Vec<(u8, Batch)>,
     /// Passes `visible` holds rows for; reservations up to it allocate nothing.
     capacity: usize,
     rows: Vec<InstanceRow>,
@@ -809,6 +815,11 @@ impl Native {
                 &mut owned,
             )?;
             let visible = host_buffer(gpu, visible_bytes, &mut owned)?;
+            let outline = host_buffer(
+                gpu,
+                crate::renderer::outline::COLOURS + scene.instances.len() * 8,
+                &mut owned,
+            )?;
             Ok((
                 materials,
                 gpu.storage_buffer(materials)?.index,
@@ -816,21 +827,29 @@ impl Native {
                 gpu.storage_buffer(instances)?.index,
                 visible,
                 gpu.storage_buffer(visible)?.index,
+                (outline, gpu.storage_buffer(outline)?.index),
             ))
         })();
-        let (materials, material_index, instances, instance_index, visible, visible_index) =
-            match prepared {
-                Ok(result) => result,
-                Err(error) => {
-                    pool.destroy(gpu)?;
-                    textures.destroy(gpu)?;
-                    for resource in owned {
-                        gpu.retire(resource)?;
-                    }
-                    gpu.collect()?;
-                    return Err(error);
+        let (
+            materials,
+            material_index,
+            instances,
+            instance_index,
+            visible,
+            visible_index,
+            (outline, outline_index),
+        ) = match prepared {
+            Ok(result) => result,
+            Err(error) => {
+                pool.destroy(gpu)?;
+                textures.destroy(gpu)?;
+                for resource in owned {
+                    gpu.retire(resource)?;
                 }
-            };
+                gpu.collect()?;
+                return Err(error);
+            }
+        };
         let rows = scene.instances.iter().map(|i| row(i, i.world)).collect();
         let groups = Groups::new(scene, &pool)?;
         let mut culling = Culling::new(&groups, scene);
@@ -852,6 +871,9 @@ impl Native {
             materials,
             instances,
             visible,
+            outline,
+            outline_index,
+            outline_batches: Vec::new(),
             capacity,
             rows,
             material_data: scene.materials.to_vec(),
@@ -888,6 +910,84 @@ impl Native {
         );
         visit(Resource::Buffer(self.instances), Access::HostWrite);
         visit(Resource::Buffer(self.visible), Access::HostWrite);
+        visit(Resource::Buffer(self.outline), Access::HostWrite);
+    }
+
+    /// Uploads the outline colour table and the selected instances' rows (LOD 0, one
+    /// per instance) and keeps their draws for `record_outlines`. Channels outside
+    /// this content or groups past 127 are skipped.
+    pub(super) fn outline_rows(
+        &mut self,
+        gpu: &mut GpuDevice,
+        outlines: &crate::renderer::Outlines,
+    ) -> Result<()> {
+        use crate::renderer::outline::COLOURS;
+        self.outline_batches.clear();
+        let mut entries: Vec<(u8, usize, usize)> = outlines
+            .channels
+            .iter()
+            .filter_map(|&(channel, group)| {
+                let index = (channel as usize).checked_sub(1)?;
+                (index < self.rows.len() && (1..=127).contains(&group)).then(|| {
+                    let slot = self.groups.groups[self.groups.instance_group[index]].slot;
+                    (group, slot, index)
+                })
+            })
+            .collect();
+        entries.sort_unstable();
+        entries.dedup_by_key(|entry| entry.2);
+        let base = (COLOURS / 8) as u32;
+        let mut rows: Vec<[u32; 2]> = Vec::with_capacity(entries.len());
+        for chunk in entries.chunk_by(|a, b| a.0 == b.0 && a.1 == b.1) {
+            let group = &self.groups.groups[self.groups.instance_group[chunk[0].2]];
+            self.outline_batches.push((
+                chunk[0].0,
+                Batch {
+                    first: base + rows.len() as u32,
+                    count: chunk.len() as u32,
+                    vertices: group.counts[0],
+                    first_index: group.first_indices[0],
+                },
+            ));
+            rows.extend(chunk.iter().map(|&(_, _, i)| [i as u32, group.first]));
+        }
+        let mut colours = [[0f32; 4]; 128];
+        for (slot, colour) in colours.iter_mut().zip(&outlines.colours) {
+            *slot = *colour;
+        }
+        gpu.upload_queued_range(self.outline, 0, bytemuck::cast_slice(&colours))?;
+        if !rows.is_empty() {
+            gpu.upload_queued_range(self.outline, COLOURS as u64, bytemuck::cast_slice(&rows))?;
+        }
+        Ok(())
+    }
+
+    /// Bindless index of the outline buffer (colour table first).
+    pub(in crate::renderer) fn outline_index(&self) -> u32 {
+        self.outline_index
+    }
+
+    /// Records the outline mask's draws (`renderer::outline`): every selected row
+    /// writing its group without the depth test, then again, plus 128, with it.
+    pub(super) fn record_outlines(&self, recorder: &mut Recorder, root: RootConstants) {
+        for (pipeline, seen) in [
+            (self.pipelines.outline_hidden, 0),
+            (self.pipelines.outline_visible, 128),
+        ] {
+            recorder.push(Command::Pipeline(pipeline));
+            for (group, batch) in &self.outline_batches {
+                let mut constants = root;
+                constants.words[1] = self.material_index;
+                constants.words[2] = self.instance_index;
+                constants.words[3] = batch.first;
+                constants.words[4] = u32::from(*group) + seen;
+                constants.words[5] = self.pool.table_index().unwrap_or(0);
+                constants.words[6] = self.textures.binding().map_or(0, |b| b.buffer_index);
+                constants.words[7] = self.outline_index;
+                recorder.push(Command::Constants(constants));
+                recorder.push(self.draw(batch, pipeline));
+            }
+        }
     }
 
     pub(super) fn record(&self, recorder: &mut Recorder, root: RootConstants, pass: usize) {
@@ -1102,7 +1202,7 @@ impl Native {
         ara_gpu::cpu_scope!("RasterNative.retire_content");
         self.pool.destroy(gpu)?;
         self.textures.destroy(gpu)?;
-        for buffer in [self.materials, self.instances, self.visible] {
+        for buffer in [self.materials, self.instances, self.visible, self.outline] {
             gpu.retire(Resource::Buffer(buffer))?;
         }
         gpu.collect()?;

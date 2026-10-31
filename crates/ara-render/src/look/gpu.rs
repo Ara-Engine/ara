@@ -152,6 +152,9 @@ pub(crate) struct LookGpu {
     pub frame_wire: bool,
     /// This frame counts fragments for the overdraw view (`ViewMode::Overdraw`).
     pub frame_overdraw: bool,
+    /// This frame outlines the editor's selection (`renderer::outline`), composited
+    /// after the post chain, here or in a deferred frame's `finish`.
+    pub frame_outline: bool,
     /// Frames are not shown (`Renderer::set_unseen`); probe volumes inherit it.
     pub unseen: bool,
     /// The renderer history slot a deferred frame left for `finish` to resolve into.
@@ -314,6 +317,7 @@ impl LookGpu {
             frame_motion: false,
             frame_wire: false,
             frame_overdraw: false,
+            frame_outline: false,
             unseen: false,
             deferred_history: None,
             settle: 0,

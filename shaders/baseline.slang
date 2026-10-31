@@ -224,6 +224,34 @@ void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.ext
     else if(f.temporal.z==10)color=overdrawHeat(pixel(root.materials,r).x);
     images[NonUniformResourceIndex(f.post.w)][p]=float4(srgb(saturate(color)),1);
 }
+// Editor selection outlines (renderer/outline.rs) over the display output. The mask
+// (root word 1, render size, nativeOutlineFragment) holds each pixel's outline group,
+// plus 128 where that group's surface is in view. A pixel within the band (root word 5,
+// display pixels each side, as float bits) of a texel of another group is outlined in
+// the colour (root word 7's table, sRGB) of the group on the inside of that edge: full
+// strength where the inside is in view, root word 6's opacity where it is hidden. Edges
+// follow the silhouette only: in-view and hidden parts of one group join seamlessly.
+[shader("compute")]
+[numthreads(8,8,1)]
+void outlineCompositeMain(uint3 t:SV_DispatchThreadID){
+    Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);
+    float2 scale=float2(f.sizes.xy)/float2(f.extent.xy);int2 last=int2(f.sizes.xy)-1;
+    int2 centre=int2((float2(p)+0.5)*scale);
+    uint here=uint(pixel(root.materials,centre).x+0.5);uint group=here&127;
+    float band=asfloat(root.mode);int reach=min(int(ceil((band+1)*max(scale.x,scale.y))),4);
+    float nearest=1e9;uint inside=0;bool seen=false;
+    for(int y=-reach;y<=reach;y++)for(int x=-reach;x<=reach;x++){
+        uint there=uint(pixel(root.materials,clamp(centre+int2(x,y),0,last)).x+0.5);
+        if((there&127)==group)continue;
+        float d=length(float2(x,y)/scale);if(d>=nearest)continue;
+        nearest=d;inside=group!=0?group:there&127;seen=group!=0?here>=128:there>=128;
+    }
+    float cover=saturate(band+1-nearest);if(inside==0||cover<=0)return;
+    float4 colour=buffers[NonUniformResourceIndex(root.flags)].Load<float4>((inside-1)*16);
+    float alpha=saturate(colour.a*cover*(seen?1:asfloat(root.sample)));
+    float4 under=images[NonUniformResourceIndex(f.post.w)][p];
+    images[NonUniformResourceIndex(f.post.w)][p]=float4(lerp(under.rgb,colour.rgb,alpha),1);
+}
 // Wireframe view modes: the wire mask (root word 1, render size, nativeWireFragment)
 // over the display output (Frame.post.w, sRGB). Over the lit image (root word 5 set)
 // edges take one colour; over the wireframe view's background each entity has its

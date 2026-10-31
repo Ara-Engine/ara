@@ -57,7 +57,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `update_materials` replaces parameters in their existing order and remaps scene texture slots without uploading
   geometry. `rename` updates an entity's capture label. Invalid edits retain the previous content.
 - `submit_scene_frame` / `poll_scene_frame` keep one Scene frame in flight and two retained color/ID pairs; `output_size()` may lag a resize. UI reads only the completed pair; a new chain starts from the last synchronous frame (no frame without an image).
-  `entity_at` copies one texel on the UI queue; picks/outlines follow the displayed frame, while authored gizmo poses can lead by one Scene frame. `wait_scene_frame` is for capture/shutdown.
+  `entity_at` copies one texel on the UI queue; picks follow the displayed frame; hosts tag frames (`set_frame_tag`, `shown_frame_tag`) to draw overlays with the frame on screen. `set_outlines` (`renderer::outline`): editor selection outlines in live primary frames (selected rows into a mask without, then with, the depth test; composited after post, hidden parts faint). `wait_scene_frame` is for capture/shutdown.
   Same-queue passes share a submission; cross-queue edges and deferred helper boundaries retain GPU waits/timestamps. Synchronous `render`/`render_view` remain available.
 - `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer: physical sky LUTs and their IBL,
   CSM-shadowed froxel fog, histogram or manual exposure (snaps to its meter on a reset and while new GI arrives;
