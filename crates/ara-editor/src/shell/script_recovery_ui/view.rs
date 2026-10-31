@@ -15,12 +15,20 @@ impl Shell {
         );
         let state = &self.script_recovery_ui;
         let reason = self.script_recovery_blocker(editor);
-        out.push_str(&format!("<panel id='script-recovery' style='flex-direction:column;height:auto;min-height:0px;max-height:180px;flex-basis:auto;flex-shrink:1;gap:4px;padding:6px'><panel id='script-recovery-actions' class='row' style='height:auto;min-height:24px;flex-shrink:0;flex-wrap:wrap;gap:4px'><button id='script-recovery-reload' style='height:auto;min-height:24px;min-width:0px;white-space:normal' text='Reload scripts' description='{}' disabled='{}' action='Dispatch' /><button id='script-recovery-console' class='ghost' text='Console' description='View full diagnostic history, including managed exception stacks' action='Dispatch' /></panel>",escape(reason.unwrap_or("Reload C# in every player of the current running world; do not restart Play")),reason.is_some()));
-        if let Some(reason) = reason {
-            out.push_str(&format!(
-                "<text id='script-recovery-reason' class='caption wrap-text' text='{}' />",
-                escape(reason)
-            ));
+        // One inset status bar: what reload would do (or why it can't), then actions.
+        // Reload results list below it only when there are any.
+        let summary = reason.unwrap_or("Scripts compile automatically");
+        out.push_str(&format!("<panel id='script-recovery' class='script-recovery'><panel id='script-recovery-actions' class='script-strip'>{}<text id='script-recovery-reason' class='caption script-strip-text' text='{}' description='{}' /><button id='script-recovery-reload' class='ghost small' label='Reload scripts' description='{}' disabled='{}' action='Dispatch'>{}<text id='script-recovery-reload-label' text='Reload' /></button><button id='script-recovery-console' class='ghost icon-button' label='Console' description='View full diagnostic history, including managed exception stacks' action='Dispatch'>{}</button></panel>",
+            icons::icon_in("script-recovery","file-code","muted"),
+            escape(summary),
+            escape(summary),
+            escape(reason.unwrap_or("Reload C# in every player of the current running world; do not restart Play")),
+            reason.is_some(),
+            icons::icon("script-recovery-reload","refresh-cw"),
+            icons::icon("script-recovery-console","terminal")));
+        if state.pending.is_empty() && state.terminal.is_empty() && state.request_error.is_none() {
+            out.push_str("</panel>");
+            return;
         }
         out.push_str("<scroll id='script-recovery-scroll' style='height:auto;min-height:0px;max-height:120px;flex-basis:auto;flex-shrink:1'><panel id='script-recovery-body' style='height:auto;flex-direction:column;gap:4px'>");
         for (ticket, pending) in state.pending.iter().take(8) {
@@ -42,9 +50,6 @@ impl Shell {
         }
         for status in &state.terminal {
             status_markup(status, out);
-        }
-        if state.pending.is_empty() && state.terminal.is_empty() && state.request_error.is_none() {
-            out.push_str("<text id='script-recovery-empty' class='caption wrap-text' text='Source compilation remains automatic. Manual reload reports each player and module; Unchanged or Refused does not clear runtime faults.' />");
         }
         out.push_str("</panel></scroll></panel>");
     }

@@ -171,6 +171,9 @@ pub struct DeviceInfo {
     pub geometry_shader: bool,
     /// VK_EXT_hdr_metadata enabled for native window presentation.
     pub hdr_metadata: bool,
+    /// VK_EXT_swapchain_maintenance1 present scaling enabled: a window can present a
+    /// swapchain of another size 1:1, unstretched (live window resizes).
+    pub present_scaling: bool,
     /// Enabled 64-bit shader integer operations and buffer atomics (Metal: unsigned
     /// 64-bit min/max only, Apple9 and later).
     pub buffer_int64_atomics: bool,
@@ -418,6 +421,7 @@ pub(crate) fn test_info() -> DeviceInfo {
         task_dispatch: [0; 4],
         geometry_shader: false,
         hdr_metadata: false,
+        present_scaling: false,
         buffer_int64_atomics: false,
         shader_integer_dot_product: false,
         packed_integer_dot_accelerated: false,

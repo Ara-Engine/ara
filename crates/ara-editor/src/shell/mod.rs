@@ -49,6 +49,7 @@ pub(crate) mod toolkit_verify;
 pub(crate) use drag::Drag;
 pub use testing::MenuRow;
 mod add_component;
+mod agents_connect;
 mod agents_panel;
 mod animation_panel;
 mod assets_panel;
@@ -75,9 +76,12 @@ mod log_panels;
 mod material_panel;
 mod memo;
 mod names;
+pub(crate) use names::is_texture;
 mod probes;
 mod project_actions;
+mod render_debug_panel;
 mod scene_panel;
+mod scene_toolbars;
 pub(crate) use animation_panel::LiveChange;
 pub(crate) use log_panels::LogView;
 mod material_inspector;
@@ -156,6 +160,10 @@ pub struct Shell {
     current: Option<String>,
     /// The OS maximize state, reflected by the custom caption's restore button.
     pub(crate) native_maximized: bool,
+    /// While the window border is dragged: the Scene image's last rendered logical
+    /// size. The image shows unscaled and cropped until the drag ends, rather than
+    /// stretched or re-rendered at every intermediate size.
+    pub(crate) scene_frozen: Option<[f32; 2]>,
     /// Active schema field models keyed by widget identity.
     pub fields: BTreeMap<String, Field>,
     /// Pointer location in logical pixels of the current surface.
@@ -307,6 +315,8 @@ pub struct Shell {
     pub(crate) pick_field: Option<String>,
     pub(crate) rename: bool,
     asset_folder_click: Option<(String, std::time::Instant)>,
+    /// The last tab click, for double-click to maximize.
+    tab_click: Option<(String, std::time::Instant)>,
     asset_rename: Option<scripts::Rename>,
     script_job: Option<(String, std::time::Instant)>,
     script_recovery_ui: script_recovery_ui::State,
@@ -391,6 +401,8 @@ pub struct Shell {
     alt_tap: bool,
     /// Modal information or input dialog.
     pub(crate) dialog: Option<Dialog>,
+    /// Agent client detection and setup for the Connect an agent dialog.
+    pub(crate) agents: agents_connect::AgentSetups,
     /// OS window work for the window owner (full screen, raise, import dialog, quit).
     pub window_request: Option<WindowRequest>,
     pub(crate) status_note: Option<String>,
@@ -404,6 +416,9 @@ pub struct Shell {
     pub(crate) recording: Option<String>,
     key_search: bool,
     label_width: f32,
+    /// The inspector is too narrow for a label and a vector side by side: vector
+    /// rows put their fields under the label (set with each label width).
+    stacked_rows: bool,
     keymap: commands::keys::Keymap,
     /// Bumped whenever `keymap` is rebuilt (memoized panels show shortcuts).
     keymap_revision: u64,
@@ -511,6 +526,8 @@ pub(crate) enum Binding {
     KeySearch,
     DialogText,
     DialogAction(&'static str),
+    /// A Connect an agent row's button.
+    Agent(ara_agents::Client, agents_connect::AgentAction),
 }
 /// The editor's fonts: Inter (UI), JetBrains Mono (code, timings) and Noto Naskh
 /// Arabic (right-to-left text). The shell and the loading window share them.
@@ -528,7 +545,7 @@ impl Shell {
     /// Build the native shell with the project's initial layout and model snapshots.
     pub fn new(editor: &mut Editor, size: [f32; 2]) -> ara_ui::Result<Self> {
         let text = text_system()?;
-        let ui = Ui::editor("<ui id='editor' />", include_str!("editor.css"), size)?;
+        let ui = Ui::editor("<ui id='editor' />", live_styles::embedded::EDITOR, size)?;
         let mut shell = Self {
             reachability: Default::default(),
             history_view: Default::default(),
@@ -551,6 +568,7 @@ impl Shell {
             floats: Vec::new(),
             current: None,
             native_maximized: false,
+            scene_frozen: None,
             fields: BTreeMap::new(),
             pointer: [0.; 2],
             modifiers: [false; 3],
@@ -650,6 +668,7 @@ impl Shell {
             pick_field: None,
             rename: false,
             asset_folder_click: None,
+            tab_click: None,
             asset_rename: None,
             script_job: None,
             script_recovery_ui: Default::default(),
@@ -717,6 +736,7 @@ impl Shell {
             mnemonics: false,
             alt_tap: false,
             dialog: None,
+            agents: Default::default(),
             window_request: None,
             status_note: None,
             device_info: String::new(),
@@ -727,6 +747,7 @@ impl Shell {
             recording: None,
             key_search: false,
             label_width: 0.38,
+            stacked_rows: false,
             keymap: commands::keymap(&editor.state, &editor.extensions),
             keymap_revision: 0,
             keymap_settings: keymap_settings(&editor.state),
@@ -789,6 +810,11 @@ impl Shell {
         if let Some(id) = returning {
             self.enter(&id);
         }
+        // Prefab tiles the markup asked for extract here, where the store lives.
+        let slots = &self.thumbnail_slots;
+        crate::asset_tools::prefab_preview::extract(&mut self.thumbnails, editor, |key| {
+            slots.contains_key(key)
+        });
         self.stats.rebuilds += 1;
         self.stats.rebuild_ms += started.elapsed().as_secs_f64() * 1000.;
         result
@@ -927,7 +953,7 @@ impl Shell {
                 ];
                 self.floats.push(Surface {
                     id: window.id.clone(),
-                    ui: Ui::editor("<ui id='float' />", include_str!("editor.css"), size)?,
+                    ui: Ui::editor("<ui id='float' />", live_styles::embedded::EDITOR, size)?,
                     input: InputState::default(),
                     native_input: Default::default(),
                     pointer: [0.; 2],
@@ -966,31 +992,35 @@ impl Shell {
     fn stylesheet(&self, editor: &Editor) -> String {
         let mut css = self
             .styles
-            .css("editor.css", include_str!("editor.css"))
+            .css("editor.css", live_styles::embedded::EDITOR)
             .to_owned();
         css.push_str(
             self.styles
-                .css("viewport.css", include_str!("viewport.css")),
+                .css("viewport.css", live_styles::embedded::VIEWPORT),
         );
         css.push_str(
             self.styles
-                .css("inspector.css", include_str!("inspector.css")),
+                .css("inspector.css", live_styles::embedded::INSPECTOR),
         );
         if editor.state.comfortable() {
-            css.push_str(self.styles.css(
-                "editor-comfortable.css",
-                include_str!("editor-comfortable.css"),
-            ));
+            css.push_str(
+                self.styles
+                    .css("editor-comfortable.css", live_styles::embedded::COMFORTABLE),
+            );
         }
         css.push_str(
             self.styles
-                .css("editor-titlebar.css", include_str!("editor-titlebar.css")),
+                .css("editor-titlebar.css", live_styles::embedded::TITLEBAR),
         );
-        css.push_str(ara_ui::dialogs::CSS);
-        css.push_str(ara_ui::select::CSS);
-        css.push_str(history_panel::CSS);
-        css.push_str(lighting::CSS);
-        css.push_str(probes::CSS);
+        for (name, embedded) in [
+            ("dialogs.css", ara_ui::dialogs::CSS),
+            ("select.css", ara_ui::select::CSS),
+            ("history.css", history_panel::CSS),
+            ("lighting.css", lighting::CSS),
+            ("probes.css", probes::CSS),
+        ] {
+            css.push_str(self.styles.css(name, embedded));
+        }
         css.push_str(profiler_targets::CSS);
         css.push_str(palette::FORM_CSS);
         if self.toolkit_verify.is_some() {
@@ -1541,6 +1571,10 @@ impl Shell {
             }
         }
         let mut work = self.ui.frame(&mut self.text)?;
+        // Layout moved under a still pointer: hover follows now, not on the next move.
+        if work.layout_passes > 0 && self.input.rehover(&mut self.ui) {
+            work += self.ui.frame(&mut self.text)?;
+        }
         if self.fit_game_frames()? {
             work.layout_passes += 1;
             work.paint_nodes = work.paint_nodes.max(1);

@@ -241,6 +241,9 @@ codes! {
     ASSET_WORKER_FAILED = 2103,
     /// An import was cancelled or superseded before it was published.
     ASSET_IMPORT_CANCELLED = 2104,
+    /// An asset imported successfully: the diagnostics store drops its earlier import
+    /// failures (a signal; it is not kept as a record).
+    ASSET_IMPORTED = 2105,
 
     /// World data, a cooked cell or the streaming configuration is invalid.
     WORLD_INVALID = 2201,

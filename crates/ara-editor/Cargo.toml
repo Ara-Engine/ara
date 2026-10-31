@@ -63,6 +63,7 @@ ara-ui = { path = "../ara-ui" }
 ara-ui-render = { path = "../ara-ui-render" }
 ara-ui-text = { path = "../ara-ui-text" }
 ara-update = { path = "../ara-update" }
+ara-agents = { path = "../ara-agents" }
 anyhow = { workspace = true }
 notify = "8.2"
 bytemuck = { workspace = true }
@@ -71,7 +72,7 @@ glam34 = { workspace = true }
 gltf = { workspace = true, default-features = true }
 parley = { workspace = true, features = ["std", "complex-scripts"] }
 resvg.workspace = true
-image = { workspace = true, features = ["png", "jpeg"] }
+image = { workspace = true, features = ["png", "jpeg", "hdr", "exr", "tga", "tiff", "webp", "bmp", "dds"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
 sdl3-sys.workspace = true
@@ -82,4 +83,4 @@ ara-ui-test = { path = "../ara-ui-test" }
 
 [target.'cfg(windows)'.dependencies]
 accesskit_windows = "0.35"
-windows = { workspace = true, features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_Security"] }
+windows = { workspace = true, features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_UI_Controls", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_Security"] }

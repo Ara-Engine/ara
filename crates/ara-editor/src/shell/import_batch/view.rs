@@ -125,48 +125,9 @@ impl Shell {
             .ok_or("Compatible import group disappeared")?;
         out.push_str(&format!("<text id='import-batch-targets' class='caption' style='white-space:normal' text='Editing {} {} sources; other selected types remain unchanged.' />",group.sources.len(),escape(label(&group.importer))));
         self.import_fields(editor, &token, &group, out)?;
-        let presets = group
-            .sources
-            .iter()
-            .map(|source| {
-                workspace
-                    .doc(&source.doc)
-                    .and_then(|doc| doc.record("i_settings"))
-                    .and_then(|r| r.get("preset"))
-                    .cloned()
-                    .unwrap_or(Value::Null)
-            })
-            .collect::<Vec<_>>();
-        let preset = presets
-            .first()
-            .filter(|first| presets.iter().all(|value| value == *first))
-            .cloned()
-            .unwrap_or(json!("mixed"));
-        self.choice_button(
-            "import-batch-preset",
-            if preset == "mixed" {
-                "Quality (mixed)"
-            } else {
-                "Cook quality"
-            },
-            choices::Select {
-                destination: choices::Destination::ImportBatch {
-                    group: token,
-                    key: "$preset".into(),
-                },
-                current: preset,
-                options: vec![
-                    (Value::Null, "Use project/default quality".into()),
-                    (json!("fast"), "Fast".into()),
-                    (json!("balanced"), "Balanced".into()),
-                    (json!("highQuality"), "High quality".into()),
-                ],
-            },
-            out,
-        );
         out.push_str(&self.bind_button(
             "import-batch-defaults",
-            "Project texture quality…",
+            "Project import defaults…",
             Binding::Command(
                 "assets.import_defaults",
                 super::super::commands::Target::None,
@@ -201,7 +162,8 @@ impl Shell {
             .as_object()
             .ok_or("Importer defaults are not an object")?;
         for (key, default) in defaults {
-            if group.importer == "ara.fbx" && key == "opacityMaps" {
+            // Encoding quality is not a choice people make (it follows the project).
+            if key == "preset" || (group.importer == "ara.fbx" && key == "opacityMaps") {
                 continue;
             }
             let metadata = fields

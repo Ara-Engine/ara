@@ -19,34 +19,9 @@ pub(super) const LOCK: f32 = 36.;
 impl Shell {
     pub(super) fn paint_polish(&mut self) {
         let color = |name: &str| self.ui.sheet.color_token(name).unwrap_or(Color(0, 0, 0, 0));
-        let primary = color("--primary");
         let muted = color("--muted-foreground");
         let on_selection = color("--selection-foreground");
         let mut draws = Vec::new();
-        for node in &self.ui.nodes {
-            if !node.visible || !node.rect.intersects(node.clip) {
-                continue;
-            }
-            let class = node
-                .element
-                .attrs
-                .get("class")
-                .map(String::as_str)
-                .unwrap_or("");
-            if class.contains("tab-selected") {
-                let r = node.rect;
-                draws.push(Draw::Rect {
-                    node: stable_id(&format!("{}-underline", node.element.id)),
-                    rect: Box2 {
-                        x: r.x,
-                        y: r.y,
-                        w: r.w,
-                        h: 2.,
-                    },
-                    color: primary,
-                });
-            }
-        }
         if self.hierarchy_surface == self.current
             && let Some(view) = &self.hierarchy_view
         {

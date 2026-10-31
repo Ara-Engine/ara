@@ -23,6 +23,9 @@ struct GizmoDrag {
     duplicate: bool,
     /// Captured source geometry and contact identity for exact placement modes.
     snap: Option<snap::Drag>,
+    /// World delta of the live preview since pointer-down (`Gesture::world_delta`),
+    /// refreshed after every event so the drawn gizmo follows the drag.
+    offset: glam::Mat4,
 }
 #[derive(Default)]
 pub(super) struct Controller {
@@ -35,6 +38,8 @@ pub(super) struct Controller {
     gizmo: Option<GizmoDrag>,
     /// Gizmo handle under the pointer, highlighted yellow.
     hover: Option<overlay::Handle>,
+    /// Scene icon under the pointer (`render_id` of its entity), when no handle is.
+    icon: Option<u64>,
     marquee: Option<selection::Press>,
 }
 impl Controller {
@@ -107,11 +112,16 @@ impl Controller {
             "marquee":self.marquee.is_some(),
         })
     }
-    /// Hovered and dragged gizmo handles, for drawing.
+    /// Hovered and dragged gizmo handles and the live drag offset, for drawing.
     pub fn gizmo_state(&self) -> overlay::GizmoState {
         overlay::GizmoState {
             hover: self.hover,
             active: self.gizmo.as_ref().map(|g| g.handle),
+            offset: self
+                .gizmo
+                .as_ref()
+                .map_or(glam::Mat4::IDENTITY, |g| g.offset),
+            icon: self.icon,
         }
     }
     /// Start a handle drag at the pointer.
@@ -176,6 +186,7 @@ impl Controller {
             typed: String::new(),
             duplicate,
             snap: None,
+            offset: glam::Mat4::IDENTITY,
         });
         Ok(())
     }
@@ -281,8 +292,28 @@ impl Controller {
         };
         Some(format!("{text}{typed}{snap}"))
     }
+    /// Handle one native event; the drawn gizmo then follows the live drag preview.
     #[allow(clippy::too_many_arguments)]
     pub fn event(
+        &mut self,
+        event: Event,
+        editor: &mut Editor,
+        shell: &mut Shell,
+        renderer: &mut Renderer,
+        view: &crate::world::DocumentView,
+        scene_view: &viewport::SceneView,
+        clipboard: &mut dyn ara_ui_text::Clipboard,
+    ) -> ara_ui::Result<(bool, bool, bool)> {
+        let result = self.handle(event, editor, shell, renderer, view, scene_view, clipboard);
+        if let Some(drag) = &mut self.gizmo {
+            drag.offset = editor.gesture.as_ref().map_or(glam::Mat4::IDENTITY, |g| {
+                g.world_delta(editor.state.selection.first().map(String::as_str))
+            });
+        }
+        result
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn handle(
         &mut self,
         event: Event,
         editor: &mut Editor,
@@ -549,6 +580,11 @@ impl Controller {
                     if hover != self.hover {
                         self.hover = hover;
                     }
+                    self.icon = inside
+                        .then(|| shell.outlines.icons.at(position))
+                        .flatten()
+                        .filter(|_| hover.is_none())
+                        .map(crate::world::render_id);
                     shell.event(InputEvent::PointerMove(position), clipboard)?;
                     shell.hover_tooltip()?;
                     if shell.menu.is_some() {
@@ -558,6 +594,7 @@ impl Controller {
                         shell.drag_over();
                     }
                     shell.drag_column(editor)?;
+                    shell.drag_toolbar();
                 }
                 dirty = true;
             }
@@ -628,10 +665,13 @@ impl Controller {
                         } else {
                             None
                         };
-                        // Through the channel map: a terrain tile is its Terrain, a
-                        // model part its entity.
-                        let entity = id
-                            .and_then(|id| shell.outlines.channels.target_of(id))
+                        // Icons first; then through the channel map: a terrain tile
+                        // is its Terrain, a model part its entity.
+                        let entity = shell
+                            .outlines
+                            .icons
+                            .at(shell.pointer)
+                            .or_else(|| id.and_then(|id| shell.outlines.channels.target_of(id)))
                             .map(str::to_owned);
                         let source = match entity {
                             Some(entity) => {
@@ -725,10 +765,16 @@ impl Controller {
                                     .max(0.) as u32;
                                 if x < renderer.size()[0] && y < renderer.size()[1] {
                                     let id = renderer.entity_at([x, y])?;
-                                    // Through the channel map: a terrain tile selects its
-                                    // Terrain, a model part its entity.
-                                    let entity = id
-                                        .and_then(|id| shell.outlines.channels.target_of(id))
+                                    // Icons draw over the Scene, so they pick first; then
+                                    // the channel map: a terrain tile selects its Terrain,
+                                    // a model part its entity.
+                                    let entity = shell
+                                        .outlines
+                                        .icons
+                                        .at(shell.pointer)
+                                        .or_else(|| {
+                                            id.and_then(|id| shell.outlines.channels.target_of(id))
+                                        })
                                         .map(str::to_owned)
                                         .filter(|a| !editor.state.locked.contains(a));
                                     if let Some(path) = shell.pick_field.take() {

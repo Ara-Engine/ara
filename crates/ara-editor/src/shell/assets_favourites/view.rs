@@ -66,7 +66,8 @@ impl Shell {
                 )
             }));
         }
-        out.push_str("<panel id='asset-bookmark-value' style='flex-basis:0px;flex-grow:1;min-width:0px;flex-shrink:1'>");
+        out.push_str("<panel id='asset-bookmark-value' class='asset-filter'>");
+        let start = out.len();
         self.choice_button(
             "asset-bookmark-select",
             "Favourites and saved Assets searches",
@@ -77,6 +78,7 @@ impl Shell {
             },
             out,
         );
+        crate::shell::assets_panel::types::compact_select(out, start);
         self.bind_command(
             "asset-search-folder-only",
             "assets.search.scope",

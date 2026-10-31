@@ -17,6 +17,8 @@ mod feedback;
 mod focus;
 pub mod input;
 pub mod layers;
+#[cfg(debug_assertions)]
+pub mod live;
 pub mod native_input;
 pub mod paint;
 mod pipeline;

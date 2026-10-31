@@ -41,7 +41,7 @@ fn setup(headless: bool, available: bool) -> (App, Hub) {
         call,
         result: Ok(json!({"engineVersion":"0.0.1-alpha","available":available,"registered":false})),
     });
-    let mut app = App::new([1280., 720.], Vec::new()).expect("native UI");
+    let mut app = App::new([1280., 720.]).expect("native UI");
     app.rebuild(&mut hub, capture::NOW)
         .expect("compatibility modal");
     (app, hub)

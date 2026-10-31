@@ -50,6 +50,7 @@ pub(super) fn device_info(device: &ProtocolObject<dyn MTLDevice>) -> DeviceInfo 
         task_dispatch: [0; 4],
         geometry_shader: false,
         hdr_metadata: false,
+        present_scaling: false,
         buffer_int64_atomics: buffer_int64_atomics(device),
         shader_integer_dot_product: false,
         packed_integer_dot_accelerated: false,

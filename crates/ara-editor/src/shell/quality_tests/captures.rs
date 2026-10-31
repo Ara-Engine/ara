@@ -42,7 +42,7 @@ fn native_full_editor_overlay_quality_captures() {
         gpu.pixels().unwrap().save(&path).unwrap();
         captures.push(json!({"file":path.file_name().unwrap().to_string_lossy(),"dpi":dpi,"logical":shell.ui.size,"physical":physical}));
     };
-    let sweep = run_sweep(&project, &mut capture);
+    let sweep = run_sweep(&project, &super::SIZES, &mut capture);
     sweep.write(&output);
     std::fs::write(
         output.join("capture-index.json"),

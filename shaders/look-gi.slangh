@@ -61,22 +61,28 @@ float giLatticeCoverage(GiLattice g,float3 p){
 // Irradiance facing `normal` (and with `both`, facing `reflection`) from one
 // lattice's eight probes (DDGI weights: trilinear, backface and Chebyshev
 // visibility against static moments, the latter two crushed cubically below 0.2 so
-// probes behind thin walls do not leak), the point offset along the normal and
+// probes behind thin walls do not leak; a point seeing under a third of its probes'
+// unoccluded weight darkens by its share), the point offset along the normal and
 // towards `v` by the lattice's surface bias.
 void giLatticeLobes(Look l,GiLattice g,uint image,float3 position,float3 normal,float3 reflection,float3 v,bool both,out float3 diffuse,out float3 specular){
     float3 biased=position+normal*g.bias+v*(g.bias*0.33);float3 grid=(biased-g.origin)/g.spacing;
-    int3 base=clamp(int3(floor(grid)),int3(0),int3(g.counts)-2);float3 alpha=saturate(grid-base);diffuse=0;specular=0;float total=0;
+    int3 base=clamp(int3(floor(grid)),int3(0),int3(g.counts)-2);float3 alpha=saturate(grid-base);diffuse=0;specular=0;float total=0,open=0;
     for(uint k=0;k<8;k++){
         uint3 d=uint3(k&1,(k>>1)&1,(k>>2)&1);uint3 p=uint3(base)+d;uint id=g.base+(p.z*g.counts.y+p.y)*g.counts.x+p.x;
         float4 meta=giMeta(l,id);if(meta.w<0.5)continue;
         float3 delta=biased-(g.origin+float3(p)*g.spacing)-meta.xyz;float distance=length(delta);float3 dir=delta/max(distance,1e-6);
         float2 moments=giSampleMoments(l,id,dir);
         float variance=max(moments.y-moments.x*moments.x,0.0001);float visibility=distance<=moments.x?1:pow(variance/(variance+pow(distance-moments.x,2)),3);
-        float weight=max(0.02,pow(saturate(dot(-dir,normal)*0.5+0.5),2))*visibility;if(weight<0.2)weight*=weight*weight/0.04;
-        float3 trilinear=lerp(1-alpha,alpha,float3(d));weight*=trilinear.x*trilinear.y*trilinear.z;
-        diffuse+=giSampleIrradiance(l,image,id,normal)*weight;if(both)specular+=giSampleIrradiance(l,image,id,reflection)*weight;total+=weight;
+        float3 trilinear=lerp(1-alpha,alpha,float3(d));float cell=trilinear.x*trilinear.y*trilinear.z;
+        float facing=max(0.02,pow(saturate(dot(-dir,normal)*0.5+0.5),2));float unseen=facing<0.2?facing*facing*facing/0.04:facing;
+        float weight=facing*visibility;if(weight<0.2)weight*=weight*weight/0.04;weight*=cell;
+        diffuse+=giSampleIrradiance(l,image,id,normal)*weight;if(both)specular+=giSampleIrradiance(l,image,id,reflection)*weight;total+=weight;open+=unseen*cell;
     }
-    if(total>1e-6){diffuse/=total;specular/=total;}
+    // Normalizing alone hands a point that sees none of its probes (a gap narrower than
+    // the spacing, between two blocks) the full light of the least-occluded one, often
+    // one in the open: light wrapping into the gap. Below a third of the weight the
+    // probes would carry unoccluded, the point darkens with its visible share.
+    if(total>1e-6){float seen=smoothstep(0,0.33,total/max(open,1e-6));diffuse*=seen/total;specular*=seen/total;}
 }
 // Irradiance from the pool at `position`: lattices front to back, finest first,
 // each weighted by its coverage of what the finer ones left, so a fine lattice

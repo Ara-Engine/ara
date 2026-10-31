@@ -159,7 +159,9 @@ fn scene_tab_drag_cancels_then_detaches_resizes_and_redocks_without_authoring_op
     assert!(resized.w > first.w && resized.h > first.h);
     let cube = shell.ui.nodes[shell.shown_node("view-cube").unwrap()].rect;
     assert!((cube.x + cube.w - (resized.x + resized.w - 12.)).abs() <= 0.5);
-    assert!((cube.y - (resized.y + 12.)).abs() <= 0.5);
+    // Top-right, below the View options toolbar docked in that corner (never over it).
+    let toolbar = shell.ui.nodes[shell.shown_node("scene-view-tools").unwrap()].rect;
+    assert!((cube.y - (toolbar.y + toolbar.h + 4.)).abs() <= 0.5);
 
     begin(&mut shell, "scene");
     shell.leave();

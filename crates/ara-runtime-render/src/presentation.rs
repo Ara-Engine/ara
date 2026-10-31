@@ -122,6 +122,12 @@ impl Presenter {
         self.render_scale = scale.map(|s| s.clamp(0.1, 1.));
     }
 
+    /// Turns effects off for diagnosis (the editor's View > Rendering debug, sent
+    /// with each Play); `full_resolution` renders at the display size.
+    pub fn set_debug(&mut self, debug: ara_render::RenderDebug) {
+        self.debug = debug;
+    }
+
     /// Enables (the default) or disables D29's hybrid ray queries on High/Epic: off,
     /// an RT device renders those presets' raster path, as a GPU without ray queries
     /// would (A/B measurements). Applies from the next prepared frame.
@@ -287,7 +293,11 @@ impl Presenter {
             self.size,
             self.options,
         )?;
-        if let (Some(scale), RenderPath::Raster(raster)) = (self.render_scale, &mut plan.path) {
+        renderer.set_debug(self.debug)?;
+        let scale = self
+            .render_scale
+            .or(self.debug.full_resolution.then_some(1.));
+        if let (Some(scale), RenderPath::Raster(raster)) = (scale, &mut plan.path) {
             raster.render_size = raster
                 .display_size
                 .map(|v| ((v as f32 * scale).round() as u32).clamp(1, v));

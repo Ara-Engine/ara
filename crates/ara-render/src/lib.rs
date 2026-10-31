@@ -11,7 +11,7 @@ pub mod renderer;
 pub mod scene;
 mod tsr;
 pub use renderer::{
-    HdrExposure, NativeContent, NativeSeed, Renderer, ViewId, ViewOutput, ViewRequest,
+    HdrExposure, NativeContent, NativeSeed, RenderDebug, Renderer, ViewId, ViewOutput, ViewRequest,
     temporal_phases,
 };
 pub use tsr::Upscaler;

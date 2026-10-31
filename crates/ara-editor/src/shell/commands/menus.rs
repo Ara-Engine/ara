@@ -25,6 +25,8 @@ pub(crate) enum Dynamic {
     PrefabSources,
     /// Cached canonical and legacy build profiles, selected through typed preferences.
     BuildProfiles,
+    /// Scene gizmo types (`overlay::gizmos::TYPES`), toggled with `view.gizmos.type`.
+    GizmoTypes,
 }
 impl Dynamic {
     /// The registry command dynamic entries run.
@@ -35,6 +37,7 @@ impl Dynamic {
             Self::SavedLayouts => "layout.load",
             Self::PrefabSources => "prefab.apply_to",
             Self::BuildProfiles => "build.profile.select",
+            Self::GizmoTypes => "view.gizmos.type",
         }
     }
 }
@@ -133,6 +136,7 @@ const PLAY: &[Item] = &[
 const TOOLS: &[Item] = &[
     C("window.profiler"),
     C("window.lighting"),
+    C("window.render_debug"),
     C("tools.gpu_capture"),
     C("tools.why"),
     C("tools.references"),
@@ -342,6 +346,20 @@ pub(crate) const MENUS: &[Menu] = &[
                 ],
             ),
             Sub(
+                "Rendering Debug",
+                &[
+                    C("window.render_debug"),
+                    S,
+                    C("view.debug.ambient_occlusion"),
+                    C("view.debug.shadows"),
+                    C("view.debug.temporal_jitter"),
+                    S,
+                    C("view.debug.full_resolution"),
+                    S,
+                    C("view.debug.reset"),
+                ],
+            ),
+            Sub(
                 "Show",
                 &[
                     C("view.show.grid"),
@@ -482,6 +500,7 @@ pub(crate) const MENUS: &[Menu] = &[
             C("window.agents"),
             C("window.profiler"),
             C("window.lighting"),
+            C("window.render_debug"),
             C("window.history"),
             S,
             Sub("Tools", TOOLS),
@@ -574,6 +593,8 @@ pub(crate) enum Context {
     ViewModes,
     /// Viewport toolbar: show flags.
     Show,
+    /// Viewport toolbar: component gizmos, icons and gizmo types.
+    Gizmos,
     /// Game view toolbar: aspect presets.
     GameAspect,
     /// Hierarchy toolbar: type filters.
@@ -871,6 +892,11 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             C("view.quality.medium"),
             C("view.quality.high"),
             C("view.quality.epic"),
+            S,
+            C("view.debug.ambient_occlusion"),
+            C("view.debug.shadows"),
+            C("view.debug.temporal_jitter"),
+            C("view.debug.full_resolution"),
         ],
         Context::HierarchyFilter => &[
             C("hierarchy.filter.save"),
@@ -907,6 +933,25 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             S,
             C("view.game"),
             C("view.hide_overlays"),
+            C("view.overlays.reset"),
+        ],
+        Context::Gizmos => &[
+            C("view.gizmos.toggle"),
+            S,
+            C("view.gizmos.icons"),
+            C("view.gizmos.icons3d"),
+            Sub(
+                "Icon Size",
+                &[
+                    C("view.gizmos.icon_size.small"),
+                    C("view.gizmos.icon_size.medium"),
+                    C("view.gizmos.icon_size.large"),
+                    C("view.gizmos.icon_size.huge"),
+                ],
+            ),
+            S,
+            C("view.gizmos.all_types"),
+            Item::Dynamic(Dynamic::GizmoTypes),
         ],
         Context::Play => &[
             C("play.options"),

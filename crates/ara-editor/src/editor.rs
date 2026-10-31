@@ -84,6 +84,9 @@ pub struct Editor {
     /// The Game view's UI scale (physical pixels per point): embedded Play draws its
     /// game UI at this scale, so it keeps its size in the panel.
     pub(crate) game_scale: f32,
+    /// Refresh rate (Hz) of the monitor showing the main window: embedded Play's
+    /// frame cap with VSync on.
+    pub(crate) display_hz: f32,
     /// Model sources already checked on disk, present or reported missing
     /// (`report_missing_sources`); each is checked once per session.
     sources_checked: BTreeSet<String>,
@@ -278,6 +281,7 @@ impl Editor {
             play_world: None,
             game_size: [1280, 720],
             game_scale: 1.,
+            display_hz: 60.,
             sources_checked: BTreeSet::new(),
             cameras,
         };
@@ -338,6 +342,14 @@ impl Editor {
             .and_then(Value::as_bool)
             .unwrap_or(true)
     }
+    /// Presentation waits for vertical blank (setting `view.vsync`, on by default).
+    pub fn vsync(&self) -> bool {
+        self.state
+            .settings
+            .get("view.vsync")
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
+    }
     /// Play in the Game view (`plays_in_game_view`): no player window, an embedded
     /// surface at the Game view's size instead.
     pub(crate) fn embed_play(&self, params: &mut Value) {
@@ -348,6 +360,8 @@ impl Editor {
                 "width": w.clamp(64, 8192),
                 "height": h.clamp(64, 8192),
                 "scale": self.game_scale,
+                // VSync caps the Game view at the monitor's rate; off, at 1000 FPS.
+                "maxFps": if self.vsync() { self.display_hz.round().clamp(1., 1000.) as u32 } else { 1000 },
             });
         }
     }
@@ -387,6 +401,9 @@ impl Editor {
             // Otherwise every update (each camera step of an orbit, each commit) looked
             // like a panel change and rebuilt the whole shell.
             state.detected_quality = self.state.detected_quality;
+            // Rendering Debug switches are session-only (never in the navigation
+            // record), so every incoming state would otherwise turn them back on.
+            state.render_debug = self.state.render_debug;
             state.apply_settings();
             // The theme is not here: it only tints deletion ghosts (none since D24),
             // and re-extracting a large scene for it took seconds.

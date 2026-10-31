@@ -50,10 +50,7 @@ impl Shell {
             preview_asset.path =
                 self.thumbnails
                     .request_live(path, source.into_bytes(), false, 192);
-        } else if matches!(
-            asset.kind.as_str(),
-            "png" | "jpg" | "jpeg" | "glb" | "gltf" | "fbx"
-        ) {
+        } else if crate::asset_tools::thumbnails::has_thumbnail(path) {
             preview_asset.path = self.thumbnails.request_sized(path, 192);
         }
         // Until the larger render lands, the grid tile's image stands in.
@@ -112,7 +109,8 @@ impl Shell {
             });
             if let Some(fields) = defaults.as_object() {
                 for (key, default) in fields {
-                    if settings.importer == "ara.fbx" && key == "opacityMaps" {
+                    // Encoding quality is not a choice people make (it follows the project).
+                    if key == "preset" || (settings.importer == "ara.fbx" && key == "opacityMaps") {
                         continue;
                     }
                     let value = settings.settings.get(key).unwrap_or(default);
@@ -177,26 +175,7 @@ impl Shell {
                     out.push_str("</panel></panel>");
                 }
             }
-            out.push_str(&format!("<panel id='import-quality-row' class='prop-row'><panel id='import-quality-label-cell' class='prop-label' style='width:{label}px'><text id='import-quality-label' text='Quality' description='Source cook quality; absent follows project/default quality' /></panel><panel id='import-quality-value' class='prop-value'>"));
-            self.choice_button(
-                "import-quality",
-                "Cook quality",
-                choices::Select {
-                    destination: choices::Destination::ImportBatch {
-                        group: format!("@source:{}", doc.id),
-                        key: "$preset".into(),
-                    },
-                    current: json!(settings.preset),
-                    options: vec![
-                        (Value::Null, "Use project/default quality".into()),
-                        (json!("fast"), "Fast".into()),
-                        (json!("balanced"), "Balanced".into()),
-                        (json!("highQuality"), "High quality".into()),
-                    ],
-                },
-                out,
-            );
-            out.push_str("</panel></panel><panel id='import-actions' class='row' style='flex-shrink:0;padding:8px;padding-left:12px'>");
+            out.push_str("<panel id='import-actions' class='row' style='flex-shrink:0;padding:8px;padding-left:12px'>");
             out.push_str(&self.bind_button(
                 "asset-reimport",
                 "Reimport",

@@ -59,6 +59,17 @@ Causes:
 Fixes:
 - Nothing to fix; wait for the newer import, or start the job again if it was cancelled by hand.
 
+## ARA2105 ASSET_IMPORTED: Asset imported
+owner: ara-asset
+
+An asset imported successfully. The engine sends this as a signal: the diagnostics store removes that asset's earlier import failures (ARA2101, ARA2102, ARA2103) instead of keeping them across sessions, and does not keep this notice itself.
+
+Causes:
+- A source imported, or re-imported after a failure.
+
+Fixes:
+- Nothing to fix.
+
 ## ARA2201 WORLD_INVALID: Invalid world data
 owner: ara-world
 

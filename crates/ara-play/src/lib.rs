@@ -15,11 +15,13 @@ mod game_ui;
 mod imports;
 pub mod link;
 mod process;
+mod render_debug;
 pub mod shm;
 pub use editor_control::{Control, Controlled, View, ViewCamera};
 pub use game_ui::{GameUi, UiBinding, UiMusic, UiSound};
 pub use imports::{ImportState, Stall};
 pub use process::ProcessMode;
+pub use render_debug::RenderDebug;
 
 use ara_doc::{AssetId, Document, Record, RecordId, Workspace};
 use serde::{Deserialize, Serialize};
@@ -61,6 +63,9 @@ pub mod method {
     pub const UNTIL: &str = "play.until";
     /// Host-time speed multiplier.
     pub const TIMESCALE: &str = "play.timescale";
+    /// Turn rendering effects off or on for diagnosis ([`crate::RenderDebug`] under
+    /// `renderDebug`), from the next presented frame.
+    pub const RENDER_DEBUG: &str = "play.renderDebug";
     /// Queue action injections for the next tick ([`crate::Inputs`]).
     pub const INPUT: &str = "play.input";
     /// Read components of one entity ([`crate::Inspect`]).
@@ -566,6 +571,22 @@ pub struct CaptureParams {
     /// VFX composite) instead of the full capture.
     #[serde(default)]
     pub presented: bool,
+    /// Measure temporal stability: render this many live frames (jitter and the
+    /// temporal resolve running, camera still), report how much the last eight change
+    /// and write the final live frame beside the image as `<name>.live.png`.
+    #[serde(default)]
+    pub stability: Option<u32>,
+    /// Record a clip: this many live frames (60 per second) while the camera moves by
+    /// `video_move` metres and turns by `video_yaw` degrees about the vertical axis,
+    /// each written to `<name>.video/NNNNN.png`.
+    #[serde(default)]
+    pub video: Option<u32>,
+    /// World-space camera travel over the clip.
+    #[serde(default)]
+    pub video_move: Option<[f32; 3]>,
+    /// Camera turn over the clip in degrees.
+    #[serde(default)]
+    pub video_yaw: Option<f32>,
 }
 fn width() -> u32 {
     1280
@@ -603,6 +624,28 @@ pub struct Captured {
     pub image: Option<String>,
     /// Numbered marks.
     pub marks: Vec<Mark>,
+    /// Temporal stability of the live frames, when asked for.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stability: Option<Stability>,
+}
+
+/// How much a still camera's consecutive live frames change (8-bit luminance): near
+/// zero for a stable image; a high worst block is visible flicker there.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Stability {
+    /// Live frames rendered before measuring.
+    pub frames: u32,
+    /// Mean absolute change per pixel between consecutive frames.
+    pub mean_change: f32,
+    /// The largest mean change of any 16x16 block.
+    pub worst_block: f32,
+    /// Share of 16x16 blocks whose mean change exceeds one level.
+    pub flickering_blocks: f32,
+    /// Median GPU work per measured frame: the sum of its timed passes (ms).
+    pub gpu_ms: f32,
+    /// The final live frame.
+    pub live_image: String,
 }
 
 /// `play.watch` params.
@@ -707,6 +750,9 @@ pub struct PlayScene {
     /// Omitted by older format-1 senders, which retain hardware auto-detection.
     #[serde(default)]
     pub rendering: ara_components::render::RenderSettings,
+    /// Effects turned off for diagnosis (`play.start` `renderDebug`); default all on.
+    #[serde(default)]
+    pub render_debug: RenderDebug,
     /// Format version (1).
     pub format: u32,
     /// Scene asset ID.

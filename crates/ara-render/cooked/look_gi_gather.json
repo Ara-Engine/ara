@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
+  "key": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7",
   "stages": [
     {
-      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_gi_gather/giGatherMain.dxil",
-      "dxil_hash": "b20f10a43c61741785f6f4b5a0a36db455e6be315b4f6f99d371bebf10be4593",
+      "dxil": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_gi_gather/giGatherMain.dxil",
+      "dxil_hash": "aaa7415c63317c321ef00f557e1e7ba36997575483aabd9910048191d08eb198",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_gi_gather/giGatherMain.metallib",
-        "metallib_hash": "f7184e439ff0cf2df947239f8d2fa4cbc40939ac5bb6cdff5e101533936d79a0",
-        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_gi_gather/giGatherMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "metallib": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_gi_gather/giGatherMain.metallib",
+        "metallib_hash": "6577780b33253e24f5fa5278d20f2b2f7d9acbbca49787401761dd8719d6d935",
+        "reflection": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_gi_gather/giGatherMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "giGatherMain",
-      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_gi_gather/giGatherMain.spv",
+      "spirv": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_gi_gather/giGatherMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "a9ac92e9cc89f8e51c1a104aec2098aa138ebad3386d1e0d34fd7a0070d6c09e",
+      "spirv_hash": "b0034a4ce789daee9184ca54068004697c942ed7b7bc4719e71023f22068db29",
       "stage": "compute"
     }
   ],

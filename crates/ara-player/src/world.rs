@@ -29,6 +29,8 @@ use std::{
 };
 mod editor_control;
 mod feedback;
+mod stability;
+mod video;
 pub(crate) use editor_control::PendingControl;
 
 /// Ticks per uninterrupted chunk of an explicit step (~0.5 s of game time).
@@ -796,6 +798,7 @@ impl World {
         frame: &mut RenderFrame,
     ) -> Result<Captured> {
         let mut marks = Vec::new();
+        let mut stability = None;
         if let Some(path) = &params.path {
             let size = [params.width, params.height];
             let marks_wanted = (params.marks > 0).then_some(params.marks);
@@ -825,21 +828,46 @@ impl World {
                         .map_err(|error| anyhow!(error))?,
                     );
                 }
-                presenter.context("no presenter")?.capture_with(
-                    frame,
-                    &ara_render::capture::CaptureRequest {
-                        camera: ara_runtime_render::camera(frame)?,
-                        size,
-                        mode: ViewMode::Lit,
-                        deterministic: true,
-                        exposure: frame.environment.exposure,
-                        settle_frames: 16,
-                        tick: frame.tick,
-                        seed: self.seed,
-                        marks: marks_wanted,
-                    },
-                    || self.fidelity_content(frame),
-                )?
+                let presenter = presenter.context("no presenter")?;
+                let request = ara_render::capture::CaptureRequest {
+                    camera: ara_runtime_render::camera(frame)?,
+                    size,
+                    mode: ViewMode::Lit,
+                    deterministic: true,
+                    exposure: frame.environment.exposure,
+                    settle_frames: 16,
+                    tick: frame.tick,
+                    seed: self.seed,
+                    marks: marks_wanted,
+                };
+                let capture =
+                    presenter.capture_with(frame, &request, || self.fidelity_content(frame))?;
+                if let Some(frames) = params.stability {
+                    let live = std::path::Path::new(path).with_extension("live.png");
+                    stability = Some(stability::measure(
+                        presenter,
+                        frame,
+                        &request,
+                        frames.clamp(1, 600),
+                        &live,
+                        || self.fidelity_content(frame),
+                    )?);
+                }
+                if let Some(frames) = params.video {
+                    video::record(
+                        presenter,
+                        frame,
+                        &request,
+                        video::Clip {
+                            frames: frames.clamp(1, 3600),
+                            travel: params.video_move.unwrap_or_default(),
+                            yaw: params.video_yaw.unwrap_or_default(),
+                        },
+                        &std::path::Path::new(path).with_extension("video"),
+                        |frame| self.fidelity_content(frame),
+                    )?;
+                }
+                capture
             };
             let mut capture = capture;
             if let Some(ui) = &self.ui {
@@ -867,6 +895,7 @@ impl World {
             entities: self.entities(),
             image: params.path.clone(),
             marks,
+            stability,
         })
     }
 

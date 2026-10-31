@@ -141,6 +141,8 @@ pub struct Presenter {
     look_override: Option<ara_render_fidelity::environment::FrameEnvironment>,
     /// Raster render scale per display axis replacing the preset's (`set_render_scale`).
     render_scale: Option<f32>,
+    /// Effects a debug view turned off (`set_debug`), applied to every raster frame.
+    debug: ara_render::RenderDebug,
     /// Hybrid ray queries on High/Epic where the device has them (`set_ray_queries`;
     /// `ARA_RAY_QUERIES=0` at creation starts with them off, for A/B captures).
     ray_queries: bool,
@@ -250,6 +252,7 @@ impl Presenter {
             environment: None,
             look_override: None,
             render_scale: None,
+            debug: ara_render::RenderDebug::default(),
             ray_queries: std::env::var_os("ARA_RAY_QUERIES").is_none_or(|v| v != "0"),
             lut: None,
             frames_in_flight: false,

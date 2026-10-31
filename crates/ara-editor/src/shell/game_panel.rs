@@ -301,10 +301,28 @@ impl Shell {
             })
         });
     }
-    /// The gameplay camera's preview image, letterboxed like Play's frames.
+    /// The gameplay camera's preview image, letterboxed like Play's frames. Before the
+    /// Game surface is laid out (its tab just shown) the frame is empty: `game_frame_stale`
+    /// rebuilds it at the real size before it is drawn. The image keeps its own pixel
+    /// size (`app::viewport::draw_unscaled`), cropped by the frame.
     fn preview_frame(&self, out: &mut String, description: &str) {
-        let [w, h] = self.game_frame().unwrap_or([640., 360.]);
-        out.push_str(&format!("<panel id='game-frame' class='game-frame' style='width:{w:.0}px;height:{h:.0}px' label='Gameplay camera' description='{description}'><image id='game-image' src='game-preview' style='width:100%;height:100%' /></panel>"));
+        let Some([w, h]) = self.game_frame() else {
+            out.push_str(
+                "<panel id='game-frame' class='game-frame' style='width:0px;height:0px' />",
+            );
+            return;
+        };
+        out.push_str(&format!("<panel id='game-frame' class='game-frame' style='width:{w:.0}px;height:{h:.0}px;flex-shrink:0;overflow:hidden' label='Gameplay camera' description='{description}'><image id='game-image' src='game-preview' style='width:100%;height:100%' /></panel>"));
+    }
+    /// Whether the Game frame's markup size (from the last layout) no longer matches
+    /// the laid-out Game surface: rebuild before drawing, so a Game tab just shown or a
+    /// resized one never shows a frame of the wrong size.
+    pub(crate) fn game_frame_stale(&self) -> bool {
+        let (Some([w, h]), Some(index)) = (self.game_frame(), self.ui.find("game-frame")) else {
+            return false;
+        };
+        let rect = self.ui.nodes[index].rect;
+        (rect.w - w.round()).abs() > 1. || (rect.h - h.round()).abs() > 1.
     }
     /// Play's start over the camera preview: title, phase, a bar and count when the
     /// phase has a total, and the elapsed time, in one hint. Its ids are the starting

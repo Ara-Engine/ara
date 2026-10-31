@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf",
+  "key": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19",
   "stages": [
     {
-      "dxil": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/hybrid_emissive/hybridEmissiveMain.dxil",
-      "dxil_hash": "ab4acb31717b467c6954166b4332f658934566272fba88ea0b907307497de1d3",
+      "dxil": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/hybrid_emissive/hybridEmissiveMain.dxil",
+      "dxil_hash": "847e632373817625e4ac87e46376725383abecc7dba22d0865ea4f32c1576103",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/hybrid_emissive/hybridEmissiveMain.metallib",
+        "metallib": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/hybrid_emissive/hybridEmissiveMain.metallib",
         "metallib_hash": "a9008a725df59c0453df21b5784dc8a03069e6ef91175406f3089a7c27603ecb",
-        "reflection": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/hybrid_emissive/hybridEmissiveMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/hybrid_emissive/hybridEmissiveMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "hybridEmissiveMain",
-      "spirv": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/hybrid_emissive/hybridEmissiveMain.spv",
+      "spirv": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/hybrid_emissive/hybridEmissiveMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "b7ced069fdf3b58e6caf9fd34201e725feeb0a7701fe2fd3ee40b205fb5289a6",
+      "spirv_hash": "a9ffa49feb518017ad62908f92ce93980a23302595692ce16f6dbb5d390cc708",
       "stage": "compute"
     }
   ],

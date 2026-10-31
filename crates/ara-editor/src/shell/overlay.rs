@@ -1,6 +1,7 @@
 //! Grid/handle projection and picking use the actual renderer camera and ID channel.
 pub(crate) mod diagnostics;
 mod gizmo;
+pub(crate) mod gizmos;
 #[cfg(test)]
 mod tests;
 use crate::{
@@ -34,6 +35,8 @@ pub struct Outlines {
     /// channel is in it: only those get an outline pass).
     groups: Vec<(String, bool)>,
     upload: Option<ara_ui_render::gpu::Image>,
+    /// Scene gizmos (icons and component shapes); clicks on icons select.
+    pub icons: gizmos::Gizmos,
 }
 impl Outlines {
     /// Refresh the channel map and group table; the outline overlays, one per colour group.
@@ -328,11 +331,21 @@ pub fn plane_point(
 }
 /// Resolve the selected pivot and orientation into image-space transform handles.
 pub fn handles(view: &DocumentView, state: &EditorState, rect: Box2) -> Option<Handles> {
+    moved_handles(view, state, rect, glam::Mat4::IDENTITY)
+}
+/// [`handles`] at the pose a live drag previews: the committed pivot and axes moved
+/// by `offset` (`GizmoState::offset`), so drawing follows the drag before it commits.
+pub fn moved_handles(
+    view: &DocumentView,
+    state: &EditorState,
+    rect: Box2,
+    offset: glam::Mat4,
+) -> Option<Handles> {
     if state.hide_gizmos || state.game_view {
         return None;
     }
     // Only the selection's transforms: composing the whole scene cost ~0.5 ms a frame.
-    let world = |id: &str| crate::world::world_transform(view.entities(), id);
+    let world = |id: &str| crate::world::world_transform(view.entities(), id).map(|m| offset * m);
     let matrix = world(state.selection.first()?)?;
     let pivot = if state.centre {
         state
@@ -508,8 +521,13 @@ pub struct GizmoState {
     pub hover: Option<Handle>,
     /// Handle being dragged; others fade and a constraint line appears.
     pub active: Option<Handle>,
+    /// World delta of the live drag preview (identity when idle): the gizmo draws
+    /// at the previewed pose, not the committed one.
+    pub offset: glam::Mat4,
+    /// Scene icon under the pointer (its entity's `render_id`): lit, with its shape.
+    pub icon: Option<u64>,
 }
-/// Create semantic-token grid, silhouette review tints and transform handles. Outlines
+/// Create semantic-token grid, silhouette review tints, Scene icons and transform handles. Outlines
 /// go by entity (`outlines`, refreshed here; upload its table with `Outlines::upload`).
 #[allow(clippy::too_many_arguments)]
 pub fn build(
@@ -581,7 +599,11 @@ pub fn build(
             });
         }
     }
-    let Some(handles) = handles(view, state, rect) else {
+    // Component gizmos read their own switches (`viewport.gizmos`, `viewport.icons`...).
+    outlines
+        .icons
+        .draw(&mut overlays, view, state, rect, revision, gizmo, &color)?;
+    let Some(handles) = moved_handles(view, state, rect, gizmo.offset) else {
         return Ok(overlays);
     };
     if state.tool == Tool::Universal {
@@ -590,7 +612,7 @@ pub fn build(
             let other_active = gizmo.active.is_some_and(|h| !belongs(&h));
             let operation_gizmo = GizmoState {
                 hover: gizmo.hover.filter(belongs).map(Handle::base),
-                active: gizmo.active.filter(belongs).map(Handle::base),
+                ..gizmo
             };
             let tint = |name: &str, alpha: f32| {
                 color(name, if other_active { alpha * 0.15 } else { alpha })

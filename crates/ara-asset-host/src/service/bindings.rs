@@ -116,7 +116,9 @@ impl Bindings {
         self.validate_settings(&settings.importer, &effective)?;
         Ok(SourceAsset {
             preset: Some(preset),
-            thread_budget: 2,
+            // Every core: workers run below normal priority, so the editor stays responsive.
+            thread_budget: std::thread::available_parallelism()
+                .map_or(2, |n| u16::try_from(n.get()).unwrap_or(256).clamp(1, 256)),
             id,
             path: path.to_owned(),
             importer: settings.importer.clone(),

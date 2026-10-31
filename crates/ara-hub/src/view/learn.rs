@@ -1,10 +1,40 @@
-//! Learn: the samples as starting points, the docs present on this machine and a
-//! short CLI reference. Deliberately light.
+//! Learn: the samples as starting points, the docs on the open-source repository
+//! and a short CLI reference. Deliberately light.
 use super::{Ctx, Page, columns, create::description, tracks};
 use crate::model::{Hub, Intent};
 
 /// Sidebar and content padding.
 const CHROME: f32 = 317.;
+
+/// Docs on GitHub: title, caption and repository path (opened on `main`).
+const DOCS: &[(&str, &str, &str)] = &[
+    (
+        "Read me first",
+        "Requirements, installation and first commands",
+        "release/README-FIRST.txt",
+    ),
+    ("Ara README", "What Ara is and how to build it", "README.md"),
+    (
+        "Samples guide",
+        "Outpost and Showcase: fetching art, building and capturing",
+        "samples/README.md",
+    ),
+    (
+        "Hub and global MCP",
+        "Projects, lifecycle and agent setup reference",
+        "crates/ara-hub-service/AGENTS.md",
+    ),
+    (
+        "Known issues",
+        "What does not work yet in this alpha",
+        "docs/KNOWN_ISSUES.md",
+    ),
+    (
+        "Engine decisions",
+        "The locked design decisions behind Ara",
+        "docs/decisions.md",
+    ),
+];
 
 const CLI: &[(&str, &str)] = &[
     (
@@ -72,30 +102,32 @@ pub(super) fn body(p: &mut Page, hub: &Hub, ctx: &Ctx) {
             },
         );
     }
-    if !ctx.docs.is_empty() {
-        p.text("section-title", "Docs on this machine");
-        p.panel("list", |p| {
-            for (row, doc) in ctx.docs.iter().enumerate() {
-                if row > 0 {
-                    p.leaf("divider");
-                }
-                p.button(
-                    &format!("doc-{row}"),
-                    "link-row",
-                    &doc.title,
-                    Some(Intent::OpenPath(doc.path.clone())),
-                    |p| {
-                        p.icon("book-open", "accent");
-                        p.panel("col fill", |p| {
-                            p.text("fg", &doc.title);
-                            p.text("tiny muted", &doc.caption);
-                        });
-                        p.icon("external-link", "icon-sm");
-                    },
-                );
+    p.text("section-title", "Docs on GitHub");
+    p.panel("list", |p| {
+        for (row, (title, caption, path)) in DOCS.iter().enumerate() {
+            if row > 0 {
+                p.leaf("divider");
             }
-        });
-    }
+            let url = format!(
+                "https://github.com/{}/blob/main/{path}",
+                ara_update::DEFAULT_REPOSITORY
+            );
+            p.button(
+                &format!("doc-{row}"),
+                "link-row",
+                title,
+                Some(Intent::OpenUrl(url)),
+                |p| {
+                    p.icon("book-open", "accent");
+                    p.panel("col fill", |p| {
+                        p.text("fg", title);
+                        p.text("tiny muted", caption);
+                    });
+                    p.icon("external-link", "icon-sm");
+                },
+            );
+        }
+    });
     p.text("section-title", "Command line");
     p.panel("code-block", |p| {
         for (index, (command, what)) in CLI.iter().enumerate() {

@@ -1,5 +1,6 @@
 //! Renderer orchestration. Extraction snapshots are uploaded once; frames record handles.
 mod capabilities;
+mod debug;
 mod edit;
 mod frame;
 mod gi;
@@ -27,6 +28,7 @@ use anyhow::{Result, ensure};
 use ara_gpu::{
     Access, Buffer, Device, GpuDevice, Image, Pipeline, Queue, Resource, vk, vulkan::PassTiming,
 };
+pub use debug::RenderDebug;
 pub use frame::temporal_phases;
 use glam::{Mat4, Vec3};
 pub use native::{NativeContent, NativeSeed};
@@ -130,6 +132,10 @@ pub struct Renderer {
     frame_number: u32,
     /// A fixed sample offset for every frame (`set_jitter_override`).
     jitter_override: Option<[f32; 2]>,
+    /// Effects a debug view turned off (`set_debug`).
+    debug: RenderDebug,
+    /// The quality last requested (`set_quality`), before `debug` removes effects.
+    requested_quality: Option<crate::look::Quality>,
     artifacts: PathBuf,
     shader_metadata: crate::capture::ShaderMetadata,
     last_timings: Vec<PassTiming>,
@@ -491,6 +497,8 @@ impl Renderer {
     pub fn set_quality(&mut self, quality: crate::look::Quality) -> Result<()> {
         ara_gpu::cpu_scope!("Raster.set_quality");
         quality.validate()?;
+        self.requested_quality = Some(quality);
+        let quality = self.debug.apply(quality);
         let previous = std::mem::replace(&mut self.look.quality, quality);
         // The preset's upscaler, unless `ARA_UPSCALER` forces one (A/B runs).
         self.tsr
@@ -579,6 +587,20 @@ impl Renderer {
     /// the captures (upscaler studies); live views never set it.
     pub fn set_jitter_override(&mut self, jitter: Option<[f32; 2]>) {
         self.jitter_override = jitter;
+    }
+    /// Turns effects off (or back on) from the next frame, for diagnosis; the
+    /// requested quality is kept and restored when an effect returns.
+    pub fn set_debug(&mut self, debug: RenderDebug) -> Result<()> {
+        if debug == self.debug {
+            return Ok(());
+        }
+        self.debug = debug;
+        let quality = self.requested_quality.unwrap_or(self.look.quality);
+        self.set_quality(quality)
+    }
+    /// The effects a debug view has turned off (`set_debug`).
+    pub fn debug(&self) -> RenderDebug {
+        self.debug
     }
     /// Selects the temporal upscaler from the next frame (`set_quality` applies the
     /// preset's `Quality::upscaler`, or `ARA_UPSCALER` when set). TSR resolves

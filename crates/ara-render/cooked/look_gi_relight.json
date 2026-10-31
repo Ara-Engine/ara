@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
+  "key": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7",
   "stages": [
     {
-      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_gi_relight/giRelightMain.dxil",
-      "dxil_hash": "a0f33aaadcff05bd0719b037f48e59bad6aead120e1950dc2f27db9ae560bda1",
+      "dxil": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_gi_relight/giRelightMain.dxil",
+      "dxil_hash": "8145d338f0b9f1ae9eca165c6cb23c9fdc31bd6cedfcf7f6bd1a02d9649ce0e5",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_gi_relight/giRelightMain.metallib",
-        "metallib_hash": "5ec160f64c5665ebeda90ad8f04c3ff5d7ed6a6613259225ef7de795d68a22cf",
-        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_gi_relight/giRelightMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "metallib": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_gi_relight/giRelightMain.metallib",
+        "metallib_hash": "5b8060918861d080aad99e16d0cee61b6837fefd3dedb566160d41b8fe23049e",
+        "reflection": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_gi_relight/giRelightMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "giRelightMain",
-      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_gi_relight/giRelightMain.spv",
+      "spirv": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_gi_relight/giRelightMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "f1085d13aeeb9fd7cd4b74e1c2320fa3668ec73b186ec274b652fcb8b4fa8edf",
+      "spirv_hash": "5e8325d3ca1dab98718e0be31536f2c53431dec1524e1a4d6e037650a8ef354e",
       "stage": "compute"
     }
   ],

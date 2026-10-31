@@ -364,6 +364,18 @@ impl Shell {
                     }
                     Binding::Command(id, target) => {
                         let (id, target) = (*id, target.clone());
+                        // Double-clicking a tab maximizes its panel (again restores).
+                        let id = match &target {
+                            commands::Target::Panel(panel) if id == "window.show_panel" => {
+                                let now = std::time::Instant::now();
+                                let double = self.tab_click.as_ref().is_some_and(|(last, at)| {
+                                    last == panel && now.duration_since(*at).as_millis() < 450
+                                });
+                                self.tab_click = (!double).then(|| (panel.clone(), now));
+                                if double { "window.maximize" } else { id }
+                            }
+                            _ => id,
+                        };
                         let appended = if id == "field.set" {
                             match &target {
                                 commands::Target::Text(target) => target
@@ -523,6 +535,10 @@ impl Shell {
                     }
                     Binding::DialogAction(which) => {
                         self.dialog_action(editor, which)?;
+                        rebuild = true;
+                    }
+                    Binding::Agent(client, action) => {
+                        self.agent_action(*client, *action);
                         rebuild = true;
                     }
                     Binding::ResourceContent(doc, commands, why) => {

@@ -11,7 +11,7 @@ mod tests;
 mod view;
 
 pub(crate) use authoring::{Create, Preset};
-pub(super) const CSS: &str = include_str!("lighting/lighting.css");
+pub(super) const CSS: &str = super::live_styles::embedded::LIGHTING;
 const PAGE: usize = 64;
 
 /// Local reading position only; authoring and selection remain typed authority operations.
@@ -124,7 +124,7 @@ impl Shell {
             .shown_node("inspector-scroll")
             .or_else(|| self.shown_node("body-inspector"))
             .map_or(320., |index| self.ui.nodes[index].rect.w);
-        let label = self.label_px(width);
+        let label = self.row_metrics(width);
         self.bind_command("lighting-inspector-full", "window.inspector", Target::None);
         out.push_str("<panel id='lighting-inspector-heading' class='lighting-heading'><text id='lighting-inspector-title' class='lighting-title' text='Lighting selection' /><text id='lighting-inspector-help' class='lighting-help' text='Local volume size and orientation come from Transform. Optional override checkboxes inherit when unchecked; each edited value uses normal Undo.' /><button id='lighting-inspector-full' class='lighting-button' text='All components' description='Show the full Inspector, including component add, remove and reorder' action='Dispatch' /></panel><scroll id='inspector-scroll' style='min-height:0px;flex-grow:1;flex-basis:0px'><panel id='inspector-components' class='inspector-components'>");
         let mut component = String::new();

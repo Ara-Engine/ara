@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
+  "key": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7",
   "stages": [
     {
-      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/tsr_luma_instability/tsrLumaInstabilityMain.dxil",
-      "dxil_hash": "fa43c25aee9103c521d2c4d638388bf28a0876c03eb224bb03a293c7f7271792",
+      "dxil": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/tsr_luma_instability/tsrLumaInstabilityMain.dxil",
+      "dxil_hash": "b8363a4229face48b47357f5c5a9f3e279aef889d8c2d133a8f53910af1ac622",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/tsr_luma_instability/tsrLumaInstabilityMain.metallib",
+        "metallib": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/tsr_luma_instability/tsrLumaInstabilityMain.metallib",
         "metallib_hash": "19eabd6fddad0c31989930620b3ca211b6aeb89899489261afb0efdbef9a8063",
-        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/tsr_luma_instability/tsrLumaInstabilityMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/tsr_luma_instability/tsrLumaInstabilityMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "tsrLumaInstabilityMain",
-      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/tsr_luma_instability/tsrLumaInstabilityMain.spv",
+      "spirv": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/tsr_luma_instability/tsrLumaInstabilityMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "9b65a2ec7acd222d74dbbfab9169c70d47e09f991108bb22d24c5f1f91d299e6",
+      "spirv_hash": "daf62200478406d2816711a1a1eee97f9540e9e450244f73a106561b85f987b7",
       "stage": "compute"
     }
   ],

@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf",
+  "key": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19",
   "stages": [
     {
-      "dxil": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/primary_raster/primaryRasterMain.dxil",
-      "dxil_hash": "88f7c64825ed0030373f577a28a129166fbc4b45f0cc8f6271b59e9a7824c2bb",
+      "dxil": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/primary_raster/primaryRasterMain.dxil",
+      "dxil_hash": "606f80b8af4c2d6ff78d62e8c1cfc51f985ca81e9b3e7751c1214d25057c5bfa",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/primary_raster/primaryRasterMain.metallib",
+        "metallib": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/primary_raster/primaryRasterMain.metallib",
         "metallib_hash": "db2140cf61ca698d4a24b39ea7b5d0bf91567681a491a891165f8dab63a8a749",
-        "reflection": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/primary_raster/primaryRasterMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/primary_raster/primaryRasterMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "primaryRasterMain",
-      "spirv": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/primary_raster/primaryRasterMain.spv",
+      "spirv": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/primary_raster/primaryRasterMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "f01c18ddb02889af91a64a89f4c21ebb5439943ca1b673706e668b175078a2a4",
+      "spirv_hash": "bb4bbd5b189f47dfce6a40c6f7576dae8a0acf1087578c01e5362f47e550d3ce",
       "stage": "compute"
     }
   ],

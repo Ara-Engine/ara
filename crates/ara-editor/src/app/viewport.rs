@@ -457,9 +457,13 @@ impl SceneView {
                 ray_tracing: settings.ray_tracing,
             },
         )?;
-        let RenderPath::Raster(plan) = plan.path else {
+        let RenderPath::Raster(mut plan) = plan.path else {
             return Ok(());
         };
+        // The Scene view renders at its full physical size: the preset's temporal
+        // upscale (`raster_scale` 0.45-0.7) blurred edges, outlines and wireframes,
+        // most visibly while the camera moved. Play and exports keep the preset scale.
+        plan.render_size = plan.display_size;
         self.convergence.configure(ara_render::temporal_phases(
             plan.render_size,
             plan.display_size,
@@ -467,6 +471,13 @@ impl SceneView {
         let presentation = (view_mode(&editor.state.view_mode), plan);
         if self.raster_presentation != Some(presentation) {
             self.raster_presentation = Some(presentation);
+            self.convergence.reset();
+        }
+        // Rendering Debug switches change the image without changing its input.
+        if renderer.debug() != editor.state.render_debug {
+            renderer
+                .set_debug(editor.state.render_debug)
+                .map_err(|error| format!("{error:#}"))?;
             self.convergence.reset();
         }
         if self.camera != Some(editor.state.camera) {
@@ -523,6 +534,7 @@ impl SceneView {
             &mut self.content_job,
             &mut self.content_ready,
             key,
+            self.raster_input,
             renderer,
             wait_for_content,
         )?;
@@ -582,6 +594,7 @@ impl SceneView {
                 .content_ready
                 .take()
                 .ok_or("Scene content publication")?;
+            let candidate_epoch = candidate.key.epoch;
             let prepared = candidate.scene;
             self.failed = Some(revision);
             let raster = self.raster.get_or_insert_with(|| {
@@ -607,9 +620,13 @@ impl SceneView {
                 revision.2,
                 content.snapshot_revision(),
             ));
-            self.raster_input = self
-                .revision
-                .map(|revision| content::Key { revision, ..key });
+            // The candidate's own draft epoch: an older slider value shown mid-drag
+            // leaves the latest one still to extract.
+            self.raster_input = self.revision.map(|revision| content::Key {
+                revision,
+                epoch: candidate_epoch,
+                ..key
+            });
             self.patched_pose = key.pose;
             self.failed = None;
             self.convergence.reset();
@@ -886,6 +903,12 @@ impl SceneView {
         self.revision = Some(revision);
         Ok(())
     }
+    /// Whether a Scene frame is still on its way: one in flight to collect, or
+    /// content being prepared for the next. After an edit these render at once
+    /// rather than after the input pause, so the edit shows as soon as it lands.
+    pub fn frame_in_flight(&self) -> bool {
+        self.frame_pending || self.content_job.is_some() || self.content_ready.is_some()
+    }
     pub fn needs_frame(&self, quality: bool) -> bool {
         if self
             .recovery
@@ -1020,6 +1043,37 @@ fn pose_key(gesture: Option<&crate::world::gesture::Gesture>) -> Option<u64> {
         }
         hash.finish()
     })
+}
+
+/// Draw view image `image` at its own pixel size (`size` physical pixels at `dpi`),
+/// centred on its node and cropped by the panel's clip, never stretched
+/// over the node: a resized panel or window shows the last completed frame at its
+/// native size until the frame at the new size lands. Run on the display list right
+/// before the UI renders; picking and overlays keep the node's rect.
+pub(super) fn draw_unscaled(
+    display: &mut ara_ui::paint::DisplayList,
+    image: u32,
+    size: [u32; 2],
+    dpi: f32,
+) {
+    if size.contains(&0) || dpi <= 0. {
+        return;
+    }
+    for draw in &mut display.commands {
+        if let ara_ui::paint::Draw::Image {
+            rect, image: id, ..
+        } = draw
+            && *id == image
+        {
+            let (w, h) = (size[0] as f32 / dpi, size[1] as f32 / dpi);
+            // Centred: the cameras keep their vertical FOV around the view centre,
+            // so a frame from before a resize lines up with the next one.
+            rect.x += ((rect.w - w) * 0.5).round();
+            rect.y += ((rect.h - h) * 0.5).round();
+            rect.w = w;
+            rect.h = h;
+        }
+    }
 }
 
 #[cfg(test)]

@@ -47,7 +47,6 @@ impl Shell {
     ) -> ara_ui::Result<()> {
         let importer = self.import_batch.default_type.clone();
         settings(&importer)?;
-        let policy = commands::policy(editor)?;
         out.push_str("<scroll id='import-defaults-inspector' style='flex-grow:1;flex-basis:0px;min-height:0px;padding:8px;gap:8px'><text id='import-defaults-title' class='heading' text='Project import defaults' /><text id='import-defaults-scope' class='caption' style='white-space:normal' text='Explicit source fields take priority, then these typed defaults, then built-in importer values. Existing sources which inherit changed fields are reimported; each completed edit has one Undo.' />");
         self.choice_button(
             "import-defaults-type",
@@ -59,23 +58,6 @@ impl Shell {
                     .into_iter()
                     .map(|value| (json!(value), view::label(value).into()))
                     .collect(),
-            },
-            out,
-        );
-        self.choice_button(
-            "import-defaults-quality",
-            "Global texture quality",
-            choices::Select {
-                destination: choices::Destination::ImportBatch {
-                    group: "@project".into(),
-                    key: "$preset".into(),
-                },
-                current: json!(policy.preset),
-                options: vec![
-                    (json!("fast"), "Fast".into()),
-                    (json!("balanced"), "Balanced".into()),
-                    (json!("highQuality"), "High quality".into()),
-                ],
             },
             out,
         );

@@ -76,11 +76,12 @@ WireVarying nativeWireVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID
     Varying v=nativeVertex(vertex,instance,false,false);WireVarying o;o.clip=v.clip;
     uint corner=vertex%3;o.bary=float3(corner==0,corner==1,corner==2);return o;
 }
-// Edge coverage: the distance to the nearest edge in pixels, antialiased over 1.5.
+// Edge coverage of a one-pixel line: each triangle covers its half-pixel side of a
+// shared edge, falling off linearly to zero one pixel away (one pixel wide in all).
 [shader("fragment")]
 float4 nativeWireFragment(WireVarying v):SV_Target0{
-    float3 edge=smoothstep(float3(0),fwidth(v.bary)*1.5,v.bary);
-    return float4(1-min(edge.x,min(edge.y,edge.z)),0,0,0);
+    float3 pixels=v.bary/max(fwidth(v.bary),1e-6);
+    return float4(saturate(1-min(pixels.x,min(pixels.y,pixels.z))),0,0,0);
 }
 struct ShadowVarying {float4 clip:SV_Position;float2 uv:TEXCOORD0;float2 uv1:TEXCOORD1;nointerpolation uint material:TEXCOORD2;};
 [shader("vertex")]

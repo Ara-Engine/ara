@@ -20,7 +20,10 @@ mod process;
 use limit::{Admission, Work};
 use process::Running;
 
-const MAX_FRAME: u64 = 512 * 1024 * 1024;
+/// Largest IPC frame: a sanity bound on the length prefix. One import returns all of
+/// its cooked artifacts in a frame, and a large scene (hundreds of baked 2K textures)
+/// exceeds 512 MiB.
+const MAX_FRAME: u64 = 4 * 1024 * 1024 * 1024;
 pub(crate) fn background_priority() {
     #[cfg(windows)]
     {
@@ -101,7 +104,7 @@ fn write_frame(writer: &mut impl Write, value: &impl Serialize) -> Result<()> {
     drop(encode);
     let _write = crate::trace::Scope::new("ipc.write", "frame").bytes(bytes.len());
     if bytes.len() as u64 > MAX_FRAME {
-        return Err(Error::Worker("frame exceeds 512 MiB".into()));
+        return Err(Error::Worker("frame exceeds 4 GiB".into()));
     }
     writer.write_all(&(bytes.len() as u64).to_le_bytes())?;
     writer.write_all(&bytes)?;
@@ -114,7 +117,7 @@ fn read_frame<T: serde::de::DeserializeOwned>(reader: &mut impl Read) -> Result<
     reader.read_exact(&mut len)?;
     let len = u64::from_le_bytes(len);
     if len > MAX_FRAME {
-        return Err(Error::Worker("frame exceeds 512 MiB".into()));
+        return Err(Error::Worker("frame exceeds 4 GiB".into()));
     }
     let mut bytes = vec![0; len as usize];
     reader.read_exact(&mut bytes)?;
@@ -508,7 +511,9 @@ impl ProcessWorker {
             .args(&self.arguments)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null());
+            // A worker prints only why it stopped; discarding that left "worker exited
+            // or closed output" as the whole story.
+            .stderr(Stdio::inherit());
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;

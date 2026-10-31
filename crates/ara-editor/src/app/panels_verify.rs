@@ -775,7 +775,7 @@ impl Verification {
                 "scene-hover",
                 GizmoState {
                     hover: Some(Handle::Axis(0)),
-                    active: None,
+                    ..Default::default()
                 },
             ),
             (
@@ -783,6 +783,7 @@ impl Verification {
                 GizmoState {
                     hover: None,
                     active: Some(Handle::Plane(1)),
+                    ..Default::default()
                 },
             ),
         ] {

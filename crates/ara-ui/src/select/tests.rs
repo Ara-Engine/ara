@@ -75,8 +75,8 @@ fn closed_select_has_native_chevron_reserved_caption_space_and_enabled_hover_foc
         assert_eq!(
             ui.nodes[index].computed.background,
             ui.sheet
-                .color_token("--background")
-                .expect("enabled field fill")
+                .color_token("--raised")
+                .expect("raised pop-up button")
         );
         let id = stable_id(select.control_id());
         let lines: Vec<_> = ui
@@ -121,13 +121,20 @@ fn closed_select_has_native_chevron_reserved_caption_space_and_enabled_hover_foc
         )?;
         assert_eq!(
             ui.nodes[index].computed.background,
-            ui.sheet.color_token("--hover-surface").expect("hover")
+            ui.sheet.color_token("--raised-hover").expect("hover")
         );
         input.focus(&mut ui, id)?;
         ui.frame(&mut text)?;
         assert_eq!(
-            ui.nodes[index].computed.border_color,
-            ui.sheet.color_token("--ring").expect("focus ring")
+            ui.nodes[index]
+                .computed
+                .shadows
+                .last()
+                .map(|s| (s.spread, s.color)),
+            Some((
+                3.,
+                ui.sheet.color_token("--focus-halo").expect("focus halo")
+            ))
         );
         let mut unavailable = SelectOption::new(0, "Engine not installed");
         unavailable.disabled = Some("Install the engine first".into());

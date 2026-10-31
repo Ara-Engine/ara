@@ -258,11 +258,39 @@ impl Shell {
             return Ok(false);
         };
         let Some(preview) = self.drop_preview.take() else {
+            if self.header_double_click(&panel) {
+                self.execute(editor, "window.maximize", &commands::Target::Panel(panel))?;
+                self.rebuild(editor)?;
+            }
             return Ok(false);
         };
         self.drop_tab(editor, &panel, &preview.target, rect)?;
         self.rebuild(editor)?;
         Ok(true)
+    }
+
+    /// Whether this click on lone panel `panel`'s title (not its buttons) is the
+    /// second of a double click, which maximizes or restores it as a tab's does.
+    fn header_double_click(&mut self, panel: &str) -> bool {
+        let [x, y] = self.pointer;
+        let on_title = self
+            .ui
+            .find(&format!("header-{panel}"))
+            .is_some_and(|i| self.ui.nodes[i].visible && self.ui.nodes[i].rect.contains(x, y))
+            && self
+                .ui
+                .hit_test(x, y)
+                .is_none_or(|i| self.ui.nodes[i].element.tag != "button");
+        if !on_title {
+            return false;
+        }
+        let now = std::time::Instant::now();
+        let double = self
+            .tab_click
+            .as_ref()
+            .is_some_and(|(last, at)| last == panel && now.duration_since(*at).as_millis() < 450);
+        self.tab_click = (!double).then(|| (panel.to_owned(), now));
+        double
     }
 
     /// Layout changes are typed navigation commands, persisted by the authority.

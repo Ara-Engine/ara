@@ -37,6 +37,21 @@ impl Present {
             .set_frames_in_flight(enabled)?;
         Ok(())
     }
+    /// As on Vulkan (`displaySyncEnabled`); takes effect at once, so always true.
+    /// # Safety
+    /// `gpu` created this presentation and is live.
+    pub unsafe fn set_vsync(
+        &mut self,
+        _gpu: &GpuDevice,
+        _window: &Window,
+        vsync: bool,
+    ) -> Result<bool> {
+        self.presenter
+            .as_mut()
+            .context("presentation retired")?
+            .set_vsync(vsync);
+        Ok(true)
+    }
     /// As on Vulkan, but always true: Metal's copies never wait on the display (a
     /// drawable is writable once acquired, and `present_image` bounds that wait and
     /// skips the frame), a synchronous present waits its own copy, and with frames in

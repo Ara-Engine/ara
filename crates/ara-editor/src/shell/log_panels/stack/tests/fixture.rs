@@ -63,7 +63,7 @@ impl Fixture {
         editor
             .action("editor.layout.move", json!({"panel":panel,"slot":"view"}))
             .unwrap();
-        let mut shell = Shell::new(&mut editor, [1120., 780.]).unwrap();
+        let mut shell = Shell::new(&mut editor, [1120., 840.]).unwrap();
         shell.offscreen = true;
         shell.open_ide = false;
         Self {

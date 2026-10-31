@@ -162,6 +162,8 @@ const METHOD_NOT_FOUND: i64 = -32601;
 struct Player {
     quality: QualityChoice,
     render_options: RenderOptions,
+    /// Effects the Play start turned off for diagnosis (`PlayScene::render_debug`).
+    render_debug: ara_render::RenderDebug,
     link: Link,
     args: Args,
     size: [u32; 2],
@@ -277,6 +279,7 @@ fn run(args: Args, launched: Instant) -> Result<()> {
         render_options: RenderOptions {
             ray_tracing: args.ray_tracing.unwrap_or(false),
         },
+        render_debug: ara_render::RenderDebug::default(),
         link,
         args,
         size,
@@ -503,6 +506,9 @@ impl Player {
                 (&mut self.presenter, world.probe_scene())
             {
                 presenter.set_probe_scene(doc, cache);
+            }
+            if let Some(presenter) = &mut self.presenter {
+                presenter.set_debug(self.render_debug);
             }
             let listener = world::listener(&self.frame);
             let simulation = world.runtime.world();
@@ -977,6 +983,17 @@ impl Player {
                 world.runtime.set_timescale(value)?;
                 json!({"timescale": value})
             }
+            method::RENDER_DEBUG => {
+                #[derive(serde::Deserialize)]
+                #[serde(rename_all = "camelCase")]
+                struct Update {
+                    render_debug: ara_play::RenderDebug,
+                }
+                let update: Update = parse(params)?;
+                // The presenter takes it before the next presented frame.
+                self.render_debug = render_debug(update.render_debug);
+                json!({"renderDebug": update.render_debug})
+            }
             method::STEP => {
                 let step: ara_play::Step = parse(params)?;
                 serde_json::to_value(world.step(step.ticks, &step.inputs, &mut alive)?)?
@@ -1024,6 +1041,7 @@ impl Player {
                     .get_or_insert_with(|| Presenter2d::new(&self.args.gpu_cache));
                 if let Some(presenter) = &mut self.presenter {
                     presenter.set_quality(params.preset.map(Into::into).unwrap_or(self.quality));
+                    presenter.set_debug(self.render_debug);
                 }
                 serde_json::to_value(world.capture(
                     &params,
@@ -1102,6 +1120,7 @@ impl Player {
         self.render_options = RenderOptions {
             ray_tracing: self.args.ray_tracing.unwrap_or(scene.rendering.ray_tracing),
         };
+        self.render_debug = render_debug(scene.render_debug);
         if let Some(presenter) = &mut self.presenter {
             presenter.set_quality(self.quality);
             presenter.set_render_options(self.render_options);
@@ -1171,6 +1190,16 @@ impl Player {
     }
 }
 
+/// The renderer's switches for a Play start's `renderDebug` (one field each).
+fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
+    ara_render::RenderDebug {
+        ambient_occlusion: debug.ambient_occlusion,
+        shadows: debug.shadows,
+        temporal_jitter: debug.temporal_jitter,
+        full_resolution: debug.full_resolution,
+    }
+}
+
 /// Announces known-long silent work (device creation, world build) to the owner's
 /// watchdog; a hang past the deadline is still reported.
 fn busy(link: &mut Link, what: &str) -> Result<()> {
@@ -1218,5 +1247,28 @@ mod cli_tests {
     fn game_and_standalone_arguments_form_one_valid_command() {
         use clap::CommandFactory;
         super::Args::command().debug_assert();
+    }
+
+    /// The editor sends `ara_render::RenderDebug` as `play.start` `renderDebug`;
+    /// the protocol's copy must read every switch back unchanged.
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn render_debug_survives_the_play_start_wire() {
+        for debug in [
+            ara_render::RenderDebug::default(),
+            ara_render::RenderDebug {
+                ambient_occlusion: false,
+                shadows: false,
+                temporal_jitter: false,
+                full_resolution: true,
+            },
+        ] {
+            let wire: ara_play::RenderDebug =
+                serde_json::from_value(serde_json::to_value(debug).unwrap()).unwrap();
+            assert_eq!(super::render_debug(wire), debug);
+        }
+        let partial: ara_play::RenderDebug =
+            serde_json::from_value(serde_json::json!({"shadows": false})).unwrap();
+        assert!(partial.ambient_occlusion && !partial.shadows && !partial.full_resolution);
     }
 }

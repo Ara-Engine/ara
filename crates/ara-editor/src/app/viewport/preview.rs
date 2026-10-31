@@ -109,7 +109,7 @@ impl SceneView {
             preview.view = Some(renderer.create_view()?);
         }
         let view = preview.view.as_mut().ok_or("Game preview camera")?;
-        let request = ara_render::ViewRequest {
+        let mut request = ara_render::ViewRequest {
             camera: request.camera,
             size: request.size,
             render_size: plan.render_size,
@@ -117,7 +117,16 @@ impl SceneView {
             exposure,
         };
         if !renderer.preallocate_view(view, &request)? {
-            return renderer.view_output(view).map_err(Into::into);
+            // A resizing panel keeps rendering at the extent it has (drawn
+            // unscaled) while the new one allocates; only a first frame waits.
+            let shown = renderer.view_output(view)?;
+            match (renderer.view_extent(view), &shown) {
+                (Some((render_size, size)), Some(_)) => {
+                    request.size = size;
+                    request.render_size = render_size;
+                }
+                _ => return Ok(shown),
+            }
         }
         let mut submitted = false;
         let output = renderer.submit_secondary(view, &request, |renderer, request| {

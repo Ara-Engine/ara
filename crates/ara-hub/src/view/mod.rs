@@ -6,6 +6,7 @@ mod create;
 mod dialogs;
 mod installs;
 mod learn;
+mod markdown;
 mod projects;
 mod settings;
 mod shell;
@@ -22,15 +23,16 @@ use std::{
 /// The stylesheet; colors are theme tokens only (D18).
 pub const CSS: &str = include_str!("hub.css");
 
-/// Hub surfaces include the shared choice styles and let long option rows grow.
+/// The embedded stylesheet (see [`compose`]).
 pub fn stylesheet() -> &'static str {
     static SHEET: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-    SHEET.get_or_init(|| {
-        format!(
-            "{CSS}{}\n.kit-select-option {{height:auto;min-height:32px;flex-shrink:0;}}",
-            ara_ui::select::CSS
-        )
-    })
+    SHEET.get_or_init(|| compose(CSS, ara_ui::select::CSS))
+}
+
+/// Hub surfaces include the shared choice styles and let long option rows grow.
+/// Debug builds compose live sources the same way (`native::live_styles`).
+pub fn compose(hub: &str, select: &str) -> String {
+    format!("{hub}{select}\n.kit-select-option {{height:auto;min-height:32px;flex-shrink:0;}}")
 }
 
 /// Fonts shared with the editor: Inter, JetBrains Mono and Arabic fallback.
@@ -54,17 +56,6 @@ pub enum Binding {
     Field(fn(String) -> Intent),
 }
 
-/// A Learn link: title, caption and the local file it opens.
-#[derive(Clone, Debug)]
-pub struct Doc {
-    /// Link title.
-    pub title: String,
-    /// One-line caption.
-    pub caption: String,
-    /// Local file.
-    pub path: PathBuf,
-}
-
 /// Inputs the views need besides the model.
 pub struct Ctx<'a> {
     /// Show the close button's non-interactive hint after native hover hit-testing.
@@ -77,8 +68,6 @@ pub struct Ctx<'a> {
     pub thumbnail: &'a dyn Fn(&Path) -> Option<String>,
     /// Screen rect of the open menu's button, from the previous layout.
     pub anchor: Option<[f32; 4]>,
-    /// Learn links that exist on this machine.
-    pub docs: &'a [Doc],
 }
 
 /// Generated markup plus its control bindings and wanted preview images.

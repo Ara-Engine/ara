@@ -176,7 +176,15 @@ impl Shell {
             self.menu = None;
             return;
         }
-        let at = [self.pointer[0] + 2., self.pointer[1] + 2.];
+        // An asset picker drops down below its field, like a select. Opened at the
+        // pointer, its "None" row sat under the cursor, so a double-click cleared the
+        // field.
+        let field = matches!(source, Source::Assets(..))
+            .then(|| self.ui.by_id(node).map(|i| self.ui.nodes[i].rect))
+            .flatten();
+        let at = field.map_or([self.pointer[0] + 2., self.pointer[1] + 2.], |r| {
+            [r.x, r.y + r.h + 2.]
+        });
         self.open_menu_at(source, at);
         if let Some(menu) = &mut self.menu {
             menu.anchor = anchor;
@@ -225,6 +233,18 @@ impl Shell {
     }
     fn dynamic(&self, editor: &Editor, kind: Dynamic, out: &mut Vec<Row>) {
         match kind {
+            Dynamic::GizmoTypes => {
+                let settings = super::overlay::gizmos::Settings::read(&editor.state);
+                for gizmo in super::overlay::gizmos::TYPES {
+                    out.push(Row::Command {
+                        id: kind.command().into(),
+                        label: Some(gizmo.label.into()),
+                        checked: Some(settings.shows(gizmo.key)),
+                        target: Target::Component(gizmo.key.into()),
+                        path: String::new(),
+                    });
+                }
+            }
             Dynamic::BuildProfiles => {
                 let selected = self.selected_build_profile(editor).ok();
                 for name in self.build_profiles() {
@@ -620,9 +640,15 @@ impl Shell {
             // The root opens below its control (or at the click); each submenu beside
             // the row that opened it. `Ui::frame` flips and shifts them into the window.
             let place = match (level, &menu.anchor) {
+                // An asset picker is at least as wide as its field, like a select.
                 (0, Some(anchor)) => format!(
-                    "anchor='{}' placement='bottom-start' offset='2'",
-                    escape(anchor)
+                    "anchor='{}' placement='bottom-start' offset='2'{}",
+                    escape(anchor),
+                    if matches!(menu.source, Source::Assets(..)) {
+                        " match-anchor='width'"
+                    } else {
+                        ""
+                    }
                 ),
                 (0, None) => format!(
                     "at='{},{}' placement='bottom-start' offset='0'",
@@ -645,7 +671,7 @@ impl Shell {
                     ara_ui::source::stable_id("menu-filter"),
                     Binding::MenuFilter,
                 );
-                out.push_str(&format!("<panel id='menu-filter-row' class='menu-filter'><field id='menu-filter' class='search-input' style='height:{}px' text='{}' label='Filter this menu' action='Dispatch' /><image id='menu-filter-icon' class='search-icon' src='icon-search' tint='true' />{}</panel>",Self::row_height(editor)-4.,escape(&menu.query),if menu.query.is_empty(){"<text id='menu-filter-placeholder' class='placeholder' text='Type to filter' />"}else{""}));
+                out.push_str(&format!("<panel id='menu-filter-row' class='menu-filter'><field id='menu-filter' class='search-input menu-search' style='height:{}px' text='{}' label='Filter this menu' action='Dispatch' /><image id='menu-filter-icon' class='search-icon' src='icon-search' tint='true' />{}</panel>",Self::row_height(editor)-4.,escape(&menu.query),if menu.query.is_empty(){"<text id='menu-filter-placeholder' class='placeholder' text='Type to filter' />"}else{""}));
                 if rows.is_empty() {
                     out.push_str("<text id='menu-empty' class='caption' text='No matching commands' style='padding:6px' />");
                 }

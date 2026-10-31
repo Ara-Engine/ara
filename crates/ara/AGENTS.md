@@ -107,5 +107,5 @@ activity/install-mcp` manage the user service. Install output is one-time global
 `ara hub register-engine/unregister-engine` register this exact installed build;
 `ara hub shutdown` stops the service without closing user projects.
 `register-engine/unregister-engine --no-start` reuse RPC or lock the registry offline;
-they never spawn a service. `install-mcp` prints the current absolute executable path.
-Claude JSON or Codex TOML. Wire API and UI contract: ../ara-hub-service/AGENTS.md.
+they never spawn a service. `install-mcp` prints `ara_agents::snippet` for this executable:
+Claude/Cursor JSON, Codex TOML or OpenCode JSON. Wire API and UI contract: ../ara-hub-service/AGENTS.md.

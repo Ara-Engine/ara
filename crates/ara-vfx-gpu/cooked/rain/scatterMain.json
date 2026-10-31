@@ -1,20 +1,20 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "1638deff058078ff2241cc2dcb6b49f7693c4ad3f9e61ae862f573b84ede26d9",
+  "key": "118d067f0014361a52c2a1e12b7177669d6c6d7e500aff7c18dcab38090f6f28",
   "stages": [
     {
-      "dxil": "1638deff058078ff2241cc2dcb6b49f7693c4ad3f9e61ae862f573b84ede26d9/scatterMain/scatterMain.dxil",
+      "dxil": "118d067f0014361a52c2a1e12b7177669d6c6d7e500aff7c18dcab38090f6f28/scatterMain/scatterMain.dxil",
       "dxil_hash": "322f73b7d97e5951d4717f1a3f0f68031ae805b2f7f387d23a28739dfe1b1028",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "1638deff058078ff2241cc2dcb6b49f7693c4ad3f9e61ae862f573b84ede26d9/scatterMain/scatterMain.metallib",
+        "metallib": "118d067f0014361a52c2a1e12b7177669d6c6d7e500aff7c18dcab38090f6f28/scatterMain/scatterMain.metallib",
         "metallib_hash": "612e1bdf0a199403dac5e6787eec396950cb5923cc6fa03b100ac05e50b81781",
-        "reflection": "1638deff058078ff2241cc2dcb6b49f7693c4ad3f9e61ae862f573b84ede26d9/scatterMain/scatterMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "118d067f0014361a52c2a1e12b7177669d6c6d7e500aff7c18dcab38090f6f28/scatterMain/scatterMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "scatterMain",
-      "spirv": "1638deff058078ff2241cc2dcb6b49f7693c4ad3f9e61ae862f573b84ede26d9/scatterMain/scatterMain.spv",
+      "spirv": "118d067f0014361a52c2a1e12b7177669d6c6d7e500aff7c18dcab38090f6f28/scatterMain/scatterMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "a6297dbb9545ab907d9de0ad51c9eb14b9b9641f63738d95102c50784a865dc8",
       "stage": "compute"

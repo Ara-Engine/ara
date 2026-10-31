@@ -65,6 +65,8 @@ pub const PROPERTIES: &[&str] = &[
     "border-color",
     "border-width",
     "border-radius",
+    "box-shadow",
+    "backdrop-filter",
     "overflow",
     "translate-x",
     "translate-y",

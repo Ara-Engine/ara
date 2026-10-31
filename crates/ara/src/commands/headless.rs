@@ -63,6 +63,24 @@ pub struct CaptureArgs {
     /// Maximum numbered entity marks (zero disables them).
     #[arg(long)]
     marks: Option<u32>,
+    /// Turn a rendering effect off to see what it contributes (repeatable).
+    #[arg(long, value_parser = ["ambient-occlusion", "shadows", "temporal-jitter"])]
+    without: Vec<String>,
+    /// Render at display resolution instead of the preset's upscaled scale.
+    #[arg(long)]
+    full_resolution: bool,
+    /// Measure flicker: settle this many live frames, then report how much they change.
+    #[arg(long)]
+    stability: Option<u32>,
+    /// Record a clip of this many live frames (60 per second) into `<name>.video/`.
+    #[arg(long)]
+    video: Option<u32>,
+    /// Camera travel over the clip in metres, `x,y,z`.
+    #[arg(long, value_delimiter = ',', allow_hyphen_values = true)]
+    video_move: Option<Vec<f32>>,
+    /// Camera turn over the clip in degrees about the vertical axis.
+    #[arg(long, allow_hyphen_values = true)]
+    video_yaw: Option<f32>,
 }
 impl CaptureArgs {
     pub fn call(self) -> Call {
@@ -70,8 +88,25 @@ impl CaptureArgs {
             method: "capture",
             params: params(json!({"scene":self.scene,"camera":self.camera,
             "path":self.path,"width":self.width,"height":self.height,"preset":self.preset,
-            "ticks":self.ticks,"seed":self.seed,"marks":self.marks})),
+            "ticks":self.ticks,"seed":self.seed,"marks":self.marks,"stability":self.stability,
+            "video":self.video,"videoMove":self.video_move,"videoYaw":self.video_yaw,
+            "renderDebug":render_debug(&self.without, self.full_resolution)})),
             summary: protocol::pretty,
         }
     }
+}
+
+/// `capture`'s `renderDebug` for `--without` and `--full-resolution`; omitted when
+/// every effect stays at its default.
+fn render_debug(without: &[String], full_resolution: bool) -> serde_json::Value {
+    if without.is_empty() && !full_resolution {
+        return serde_json::Value::Null;
+    }
+    let on = |name: &str| !without.iter().any(|w| w == name);
+    json!({
+        "ambientOcclusion": on("ambient-occlusion"),
+        "shadows": on("shadows"),
+        "temporalJitter": on("temporal-jitter"),
+        "fullResolution": full_resolution,
+    })
 }

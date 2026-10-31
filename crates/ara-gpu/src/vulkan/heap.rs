@@ -22,6 +22,9 @@ pub struct DescriptorUsage {
 /// where NVIDIA blends over the first half of each LOD step only (up to half a mip softer
 /// than trilinear). The Metal backend's matching sampler uses the same value.
 const MATERIAL_ANISOTROPY: f32 = 16.0;
+/// Storage-image slots: the binding-3 array size every cooked shader declares
+/// (`images[128]`), part of each pipeline's binding-layout hash.
+const STORAGE_IMAGES: u32 = 128;
 
 /// The material sampler's `maxAnisotropy`: [`MATERIAL_ANISOTROPY`] clamped to the
 /// device limit, or 1.0 (isotropic) where `samplerAnisotropy` is unsupported, which is
@@ -60,7 +63,7 @@ impl Heap {
         DescriptorUsage {
             sampled_images: gpu.info.sampled_image_capacity as usize - self.free_images.len(),
             storage_buffers: gpu.info.storage_buffer_capacity as usize - self.free_buffers.len(),
-            storage_images: 64 - self.free_storage.len(),
+            storage_images: STORAGE_IMAGES as usize - self.free_storage.len(),
             acceleration_structures: if gpu.info.ray_tracing { 16 } else { 0 }
                 - self.free_acceleration.len(),
         }
@@ -81,7 +84,7 @@ impl Heap {
                     gpu.info.storage_buffer_capacity,
                 ),
                 (2, vk::DescriptorType::SAMPLER, 3),
-                (3, vk::DescriptorType::STORAGE_IMAGE, 64),
+                (3, vk::DescriptorType::STORAGE_IMAGE, STORAGE_IMAGES),
             ];
             if gpu.info.ray_tracing {
                 bindings.push((4, vk::DescriptorType::ACCELERATION_STRUCTURE_KHR, 16));
@@ -217,7 +220,7 @@ impl Heap {
                 },
                 free_images: (0..gpu.info.sampled_image_capacity).rev().collect(),
                 free_buffers: (0..gpu.info.storage_buffer_capacity).rev().collect(),
-                free_storage: (0..64).rev().collect(),
+                free_storage: (0..STORAGE_IMAGES).rev().collect(),
                 storage: Vec::new(),
             })
         }
@@ -275,6 +278,14 @@ impl Heap {
             );
         }
         Ok(HeapIndex { index })
+    }
+    /// Whether every storage-image slot is taken.
+    pub fn storage_full(&self) -> bool {
+        self.free_storage.is_empty()
+    }
+    /// Whether `view` holds a storage-image slot.
+    pub fn has_storage(&self, view: vk::ImageView) -> bool {
+        self.storage.iter().any(|(_, v, _)| *v == view)
     }
     pub fn storage_image(
         &mut self,

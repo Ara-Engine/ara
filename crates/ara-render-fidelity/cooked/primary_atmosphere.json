@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf",
+  "key": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19",
   "stages": [
     {
-      "dxil": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/primary_atmosphere/primaryAtmosphereMain.dxil",
-      "dxil_hash": "195f92f6065fd4ef2eae96a9908b9e7d38b4150c1063b37d324ba93c91e06eeb",
+      "dxil": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/primary_atmosphere/primaryAtmosphereMain.dxil",
+      "dxil_hash": "7846e14842e804648f5123dd9d2252d191bc5ad1143dc495a405415aa5dd83a1",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/primary_atmosphere/primaryAtmosphereMain.metallib",
+        "metallib": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/primary_atmosphere/primaryAtmosphereMain.metallib",
         "metallib_hash": "181e75a716af89bf42331b382660dda3016c26f5f3596dfed5f54a7de6e86e44",
-        "reflection": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/primary_atmosphere/primaryAtmosphereMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/primary_atmosphere/primaryAtmosphereMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "primaryAtmosphereMain",
-      "spirv": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/primary_atmosphere/primaryAtmosphereMain.spv",
+      "spirv": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/primary_atmosphere/primaryAtmosphereMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "2c4a225c1ea38e507865213be9d2a0ead01b5687268a27a5df2ac62744c9a7f3",
+      "spirv_hash": "f645a7ce08a96ed0f6dce2b55cb143a46026ebea276575e780da5b485a782311",
       "stage": "compute"
     }
   ],

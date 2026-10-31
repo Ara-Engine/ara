@@ -33,6 +33,11 @@ impl ViewState {
         self.render == render && self.size == display
     }
 
+    /// The (render, display) extent these targets were allocated at.
+    pub(super) fn extent(&self) -> ([u32; 2], [u32; 2]) {
+        (self.render, self.size)
+    }
+
     pub(super) fn from_prepared(
         renderer: &mut Renderer,
         render: [u32; 2],

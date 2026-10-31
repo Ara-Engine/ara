@@ -47,6 +47,14 @@ impl Shell {
     pub(super) fn label_px(&self, width: f32) -> f32 {
         (width * self.label_width).clamp(96., (width - 120.).max(96.))
     }
+    /// The label column for an inspector `width`, and whether vector rows stack.
+    /// Three axis cells, a unit and a reset need about 200 px beside a label, as in
+    /// Unity's wide mode.
+    pub(super) fn row_metrics(&mut self, width: f32) -> f32 {
+        let label = self.label_px(width);
+        self.stacked_rows = width - label < 200.;
+        label
+    }
     pub(super) fn inspector_panel(
         &mut self,
         editor: &mut Editor,
@@ -115,7 +123,7 @@ impl Shell {
             .or_else(|| self.shown_node("body-inspector"))
             .map(|i| self.ui.nodes[i].rect.w)
             .unwrap_or(320.);
-        let label = self.label_px(width);
+        let label = self.row_metrics(width);
         let first = editor
             .state
             .selection
@@ -216,7 +224,6 @@ impl Shell {
             })
             .unwrap_or_default();
         self.inspector_sections.order(&mut components);
-        self.component_jumps(editor, &components, out);
         out.push_str("</panel><scroll id='inspector-scroll' style='min-height:0;flex-grow:1;flex-basis:0px'><panel id='inspector-components' class='inspector-components'>");
         let query = editor
             .state
@@ -272,23 +279,27 @@ impl Shell {
                 .schema()
                 .get(&head)
                 .map_or("", |t| t.doc.as_str());
-            out.push_str(&format!("<panel id='section-{head}' class='component-section'><panel id='component-{head}' class='component-header'><button id='{collapse_id}' class='component-heading' label='{} {}' description='{}' action='Dispatch'>{}{}<text id='heading-{head}' class='component-title' text='{}' /></button>", if collapsed {"Expand"} else {"Collapse"}, escape(&sentence(&head)), escape(doc), icons::icon_in(&collapse_id, if collapsed {"chevron-right"} else {"chevron-down"}, "icon-sm"), icons::icon(&format!("section-icon-{head}"), icon), escape(&sentence(&head))));
-            if let Some(enabled) = fields.iter().find(|f| {
+            let enabled = fields.iter().find(|f| {
                 f.path == format!("{head}.enabled")
                     && !f.optional
                     && matches!(f.widget, Widget::Bool)
-            }) {
+            });
+            let off = enabled.is_some_and(|e| !e.mixed && e.value.as_bool() == Some(false));
+            out.push_str(&format!("<panel id='section-{head}' class='component-section{}{}'><panel id='component-{head}' class='component-header'>", if off {" component-off"} else {""}, if collapsed {" component-collapsed"} else {""}));
+            // The enable checkbox leads the header, ahead of the title it switches.
+            if let Some(enabled) = enabled {
                 let id = format!("component-enabled-{head}");
                 self.bindings.insert(
                     ara_ui::source::stable_id(&id),
                     Binding::Field(enabled.path.clone(), None),
                 );
                 out.push_str(&format!("<toggle id='{id}' class='component-enabled' checked='{}' label='Enable {}' description='{}' {} action='Dispatch' />", enabled.value.as_bool().unwrap_or(false), escape(&sentence(&head)), escape(&enabled.doc), if enabled.read_only {"disabled='true'"} else {""}));
-                if enabled.mixed {
-                    out.push_str(&format!(
-                        "<text id='enabled-mixed-{head}' class='caption' text='Mixed' />"
-                    ));
-                }
+            }
+            out.push_str(&format!("<button id='{collapse_id}' class='component-heading' label='{} {}' description='{}' action='Dispatch'>{}{}<text id='heading-{head}' class='component-title{}' text='{}' /></button>", if collapsed {"Expand"} else {"Collapse"}, escape(&sentence(&head)), escape(doc), icons::icon_in(&collapse_id, if collapsed {"chevron-right"} else {"chevron-down"}, "icon-sm"), icons::icon(&format!("section-icon-{head}"), icon), if off {" component-title-off"} else {""}, escape(&sentence(&head))));
+            if enabled.is_some_and(|e| e.mixed) {
+                out.push_str(&format!(
+                    "<text id='enabled-mixed-{head}' class='caption' text='Mixed' />"
+                ));
             }
             out.push_str(&format!("<button id='component-menu-{head}' class='ghost icon-button' label='{head} options' description='Reset, remove, copy, paste or reorder this component' action='Dispatch'>{}</button></panel>", icons::icon(&format!("component-menu-{head}"), "ellipsis")));
             if !collapsed {
@@ -309,9 +320,10 @@ impl Shell {
         for field in fields.drain(..) {
             self.fields.insert(field.path.clone(), field);
         }
-        out.push_str("</panel></scroll>");
+        // Add component follows the last component, as in Unity, not the dock bottom.
         self.bind_command("add-component", "component.add", Target::None);
-        out.push_str(&format!("<panel id='add-component-row' style='padding:8px;flex-shrink:0'><button id='add-component' label='Add component' description='Search components to add' action='Dispatch'>{}<text id='add-component-label' text='Add component' /></button></panel>", icons::icon("add-component", "plus")));
+        out.push_str(&format!("<panel id='add-component-row' class='add-component-row'><button id='add-component' label='Add component' description='Search components to add' action='Dispatch'>{}<text id='add-component-label' text='Add component' /></button></panel>", icons::icon("add-component", "plus")));
+        out.push_str("</panel></scroll>");
         Ok(())
     }
 }

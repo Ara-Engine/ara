@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
+  "key": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7",
   "stages": [
     {
-      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_capture_mip/captureMipMain.dxil",
-      "dxil_hash": "2638f15499f017a2cdded7612305cce754f256a5287e1bbb1e7b397db5e282a4",
+      "dxil": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_capture_mip/captureMipMain.dxil",
+      "dxil_hash": "b436b1b33d1e6d6cccb06a56e9c101051dd2c4729069ce6d0c160b968a3d7ce9",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_capture_mip/captureMipMain.metallib",
+        "metallib": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_capture_mip/captureMipMain.metallib",
         "metallib_hash": "e45c55de49c89e466f327a6d3eb460f224349f04c0d7f23132c547d6fac146c8",
-        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_capture_mip/captureMipMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_capture_mip/captureMipMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "captureMipMain",
-      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/look_capture_mip/captureMipMain.spv",
+      "spirv": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_capture_mip/captureMipMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "d6008a7a251b4bb516446d4adf69318247c9b883df731fe43b06e337b84a2e45",
+      "spirv_hash": "265e3de6e33e86206ee3cc1ced13323d3d2fd3654d594ba96d85351dffe8b9e4",
       "stage": "compute"
     }
   ],

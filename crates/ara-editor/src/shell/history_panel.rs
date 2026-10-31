@@ -6,7 +6,7 @@ mod projection;
 #[cfg(test)]
 mod tests;
 
-pub(super) const CSS: &str = include_str!("history_panel/history.css");
+pub(super) const CSS: &str = super::live_styles::embedded::HISTORY;
 const PAGE: usize = 64;
 const OPS: usize = 64;
 

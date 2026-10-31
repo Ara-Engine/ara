@@ -46,8 +46,8 @@ Gate with focused checks. The GPU gate (`run.ps1 -Mode Verify`, `tests/native.rs
 Polish assets: Lucide SVGs (ISC), Inter, JetBrains Mono (OFL; THIRD_PARTY_NOTICES). `viewport.rs` owns SceneView and lazy GamePreview cameras: `preview_game` polls native content without drawing Scene; keep its handle while sampling, then release before the GPU.
 Raster IDs drive picking, outlines and GPU-only hover through `world/channels.rs` (channel → entity; terrain is one object). Physical Scene extents and UI glyph
 scale change together; keep the SDL window, editor logical, IME and UIA coordinate
-conversions. Motion is paint-only, ≤140 ms, off with editor.preferences.
-verify-polish.ps1 captures 1440x900 at 1x and 2560x1440 at 2x (palettes, Agents).
+conversions. Motion is paint-only, ≤140 ms, off with editor.preferences. verify-polish.ps1 captures 1440x900 at 1x and 2560x1440 at 2x (palettes, Agents).
+Debug builds hot-reload `shell/**/*.css` (unique file names), ara-ui dialog/select CSS and theme JSON (`shell/live_styles.rs`); `ara-dev live editor -- <project>` rebuilds/relaunches on Rust saves.
 
 Panel authoring: asset_tools owns isolated import jobs and cached off-thread
 thumbnails and material node previews (`node_preview.rs`). authoring registers graph/material/VFX/animation commands; graph is
@@ -61,7 +61,7 @@ annotations live in `.ara/editor/animation-<id>.graph`. Each graph page owns its
 takes graph commands. Labels are shaped once (scalable MSDF runs across pan/zoom). Keep
 node/wire culling, the stable lookup table and the bounded thumbnail image pool.
 Thumbnails: models via `asset_tools/studio.rs` (published materials, fitted 3/4 shot),
-material spheres, VFX framed on simulated particles; 512 masters resampled to 2× each
+material spheres, VFX framed on simulated particles, prefabs extracted on the window thread (`prefab_preview.rs`); 512 masters resampled to 2× each
 view, on worker GPUs with off-thread IO, last good kept. Host import sidecars save to
 `.import.json` while their asset IDs index source media; keep importer version policy.
 Profiler views consume actual ara-profile frames/spans/GPU queue timings. Frozen
@@ -147,3 +147,4 @@ are preview-only; its timeline drives `vfx_stream`. In Play the Animation page p
 
 The full --verify-behaviours route includes extended imports and asset lifecycle checks; --verify-behaviours-core runs the other native stories independently and writes verification-scope.json. A core result does not establish asset acceptance.
 The monkey deliberately invalidates the Scene after attempted actions, including rejected inputs. Its phase timings describe this stress workload; they are not ordinary user latency measurements.
+Custom chrome (D28): `app/live_resize.rs` resizes from the border live (Windows): `step` sizes the frame, `apply` moves the window after it presents, `reach` keeps one swapchain per drag; `native/frame.rs` sets DWM corners/border/shadow. Scene/Game images draw at their own pixel size, cropped, never stretched (`viewport::draw_unscaled`); `Shell::game_frame_stale` rebuilds a Game frame sized from a stale layout before drawing. The Scene view renders at native resolution (Play/exports keep preset scale). Scene gizmos (`shell/overlay/gizmos/`): per-component icons and wire shapes, full when selected, faint otherwise (`viewport.gizmos`, `viewport.icons*`, `viewport.gizmoTypes`; toolbar Gizmos menu, Ctrl+Shift+G). Scene toolbars dock to any edge and collapse by their grip (`shell/scene_toolbars.rs`, `viewport.overlays`); the axis widget keeps clear of them.

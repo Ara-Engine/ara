@@ -57,7 +57,17 @@ impl Shell {
         picker.swatches = color_list(editor, "color.swatches");
         picker.recent = color_list(editor, "color.recent");
         let anchor = picker.anchor();
-        let anchored = self.shown_node(&anchor).is_some();
+        // Beside the swatch when the 288 px picker fits to its left; a full-width
+        // swatch in a narrow window opens it below instead.
+        let room = self
+            .shown_node(&anchor)
+            .map(|index| self.ui.nodes[index].rect.x);
+        let anchored = room.is_some();
+        let side = if room.is_some_and(|x| x >= 304.) {
+            "left-start"
+        } else {
+            "bottom-end"
+        };
         let Some(picker) = &self.color_picker else {
             return;
         };
@@ -67,7 +77,7 @@ impl Shell {
         }
         let place = match picker.pinned {
             Some([x, y]) => format!("at='{x},{y}' placement='bottom-start' offset='0'"),
-            None if anchored => format!("anchor='{anchor}' placement='left-start' offset='8'"),
+            None if anchored => format!("anchor='{anchor}' placement='{side}' offset='8'"),
             None => return,
         };
         let component = picker.field.path.split('.').next().unwrap_or_default();

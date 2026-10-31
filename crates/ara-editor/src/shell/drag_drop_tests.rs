@@ -31,6 +31,9 @@ fn held_collection_edge_scroll_reaches_item_one_hundred_and_reorders_once() {
         .unwrap();
     shell.rebuild(&mut editor).unwrap();
     shell.frame().unwrap();
+    // Rows size from the last layout; settle at the maximized width.
+    shell.rebuild(&mut editor).unwrap();
+    shell.frame().unwrap();
     let scroll = collection_adapter::id("MeshRenderer.emissiveMaterials", "");
     let scroll_index = shell.ui.find(&scroll).unwrap();
     shell.ui.scroll_into_view(scroll_index).unwrap();

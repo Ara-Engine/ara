@@ -1,20 +1,20 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "741d1f96fb5fb6c9d13bbda05a727024ed81191254799a87598835c136982e6a",
+  "key": "251ea10f908c07c958d0f8cbd6ca530e641db932fb35fc56c0f3959a596baf6a",
   "stages": [
     {
-      "dxil": "c40d123aad6a2d01ee0bcb5f35976e8fce3fa27ef6a8306eccd7605a1e54f19e/clearDepthVertex.dxil",
+      "dxil": "251ea10f908c07c958d0f8cbd6ca530e641db932fb35fc56c0f3959a596baf6a/clear_depth/clearDepthVertex.dxil",
       "dxil_hash": "3b87aa63f89b7b3ab5f5d937964a024d8966177c8642ffcfe09c804c21b9c947",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "c40d123aad6a2d01ee0bcb5f35976e8fce3fa27ef6a8306eccd7605a1e54f19e/clearDepthVertex.metallib",
+        "metallib": "251ea10f908c07c958d0f8cbd6ca530e641db932fb35fc56c0f3959a596baf6a/clear_depth/clearDepthVertex.metallib",
         "metallib_hash": "93d8710060572a344ad14848338ea0384f1bd736959ddc95e3b9e3523fa5ec8f",
-        "reflection": "c40d123aad6a2d01ee0bcb5f35976e8fce3fa27ef6a8306eccd7605a1e54f19e/clearDepthVertex.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "251ea10f908c07c958d0f8cbd6ca530e641db932fb35fc56c0f3959a596baf6a/clear_depth/clearDepthVertex.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "clearDepthVertex",
-      "spirv": "c40d123aad6a2d01ee0bcb5f35976e8fce3fa27ef6a8306eccd7605a1e54f19e/clearDepthVertex.spv",
+      "spirv": "251ea10f908c07c958d0f8cbd6ca530e641db932fb35fc56c0f3959a596baf6a/clear_depth/clearDepthVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "3bc1259f059e2dfb973170c37dfae6783fe558b8f6e07db078ec963e459dd45e",
       "stage": "vertex"

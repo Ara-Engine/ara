@@ -12,14 +12,14 @@ pub(super) fn body(p: &mut Page, hub: &Hub) {
         p.text("label", "WHAT'S NEW");
         p.markup
             .push_str("<scroll id='release-notes-scroll' class='release-notes-scroll'>");
-        p.text(
-            "dialog-copy",
-            if release.notes.trim().is_empty() {
-                "This release includes improvements to Ara Hub."
-            } else {
-                &release.notes
-            },
-        );
+        if release.notes.trim().is_empty() {
+            p.text(
+                "dialog-copy",
+                "This release includes improvements to Ara Hub.",
+            );
+        } else {
+            super::super::markdown::render(p, &release.notes);
+        }
         p.markup.push_str("</scroll>");
     });
     if hub.releases.starting("hub", &release.version) {

@@ -150,7 +150,7 @@ mod override_tests {
 /// Runtime sampled-image and storage-buffer arrays. The fingerprint rejects
 /// fixed-size engine shaders whose declared buffer range cannot reach new slots.
 pub const BINDING_LAYOUT: &str =
-    "ara.v3:root32:texture-runtime@5:legacy-texture128@0:buffer-runtime@1:sampler3:storage64:as16";
+    "ara.v3:root32:texture-runtime@5:legacy-texture128@0:buffer-runtime@1:sampler3:storage128:as16";
 /// Hash of the exact global binding ABI.
 pub fn binding_layout_hash() -> String {
     format!("{:x}", Sha256::digest(BINDING_LAYOUT.as_bytes()))

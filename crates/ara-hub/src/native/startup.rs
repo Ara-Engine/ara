@@ -41,7 +41,7 @@ pub(super) fn run(options: &Options, output: &Path, directory: &Path, config: &P
     let mut surface = Offscreen::new(options.size, options.dpi.unwrap_or(1.))?;
     ara_hub_service::startup::record("ui.gpu_images", phase.elapsed());
     let phase = Instant::now();
-    let mut app = App::new(surface.logical(), os::docs(directory)).map_err(err)?;
+    let mut app = App::new(surface.logical()).map_err(err)?;
     app.rebuild(&mut hub, now_ms()).map_err(err)?;
     app.frame().map_err(err)?;
     surface.render(&app)?;

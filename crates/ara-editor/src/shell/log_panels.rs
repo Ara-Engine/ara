@@ -10,9 +10,9 @@
 //! time, origin and source (Problems: code and source). Both panels live in narrow
 //! docks by default, so nothing may sit over the message text.
 //!
-//! This computer's GPU loader and overlay messages (`ARA_GPU_ENVIRONMENT`: other apps'
+//! GPU driver and overlay messages (`ARA_GPU_ENVIRONMENT`: other apps'
 //! Vulkan layers, missing loader manifests) are not the project's problems. Both panels
-//! keep them out of their counts and lists, in one collapsed "This computer" group.
+//! keep them out of their counts and lists, in one collapsed "Driver and overlay messages" group.
 use super::commands::Target;
 use super::*;
 use std::collections::BTreeMap;
@@ -404,13 +404,13 @@ impl Shell {
         out.push_str("</scroll>");
     }
 
-    /// The "This computer" group header (collapsed by default, like a Problems file
+    /// The "Driver and overlay messages" group header (collapsed by default, like a Problems file
     /// group): how many messages came from this PC's graphics drivers and overlay
     /// layers. Opened, a note under it says why they are not the project's.
     fn machine_group(&mut self, out: &mut String, panel: &str, records: &[Entry]) {
         let id = format!("{panel}-machine");
         self.bind_command(&id, "console.machine", Target::None);
-        out.push_str(&format!("<button id='{id}' class='machine-group' label='This computer' description='Messages from this computer&apos;s graphics drivers and overlay layers, not the project' action='Dispatch'>{}{}<text id='{id}-title' class='fg' text='This computer' /><text id='{id}-count' class='caption' text='{}' /></button>",icons::icon_in(&format!("{id}-chevron"),if self.machine_open{"chevron-down"}else{"chevron-right"},"icon-sm"),icons::icon(&id,"monitor"),records.len()));
+        out.push_str(&format!("<button id='{id}' class='machine-group' label='Driver and overlay messages' description='Messages from this computer&apos;s graphics drivers and overlay layers, not the project' action='Dispatch'>{}{}<text id='{id}-title' class='caption' text='Driver and overlay messages' /><text id='{id}-count' class='log-count' text='{}' /></button>",icons::icon_in(&format!("{id}-chevron"),if self.machine_open{"chevron-down"}else{"chevron-right"},"icon-sm"),icons::icon_in(&id,"monitor","muted"),records.len()));
         if self.machine_open {
             out.push_str(&format!("<panel id='{id}-note' class='machine-note'><text id='{id}-note-text' class='caption wrap-text' text='From this PC&apos;s graphics drivers and other apps&apos; overlay layers (screen recorders, game overlays), not the project. They never count as errors or warnings.' /></panel>"));
         }
@@ -561,7 +561,8 @@ impl Shell {
         self.script_recovery_markup(editor, out);
         let notice = compilation.notice();
         if let Some(notice) = &notice {
-            out.push_str(&format!("<text id='problems-compile-status' class='caption wrap-text' style='flex-shrink:0;padding:6px' text='{}' />",escape(notice)));
+            // The full coverage explanation lives in the tooltip; the row stays one line.
+            out.push_str(&format!("<panel id='problems-compile-row' class='problems-notice' description='{}'>{}<text id='problems-compile-status' class='caption script-strip-text' text='{}' /></panel>",escape(notice),icons::icon_in("problems-compile","info","muted"),escape(notice)));
         }
         let query = editor
             .state
@@ -618,7 +619,7 @@ impl Shell {
         }
         for (n, (group, rows)) in groups.iter().enumerate() {
             let gid = format!("problem-group-{n}");
-            out.push_str(&format!("<panel id='{gid}' class='problem-group'>{}<text id='{gid}-path' class='fg' text='{}' /><text id='{gid}-count' class='caption' text='{}' /></panel>",icons::icon(&gid,if group=="Project"{"folder"}else{"file"}),escape(group),rows.len()));
+            out.push_str(&format!("<panel id='{gid}' class='problem-group'>{}<text id='{gid}-path' class='fg' text='{}' /><text id='{gid}-count' class='log-count' text='{}' /></panel>",icons::icon_in(&gid,if group=="Project"{"folder"}else{"file"},"muted"),escape(group),rows.len()));
             if rows.len() > 200 {
                 out.push_str(&format!("<text id='{gid}-window' class='caption wrap-text' text='Showing 200 of {} problems in this group. Search filters all retained rows.' />",rows.len()));
             }

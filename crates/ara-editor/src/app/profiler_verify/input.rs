@@ -82,7 +82,7 @@ impl ProfilerCheck {
                 .as_u64()
                 .is_some_and(|n| n >= 3)
     }
-    fn input(
+    pub(super) fn input(
         &mut self,
         editor: &mut Editor,
         shell: &mut Shell,

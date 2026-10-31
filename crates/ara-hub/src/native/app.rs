@@ -3,7 +3,7 @@
 use super::{images::Thumbnails, input::OsClipboard, selects::Selects};
 use crate::{
     model::{Dialog, Hub, Intent, View},
-    view::{self, Binding, Ctx, Doc},
+    view::{self, Binding, Ctx},
 };
 use ara_ui::{
     Ui, Work,
@@ -32,8 +32,6 @@ pub struct App {
     pub text: TextSystem,
     /// Preview images.
     pub thumbnails: Thumbnails,
-    /// Learn links.
-    pub docs: Vec<Doc>,
     /// Logical window size.
     pub size: [f32; 2],
     /// Pointer in logical pixels.
@@ -54,17 +52,19 @@ pub struct App {
     close_hint_shown: bool,
     view: Option<View>,
     page_positions: BTreeMap<View, PagePosition>,
+    /// Live palettes indexed by `light` (debug builds); theme switches use them
+    /// instead of the embedded ones once a save has been applied.
+    live_tokens: Option<[BTreeMap<String, String>; 2]>,
 }
 
 impl App {
     /// An empty window of `size` logical pixels.
-    pub fn new(size: [f32; 2], docs: Vec<Doc>) -> ara_ui::Result<Self> {
+    pub fn new(size: [f32; 2]) -> ara_ui::Result<Self> {
         Ok(Self {
             ui: Ui::editor("<ui id='hub' />", view::stylesheet(), size)?,
             input: InputState::default(),
             text: view::text_system()?,
             thumbnails: Thumbnails::default(),
-            docs,
             size,
             pointer: [-1.; 2],
             work: Work::default(),
@@ -82,7 +82,23 @@ impl App {
             close_hint_shown: false,
             view: None,
             page_positions: BTreeMap::new(),
+            live_tokens: None,
         })
+    }
+
+    /// Apply a validated live stylesheet and the current theme's live palette; the
+    /// next frame restyles (and relayouts only if geometry changed) and presents.
+    #[cfg(debug_assertions)]
+    pub(super) fn apply_styles(
+        &mut self,
+        styles: super::live_styles::Styles,
+    ) -> ara_ui::Result<()> {
+        self.ui.set_stylesheet(&styles.css)?;
+        self.ui
+            .set_theme_tokens(styles.tokens[usize::from(self.light)].clone());
+        self.live_tokens = Some(styles.tokens);
+        self.present_needed = true;
+        Ok(())
     }
 
     /// Reconcile changed markup, keeping native nodes, shaped text, widgets and
@@ -123,7 +139,6 @@ impl App {
             size: self.size,
             thumbnail: &|path| thumbnails.get(path),
             anchor,
-            docs: &self.docs,
         };
         let mut page = view::page(hub, &ctx);
         self.close_hint_shown = close_hint;
@@ -143,11 +158,17 @@ impl App {
             self.ui.resize(self.size)?;
         }
         if self.light != hub.prefs.light {
-            self.ui.switch_theme(if hub.prefs.light {
-                EditorTheme::Light
-            } else {
-                EditorTheme::Dark
-            })?;
+            match &self.live_tokens {
+                Some(tokens) => {
+                    self.ui
+                        .set_theme_tokens(tokens[usize::from(hub.prefs.light)].clone());
+                }
+                None => self.ui.switch_theme(if hub.prefs.light {
+                    EditorTheme::Light
+                } else {
+                    EditorTheme::Dark
+                })?,
+            }
             self.light = hub.prefs.light;
         }
         let overlay = if hub.dialog.is_some() {

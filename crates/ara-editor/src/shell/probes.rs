@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 #[cfg(test)]
 mod tests;
 mod view;
-pub(super) const CSS: &str = include_str!("probes/probes.css");
+pub(super) const CSS: &str = super::live_styles::embedded::PROBES;
 const CADENCE: Duration = Duration::from_millis(250);
 const TERMINAL_HISTORY: usize = 32;
 

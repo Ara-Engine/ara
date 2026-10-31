@@ -395,6 +395,7 @@ dependencies = [
 name = "ara"
 version = "0.0.1-alpha"
 dependencies = [
+ "ara-agents",
  "ara-ai",
  "ara-asset",
  "ara-asset-host",
@@ -453,6 +454,15 @@ dependencies = [
  "libloading 0.9.0",
  "rtrb",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ara-agents"
+version = "0.0.1-alpha"
+dependencies = [
+ "ara-json",
+ "dunce",
  "serde_json",
 ]
 
@@ -784,6 +794,7 @@ dependencies = [
  "cc",
  "clap",
  "libc",
+ "notify",
  "object",
  "proc-macro2",
  "quote",
@@ -828,6 +839,7 @@ dependencies = [
  "accesskit 0.25.1",
  "accesskit_windows 0.35.1",
  "anyhow",
+ "ara-agents",
  "ara-ai",
  "ara-anim",
  "ara-asset",
@@ -1140,6 +1152,7 @@ name = "ara-hub"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-agents",
  "ara-crash",
  "ara-diag",
  "ara-editor-gpu",
@@ -5736,6 +5749,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
+name = "fax"
+version = "0.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "caf1079563223d5d59d83c85886a56e586cfd5c1a26292e971a0fa266531ac5a"
+
+[[package]]
 name = "fdeflate"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7048,11 +7067,23 @@ dependencies = [
  "bytemuck",
  "byteorder-lite",
  "exr",
+ "image-webp",
  "moxcms",
  "num-traits",
  "png 0.18.1",
+ "tiff",
  "zune-core",
  "zune-jpeg",
+]
+
+[[package]]
+name = "image-webp"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
+dependencies = [
+ "byteorder-lite",
+ "quick-error 2.0.1",
 ]
 
 [[package]]
@@ -10296,6 +10327,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
+name = "quick-error"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
+
+[[package]]
 name = "quick-xml"
 version = "0.38.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11040,7 +11077,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc6bf79ff24e648f6da1f8d1f011e9cac26491b619e6b9280f2b47f1774e6ee2"
 dependencies = [
  "fnv",
- "quick-error",
+ "quick-error 1.2.3",
  "tempfile",
  "wait-timeout",
 ]
@@ -12127,6 +12164,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "tiff"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b63feaf3343d35b6ca4d50483f94843803b0f51634937cc2ec519fc32232bc52"
+dependencies = [
+ "fax",
+ "flate2",
+ "half",
+ "quick-error 2.0.1",
+ "weezl",
+ "zune-jpeg",
+]
+
+[[package]]
 name = "tikv-jemalloc-sys"
 version = "0.5.4+5.3.0-patched"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13045,6 +13096,12 @@ checksum = "f5f280bbb2b287bc8e7de7e3852945a0ff50d1bbcb5ed42b6c7a568c546df171"
 dependencies = [
  "rustls-pki-types",
 ]
+
+[[package]]
+name = "weezl"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 
 [[package]]
 name = "wesl"

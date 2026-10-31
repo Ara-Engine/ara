@@ -47,7 +47,7 @@ pub(super) fn records(editor: &Editor) -> ara_ui::Result<Value> {
         .workspace()
         .doc(SCENE)
         .ok_or("Native probe fixture document missing")?;
-    Ok(serde_json::to_value(&doc.records)?)
+    Ok(serde_json::to_value(doc.records())?)
 }
 pub(super) fn snapshot(editor: &Editor) -> ara_ui::Result<Value> {
     Ok(

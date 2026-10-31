@@ -12,6 +12,7 @@ blake3.workspace = true
 ara-hotpatch = { path = "../ara-hotpatch" }
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
+notify = "8.2"
 quote.workspace = true
 semver = "1"
 serde = { workspace = true, features = ["derive"] }

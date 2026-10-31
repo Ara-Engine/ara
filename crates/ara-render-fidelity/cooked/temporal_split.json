@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf",
+  "key": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19",
   "stages": [
     {
-      "dxil": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/temporal_split/temporalSplitMain.dxil",
-      "dxil_hash": "aab4641c46f5ee4989914d7b2f6ebe9c98c90057bfeefff8527bd85c44aeae26",
+      "dxil": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/temporal_split/temporalSplitMain.dxil",
+      "dxil_hash": "4466d8b8bd5980ae0d6c882ce8654a3d5009f0e8049e56586c543717849793d8",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/temporal_split/temporalSplitMain.metallib",
+        "metallib": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/temporal_split/temporalSplitMain.metallib",
         "metallib_hash": "f7b0c400f59c223766a8e858aefc69d21785b69f1150b1f96bfd662438bd8c35",
-        "reflection": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/temporal_split/temporalSplitMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/temporal_split/temporalSplitMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "temporalSplitMain",
-      "spirv": "06165955fc251356e49b1f155c701ff27fc7d5e0d99009486f53b31065fd2baf/temporal_split/temporalSplitMain.spv",
+      "spirv": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/temporal_split/temporalSplitMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "41100fa111c5b13184c30cf58a388200f89fd8131086c3026c372bef223d68e4",
+      "spirv_hash": "ae6191e64ded61f530483aa2f0f39982d0dcb20acc0029b05243d3a2fe0513cd",
       "stage": "compute"
     }
   ],

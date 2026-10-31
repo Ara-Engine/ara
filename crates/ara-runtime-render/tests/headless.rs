@@ -345,3 +345,168 @@ fn lab_readbacks_drain_frames_and_keep_overlap_enabled() {
     presenter.set_frames_in_flight(false).unwrap();
     presenter.renderer().unwrap().gpu().assert_clean().unwrap();
 }
+
+/// Rendering Debug on the native path Play uses: shadows off and AO off each change
+/// the High image, and restoring the defaults restores it. Captures go to
+/// `target/renderer-unification/debug-switches` for review.
+#[test]
+fn debug_switches_change_the_native_high_image() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/renderer-unification/debug-switches");
+    let mut rt = runtime();
+    let mut frame = RenderFrame::default();
+    rt.extract(&mut frame);
+    let mut presenter = Presenter::new([480, 270], Vec::new(), root.join("gpu"));
+    presenter.set_quality(ara_runtime_render::QualityChoice::Preset(
+        ara_runtime_render::QualityPreset::High,
+    ));
+    let on = ara_render::RenderDebug::default();
+    let mut shot = |debug: ara_render::RenderDebug, name: &str| {
+        presenter.set_debug(debug);
+        let capture = presenter
+            .capture(&frame, [480, 270], ViewMode::Lit, None, 1)
+            .unwrap();
+        capture.write(&root.join(format!("{name}.png"))).unwrap();
+        capture.image
+    };
+    let lit = shot(on, "default");
+    let unshadowed = shot(
+        ara_render::RenderDebug {
+            shadows: false,
+            ..on
+        },
+        "no-shadows",
+    );
+    let unoccluded = shot(
+        ara_render::RenderDebug {
+            ambient_occlusion: false,
+            ..on
+        },
+        "no-ao",
+    );
+    let again = shot(on, "default-again");
+    // Where AO darkens: the lit image over the unoccluded one (white = untouched).
+    let factor = image::RgbaImage::from_fn(lit.width(), lit.height(), |x, y| {
+        let (a, b) = (lit.get_pixel(x, y), unoccluded.get_pixel(x, y));
+        let ratio = (0..3)
+            .map(|c| f32::from(a[c]) / f32::from(b[c]).max(1.))
+            .sum::<f32>()
+            / 3.;
+        // Five times the darkening, so faint false occlusion is visible.
+        let v = ((1. - (1. - ratio.min(1.)) * 5.).max(0.) * 255.) as u8;
+        image::Rgba([v, v, v, 255])
+    });
+    factor.save(root.join("ao-factor.png")).unwrap();
+    assert!(
+        !compare(&unshadowed, &lit, 0.002).unwrap().passed,
+        "shadows off changed nothing"
+    );
+    assert!(
+        !compare(&unoccluded, &lit, 0.002).unwrap().passed,
+        "AO off changed nothing"
+    );
+    assert!(
+        compare(&again, &lit, 0.002).unwrap().passed,
+        "defaults did not restore the image"
+    );
+}
+
+/// Temporal stability on the native High path with a still camera: consecutive live
+/// frames (jitter and the temporal resolve running) barely change once the history
+/// has converged. Reports the mean and worst 16x16-block luminance change, with and
+/// without the jitter; frames go to `target/renderer-unification/temporal`.
+#[test]
+#[ignore = "temporal measurement: run explicitly while working on the resolve"]
+fn still_camera_frames_hold_still() {
+    let root =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/renderer-unification/temporal");
+    let mut rt = runtime();
+    let mut frame = RenderFrame::default();
+    rt.extract(&mut frame);
+    let size = [960, 540];
+    let mut presenter = Presenter::new(size, Vec::new(), root.join("gpu"));
+    presenter.set_quality(ara_runtime_render::QualityChoice::Preset(
+        ara_runtime_render::QualityPreset::High,
+    ));
+    let luma = |image: &image::RgbaImage| -> Vec<f32> {
+        image
+            .pixels()
+            .map(|p| 0.2126 * f32::from(p[0]) + 0.7152 * f32::from(p[1]) + 0.0722 * f32::from(p[2]))
+            .collect()
+    };
+    for (name, debug) in [
+        ("jitter", ara_render::RenderDebug::default()),
+        (
+            "still",
+            ara_render::RenderDebug {
+                temporal_jitter: false,
+                ..Default::default()
+            },
+        ),
+        (
+            "jitter-full",
+            ara_render::RenderDebug {
+                full_resolution: true,
+                ..Default::default()
+            },
+        ),
+    ] {
+        presenter.set_debug(debug);
+        for _ in 0..64 {
+            presenter.present(&frame).unwrap();
+        }
+        let request = ara_render::capture::CaptureRequest {
+            // Readback only: the completed frame keeps its own camera.
+            camera: ara_render::scene::CameraSpec::Orthographic {
+                centre: Default::default(),
+                world_size: Default::default(),
+            },
+            size,
+            mode: ViewMode::Lit,
+            deterministic: false,
+            exposure: 1.,
+            settle_frames: 0,
+            tick: 0,
+            seed: 0,
+            marks: None,
+        };
+        let mut previous: Option<Vec<f32>> = None;
+        let (mut mean, mut worst) = (0f64, 0f32);
+        for k in 0..8 {
+            presenter.present(&frame).unwrap();
+            let image = presenter
+                .renderer_mut()
+                .unwrap()
+                .capture_completed(&request)
+                .unwrap()
+                .image;
+            image.save(root.join(format!("{name}-{k}.png"))).unwrap();
+            let current = luma(&image);
+            if let Some(previous) = &previous {
+                let diff: Vec<f32> = current
+                    .iter()
+                    .zip(previous)
+                    .map(|(a, b)| (a - b).abs())
+                    .collect();
+                mean += diff.iter().map(|&d| f64::from(d)).sum::<f64>() / diff.len() as f64;
+                for by in 0..size[1] as usize / 16 {
+                    for bx in 0..size[0] as usize / 16 {
+                        let mut block = 0f32;
+                        for y in 0..16 {
+                            for x in 0..16 {
+                                block += diff[(by * 16 + y) * size[0] as usize + bx * 16 + x];
+                            }
+                        }
+                        worst = worst.max(block / 256.);
+                    }
+                }
+            }
+            previous = Some(current);
+        }
+        eprintln!(
+            "{name}: mean change {:.3}, worst 16x16 block {:.2} (8-bit luma)",
+            mean / 7.,
+            worst
+        );
+    }
+}

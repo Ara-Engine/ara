@@ -44,6 +44,11 @@ float4 fillColor(Instance i,float2 p,inout float shape){
     float cell=max(i.parameters.z,1);int2 q=int2(floor(p/cell));
     return ((q.x+q.y)&1)==0?i.color:i.uv;
 }
+// Box-shadow edges (mode 10): Abramowitz-Stegun erf, a Gaussian edge for CSS blur radius
+// `blur` (sigma = blur / 2) or a hard antialiased one; ara-ui-render's CPU twin matches.
+float erfApprox(float x){float a=abs(x);float t=1+(0.278393+(0.230389+0.078108*a*a)*a)*a;t*=t;return sign(x)*(1-1/(t*t));}
+float edgeCoverage(float d,float blur,float aa){return blur>0?0.5-0.5*erfApprox(d/(blur*0.70710678)):saturate(0.5-d/aa);}
+float boxDistance(float2 p,float4 box,float radius){return all(box.zw>0)?roundedDistance(p-box.xy,box.zw,radius):1e6;}
 [shader("vertex")]
 Varying vertexMain(uint vertex:SV_VertexID,uint instance:SV_InstanceID) {
     static const float2 corners[6]={float2(0,0),float2(1,0),float2(0,1),float2(0,1),float2(1,0),float2(1,1)};
@@ -88,6 +93,36 @@ float4 fragmentMain(Varying input):SV_Target {
         int2 pixel=clamp(int2(screen*float2(width,height)),int2(0,0),int2(width-1,height-1));
         bool covered=TEX(pc.textureIndex).Load(int3(pixel,0)).r>0;
         color.a*=distance>0&&!covered?exp(-distance/max(i.parameters.w,0.01))*smoothstep(0.01,0.1,abs(ray.y)):0;
+    }else if(pc.mode==10){
+        // Box shadow. Outer: rect is the shadow box grown by blur*1.5+1, uv the casting
+        // box (excluded). Inset: rect is the box, uv the hole. parameters: box radius,
+        // blur, shadow radius, inset flag.
+        float blur=i.parameters.y;float2 size=i.rect.zw;
+        float ds;float d;
+        if(i.parameters.w>0.5){ds=roundedDistance(input.local,size,i.parameters.x);d=boxDistance(input.local,i.uv,i.parameters.z);}
+        else{float m=blur*1.5+1;d=boxDistance(input.local,float4(m,m,size-2*m),i.parameters.z);ds=boxDistance(input.local,i.uv,i.parameters.x);}
+        float aa=max(fwidth(ds),0.0001);float hard=saturate(0.5-ds/aa);
+        color.a*=i.parameters.w>0.5?hard*(1-edgeCoverage(d,blur,aa)):edgeCoverage(d,blur,aa)*(1-hard);
+    }else if(pc.mode==11){
+        // Glass, two passes over premultiplied texels: w=0 blurs the target horizontally
+        // into scratch, w=1 blurs scratch vertically back inside the rounded box with
+        // saturation z. y is the standard deviation in logical pixels. Bilinear pairs
+        // halve the taps of the 3-sigma Gaussian.
+        uint width,height;TEX(pc.textureIndex).GetDimensions(width,height);float2 texel=1/float2(width,height);
+        bool vertical=i.parameters.w>0.5;float sigma=max(i.parameters.y*pc.dpi,0.0001);int reach=int(ceil(3*sigma));
+        float2 step=vertical?float2(0,texel.y):float2(texel.x,0);float2 uv=input.position.xy*texel;
+        float4 sum=TEX(pc.textureIndex).SampleLevel(SAMPLER,uv,0);float total=1;float inv=1/(2*sigma*sigma);
+        for(int k=1;k<=reach;k+=2){
+            float w0=exp(-float(k*k)*inv);float w1=k+1<=reach?exp(-float((k+1)*(k+1))*inv):0;float w=w0+w1;
+            float o=(k*w0+(k+1)*w1)/w;
+            sum+=(TEX(pc.textureIndex).SampleLevel(SAMPLER,uv+step*o,0)+TEX(pc.textureIndex).SampleLevel(SAMPLER,uv-step*o,0))*w;total+=2*w;
+        }
+        float4 blurred=sum/total;
+        if(vertical){
+            float luma=dot(blurred.rgb,float3(0.2126,0.7152,0.0722));blurred.rgb=max(lerp(luma.xxx,blurred.rgb,i.parameters.z),0);
+            float d=roundedDistance(input.local,i.rect.zw,i.parameters.x);blurred*=saturate(0.5-d/max(fwidth(d),0.0001));
+        }
+        return blurred*coverage;
     }else if(pc.mode==9){
         float d=roundedDistance(input.local,i.rect.zw,i.parameters.x);
         float shape=saturate(0.5-d/max(fwidth(d),0.0001));
@@ -105,20 +140,24 @@ float4 fragmentMain(Varying input):SV_Target {
         wanted&=~GROUND;
         uint centreId=uint(TEX(pc.textureIndex).Load(int3(pixel,0)).r);
         uint centre=outlineKey(table,centreId,hover);
-        bool edge=false;
-        static const int2 offsets[4]={int2(-1,0),int2(1,0),int2(0,-1),int2(0,1)};
-        for(uint n=0;n<4;n++){
-            int2 other=clamp(pixel+offsets[n]*max(1,int(round(1.25*pc.dpi))),int2(0,0),int2(width-1,height-1));
+        bool inside=(centre&~GROUND)==wanted;
+        // Antialiased band one logical pixel each side of the shape's edge: coverage falls
+        // with the distance (display pixels) to the nearest ID texel across the edge.
+        // `scale` is ID texels per display pixel; offsets past the band are never read.
+        float scale=max(abs(ddx(input.uv.x))*float(width),0.001),half=max(pc.dpi,1);
+        float limit=(half+0.5)*scale+0.5;int reach=clamp(int(floor(limit)),1,4);float nearest=1e6;
+        for(int y=-reach;y<=reach;y++)for(int x=-reach;x<=reach;x++){
+            float d=length(float2(x,y));if((x==0&&y==0)||d>=limit||d>=nearest)continue;
+            int2 other=clamp(pixel+int2(x,y),int2(0,0),int2(width-1,height-1));
             uint otherId=uint(TEX(pc.textureIndex).Load(int3(other,0)).r);
             uint neighbor=outlineKey(table,otherId,hover);
-            bool inside=(centre&~GROUND)==wanted;
             if(inside==((neighbor&~GROUND)==wanted))continue;
             // Ground (terrain) outlines against the sky, the void and other ground only:
             // what stands on it is in front of it, not its edge.
             uint inner=inside?centre:neighbor;uint outerId=inside?otherId:centreId;uint outer=inside?neighbor:centre;
-            edge=edge||(inner&GROUND)==0||outerId==0||(outer&GROUND)!=0;
+            if((inner&GROUND)==0||outerId==0||(outer&GROUND)!=0)nearest=d;
         }
-        color.a*=edge&&wanted>0?1:0;
+        color.a*=wanted>0?saturate(half+0.5-(nearest-0.5)/scale):0;
     }else if(pc.mode==8){
         // Convex quad: signed distance to the nearest edge, oriented by the winding.
         float2 corners[4]={i.uv.xy,i.uv.zw,i.parameters.xy,i.parameters.zw};float area=0;

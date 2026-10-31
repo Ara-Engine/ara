@@ -24,7 +24,8 @@ pub fn importer_for_source(source: &str) -> Result<&'static str, Diagnostic> {
     match extension.as_str() {
         "gltf" | "glb" => Ok("ara.gltf"),
         "fbx" => Ok("ara.fbx"),
-        "png" | "jpg" | "jpeg" | "hdr" | "exr" => Ok("ara.texture"),
+        "png" | "jpg" | "jpeg" | "hdr" | "exr" | "tga" | "tif" | "tiff" | "webp" | "bmp"
+        | "dds" => Ok("ara.texture"),
         "wav" | "flac" | "ogg" | "vorbis" | "opus" => Ok("ara.audio"),
         _ => Err(invalid(format!("no installed importer for .{extension}"))),
     }

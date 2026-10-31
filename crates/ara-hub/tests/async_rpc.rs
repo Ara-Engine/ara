@@ -38,7 +38,7 @@ fn bootstrap_preparation_cannot_hold_the_first_frame_or_connecting_input() {
         .expect("preparation started");
     assert!(connection.poll().is_empty());
     let mut hub = Hub::new(Prefs::default(), "target/hub-async-tests".into(), None);
-    let mut app = App::new([1440., 900.], Vec::new()).expect("UI");
+    let mut app = App::new([1440., 900.]).expect("UI");
     app.rebuild(&mut hub, capture::NOW).expect("first view");
     assert!(app.frame().expect("first frame"));
     for id in ["theme", "nav-settings"] {
@@ -148,7 +148,7 @@ fn a_slow_rpc_does_not_block_ui_input() {
     ));
     let mut hub = Hub::new(Prefs::default(), directory.clone(), None);
     capture::seed(&mut hub);
-    let mut app = App::new([1440., 900.], Vec::new()).expect("app");
+    let mut app = App::new([1440., 900.]).expect("app");
     app.rebuild(&mut hub, capture::NOW).expect("view");
     connection.send([Call::Status]);
     waiting

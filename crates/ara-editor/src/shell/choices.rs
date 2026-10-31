@@ -135,7 +135,11 @@ impl Shell {
                         .collect(),
                     Some(select.current.clone()),
                 )
-                .with_control_id(id),
+                .with_control_id(id)
+                .with_empty_text(match select.destination {
+                    Destination::Append { .. } => "Add…",
+                    _ => "Select…",
+                }),
             });
         if entry.destination != select.destination {
             entry.destination = select.destination;
@@ -151,7 +155,18 @@ impl Shell {
             entry.options = select.options;
         }
         entry.select.set_selected(Some(select.current));
-        out.push_str(&entry.select.control_markup());
+        // Editor selects are single-line 22 px controls, like fields. An action menu
+        // ("Add…") keeps its caption whole: it never shrinks or wraps.
+        let class = match entry.destination {
+            Destination::Append { .. } => "class='kit-select kit-select-compact kit-select-action'",
+            _ => "class='kit-select kit-select-compact'",
+        };
+        out.push_str(
+            &entry
+                .select
+                .control_markup()
+                .replacen("class='kit-select'", class, 1),
+        );
     }
 
     pub(super) fn choose_value(

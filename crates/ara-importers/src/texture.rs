@@ -330,10 +330,18 @@ pub(crate) fn cook_texture_batch_serviced(
         .collect())
 }
 
+/// A decoder for `source` by its signature; TGA has none, so unrecognised bytes are
+/// read as TGA (other data then fails to decode as one).
+fn texture_reader(source: &[u8]) -> std::io::Result<image::ImageReader<std::io::Cursor<&[u8]>>> {
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(source)).with_guessed_format()?;
+    if reader.format().is_none() {
+        reader.set_format(image::ImageFormat::Tga);
+    }
+    Ok(reader)
+}
 const BATCH_MEMORY_BYTES: usize = 512 * 1024 * 1024;
 fn texture_working_set(source: &[u8]) -> usize {
-    image::ImageReader::new(std::io::Cursor::new(source))
-        .with_guessed_format()
+    texture_reader(source)
         .ok()
         .and_then(|reader| reader.into_dimensions().ok())
         // Float RGBA + full mip chain + native packing/decoder scratch. The
@@ -420,9 +428,7 @@ fn decode_texture(
     if settings.mask_channel > 3 || settings.max_dimension == 0 || settings.max_dimension > 16384 {
         return Err(invalid("invalid texture settings"));
     }
-    let mut reader = image::ImageReader::new(std::io::Cursor::new(source))
-        .with_guessed_format()
-        .map_err(invalid)?;
+    let mut reader = texture_reader(source).map_err(invalid)?;
     let hdr = matches!(
         reader.format(),
         Some(image::ImageFormat::Hdr | image::ImageFormat::OpenExr)
@@ -575,5 +581,44 @@ mod batch_tests {
         assert_eq!(batch_len(&[1024 * 1024 * 32; 16]), 8);
         assert_eq!(batch_len(&[usize::MAX; 2]), 1);
         assert_eq!(batch_len(&[]), 0);
+    }
+}
+
+#[cfg(test)]
+mod format_tests {
+    use super::*;
+    #[test]
+    fn tga_tiff_webp_bmp_and_dds_sources_decode() {
+        let pixels = image::RgbaImage::from_fn(8, 4, |x, y| {
+            image::Rgba([x as u8 * 30, y as u8 * 60, 9, 255])
+        });
+        for format in [
+            image::ImageFormat::Tga,
+            image::ImageFormat::Tiff,
+            image::ImageFormat::WebP,
+            image::ImageFormat::Bmp,
+        ] {
+            let mut bytes = std::io::Cursor::new(Vec::new());
+            image::DynamicImage::ImageRgba8(pixels.clone())
+                .write_to(&mut bytes, format)
+                .expect("encode");
+            let decoded = texture_reader(bytes.get_ref())
+                .expect("reader")
+                .decode()
+                .unwrap_or_else(|e| panic!("{format:?}: {e}"));
+            assert_eq!((decoded.width(), decoded.height()), (8, 4), "{format:?}");
+            assert_eq!(
+                decoded.to_rgba8().get_pixel(7, 3),
+                pixels.get_pixel(7, 3),
+                "{format:?}"
+            );
+        }
+        for source in ["a.tga", "b.TIF", "c.webp", "d.bmp", "e.dds"] {
+            assert_eq!(
+                crate::commands::importer_for_source(source).ok(),
+                Some("ara.texture"),
+                "{source}"
+            );
+        }
     }
 }

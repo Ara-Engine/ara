@@ -1,22 +1,22 @@
 {
-  "binding_layout_hash": "f71261afa0d52758f34ca15c916d2da422ee92b118ede6e189c970911a274f1e",
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93",
+  "key": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7",
   "stages": [
     {
-      "dxil": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/tsr_prepare_inputs/tsrPrepareInputsMain.dxil",
-      "dxil_hash": "0756f2fc08f52cdc4a977805558e9626f10d84c10e9d9ce8c8ea1517a79b54c1",
+      "dxil": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/tsr_prepare_inputs/tsrPrepareInputsMain.dxil",
+      "dxil_hash": "1e594d7693f39770c15f2d5f8746b8a21a886442bf5519bb7a5bd3ef23200728",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/tsr_prepare_inputs/tsrPrepareInputsMain.metallib",
+        "metallib": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/tsr_prepare_inputs/tsrPrepareInputsMain.metallib",
         "metallib_hash": "a9b627e4669dd86c1d8adcf533619f3ea943b1213f2e4b9117f3c66be8b1a471",
-        "reflection": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/tsr_prepare_inputs/tsrPrepareInputsMain.metal.json",
-        "root_signature_hash": "1cc11e518b14c2b24e05fc30812bfd2b87e0a9c313ea79a4620a443a723525ef"
+        "reflection": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/tsr_prepare_inputs/tsrPrepareInputsMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "tsrPrepareInputsMain",
-      "spirv": "914960cef6df1a186de691fb017277168a16910b344a788f622e21a250c57a93/tsr_prepare_inputs/tsrPrepareInputsMain.spv",
+      "spirv": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/tsr_prepare_inputs/tsrPrepareInputsMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "d5a0e648f2d687de2047165120f1ef5c62af3c08a517f60cde8b02d9d61f22d9",
+      "spirv_hash": "6d6396b89e1d354fa272712fc6a9d2c46b436aa0a4f00f6d1773dd60c2be06eb",
       "stage": "compute"
     }
   ],

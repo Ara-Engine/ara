@@ -36,7 +36,9 @@ pub(crate) const MOTION_NEIGHBOURS: usize = 19;
 const IMAGES: usize = 20;
 /// Depth of a visibility-bitmask sample (`LookGpu::bitmask_ao`) behind its front, as
 /// a share of the AO radius: thinner foreground hides less of what lies behind it.
-const BITMASK_THICKNESS: f32 = 0.4;
+/// 0.4 treated branches, rails and posts as 40 cm slabs: ground under a sky-lit tree
+/// went black (3.4% of a street scene darkened past 40%; 1.4% at 0.1).
+const BITMASK_THICKNESS: f32 = 0.1;
 /// The largest colour lookup table: 32 steps per channel.
 pub(crate) const LUT_SIZE: u32 = 32;
 /// The exposure state (four floats), then the metering histogram's 256 counts

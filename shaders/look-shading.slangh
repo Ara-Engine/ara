@@ -115,9 +115,13 @@ float visibility(Frame f,Look l,float3 world,float3 normal,float pages=-1){
 // of Adobe's Fresnel Model"): Schlick minus b cos (1 - cos)^6, b = Schlick(1/7) (1 - tint)
 // 7 / (6/7)^6, so F at cos 1/7 is Schlick times the tint. No content or material carries a
 // tint (white: b = 0, exactly Schlick); a tint subtracts that term here and b/126 in meanFresnel.
-float3 fresnel(float cosine,float3 f0){float m=1-saturate(cosine),m2=m*m;return f0+(1-f0)*(m2*m2*m);}
+// The grazing reflectance F90 is 1, except below 2% F0: no real material reflects that
+// little, so such F0 is occlusion (Unreal's saturate(50 F0.g)) and a black metal stays
+// black instead of mirroring the sky at grazing angles.
+float grazing(float3 f0){return saturate(50*f0.g);}
+float3 fresnel(float cosine,float3 f0){float m=1-saturate(cosine),m2=m*m;return f0+(grazing(f0)-f0)*(m2*m2*m);}
 // Hemispherical average of fresnel, 2 int F(mu) mu dmu.
-float3 meanFresnel(float3 f0){return f0+(1-f0)/21;}
+float3 meanFresnel(float3 f0){return f0+(grazing(f0)-f0)/21;}
 // Ara's GGX lobe (alpha `a` = roughness^2, height-correlated Smith masking as in Cycles):
 // the energy its single scattering loses towards a viewer with masking `g` = G1(v),
 // K = 1/E - 1 for Kulla and Conty 2017's directional albedo E. A polynomial fit to offline
@@ -175,7 +179,7 @@ Lobes specularLobes(Surface s,float3 v){
     o.lv=sqrt(o.nv*o.nv*(1-o.a2)+o.a2);float g=2*o.nv/(o.nv+o.lv);
     float k=specularLoss(g,a),e=1/(1+k),bias=e*fresnelWeight(g,o.nv,s.roughness),eavg=averageAlbedo(s.roughness);
     o.f0=lerp(float3(0.04),s.albedo,s.metal);o.scale=1+multipleFresnel(meanFresnel(o.f0),eavg)*k;
-    o.albedo=(o.f0*e+(1-o.f0)*bias)*o.scale;
+    o.albedo=(o.f0*e+(grazing(o.f0)-o.f0)*bias)*o.scale;
     float layer=(0.04*e+0.96*bias)*(1+multipleFresnel(meanFresnel(float3(0.04)),eavg).x*k);
     o.diffuse=s.albedo*(1-s.metal)*(1-s.transmission)*(1-layer)/PI;
     return o;

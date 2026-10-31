@@ -12,6 +12,7 @@ ara-asset-host = { path = "../ara-asset-host" }
 ara-update = { path = "../ara-update" }
 ara-crash = { path = "../ara-crash" }
 ara-shader-cook = { path = "../ara-shader-cook" }
+ara-agents = { path = "../ara-agents" }
 ara-hub-service = { path = "../ara-hub-service" }
 ara-ai = { path = "../ara-ai" }
 ara-audio-why = { path = "../ara-audio-why" }
