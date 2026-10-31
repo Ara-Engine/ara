@@ -160,6 +160,8 @@ impl Embedded {
         };
         presenter.set_quality(quality);
         presenter.set_render_options(options);
+        // An editor Game view: sharp at the panel's size within a 1440p frame's cost.
+        presenter.set_pixel_budget(true);
         presenter.set_probe_gi(false);
         presenter.prepare(&device::warm_frame())?;
         presenter.set_probe_gi(true);

@@ -71,6 +71,10 @@ pub struct Options {
     /// pan, with per-frame renderer state (`app/scene_quality.rs`); writes
     /// `scene-quality.json` and the captures.
     pub verify_scene_quality: bool,
+    /// Follow the Game view through its preview, Play entry, dock and aspect changes:
+    /// where each frame's image was drawn against its node (`app/game_view_verify.rs`);
+    /// writes `game-view.json` and captures.
+    pub verify_game_view: bool,
     /// Run the loading window offscreen on the project (`loading`): its real run's
     /// milestones and every state, in both themes, as PNGs in the output folder.
     pub verify_loading: bool,
@@ -106,6 +110,7 @@ impl Options {
             || self.verify_unpresentable
             || self.verify_first_hour
             || self.verify_scene_quality
+            || self.verify_game_view
             || self.verify_loading
             || self.headless
     }
@@ -164,6 +169,7 @@ impl Default for Options {
             monkey_replay: None,
             verify_first_hour: false,
             verify_scene_quality: false,
+            verify_game_view: false,
             verify_loading: false,
             verify_responsiveness: false,
             verify_unpresentable: false,

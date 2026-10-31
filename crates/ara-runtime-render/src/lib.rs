@@ -144,6 +144,8 @@ pub struct Presenter {
     look_override: Option<ara_render_fidelity::environment::FrameEnvironment>,
     /// Raster render scale per display axis replacing the preset's (`set_render_scale`).
     render_scale: Option<f32>,
+    /// Below 1440p, render the preset's 1440p pixel budget (`set_pixel_budget`).
+    pixel_budget: bool,
     /// Effects a debug view turned off (`set_debug`), applied to every raster frame.
     debug: ara_render::RenderDebug,
     /// Hybrid ray queries on High/Epic where the device has them (`set_ray_queries`;
@@ -257,6 +259,7 @@ impl Presenter {
             environment: None,
             look_override: None,
             render_scale: None,
+            pixel_budget: false,
             debug: ara_render::RenderDebug::default(),
             ray_queries: std::env::var_os("ARA_RAY_QUERIES").is_none_or(|v| v != "0"),
             lut: None,

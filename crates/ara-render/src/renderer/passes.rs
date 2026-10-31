@@ -380,9 +380,10 @@ impl Renderer {
             self.look.frame_outline = true;
         }
         let (sampled, storage) = self.look.indices();
-        // Exposure snaps to its meter on a reset unless a host seeded it, and
-        // while new probe GI converges or fades in (no adaptation swing as the
-        // scene brightens under it).
+        // Exposure snaps to its meter on a reset unless a host seeded it, while new
+        // probe GI converges or fades in (no adaptation swing as the scene brightens
+        // under it), and on frames nobody sees (`set_unseen`, a Play entry): the
+        // first frame shown is metered, not a second of adaptation from a guess.
         let reset = self.targets.history.is_none() || self.look.settle > 0;
         let seeded = std::mem::take(&mut self.look.seeded);
         let arriving = self.look.gi.as_ref().is_some_and(|gi| gi.arriving());
@@ -392,7 +393,7 @@ impl Renderer {
                 sun_lux: self.content.sun_lux,
                 exposure,
                 reset,
-                snap: (reset && !seeded) || arriving,
+                snap: (reset && !seeded) || arriving || self.look.unseen,
                 frame_number: self.frame_number,
                 sampled,
                 storage,

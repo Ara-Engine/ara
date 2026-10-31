@@ -20,7 +20,7 @@ pub(crate) const LOCAL_INDIRECT: u32 = 64;
 /// The reflection debug view shows sources (`RenderDebug::reflections`).
 pub(crate) const REFLECTION_SOURCES: u32 = 128;
 /// Exposure adaptation step; the renderer has no wall clock.
-const FRAME_SECONDS: f32 = 1. / 60.;
+pub(crate) const FRAME_SECONDS: f32 = 1. / 60.;
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]

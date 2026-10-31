@@ -129,7 +129,7 @@ impl Renderer {
     /// (an embedded Play entry publishes nothing until it is lit) set `true`, and
     /// probe GI then converges its whole volume per bounce and shows without its
     /// fade, so readiness arrives in a few frames. `false` (shown frames) returns
-    /// to the budgeted relight and fades.
+    /// to the budgeted relight and fades. Unseen frames also snap exposure to its meter.
     pub fn set_unseen(&mut self, unseen: bool) {
         self.look.unseen = unseen;
         if let Some(gi) = &mut self.look.gi {

@@ -289,6 +289,10 @@ pub enum RenderPath {
     Fidelity(FidelityPlan),
 }
 
+/// The display the preset budgets were set at (D26/D27: 2560x1440); smaller
+/// displays may keep that pixel count ([`QualityPreset::raster_scale_for`]).
+pub const BUDGET_DISPLAY: [u32; 2] = [2560, 1440];
+
 impl QualityPreset {
     /// Raster render scale per display axis: the scene renders at this fraction of
     /// the display and the temporal resolve reconstructs the display resolution
@@ -305,6 +309,19 @@ impl QualityPreset {
             Self::High => 0.6,
             Self::Epic => 0.7,
         }
+    }
+
+    /// Raster render scale per display axis for `display` by pixel budget (Unreal's
+    /// display-resolution screen percentage): [`Self::raster_scale`] at 2560x1440 and
+    /// above; below it, the scale that renders as many pixels as the preset does at
+    /// 1440p, up to native. Editor Game views use it (`Presenter::set_pixel_budget`):
+    /// a panel costs no more than a 1440p frame and is sharp instead of upscaling a few
+    /// hundred lines (High: native up to ~1.3 MP). Plans keep [`Self::raster_scale`].
+    pub fn raster_scale_for(self, display: [u32; 2]) -> f32 {
+        let scale = self.raster_scale();
+        let pixels = |s: [u32; 2]| s[0] as f32 * s[1] as f32;
+        let budget = scale * scale * pixels(BUDGET_DISPLAY);
+        (budget / pixels(display).max(1.)).sqrt().clamp(scale, 1.)
     }
 
     /// Raster budgets for this preset (D27 record targets at 2560x1440 on an RTX
@@ -632,6 +649,22 @@ mod tests {
         }
     }
 
+    #[test]
+    fn raster_scale_keeps_the_1440p_pixel_budget_on_smaller_displays() {
+        for preset in QualityPreset::ALL {
+            let scale = preset.raster_scale();
+            // At and above the budget display: the preset scale, unchanged.
+            assert_eq!(preset.raster_scale_for(BUDGET_DISPLAY), scale);
+            assert_eq!(preset.raster_scale_for([3840, 2160]), scale);
+            // Below it: the same pixel count, never above native.
+            let hd = preset.raster_scale_for([1920, 1080]);
+            let pixels = |s: f32, d: [u32; 2]| s * s * d[0] as f32 * d[1] as f32;
+            assert!(hd > scale && hd <= 1.);
+            assert!((pixels(hd, [1920, 1080]) - pixels(scale, BUDGET_DISPLAY)).abs() < 2e3);
+            assert_eq!(preset.raster_scale_for([1131, 606]), 1., "{preset:?}");
+        }
+        assert!((QualityPreset::High.raster_scale_for([1920, 1080]) - 0.8).abs() < 1e-4);
+    }
     #[test]
     fn raster_by_default_and_ray_tracing_is_opt_in() {
         let traced = RenderOptions { ray_tracing: true };

@@ -464,6 +464,34 @@ impl Renderer {
         let value = f32::from_le_bytes(state[..4].try_into()?);
         Ok((value.is_finite() && value > 0.).then_some(value))
     }
+    /// Whether automatic exposure has reached its meter as of the last completed
+    /// frame: within 1% (0.014 EV, invisible) of where it is adapting to. Manual
+    /// exposure is always settled. `None` while a frame that writes the exposure is in
+    /// flight, or before any metered frame. Views that stop redrawing once still
+    /// (the editor Scene) keep rendering until it holds, so they never freeze halfway
+    /// through an adaptation and resume it on the next input.
+    pub fn exposure_settled(&self) -> Option<bool> {
+        let Some(metering) = self.look.look.auto_exposure else {
+            return Some(true);
+        };
+        let state = self.gpu.read(self.look.state).ok()?;
+        let word = |i: usize| -> Option<f32> {
+            Some(f32::from_le_bytes(
+                state.get(i * 4..i * 4 + 4)?.try_into().ok()?,
+            ))
+        };
+        let (applied, previous) = (word(0)?, word(1)?);
+        if !(applied.is_finite() && previous.is_finite() && applied > 0. && previous > 0.) {
+            return None;
+        }
+        // Each frame moves `step` of the way to the target (look-post.slang
+        // exposureMain), so the last move over `step` is how far the target still is.
+        let step = 1. - (-metering.adaptation * crate::look::frame::FRAME_SECONDS).exp();
+        if step <= 0. {
+            return Some(true);
+        }
+        Some(((applied - previous) / step).abs() <= 0.01 * applied)
+    }
     /// Start the next frame's exposure from `multiplier` (a linear exposure, as
     /// `exposure` returns): automatic exposure adapts from it at the look's rate
     /// instead of snapping to its first meter, and history pre-exposes with it.

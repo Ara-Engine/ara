@@ -36,7 +36,7 @@ No authoritative gameplay or authoring state lives here.
 - `presets`: `QualityPreset` (Low/Medium/High/Epic), `QualityChoice` (`--quality`),
   `Capabilities::of`, `Plan::resolve(choice, caps, display, RenderOptions)` →
   `RenderPath::Raster(RasterPlan)` (D27 default: every preset, every GPU;
-  `raster_quality()` budgets; `raster_scale()` render size, upscaled by TAAU; D29: High/Epic keep
+  `raster_quality()` budgets; `raster_scale()` render size, upscaled by TSR/TAAU (`raster_scale_for`: the 1440p pixel budget, for editor Game views); D29: High/Epic keep
   `quality.ray_queries` only on RT devices, `RasterPlan::hybrid`) or, with `RenderOptions::ray_tracing` on an RT device,
   `Fidelity(FidelityPlan)` for Medium and above. `FidelityPlan::settings` at
   creation, `configure` after new/resize/content swap. D26 RT tiers: Medium 0.4,

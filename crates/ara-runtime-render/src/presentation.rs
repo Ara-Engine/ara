@@ -134,6 +134,16 @@ impl Presenter {
         self.render_scale = scale.map(|s| s.clamp(0.1, 1.));
     }
 
+    /// Renders an editor Game view: below 2560x1440 the raster plan renders the
+    /// preset's 1440p pixel count, up to native (`QualityPreset::raster_scale_for`),
+    /// instead of its scale, so a Game view panel is sharp at no more than a 1440p
+    /// frame's cost. Standalone games keep the preset scale; an explicit render scale,
+    /// Play's full-resolution switch or the user's resolution scale win.
+    pub fn set_pixel_budget(&mut self, enabled: bool) {
+        self.graphics_plan_key = None;
+        self.pixel_budget = enabled;
+    }
+
     /// Turns effects off for diagnosis (the editor's View > Rendering debug, sent
     /// with each Play); `full_resolution` renders at the display size.
     pub fn set_debug(&mut self, debug: ara_render::RenderDebug) {
@@ -340,9 +350,20 @@ impl Presenter {
             fidelity.render_size = fidelity.display_size;
         }
         renderer.set_debug(self.debug)?;
+        // Explicit scales win: the host's, Play's full-resolution debug switch, then the
+        // user's resolution scale (already in a graphics plan); else the pixel budget.
+        let user_scale = self
+            .graphics
+            .as_ref()
+            .is_some_and(|g| g.resolution_scale.is_some());
+        let budget = (self.pixel_budget && !user_scale).then(|| match &plan.path {
+            RenderPath::Raster(raster) => plan.preset.raster_scale_for(raster.display_size),
+            RenderPath::Fidelity(_) => 1.,
+        });
         let scale = self
             .render_scale
-            .or(self.debug.full_resolution.then_some(1.));
+            .or(self.debug.full_resolution.then_some(1.))
+            .or(budget);
         if let (Some(scale), RenderPath::Raster(raster)) = (scale, &mut plan.path) {
             raster.render_size = raster
                 .display_size

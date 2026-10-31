@@ -17,6 +17,7 @@ mod game;
 #[cfg(test)]
 mod game_input_tests;
 mod game_preview;
+mod game_view_verify;
 mod hierarchy_verify;
 mod history_verify;
 mod import_drops;
@@ -114,6 +115,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             || options.verify_responsiveness
             || options.verify_unpresentable
             || options.verify_scene_quality
+            || options.verify_game_view
             || options.verify_loading
             || options.headless
         {
@@ -409,6 +411,14 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         editor.action("editor.layout.reset", json!({}))?;
         editor.action("editor.theme", json!({"light": false}))?;
     }
+    let mut game_view_check = options
+        .verify_game_view
+        .then(|| game_view_verify::GameViewCheck::new(&options.output));
+    if game_view_check.is_some() {
+        shell.memo_check = false;
+        editor.action("editor.layout.reset", json!({}))?;
+        editor.action("editor.theme", json!({"light": false}))?;
+    }
     let mut journey = if options.verify_journey {
         Some(journey::Journey::new(&mut editor, &options.output)?)
     } else {
@@ -481,6 +491,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         || first_hour.is_some()
         || probe.is_some()
         || scene_quality.is_some()
+        || game_view_check.is_some()
     {
         shell.rebuild(&mut editor)?;
     }
@@ -1248,6 +1259,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 set_camera(&mut editor, &camera)?;
                 dirty = true;
                 scene_dirty = true;
+            }
+            if let Some(route) = &mut game_view_check
+                && route.step(&mut editor, &mut shell)?
+            {
+                shell.rebuild(&mut editor)?;
+                dirty = true;
             }
             if let Some(route) = &mut scene_quality
                 && route.step(&mut editor)?
@@ -2052,7 +2069,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 let render_at = Instant::now();
                 {
                     ara_gpu::cpu_scope!("UI.render");
-                    unscaled_views(&mut shell, &renderer, scene_dpi, None);
+                    place_view_images(&mut shell, &renderer, scene_dpi, None);
                     // Exactly the drawable: a one-pixel miss rescales the whole UI.
                     gpu.pin_target_size(physical);
                     ui_renderer.render(
@@ -2167,7 +2184,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 }
                 let float_dpi = options.dpi.unwrap_or_else(|| float.window.display_scale())
                     * windows::ui_scale(&editor);
-                unscaled_views(&mut shell, &renderer, scene_dpi, Some(&float.id));
+                place_view_images(&mut shell, &renderer, scene_dpi, Some(&float.id));
                 let Some(surface) = shell.surface(&float.id) else {
                     continue;
                 };
@@ -2341,6 +2358,14 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     tick_ms,
                     view_ms,
                 );
+            }
+            if let Some(route) = &mut game_view_check {
+                route.end(&mut editor, &shell, &mut gpu, presented)?;
+                if route.finished() {
+                    route.write(&serde_json::to_value(renderer.gpu().info())?)?;
+                    game.close(&mut editor, &mut gpu)?;
+                    break;
+                }
             }
             if let Some(route) = &mut scene_quality {
                 route.end(
@@ -2916,8 +2941,9 @@ fn set_camera(
     Ok(())
 }
 /// Show the Scene, Game preview and live Game images of one window (`float`, or the
-/// main window) at their own pixel size, never stretched (`viewport::draw_unscaled`).
-fn unscaled_views(
+/// main window): 1:1 when rendered for their node, scaled to cover it while a
+/// resized frame is in flight (`viewport::draw_view_image`).
+fn place_view_images(
     shell: &mut crate::shell::Shell,
     renderer: &Renderer,
     scene_dpi: Option<f32>,
@@ -2931,7 +2957,7 @@ fn unscaled_views(
         },
     };
     if let Some(dpi) = scene_dpi {
-        viewport::draw_unscaled(
+        viewport::draw_view_image(
             display,
             overlay::viewport_image(),
             renderer.output_size(),
@@ -2939,10 +2965,10 @@ fn unscaled_views(
         );
     }
     if let Some(size) = shell.game_preview {
-        viewport::draw_unscaled(display, game_preview::texture(), size, shell.game_scale);
+        viewport::draw_view_image(display, game_preview::texture(), size, shell.game_scale);
     }
     for (player, info) in &shell.play_controls.players {
-        viewport::draw_unscaled(
+        viewport::draw_view_image(
             display,
             game::player_texture(*player),
             info.size,
