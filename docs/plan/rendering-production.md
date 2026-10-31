@@ -22,7 +22,12 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
 - [ ] **Soft sun shadows.** Source-angle penumbrae on cascades and the far map (PCSS
   blocker search, the VSM path already contact-hardens), matching the light's angular
   diameter (`Light.sourceAngle`, Unreal's `LightSourceAngle`).
-- [ ] **Global illumination ("Lumen alternative").** Bounce energy that matches the path
+- [ ] **Global illumination ("Lumen alternative").** Finding (2026-10-31, Polar at EV100 -2,
+  4096-spp reference): raster matches the reference on walls, the opening and the back room
+  (within ~10%); the metal ceiling is 2.4x short (0.0021 vs 0.0050) and the floor centre 1.6x
+  (it reflects the ceiling). Ceiling = 0.0011 reflections (SSR-resolved, green in sources)
+  + 0.0011 diffuse: rough metal specular misses the sunlit floor/snow a wide lobe gathers.
+  Original item: Bounce energy that matches the path
   tracer: screen-space GI over the probe field, a per-probe radiance cache with sky and
   emissive, multi-bounce, metals; temporal stability with no noise (D27). Measured against
   `ara-pathtrace` on the samples and Polar.
@@ -48,7 +53,10 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
 
 - [ ] **C# graphics settings.** Quality presets and individual settings readable and
   writable from game scripts (Unreal's `UGameUserSettings` scalability).
-- [ ] **Debugging.** A debug view for every effect above (`ViewMode`, `RenderDebug`),
+- [~] **Debugging.** Done: `ara capture --reference [spp] --bounces n` (path-traced ground
+  truth, 2ef3a3419), `--ev100` exposure lock (2ef3a3419), `--view` buffer visualization
+  (510d884ca, 0a864f5c5). Open: editor toggles for each, region luminance tooling in-engine.
+  Original item: A debug view for every effect above (`ViewMode`, `RenderDebug`),
   `ara capture` switches for each (`--view`, `--without`), a path-traced reference capture
   (`ara capture --reference`), and region luminance/compare tooling.
 - [x] Per-mesh Cast Shadows (3f2a35625); horizon shadows past the maps' reach (e3f974ddd).
