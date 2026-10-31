@@ -31,7 +31,19 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   tracer: screen-space GI over the probe field, a per-probe radiance cache with sky and
   emissive, multi-bounce, metals; temporal stability with no noise (D27). Measured against
   `ara-pathtrace` on the samples and Polar.
-- [ ] **Volumetric fog and light shafts.** Froxel volumetric fog (Unreal's volumetric fog):
+- [~] **Volumetric fog and light shafts.** Done (c8a7870ec, ce532b13d, 3876cdedf, cook
+  5fb204d26): `look::volumetric` near froxel volume (Medium 16 px/48 slices, High 12/64,
+  Epic 8/96; Low keeps the coarse grid) to `HeightFog.volumetricDistance`, ambient
+  (probe GI or sky) on a 4x4x2 grid, injection with Halton jitter, reprojected history and
+  per-group light culling, Hillaire integration; `LocalFogVolume`; emissive fog, extinction
+  scale, `Light.volumetricScattering`; coarse grid parallelised (0.32 -> 0.09 ms);
+  `--without volumetric-fog` and editor toggles. Polar 1440p fog GPU time: Low 0.09,
+  Medium 0.16, High 0.23, Epic 0.67 ms (unguarded, busy PC). Open: the reference's fog is
+  itself a coarse froxel grid (no shafts; needs a per-pixel path-traced medium), local fog
+  volumes in the fidelity renderer, froxel leaking through thin occluders at grazing
+  angles (as Unreal), virtual shadow pages for fog, a fog buffer view. Polar's authored
+  density (0.00025/m) shows faint shafts; check the UE FogDensity conversion.
+  Original item: Froxel volumetric fog (Unreal's volumetric fog):
   height and local fog volumes, sun with shadows (shafts), local lights with shadows,
   emissive fog, temporal reprojection, per-light volumetric scattering intensity.
 - [ ] **Atmosphere parity.** Hillaire sky atmosphere (transmittance, multi-scattering,
