@@ -532,6 +532,8 @@ pub fn register_schemas(db: &mut SchemaDb) {
     ara_nav::register(db);
     db.register::<PrimitiveMaterialOverride>()
         .register::<MeshRenderer>()
+        .register::<crate::paint::PaintedPrimitive>()
+        .register::<crate::paint::VertexPaint>()
         .register::<Light>()
         .register::<Environment>()
         .register::<Camera>()

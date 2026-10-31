@@ -21,6 +21,7 @@ pub(super) fn scene() -> NativeScene {
             world: Mat4::from_translation(Vec3::new(x, 0., 0.)),
             previous_world: Mat4::IDENTITY,
             casts_shadows: true,
+            paint: None,
         })
         .collect();
     instances.extend((0..512).map(|i| instanced::Instance {
@@ -31,6 +32,7 @@ pub(super) fn scene() -> NativeScene {
         world: Mat4::from_translation(Vec3::new(1000. + i as f32 * 2., 0., 0.)),
         previous_world: Mat4::IDENTITY,
         casts_shadows: true,
+        paint: None,
     }));
     NativeScene {
         geometry: vec![instanced::Geometry {
@@ -46,7 +48,7 @@ pub(super) fn scene() -> NativeScene {
                     uv: [0.; 2],
                     uv1: [0.; 2],
                     terrain_weights: 0,
-                    reserved: 0,
+                    color: u32::MAX,
                 })
                 .collect(),
             lods: vec![instanced::Lod {
@@ -54,6 +56,7 @@ pub(super) fn scene() -> NativeScene {
                 error: 0.,
             }],
             bounds: [Vec3::new(-0.2, -0.2, 0.5), Vec3::new(0.2, 0.2, 0.5)],
+            vertex_colors: false,
         }],
         materials,
         instances,

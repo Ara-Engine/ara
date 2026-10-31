@@ -26,6 +26,7 @@ fn readiness_waits_for_probe_delivery_and_convergence_but_allows_motion() -> Res
         material: None,
         skin: None,
         casts_shadows: true,
+        paint: None,
     });
     presenter.present(&frame)?;
     assert!(!presenter.readiness().is_ready());

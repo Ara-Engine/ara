@@ -309,6 +309,7 @@ mod tests {
                 lods: Vec::new(),
                 bounds: [Vec3::splat(-0.5), Vec3::splat(0.5)],
                 deforming: false,
+                vertex_colors: false,
                 revision: 0,
             }],
             instances: [id, id + 1]
@@ -321,6 +322,7 @@ mod tests {
                     world: Mat4::from_translation(Vec3::new(0., 0., -5.)),
                     previous_world: Mat4::IDENTITY,
                     casts_shadows: true,
+                    paint: None,
                 })
                 .collect(),
             materials: Vec::new(),

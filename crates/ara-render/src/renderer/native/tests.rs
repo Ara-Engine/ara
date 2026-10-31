@@ -6,6 +6,7 @@ use crate::{
 mod budgets;
 mod gbuffer;
 mod lens;
+mod paint;
 mod prepared;
 mod rays;
 mod shadow_patches;
@@ -74,7 +75,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
                     tangent: [1., 0., 0., 1.],
                     uv1: [1., 0.],
                     terrain_weights: 0,
-                    reserved: 0,
+                    color: u32::MAX,
                 })
                 .collect(),
             lods: vec![instanced::Lod {
@@ -83,6 +84,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
             }],
             bounds: [Vec3::new(-0.5, -0.5, 0.), Vec3::new(0.5, 0.5, 0.)],
             deforming: true,
+            vertex_colors: false,
             revision: 0,
         }],
         instances: [(-0.65, 1), (0.65, 2)]
@@ -95,6 +97,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
                 world: Mat4::from_translation(Vec3::new(x, 0., 0.)),
                 previous_world: Mat4::IDENTITY,
                 casts_shadows: true,
+                paint: None,
             })
             .collect(),
         materials: vec![instanced::Material {
@@ -123,6 +126,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
             world: Mat4::from_translation(Vec3::new(entity as f32 + 1000., 0., 0.)),
             previous_world: Mat4::IDENTITY,
             casts_shadows: true,
+            paint: None,
         }));
     let mut renderer = Renderer::new_native(
         &scene,

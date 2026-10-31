@@ -1,0 +1,55 @@
+{
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433",
+  "stages": [
+    {
+      "dxil": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_vertex_color/nativePaintVertex.dxil",
+      "dxil_hash": "df9b5fdae1dc409c8c93a8b069364da9a0e7ffcc79d904d89ecf5da28be4a901",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_vertex_color/nativePaintVertex.metallib",
+        "metallib_hash": "27615f69fb1b2261d4eb1764e271ba6e61ad00146fc79e96ce15a94652b091b6",
+        "reflection": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_vertex_color/nativePaintVertex.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "nativePaintVertex",
+      "spirv": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_vertex_color/nativePaintVertex.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "4cc707f2d875324a3b376b1793fb1edbe79280d7fdb00c214f575d131cae8415",
+      "stage": "vertex"
+    },
+    {
+      "dxil": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_vertex_color/nativeVertexColorFragment.dxil",
+      "dxil_hash": "aaaa35ffde55ffefffc691a6d23509f2898424e8c02179f7768b1de9f8be7a02",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_vertex_color/nativeVertexColorFragment.metallib",
+        "metallib_hash": "9ec6be86bc72db3e156da8bfab96fc2b6c55f43821d69c847ae0d71105ff64ea",
+        "reflection": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_vertex_color/nativeVertexColorFragment.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "nativeVertexColorFragment",
+      "spirv": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_vertex_color/nativeVertexColorFragment.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "2ca0149edd899aa7644c4997ab84a40dda54d68422c7837cac42f852aa07bc47",
+      "stage": "fragment"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [
+      43,
+      77,
+      37,
+      122,
+      100,
+      83
+    ],
+    "depth_format": 126,
+    "depth_test": true,
+    "depth_write": true,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

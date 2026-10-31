@@ -15,7 +15,7 @@ fn scene() -> NativeScene {
             uv: [0.; 2],
             uv1: [0.; 2],
             terrain_weights: 0,
-            reserved: 0,
+            color: u32::MAX,
         });
     let mut material = instanced::Material::default();
     material.pbr.textures = [u32::MAX; 4];
@@ -27,6 +27,7 @@ fn scene() -> NativeScene {
         world,
         previous_world: world,
         casts_shadows: true,
+        paint: None,
     };
     NativeScene {
         geometry: vec![instanced::Geometry {
@@ -39,6 +40,7 @@ fn scene() -> NativeScene {
                 error: 0.,
             }],
             bounds: [Vec3::new(-0.5, 0., -0.5), Vec3::new(0.5, 0., 0.5)],
+            vertex_colors: false,
         }],
         materials: vec![material],
         instances: vec![

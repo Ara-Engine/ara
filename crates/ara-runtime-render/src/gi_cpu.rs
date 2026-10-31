@@ -1390,7 +1390,7 @@ mod tests {
                 tangent: [1., 0., 0., 1.],
                 uv1: [0.; 2],
                 terrain_weights: 0,
-                reserved: 0,
+                color: u32::MAX,
             }));
             indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
         }
@@ -1404,6 +1404,7 @@ mod tests {
             lods: vec![Lod { indices, error: 0. }],
             bounds: [lo, hi],
             deforming: false,
+            vertex_colors: false,
             revision: 0,
         }
     }
@@ -1418,6 +1419,7 @@ mod tests {
                 world: Mat4::IDENTITY,
                 previous_world: Mat4::IDENTITY,
                 casts_shadows: true,
+                paint: None,
             })
             .collect();
         Scene {

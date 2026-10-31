@@ -41,7 +41,7 @@ fn native_fidelity_traces_shared_transforms_and_independent_emissive_uv1() -> Re
         uv: [0.75, 0.5],
         uv1: [0.25, 0.5],
         terrain_weights: 0,
-        reserved: 0,
+        color: u32::MAX,
     })
     .to_vec();
     let mut left = Material::default();
@@ -62,6 +62,7 @@ fn native_fidelity_traces_shared_transforms_and_independent_emissive_uv1() -> Re
             }],
             bounds: [Vec3::new(-0.4, -0.4, 0.0), Vec3::new(0.4, 0.4, 0.0)],
             deforming: true,
+            vertex_colors: false,
             revision: 0,
         }],
         instances: [-0.6, 0.6]
@@ -81,6 +82,7 @@ fn native_fidelity_traces_shared_transforms_and_independent_emissive_uv1() -> Re
                     world,
                     previous_world: world,
                     casts_shadows: true,
+                    paint: None,
                 }
             })
             .collect(),

@@ -61,6 +61,10 @@ pub struct Draw {
     pub skin: Option<Range<usize>>,
     /// Whether it blocks light (`MeshRenderer::cast_shadows` and the model node's own).
     pub casts_shadows: bool,
+    /// Per-instance vertex colours ([`crate::paint::VertexPaint`]): one linear RGBA8
+    /// word (red low) per drawn vertex, replacing the geometry's colours for this
+    /// draw only. Shapes carry one per generated vertex.
+    pub paint: Option<Arc<[u32]>>,
 }
 
 /// A point or spot light in world space.
@@ -211,6 +215,7 @@ pub struct RenderFrame {
     pub terrain: Option<TerrainView>,
     scratch: Vec<Mat4>,
     palette: Vec<Mat4>,
+    paints: crate::paint::PaintCache,
 }
 
 impl RenderFrame {
@@ -369,10 +374,24 @@ impl RenderFrame {
                     material,
                     skin: None,
                     casts_shadows: renderer.cast_shadows,
+                    paint: None,
                 };
                 if base.material.is_some() {
                     base.emissive = emission_multiplier(renderer, strength);
                     base.emissive_factor = renderer.emissive_factor;
+                }
+                let painted = entity.get::<crate::paint::VertexPaint>();
+                if renderer.model.is_none()
+                    && let Some(paint) = painted.and_then(|p| p.get(0))
+                {
+                    // Procedural shapes: source vertex i is generated vertex i.
+                    base.paint = self.paints.get(
+                        base.entity,
+                        paint,
+                        ara_asset::Digest([0; 32]),
+                        usize::MAX,
+                        |c| Some(c.iter().map(|&c| u32::from_le_bytes(c)).collect()),
+                    );
                 }
                 let model = renderer
                     .model
@@ -428,6 +447,13 @@ impl RenderFrame {
                         for i in selection.primitives {
                             let primitive = &model.primitives[i];
                             let material = material_override(renderer, i - selection.base, library);
+                            let slot = (i - selection.base) as u32;
+                            let id = base.entity.wrapping_add(i as u64);
+                            let paint = painted.and_then(|p| p.get(slot)).and_then(|paint| {
+                                self.paints.get(id, paint, model.digest, i, |c| {
+                                    crate::paint::cooked(primitive, c)
+                                })
+                            });
                             self.draws.push(Draw {
                                 entity: base.entity.wrapping_add(i as u64),
                                 geometry: Geometry::Model {
@@ -442,6 +468,7 @@ impl RenderFrame {
                                     primitive.material,
                                 ),
                                 material,
+                                paint,
                                 ..base.clone()
                             });
                         }
@@ -450,6 +477,7 @@ impl RenderFrame {
             }
         }
         self.camera = camera.map(|(_, c)| c);
+        self.paints.retain_seen();
     }
 
     fn light(&mut self, light: &Light, pose: &Pose) {

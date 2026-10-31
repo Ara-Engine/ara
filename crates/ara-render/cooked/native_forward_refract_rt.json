@@ -1,38 +1,38 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094",
+  "key": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433",
   "stages": [
     {
-      "dxil": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract_rt/nativeForwardRefractRtFragment.dxil",
-      "dxil_hash": "ae5956d027f09e8c526c79e90f12de68be40f734ba34d81746bddeffaf634c97",
+      "dxil": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_forward_refract_rt/nativeForwardRefractRtFragment.dxil",
+      "dxil_hash": "333e2e848c90b5f130690ec4cd990fd6924ea15de4b98a8f6daa2ab474a662e1",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract_rt/nativeForwardRefractRtFragment.metallib",
-        "metallib_hash": "f0b8427640d06ad310ebc8fcf0c2a99d6f0ef213bf1ad878f91634bb62f4aa2d",
-        "reflection": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract_rt/nativeForwardRefractRtFragment.metal.json",
+        "metallib": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_forward_refract_rt/nativeForwardRefractRtFragment.metallib",
+        "metallib_hash": "940e4ae567c57423e3769aaa9946c38b812be0a023f3987d73eb61a130602be1",
+        "reflection": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_forward_refract_rt/nativeForwardRefractRtFragment.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "nativeForwardRefractRtFragment",
-      "spirv": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract_rt/nativeForwardRefractRtFragment.spv",
+      "spirv": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_forward_refract_rt/nativeForwardRefractRtFragment.spv",
       "spirv_entry": "main",
-      "spirv_hash": "fd84942a0fbc38b9882ddd5ea0eae563236936f52a0af235822f0a92bdbb3379",
+      "spirv_hash": "e7eedf27b3bfa2cab720ed018a6b226825007cb89402bab692255fd7e6cd1d9d",
       "stage": "fragment"
     },
     {
-      "dxil": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract_rt/nativeGeometryVertex.dxil",
-      "dxil_hash": "bac22c88e6a71908abdd701c74cf7a138808675ef4f32804eccf7d93ea5e702e",
+      "dxil": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_forward_refract_rt/nativePaintVertex.dxil",
+      "dxil_hash": "df9b5fdae1dc409c8c93a8b069364da9a0e7ffcc79d904d89ecf5da28be4a901",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract_rt/nativeGeometryVertex.metallib",
-        "metallib_hash": "05055473cf32d0d6ea16009c70bee178487027bb6526624be58e90d1e7292cd4",
-        "reflection": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract_rt/nativeGeometryVertex.metal.json",
+        "metallib": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_forward_refract_rt/nativePaintVertex.metallib",
+        "metallib_hash": "27615f69fb1b2261d4eb1764e271ba6e61ad00146fc79e96ce15a94652b091b6",
+        "reflection": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_forward_refract_rt/nativePaintVertex.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
-      "source_entry": "nativeGeometryVertex",
-      "spirv": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract_rt/nativeGeometryVertex.spv",
+      "source_entry": "nativePaintVertex",
+      "spirv": "b345ecdd40b68b5f7e533b1b31a79305efc4657ca283a003456a3f3549859433/native_forward_refract_rt/nativePaintVertex.spv",
       "spirv_entry": "main",
-      "spirv_hash": "0dd39af89ab1a347edff9b8779e8c57953fe7ce677cd4461f318e40e4d3f5695",
+      "spirv_hash": "4cc707f2d875324a3b376b1793fb1edbe79280d7fdb00c214f575d131cae8415",
       "stage": "vertex"
     }
   ],

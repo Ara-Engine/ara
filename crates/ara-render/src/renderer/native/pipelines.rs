@@ -1,4 +1,4 @@
-//! Seventeen native PSOs are retained by the renderer across content generations.
+//! Twenty native PSOs are retained by the renderer across content generations.
 use super::*;
 use ara_gpu::vulkan::{PipelinePreparation, PipelinePreparationId};
 
@@ -48,6 +48,16 @@ pub(in crate::renderer) struct NativePipelines {
     pub outline_hidden: Pipeline,
     /// The selection outline mask's parts in view: against the frame's depth.
     pub outline_visible: Pipeline,
+    /// The G-buffer fill of draws that read vertex colours (`Batch::paint`):
+    /// vertex-colour tint and vertex-paint layers. Only those draws pay for the
+    /// colour interpolant and the layer blend; terrain never draws through it.
+    pub gbuffer_paint: Pipeline,
+    /// Shadow casters whose alpha test reads vertex colours (`Batch::paint`):
+    /// masked materials with a tint or paint layers.
+    pub shadow_paint: Pipeline,
+    /// The vertex-colour debug views (`ViewMode::vertex_color`): every camera draw
+    /// writes its vertex colour (or one channel) as G-buffer albedo.
+    pub vertex_color: Pipeline,
 }
 
 impl NativePipelines {
@@ -63,7 +73,7 @@ impl NativePipelines {
 }
 
 /// Cooked recipe names, in `NativePipelines` field order.
-const RECIPES: [&str; 17] = [
+const RECIPES: [&str; 20] = [
     "native_shadow",
     "native_gbuffer",
     "native_forward",
@@ -81,6 +91,9 @@ const RECIPES: [&str; 17] = [
     "native_overdraw",
     "native_outline_hidden",
     "native_outline_visible",
+    "native_gbuffer_paint",
+    "native_shadow_paint",
+    "native_vertex_color",
 ];
 
 #[derive(Default)]
@@ -137,6 +150,9 @@ impl Renderer {
                     overdraw,
                     outline_hidden,
                     outline_visible,
+                    gbuffer_paint,
+                    shadow_paint,
+                    vertex_color,
                 ]: [Pipeline; RECIPES.len()] = handles
                     .try_into()
                     .map_err(|_| anyhow::anyhow!("native PSO count differs"))?;
@@ -158,6 +174,9 @@ impl Renderer {
                     overdraw,
                     outline_hidden,
                     outline_visible,
+                    gbuffer_paint,
+                    shadow_paint,
+                    vertex_color,
                 }));
             }
         }

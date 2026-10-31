@@ -48,7 +48,7 @@ compilation runs externally and only checked programs can generate shaders.
   material format. Rename recovery can retain layout tombstones for deleted names.
 - check/CheckedMaterial/fold_constants: types, domains, finite f32 values, cycles,
   static budgets, dependency scheduling and reachable constant folding.
-- library::{BUILTINS,get,infer,registry}: 49 documented operations, signatures,
+- library::{BUILTINS,get,infer,registry}: 53 documented operations (incl. `vertexColor`, surface/unlit only, and `red`/`green`/`blue` lanes), signatures,
   generic graph search metadata and cost estimates (including named aliases).
 - register: graph and materialinstance Schema DB document kinds. InstanceAsset
   saves a definition @path#id and typed overrides, including symbolic textures.

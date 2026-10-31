@@ -57,6 +57,7 @@ pub mod material;
 pub mod math;
 pub mod model;
 pub mod navigation;
+pub mod paint;
 pub mod physics;
 pub mod plugin;
 mod preload;
@@ -206,6 +207,7 @@ pub fn register_components(registry: &mut SimRegistry) -> std::result::Result<()
     registry.register_component::<ara_perception::Stimulus>()?;
     registry.register_component::<components::StreamedWorld>()?;
     registry.register_component::<MeshRenderer>()?;
+    registry.register_component::<paint::VertexPaint>()?;
     registry.register_component::<Light>()?;
     registry.register_component::<Environment>()?;
     registry.register_component::<ara_components::render::SkyAtmosphere>()?;

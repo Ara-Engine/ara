@@ -46,6 +46,25 @@ pub struct MaterialAsset {
     pub base_color_decode_srgb: bool,
     /// Decode the raw emissive sample from sRGB after filtering (`sampleColor`).
     pub emissive_decode_srgb: bool,
+    /// Vertex-paint layers (the graph lerps between layers by vertex-colour channels,
+    /// like Unreal's VertexColor): each a complete PBR material over `textures`,
+    /// blended by its channel weights. Empty for an ordinary material; `material`
+    /// then holds the first layer with the blend's alpha mode.
+    pub paint_layers: Vec<PaintLayer>,
+}
+
+/// One vertex-paint layer of a [`MaterialAsset`].
+#[derive(Debug, Clone)]
+pub struct PaintLayer {
+    /// Per channel R, G, B, A: 0 unused, 1 weight times the channel, 2 times one
+    /// minus it (`ara_render::scene::PaintWeight`). The layers' weights sum to one.
+    pub terms: [u8; 4],
+    /// The layer's surface factors and texture slots into the asset's `textures`.
+    pub material: ModelMaterial,
+    /// Decode the layer's raw base-colour sample from sRGB after filtering.
+    pub base_color_decode_srgb: bool,
+    /// Decode the layer's raw emissive sample from sRGB after filtering.
+    pub emissive_decode_srgb: bool,
 }
 
 /// Resolved native material generations. Failed reloads retain their last good data.
@@ -138,6 +157,7 @@ impl MaterialAsset {
             texture_generations: prepared.generations,
             base_color_decode_srgb: prepared.base_color_decode_srgb,
             emissive_decode_srgb: prepared.emissive_decode_srgb,
+            paint_layers: prepared.paint_layers,
         })
     }
 }

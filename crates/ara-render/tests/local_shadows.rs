@@ -43,7 +43,7 @@ fn scene() -> Scene {
         uv: [0.; 2],
         uv1: [0.; 2],
         terrain_weights: 0,
-        reserved: 0,
+        color: u32::MAX,
     });
     let mut material = Material::default();
     material.pbr.textures = [u32::MAX; 4];
@@ -55,6 +55,7 @@ fn scene() -> Scene {
         world,
         previous_world: world,
         casts_shadows: true,
+        paint: None,
     };
     Scene {
         geometry: vec![Geometry {
@@ -66,6 +67,7 @@ fn scene() -> Scene {
             }],
             bounds: [Vec3::new(-0.5, 0., -0.5), Vec3::new(0.5, 0., 0.5)],
             deforming: false,
+            vertex_colors: false,
             revision: 0,
         }],
         instances: vec![

@@ -25,7 +25,7 @@ fn fixture() -> Scene {
                     tangent: [1.0, 0.0, 0.0, 1.0],
                     uv1: [0.0; 2],
                     terrain_weights: 0,
-                    reserved: 0,
+                    color: u32::MAX,
                 })
                 .to_vec(),
             lods: vec![
@@ -40,6 +40,7 @@ fn fixture() -> Scene {
             ],
             bounds: [Vec3::new(x - 0.5, -0.5, 0.0), Vec3::new(x + 0.5, 0.5, 0.0)],
             deforming: index == 1,
+            vertex_colors: false,
             revision: 1,
         })
         .collect();

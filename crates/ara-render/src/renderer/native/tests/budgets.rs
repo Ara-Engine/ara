@@ -13,7 +13,7 @@ fn scene() -> NativeScene {
                     tangent: [1., 0., 0., 1.],
                     uv1: [0.; 2],
                     terrain_weights: 0,
-                    reserved: 0,
+                    color: u32::MAX,
                 })
                 .collect(),
             lods: vec![
@@ -28,6 +28,7 @@ fn scene() -> NativeScene {
             ],
             bounds: [Vec3::new(-0.5, -0.5, 0.), Vec3::new(0.5, 0.5, 0.)],
             deforming: false,
+            vertex_colors: false,
             revision: 0,
         }],
         instances: [1., 0.02]
@@ -47,6 +48,7 @@ fn scene() -> NativeScene {
                     world,
                     previous_world: world,
                     casts_shadows: true,
+                    paint: None,
                 }
             })
             .collect(),

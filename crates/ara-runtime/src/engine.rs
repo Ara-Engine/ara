@@ -52,6 +52,7 @@ pub fn register_commands(registry: &mut Registry, db: &mut SchemaDb) {
     ara_2d::commands::register(registry, db);
     ara_physics2d::commands::register(registry, db);
     crate::physics::commands::register(registry, db);
+    crate::paint::commands::register(registry, db);
     ara_terrain::commands::register(registry, db);
     ara_foliage::commands::register(registry, db);
     ara_l10n::tools::register(registry, db);

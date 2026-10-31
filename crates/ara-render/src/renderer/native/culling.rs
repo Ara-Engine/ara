@@ -193,6 +193,14 @@ impl Culling {
                 groups.groups[g].two_pass = two_pass;
                 self.transparent_dirty = true;
             }
+            // Batches carry the PSO routing: re-list a group whose routing changes.
+            let paint = batches::reads_vertex_colors(value, groups.groups[g].colored);
+            let paint_shadow = paint && value.pbr.flags[0] == 1;
+            if (groups.groups[g].paint, groups.groups[g].paint_shadow) != (paint, paint_shadow) {
+                groups.groups[g].paint = paint;
+                groups.groups[g].paint_shadow = paint_shadow;
+                self.group(g);
+            }
         }
     }
 
@@ -344,6 +352,11 @@ impl Culling {
                     count: entries.len() as u32,
                     vertices: group.counts[lod],
                     first_index: group.first_indices[lod],
+                    paint: if pass == 4 {
+                        group.paint
+                    } else {
+                        group.paint_shadow
+                    },
                 };
                 cursor += entries.len();
             }
@@ -400,6 +413,7 @@ impl Culling {
                 count: 1,
                 vertices: groups.groups[g].counts[lod],
                 first_index: groups.groups[g].first_indices[lod],
+                paint: false,
             });
             self.visible[first + n] = [i as u32, groups.groups[g].first + lod as u32];
             let refract = groups.groups[g].refract;

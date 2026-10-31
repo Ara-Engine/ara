@@ -127,6 +127,12 @@ pub fn prepare(frame: &RenderFrame, content: Content, config: NativeConfig) -> R
     })
 }
 
+/// A draw's per-instance paint when it covers every vertex of its geometry
+/// (procedural shapes carry one colour per generated vertex; a mismatch draws unpainted).
+pub(super) fn paint(draw: &Draw, vertices: usize) -> Option<Arc<[u32]>> {
+    draw.paint.clone().filter(|paint| paint.len() == vertices)
+}
+
 impl Builder {
     fn draw_source(
         &mut self,
@@ -178,6 +184,7 @@ impl Builder {
             world,
             previous_world: world,
             casts_shadows: draw.casts_shadows,
+            paint: paint(draw, self.scene.geometry[geometry].vertices.len()),
         });
         Ok(())
     }

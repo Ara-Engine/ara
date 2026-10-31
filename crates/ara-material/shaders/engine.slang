@@ -28,6 +28,8 @@ struct AraMaterialInput {
     float3 worldTangent;
     float3 worldBitangent;
     float3 viewDirection;
+    // Linear RGBA vertex colour (imported or painted); white without.
+    float4 vertexColor;
 };
 struct AraSurface {
     float3 baseColor;

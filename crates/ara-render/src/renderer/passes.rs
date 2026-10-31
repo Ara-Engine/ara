@@ -28,7 +28,8 @@ enum Recipe {
     HorizonCapture(usize),
     /// This frame's virtual shadow pages (`look::vsm`).
     VsmPages,
-    GBuffer,
+    /// The G-buffer fill; `true`: the vertex-colour views (`ViewMode::vertex_color`).
+    GBuffer(bool),
     Tile,
     /// Deferred lighting; `true`: the gi_diffuse view's variant (`ViewMode::GiDiffuse`).
     Lighting(bool),
@@ -796,7 +797,7 @@ impl Renderer {
             .into_iter()
             .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color))),
         );
-        declare(gbuffer, Recipe::GBuffer);
+        declare(gbuffer, Recipe::GBuffer(mode.vertex_color().is_some()));
         // Page visibility for lighting and the pages this frame's pixels sample
         // (look::vsm), read back once the frame completes.
         let mut vsm_mask = None;
@@ -1001,7 +1002,7 @@ impl Renderer {
             forward,
             Recipe::Forward {
                 lit: forward_lit,
-                draws: !gi_diffuse,
+                draws: !gi_diffuse && mode.vertex_color().is_none(),
             },
         );
         let mut shaded = shadow_passes;
@@ -1505,7 +1506,7 @@ impl Renderer {
                         }
                         recorder.push(Command::EndRendering);
                     }
-                    Recipe::GBuffer => {
+                    Recipe::GBuffer(vertex_colors) => {
                         recorder.push(Command::Pipeline(self.pipelines.gbuffer));
                         recorder.push(Command::BeginRendering {
                             colors: [ALBEDO, NORMAL, MATERIAL, EMISSIVE, ID]
@@ -1524,7 +1525,7 @@ impl Renderer {
                         });
                         if let Some(native) = &self.native {
                             let detail = self.look.quality.terrain_detail;
-                            native.record_gbuffer(&mut recorder, footprint, detail);
+                            native.record_gbuffer(&mut recorder, footprint, detail, vertex_colors);
                         }
                         for (index, mesh) in self
                             .content

@@ -142,7 +142,7 @@ fn scene() -> Scene {
                     uv1: [0.; 2],
                     tangent: [1., 0., 0., 1.],
                     terrain_weights: 0,
-                    reserved: 0,
+                    color: u32::MAX,
                 })
                 .to_vec(),
             lods: vec![Lod {
@@ -151,6 +151,7 @@ fn scene() -> Scene {
             }],
             bounds: [Vec3::new(-1., -0.8, 0.), Vec3::new(1., 0.8, 0.)],
             deforming: false,
+            vertex_colors: false,
             revision: 0,
         }],
         instances: vec![Instance {

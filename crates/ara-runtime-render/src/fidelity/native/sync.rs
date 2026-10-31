@@ -191,7 +191,26 @@ impl Prepared {
                 poses += 1;
                 self.changes.instances.push(index);
             }
+            let vertices = self.scene.geometry[instance.geometry].vertices.len();
+            match (super::paint(draw, vertices), &instance.paint) {
+                (None, None) => {}
+                (Some(next), Some(known)) => {
+                    if !Arc::ptr_eq(&next, known) && next != *known {
+                        instance.paint = Some(next);
+                        self.changes.paint.push(index);
+                    }
+                }
+                // Adding or removing paint changes how draws group.
+                _ => return Ok(FrameChange::Rebuild),
+            }
             let current = source(draw);
+            // Paint layers are their own material rows: a new source or a factor
+            // edit rebuilds them with the parent.
+            let layered = Source::of(draw)
+                .is_some_and(|s| matches!(s, Source::Native(m) if !m.paint_layers.is_empty()));
+            if layered && current != link.source {
+                return Ok(FrameChange::Rebuild);
+            }
             let material = &mut self.scene.materials[instance.material];
             let previous = *material;
             if current != link.source {
@@ -206,6 +225,9 @@ impl Prepared {
             }
             material::apply_draw(material, draw, Source::of(draw));
             if bytemuck::bytes_of(material) != bytemuck::bytes_of(&previous) {
+                if layered {
+                    return Ok(FrameChange::Rebuild);
+                }
                 self.changes.materials.push(instance.material);
             }
             if let Some(range) = &draw.skin {

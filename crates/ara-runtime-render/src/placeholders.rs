@@ -115,6 +115,7 @@ mod tests {
             material: None,
             skin: None,
             casts_shadows: true,
+            paint: None,
         }];
         frame
     }

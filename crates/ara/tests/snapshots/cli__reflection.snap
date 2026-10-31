@@ -5619,6 +5619,55 @@ expression: out
         }
       }
     },
+    "PaintChannels": {
+      "kind": "struct",
+      "doc": "Which RGBA channels a fill writes (Unreal's paint channel mask).",
+      "module": "render",
+      "fields": {
+        "r": {
+          "type": "bool",
+          "doc": "Write red.",
+          "default": true
+        },
+        "g": {
+          "type": "bool",
+          "doc": "Write green.",
+          "default": true
+        },
+        "b": {
+          "type": "bool",
+          "doc": "Write blue.",
+          "default": true
+        },
+        "a": {
+          "type": "bool",
+          "doc": "Write alpha.",
+          "default": true
+        }
+      }
+    },
+    "PaintedPrimitive": {
+      "kind": "struct",
+      "doc": "One primitive's painted colours.",
+      "module": "render",
+      "fields": {
+        "primitive": {
+          "type": "u32",
+          "doc": "Zero-based primitive within the selected subtree, before `primitive` filtering.",
+          "default": 0
+        },
+        "vertices": {
+          "type": "u32",
+          "doc": "Source vertices the colours cover (the imported primitive's vertex count). A re-import that changes it leaves the primitive unpainted until repainted.",
+          "default": 0
+        },
+        "colors": {
+          "type": "string",
+          "doc": "Linear RGBA8 per source vertex: zlib-compressed, then standard base64.",
+          "default": ""
+        }
+      }
+    },
     "Perceiver": {
       "kind": "component",
       "doc": "An AI's senses: a sight cone with peripheral vision, hearing and memory.",
@@ -8694,6 +8743,94 @@ expression: out
         }
       }
     },
+    "VertexPaint": {
+      "kind": "component",
+      "doc": "Vertex colours painted onto this entity's `MeshRenderer` (its instance only; the shared model stays untouched). Materials read them as `vertexColor()`: glTF materials multiply base colour by them, graph materials blend layers by them.",
+      "module": "render",
+      "fields": {
+        "primitives": {
+          "type": "list<PaintedPrimitive>",
+          "doc": "Painted primitives by subtree-local slot (as `MeshRenderer.materialOverrides`); unlisted primitives keep their imported colours.",
+          "default": []
+        }
+      }
+    },
+    "VertexPaintClearParams": {
+      "kind": "params",
+      "doc": "Parameters of `vertexPaint.clear`.",
+      "module": "render",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Painted entity.",
+          "required": true
+        },
+        "primitive": {
+          "type": "option<u32>",
+          "doc": "Slot to clear; absent removes the whole `VertexPaint` component.",
+          "default": null
+        }
+      }
+    },
+    "VertexPaintFillParams": {
+      "kind": "params",
+      "doc": "Parameters of `vertexPaint.fill`.",
+      "module": "render",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Painted entity (its MeshRenderer).",
+          "required": true
+        },
+        "primitive": {
+          "type": "u32",
+          "doc": "Subtree-local primitive slot.",
+          "default": 0
+        },
+        "color": {
+          "type": "color",
+          "doc": "Linear colour written to every vertex's selected channels.",
+          "required": true
+        },
+        "channels": {
+          "type": "option<PaintChannels>",
+          "doc": "Channels written (absent: all); the others keep their painted (or white) values.",
+          "default": null
+        },
+        "vertices": {
+          "type": "option<u32>",
+          "doc": "Source vertex count; required when the slot has no paint yet (the editor and `ara inspect` of the model report it).",
+          "default": null
+        }
+      }
+    },
+    "VertexPaintSetParams": {
+      "kind": "params",
+      "doc": "Parameters of `vertexPaint.set`.",
+      "module": "render",
+      "fields": {
+        "entity": {
+          "type": "entity",
+          "doc": "Painted entity (its MeshRenderer); may be inside a prefab instance.",
+          "required": true
+        },
+        "primitive": {
+          "type": "u32",
+          "doc": "Subtree-local primitive slot.",
+          "default": 0
+        },
+        "vertices": {
+          "type": "u32",
+          "doc": "Source vertex count the colours cover.",
+          "required": true
+        },
+        "colors": {
+          "type": "string",
+          "doc": "Linear RGBA8 per source vertex, zlib-compressed and base64 (`VertexPaint` format).",
+          "required": true
+        }
+      }
+    },
     "VfxEnableParams": {
       "kind": "params",
       "doc": "Turn one module on or off without removing it.",
@@ -10879,6 +11016,70 @@ expression: out
       "examples": [
         {
           "source": "<ui id=\"hud\"><text id=\"title\" text=\"Hello\" /></ui>\n"
+        }
+      ]
+    },
+    "vertexPaint.clear": {
+      "kind": "command",
+      "summary": "Remove per-instance vertex paint from one primitive slot or the whole entity.",
+      "params": "VertexPaintClearParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_floor"
+        },
+        {
+          "entity": "e_floor",
+          "primitive": 2
+        }
+      ]
+    },
+    "vertexPaint.fill": {
+      "kind": "command",
+      "summary": "Fill selected colour channels of one primitive's per-instance vertex colours.",
+      "params": "VertexPaintFillParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_floor",
+          "color": [0, 0, 0, 1],
+          "vertices": 4096
+        },
+        {
+          "entity": "e_floor",
+          "primitive": 1,
+          "color": [1, 0, 0, 1],
+          "channels": {
+            "g": false,
+            "b": false,
+            "a": false
+          }
+        }
+      ]
+    },
+    "vertexPaint.set": {
+      "kind": "command",
+      "summary": "Replace one primitive's per-instance vertex colours (a whole paint stroke).",
+      "params": "VertexPaintSetParams",
+      "hints": {
+        "idempotent": false,
+        "destructive": false
+      },
+      "scope": "edit:scene",
+      "examples": [
+        {
+          "entity": "e_floor",
+          "primitive": 0,
+          "vertices": 3,
+          "colors": "eJz7z8Dw/z8UAwAm5QX7"
         }
       ]
     },

@@ -21,6 +21,7 @@ fn draw(geometry: Geometry) -> Draw {
         material: None,
         skin: None,
         casts_shadows: true,
+        paint: None,
     }
 }
 
@@ -42,6 +43,8 @@ fn model_factors_alpha_emission_and_cooked_lod_reach_fidelity() {
             material: Some(0),
             skin: None,
             casts_shadows: true,
+            source_vertices: Vec::new(),
+            vertex_colors: false,
         }],
         materials: vec![ModelMaterial {
             name: "Source material".into(),
@@ -68,6 +71,7 @@ fn model_factors_alpha_emission_and_cooked_lod_reach_fidelity() {
             double_sided: false,
             alpha_mode: 1,
             alpha_cutoff: 0.4,
+            vertex_color_tint: true,
         }],
         textures: Vec::new(),
         skins: Vec::new(),
@@ -151,6 +155,8 @@ fn materialless_models_have_zero_source_emission_and_allow_an_explicit_factor() 
             material: None,
             skin: None,
             casts_shadows: true,
+            source_vertices: Vec::new(),
+            vertex_colors: false,
         }],
         nodes: BTreeMap::new(),
         node_names: BTreeMap::new(),
@@ -230,6 +236,7 @@ fn every_pbr_map_is_resolved_once_per_model_generation() {
         double_sided: false,
         alpha_mode: 2,
         alpha_cutoff: 0.5,
+        vertex_color_tint: true,
     };
     let mut builder = Builder::default();
     for _ in 0..2 {

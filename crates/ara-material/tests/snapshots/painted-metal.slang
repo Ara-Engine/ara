@@ -28,6 +28,8 @@ struct AraMaterialInput {
     float3 worldTangent;
     float3 worldBitangent;
     float3 viewDirection;
+    // Linear RGBA vertex colour (imported or painted); white without.
+    float4 vertexColor;
 };
 struct AraSurface {
     float3 baseColor;
@@ -173,6 +175,7 @@ float4 fragmentMain(AraValidationInput v) : SV_Target {
     input.uv = v.uv; input.worldPosition = v.worldPosition;
     input.worldNormal = v.worldNormal; input.worldTangent = v.worldTangent;
     input.worldBitangent = v.worldBitangent; input.viewDirection = v.viewDirection;
+    input.vertexColor = float4(1, 1, 1, 1);
     AraSurface s = ara_evaluate(input);
     clip(s.opacityMask - 0.5);
     return float4(ara_engine_light(s, input, float3(0, 1, 0), float3(1), float3(0.03)), 1);

@@ -11,6 +11,9 @@ pub struct Changes {
     pub materials: Vec<usize>,
     /// Deforming geometries whose vertex revision changed.
     pub geometries: Vec<usize>,
+    /// Instances whose per-instance paint colours changed (`Instance::paint`, same
+    /// length). Adding or removing paint changes grouping: replace the scene.
+    pub paint: Vec<usize>,
 }
 
 impl Changes {
@@ -19,6 +22,7 @@ impl Changes {
         self.instances.clear();
         self.materials.clear();
         self.geometries.clear();
+        self.paint.clear();
     }
 }
 

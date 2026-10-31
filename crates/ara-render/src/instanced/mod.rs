@@ -38,8 +38,20 @@ pub struct Vertex {
     pub uv1: [f32; 2],
     /// Terrain's four splat bytes, little-endian; zero for model geometry.
     pub terrain_weights: u32,
-    /// Reserved shader word; must be zero.
-    pub reserved: u32,
+    /// Linear RGBA8 vertex colour, red in the low byte ([`Vertex::WHITE`] without
+    /// colours). Materials with `VERTEX_COLOR_TINT` multiply base colour by it and
+    /// vertex-paint layer materials blend by its channels.
+    pub color: u32,
+}
+
+impl Vertex {
+    /// The colour of geometry without vertex colours: opaque white.
+    pub const WHITE: u32 = u32::MAX;
+}
+
+/// Packs linear RGBA (clamped to 0..1) as a [`Vertex::color`] word.
+pub fn pack_color(rgba: [f32; 4]) -> u32 {
+    u32::from_le_bytes(rgba.map(|c| (c.clamp(0.0, 1.0) * 255.0 + 0.5) as u8))
 }
 
 /// One cooked triangle LOD, sharing the geometry's vertex allocation.
@@ -65,6 +77,10 @@ pub struct Geometry {
     pub bounds: [Vec3; 2],
     /// Whether animation can replace positions/normals/tangents between frames.
     pub deforming: bool,
+    /// Whether any vertex colour differs from [`Vertex::WHITE`]. False promises
+    /// all-white vertices (validated), so tinting materials draw through the
+    /// plain G-buffer PSO; true routes them to the vertex-colour PSO variant.
+    pub vertex_colors: bool,
     /// Position/normal/tangent revision for deforming geometry. Advance after a
     /// new skin pose; static geometry retains zero and keeps its GPU allocation.
     pub revision: u64,
@@ -87,6 +103,11 @@ pub struct Instance {
     /// Whether it blocks light. False still draws, reflects and bounces light, but
     /// leaves it out of every shadow map and ray-traced shadow.
     pub casts_shadows: bool,
+    /// Per-instance vertex colours (Unreal's mesh-paint override colours): one
+    /// [`Vertex::color`] word per geometry vertex, replacing the shared geometry's
+    /// colours for this instance only. Every LOD indexes the same vertices, so the
+    /// override covers all of them. `None` reads the geometry's colours.
+    pub paint: Option<std::sync::Arc<[u32]>>,
 }
 
 impl Instance {

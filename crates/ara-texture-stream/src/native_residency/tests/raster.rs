@@ -62,7 +62,7 @@ fn native_raster_samples_compressed_raw_maps_with_independent_uvs_and_decode_pol
                 uv: [0.75, 0.5],
                 uv1: [0.25, 0.5],
                 terrain_weights: 0,
-                reserved: 0,
+                color: u32::MAX,
             })
             .collect(),
             lods: vec![instanced::Lod {
@@ -71,6 +71,7 @@ fn native_raster_samples_compressed_raw_maps_with_independent_uvs_and_decode_pol
             }],
             bounds: [Vec3::new(-0.4, -0.4, 0.), Vec3::new(0.4, 0.4, 0.)],
             deforming: false,
+            vertex_colors: false,
             revision: 0,
         }],
         instances: [-0.6, 0.6]
@@ -84,6 +85,7 @@ fn native_raster_samples_compressed_raw_maps_with_independent_uvs_and_decode_pol
                 world: Mat4::from_translation(Vec3::new(x, 0., 0.)),
                 previous_world: Mat4::IDENTITY,
                 casts_shadows: true,
+                paint: None,
             })
             .collect(),
         materials: vec![left, right],

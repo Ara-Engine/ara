@@ -254,7 +254,7 @@ mod tests {
                         tangent: [1., 0., 0., 1.],
                         uv1: [0.; 2],
                         terrain_weights: 0,
-                        reserved: 0,
+                        color: u32::MAX,
                     })
                     .into(),
                 lods: vec![Lod {
@@ -263,6 +263,7 @@ mod tests {
                 }],
                 bounds: [Vec3::new(-1., -1., 0.), Vec3::new(1., 1., 0.)],
                 deforming: false,
+                vertex_colors: false,
                 revision: 0,
             }],
             instances: worlds
@@ -276,6 +277,7 @@ mod tests {
                     world: *world,
                     previous_world: *world,
                     casts_shadows: true,
+                    paint: None,
                 })
                 .collect(),
             materials: Vec::new(),

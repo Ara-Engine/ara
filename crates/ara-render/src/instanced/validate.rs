@@ -86,8 +86,8 @@ impl Scene {
                             .all(|v| v.is_finite())
                         && Vec3::from_array(vertex.normal).length_squared() > 1e-8
                         && Vec3::from_slice(&vertex.tangent).length_squared() > 1e-8
-                        && vertex.reserved == 0,
-                    "invalid native vertex or culling bounds"
+                        && (geometry.vertex_colors || vertex.color == Vertex::WHITE),
+                    "invalid native vertex, culling bounds or undeclared vertex colours"
                 );
             }
             let mut previous_error = 0.0;
@@ -117,8 +117,11 @@ impl Scene {
             ensure!(
                 entities.insert(instance.entity)
                     && instance.geometry < self.geometry.len()
-                    && instance.material < self.materials.len(),
-                "invalid or duplicated native instance"
+                    && instance.material < self.materials.len()
+                    && instance.paint.as_ref().is_none_or(|paint| {
+                        paint.len() == self.geometry[instance.geometry].vertices.len()
+                    }),
+                "invalid or duplicated native instance, or paint not one colour per vertex"
             );
             for world in [instance.world, instance.previous_world] {
                 ensure!(
