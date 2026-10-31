@@ -17,6 +17,7 @@ mod game;
 #[cfg(test)]
 mod game_input_tests;
 mod game_preview;
+mod game_view_verify;
 mod hierarchy_verify;
 mod history_verify;
 mod import_drops;
@@ -114,6 +115,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
             || options.verify_responsiveness
             || options.verify_unpresentable
             || options.verify_scene_quality
+            || options.verify_game_view
             || options.verify_loading
             || options.headless
         {
@@ -409,6 +411,14 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         editor.action("editor.layout.reset", json!({}))?;
         editor.action("editor.theme", json!({"light": false}))?;
     }
+    let mut game_view_check = options
+        .verify_game_view
+        .then(|| game_view_verify::GameViewCheck::new(&options.output));
+    if game_view_check.is_some() {
+        shell.memo_check = false;
+        editor.action("editor.layout.reset", json!({}))?;
+        editor.action("editor.theme", json!({"light": false}))?;
+    }
     let mut journey = if options.verify_journey {
         Some(journey::Journey::new(&mut editor, &options.output)?)
     } else {
@@ -481,6 +491,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
         || first_hour.is_some()
         || probe.is_some()
         || scene_quality.is_some()
+        || game_view_check.is_some()
     {
         shell.rebuild(&mut editor)?;
     }
@@ -1248,6 +1259,12 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 set_camera(&mut editor, &camera)?;
                 dirty = true;
                 scene_dirty = true;
+            }
+            if let Some(route) = &mut game_view_check
+                && route.step(&mut editor, &mut shell)?
+            {
+                shell.rebuild(&mut editor)?;
+                dirty = true;
             }
             if let Some(route) = &mut scene_quality
                 && route.step(&mut editor)?
@@ -2341,6 +2358,14 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                     tick_ms,
                     view_ms,
                 );
+            }
+            if let Some(route) = &mut game_view_check {
+                route.end(&shell, &mut gpu, presented)?;
+                if route.finished() {
+                    route.write(&serde_json::to_value(renderer.gpu().info())?)?;
+                    game.close(&mut editor, &mut gpu)?;
+                    break;
+                }
             }
             if let Some(route) = &mut scene_quality {
                 route.end(
