@@ -72,7 +72,7 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   over 15 frames); waiting for them or baking all at once both failed; try a bounded number
   of bake steps per frame during entry, without the lighting-change re-bake. (2) After a
   camera move, Polar's Scene exposure drifts ~0.2%/frame for 240+ frames (4.90 to 4.08;
-  D:AraScratchpresentationevidenceinal2scenescene-quality.json): check the
+  D:\AraScratch\presentation\evidence\final2\scene\scene-quality.json): check the
   adaptation rate the Unreal speeds map to and decide the editor policy (finish adaptation
   quickly at rest). Standalone games still upscale (unchanged cost).
 

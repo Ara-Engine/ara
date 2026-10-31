@@ -105,6 +105,8 @@ fn native(skin: bool) -> ara_render::instanced::Scene {
                     world: Default::default(),
                     previous_world: Default::default(),
                     casts_shadows: true,
+                    paint: None,
+                    receives_decals: true,
                 };
                 instance.world.w_axis.x = c[0];
                 instance.world.w_axis.y = c[1];
@@ -114,6 +116,7 @@ fn native(skin: bool) -> ara_render::instanced::Scene {
             .collect(),
         materials: vec![Material::default()],
         textures: 0,
+        decals: Vec::new(),
         lights: Vec::new(),
         sun_direction: [0.0, 0.0, 1.0].into(),
         sun_lux: [0.0; 3].into(),
