@@ -212,12 +212,7 @@ impl Renderer {
             lights.len() <= MAX_LIGHTS,
             "Too many local lights for the tiled light list"
         );
-        ensure!(
-            bytemuck::cast_slice::<Light, f32>(lights)
-                .iter()
-                .all(|v| v.is_finite()),
-            "Non-finite light"
-        );
+        ensure!(lights.iter().all(Light::is_valid), "Invalid local light");
         write_lights(
             &mut self.gpu,
             [self.content.light_buffer, self.content.compute_lights],
@@ -320,12 +315,7 @@ pub(super) fn upload_geometry(
         "Too many local lights for the tiled light list"
     );
     ensure!(meshes.len() < 16_777_216, "Float entity channel exhausted");
-    ensure!(
-        bytemuck::cast_slice::<Light, f32>(&lights)
-            .iter()
-            .all(|v| v.is_finite()),
-        "Non-finite light"
-    );
+    ensure!(lights.iter().all(Light::is_valid), "Invalid local light");
     let mut seen = std::collections::BTreeSet::new();
     for mesh in &meshes {
         ensure!(seen.insert(mesh.entity), "Duplicate entity ID");

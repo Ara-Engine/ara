@@ -52,18 +52,21 @@ pub fn scene() -> Result<Scene> {
                 color_lumens: [1., 0.12, 0.035, 2400.],
                 direction_outer: [0., -1., 0., 0.],
                 parameters: [0.; 4],
+                ..ara_render::scene::Light::ZERO
             },
             Light {
                 position_range: [3., 3., 1., 7.],
                 color_lumens: [0.05, 0.45, 1., 3200.],
                 direction_outer: [0., -1., 0., 0.],
                 parameters: [0.; 4],
+                ..ara_render::scene::Light::ZERO
             },
             Light {
                 position_range: [0., 4., -3., 8.],
                 color_lumens: [0.75, 0.2, 1., 1800.],
                 direction_outer: [0., -1., 0., 0.8],
                 parameters: [1., 0.94, 0., 0.],
+                ..ara_render::scene::Light::ZERO
             },
         ],
         sun_direction: Vec3::new(-0.6, 1., 0.4).normalize(),

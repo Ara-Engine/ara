@@ -131,6 +131,10 @@ pub(crate) struct LookGpu {
     pub lut_index: u32,
     /// Steps per channel of the current table; zero without one.
     pub lut_size: u32,
+    /// Area-light LTC tables (`look::ltc`), uploaded once; secondary views share them.
+    pub ltc: super::ltc::LtcTables,
+    /// The sun's angular radius (`Renderer::set_sun_radius`); `None` keeps the sky's.
+    pub sun_radius: Option<f32>,
     pub images: [Option<Image>; IMAGES],
     pub sampled: [u32; IMAGES],
     pub storage: [u32; IMAGES],
@@ -290,6 +294,7 @@ impl LookGpu {
             true,
         )?;
         let lut_index = gpu.storage_buffer(lut)?.index;
+        let ltc = super::ltc::LtcTables::new(gpu)?;
         Ok(Self {
             look: Look::default(),
             quality: Quality::default(),
@@ -302,6 +307,8 @@ impl LookGpu {
             lut,
             lut_index,
             lut_size: 0,
+            ltc,
+            sun_radius: None,
             images: [None; IMAGES],
             sampled: [0; IMAGES],
             storage: [0; IMAGES],

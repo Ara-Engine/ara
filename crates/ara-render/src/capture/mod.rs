@@ -46,6 +46,12 @@ pub enum ViewMode {
     /// per legend band ([`OverdrawStats`]). Only where [`RenderCapabilities::overdraw`]
     /// holds.
     Overdraw = 10,
+    /// Local-light shading cost per pixel (Unreal's light complexity) on the
+    /// [`Overdraw`](Self::Overdraw) heat legend: each light reaching the opaque surface
+    /// (in range, in front of a rect or disc, within a spot's cone) counts one, an
+    /// area light (sphere, tube, rect or disc) three, and one more when it has a local
+    /// shadow this frame. Black where none reach; the background is black.
+    LightComplexity = 11,
 }
 impl ViewMode {
     /// Complete baseline debug capture set.
@@ -72,6 +78,7 @@ impl ViewMode {
             Self::LitWireframe => "lit_wireframe",
             Self::GiDiffuse => "gi_diffuse",
             Self::Overdraw => "overdraw",
+            Self::LightComplexity => "light_complexity",
         }
     }
     /// Renders the lit scene (`Lit`, and under `LitWireframe`'s edges).

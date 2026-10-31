@@ -101,7 +101,7 @@ void prefilterMain(uint3 t:SV_DispatchThreadID){if(t.x>=256||t.y>=640)return;Fra
 [numthreads(64,1,1)]
 void tileMain(uint3 t:SV_DispatchThreadID){Frame f=frame();uint tilesX=(f.extent.x+15)/16;uint tilesY=(f.extent.y+15)/16;if(t.x>=tilesX*tilesY)return;uint offset=t.x*TILE_STRIDE;uint count=0;float2 tileMin=float2(t.x%tilesX,t.x/tilesX)*16;float2 tileMax=tileMin+16;
     for(uint i=0;i<f.extent.z;i++){
-        Light l=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64);float4 clip=mul(f.vp,float4(l.positionRange.xyz,1));float range=l.positionRange.w;
+        Light l=loadLight(f.lighting.w,i);float4 clip=mul(f.vp,float4(l.positionRange.xyz,1));float range=l.positionRange.w;
         bool include=clip.w<=range;
         if(!include){float2 centre=float2(clip.x/clip.w*0.5+0.5,0.5-clip.y/clip.w*0.5)*float2(f.extent.xy);float radius=range*max(abs(f.vp[0][0]),abs(f.vp[1][1]))*max(f.extent.x,f.extent.y)/max(clip.w-range,0.1);include=all(centre+radius>=tileMin)&&all(centre-radius<=tileMax);}
         if(include && count<TILE_LIGHTS){buffers[NonUniformResourceIndex(f.lighting.z)].Store((offset+1+count)*4,i);count++;}
@@ -204,6 +204,21 @@ float3 overdrawHeat(float count){
     float t=clamp(log2(count),0,4);float3 blue=float3(0,0,1),green=float3(0,1,0),yellow=float3(1,1,0),orange=float3(1,0.2122,0),red=float3(1,0,0);
     return t<1?lerp(blue,green,t):t<2?lerp(green,yellow,t-1):t<3?lerp(yellow,orange,t-2):lerp(orange,red,t-3);
 }
+// The light complexity view (ViewMode::LightComplexity): the cost-weighted count of
+// the tile's local lights reaching render pixel `r`'s opaque surface (`g`: the record
+// at render size): one each, three for an area light, one more with a local shadow.
+float lightComplexity(Frame g,int2 r){
+    bool covered;float3 w=gbufferWorld(g,r,covered);if(!covered)return 0;
+    Look l=look(g);uint tilesX=(g.extent.x+15)/16;uint tile=(uint(r.y)/16*tilesX+uint(r.x)/16)*TILE_STRIDE;
+    uint count=buffers[NonUniformResourceIndex(g.lighting.z)].Load(tile*4);float cost=0;
+    for(uint i=0;i<count;i++){
+        uint index=buffers[NonUniformResourceIndex(g.lighting.z)].Load((tile+1+i)*4);Light light=loadLight(g.lighting.w,index);
+        if(all(lightIntensity(g,light,index,w)<=0))continue;
+        cost+=lightHasArea(light)?3:1;
+        if(l.localShadows.y!=0&&buffers[NonUniformResourceIndex(l.localShadows.x)].Load2(index*8).y!=0)cost+=1;
+    }
+    return cost;
+}
 [shader("compute")]
 [numthreads(8,8,1)]
 void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);float3 color=pixel(root.materials,p).rgb;
@@ -222,6 +237,7 @@ void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.ext
     else if(f.temporal.z==9)color=max(color,0);
     // overdraw: root word 1 is the render-size fragment count (`Overdraw.Count`).
     else if(f.temporal.z==10)color=overdrawHeat(pixel(root.materials,r).x);
+    else if(f.temporal.z==11)color=overdrawHeat(lightComplexity(g,r));
     images[NonUniformResourceIndex(f.post.w)][p]=float4(srgb(saturate(color)),1);
 }
 // Editor selection outlines (renderer/outline.rs) over the display output. The mask

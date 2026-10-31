@@ -98,15 +98,15 @@ void fogMain(uint3 tid:SV_DispatchThreadID){
         if(physical)source+=(sr+sm+density*albedo)*multiScattering(l,height,sun.y)*l.sunLux.rgb;
         else source+=density*albedo*ambient;
         if(density>0)for(uint i=0;i<lights;i++){
-            Light light=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64);
+            Light light=loadLight(f.lighting.w,i);
             // parameters.w: unshadowed emitter lights stay out of the fog.
             float3 delta=light.positionRange.xyz-at;float distance=length(delta);if(distance>light.positionRange.w||light.parameters.w>0.5)continue;
             float3 toLight=delta/max(distance,0.001);
-            float spot=light.parameters.x<0.5?1:smoothstep(light.directionOuter.w,max(light.directionOuter.w+1e-4,light.parameters.y),dot(-toLight,light.directionOuter.xyz));
-            float fade=pow(saturate(1-pow(distance/light.positionRange.w,4)),2);
+            // The light's intensity towards the sample (look-lights.slangh: cone, rect and
+            // disc cosine, barn doors, range), as from its centre.
             float r2=max(0.01,light.parameters.z*light.parameters.z);
             float shadow=(l.flags.y&LOOK_LOCAL_INDIRECT)!=0?localShadow(l,i,at,0,light.positionRange.xyz):1;
-            source+=density*albedo*light.colorLumens.rgb*light.colorLumens.w/(4*PI*max(distance*distance,r2))*fade*spot*shadow*phaseM(dot(d,toLight),g);
+            source+=density*albedo*lightIntensity(f,light,i,at)/max(distance*distance,r2)*shadow*phaseM(dot(d,toLight),g);
         }
         float3 segment=exp(-e*ds);integral+=trans*source*(1-segment)/max(e,float3(1e-9));trans*=segment;
         store(l.storage0.w,uint2(z*128+tid.x,tid.y),integral);

@@ -82,6 +82,7 @@ fn scene() -> Scene {
             color_lumens: [1., 1., 1., 2000.],
             direction_outer: [0., -1., 0., 0.],
             parameters: [0., 1., 0., 0.],
+            ..ara_render::scene::Light::ZERO
         }],
         sun_direction: Vec3::Y,
         sun_lux: Vec3::ZERO,

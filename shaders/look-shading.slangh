@@ -66,10 +66,33 @@ float fogVisibility(Frame f,Look l,float3 world){
 }
 // Local-shadow table layout (ara_render look::local::{FACES, RECORDS}).
 static const uint LOCAL_FACES=2048,LOCAL_RECORDS=8192;
+// Widest local-light penumbra, in texels of radius (localTent's cost grows with its square).
+static const float LOCAL_SOFT_TEXELS=4;
+// Tent-filtered compares of `depth` in an atlas tile (texel origin `lo`, side `res`)
+// around texel-space point `c` (texel centres on integers), half-width `radius` texels:
+// gathers cover every texel the tent weighs, clamped inside the tile.
+float localTent(Look l,float2 lo,float res,float2 atlas,float2 c,float depth,float radius){
+    int2 first=int2(floor(c-radius))+1,last=int2(ceil(c+radius))-1;float sum=0,total=0;
+    for(int gy=first.y+1;gy<=last.y+1;gy+=2){
+        float2 oy=float2(gy-1,gy)-c.y,wy=max(radius-abs(oy),0);
+        for(int gx=first.x+1;gx<=last.x+1;gx+=2){
+            float2 ox=float2(gx-1,gx)-c.x,wx=max(radius-abs(ox),0);
+            float4 lit=step(textures[NonUniformResourceIndex(l.localShadows.y)].GatherRed(samplers[2],clamp(float2(gx,gy),lo+1,lo+res-1)/atlas),depth);
+            float4 w=float4(wx.x*wy.x,wx.y*wy.x,wx.x*wy.y,wx.y*wy.y);
+            sum+=dot(w,lit.wzxy);total+=dot(w,1);
+        }
+    }
+    return total>0?sum/total:1;
+}
 // Visibility of `world` from shadowed local light `index` (look::local): the
 // light's face (a cube's by the major axis from the light), its atlas tile, a
 // slope-scaled normal offset (shadowOffset) and a 3x3 tent filter in the tile.
-float localShadow(Look l,uint index,float3 world,float3 normal,float3 light){
+// `size` (m, the source's extent; zero for an ideal point): contact-hardening
+// shadows (PCSS, Fernando 2005) of an area source reaching `range`: the blockers in
+// the 4x4 texels around the point set the penumbra, size x (receiver - blocker) /
+// blocker in linear face depth, which a tent of up to LOCAL_SOFT_TEXELS filters.
+// Every pattern is fixed, so penumbrae are smooth and stable without accumulation.
+float localShadow(Look l,uint index,float3 world,float3 normal,float3 light,float size=0,float range=1){
     if(l.localShadows.y==0)return 1;
     uint2 entry=buffers[NonUniformResourceIndex(l.localShadows.x)].Load2(index*8);if(entry.y==0)return 1;
     float3 d=world-light,a=abs(d);
@@ -80,12 +103,29 @@ float localShadow(Look l,uint index,float3 world,float3 normal,float3 light){
     float2 atlas=float2(l.localShadows.zw);float res=tile.z*atlas.x;
     // A face's view depth is the major axis of the light-to-point vector (a
     // spot's is close to its length): texel size without a second transform.
-    float texel=2*max(entry.y==1?length(d):max(a.x,max(a.y,a.z)),0.01)/(length(m[0].xyz)*res);
-    float4 h=mul(m,float4(world+normal*texel*shadowOffset(saturate(dot(normal,normalize(light-world)))),1));if(h.w<=0)return 1;
+    float axial=max(entry.y==1?length(d):max(a.x,max(a.y,a.z)),0.01),texel=2*axial/(length(m[0].xyz)*res);
+    // Wider filters reach further across a slanted receiver: a larger normal offset.
+    float offset=texel*shadowOffset(saturate(dot(normal,normalize(light-world))))*(size>0?2:1);
+    float4 h=mul(m,float4(world+normal*offset,1));if(h.w<=0)return 1;
     float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
     if(any(uv<0)||any(uv>1)||q.z<=0||q.z>1)return 1;
     float depth=q.z*1.002;
     float2 lo=tile.xy*atlas,position=lo+uv*res-0.5,base=floor(position),t=position-base;
+    if(size>0){
+        // Reversed-Z faces (near look::local NEAR, far the range): linear depth
+        // = b / (ndc - a).
+        float near=0.05,far=max(range,0.1),za=-near/(far-near),zb=near*far/(far-near);
+        float blockers=0,count=0;
+        [unroll]for(uint j=0;j<2;j++)[unroll]for(uint i=0;i<2;i++){
+            float4 texels=textures[NonUniformResourceIndex(l.localShadows.y)].GatherRed(samplers[2],clamp(base+float2(2*i,2*j),lo+1,lo+res-1)/atlas);
+            float4 blocking=step(depth,texels);
+            blockers+=dot(blocking,zb/max(texels-za,1e-6));count+=dot(blocking,1);
+        }
+        if(count==0)return 1;
+        float receiver=zb/max(q.z-za,1e-6),blocker=blockers/count;
+        float penumbra=0.5*size*max(receiver-blocker,0)/max(blocker,1e-3)/texel;
+        return localTent(l,lo,res,atlas,position,depth,clamp(penumbra,1,LOCAL_SOFT_TEXELS));
+    }
     float4 wx=float4(1-t.x,1,1,t.x)/3,wy=float4(1-t.y,1,1,t.y)/3;float sum=0;
     [unroll]for(uint j=0;j<2;j++)[unroll]for(uint i=0;i<2;i++){
         float2 g=clamp(base+float2(2*i,2*j),lo+1,lo+res-1)/atlas;
@@ -406,6 +446,8 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
 float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,bool high=false,bool rays=false){
     return ibl(f,l,s,specularLobes(s,v),world,v,p,gathered,high,rays);
 }
+// Local lights (after Lobes and brdf, which they shade with).
+#include "look-lights.slangh"
 // Linear HDR radiance leaving `world` towards the camera (before fog and exposure).
 // `gathered`: deferred G-buffer pixels read the half-resolution probe gather.
 float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered,bool high=false,bool rays=false) {
@@ -419,19 +461,14 @@ float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered,bool hig
         result+=brdf(s,v,f.sunDirection.xyz,o)*sunAt(f,l,world)*lit;
     }
     uint tilesX=(f.extent.x+15)/16;uint tile=(uint(p.y)/16*tilesX+uint(p.x)/16)*TILE_STRIDE;
-    uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);
+    uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);AreaPixel area=(AreaPixel)0;
     for(uint i=0;i<count;i++) {
         uint index=buffers[NonUniformResourceIndex(f.lighting.z)].Load((tile+1+i)*4);
-        Light light=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(index*64);
-        float3 delta=light.positionRange.xyz-world;float d2=max(dot(delta,delta),max(0.01,light.parameters.z*light.parameters.z));float d=sqrt(d2);float3 toLight=normalize(delta);
-        float fade=pow(saturate(1-pow(d/light.positionRange.w,4)),2);float spot=1;
-        if(light.parameters.x>0.5)spot=smoothstep(light.directionOuter.w,light.parameters.y,dot(-toLight,light.directionOuter.xyz));
-        // Lumens are point-equivalent for spots too (the cone masks, it does not
-        // concentrate), as in the path tracer; inside a source's radius the near
-        // field softens instead of peaking.
-        float3 illuminance=light.colorLumens.rgb*(light.colorLumens.w/(4*PI*d2))*fade*spot;
-        if(any(illuminance>0))illuminance*=localShadow(l,index,world,s.normal,light.positionRange.xyz);
-        result+=brdf(s,v,toLight,o)*illuminance;
+        // look-lights.slangh: points, spots, spheres, tubes, rects and discs.
+        Light light=loadLight(f.lighting.w,index);
+        float size;float3 c=localLight(f,l,s,o,v,world,index,light,area,size);
+        if(any(c>0))c*=localShadow(l,index,world,s.normal,light.positionRange.xyz,size,light.positionRange.w);
+        result+=c;
     }
     return result;
 }

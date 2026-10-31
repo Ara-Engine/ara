@@ -51,7 +51,7 @@ mod camel_view {
     use crate::capture::ViewMode;
     use serde::{Deserialize, Deserializer, Serializer, de::Error};
 
-    const NAMES: [(ViewMode, &str); 11] = [
+    const NAMES: [(ViewMode, &str); 12] = [
         (ViewMode::Lit, "lit"),
         (ViewMode::Albedo, "albedo"),
         (ViewMode::Normals, "normals"),
@@ -63,6 +63,7 @@ mod camel_view {
         (ViewMode::LitWireframe, "litWireframe"),
         (ViewMode::GiDiffuse, "giDiffuse"),
         (ViewMode::Overdraw, "overdraw"),
+        (ViewMode::LightComplexity, "lightComplexity"),
     ];
 
     pub(super) fn serialize<S: Serializer>(view: &ViewMode, s: S) -> Result<S::Ok, S::Error> {

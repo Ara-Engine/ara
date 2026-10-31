@@ -18,6 +18,7 @@ mod rt;
 mod submission;
 mod targets;
 mod transfer;
+pub(crate) use transfer::upload_image;
 mod upload;
 mod views;
 use crate::{
@@ -505,6 +506,17 @@ impl Renderer {
         self.gpu
             .upload_queued(self.look.lut, bytemuck::cast_slice(texels))?;
         self.look.lut_size = size;
+        Ok(())
+    }
+    /// The directional light's angular radius in radians (half its source angle), or
+    /// `None` for the look's sky default: it widens the sun's contact-hardened shadows
+    /// (`Look.sunLux.w`) and its disc.
+    pub fn set_sun_radius(&mut self, radius: Option<f32>) -> Result<()> {
+        ensure!(
+            radius.is_none_or(|r| r.is_finite() && (0.0..=0.2).contains(&r)),
+            "a sun radius is 0 to 0.2 radians"
+        );
+        self.look.sun_radius = radius;
         Ok(())
     }
     /// The look applied to rendered frames.

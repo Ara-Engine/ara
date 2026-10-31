@@ -390,6 +390,7 @@ impl Renderer {
             &self.look.effective(),
             &FrameInputs {
                 sun_lux: self.content.sun_lux,
+                sun_radius: self.look.sun_radius,
                 exposure,
                 reset,
                 snap: (reset && !seeded) || arriving,
@@ -400,6 +401,7 @@ impl Renderer {
             },
         );
         let mut look_frame = look_frame;
+        look_frame.light_info[0] = [self.look.ltc.sampled[0], self.look.ltc.sampled[1], 0, 0];
         if let Some(cascades) = &self.look.cascades {
             for (slot, &index) in look_frame.cascade_maps.iter_mut().zip(&cascades.sampled) {
                 *slot = index;
@@ -640,6 +642,17 @@ impl Renderer {
                 };
                 graphics.push((id, read));
             });
+        }
+        // The area-light tables stay in ShaderRead for the renderer's lifetime.
+        for resource in self.look.ltc.resources() {
+            let id = graph.import(
+                resource,
+                State {
+                    access: Access::ShaderRead,
+                    queue: Queue::Graphics,
+                },
+            );
+            graphics.push((id, Access::ShaderRead));
         }
         let mut frame_input = None;
         for buffer in [self.frame, self.display_frame] {

@@ -469,6 +469,7 @@ mod tests {
             color_lumens: [1., 1., 1., lumens],
             direction_outer: [0., -1., 0., 0.],
             parameters: [0., 1., 0., 0.],
+            ..crate::scene::Light::ZERO
         }
     }
 

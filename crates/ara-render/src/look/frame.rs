@@ -134,12 +134,19 @@ pub(crate) struct LookFrame {
     pub exposure_curve: [[f32; 4]; 4],
     /// Probe radiance atlas (`GiGpu::radiance`): x sampled, y storage; zero: no probe GI.
     pub gi_radiance: [u32; 4],
+    /// Local lights (`look::ltc`, `look-lights.slangh`): info `[0]` LTC inverse
+    /// matrices and sphere integral (sampled), light tables (storage; zero: none).
+    /// Params are reserved.
+    pub light_params: [[f32; 4]; 2],
+    pub light_info: [[u32; 4]; 2],
 }
 
 /// Per-frame inputs that are not part of the authored look.
 pub(crate) struct FrameInputs {
     /// Top-of-atmosphere sun illuminance in lux.
     pub sun_lux: Vec3,
+    /// The sun's angular radius in radians, over the sky's default.
+    pub sun_radius: Option<f32>,
     /// Manual linear exposure multiplier; used unless the look meters automatically.
     pub exposure: f32,
     /// Drop GI hysteresis (first frame, history reset or a capture's settle
@@ -168,7 +175,10 @@ impl LookFrame {
             | if inputs.reset { RESET } else { 0 }
             | if inputs.snap { SNAP } else { 0 };
         Self {
-            sun_lux: inputs.sun_lux.extend(sky.sun_radius).to_array(),
+            sun_lux: inputs
+                .sun_lux
+                .extend(inputs.sun_radius.unwrap_or(sky.sun_radius))
+                .to_array(),
             atmosphere: [
                 sky.sea_level,
                 fog.map_or(0., |f| f.extinction),
@@ -263,6 +273,8 @@ impl LookFrame {
                 })
             },
             gi_radiance: [0; 4],
+            light_params: [[0.; 4]; 2],
+            light_info: [[0; 4]; 2],
         }
     }
 }
