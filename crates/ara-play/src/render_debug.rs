@@ -22,6 +22,51 @@ pub struct RenderDebug {
     pub full_resolution: bool,
     /// What the lit image shows of reflections (default `lit`).
     pub reflections: ReflectionView,
+    /// The debug view drawn instead of Lit, in the window and in captures (default
+    /// `lit`; `ara capture --view`).
+    pub view: DebugView,
+}
+
+/// The renderer's debug views (`ara_render::capture::ViewMode`, same names).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
+#[ara(module = "play")]
+#[serde(rename_all = "snake_case")]
+pub enum DebugView {
+    /// The lit image.
+    #[default]
+    Lit,
+    /// Linear base colour.
+    Albedo,
+    /// World normals.
+    Normals,
+    /// Reversed-Z depth.
+    Depth,
+    /// Roughness (red) and metalness (green).
+    RoughnessMetal,
+    /// Pseudocolour entity IDs.
+    EntityIds,
+    /// Cascade selection times shadow visibility.
+    ShadowCascades,
+    /// Triangle edges.
+    Wireframe,
+    /// The lit image with triangle edges.
+    LitWireframe,
+    /// Diffuse indirect light alone.
+    GiDiffuse,
+    /// Fragments per pixel before depth rejection.
+    Overdraw,
+    /// Vertex colour RGB as stored.
+    VertexColor,
+    /// Vertex colour red alone.
+    VertexColorRed,
+    /// Vertex colour green alone.
+    VertexColorGreen,
+    /// Vertex colour blue alone.
+    VertexColorBlue,
+    /// Vertex colour alpha alone.
+    VertexColorAlpha,
+    /// Deferred decals per pixel.
+    DecalCoverage,
 }
 
 /// The reflection debug views.
@@ -48,6 +93,7 @@ impl Default for RenderDebug {
             temporal_jitter: true,
             full_resolution: false,
             reflections: ReflectionView::Lit,
+            view: DebugView::Lit,
         }
     }
 }

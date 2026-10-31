@@ -7,7 +7,6 @@ use ara_input::{ActionValue, Injection, PlayerId};
 use ara_play::{
     Captured, Input, Mark, Patch, Patched, PlayScene, Sample, Set, Started, Stepped, unhex,
 };
-use ara_render::capture::ViewMode;
 use ara_runtime::{
     Runtime, RuntimeConfig, assets::CachedAssets, extract::RenderFrame, live::set_edit,
 };
@@ -832,7 +831,8 @@ impl World {
                 let request = ara_render::capture::CaptureRequest {
                     camera: ara_runtime_render::camera(frame)?,
                     size,
-                    mode: ViewMode::Lit,
+                    // `ara capture --view` (renderDebug.view); Lit by default.
+                    mode: presenter.debug().view,
                     deterministic: true,
                     exposure: frame.environment.exposure,
                     settle_frames: 16,

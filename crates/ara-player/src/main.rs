@@ -1202,6 +1202,29 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
             ara_play::ReflectionView::Reflections => ara_render::ReflectionView::Reflections,
             ara_play::ReflectionView::Sources => ara_render::ReflectionView::Sources,
         },
+        view: {
+            use ara_play::DebugView as D;
+            use ara_render::capture::ViewMode as V;
+            match debug.view {
+                D::Lit => V::Lit,
+                D::Albedo => V::Albedo,
+                D::Normals => V::Normals,
+                D::Depth => V::Depth,
+                D::RoughnessMetal => V::RoughnessMetal,
+                D::EntityIds => V::EntityIds,
+                D::ShadowCascades => V::ShadowCascades,
+                D::Wireframe => V::Wireframe,
+                D::LitWireframe => V::LitWireframe,
+                D::GiDiffuse => V::GiDiffuse,
+                D::Overdraw => V::Overdraw,
+                D::VertexColor => V::VertexColor,
+                D::VertexColorRed => V::VertexColorRed,
+                D::VertexColorGreen => V::VertexColorGreen,
+                D::VertexColorBlue => V::VertexColorBlue,
+                D::VertexColorAlpha => V::VertexColorAlpha,
+                D::DecalCoverage => V::DecalCoverage,
+            }
+        },
     }
 }
 
@@ -1267,6 +1290,7 @@ mod cli_tests {
                 temporal_jitter: false,
                 full_resolution: true,
                 reflections: ara_render::ReflectionView::Sources,
+                view: ara_render::capture::ViewMode::VertexColor,
             },
         ] {
             let wire: ara_play::RenderDebug =

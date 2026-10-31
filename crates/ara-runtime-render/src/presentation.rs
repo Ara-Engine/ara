@@ -128,6 +128,11 @@ impl Presenter {
         self.debug = debug;
     }
 
+    /// The diagnosis switches in force, including the debug view captures draw.
+    pub fn debug(&self) -> ara_render::RenderDebug {
+        self.debug
+    }
+
     /// Enables (the default) or disables D29's hybrid ray queries where a plan has
     /// them (only under the ray-tracing opt-in): off, an RT device renders the raster
     /// path, as a GPU without ray queries would (A/B measurements). Applies from the
@@ -561,7 +566,7 @@ impl Presenter {
             renderer,
             frame,
             &camera,
-            ViewMode::Lit,
+            self.debug.view,
             opened,
             |renderer| {
                 let source = renderer.output();
@@ -644,7 +649,7 @@ impl Presenter {
                     renderer,
                     frame,
                     &camera(frame)?,
-                    ViewMode::Lit,
+                    self.debug.view,
                     |renderer| {
                         let source = renderer.output();
                         Published::publish(published, renderer.gpu_mut(), source, size).map(drop)

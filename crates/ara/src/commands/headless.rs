@@ -74,6 +74,12 @@ pub struct CaptureArgs {
     /// trace blue, box-projected captures cyan, probes orange, sky magenta).
     #[arg(long, value_parser = ["reflections", "sources"])]
     reflections: Option<String>,
+    /// Debug view to capture instead of the lit image: albedo, normals, depth,
+    /// roughness-metal, entity-ids, shadow-cascades, wireframe, lit-wireframe,
+    /// gi-diffuse, overdraw, vertex-color (and -red/-green/-blue/-alpha) or
+    /// decal-coverage.
+    #[arg(long, value_parser = ["lit", "albedo", "normals", "depth", "roughness-metal", "entity-ids", "shadow-cascades", "wireframe", "lit-wireframe", "gi-diffuse", "overdraw", "vertex-color", "vertex-color-red", "vertex-color-green", "vertex-color-blue", "vertex-color-alpha", "decal-coverage"])]
+    view: Option<String>,
     /// Measure flicker: settle this many live frames, then report how much they change.
     #[arg(long)]
     stability: Option<u32>,
@@ -95,20 +101,21 @@ impl CaptureArgs {
             "path":self.path,"width":self.width,"height":self.height,"preset":self.preset,
             "ticks":self.ticks,"seed":self.seed,"marks":self.marks,"stability":self.stability,
             "video":self.video,"videoMove":self.video_move,"videoYaw":self.video_yaw,
-            "renderDebug":render_debug(&self.without, self.full_resolution, self.reflections.as_deref())})),
+            "renderDebug":render_debug(&self.without, self.full_resolution, self.reflections.as_deref(), self.view.as_deref())})),
             summary: protocol::pretty,
         }
     }
 }
 
-/// `capture`'s `renderDebug` for `--without`, `--full-resolution` and
-/// `--reflections`; omitted when every effect stays at its default.
+/// `capture`'s `renderDebug` for `--without`, `--full-resolution`,
+/// `--reflections` and `--view`; omitted when every effect stays at its default.
 fn render_debug(
     without: &[String],
     full_resolution: bool,
     reflections: Option<&str>,
+    view: Option<&str>,
 ) -> serde_json::Value {
-    if without.is_empty() && !full_resolution && reflections.is_none() {
+    if without.is_empty() && !full_resolution && reflections.is_none() && view.is_none() {
         return serde_json::Value::Null;
     }
     let on = |name: &str| !without.iter().any(|w| w == name);
@@ -118,5 +125,6 @@ fn render_debug(
         "temporalJitter": on("temporal-jitter"),
         "fullResolution": full_resolution,
         "reflections": reflections.unwrap_or("lit"),
+        "view": view.unwrap_or("lit").replace('-', "_"),
     })
 }

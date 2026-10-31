@@ -20,6 +20,14 @@ pub struct RenderDebug {
     pub full_resolution: bool,
     /// What the lit image shows of reflections.
     pub reflections: ReflectionView,
+    /// The debug view presenters draw instead of Lit (live windows and captures):
+    /// `ara capture --view` and `play.renderDebug`.
+    #[serde(default = "lit")]
+    pub view: crate::capture::ViewMode,
+}
+
+fn lit() -> crate::capture::ViewMode {
+    crate::capture::ViewMode::Lit
 }
 
 /// The reflection debug views: the lit image, the reflected light alone, or where
@@ -46,6 +54,7 @@ impl Default for RenderDebug {
             temporal_jitter: true,
             full_resolution: false,
             reflections: ReflectionView::Lit,
+            view: crate::capture::ViewMode::Lit,
         }
     }
 }
