@@ -58,6 +58,11 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
 
 ## Tools
 
+- [~] **Editor views: no noise, full quality, correct sizing.** Scene and Game views free of
+  visible noise and low-resolution or half-converged images; the Game view never draws a
+  frame at the wrong size while it resizes or starts; stale frames, flashes, ghosting and
+  exposure pumping found and fixed, at unchanged frame cost.
+
 - [ ] **Cooker determinism.** An incremental re-cook of unchanged sources rewrote Metal
   metadata (`ResourceCount` 31 to 224 on fullscreenVertex) relative to the fresh cohort cook.
 
