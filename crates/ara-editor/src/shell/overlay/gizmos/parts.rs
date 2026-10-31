@@ -84,6 +84,11 @@ pub(super) enum Shape {
         half: Vec3,
         fade: f32,
     },
+    /// A decal's projection box (local half extents, before entity scale); it
+    /// projects along local -Z.
+    Decal {
+        half: Vec3,
+    },
     ReverbSphere {
         radius: f32,
         fade: f32,
@@ -272,6 +277,15 @@ pub(super) fn classify(record: &ara_doc::Record) -> (Vec<Part>, Option<Icon>) {
                 height: num(portal, "height", 2.),
             },
         );
+    }
+    if let Some(decal) = record.get("Decal") {
+        part(
+            "Decal",
+            Shape::Decal {
+                half: vec3(decal, "size", [1., 1., 1.]).abs() * 0.5,
+            },
+        );
+        icons.push(("Decal", "image", Tint::Volume));
     }
     if record.contains_key("ReflectionProbe") {
         icons.push(("ReflectionProbe", "circle-dot", Tint::Probe));

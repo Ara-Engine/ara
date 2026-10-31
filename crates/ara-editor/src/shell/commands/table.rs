@@ -246,6 +246,9 @@ fn renderer_debug_mode(c: &Ctx, name: &str) -> Avail {
     let (available, key) = match name {
         "gi_diffuse" => (caps.gi_diffuse, "giDiffuse"),
         "overdraw" => (caps.overdraw, "overdraw"),
+        "vertexColor" | "vertexColorRed" | "vertexColorGreen" | "vertexColorBlue"
+        | "vertexColorAlpha" => (caps.vertex_colors, "vertexColors"),
+        "decalCoverage" => (caps.decals, "decals"),
         _ => return Avail::Blocked("Unknown renderer debug view".into()),
     };
     if available {
@@ -525,6 +528,19 @@ fn can_undo(c: &Ctx, redo: bool) -> Avail {
     } else {
         Avail::Blocked(format!("Nothing to {}", if redo { "redo" } else { "undo" }))
     }
+}
+/// Edits Mesh Paint's settings, turning the mode on.
+fn paint(e: &mut Editor, edit: impl FnOnce(&mut crate::paint::PaintSettings)) -> R {
+    let mut settings = e.state.paint.unwrap_or_default();
+    edit(&mut settings);
+    e.state.paint = Some(settings);
+    Ok(())
+}
+fn paint_tool(c: &Ctx, tool: crate::paint::PaintTool) -> Avail {
+    Avail::Checked(c.state.paint.is_some_and(|p| p.tool == tool))
+}
+fn paint_channel(c: &Ctx, channel: usize) -> Avail {
+    Avail::Checked(c.state.paint.unwrap_or_default().channels[channel])
 }
 fn panel_open(c: &Ctx, panel: &str) -> Avail {
     Avail::Checked(crate::state::panel_visible(c.state, panel))
@@ -997,6 +1013,12 @@ fn build() -> Vec<Spec> {
         .when(|c| mode(c, "litWireframe")),
     ]);
     c.extend([
+        cmd("view.mode.vertex_color", "Vertex Color", "palette", "", "Each surface's vertex colour (imported or painted), unlit and as stored: 0.5 shows mid-grey.", |_,e,_|view(e,json!({"viewMode":"vertexColor"}))).when(|c|renderer_debug_mode(c,"vertexColor")),
+        cmd("view.mode.vertex_color_red", "Vertex Color: Red", "palette", "", "The vertex colour's red channel alone, as grey (paint-layer masks).", |_,e,_|view(e,json!({"viewMode":"vertexColorRed"}))).when(|c|renderer_debug_mode(c,"vertexColorRed")),
+        cmd("view.mode.vertex_color_green", "Vertex Color: Green", "palette", "", "The vertex colour's green channel alone, as grey.", |_,e,_|view(e,json!({"viewMode":"vertexColorGreen"}))).when(|c|renderer_debug_mode(c,"vertexColorGreen")),
+        cmd("view.mode.vertex_color_blue", "Vertex Color: Blue", "palette", "", "The vertex colour's blue channel alone, as grey.", |_,e,_|view(e,json!({"viewMode":"vertexColorBlue"}))).when(|c|renderer_debug_mode(c,"vertexColorBlue")),
+        cmd("view.mode.vertex_color_alpha", "Vertex Color: Alpha", "palette", "", "The vertex colour's alpha channel alone, as grey.", |_,e,_|view(e,json!({"viewMode":"vertexColorAlpha"}))).when(|c|renderer_debug_mode(c,"vertexColorAlpha")),
+        cmd("view.mode.decal_coverage", "Decal Coverage", "image", "", "Deferred decals per pixel over the dimmed scene (1 blue, 2 green, 4 yellow, 8 orange, 16+ red); surfaces that refuse decals stay grey.", |_,e,_|view(e,json!({"viewMode":"decalCoverage"}))).when(|c|renderer_debug_mode(c,"decalCoverage")),
         cmd("view.mode.overdraw", "Overdraw", "flame", "", "Native opaque and alpha-tested fragments before depth rejection; transparent and VFX passes are excluded. Heat legend: 0 black, 1 blue, 2 green, 4 yellow, 8 orange, 16+ red.", |_,e,_|view(e,json!({"viewMode":"overdraw"}))).when(|c|renderer_debug_mode(c,"overdraw")),
         cmd("view.mode.gi_debug", "GI Diffuse", "sparkles", "", "Native diffuse indirect light on opaque surfaces; background black. The actual renderer explains unavailable data instead of showing Lit.", |_,e,_|view(e,json!({"viewMode":"gi_diffuse"}))).when(|c|renderer_debug_mode(c,"gi_diffuse")),
         cmd("view.debug.ambient_occlusion", "Ambient Occlusion", "contrast", "", "Rendering debug: untick to turn ambient occlusion off in the Scene view now and in Play from its next start.", |_,e,_|render_debug(e,|d|d.ambient_occlusion = !d.ambient_occlusion)).when(|c|Avail::Checked(c.state.render_debug.ambient_occlusion)),
@@ -1109,6 +1131,41 @@ fn build() -> Vec<Spec> {
             act(e, "editor.tool", json!({"tool": e.state.tool, "centre": !e.state.centre}))
         }).when(|c| Avail::Checked(c.state.centre)),
     ]);
+    // Mesh Paint (`crate::paint`, `shell/mesh_paint_panel.rs`).
+    {
+        use crate::paint::PaintTool as T;
+        c.extend([
+            cmd("paint.mode", "Mesh Paint", "palette", "", "Paint per-instance vertex colours on the selected meshes (Unreal's mesh paint); the shared model never changes.", |_, e, _| {
+                e.state.paint = if e.state.paint.is_some() { None } else { Some(Default::default()) };
+                if e.state.paint.is_some() {
+                    act(e, "editor.layout.show", json!({"panel": "mesh-paint"}))?;
+                }
+                Ok(())
+            }).when(|c| Avail::Checked(c.state.paint.is_some())),
+            cmd("window.mesh_paint", "Mesh Paint", "palette", "", "Brush, colours and channels of Mesh Paint.", |_, e, _| act(e, "editor.layout.show", json!({"panel": "mesh-paint"}))).when(|c| panel_open(c, "mesh-paint")),
+            cmd("paint.tool.brush", "Paint Brush", "palette", "", "Blend the paint colour in under the brush.", |_, e, _| paint(e, |p| p.tool = T::Brush)).when(|c| paint_tool(c, T::Brush)),
+            cmd("paint.tool.erase", "Erase Brush", "palette", "", "Blend the erase colour in under the brush.", |_, e, _| paint(e, |p| p.tool = T::Erase)).when(|c| paint_tool(c, T::Erase)),
+            cmd("paint.tool.fill", "Fill Mesh", "palette", "", "Click a selected mesh to set every vertex to the paint colour.", |_, e, _| paint(e, |p| p.tool = T::Fill)).when(|c| paint_tool(c, T::Fill)),
+            cmd("paint.tool.flood", "Flood Island", "palette", "", "Click a selected mesh to set its connected island to the paint colour.", |_, e, _| paint(e, |p| p.tool = T::Flood)).when(|c| paint_tool(c, T::Flood)),
+            cmd("paint.tool.pick", "Pick Colour", "pipette", "", "Click a mesh to take its vertex colour as the paint colour.", |_, e, _| paint(e, |p| p.tool = T::Pick)).when(|c| paint_tool(c, T::Pick)),
+            cmd("paint.channel.red", "Paint Red", "palette", "", "Write the red channel.", |_, e, _| paint(e, |p| p.channels[0] = !p.channels[0])).when(|c| paint_channel(c, 0)),
+            cmd("paint.channel.green", "Paint Green", "palette", "", "Write the green channel.", |_, e, _| paint(e, |p| p.channels[1] = !p.channels[1])).when(|c| paint_channel(c, 1)),
+            cmd("paint.channel.blue", "Paint Blue", "palette", "", "Write the blue channel.", |_, e, _| paint(e, |p| p.channels[2] = !p.channels[2])).when(|c| paint_channel(c, 2)),
+            cmd("paint.channel.alpha", "Paint Alpha", "palette", "", "Write the alpha channel.", |_, e, _| paint(e, |p| p.channels[3] = !p.channels[3])).when(|c| paint_channel(c, 3)),
+            cmd("paint.radius.up", "Larger Brush", "palette", "", "Grow the brush radius by a quarter.", |_, e, _| paint(e, |p| p.radius = (p.radius * 1.25).min(100.))),
+            cmd("paint.radius.down", "Smaller Brush", "palette", "", "Shrink the brush radius by a fifth.", |_, e, _| paint(e, |p| p.radius = (p.radius / 1.25).max(0.005))),
+            cmd("paint.strength.up", "Stronger Brush", "palette", "", "Raise brush strength by 0.1.", |_, e, _| paint(e, |p| p.strength = (p.strength + 0.1).min(1.))),
+            cmd("paint.strength.down", "Weaker Brush", "palette", "", "Lower brush strength by 0.1.", |_, e, _| paint(e, |p| p.strength = (p.strength - 0.1).max(0.))),
+            cmd("paint.falloff.up", "Softer Brush", "palette", "", "Widen the brush's fading edge by 0.1.", |_, e, _| paint(e, |p| p.falloff = (p.falloff + 0.1).min(1.))),
+            cmd("paint.falloff.down", "Harder Brush", "palette", "", "Narrow the brush's fading edge by 0.1.", |_, e, _| paint(e, |p| p.falloff = (p.falloff - 0.1).max(0.))),
+            cmd("paint.swap", "Swap Paint and Erase Colours", "palette", "", "Exchange the paint and erase colours.", |_, e, _| paint(e, |p| std::mem::swap(&mut p.color, &mut p.erase))),
+            cmd("paint.color.white", "Paint White", "palette", "", "Paint opaque white.", |_, e, _| paint(e, |p| p.color = [1., 1., 1., 1.])),
+            cmd("paint.color.black", "Paint Black", "palette", "", "Paint opaque black.", |_, e, _| paint(e, |p| p.color = [0., 0., 0., 1.])),
+            cmd("paint.color.red", "Paint Red Colour", "palette", "", "Paint red (the R mask of layer blends).", |_, e, _| paint(e, |p| p.color = [1., 0., 0., 1.])),
+            cmd("paint.color.green", "Paint Green Colour", "palette", "", "Paint green.", |_, e, _| paint(e, |p| p.color = [0., 1., 0., 1.])),
+            cmd("paint.color.blue", "Paint Blue Colour", "palette", "", "Paint blue.", |_, e, _| paint(e, |p| p.color = [0., 0., 1., 1.])),
+        ]);
+    }
     // Create
     c.extend([
         cmd("create.empty", "Empty Entity", "layers", "Ctrl+Shift+N", "Create an entity with only a Transform.", |_, e, _| create(e, &Target::None, "Entity", json!({}), false)).when(scene_doc),
@@ -1129,7 +1186,7 @@ fn build() -> Vec<Spec> {
         cmd("create.probe", "Create Reflection Probe", "sun", "", "Create an authored reflection probe with schema defaults.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::Probe)).when(|c|with_components(c,&["ReflectionProbe"])),
         cmd("create.camera", "Camera", "camera", "", "Viewpoint along −Z.", |_, e, t| create(e, t, "Camera", json!({"Camera": {}}), false)).when(|c| with_components(c, &["Camera"])),
         cmd("create.vfx", "VFX System", "sparkles", "", "Entity that plays a VFX graph.", |_, e, t| create(e, t, "VFX", json!({"VisualEffect": {}}), false)).when(|c| with_components(c, &["VisualEffect"])),
-        later("create.decal", "Decal", "", "", "Decals are not in the renderer schema yet."),
+        cmd("create.decal", "Decal", "image", "", "Project a decal material onto the surfaces below (a 1 m box facing down at the view target; assign a decal-domain material).", |_, e, t| { let p = e.state.camera.target; create(e, t, "Decal", json!({"Decal": {}, "Transform": {"position": [p.x, p.y.max(0.), p.z], "rotation": [-90, 0, 0]}}), false) }).when(|c| with_components(c, &["Decal"])),
         cmd("create.fog", "Height Fog", "sun", "", "Create global height fog; the first entity by identity supplies the scene fog.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::HeightFog)).when(|c|with_components(c,&["HeightFog"])),
         cmd("create.post.global", "Global Post-process Volume", "sliders-horizontal", "", "Create scene-wide post-process overrides.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::Global)).when(|c|with_components(c,&["PostProcessVolume"])),
         cmd("create.post.box", "Local Post-process Box", "box", "", "Create a box whose overrides blend near the camera.", |s,e,_|s.create_lighting(e,super::super::lighting::Create::Box)).when(|c|with_components(c,&["PostProcessVolume"])),

@@ -231,6 +231,21 @@ pub(super) fn draw(pen: &mut Pen, part: &Part, world: Mat4, detail: Detail, pale
                 pen.cuboid(pose, Vec3::ZERO, inner, width, with_alpha(c, 0.45));
             }
         }
+        Shape::Decal { half } => {
+            // The box at the entity's full transform (scale included), and the
+            // projection: an arrow from the top face's centre down local -Z.
+            let c = with_alpha(palette.accent, alpha);
+            let (scale, ..) = world.to_scale_rotation_translation();
+            let half = half * scale.abs();
+            let pose = Mat4::from_rotation_translation(rotation, position);
+            pen.cuboid(pose, Vec3::ZERO, half, width, c);
+            if full {
+                let top = position - forward * half.z;
+                let bottom = position + forward * half.z;
+                pen.line(top, bottom, width, c);
+                arrowhead(pen, bottom, forward, 10., width, c);
+            }
+        }
         Shape::ReverbSphere { radius, fade } => {
             let c = with_alpha(palette.audio, alpha);
             if full {

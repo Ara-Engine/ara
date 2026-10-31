@@ -147,6 +147,11 @@ impl Service for EditorService {
                 "editor.layout",
                 "Move/activate a panel or resize a dock split.",
             ),
+            Method::new::<EditorPaint>(
+                db,
+                "editor.paint",
+                "Mesh Paint: turn it on or off and set its tool, colours, brush and channels.",
+            ),
             Method::new::<EditorTool>(
                 db,
                 "editor.tool",
@@ -1166,6 +1171,52 @@ impl EditorService {
                     dock.expand_panel(&panel);
                 }
                 state.set_dock(&dock);
+            }
+            "editor.paint" => {
+                let p: EditorPaint = parse(params)?;
+                if p.enabled == Some(false) {
+                    state.paint = None;
+                } else {
+                    let mut s = state.paint.unwrap_or_default();
+                    if let Some(tool) = p.tool {
+                        s.tool = crate::paint::PaintTool::parse(&tool).ok_or_else(|| {
+                            vec![crate::invalid(
+                                "tool must be brush, erase, fill, flood or pick",
+                            )]
+                        })?;
+                    }
+                    for (input, target) in [(p.color, &mut s.color), (p.erase, &mut s.erase)] {
+                        if let Some(c) = input {
+                            if c.iter().any(|v| !v.is_finite()) {
+                                return Err(vec![crate::invalid("paint colours must be finite")]);
+                            }
+                            *target = c.map(|v| v.clamp(0., 1.));
+                        }
+                    }
+                    if let Some(r) = p.radius {
+                        if !r.is_finite() || r <= 0. {
+                            return Err(vec![crate::invalid("brush radius must be positive")]);
+                        }
+                        s.radius = r;
+                    }
+                    for (input, target) in
+                        [(p.strength, &mut s.strength), (p.falloff, &mut s.falloff)]
+                    {
+                        if let Some(v) = input {
+                            *target = if v.is_finite() {
+                                v.clamp(0., 1.)
+                            } else {
+                                *target
+                            };
+                        }
+                    }
+                    if let Some(c) = p.channels {
+                        s.channels = <[bool; 4]>::try_from(c.as_slice()).map_err(|_| {
+                            vec![crate::invalid("channels takes four flags: R, G, B, A")]
+                        })?;
+                    }
+                    state.paint = Some(s);
+                }
             }
             "editor.tool" => {
                 let p: EditorTool = parse(params)?;

@@ -11,3 +11,8 @@
 .lighting-pages { border-width:1px; border-color:var(--border); }
 .lighting-heading { padding:8px; gap:6px; flex-shrink:0; }
 .lighting-component-title { font-size:12px; color:var(--foreground); padding:6px; white-space:normal; flex-shrink:0; }
+/* Mesh Paint (shell/mesh_paint_panel.rs): tool and channel chips in rows, inline steppers. */
+.paint-row { flex-direction:row; align-items:center; gap:4px; min-width:0px; }
+.paint-chip { flex-grow:1; flex-basis:0px; min-width:0px; height:26px; }
+.paint-step { flex-shrink:0; width:28px; height:24px; }
+.paint-label { flex-grow:1; min-width:0px; }

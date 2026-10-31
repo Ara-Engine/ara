@@ -54,6 +54,7 @@ pub(super) fn title(panel: &str) -> &str {
         "profiler" => "Profiler",
         "lighting" => "Lighting",
         "render-debug" => "Rendering Debug",
+        "mesh-paint" => "Mesh Paint",
         "scene" => "Scene",
         "game" => "Game",
         "hierarchy" => "Hierarchy",
@@ -83,6 +84,7 @@ pub(super) fn keep_alive(panel: &str) -> bool {
             | "settings"
             | "lighting"
             | "render-debug"
+            | "mesh-paint"
             | "history"
     )
 }
@@ -97,6 +99,7 @@ pub(super) fn panel_icon(panel: &str) -> &'static str {
         "profiler" => "gauge",
         "lighting" => "sun",
         "render-debug" => "scan-eye",
+        "mesh-paint" => "palette",
         "hierarchy" => "list-tree",
         "inspector" => "sliders-horizontal",
         "assets" => "folder",
@@ -335,6 +338,7 @@ impl Shell {
             "profiler" => self.profiler_panel(editor, out)?,
             "lighting" => self.lighting_panel(editor, out)?,
             "render-debug" => self.render_debug_panel(editor, out),
+            "mesh-paint" => self.mesh_paint_panel(editor, out),
             "animation" => self.animation_panel(editor, out)?,
             "inspector" => self.inspector_panel(editor, out)?,
             "assets" => {
