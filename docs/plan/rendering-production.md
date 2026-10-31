@@ -58,10 +58,18 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
 
 ## Tools
 
-- [~] **Editor views: no noise, full quality, correct sizing.** Scene and Game views free of
-  visible noise and low-resolution or half-converged images; the Game view never draws a
-  frame at the wrong size while it resizes or starts; stale frames, flashes, ghosting and
-  exposure pumping found and fixed, at unchanged frame cost.
+- [~] **Editor views: no noise, full quality, correct sizing.** Done (merge b1fb2bfd0): Game
+  frames never drawn small or stretched (cover the panel until the new size arrives), whole
+  physical pixels at fractional DPI, native-resolution embedded Game view (+~1 ms GPU),
+  exposure finishes adapting before a still Scene stops (120-frame cap), single resize per
+  change, HUD at the exact scene size; `ara-editor --verify-game-view` route. Open:
+  (1) automatic reflection captures finish baking ~1 s after Play entry (brightness 49 to 45
+  over 15 frames); waiting for them or baking all at once both failed; try a bounded number
+  of bake steps per frame during entry, without the lighting-change re-bake. (2) After a
+  camera move, Polar's Scene exposure drifts ~0.2%/frame for 240+ frames (4.90 to 4.08;
+  D:AraScratchpresentationevidenceinal2scenescene-quality.json): check the
+  adaptation rate the Unreal speeds map to and decide the editor policy (finish adaptation
+  quickly at rest). Standalone games still upscale (unchanged cost).
 
 - [ ] **Cooker determinism.** An incremental re-cook of unchanged sources rewrote Metal
   metadata (`ResourceCount` 31 to 224 on fullscreenVertex) relative to the fresh cohort cook.
