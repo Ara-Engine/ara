@@ -1,6 +1,5 @@
 ---
 source: crates/ara/tests/cli.rs
-assertion_line: 121
 expression: out
 ---
 {
@@ -7783,6 +7782,11 @@ expression: out
           "doc": "Maximum permitted source dimension (decode limits are also enforced).",
           "default": 16384,
           "range": [1, 16384]
+        },
+        "alphaCoverage": {
+          "type": "option<f32>",
+          "doc": "Alpha-test cutoff whose coverage every mip keeps: a level whose averaged alpha would pass fewer texels than the full-size image has its alpha raised until it passes as many, so masked grates, fences and foliage stay as solid at a distance as up close (Unity's \"preserve coverage\", Unreal's \"preserve alpha coverage\"). Model importers set it for the base colour of alpha-masked materials. Absent: alpha mips are plain averages.",
+          "default": null
         }
       }
     },

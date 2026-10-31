@@ -46,6 +46,14 @@ pub struct TextureSettings {
     /// Maximum permitted source dimension (decode limits are also enforced).
     #[ara(default = 16384, range(min = 1, max = 16384))]
     pub max_dimension: u32,
+    /// Alpha-test cutoff whose coverage every mip keeps: a level whose averaged alpha
+    /// would pass fewer texels than the full-size image has its alpha raised until it
+    /// passes as many, so masked grates, fences and foliage stay as solid at a distance
+    /// as up close (Unity's "preserve coverage", Unreal's "preserve alpha coverage").
+    /// Model importers set it for the base colour of alpha-masked materials. Absent:
+    /// alpha mips are plain averages.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alpha_coverage: Option<f32>,
 }
 impl Default for TextureSettings {
     fn default() -> Self {
@@ -56,6 +64,7 @@ impl Default for TextureSettings {
             flip_normal_y: false,
             mask_channel: 0,
             max_dimension: 16384,
+            alpha_coverage: None,
         }
     }
 }

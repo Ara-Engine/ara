@@ -42,6 +42,43 @@ pub(super) fn downsample(
     output
 }
 
+/// Share of `pixels` whose alpha passes an alpha test at `cutoff`.
+pub(super) fn coverage(pixels: &[[f32; 4]], cutoff: f32) -> f32 {
+    let passing = pixels.iter().filter(|p| p[3] >= cutoff).count();
+    passing as f32 / pixels.len().max(1) as f32
+}
+
+/// Raises a mip's alpha so at least `share` of its texels pass the alpha test at
+/// `cutoff`, as the full-size image's do (Castaño 2010): averaging a thin grate's
+/// alpha would otherwise drop whole blocks below the cutoff with distance. Alpha is
+/// never lowered: a level that covers more (small holes averaged closed) keeps its
+/// own alpha, since squeezing solid texels down onto the cutoff leaves compression
+/// and filtering error to punch holes through them.
+pub(super) fn preserve_coverage(pixels: &mut [[f32; 4]], cutoff: f32, share: f32) {
+    let n = pixels.len();
+    let kept = ((share * n as f32).round() as usize).min(n);
+    if kept == 0 || coverage(pixels, cutoff) * n as f32 >= kept as f32 {
+        return;
+    }
+    // The kept-th largest alpha lands on the cutoff.
+    let mut alphas: Vec<f32> = pixels.iter().map(|p| p[3]).collect();
+    let (_, threshold, _) = alphas.select_nth_unstable_by(kept - 1, |a, b| b.total_cmp(a));
+    let threshold = if *threshold > 0. {
+        *threshold
+    } else {
+        // Fewer non-zero texels than the share: every one of them passes.
+        pixels
+            .iter()
+            .map(|p| p[3])
+            .filter(|&a| a > 0.)
+            .fold(1., f32::min)
+    };
+    let scale = (cutoff / threshold).max(1.);
+    for p in pixels {
+        p[3] = (p[3] * scale).min(1.);
+    }
+}
+
 fn box_color(pixels: [[f32; 4]; 4]) -> [f32; 4] {
     let mut sum = [0.; 4];
     for p in pixels {

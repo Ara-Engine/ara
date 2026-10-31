@@ -17,7 +17,7 @@ impl Importer for GltfImporter {
         "ara.gltf"
     }
     fn version(&self) -> &str {
-        "7-gltf14-meshopt070-ispc050-texture-presets-tiled-f32text-arag1-khr-opacity-deep-lods-prefix"
+        "7-gltf14-meshopt070-ispc050-texture-presets-tiled-f32text-arag1-khr-opacity-deep-lods-prefix-alpha-coverage"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();
@@ -321,6 +321,29 @@ impl Importer for GltfImporter {
                 }
             }
         }
+        // Alpha-masked base colours keep their coverage in every mip (TextureSettings::
+        // alpha_coverage), at the cutoff of the first masked material sampling them;
+        // an image a blended material also reads keeps plain alpha mips.
+        let mut coverage = BTreeMap::new();
+        let mut blended = std::collections::BTreeSet::new();
+        for material in gltf.materials() {
+            let Some(texture) = material.pbr_metallic_roughness().base_color_texture() else {
+                continue;
+            };
+            let image = texture.texture().source().index();
+            match material.alpha_mode() {
+                gltf::material::AlphaMode::Mask => {
+                    coverage
+                        .entry(image)
+                        .or_insert(material.alpha_cutoff().unwrap_or(0.5));
+                }
+                gltf::material::AlphaMode::Blend => {
+                    blended.insert(image);
+                }
+                gltf::material::AlphaMode::Opaque => {}
+            }
+        }
+        coverage.retain(|image, _| !blended.contains(image));
         let mut texture_map = Vec::new();
         let mut textures: Vec<_> = texture_usages.into_iter().collect();
         let jobs: Vec<_> = textures
@@ -344,6 +367,10 @@ impl Importer for GltfImporter {
                     TextureSettings {
                         preset,
                         usage: *usage,
+                        alpha_coverage: coverage
+                            .get(image)
+                            .copied()
+                            .filter(|_| *usage == TextureUsage::Color),
                         ..Default::default()
                     },
                     std::mem::take(bytes),

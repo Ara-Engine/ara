@@ -169,3 +169,62 @@ fn color_ktx2_bytes_match_the_original_filter_for_both_presets() {
         }
     }
 }
+
+#[test]
+fn coverage_preserving_mips_keep_masked_texels_solid_at_a_distance() {
+    // Sparse thin features: alpha r^3 of a uniform r, so about a fifth of the
+    // full-size texels pass a 0.5 cutoff while 16-texel averages almost never do.
+    let mut state = 0x9e37_79b9u32;
+    let pixels: Vec<[f32; 4]> = (0..64 * 64)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            let r = state as f32 / u32::MAX as f32;
+            [0.2, 0.4, 0.6, r * r * r]
+        })
+        .collect();
+    let share = coverage(&pixels, 0.5);
+    assert!((0.15..0.25).contains(&share), "{share}");
+    let level = downsample(&pixels, 64, 64, 32, 32, TextureUsage::Color);
+    let level = downsample(&level, 32, 32, 16, 16, TextureUsage::Color);
+    assert!(
+        coverage(&level, 0.5) < share / 4.,
+        "plain averages lose coverage"
+    );
+    let mut kept = level.clone();
+    preserve_coverage(&mut kept, 0.5, share);
+    assert!(
+        (coverage(&kept, 0.5) - share).abs() <= 1. / 256.,
+        "{}",
+        coverage(&kept, 0.5)
+    );
+    assert!(kept.iter().zip(&level).all(|(a, b)| a[..3] == b[..3]));
+}
+
+#[test]
+fn coverage_preserving_mips_never_thin_a_solid_level() {
+    // Solid with one-texel holes: averaging closes them, so the level covers more
+    // than the full-size image. Its alpha stays as filtered, never squeezed onto the
+    // cutoff where compression error would punch new holes.
+    let pixels: Vec<[f32; 4]> = (0..16 * 16)
+        .map(|i| {
+            [
+                1.,
+                1.,
+                1.,
+                if i % 4 == 0 && (i / 16) % 4 == 0 {
+                    0.
+                } else {
+                    0.95
+                },
+            ]
+        })
+        .collect();
+    let share = coverage(&pixels, 0.5);
+    let level = downsample(&pixels, 16, 16, 8, 8, TextureUsage::Color);
+    assert!(coverage(&level, 0.5) > share);
+    let mut kept = level.clone();
+    preserve_coverage(&mut kept, 0.5, share);
+    assert_eq!(kept, level);
+}

@@ -201,6 +201,8 @@ struct DecodedTexture {
     format: TextureFormat,
     pixels: Vec<[f32; 4]>,
     mipmaps: bool,
+    /// `TextureSettings::alpha_coverage`.
+    alpha_coverage: Option<f32>,
 }
 struct MippedTexture {
     width: u32,
@@ -425,7 +427,13 @@ fn decode_texture(
             "mobile texture profile requires an ASTC texture importer plugin",
         ));
     }
-    if settings.mask_channel > 3 || settings.max_dimension == 0 || settings.max_dimension > 16384 {
+    if settings.mask_channel > 3
+        || settings.max_dimension == 0
+        || settings.max_dimension > 16384
+        || settings
+            .alpha_coverage
+            .is_some_and(|c| !(c.is_finite() && c > 0. && c <= 1.))
+    {
         return Err(invalid("invalid texture settings"));
     }
     let mut reader = texture_reader(source).map_err(invalid)?;
@@ -482,6 +490,9 @@ fn decode_texture(
         pixels,
         // A lookup table is sampled at its texels only.
         mipmaps: settings.mipmaps && usage != TextureUsage::Lut,
+        alpha_coverage: settings
+            .alpha_coverage
+            .filter(|_| matches!(usage, TextureUsage::Color | TextureUsage::Linear)),
     })
 }
 fn generate_mips(
@@ -495,9 +506,13 @@ fn generate_mips(
         format,
         mut pixels,
         mipmaps,
+        alpha_coverage,
     } = decoded;
     let (mut w, mut h) = (width, height);
     let mut mips = Vec::new();
+    // The full-size image's share of texels passing the cutoff, which every smaller
+    // level keeps. Levels filter the unscaled chain, so the scaling never compounds.
+    let coverage = alpha_coverage.map(|cutoff| (cutoff, mips::coverage(&pixels, cutoff)));
     loop {
         cancellation.check()?;
         let next = if mipmaps && (w != 1 || h != 1) {
@@ -512,6 +527,12 @@ fn generate_mips(
         } else {
             None
         };
+        // `next` is already filtered from this level's unscaled alpha.
+        if let Some((cutoff, share)) = coverage
+            && !mips.is_empty()
+        {
+            mips::preserve_coverage(&mut pixels, cutoff, share);
+        }
         mips.push((w, h, pixels));
         let Some(next) = next else { break };
         pixels = next;
