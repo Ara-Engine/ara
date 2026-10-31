@@ -29,11 +29,13 @@ float cascadeVisibility(Frame f,Look l,uint c,float3 world,float3 normal){
 // Distant sun visibility from the far shadow map (look/far.rs): the cascades'
 // 3x3 box of bilinear compares (four gathers), with normal offset and bias
 // scaled to its (metre-sized) texels, so distant edges stay smooth.
-float farVisibility(Look l,float3 world,float3 normal){
-    if(l.farInfo.z==0)return 1;
+// `mapped`: the map holds `world` (false past it, where it is lit).
+float farVisibility(Look l,float3 world,float3 normal,out bool mapped){
+    mapped=false;if(l.farInfo.z==0)return 1;
     float res=float(l.farInfo.y);float4x4 m=l.farShadow;float texel=2/(length(m[0].xyz)*res);
     float4 h=mul(m,float4(world+normal*texel*1.5,1));float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
     if(any(uv<0)||any(uv>1)||q.z<0||q.z>1)return 1;
+    mapped=true;
     float depth=q.z+texel*length(m[2].xyz);
     float2 position=uv*res-0.5,base=floor(position),t=position-base;
     float4 wx=float4(1-t.x,1,1,t.x)/3,wy=float4(1-t.y,1,1,t.y)/3;float sum=0;
@@ -93,23 +95,26 @@ float localShadow(Look l,uint index,float3 world,float3 normal,float3 light){
     return sum;
 }
 // Sun visibility at `world` in the sun maps: blends into the next cascade over the
-// last tenth of each, then the far map, past which it is lit.
-float mapVisibility(Frame f,Look l,float3 world,float3 normal) {
+// last tenth of each, then the far map, past which it is lit (`mapped` false).
+float mapVisibility(Frame f,Look l,float3 world,float3 normal,out bool mapped) {
     float d=dot(world-f.camera.xyz,f.forward.xyz);float4 splits=f.splits;uint count=f.look.z,c=cascadeIndex(f,world);
-    if(c>=count)return farVisibility(l,world,normal);
+    if(c>=count)return farVisibility(l,world,normal,mapped);
+    mapped=true;bool unused;
     float far=component(splits,c),near=c==0?0:component(splits,c-1),band=(far-near)*0.1,blend=saturate((d-(far-band))/max(band,1e-3));
     float v=cascadeVisibility(f,l,c,world,normal);
-    if(blend>0)v=lerp(v,c+1<count?cascadeVisibility(f,l,c+1,world,normal):farVisibility(l,world,normal),blend);
+    if(blend>0)v=lerp(v,c+1<count?cascadeVisibility(f,l,c+1,world,normal):farVisibility(l,world,normal,unused),blend);
     return v;
 }
 // Sun visibility at `world`: `pages` where the virtual shadow map resolved it
 // (look-vsm.slangh: vsmMask, vsmVisibility), else the sun maps; at every distance the
 // horizon of distant landforms (look-horizon.slangh), so far terrain stays shadowed
-// past them. Shaders sample pages only through the mask or their own entry points:
-// inline page lookups would cost every preset registers (and occupancy).
+// past them: only past HORIZON_NEAR where a map shades `world`. Shaders sample pages
+// only through the mask or their own entry points: inline page lookups would cost
+// every preset registers (and occupancy).
 float visibility(Frame f,Look l,float3 world,float3 normal,float pages=-1){
-    float v=pages>=0?pages:mapVisibility(f,l,world,normal);
-    return v>0?min(v,horizonSun(l,world)):0;
+    bool mapped=pages>=0;
+    float v=mapped?pages:mapVisibility(f,l,world,normal,mapped);
+    return v>0?min(v,horizonSun(l,world,mapped)):0;
 }
 // Schlick's Fresnel. Cycles' metals use the F82-tint model (Hoffman 2023, "Generalization
 // of Adobe's Fresnel Model"): Schlick minus b cos (1 - cos)^6, b = Schlick(1/7) (1 - tint)

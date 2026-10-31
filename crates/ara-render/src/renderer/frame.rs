@@ -239,7 +239,8 @@ fn shadow_cascades(camera: &Camera, sun: Vec3, splits: [f32; 4], resolution: u32
         let snap = |v: f32| (v / step).round() * step;
         let (x, y) = (snap(c.x), snap(c.y));
         // Light-space z grows towards the sun: casters up to 200 m sunward of the
-        // cascade still shadow it. Coarse cascades snap their depth range too.
+        // cascade still shadow it (the horizon, look-horizon.slangh HORIZON_NEAR,
+        // relies on it). Coarse cascades snap their depth range too.
         let z = if i == 0 { c.z } else { snap(c.z) };
         let away = z - radius - 10. - (step - texel);
         let sunward = z + radius + 200.;

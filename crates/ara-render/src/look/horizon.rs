@@ -6,7 +6,10 @@
 //! buildings; radii under [`MIN_RADIUS`] are left out) becomes the heightfield.
 //! From it, `horizonSunMain` marches each texel towards the sun's azimuth and
 //! stores the sun's visible share (the sun disk sets the penumbra) beside the top
-//! surface height, and
+//! surface height and the share past landforms beyond `HORIZON_NEAR` (200 m) along
+//! the sun ray. Receivers a sun shadow map shades take only that far share: the maps
+//! draw every caster within 200 m sunward, and a heightfield cannot see through a
+//! wall's openings (as Unreal's far shadows start past its cascades). And
 //! `horizonSkyMain` stores the cosine-weighted sky visibility over twelve
 //! azimuths. The capture and sky visibility are redone when content is replaced;
 //! the sun visibility when the sun moves. Shading takes the minimum of the near
@@ -118,8 +121,12 @@ impl Horizon {
             )?;
             owned.push(Resource::Image(depth));
             let storage = vk::ImageUsageFlags::SAMPLED | vk::ImageUsageFlags::STORAGE;
-            let sun =
-                gpu.create_image(resolution, resolution, vk::Format::R16G16_SFLOAT, storage)?;
+            let sun = gpu.create_image(
+                resolution,
+                resolution,
+                vk::Format::R16G16B16A16_SFLOAT,
+                storage,
+            )?;
             owned.push(Resource::Image(sun));
             let sky = gpu.create_image(
                 sky_resolution,
