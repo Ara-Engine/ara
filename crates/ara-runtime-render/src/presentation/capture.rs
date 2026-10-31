@@ -65,6 +65,17 @@ impl Presenter {
         request: &CaptureRequest,
         resolve: impl FnOnce() -> Result<Content>,
     ) -> Result<Capture> {
+        // A buffer visualization (RenderDebug::view) replaces the lit image.
+        let viewed;
+        let request = if matches!(request.mode, ViewMode::Lit) && self.debug.view != ViewMode::Lit {
+            viewed = CaptureRequest {
+                mode: self.debug.view,
+                ..request.clone()
+            };
+            &viewed
+        } else {
+            request
+        };
         self.resize(request.size)?;
         self.prepare_with(frame, resolve)?;
         let prepared_stats = self.stats;

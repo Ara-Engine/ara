@@ -86,6 +86,10 @@ pub struct CaptureArgs {
     /// volume, so captures from different renderers compare at the same brightness.
     #[arg(long, allow_hyphen_values = true)]
     ev100: Option<f32>,
+    /// Show a buffer instead of the lit image (Unreal's buffer visualization).
+    #[arg(long, value_parser = ["albedo", "normals", "depth", "roughness-metal", "entity-ids",
+        "shadow-cascades", "wireframe", "lit-wireframe", "gi-diffuse", "overdraw"])]
+    view: Option<String>,
     /// Measure flicker: settle this many live frames, then report how much they change.
     #[arg(long)]
     stability: Option<u32>,
@@ -108,27 +112,29 @@ impl CaptureArgs {
             "ticks":self.ticks,"seed":self.seed,"marks":self.marks,"stability":self.stability,
             "video":self.video,"videoMove":self.video_move,"videoYaw":self.video_yaw,
             "renderDebug":render_debug(&self.without, self.full_resolution, self.reflections.as_deref(),
-                self.reference.map(|samples| (samples, self.bounces)), self.ev100)})),
+                self.reference.map(|samples| (samples, self.bounces)), self.ev100, self.view.as_deref())})),
             summary: protocol::pretty,
         }
     }
 }
 
 /// `capture`'s `renderDebug` for `--without`, `--full-resolution`,
-/// `--reflections`, `--reference` and `--ev100`; omitted when every effect stays at
-/// its default.
+/// `--reflections`, `--reference`, `--ev100` and `--view`; omitted when every
+/// effect stays at its default.
 fn render_debug(
     without: &[String],
     full_resolution: bool,
     reflections: Option<&str>,
     reference: Option<(u32, u32)>,
     ev100: Option<f32>,
+    view: Option<&str>,
 ) -> serde_json::Value {
     if without.is_empty()
         && !full_resolution
         && reflections.is_none()
         && reference.is_none()
         && ev100.is_none()
+        && view.is_none()
     {
         return serde_json::Value::Null;
     }
@@ -141,6 +147,15 @@ fn render_debug(
         "reflections": reflections.unwrap_or("lit"),
         "reference": reference.map(|(samples, bounces)| json!({"samples": samples, "bounces": bounces})),
         "exposure": ev100,
+        // kebab-case flag values name the camelCase BufferView variants.
+        "view": view.map_or_else(|| "lit".to_owned(), |v| {
+            let mut out = String::new();
+            let mut upper = false;
+            for c in v.chars() {
+                if c == '-' { upper = true; } else if upper { out.extend(c.to_uppercase()); upper = false; } else { out.push(c); }
+            }
+            out
+        }),
     })
 }
 
@@ -151,14 +166,23 @@ mod tests {
 
     #[test]
     fn capture_debug_flags_map_to_render_debug() {
-        assert!(render_debug(&[], false, None, None, None).is_null());
-        let debug = render_debug(&["shadows".into()], false, None, Some((2048, 6)), Some(-2.));
+        assert!(render_debug(&[], false, None, None, None, None).is_null());
+        let debug = render_debug(
+            &["shadows".into()],
+            false,
+            None,
+            Some((2048, 6)),
+            Some(-2.),
+            None,
+        );
         assert_eq!(debug["shadows"], false);
         assert_eq!(debug["ambientOcclusion"], true);
         assert_eq!(debug["reference"], json!({"samples": 2048, "bounces": 6}));
         assert_eq!(debug["exposure"], -2.);
-        let lock = render_debug(&[], false, None, None, Some(7.));
+        let lock = render_debug(&[], false, None, None, Some(7.), Some("gi-diffuse"));
         assert!(lock["reference"].is_null());
         assert_eq!(lock["exposure"], 7.);
+        assert_eq!(lock["view"], "giDiffuse");
+        assert_eq!(debug["view"], "lit");
     }
 }

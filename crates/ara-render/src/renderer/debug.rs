@@ -30,6 +30,10 @@ pub struct RenderDebug {
     /// compare at the same brightness. Applied where hosts resolve the frame's look
     /// (`ara_runtime_render::environment_locked`).
     pub exposure: Option<f32>,
+    /// What captures show (Unreal's buffer visualization): the lit image, a G-buffer
+    /// channel, shadow cascades, the diffuse GI, wireframe or overdraw. Applied where
+    /// a capture asks for the lit image.
+    pub view: crate::capture::ViewMode,
 }
 
 /// The path-traced reference's budget ([`RenderDebug::reference`]).
@@ -76,6 +80,7 @@ impl Default for RenderDebug {
             reflections: ReflectionView::Lit,
             reference: None,
             exposure: None,
+            view: crate::capture::ViewMode::Lit,
         }
     }
 }

@@ -1207,6 +1207,23 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
             bounces: r.bounces.clamp(1, 16),
         }),
         exposure: debug.exposure.filter(|ev| ev.is_finite()),
+        view: {
+            use ara_play::BufferView as B;
+            use ara_render::capture::ViewMode as V;
+            match debug.view {
+                B::Lit => V::Lit,
+                B::Albedo => V::Albedo,
+                B::Normals => V::Normals,
+                B::Depth => V::Depth,
+                B::RoughnessMetal => V::RoughnessMetal,
+                B::EntityIds => V::EntityIds,
+                B::ShadowCascades => V::ShadowCascades,
+                B::Wireframe => V::Wireframe,
+                B::LitWireframe => V::LitWireframe,
+                B::GiDiffuse => V::GiDiffuse,
+                B::Overdraw => V::Overdraw,
+            }
+        },
     }
 }
 
@@ -1277,6 +1294,7 @@ mod cli_tests {
                     bounces: 6,
                 }),
                 exposure: Some(-2.5),
+                view: ara_render::capture::ViewMode::GiDiffuse,
             },
         ] {
             let wire: ara_play::RenderDebug =

@@ -31,6 +31,39 @@ pub struct RenderDebug {
     /// renderers and presets compare at the same brightness.
     #[ara(range(min = -10, max = 24))]
     pub exposure: Option<f32>,
+    /// What captures show instead of the lit image (default `lit`), as Unreal's
+    /// buffer visualization.
+    pub view: BufferView,
+}
+
+/// The images a capture can show ([`RenderDebug::view`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
+#[ara(module = "play")]
+#[serde(rename_all = "camelCase")]
+pub enum BufferView {
+    /// The lit image.
+    #[default]
+    Lit,
+    /// Material base colour.
+    Albedo,
+    /// World normals.
+    Normals,
+    /// Scene depth.
+    Depth,
+    /// Roughness (red) and metalness (green).
+    RoughnessMetal,
+    /// A stable colour per entity.
+    EntityIds,
+    /// Each pixel's sun shadow cascade, times its shadow.
+    ShadowCascades,
+    /// Triangle edges.
+    Wireframe,
+    /// The lit image with triangle edges over it.
+    LitWireframe,
+    /// The diffuse indirect light shading samples (probe GI, sky, screen bounce, AO).
+    GiDiffuse,
+    /// Fragments drawn per pixel, on a heat legend.
+    Overdraw,
 }
 
 /// The path-traced reference's budget ([`RenderDebug::reference`]).
@@ -81,6 +114,7 @@ impl Default for RenderDebug {
             reflections: ReflectionView::Lit,
             reference: None,
             exposure: None,
+            view: BufferView::Lit,
         }
     }
 }
