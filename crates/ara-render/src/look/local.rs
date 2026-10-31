@@ -468,7 +468,7 @@ mod tests {
             position_range: [x, 3., 0., 10.],
             color_lumens: [1., 1., 1., lumens],
             direction_outer: [0., -1., 0., 0.],
-            parameters: [0., 1., 0., 0.],
+            parameters: [0., 1., 0., 1.],
         }
     }
 

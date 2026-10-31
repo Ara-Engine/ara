@@ -23,8 +23,10 @@ struct Frame {
     float4 sunDirection;float4 sunLux;float4 temporal;float4 post;float4 metering;uint4 display;float4 lens;
     uint4 control;uint4 transport;float4 jitter;float4 texture;float4 atmosphere;float4 weather;
     // fog: tint rgb, anisotropy. grading: white-balance gain rgb, saturation.
-    // look: contrast, vignette, fog base altitude, aerosol scale.
-    float4 fog;float4 grading;float4 look;
+    // look: contrast, vignette, fog base altitude, aerosol scale. weather: cloud
+    // coverage, cloud height, z volumetric fog (shadowed sun, local lights). fogLight:
+    // volumetric fog emission rgb (radiance per metre at base density), w extinction scale.
+    float4 fog;float4 grading;float4 look;float4 fogLight;
 };
 Frame frame(){return buffers[root.frame].Load<Frame>(0);}
 // Rust retains seven read rows, seven write rows, then nine private rows.

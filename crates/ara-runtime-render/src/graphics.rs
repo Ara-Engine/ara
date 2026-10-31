@@ -52,7 +52,10 @@ pub fn plan(
             quality.depth_of_field = post.depth_of_field.filter(|_| settings.depth_of_field);
             quality.motion_blur = post.motion_blur.filter(|_| settings.motion_blur);
             quality.bloom = post.bloom && settings.bloom;
-            quality.emitter_lights = group(groups.effects).emitter_lights;
+            let effects = group(groups.effects);
+            quality.emitter_lights = effects.emitter_lights;
+            // Unreal scalability keeps volumetric fog under Effects.
+            quality.volumetric_fog = effects.volumetric_fog;
             quality.high_tier =
                 reflections.high_tier || post.high_tier || shadows.high_tier || gi.high_tier;
             quality.upscaler = match settings.upscaler {

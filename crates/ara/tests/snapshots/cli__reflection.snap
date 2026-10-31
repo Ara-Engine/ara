@@ -2936,6 +2936,19 @@ expression: out
         }
       }
     },
+    "FogVolumeShape": {
+      "kind": "enum",
+      "doc": "The shape of a [`LocalFogVolume`].",
+      "module": "render",
+      "variants": {
+        "sphere": {
+          "doc": "An ellipsoid filling `size`."
+        },
+        "box": {
+          "doc": "A box of `size`."
+        }
+      }
+    },
     "FolderCreateParams": {
       "kind": "params",
       "doc": "Parameters of `folder.create`.",
@@ -3484,7 +3497,7 @@ expression: out
     },
     "HeightFog": {
       "kind": "component",
-      "doc": "Exponential height fog lit by the sun, the sky and local lights (volumetric shafts where shadows cut the beams). Density halves every `falloff × ln 2` metres above `baseHeight`. The first entity in ID order wins.",
+      "doc": "Exponential height fog lit by the sun, the sky and local lights. Volumetric fog (the default) casts shafts where shadows cut the beams, lets lamps glow in it and renders the near field at screen-tile detail from the Medium preset up (Unreal's volumetric fog). Density halves every `falloff × ln 2` metres above `baseHeight`. The first entity in ID order wins.",
       "module": "render",
       "fields": {
         "density": {
@@ -3517,6 +3530,34 @@ expression: out
           "doc": "Forward-scattering bias: 0 is uniform, toward 1 the fog glows around the sun and lamps.",
           "default": 0.3,
           "range": [0, 0.9]
+        },
+        "volumetric": {
+          "type": "bool",
+          "doc": "Volumetric fog: shadows cut sun shafts and lamp cones into the fog (and into local fog volumes) and local lights scatter in it. Off, the fog is plain height fog: unshadowed sun glow and sky light only.",
+          "default": true
+        },
+        "volumetricDistance": {
+          "type": "f32",
+          "doc": "How far from the camera the detailed (froxel) volumetric fog reaches; beyond it a coarser grid carries the fog. Larger distances spread the same slices thinner.",
+          "default": 60,
+          "unit": "m",
+          "range": [1, 1000]
+        },
+        "volumetricEmissive": {
+          "type": "vec3",
+          "doc": "Light the fog itself emits (linear radiance per metre of fog at `density`, following the height falloff), for glowing haze. Black emits none.",
+          "default": [0, 0, 0],
+          "range": [0, null],
+          "editor": {
+            "color": true,
+            "hdr": true
+          }
+        },
+        "volumetricExtinctionScale": {
+          "type": "f32",
+          "doc": "Scales how much light the fog absorbs (not how much it scatters): above 1 the fog darkens what lies behind it more for the same glow.",
+          "default": 1,
+          "range": [0.1, 10]
         }
       }
     },
@@ -4309,6 +4350,12 @@ expression: out
               }
             }
           }
+        },
+        "volumetricScattering": {
+          "type": "f32",
+          "doc": "How strongly the light scatters in volumetric fog (Unreal's volumetric scattering intensity): 1 is physical, 0 keeps it out of the fog, above 1 exaggerates its shafts and glow. Surfaces are lit the same either way.",
+          "default": 1,
+          "range": [0, 16]
         }
       }
     },
@@ -4410,6 +4457,74 @@ expression: out
         },
         "teleport": {
           "doc": "Instant relocation (portals, spawn tubes)."
+        }
+      }
+    },
+    "LocalFogVolume": {
+      "kind": "component",
+      "doc": "A local volume of fog, mist or smoke placed by the entity's transform (Unreal's Local Fog Volume). It is lit like height fog (sun shafts, lamps, the sky or probe GI) and rendered in the volumetric fog; overlapping volumes add up. At most 16 render at once: the highest priority first, then the nearest to the camera.",
+      "module": "render",
+      "fields": {
+        "enabled": {
+          "type": "bool",
+          "doc": "Whether the volume renders.",
+          "default": true
+        },
+        "shape": {
+          "type": "FogVolumeShape",
+          "doc": "Sphere (an ellipsoid filling `size`) or box.",
+          "default": "sphere",
+          "options": [
+            "sphere",
+            "box"
+          ]
+        },
+        "size": {
+          "type": "vec3",
+          "doc": "Full size along the entity's axes, centred on its origin and scaled by its transform.",
+          "default": [10, 10, 10],
+          "unit": "m",
+          "range": [0.02, 100000]
+        },
+        "density": {
+          "type": "f32",
+          "doc": "Extinction at the centre, per metre: 0.05 is a light mist (visibility about 60 m), 1 a thick smoke (about 3 m).",
+          "default": 0.1,
+          "range": [0, 10],
+          "examples": [0.2]
+        },
+        "radialFalloff": {
+          "type": "f32",
+          "doc": "Share of the radius, from the edge inwards, over which the fog thins to nothing: 0 is a hard edge, 1 fades all the way from the centre.",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "heightFalloff": {
+          "type": "f32",
+          "doc": "How fast density falls with height above the centre (and rises below it), per metre: 0 is uniform; around 0.5 the fog pools near the bottom.",
+          "default": 0,
+          "range": [0, 10]
+        },
+        "albedo": {
+          "type": "color",
+          "doc": "Scattering colour (single-scattering albedo, linear).",
+          "default": [0.9, 0.9, 0.9, 1]
+        },
+        "emissive": {
+          "type": "vec3",
+          "doc": "Light the fog emits (linear radiance per metre at the centre's density), for glowing haze. Black emits none.",
+          "default": [0, 0, 0],
+          "range": [0, null],
+          "editor": {
+            "color": true,
+            "hdr": true
+          }
+        },
+        "priority": {
+          "type": "i32",
+          "doc": "Which volumes render when more than 16 are in view: higher first, then nearer the camera.",
+          "default": 0,
+          "range": [-1000, 1000]
         }
       }
     },

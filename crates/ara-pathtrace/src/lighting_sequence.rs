@@ -33,7 +33,7 @@ pub(crate) fn run(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
         position_range: [-1., 2.4, 0., 20.],
         color_lumens: [1., 0.62, 0.3, 0.],
         direction_outer: [0., -1., 0., -1.],
-        parameters: [0., 1., 0., 0.],
+        parameters: [0., 1., 0., 1.],
     });
     let camera = content::camera();
     let mut s = settings([640, 360], [640, 360]);

@@ -516,6 +516,16 @@ impl Renderer {
         self.look.look = look;
         Ok(())
     }
+    /// Sets the local fog volumes rendered from the next frame (Unreal's Local Fog
+    /// Volumes), in priority order: at most [`crate::look::MAX_FOG_VOLUMES`], the first
+    /// kept. Never allocates past the first call.
+    pub fn set_fog_volumes(&mut self, volumes: &[crate::look::FogVolume]) -> Result<()> {
+        self.look.set_fog_volumes(volumes)
+    }
+    /// The local fog volumes rendered (`set_fog_volumes`).
+    pub fn fog_volumes(&self) -> &[crate::look::FogVolume] {
+        &self.look.fog_volumes
+    }
     /// Sets the colour lookup table graded through last (`Grading::lut_contribution`
     /// of it): `(size, texels)`, `size` steps per channel (2 to 32) and `size`³ RGBA8
     /// texels in strip order (red + blue × size across, green down; sRGB in and out),

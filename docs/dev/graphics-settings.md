@@ -77,7 +77,7 @@ development/reference callers using the existing presenter API.
 | Post-processing | Bloom, GTAO, DoF sample/radius and motion-blur sample/length budgets | Next frame |
 | Individual post switches | Mask their group budget; authored volumes still supply lens/exposure parameters | Next frame |
 | Textures | Native compressed residency: 256/512/1024/2048 MiB, or explicit cap; bounded to half known VRAM | Next native content publication |
-| Effects | Emissive-light budget: 4/6/8/16; authored particle simulation is unchanged | Next frame |
+| Effects | Emissive-light budget: 4/6/8/16; volumetric fog near volume (Low none, Medium 16 px/48 slices, High 12/64, Epic 8/96); authored particle simulation is unchanged | Next frame |
 | Foliage | Stable 25/50/75/100% subset by immutable instance ID; all parts of an instance stay together | Next native content publication |
 | Anti-aliasing | Group chooses TAAU at Low/Medium, TSR at High/Epic; explicit TAAU/TSR override | Next frame |
 | Resolution scale | 0.1..1 of physical output dimensions; preset scale when null; UI stays at display resolution | Next frame |

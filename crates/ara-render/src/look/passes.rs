@@ -4,9 +4,8 @@
 use super::gi::DISPATCH_PROBES;
 use super::gpu::{
     AO_DENOISED, AO_TRACE, BLOOM_DOWN, BLOOM_UP, DOF_COMPOSITE, DOF_GATHERED, DOF_PREPARED,
-    FROXELS, GI_DIFFUSE, GI_SPECULAR, LookGpu, LookIds, MOTION_NEIGHBOURS, MOTION_TILES,
-    MULTISCATTER, SKY_IRRADIANCE, SKY_PREFILTER, SKY_VIEW, SSR_PYRAMID, SSR_TRACE, SkyKey,
-    TRANSMITTANCE,
+    GI_DIFFUSE, GI_SPECULAR, LookGpu, LookIds, MOTION_NEIGHBOURS, MOTION_TILES, MULTISCATTER,
+    SKY_IRRADIANCE, SKY_PREFILTER, SKY_VIEW, SSR_PYRAMID, SSR_TRACE, SkyKey, TRANSMITTANCE,
 };
 use crate::graph::{Graph, PassId, ResourceId};
 
@@ -28,6 +27,11 @@ pub(crate) enum LookPass {
     SkyIrradiance,
     SkyPrefilter,
     Fog,
+    /// The near fog volume's ambient light, froxel injection and column integration
+    /// (`look::volumetric`).
+    FogAmbient,
+    FogInject,
+    FogIntegrate,
     /// Metering: 0 bins the history, 1 meters the bins into the exposure state.
     Exposure(u32),
     Bloom(u32),
@@ -84,8 +88,8 @@ impl LookGpu {
     pub(crate) fn record_probe_clear(&self, recorder: &mut Recorder) {
         self.record_scatter(recorder, LookPass::GiClear);
     }
-    /// Declares the sky and fog passes. LUTs are rebuilt when the aerosols change,
-    /// the sky IBL when the sun or sky changes, the sky view and froxels per frame.
+    /// Declares the sky passes and probe GI relight. LUTs are rebuilt when the
+    /// aerosols change, the sky IBL when the sun or sky changes, the sky view per frame.
     /// `shared` is the frame's conservative bindless reachability.
     pub(crate) fn sky_passes(
         &mut self,
@@ -162,22 +166,7 @@ impl LookGpu {
             }
             self.sky = Some(key);
         }
-        if physical || self.look.fog.is_some() {
-            add(
-                graph,
-                "Fog.Froxels",
-                LookPass::Fog,
-                if physical {
-                    vec![
-                        (TRANSMITTANCE, Access::ShaderRead),
-                        (MULTISCATTER, Access::ShaderRead),
-                        (FROXELS, Access::Storage),
-                    ]
-                } else {
-                    vec![(FROXELS, Access::Storage)]
-                },
-            );
-        }
+        // The coarse fog grid follows (`fog_pass`): its ambient reads the relit probes.
         if let Some(gi) = ids.gi {
             // New probe records land before the relight reads them.
             if self.gi.as_ref().is_some_and(|g| g.fresh) {
@@ -373,9 +362,7 @@ impl LookGpu {
                     .map(|i| (ids.image(i), Access::ShaderRead)),
             );
         }
-        if self.look.sky.is_some() || self.look.fog.is_some() {
-            reads.push((ids.image(FROXELS), Access::ShaderRead));
-        }
+        reads.extend(self.fog_reads(ids));
         if let Some(gi) = ids.gi {
             reads.extend([1, 2, 4, 5].map(|i| (gi[i], Access::ShaderRead)));
             reads.extend([GI_DIFFUSE, GI_SPECULAR].map(|i| (ids.image(i), Access::ShaderRead)));
@@ -560,7 +547,11 @@ impl LookGpu {
             LookPass::SkyView => (p.sky_view, 0, groups([192, 108])),
             LookPass::SkyIrradiance => (p.sky_irradiance, 0, groups([32, 16])),
             LookPass::SkyPrefilter => (p.sky_prefilter, 0, groups([256, 640])),
-            LookPass::Fog => (p.fog, 0, groups([64, 36])),
+            // One group of 32 slices per column (look-sky.slang fogMain).
+            LookPass::Fog => (p.fog, 0, [64, 36, 1]),
+            LookPass::FogAmbient => (p.fog_ambient, 0, self.volumetric_dispatch(pass)),
+            LookPass::FogInject => (p.fog_inject, 0, self.volumetric_dispatch(pass)),
+            LookPass::FogIntegrate => (p.fog_integrate, 0, self.volumetric_dispatch(pass)),
             // One grid sample per thread (128x72), then one metering group.
             LookPass::Exposure(n) => (p.exposure, n, [if n == 0 { 36 } else { 1 }, 1, 1]),
             LookPass::Bloom(n) => {

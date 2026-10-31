@@ -348,10 +348,11 @@ fn lights(frame: &RenderFrame) -> Vec<scene::Light> {
                         0.0
                     },
                 ],
+                // w: the light's volumetric fog scattering intensity.
                 parameters: if spot {
-                    [1.0, l.cone[0].to_radians().cos(), 0.0, 0.0]
+                    [1.0, l.cone[0].to_radians().cos(), 0.0, l.volumetric]
                 } else {
-                    [0.0; 4]
+                    [0.0, 0.0, 0.0, l.volumetric]
                 },
             }
         })

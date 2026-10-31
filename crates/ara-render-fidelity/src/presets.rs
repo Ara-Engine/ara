@@ -10,7 +10,7 @@ use anyhow::{Result, bail};
 use ara_gpu::GpuDevice;
 use ara_render::look::{
     AmbientOcclusion, DepthOfFieldQuality, FarShadows, LocalShadows, MotionBlurQuality, Quality,
-    RayQueries, ReflectionCaptures, Reflections, Shadows, VirtualShadows,
+    RayQueries, ReflectionCaptures, Reflections, Shadows, VirtualShadows, VolumetricFogQuality,
 };
 
 /// User-facing quality tier. D27: every tier is raster by default
@@ -377,6 +377,9 @@ impl QualityPreset {
                 distance,
             })
         };
+        // The near froxel volume of volumetric fog: render pixels per froxel and slices
+        // (Unreal's grid pixel size and grid size Z).
+        let volumetric = |tile, slices| Some(VolumetricFogQuality { tile, slices });
         match self {
             // LOD error and the cull size are in render pixels (about two
             // display pixels each at Low's scale).
@@ -401,6 +404,8 @@ impl QualityPreset {
                 depth_of_field: dof(12, 0.01),
                 motion_blur: None,
                 ray_queries: None,
+                // The coarse fog grid alone (still shadowed).
+                volumetric_fog: None,
             },
             Self::Medium => Quality {
                 shadows: shadows(3, 1024, 100., (1024, 1000.)),
@@ -426,6 +431,7 @@ impl QualityPreset {
                 depth_of_field: dof(20, 0.015),
                 motion_blur: motion(8, 24.),
                 ray_queries: None,
+                volumetric_fog: volumetric(16, 48),
             },
             Self::High => Quality {
                 shadows: shadows(4, 2048, 150., (2048, 1500.)),
@@ -458,6 +464,7 @@ impl QualityPreset {
                 depth_of_field: dof(32, 0.02),
                 motion_blur: motion(12, 32.),
                 ray_queries: rays(0.3, 0.6, 1500.),
+                volumetric_fog: volumetric(12, 64),
             },
             Self::Epic => Quality {
                 shadows: shadows(4, 2048, 250., (2048, 2000.)),
@@ -487,6 +494,7 @@ impl QualityPreset {
                 depth_of_field: dof(48, 0.025),
                 motion_blur: motion(16, 32.),
                 ray_queries: rays(0.5, 0.8, 2000.),
+                volumetric_fog: volumetric(8, 96),
             },
         }
     }

@@ -283,5 +283,10 @@ fn fork_look(
         probe_writes: Vec::new(),
         refract: None,
         translucent: None,
+        fog_volumes: source.fog_volumes.clone(),
+        volumetric: None,
+        volumetric_slot: 0,
+        volumetric_frames: 0,
+        frame_volumetric: false,
     })
 }

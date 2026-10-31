@@ -293,6 +293,9 @@ pub(super) fn classify(record: &ara_doc::Record) -> (Vec<Part>, Option<Icon>) {
     if record.contains_key("PostProcessVolume") {
         icons.push(("PostProcessVolume", "layers", Tint::Volume));
     }
+    if record.contains_key("LocalFogVolume") {
+        icons.push(("LocalFogVolume", "cloud-fog", Tint::Volume));
+    }
     for (component, glyph) in [
         ("HeightFog", "cloud-fog"),
         ("SkyAtmosphere", "sun-dim"),

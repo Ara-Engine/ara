@@ -33,7 +33,15 @@ pub(crate) const DOF_COMPOSITE: usize = 17;
 /// Motion blur velocity maxima per 16-pixel display tile and per 3x3 neighbourhood.
 pub(crate) const MOTION_TILES: usize = 18;
 pub(crate) const MOTION_NEIGHBOURS: usize = 19;
-const IMAGES: usize = 20;
+/// The near volume of volumetric fog (`look::volumetric`): the injected froxels
+/// (scattered light, extinction), a pair swapped each frame for reprojection, and
+/// the integrated in-scatter and transmittance; RGBA16F slice atlases.
+pub(crate) const VOLUME_A: usize = 20;
+pub(crate) const VOLUME_B: usize = 21;
+pub(crate) const VOLUME_LIGHT: usize = 22;
+/// The near volume's ambient light on a coarser grid (`volumetric::Layout::ambient`).
+pub(crate) const VOLUME_AMBIENT: usize = 23;
+const IMAGES: usize = 24;
 /// Depth of a visibility-bitmask sample (`LookGpu::bitmask_ao`) behind its front, as
 /// a share of the AO radius: thinner foreground hides less of what lies behind it.
 /// 0.4 treated branches, rails and posts as 40 cm slabs: ground under a sky-lit tree
@@ -74,6 +82,10 @@ pub(crate) struct Pipelines {
     pub sky_irradiance: Pipeline,
     pub sky_prefilter: Pipeline,
     pub fog: Pipeline,
+    /// The near volume of volumetric fog (`look::volumetric`).
+    pub fog_inject: Pipeline,
+    pub fog_integrate: Pipeline,
+    pub fog_ambient: Pipeline,
     pub exposure: Pipeline,
     pub bloom: Pipeline,
     pub post: Pipeline,
@@ -187,6 +199,16 @@ pub(crate) struct LookGpu {
     /// Sun shadows of blended casters (`look::translucent`), allocated by the first
     /// High/Epic frame that has one.
     pub translucent: Option<super::translucent::TranslucentSun>,
+    /// Local fog volumes (`Renderer::set_fog_volumes`), at most `MAX_FOG_VOLUMES`.
+    pub fog_volumes: Vec<super::FogVolume>,
+    /// The allocated near volume (`ensure_volumetric`).
+    pub volumetric: Option<super::volumetric::Layout>,
+    /// Which of the injection pair this frame writes (the other is its history).
+    pub volumetric_slot: usize,
+    /// Near volume frames accumulated since its history last reset.
+    pub volumetric_frames: u32,
+    /// This frame renders the near volume (`begin_volumetric`).
+    pub frame_volumetric: bool,
 }
 
 /// Graph identities of the look's persistent resources for one frame.
@@ -243,6 +265,9 @@ impl LookGpu {
             sky_irradiance: load("look_sky_irradiance")?,
             sky_prefilter: load("look_sky_prefilter")?,
             fog: load("look_fog")?,
+            fog_inject: load("look_fog_inject")?,
+            fog_integrate: load("look_fog_integrate")?,
+            fog_ambient: load("look_fog_ambient")?,
             exposure: load("look_exposure")?,
             bloom: load("look_bloom")?,
             post: load("look_post")?,
@@ -332,6 +357,11 @@ impl LookGpu {
             probe_writes: Vec::new(),
             refract: None,
             translucent: None,
+            fog_volumes: Vec::with_capacity(super::MAX_FOG_VOLUMES),
+            volumetric: None,
+            volumetric_slot: 0,
+            volumetric_frames: 0,
+            frame_volumetric: false,
         })
     }
 
@@ -372,6 +402,10 @@ impl LookGpu {
             DOF_COMPOSITE,
             MOTION_TILES,
             MOTION_NEIGHBOURS,
+            VOLUME_A,
+            VOLUME_B,
+            VOLUME_LIGHT,
+            VOLUME_AMBIENT,
         ] {
             if let Some(old) = self.images[i].take() {
                 gpu.retire(Resource::Image(old))?;
@@ -379,6 +413,7 @@ impl LookGpu {
         }
         self.render = render;
         self.display = display;
+        self.volumetric = None;
         Ok(())
     }
 
@@ -395,7 +430,7 @@ impl LookGpu {
             sky,
             sky,
             sky,
-            sky || look.fog.is_some(),
+            self.fogged(),
             sky,
             sky,
             look.bloom > 0.,
@@ -412,6 +447,11 @@ impl LookGpu {
             self.quality.depth_of_field.is_some(),
             self.quality.motion_blur.is_some(),
             self.quality.motion_blur.is_some(),
+            // The near volume follows its own layout (`ensure_volumetric`).
+            false,
+            false,
+            false,
+            false,
         ];
         for (i, needed) in needed.into_iter().enumerate() {
             if !needed || self.images[i].is_some() {
@@ -441,7 +481,7 @@ impl LookGpu {
                 self.sky = None;
             }
         }
-        Ok(())
+        self.ensure_volumetric(gpu)
     }
 
     /// Bindless indices for the shader record: (sampled, storage) rows of four.

@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7",
+  "key": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3",
   "stages": [
     {
-      "dxil": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/reservoir_specular_layers/specularTraceLayers.dxil",
-      "dxil_hash": "6143aee145e21044db835718e2120993ae8afd52e0fea001be848fb5702d6bc6",
+      "dxil": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/reservoir_specular_layers/specularTraceLayers.dxil",
+      "dxil_hash": "600b44ff632f57779d3d2a640defa9ca6e73cdf3fb59f78ad4e6ff50bee6ea65",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/reservoir_specular_layers/specularTraceLayers.metallib",
-        "metallib_hash": "3f082fee035580c2506b3bc496e46a7d42d17f3b3d129328c8d06b6fafa38e34",
-        "reflection": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/reservoir_specular_layers/specularTraceLayers.metal.json",
+        "metallib": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/reservoir_specular_layers/specularTraceLayers.metallib",
+        "metallib_hash": "1b01bf53dc4b7230a6733201a329be7f66aa3501f5d40522e0d56e018706cccb",
+        "reflection": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/reservoir_specular_layers/specularTraceLayers.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "specularTraceLayers",
-      "spirv": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/reservoir_specular_layers/specularTraceLayers.spv",
+      "spirv": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/reservoir_specular_layers/specularTraceLayers.spv",
       "spirv_entry": "main",
-      "spirv_hash": "00192eed25bfc02897dfaae20c66e6ba9499ab5b768a8d01cf3d444b3330562f",
+      "spirv_hash": "a7753370d57bf13d106e0427caa48bd35e9e8cae8b11ab5cd175497062d99412",
       "stage": "compute"
     }
   ],

@@ -14,6 +14,10 @@ pub struct RenderDebug {
     /// Sun and local-light shadows (default true).
     #[ara(default = true)]
     pub shadows: bool,
+    /// The detailed (froxel) volumetric fog near the camera (default true); off, fog
+    /// keeps only its coarse far grid, as on Low.
+    #[ara(default = true)]
+    pub volumetric_fog: bool,
     /// The sub-pixel camera jitter temporal anti-aliasing accumulates (default true);
     /// off, edges alias but hold still.
     #[ara(default = true)]
@@ -142,6 +146,7 @@ impl Default for RenderDebug {
         Self {
             ambient_occlusion: true,
             shadows: true,
+            volumetric_fog: true,
             temporal_jitter: true,
             full_resolution: false,
             reflections: ReflectionView::Lit,

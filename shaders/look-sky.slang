@@ -2,6 +2,7 @@
 #include "raster.slangh"
 #include "look.slangh"
 #include "look-shading.slangh"
+#include "look-fog.slangh"
 void store(uint image,uint2 p,float3 value){images[NonUniformResourceIndex(image)][p]=float4(value,1);}
 // 256x64: transmittance to the top of the atmosphere by altitude and sun cosine.
 [shader("compute")][numthreads(8,8,1)]
@@ -62,54 +63,47 @@ void skyPrefilterMain(uint3 tid:SV_DispatchThreadID){
     }
     store(l.storage1.y,tid.xy,sum/max(weight,0.001));
 }
-// Mean environment-map radiance over fourteen directions: the isotropic ambient
-// that lights fog when there is no physical sky.
-float3 environmentAmbient(Frame f){
-    float3 sum=0;
-    for(uint i=0;i<14;i++){
-        float3 d=i<6?float3(i==0?1.:i==1?-1.:0.,i==2?1.:i==3?-1.:0.,i==4?1.:i==5?-1.:0.):normalize(float3((i&1)!=0?1.:-1.,(i&2)!=0?1.:-1.,(i&4)!=0?1.:-1.));
-        sum+=envTex(f.extra.w,environmentUv(d)).rgb;
-    }return sum/14;
-}
-// One thread integrates a frustum column front to back over logarithmic slices.
-// Sunlight is shadowed by the cascades and far map (each segment the lit share of
-// four points); quadrature is deterministic (no noise).
-// Height fog uses its own base altitude, tint and anisotropy; clear-air Rayleigh
-// and Mie scattering join it under the physical sky.
-[shader("compute")][numthreads(8,8,1)]
-void fogMain(uint3 tid:SV_DispatchThreadID){
-    Frame f=frame();Look l=look(f);if(any(tid.xy>=uint2(64,36)))return;
-    float2 uv=(float2(tid.xy)+0.5)/float2(64,36);float3 d=viewRay(f,uv*float2(f.extent.xy)),integral=0,trans=1;float previous=0;
-    bool physical=physicalSky(l),fog=(l.flags.y&LOOK_FOG)!=0;float3 albedo=l.atmosphere.w*l.fog.rgb;float g=l.fog.w;
-    float3 ambient=physical?float3(0):environmentAmbient(f)*skyLight(l);float3 sun=f.sunDirection.xyz;
-    uint lights=f.extent.z;float cosine=dot(d,sun);
-    for(uint z=0;z<32;z++){
-        float end=2*(exp2(log2(1+FOG_RANGE/2)*float(z+1)/32)-1),ds=end-previous;
-        float3 at=f.camera.xyz+d*(previous+ds*0.5);float start=previous;previous=end;
-        float height=max(at.y-l.atmosphere.x,0);float density=fog?l.atmosphere.y*exp(-max(at.y-l.look.z,0)/l.atmosphere.z):0;
-        float3 sr=0;float sm=0;float3 e=density;
+// One group per frustum column, one thread per logarithmic slice to FOG_RANGE
+// (look.slangh sampleFroxel): each evaluates its segment, then accumulates the
+// segments in front of it in order (front to back, deterministic). On near volume
+// frames (LOOK_VOLUMETRIC) the column starts where the near volume ends, so shading
+// composes the two exactly (applyFog). Volumetric fog's sun is shadowed by the
+// cascades and far map (each segment the lit share of four points, so shafts move
+// smoothly with the camera instead of a whole slice flipping lit or dark at once), and
+// local lights scatter in it; quadrature is deterministic (no noise). Height fog and
+// fog volumes come from fogMedium; clear-air Rayleigh and Mie scattering join them
+// under the physical sky.
+groupshared float3 fogSegmentLight[32],fogSegmentTrans[32];
+[shader("compute")][numthreads(32,1,1)]
+void fogMain(uint3 group:SV_GroupID,uint z:SV_GroupIndex){
+    Frame f=frame();Look l=look(f);
+    float2 uv=(float2(group.xy)+0.5)/float2(64,36);float3 d=viewRay(f,uv*float2(f.extent.xy));
+    bool physical=physicalSky(l),shadowed=(l.flags.y&LOOK_FOG_SHADOWED)!=0;float g=l.fog.w;float3 sun=f.sunDirection.xyz;
+    uint lights=shadowed?f.extent.z:0;float cosine=dot(d,sun);
+    float begin=(l.flags.y&LOOK_VOLUMETRIC)!=0?l.volumetric.x/max(dot(d,f.forward.xyz),0.05):0;
+    float previous=z==0?0:2*(exp2(log2(1+FOG_RANGE/2)*float(z)/32)-1);
+    float end=2*(exp2(log2(1+FOG_RANGE/2)*float(z+1)/32)-1),start=max(previous,begin);
+    float3 light=0,trans=1;
+    if(end>start){
+        float ds=end-start;float3 at=f.camera.xyz+d*(start+ds*0.5);
+        float height=max(at.y-l.atmosphere.x,0);FogMedium m=fogMedium(f,l,at);
+        float3 sr=0;float sm=0;float3 e=m.extinction;
         if(physical)e+=extinction(height,l.look.w,sr,sm);
-        // The share of the segment the sun reaches, from four stratified points:
-        // shafts then move smoothly with the camera instead of a whole slice
-        // (90-140 m at mountain range) flipping lit or dark at once.
-        float lit=0;for(uint i=0;i<4;i++)lit+=fogVisibility(f,l,f.camera.xyz+d*(start+ds*(float(i)+0.5)/4));
-        float3 sunlight=sunAt(f,l,at)*lit*0.25;
-        float3 source=sunlight*(sr*phaseR(cosine)+sm*phaseM(cosine,0.8)+density*albedo*phaseM(cosine,g));
-        if(physical)source+=(sr+sm+density*albedo)*multiScattering(l,height,sun.y)*l.sunLux.rgb;
-        else source+=density*albedo*ambient;
-        if(density>0)for(uint i=0;i<lights;i++){
-            Light light=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64);
-            // parameters.w: unshadowed emitter lights stay out of the fog.
-            float3 delta=light.positionRange.xyz-at;float distance=length(delta);if(distance>light.positionRange.w||light.parameters.w>0.5)continue;
-            float3 toLight=delta/max(distance,0.001);
-            float spot=light.parameters.x<0.5?1:smoothstep(light.directionOuter.w,max(light.directionOuter.w+1e-4,light.parameters.y),dot(-toLight,light.directionOuter.xyz));
-            float fade=pow(saturate(1-pow(distance/light.positionRange.w,4)),2);
-            float r2=max(0.01,light.parameters.z*light.parameters.z);
-            float shadow=(l.flags.y&LOOK_LOCAL_INDIRECT)!=0?localShadow(l,i,at,0,light.positionRange.xyz):1;
-            source+=density*albedo*light.colorLumens.rgb*light.colorLumens.w/(4*PI*max(distance*distance,r2))*fade*spot*shadow*phaseM(dot(d,toLight),g);
+        float lit=1;
+        if(shadowed){lit=0;for(uint i=0;i<4;i++)lit+=fogVisibility(f,l,f.camera.xyz+d*(start+ds*(float(i)+0.5)/4));lit*=0.25;}
+        float3 source=sunAt(f,l,at)*lit*(sr*phaseR(cosine)+sm*phaseM(cosine,0.8)+m.scattering*(phaseM(cosine,g)*l.volumetricEmissive.w));
+        if(physical)source+=(sr+sm)*multiScattering(l,height,sun.y)*l.sunLux.rgb;
+        if(any(m.scattering>0)){
+            source+=m.scattering*fogAmbient(f,l,at);
+            for(uint i=0;i<lights;i++)source+=m.scattering*fogLocalLight(l,buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64),i,at,d,g);
         }
-        float3 segment=exp(-e*ds);integral+=trans*source*(1-segment)/max(e,float3(1e-9));trans*=segment;
-        store(l.storage0.w,uint2(z*128+tid.x,tid.y),integral);
-        store(l.storage0.w,uint2(z*128+64+tid.x,tid.y),trans);
+        source+=m.emission;
+        light=source*segmentWeight(e,ds);trans=exp(-e*ds);
     }
+    fogSegmentLight[z]=light;fogSegmentTrans[z]=trans;
+    GroupMemoryBarrierWithGroupSync();
+    float3 integral=0,through=1;
+    for(uint i=0;i<=z;i++){integral+=through*fogSegmentLight[i];through*=fogSegmentTrans[i];}
+    store(l.storage0.w,uint2(z*128+group.x,group.y),integral);
+    store(l.storage0.w,uint2(z*128+64+group.x,group.y),through);
 }

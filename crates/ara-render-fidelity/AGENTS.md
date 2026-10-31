@@ -50,6 +50,9 @@ No authoritative gameplay or authoring state lives here.
   `ground_sun()` the attenuated sun. Volume DoF and motion blur switch the fidelity view to
   `Quality::Cinematic` (`PostSettings::f_number`: the thin lens for the camera's FOV);
   lift/gamma/gain, chromatic aberration, the LUT and AO/SSR tuning are raster-only.
+  `HeightFog`'s volumetric fields map onto both renderers' fog (the fidelity froxel fog takes
+  emission, extinction scale and per-light `parameters.w`); `fog_volumes()` sorts the scene's
+  `LocalFogVolume`s for `Renderer::set_fog_volumes` (raster only for now).
 
 ## Gates
 Use CARGO_BUILD_JOBS=2. `cargo test -p ara-render-fidelity`,

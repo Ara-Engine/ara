@@ -1,0 +1,111 @@
+// Fog media and their lighting, shared by the coarse fog grid (look-sky.slang fogMain)
+// and the near froxel volume (look-volumetric.slang; look/volumetric.rs). Include after
+// look-shading.slangh.
+//
+// A local fog volume (look/volumetric.rs FogVolume::row): world-to-local rows onto the
+// unit sphere or cube, then x density (1/m), y height falloff (1/m), z radial falloff
+// share, w shape (1 box); albedo rgb and the centre's height; emission rgb.
+struct FogVolumeRecord{float4 local0;float4 local1;float4 local2;float4 shape;float4 albedo;float4 emissive;};
+static const uint FOG_VOLUME_BYTES=96;
+// Participating media at a point: grey extinction (1/m), scattering coefficient (rgb:
+// extinction times albedo) and emitted radiance per metre.
+struct FogMedium{float extinction;float3 scattering;float3 emission;};
+// Height fog (LOOK_FOG; on volumetric fog its extinction scale and emission) plus every
+// local fog volume holding `p`.
+FogMedium fogMedium(Frame f,Look l,float3 p){
+    FogMedium m;m.extinction=0;m.scattering=0;m.emission=0;
+    if((l.flags.y&LOOK_FOG)!=0){
+        float profile=exp(-max(p.y-l.look.z,0)/l.atmosphere.z),density=l.atmosphere.y*profile;
+        bool lit=(l.flags.y&LOOK_FOG_SHADOWED)!=0;
+        m.extinction=density*(lit?l.volumetric.w:1);m.scattering=density*l.atmosphere.w*l.fog.rgb;
+        if(lit)m.emission=l.volumetricEmissive.rgb*profile;
+    }
+    for(uint i=0;i<l.volumetricAtlas.z;i++){
+        // The look record's row (uniform): no NonUniformResourceIndex.
+        FogVolumeRecord v=buffers[f.look.x].Load<FogVolumeRecord>(l.volumetricAtlas.w+i*FOG_VOLUME_BYTES);
+        float4 h=float4(p,1);float3 q=float3(dot(v.local0,h),dot(v.local1,h),dot(v.local2,h));
+        float r=v.shape.w>0.5?max(abs(q.x),max(abs(q.y),abs(q.z))):length(q);
+        if(r>=1)continue;
+        float profile=smoothstep(0,1,saturate((1-r)/max(v.shape.z,1e-3)))*exp(clamp(-v.shape.y*(p.y-v.albedo.w),-30.,10.));
+        float density=v.shape.x*profile;
+        m.extinction+=density;m.scattering+=density*v.albedo.rgb;m.emission+=v.emissive.rgb*profile;
+    }
+    // Energy conservation under an extinction scale below one.
+    m.scattering=min(m.scattering,float3(m.extinction,m.extinction,m.extinction));
+    return m;
+}
+// Probe irradiance facing up plus facing down (E(+y)+E(-y)) at a point in open air,
+// from the pool in atlas `image`: each lattice's eight probes trilinear and
+// Chebyshev-weighted against their moments (no surface, so no backface weight),
+// lattices finest first as giPoolLobes blends them. Returns the pool's coverage.
+float giFogIrradiance(Look l,uint image,float3 p,out float3 sum){
+    sum=0;float remaining=1;
+    for(uint i=0;i<l.giCounts.x&&remaining>1e-3;i++){
+        GiLattice g=giLattice(l,i);float c=giLatticeCoverage(g,p)*(i+1<l.giCounts.x?l.giParams.y:1);
+        if(c<=0)continue;
+        float3 grid=(p-g.origin)/g.spacing;int3 base=clamp(int3(floor(grid)),int3(0),int3(g.counts)-2);float3 alpha=saturate(grid-base);
+        float3 lattice=0;float total=0;
+        for(uint k=0;k<8;k++){
+            uint3 d=uint3(k&1,(k>>1)&1,(k>>2)&1);uint3 q=uint3(base)+d;uint id=g.base+(q.z*g.counts.y+q.y)*g.counts.x+q.x;
+            float4 meta=giMeta(l,id);if(meta.w<0.5)continue;
+            float3 delta=p-(g.origin+float3(q)*g.spacing)-meta.xyz;float distance=length(delta);
+            float2 moments=giSampleMoments(l,id,delta/max(distance,1e-6));
+            float variance=max(moments.y-moments.x*moments.x,0.0001);float visibility=distance<=moments.x?1:pow(variance/(variance+pow(distance-moments.x,2)),3);
+            float3 t=lerp(1-alpha,alpha,float3(d));float weight=visibility;if(weight<0.2)weight*=weight*weight/0.04;weight*=t.x*t.y*t.z;
+            lattice+=(giSampleIrradiance(l,image,id,float3(0,1,0))+giSampleIrradiance(l,image,id,float3(0,-1,0)))*weight;total+=weight;
+        }
+        if(total>1e-6)lattice/=total;
+        float w=c*remaining;sum+=lattice*w;remaining-=w;
+    }
+    float coverage=1-remaining;if(coverage>1e-6)sum/=coverage;
+    return coverage;
+}
+// Mean radiance the fog's particles receive at `p` besides the sun and local lights
+// (an isotropic share, (E up + E down) / 2 pi): probe GI where the pool covers `p`, so
+// enclosed rooms are lit by their own bounce rather than the open sky; elsewhere the
+// sky's (or environment's) irradiance under distant landforms (horizonSky).
+float3 fogAmbient(Frame f,Look l,float3 p){
+    uint irradiance=physicalSky(l)?l.sampled1.x:f.lighting.x;
+    float3 sky=(envTex(irradiance,environmentUv(float3(0,1,0))).rgb+envTex(irradiance,environmentUv(float3(0,-1,0))).rgb)*skyLight(l);
+    float coverage=0;float3 probes=0;
+    [branch]if(giEnabled(l))coverage=giFogIrradiance(l,l.giImages.y,p,probes)*giWeight(l);
+    if(coverage<0.99)sky*=horizonSky(l,p);
+    return lerp(sky,probes,coverage)/(2*PI);
+}
+// Visibility of `world` from shadowed local light `index` for fog: localShadow's face
+// and tile lookup with one bilinear compare and no normal offset (media have no surface).
+float fogLocalShadow(Look l,uint index,float3 world,float3 light){
+    if(l.localShadows.y==0)return 1;
+    uint2 entry=buffers[NonUniformResourceIndex(l.localShadows.x)].Load2(index*8);if(entry.y==0)return 1;
+    float3 d=world-light,a=abs(d);
+    uint face=entry.y==1?0:(a.x>=a.y&&a.x>=a.z?(d.x>0?0:1):a.y>=a.z?(d.y>0?2:3):(d.z>0?4:5));
+    uint at=LOCAL_RECORDS+(entry.x+face)*80;
+    float4x4 m=buffers[NonUniformResourceIndex(l.localShadows.x)].Load<float4x4>(at);
+    float4 tile=asfloat(buffers[NonUniformResourceIndex(l.localShadows.x)].Load4(at+64));
+    float2 atlas=float2(l.localShadows.zw);float res=tile.z*atlas.x;
+    float4 h=mul(m,float4(world,1));if(h.w<=0)return 1;
+    float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
+    if(any(uv<0)||any(uv>1)||q.z<=0||q.z>1)return 1;
+    float2 lo=tile.xy*atlas,position=lo+uv*res-0.5,base=floor(position),t=position-base;
+    float4 lit=step(textures[NonUniformResourceIndex(l.localShadows.y)].GatherRed(samplers[2],(clamp(base,lo,lo+res-2)+1)/atlas),q.z*1.002);
+    return lerp(lerp(lit.w,lit.z,t.x),lerp(lit.x,lit.y,t.x),t.y);
+}
+// In-scattering a local light gives fog at `p` seen along `d` (illuminance times the
+// phase function; multiply by the scattering coefficient): the surfaces' falloff and
+// cone, its shadow where the fog samples local shadows (LOOK_LOCAL_INDIRECT), and its
+// volumetric scattering intensity (parameters.w; zero keeps it out of fog).
+float3 fogLocalLight(Look l,Light light,uint index,float3 p,float3 d,float g){
+    float3 delta=light.positionRange.xyz-p;float distance=length(delta);
+    if(distance>light.positionRange.w||light.parameters.w<=0)return 0;
+    float3 toLight=delta/max(distance,0.001);
+    float spot=light.parameters.x<0.5?1:smoothstep(light.directionOuter.w,max(light.directionOuter.w+1e-4,light.parameters.y),dot(-toLight,light.directionOuter.xyz));
+    if(spot<=0)return 0;
+    float fade=pow(saturate(1-pow(distance/light.positionRange.w,4)),2);
+    float r2=max(0.01,light.parameters.z*light.parameters.z);
+    float shadow=(l.flags.y&LOOK_LOCAL_INDIRECT)!=0?fogLocalShadow(l,index,p,light.positionRange.xyz):1;
+    return light.colorLumens.rgb*(light.colorLumens.w*light.parameters.w/(4*PI*max(distance*distance,r2)))*fade*spot*shadow*phaseM(dot(d,toLight),g);
+}
+// Length-weighted share of a homogeneous segment's source that leaves it (Hillaire's
+// energy-conserving integral, (1 - exp(-e ds)) / e), stable for clear air.
+float segmentWeight(float e,float ds){float x=e*ds;return x<1e-4?ds*(1-0.5*x):(1-exp(-x))/e;}
+float3 segmentWeight(float3 e,float ds){return float3(segmentWeight(e.x,ds),segmentWeight(e.y,ds),segmentWeight(e.z,ds));}

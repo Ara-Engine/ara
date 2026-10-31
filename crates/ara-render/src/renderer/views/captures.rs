@@ -363,10 +363,12 @@ impl Renderer {
         };
         // The surroundings as shaded (with screen-space occlusion, without its bounce),
         // minus effects that need history or several frames to land (screen-space
-        // reflections, virtual shadow pages), the horizon or ray queries: probes and
-        // cascades light the bake, which is the raster path's own reflection source.
+        // reflections, virtual shadow pages, the near fog volume), the horizon or ray
+        // queries: probes and cascades light the bake, which is the raster path's own
+        // reflection source.
         let quality = crate::look::Quality {
             reflections: None,
+            volumetric_fog: None,
             ray_queries: None,
             horizon: None,
             virtual_shadows: None,

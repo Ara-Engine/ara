@@ -214,6 +214,7 @@ pub fn register_components(registry: &mut SimRegistry) -> std::result::Result<()
     registry.register_component::<Environment>()?;
     registry.register_component::<ara_components::render::SkyAtmosphere>()?;
     registry.register_component::<ara_components::render::HeightFog>()?;
+    registry.register_component::<ara_components::render::LocalFogVolume>()?;
     registry.register_component::<ara_components::render::ReflectionProbe>()?;
     registry.register_component::<ara_components::post::PostProcessVolume>()?;
     registry.register_component::<Camera>()?;

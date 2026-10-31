@@ -86,6 +86,8 @@ pub struct LightView {
     pub range: f32,
     /// Inner/outer cone half-angles in degrees.
     pub cone: [f32; 2],
+    /// Volumetric fog scattering intensity (`Light::volumetric_scattering`; 1 physical).
+    pub volumetric: f32,
 }
 
 /// An authored reflection probe with its entity's world pose (interpolated).
@@ -202,6 +204,9 @@ pub struct RenderFrame {
     pub look: ara_components::render::SceneLook,
     /// Directional light: direction toward the light and linear RGB lux.
     pub sun: Option<([f32; 3], [f32; 3])>,
+    /// The directional light's volumetric fog scattering intensity
+    /// (`Light::volumetric_scattering`); `None` is physical (1).
+    pub sun_volumetric: Option<f32>,
     /// Local lights in stable order.
     pub lights: Vec<LightView>,
     /// Authored reflection probes in stable order (renderers place their own
@@ -232,8 +237,10 @@ impl RenderFrame {
         self.look.sky = None;
         self.look.fog = None;
         self.look.volumes.clear();
+        self.look.fog_volumes.clear();
         self.look.luts.clear();
         self.sun = None;
+        self.sun_volumetric = None;
         self.lights.clear();
         self.reflection_probes.clear();
         self.draws.clear();
@@ -273,6 +280,19 @@ impl RenderFrame {
             }
             if self.look.fog.is_none() {
                 self.look.fog = entity.get::<ara_components::render::HeightFog>().copied();
+            }
+            if let Some(volume) = entity
+                .get::<ara_components::render::LocalFogVolume>()
+                .filter(|v| v.enabled)
+            {
+                self.look
+                    .fog_volumes
+                    .push(ara_components::render::FogVolumeView {
+                        volume: *volume,
+                        translation: pose.translation.to_array(),
+                        rotation: pose.rotation.to_array(),
+                        scale: pose.scale.to_array(),
+                    });
             }
             if let Some(volume) = entity.get::<ara_components::post::PostProcessVolume>() {
                 // The lookup tables it references, shared from the library.
@@ -523,6 +543,7 @@ impl RenderFrame {
                             b * light.intensity,
                         ],
                     ));
+                    self.sun_volumetric = Some(light.volumetric_scattering);
                 }
             }
             kind => self.lights.push(LightView {
@@ -533,6 +554,7 @@ impl RenderFrame {
                 lumens: light.intensity,
                 range: light.range,
                 cone: [light.inner_angle, light.outer_angle],
+                volumetric: light.volumetric_scattering,
             }),
         }
     }

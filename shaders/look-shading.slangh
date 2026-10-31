@@ -466,8 +466,7 @@ float3 viewRay(Frame f,float2 p){
     return normalize(far.xyz/far.w-f.camera.xyz);
 }
 // Background radiance: the physical sky (with sun disk) or the environment map,
-// the latter fogged over the whole froxel range.
+// fogged (fogBackground).
 float3 background(Frame f,Look l,float3 d,float2 uv){
-    if(physicalSky(l))return skyRadiance(f,l,d,true);
-    return applyFog(f,l,envTex(f.extra.w,environmentUv(d)).rgb,f.camera.xyz+d*FOG_RANGE,uv);
+    return fogBackground(f,l,physicalSky(l)?skyRadiance(f,l,d,true):envTex(f.extra.w,environmentUv(d)).rgb,d,uv);
 }
