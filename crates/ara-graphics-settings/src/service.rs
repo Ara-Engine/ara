@@ -52,6 +52,7 @@ pub struct State {
 /// Host-owned presentation resource, deliberately absent from gameplay snapshots.
 #[derive(Resource)]
 pub struct Service {
+    capabilities_refresh: bool,
     state: State,
     previous: Settings,
     store: Option<Store>,
@@ -77,6 +78,7 @@ impl Service {
         };
         let active_ray_tracing = settings.ray_tracing;
         Self {
+            capabilities_refresh: true,
             previous: settings.clone(),
             store,
             state: State {
@@ -96,6 +98,9 @@ impl Service {
     pub fn state(&self) -> &State {
         &self.state
     }
+
+    /// Coalesce capability queries until the native owner can refresh display modes.
+    pub fn take_capabilities_refresh(&mut self) -> bool { std::mem::take(&mut self.capabilities_refresh) }
 
     /// Publish physical device/display capabilities. Never infer physical RT support
     /// from whether ray queries were enabled on the logical device.
@@ -165,7 +170,9 @@ impl Service {
     /// atomically, retaining the candidate and the previous applied configuration.
     pub fn request(&mut self, request: Request) -> Result<State, Diagnostic> {
         let result = self.execute(request);
-        if let Err(diagnostic) = &result { self.state.diagnostics.push(diagnostic.clone()); }
+        if let Err(diagnostic) = &result {
+            self.state.diagnostics.push(diagnostic.clone());
+        }
         result
     }
 
@@ -174,7 +181,7 @@ impl Service {
             self.state.diagnostics.clear();
         }
         match request {
-            Request::Get => {}
+            Request::Get => { self.capabilities_refresh = true; }
             Request::Set { settings } => self.state.pending = settings,
             Request::ResetToDefaults => self.state.pending = self.state.defaults.clone(),
             Request::AutoDetect => {
