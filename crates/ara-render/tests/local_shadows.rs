@@ -81,7 +81,7 @@ fn scene() -> Scene {
             position_range: [0., 2.5, 0., 20.],
             color_lumens: [1., 1., 1., 2000.],
             direction_outer: [0., -1., 0., 0.],
-            parameters: [0., 1., 0., 0.],
+            parameters: [0., 1., 0., 1.],
         }],
         sun_direction: Vec3::Y,
         sun_lux: Vec3::ZERO,

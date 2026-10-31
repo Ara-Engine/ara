@@ -19,11 +19,15 @@ pub(crate) mod passes;
 pub mod placement;
 pub(crate) mod refract;
 pub(crate) mod translucent;
+pub mod volumetric;
 pub(crate) mod vsm;
 
 pub use crate::renderer::post::ToneCurve;
 pub use lens::{
     AoTuning, DepthOfField, DepthOfFieldQuality, Lens, MotionBlurQuality, OverPreset, SsrTuning,
+};
+pub use volumetric::{
+    FogVolume, FogVolumeShape, MAX_FOG_VOLUMES, VolumetricFog, VolumetricFogQuality,
 };
 
 /// Per-preset raster budgets (`Renderer::set_quality`); independent of the
@@ -94,6 +98,11 @@ pub struct Quality {
     /// devices with ray queries; other devices keep the raster path of the same
     /// preset. `None`: raster only.
     pub ray_queries: Option<RayQueries>,
+    /// The near-field froxel volume of volumetric fog (`look::volumetric`): sun
+    /// shafts, lamp cones and local fog volumes at screen-tile resolution up to the
+    /// fog's volumetric distance, temporally accumulated. `None` keeps the coarse
+    /// 4 km fog grid alone (still shadowed, at 40-pixel columns).
+    pub volumetric_fog: Option<VolumetricFogQuality>,
 }
 
 /// Hybrid ray-query budgets (`Quality::ray_queries`).
@@ -143,6 +152,7 @@ impl Default for Quality {
             depth_of_field: None,
             motion_blur: None,
             ray_queries: None,
+            volumetric_fog: None,
         }
     }
 }
@@ -320,7 +330,8 @@ impl Quality {
                         && r.rough_roughness <= 1.
                         && r.distance.is_finite()
                         && r.distance > 0.
-                }),
+                })
+                && self.volumetric_fog.is_none_or(|v| v.valid()),
             "Invalid raster quality"
         );
         Ok(())
@@ -354,6 +365,9 @@ pub struct Look {
     /// reflections, probe bounce and fog ambient) relative to the sky drawn in the
     /// background; 1 is physical. Unreal's sky light intensity.
     pub sky_light: f32,
+    /// Scale of the sun's in-scattering in fog particles (its light's volumetric
+    /// scattering intensity; 1 physical, 0 none). Clear air scatters it regardless.
+    pub sun_scattering: f32,
 }
 impl Default for Look {
     fn default() -> Self {
@@ -368,6 +382,7 @@ impl Default for Look {
             ao: AoTuning::default(),
             ssr: SsrTuning::default(),
             sky_light: 1.,
+            sun_scattering: 1.,
         }
     }
 }
@@ -504,6 +519,11 @@ pub struct Fog {
     pub albedo: f32,
     /// Henyey-Greenstein anisotropy, from zero to 0.9.
     pub anisotropy: f32,
+    /// Volumetric lighting: sun and local-light shadows cut shafts into the fog,
+    /// local lights scatter in it, and the near field renders in the froxel volume
+    /// where the quality runs it (`Quality::volumetric_fog`). `None` is plain height
+    /// fog: unshadowed sun in-scattering and ambient light only.
+    pub volumetric: Option<VolumetricFog>,
 }
 impl Default for Fog {
     fn default() -> Self {
@@ -514,6 +534,7 @@ impl Default for Fog {
             tint: [1.; 3],
             albedo: 0.9,
             anisotropy: 0.3,
+            volumetric: Some(VolumetricFog::default()),
         }
     }
 }
@@ -527,6 +548,7 @@ impl Look {
             (0.0..=0.25).contains(&self.bloom)
                 && self.sky_light.is_finite()
                 && self.sky_light >= 0.
+                && (0.0..=16.0).contains(&self.sun_scattering)
                 && finite(&g.white_balance_gain)
                 && g.white_balance_gain.iter().all(|x| *x >= 0.)
                 && (0.25..=4.0).contains(&g.contrast)
@@ -571,7 +593,8 @@ impl Look {
                     && f.base.is_finite()
                     && f.tint.iter().all(|c| (0.0..=1.0).contains(c))
                     && (0.0..=1.0).contains(&f.albedo)
-                    && (0.0..=0.9).contains(&f.anisotropy),
+                    && (0.0..=0.9).contains(&f.anisotropy)
+                    && f.volumetric.is_none_or(|v| v.valid()),
                 "Invalid fog"
             );
         }

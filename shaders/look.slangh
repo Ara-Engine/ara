@@ -68,8 +68,17 @@ struct Look {
     // pyramid feeds the bounce. The soft sun shadows read sunLux.w; [1] is spare.
     float4 exposureCurve[4]; // automatic exposure's compensation curve: (EV100, stops) keys xy, zw in rising EV
     uint4 giRadiance;        // probe radiance atlas (look-gi.slangh giSampleRadiance): x sampled, y storage
+    // Volumetric fog (look/volumetric.rs; look-fog.slangh, look-volumetric.slang). Local fog
+    // volume records follow the struct at byte volumetricAtlas.w (look-fog.slangh).
+    float4 volumetric;         // x near volume distance (m), y slice scale (m), z history weight (0: none), w height fog extinction scale
+    float4 volumetricEmissive; // rgb height fog emission (radiance per metre at base density), w the sun's scattering scale in fog
+    uint4 volumetricGrid;      // x, y froxels, z slices, w render pixels per froxel side
+    uint4 volumetricAtlas;     // x slices per atlas row, y frames since the history reset, z fog volumes, w their byte offset
+    uint4 volumetricImages;    // injection history, injection, integrated (sampled), injection (storage)
+    uint4 volumetricStorage;   // x integrated (storage), y ambient (storage), z ambient (sampled)
+    uint4 volumetricAmbient;   // ambient light grid: xyz cells (froxels / 4, 4, 2), w slices per atlas row
 };
-static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64,LOOK_REFLECTION_SOURCES=128;
+static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64,LOOK_REFLECTION_SOURCES=128,LOOK_VOLUMETRIC=256,LOOK_FOG_SHADOWED=512;
 // Automatic exposure's extra compensation (stops) at metered scene EV100 `ev`:
 // linear between the curve's keys, flat beyond its ends. Constant row indices only.
 float exposureCurve(Look l,float ev){
@@ -236,10 +245,48 @@ float3 sampleFroxel(Look l,float2 uv,float distance,out float3 trans){
     if(slice<1){trans=lerp(float3(1),trans,slice);light*=slice;}
     return light;
 }
-// Aerial perspective and height fog between the camera and `world`.
+// The near fog volume (look/volumetric.rs): slices on an exponential view-depth
+// distribution, depth = c (2^(t log2(1 + D/c)) - 1) for t in 0..1 (c volumetric.y, D
+// volumetric.x), tiled volumetricAtlas.x per atlas row.
+float nearDepth(Look l,float t){float c=l.volumetric.y;return c*(exp2(t*log2(1+l.volumetric.x/c))-1);}
+float nearSlice(Look l,float depth){float c=l.volumetric.y;return log2(1+max(depth,0)/c)/log2(1+l.volumetric.x/c);}
+// Texel origin of slice `z` in a near volume atlas.
+uint2 nearTile(Look l,uint z){uint columns=l.volumetricAtlas.x;return uint2(z%columns,z/columns)*l.volumetricGrid.xy;}
+// Bilinear tap of slice `z` at froxel coordinates `xy` (texel units), clamped inside the
+// slice's tile so neighbouring slices never bleed in.
+float4 nearTap(Look l,uint image,uint z,float2 xy){
+    uint3 grid=l.volumetricGrid.xyz;uint columns=l.volumetricAtlas.x;
+    float2 size=float2(grid.xy)*float2(columns,(grid.z+columns-1)/columns);
+    return lut(image,(float2(nearTile(l,z))+clamp(xy,0.5,float2(grid.xy)-0.5))/size);
+}
+// Integrated in-scatter (rgb) and transmittance (a) from the camera to view depth
+// `depth` (at most the volume's distance) through render uv `uv`. Slices store their
+// far ends; between them the value interpolates linearly.
+float4 sampleNear(Frame f,Look l,float2 uv,float depth){
+    float2 xy=uv*float2(f.extent.xy)/float(l.volumetricGrid.w);uint slices=l.volumetricGrid.z,image=l.volumetricImages.z;
+    float s=nearSlice(l,depth)*slices;
+    if(s<1)return lerp(float4(0,0,0,1),nearTap(l,image,0,xy),s);
+    float z=min(s-1,float(slices-1));uint lo=uint(z),hi=min(lo+1,slices-1);
+    return lerp(nearTap(l,image,lo,xy),nearTap(l,image,hi,xy),frac(z));
+}
+// Aerial perspective and fog between the camera and `world`: on near volume frames
+// the volume up to its distance, and the coarse grid's segment behind it (which it
+// integrates from there), so the two compose exactly; else the coarse grid alone.
 float3 applyFog(Frame f,Look l,float3 colour,float3 world,float2 uv){
-    if((l.flags.y&(LOOK_PHYSICAL_SKY|LOOK_FOG))==0)return colour;
-    float3 trans;float3 light=sampleFroxel(l,uv,length(world-f.camera.xyz),trans);return colour*trans+light;
+    bool near=(l.flags.y&LOOK_VOLUMETRIC)!=0;
+    if((l.flags.y&(LOOK_PHYSICAL_SKY|LOOK_FOG))==0 && l.volumetricAtlas.z==0)return colour;
+    float3 offset=world-f.camera.xyz;float depth=dot(offset,f.forward.xyz);
+    if(!near||depth>l.volumetric.x){float3 trans;float3 light=sampleFroxel(l,uv,length(offset),trans);colour=colour*trans+light;}
+    if(near){float4 v=sampleNear(f,l,uv,depth);colour=colour*v.a+v.rgb;}
+    return colour;
+}
+// Fog over background radiance `c` seen along `d`: the whole froxel range over an
+// environment map; the physical sky carries its own aerial perspective, so only the
+// near volume (height fog, fog volumes and shafts in front of the sky) lies over it.
+float3 fogBackground(Frame f,Look l,float3 c,float3 d,float2 uv){
+    if(!physicalSky(l))return applyFog(f,l,c,f.camera.xyz+d*FOG_RANGE,uv);
+    if((l.flags.y&LOOK_VOLUMETRIC)!=0){float4 v=sampleNear(f,l,uv,l.volumetric.x);c=c*v.a+v.rgb;}
+    return c;
 }
 // Normal offset in texels for a surface at `nl` (cosine to the light) in the fine
 // maps (virtual sun pages, local faces): 1.5 facing the light, widening towards

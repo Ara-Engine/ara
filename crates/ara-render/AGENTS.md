@@ -60,12 +60,12 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   `entity_at` copies one texel on the UI queue; picks follow the displayed frame; hosts tag frames (`set_frame_tag`, `shown_frame_tag`) to draw overlays with the frame on screen. `set_outlines` (`renderer::outline`): editor selection outlines in live primary frames (selected rows into a mask without, then with, the depth test; composited after post, hidden parts faint). `wait_scene_frame` is for capture/shutdown.
   Same-queue passes share a submission; cross-queue edges and deferred helper boundaries retain GPU waits/timestamps. Synchronous `render`/`render_view` remain available.
 - `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer: physical sky LUTs and their IBL,
-  CSM-shadowed froxel fog, histogram or manual exposure (snaps to its meter on a reset and while new GI arrives;
+  fog (a coarse 64x36x32 grid to 4 km, `Fog.Froxels`; the volumetric near volume, `look::volumetric`: per-preset
+  froxels to `VolumetricFog::distance`, ambient/inject/integrate passes, reprojected history, `set_fog_volumes`), histogram or manual exposure (snaps to its meter on a reset and while new GI arrives;
   `exposure`/`seed_exposure` carry a converged exposure across views), bloom, grading and the display curve,
   plus volume lens effects (`look::lens`): display lift/gamma/gain and chromatic aberration in the post pass,
   half-res gather DoF before TAA (TAA reads `DOF_COMPOSITE`), McGuire motion blur as the `look_post_motion`
-  variant, AO/SSR tuning `OverPreset`. Their images allocate with the quality budget, never on a look edit.
-  Hosts map `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity). The sky IBL,
+  variant, AO/SSR tuning `OverPreset`. Their images allocate with the quality budget, never on a look edit. Hosts map `SceneLook` with `FrameEnvironment::raster` (ara-render-fidelity). The sky IBL,
   far map, cascades and horizon sun map rebuild on any sun change past `SUN_HOLD` (noise only): once
   something animates the sun, add a threshold with an old/new crossfade.
 - `look::gi::ProbeSurfaces` (`Renderer::set_probe_surfaces`): probe GI over a `ProbeLayout` pool (up to four lattices, finest first, blended front to back by coverage so a fine lattice never seams into the next; `giPoolLobes`). One-time 8x8 oct surface caches;
@@ -113,7 +113,7 @@ Material AO (glTF occlusion maps) scales ambient light only without screen AO + 
 Local light lists are tiled 16x16 (`scene::MAX_LOCAL_LIGHTS` 256 per scene, the
 first `TILE_LIGHTS` 128 per tile); `look::local` shadows the brightest few in view
 (cube or spot faces, one cached D32 atlas). Spot lumens are point-equivalent, as in
-the path tracer; `Light::parameters.z` softens the near field, `w` = 1 keeps it out of fog.
+the path tracer; `Light::parameters.z` softens the near field, `w` scales its fog scattering (0: none).
 
 Capture determinism resets history, fixes host tick/seed, disables jitter/history
 blending, locks exposure and renders the explicit settle count. No wall clock or

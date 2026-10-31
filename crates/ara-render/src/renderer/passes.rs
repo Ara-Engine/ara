@@ -364,6 +364,11 @@ impl Renderer {
         // Focus blur needs a perspective lens (an orthographic projection has no w).
         self.look.frame_dof = dof && lit && camera.projection.z_axis.w != 0.;
         self.look.frame_motion = motion && lit;
+        // The near fog volume needs a perspective view (froxels follow view depth).
+        self.look.begin_volumetric(
+            lit && camera.projection.z_axis.w != 0.,
+            self.targets.history.is_none(),
+        );
         // Edges come from the native draws (legacy content has none).
         self.look.frame_wire = mode.wire() && self.native.is_some();
         self.look.frame_overdraw = mode == ViewMode::Overdraw && self.native.is_some();
@@ -507,6 +512,7 @@ impl Renderer {
             look_frame.ao_images = self.look.ao_indices();
             self.look.ambient_rows(&mut look_frame);
         }
+        self.look.volumetric_rows(&mut look_frame);
         let contribution = self.look.look.grading.lut_contribution;
         if self.look.lut_size > 0 && contribution > 0. {
             look_frame.lut = [
@@ -874,6 +880,9 @@ impl Renderer {
         for (id, pass) in self.look.sky_passes(&mut graph, &look, &sky_shared, sun) {
             declare(id, Recipe::Look(pass));
         }
+        if let Some((id, pass)) = self.look.fog_pass(&mut graph, &look, &sky_shared) {
+            declare(id, Recipe::Look(pass));
+        }
         let mut gather_reads = sky_shared.clone();
         gather_reads.extend([
             (ids[DEPTH], Access::ShaderRead),
@@ -900,6 +909,12 @@ impl Renderer {
         // between graphics/compute submissions and a final ownership handoff.
         let culling = graph.pass("TiledLightCull", Queue::Graphics, [(tile, Access::Storage)]);
         declare(culling, Recipe::Tile);
+        // The near fog volume (look::volumetric) before lighting samples it.
+        let mut fog_reads = sky_shared.clone();
+        fog_reads.extend(self.look.fog_light_reads(&look));
+        for (id, pass) in self.look.volumetric_passes(&mut graph, &look, &fog_reads) {
+            declare(id, Recipe::Look(pass));
+        }
         let reflected = self.look.quality.reflections.is_some() && self.targets.history.is_some();
         let look_reads = self.look.lighting_reads(&look, reflected);
         // Reflection captures relight against their bakes; then shading reads them.

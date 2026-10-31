@@ -262,7 +262,7 @@ fn a_moved_caster_patches_a_local_face_to_what_a_whole_redraw_draws() -> Result<
         position_range: [0., 3., 0., 10.],
         color_lumens: [1., 1., 1., 2000.],
         direction_outer: [0., -1., 0., 0.],
-        parameters: [0., 1., 0., 0.],
+        parameters: [0., 1., 0., 1.],
     });
     let quality = crate::look::Quality {
         local_shadows: Some(crate::look::LocalShadows {
