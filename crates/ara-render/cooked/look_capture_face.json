@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094",
+  "key": "df2fa71c857e23b57b4493d90ad3ba96babac774f3d31876672952fcabb07802",
   "stages": [
     {
-      "dxil": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/look_capture_face/captureFaceMain.dxil",
+      "dxil": "df2fa71c857e23b57b4493d90ad3ba96babac774f3d31876672952fcabb07802/look_capture_face/captureFaceMain.dxil",
       "dxil_hash": "72e03a45c0fc230aa40c35b81ad24f1fb9dd003083796820f090aac61cf96b31",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/look_capture_face/captureFaceMain.metallib",
+        "metallib": "df2fa71c857e23b57b4493d90ad3ba96babac774f3d31876672952fcabb07802/look_capture_face/captureFaceMain.metallib",
         "metallib_hash": "087e382f371ecf0c3365b7beae9556aa5cee0c18cadf5ff76ceec11a05d7266c",
-        "reflection": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/look_capture_face/captureFaceMain.metal.json",
+        "reflection": "df2fa71c857e23b57b4493d90ad3ba96babac774f3d31876672952fcabb07802/look_capture_face/captureFaceMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "captureFaceMain",
-      "spirv": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/look_capture_face/captureFaceMain.spv",
+      "spirv": "df2fa71c857e23b57b4493d90ad3ba96babac774f3d31876672952fcabb07802/look_capture_face/captureFaceMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "dc3fe6677f5dca49b02359fc4bf0be250c16e835a3a2056c4edc59bdd7525341",
+      "spirv_hash": "b1a0b3cc8fcc2aeebe9f10d3d278eaadc6bb54e7ecddb266ad64e2ffc10a48ce",
       "stage": "compute"
     }
   ],

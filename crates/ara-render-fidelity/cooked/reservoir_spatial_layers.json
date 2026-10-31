@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7",
+  "key": "ce09810721236c9721bc45f320afe3a1ca0e410d4a15cc967a5e0908d81b2616",
   "stages": [
     {
-      "dxil": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/reservoir_spatial_layers/reservoirSpatialLayers.dxil",
-      "dxil_hash": "f535932ce564e7aa20d469ad594dc80a562722ce701bcade96f14db0b3e0ea5c",
+      "dxil": "ce09810721236c9721bc45f320afe3a1ca0e410d4a15cc967a5e0908d81b2616/reservoir_spatial_layers/reservoirSpatialLayers.dxil",
+      "dxil_hash": "ce8a1aeb04d2e98998e51f2b1738115601bd668a4024a7f34219e1a0747c8484",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/reservoir_spatial_layers/reservoirSpatialLayers.metallib",
-        "metallib_hash": "3a0a3c59f33318cfa73184a0738e9d841f62e823ce5cf8bd069801bf1553637c",
-        "reflection": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/reservoir_spatial_layers/reservoirSpatialLayers.metal.json",
+        "metallib": "ce09810721236c9721bc45f320afe3a1ca0e410d4a15cc967a5e0908d81b2616/reservoir_spatial_layers/reservoirSpatialLayers.metallib",
+        "metallib_hash": "cfce08ad7e14e86ca5cdab0e11fd1933c6dc1c17cba55e650bcbff9cce770fd0",
+        "reflection": "ce09810721236c9721bc45f320afe3a1ca0e410d4a15cc967a5e0908d81b2616/reservoir_spatial_layers/reservoirSpatialLayers.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "reservoirSpatialLayers",
-      "spirv": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/reservoir_spatial_layers/reservoirSpatialLayers.spv",
+      "spirv": "ce09810721236c9721bc45f320afe3a1ca0e410d4a15cc967a5e0908d81b2616/reservoir_spatial_layers/reservoirSpatialLayers.spv",
       "spirv_entry": "main",
-      "spirv_hash": "790d93d3a8498bad9930c92eca0af8fca7d074cfd908edc913d491007de37824",
+      "spirv_hash": "3406b31201e1e9415cf05544fda4f6a8c81524f06c28f4b3ed2f00e7c57e949c",
       "stage": "compute"
     }
   ],
