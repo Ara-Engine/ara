@@ -1073,6 +1073,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-graphics-settings"
+version = "0.0.1-alpha"
+dependencies = [
+ "ara-diag",
+ "ara-json",
+ "bevy_ecs",
+ "blake3",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "ara-host"
 version = "0.0.1-alpha"
 dependencies = [
@@ -1920,6 +1933,7 @@ dependencies = [
  "ara-doc",
  "ara-foliage",
  "ara-gpu",
+ "ara-graphics-settings",
  "ara-importers",
  "ara-input",
  "ara-landscape",
@@ -2076,6 +2090,7 @@ dependencies = [
  "ara-components",
  "ara-diag",
  "ara-doc",
+ "ara-graphics-settings",
  "ara-json",
  "ara-profile",
  "ara-runtime",
