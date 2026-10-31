@@ -122,6 +122,7 @@ pub struct Embedded {
     pub(crate) game_ui: Option<crate::game_ui::Surface>,
     ring: ExportRing,
     interval: Duration,
+    owner_interval: Duration,
     last: Option<Instant>,
     /// Render the next frame even if nothing paced it (new surface).
     dirty: bool,
@@ -174,6 +175,7 @@ impl Embedded {
                 game_ui: None,
                 ring,
                 interval: Duration::from_secs_f64(1.0 / f64::from(fps)),
+                owner_interval: Duration::from_secs_f64(1.0 / f64::from(fps)),
                 last: None,
                 dirty: true,
                 pending: None,
@@ -261,6 +263,16 @@ impl Embedded {
     pub fn due(&self, now: Instant) -> bool {
         self.ring.free() > 0
             && (self.dirty || self.entering() || self.last.is_none_or(|l| now - l >= self.interval))
+    }
+
+    /// Apply the local user's cap to this embedded surface cadence.
+    pub(crate) fn set_graphics_cap(&mut self, cap: u32) {
+        self.interval = if cap == 0 {
+            self.owner_interval
+        } else {
+            self.owner_interval
+                .max(Duration::from_secs_f64(1. / f64::from(cap.clamp(15, 1000))))
+        };
     }
 
     /// Renders a due `frame` into a free slot; the notice to send once it returns.

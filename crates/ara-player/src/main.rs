@@ -11,6 +11,7 @@ mod editor_control;
 mod embed;
 mod game_app;
 mod game_ui;
+mod graphics;
 mod group;
 #[cfg(all(test, windows))]
 mod icon_tests;
@@ -44,6 +45,8 @@ use world::{PendingPatch, World};
 #[command(name = "ara-player", about = "Ara game player and editor Play process")]
 struct Args {
     #[command(flatten)]
+    graphics: graphics::Options,
+    #[command(flatten)]
     game: game_app::Options,
     /// Owner's live-link port on 127.0.0.1.
     #[arg(long)]
@@ -55,17 +58,20 @@ struct Args {
     #[arg(long)]
     window: bool,
     /// Window or capture size, `WIDTHxHEIGHT`.
-    #[arg(long, default_value = "1280x720")]
-    size: String,
+    #[arg(long)]
+    size: Option<String>,
     /// Persistent pipeline-cache directory.
     #[arg(long, default_value_os_t = default_gpu_cache())]
     gpu_cache: PathBuf,
     /// Override project quality: auto, low, medium, high or epic.
     #[arg(long)]
     quality: Option<QualityChoice>,
-    /// Experimental hardware ray tracing; omit to use the project setting.
+    /// Hardware ray tracing opt-in; omit to use saved user/project preferences.
     #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     ray_tracing: Option<bool>,
+    /// Internal warm-up policy, distinct from a user's persistent graphics preference.
+    #[arg(long, hide = true, default_value_t = false, action = clap::ArgAction::Set)]
+    prewarm_ray_tracing: bool,
     /// Internal pool warm-up; only services with a Surfaces attachment request it.
     #[arg(long, hide = true)]
     prewarm_graphics: bool,
@@ -212,7 +218,7 @@ fn run(args: Args, launched: Instant) -> Result<()> {
         return standalone::run(args, launched);
     }
     let init = launched;
-    let size = parse_size(&args.size)?;
+    let size = parse_size(args.size.as_deref().unwrap_or("1280x720"))?;
     let token = std::env::var(TOKEN_ENV).context("ARA_PLAY_TOKEN is not set")?;
     let prewarmed = match std::env::var("ARA_PLAY_SCRIPTS") {
         Ok(text) => {
@@ -246,14 +252,14 @@ fn run(args: Args, launched: Instant) -> Result<()> {
         } else {
             device::Windowed::open
         };
-        let (window, presenter) = open(&args.name, size, &args.gpu_cache, args.quality.unwrap_or_default(), RenderOptions { ray_tracing: args.ray_tracing.unwrap_or(false) })
+        let (window, presenter) = open(&args.name, size, &args.gpu_cache, args.quality.unwrap_or_default(), RenderOptions { ray_tracing: args.ray_tracing.unwrap_or(args.prewarm_ray_tracing) })
             .context("ARA_GPU_BACKEND: cannot open the player renderer; run `ara doctor` and check the Vulkan loader, Vulkan 1.3 GPU/driver, and validation layers")?;
         (Some(window), Some(presenter))
     } else if args.prewarm_graphics {
         let presenter = embed::prewarm(
             &args.gpu_cache,
             RenderOptions {
-                ray_tracing: args.ray_tracing.unwrap_or(false),
+                ray_tracing: args.ray_tracing.unwrap_or(args.prewarm_ray_tracing),
             },
         )?;
         (None, Some(presenter))
@@ -277,7 +283,7 @@ fn run(args: Args, launched: Instant) -> Result<()> {
     let mut player = Player {
         quality: args.quality.unwrap_or_default(),
         render_options: RenderOptions {
-            ray_tracing: args.ray_tracing.unwrap_or(false),
+            ray_tracing: args.ray_tracing.unwrap_or(args.prewarm_ray_tracing),
         },
         render_debug: ara_render::RenderDebug::default(),
         link,
@@ -469,6 +475,15 @@ impl Player {
             for patch in due {
                 let result = serde_json::to_value(world.patched(patch.tick, &patch.sets))?;
                 self.link.respond(patch.id, Ok(result))?;
+            }
+            world.sync_graphics(self.presenter.as_mut(), self.window.as_mut())?;
+            if let Some(embed) = &mut self.embed {
+                let settings = world
+                    .runtime
+                    .world()
+                    .resource::<ara_graphics_settings::Service>()
+                    .state();
+                embed.set_graphics_cap(settings.applied.frame_rate_cap);
             }
             // Windowed players present every iteration (vsync paces them), embedded
             // ones when a frame is due (their frame cap), headless ones never.
@@ -1024,6 +1039,16 @@ impl Player {
                 world.watch(&watch.paths, watch.every)?;
                 json!({"watching": watch.paths.len()})
             }
+            method::GRAPHICS => {
+                world.sync_graphics(self.presenter.as_mut(), self.window.as_mut())?;
+                let request = parse(
+                    params
+                        .get("request")
+                        .cloned()
+                        .unwrap_or_else(|| json!({"operation":"get"})),
+                )?;
+                world.graphics(request, self.presenter.as_ref())?
+            }
             method::CAPTURE => {
                 let params: ara_play::CaptureParams = parse(params)?;
                 if params.path.is_some() {
@@ -1039,16 +1064,29 @@ impl Player {
                 let presenter2d = self
                     .presenter2d
                     .get_or_insert_with(|| Presenter2d::new(&self.args.gpu_cache));
+                world.sync_graphics(self.presenter.as_mut(), self.window.as_mut())?;
                 if let Some(presenter) = &mut self.presenter {
-                    presenter.set_quality(params.preset.map(Into::into).unwrap_or(self.quality));
+                    if let Some(preset) = params.preset {
+                        presenter.set_quality(preset.into());
+                    }
                     presenter.set_debug(self.render_debug);
                 }
-                serde_json::to_value(world.capture(
+                let captured = world.capture(
                     &params,
                     self.presenter.as_mut(),
                     Some(presenter2d),
                     &mut self.frame,
-                )?)?
+                );
+                if params.preset.is_some()
+                    && let Some(presenter) = &mut self.presenter
+                {
+                    let service = world
+                        .runtime
+                        .world()
+                        .resource::<ara_graphics_settings::Service>();
+                    presenter.set_graphics_settings(&service.state().applied);
+                }
+                serde_json::to_value(captured?)?
             }
             method::RECORD => {
                 world.runtime.play_mut().record()?;
@@ -1135,6 +1173,13 @@ impl Player {
             self.prewarmed.take(),
         )?;
         world.imports(self.pending_imports.take().unwrap_or_default());
+        world.configure_graphics(
+            &self.args.graphics,
+            self.args.quality,
+            self.args.ray_tracing,
+            self.args.size.as_deref(),
+            self.args.standalone.windowed,
+        )?;
         let mut handshake = None;
         if start.role == ara_play::Role::Client {
             let t = Instant::now();
@@ -1171,6 +1216,7 @@ impl Player {
                 Err(error) => eprintln!("ara-player: no audio: {error:#}"),
             }
         }
+        world.sync_graphics(self.presenter.as_mut(), self.window.as_mut())?;
         let mut started = world.start(start.start_paused, decode_ms + build_ms)?;
         for diagnostic in world.runtime.asset_diagnostics() {
             self.link.notify(

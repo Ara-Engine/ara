@@ -12,7 +12,9 @@ use std::{
     marker::PhantomData,
 };
 mod game;
+mod graphics;
 pub use game::GameWindowMode;
+pub use graphics::MonitorMode;
 
 /// Normalized native events. The simulation host maps input into tick actions.
 #[derive(Debug)]

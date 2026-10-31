@@ -15,6 +15,7 @@ pub mod geometry;
 mod gi;
 mod gi_cpu;
 mod gpu_costs;
+pub mod graphics;
 pub use gpu_costs::GpuFrameCosts;
 pub mod landscape;
 #[cfg(test)]
@@ -94,6 +95,8 @@ pub struct PresentStats {
 
 /// Owns the renderer and the per-draw upload state.
 pub struct Presenter {
+    graphics: Option<ara_graphics_settings::Settings>,
+    graphics_plan_key: Option<([u32; 2], bool, bool, Option<u64>)>,
     live: Option<presentation::Live>,
     raster: Option<RasterView>,
     published: Option<presentation::Published>,
@@ -223,6 +226,8 @@ impl Presenter {
             choice: QualityChoice::Auto,
             plan: None,
             published_quality: None,
+            graphics: None,
+            graphics_plan_key: None,
             failure: None,
             renderer: None,
             initial_device: None,
@@ -316,8 +321,21 @@ impl Presenter {
         &self,
         frame: &RenderFrame,
     ) -> ara_render_fidelity::environment::FrameEnvironment {
-        self.look_override
-            .unwrap_or_else(|| environment_locked(frame, self.debug.exposure))
+        let mut look = self
+            .look_override
+            .unwrap_or_else(|| environment_locked(frame, self.debug.exposure));
+        if let Some(settings) = &self.graphics {
+            if !settings.bloom {
+                look.bloom = 0.;
+            }
+            if !settings.motion_blur {
+                look.lens.motion_blur = 0.;
+            }
+            if !settings.depth_of_field {
+                look.lens.depth_of_field = None;
+            }
+        }
+        look
     }
 
     /// Uploads `frame`'s content (rebuilding only on structural change). A rebuild

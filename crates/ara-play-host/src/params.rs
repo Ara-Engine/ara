@@ -57,6 +57,22 @@ pub struct WorldParams {
     pub world: Option<String>,
 }
 
+/// Local user graphics requests, independently addressed to one rendering player.
+#[derive(Debug, Schema, Deserialize)]
+#[ara(params)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PlayGraphicsParams {
+    /// Calling session handle.
+    pub session: String,
+    /// Active world; absent selects the latest world.
+    pub world: Option<String>,
+    /// Player index; absent selects the authority. Preferences are never broadcast.
+    pub player: Option<u32>,
+    /// Graphics operation: get/set/apply/revert/resetToDefaults/save/autoDetect;
+    /// set carries a complete settings candidate, validated by the player service.
+    pub request: Option<Value>,
+}
+
 /// Params of `play.step`.
 #[derive(Debug, Schema, Deserialize)]
 #[ara(params)]

@@ -20,7 +20,7 @@ pub(crate) use describe::Fnv;
 pub use describe::{AbiConst, AbiField, AbiFn, AbiStruct, AbiTable};
 
 /// Bumped on any incompatible change to the semantics of the tables.
-pub const ABI_VERSION: u32 = 4;
+pub const ABI_VERSION: u32 = 5;
 
 abi_structs! { PUBLIC_STRUCTS;
     /// The fixed simulation tick that every system, behaviour and command sees.
@@ -321,6 +321,11 @@ abi_table! {
         fn character_stop(ctx: *mut c_void, entity: u64);
         /// Queues a named boolean animator parameter after exclusive gameplay callbacks.
         fn animation_bool(ctx: *mut c_void, entity: u64, name: *const u8, len: u32, value: u32);
+        /// Typed user graphics request/response JSON, exclusive callbacks only.
+        /// A capacity below 512 KiB returns -524288 without executing a mutation.
+        fn graphics(ctx: *mut c_void, request: *const u8, len: u32, out: *mut u8, cap: u32) -> i32;
+        /// Accepted graphics revision, or zero outside a host-owned exclusive scope.
+        fn graphics_revision(ctx: *mut c_void) -> u64;
     }
 }
 

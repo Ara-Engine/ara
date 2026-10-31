@@ -55,6 +55,9 @@ are central (`Directory.Packages.props`). Warnings are errors.
 
 - `Ara.Runtime` stays AOT-safe (`IsAotCompatible`): no reflection, no dynamic code. Anything
   that loads assemblies or applies deltas goes in `Ara.Host`.
+- `GraphicsSettings` is the typed user-options API; `GraphicsOptions` contains immutable
+  candidates. Host callbacks do persistence; game modules never need filesystem access.
+  `Applied` subscriptions belong to the active host/module and clear on L3/shutdown.
 - Never edit `src/Ara.Runtime/Generated/*.g.cs`; change the Rust ABI or schema and run
   `ARA_UPDATE_GENERATED=1 cargo test -p ara-script --test generated`.
 - Every `[UnmanagedCallersOnly]` entry point catches everything.

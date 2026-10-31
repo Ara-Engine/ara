@@ -1294,6 +1294,7 @@ impl Service for PlayService {
             play(Method::new::<PlayRenderDebugParams>(db, "play.renderDebug", "Turn ambient occlusion, shadows or temporal jitter off (or full resolution on) in every player of a world, from its next frame, to trace a rendering artifact."), "renderDebug"),
             play(Method::new::<PlayInspectParams>(db, "play.inspect", "Read an entity's runtime components.").read_only(), "inspect"),
             play(Method::new::<PlayReadParams>(db, "play.read", "Read entity.Component.field values at the current tick.").read_only(), "read"),
+            play(Method::new::<PlayGraphicsParams>(db, "play.graphics", "Query/set/apply/revert/reset/save local graphics preferences and GPU/display modes. Never broadcasts to other players."), "graphics"),
             play(Method::new::<PlayPatchParams>(db, "play.patch", "Live-edit authored values; applied at the next tick boundary and acknowledged after it."), "patch"),
             play(Method::new::<PlayViewParams>(db,"play.view","Set this player's spectator camera without editing authored cameras; returns a nonblocking Host job."),"view"),
             play(Method::new::<PlayControlParams>(db,"play.control","Possess or eject a controllable actor through typed ops at one authority boundary; returns a Host job."),"control"),
@@ -1455,9 +1456,10 @@ impl Service for PlayService {
                     "play.pause" | "play.resume" | "play.timescale" | "play.input"
                     | "play.step" | "play.renderDebug" => (method, true),
                     "play.patch" => (method, false),
-                    "play.inspect" | "play.read" | "play.capture" | "play.watch" | "play.until"
-                    | "play.record" | "play.recording" | "play.replay" | "play.diff"
-                    | "play.debug.crash" | "play.commands" | "play.captureAudio" => (method, false),
+                    "play.graphics" | "play.inspect" | "play.read" | "play.capture"
+                    | "play.watch" | "play.until" | "play.record" | "play.recording"
+                    | "play.replay" | "play.diff" | "play.debug.crash" | "play.commands"
+                    | "play.captureAudio" => (method, false),
                     // C# commands mutate the world: every player of it runs them.
                     "play.command" => (method, true),
                     other => {

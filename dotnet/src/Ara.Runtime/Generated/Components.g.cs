@@ -1265,9 +1265,9 @@ public enum ColliderKind2d : uint
 }
 
 /// <summary>
-/// Procedural sky radiance and camera exposure. The first in stable-ID order wins.
+/// Procedural sky radiance and camera exposure. The first in stable-ID order wins. Above the horizon the sky is <c>lerp(sky, horizon, m^skyFalloff) + glow × m^glowFalloff</c> with m = 1 − sin(elevation), as Unreal's sky-dome materials grade it; below it fades to <c>ground</c> within 15°.
 /// </summary>
-[StructLayout(LayoutKind.Explicit, Size = 56)]
+[StructLayout(LayoutKind.Explicit, Size = 84)]
 [EngineComponent("Environment", Module = "render")]
 public partial struct Environment : IComponent<Environment>
 {
@@ -1280,7 +1280,7 @@ public partial struct Environment : IComponent<Environment>
     [FieldOffset(0), Default(0.22, 0.32, 0.6, 1)]
     public Color Sky;
     /// <summary>
-    /// Horizon sky color (linear).
+    /// Sky color at the horizon (linear).
     /// </summary>
     /// <remarks>
     /// Default: [0.95,0.62,0.4,1].
@@ -1288,12 +1288,36 @@ public partial struct Environment : IComponent<Environment>
     [FieldOffset(16), Default(0.95, 0.62, 0.4, 1)]
     public Color Horizon;
     /// <summary>
+    /// How quickly the zenith color gives way to the horizon color toward the horizon: higher keeps the zenith color lower down.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0.1, 64]. Default: 3.
+    /// </remarks>
+    [FieldOffset(32), Range(0.1, 64), Default(3)]
+    public float SkyFalloff;
+    /// <summary>
+    /// Extra light added in a band just above the horizon (linear; black for none), such as a sunset glow.
+    /// </summary>
+    /// <remarks>
+    /// Default: [0,0,0,1].
+    /// </remarks>
+    [FieldOffset(36), Default(0, 0, 0, 1)]
+    public Color Glow;
+    /// <summary>
+    /// Narrowness of the <c>glow</c> band: higher hugs the horizon more tightly.
+    /// </summary>
+    /// <remarks>
+    /// Range: [0.1, 64]. Default: 10.
+    /// </remarks>
+    [FieldOffset(52), Range(0.1, 64), Default(10)]
+    public float GlowFalloff;
+    /// <summary>
     /// Ground color seen below the horizon (linear).
     /// </summary>
     /// <remarks>
     /// Default: [0.18,0.16,0.14,1].
     /// </remarks>
-    [FieldOffset(32), Default(0.18, 0.16, 0.14, 1)]
+    [FieldOffset(56), Default(0.18, 0.16, 0.14, 1)]
     public Color Ground;
     /// <summary>
     /// Sky radiance scale in candela per square metre.
@@ -1301,15 +1325,23 @@ public partial struct Environment : IComponent<Environment>
     /// <remarks>
     /// Unit: cd. Range: [0, ∞]. Default: 900.
     /// </remarks>
-    [FieldOffset(48), Unit("cd"), Min(0), Default(900)]
+    [FieldOffset(72), Unit("cd"), Min(0), Default(900)]
     public float Intensity;
+    /// <summary>
+    /// How strongly the sky lights the scene (ambient light, reflections, bounce and fog) relative to how bright it looks; 1 is physical. Lower it to calm sky fill indoors without dimming the sky itself (Unreal's sky light intensity).
+    /// </summary>
+    /// <remarks>
+    /// Range: [0, 16]. Default: 1.
+    /// </remarks>
+    [FieldOffset(76), Range(0, 16), Default(1)]
+    public float SkyLight;
     /// <summary>
     /// Linear camera exposure multiplier, applied before tone mapping.
     /// </summary>
     /// <remarks>
     /// Range: [1e-7, ∞]. Default: 0.0015.
     /// </remarks>
-    [FieldOffset(52), Min(0.0000001), Default(0.0015)]
+    [FieldOffset(80), Min(0.0000001), Default(0.0015)]
     public float Exposure;
     /// <summary>Stable engine component index.</summary>
     public static uint TypeIndex => 19;
@@ -1319,6 +1351,30 @@ public partial struct Environment : IComponent<Environment>
     public static void Insert(in Commands commands, Entity entity, in Environment value) => commands.InsertJson(entity, TypeIndex, EngineAccess.Encode(value, EngineValueCodecs.WriteEnvironment));
     /// <inheritdoc/>
     public static bool Contains(Entity entity) => Host.ComponentHas(entity.Bits, TypeIndex);
+}
+
+/// <summary>
+/// One key of an exposure compensation curve: at scene brightness <c>ev100</c> (the metered EV100), add <c>stops</c> of compensation.
+/// </summary>
+[StructLayout(LayoutKind.Explicit, Size = 8)]
+public partial struct ExposureKey
+{
+    /// <summary>
+    /// Metered scene brightness (EV100) this key applies at.
+    /// </summary>
+    /// <remarks>
+    /// Range: [-10, 24]. Default: 0.
+    /// </remarks>
+    [FieldOffset(0), Range(-10, 24), Default(0)]
+    public float Ev100;
+    /// <summary>
+    /// Compensation in stops at that brightness; +1 doubles the image brightness.
+    /// </summary>
+    /// <remarks>
+    /// Range: [-8, 8]. Default: 0.
+    /// </remarks>
+    [FieldOffset(4), Range(-8, 8), Default(0)]
+    public float Stops;
 }
 
 /// <summary>
@@ -2031,6 +2087,14 @@ public partial struct MeshRenderer : IComponent<MeshRenderer>
     /// </remarks>
     [Default(Json = "[]")]
     public string?[] EmissiveMaterials;
+    /// <summary>
+    /// Whether this geometry blocks light: off, it is still drawn, reflected and bounces light, but casts no shadow. Model nodes whose glTF <c>extras</c> set <c>castShadows: false</c> never cast, whatever this says.
+    /// </summary>
+    /// <remarks>
+    /// Default: true.
+    /// </remarks>
+    [Default(true)]
+    public bool CastShadows;
     /// <summary>Stable engine component index.</summary>
     public static uint TypeIndex => 26;
     /// <inheritdoc/>
@@ -2917,6 +2981,14 @@ public partial struct PostOverride
     [Range(0.1, 20), Default(Json = "null")]
     public float? AdaptationSpeed;
     /// <summary>
+    /// Extra compensation that follows the metered scene brightness (automatic exposure), as Unreal's exposure compensation curve: keys of scene EV100 and stops, linear between them and flat beyond the ends (at most eight). Lifting dark scenes more than bright ones keeps interiors readable without washing out daylight.
+    /// </summary>
+    /// <remarks>
+    /// Default: null.
+    /// </remarks>
+    [Default(Json = "null")]
+    public ExposureKey[]? CompensationCurve;
+    /// <summary>
     /// Display transform that compresses scene radiance into the screen's range.
     /// </summary>
     /// <remarks>
@@ -3166,7 +3238,7 @@ public partial struct PrimitiveMaterialOverride
 }
 
 /// <summary>
-/// An authored reflection probe (High and Epic): the renderer captures the lit scene around the entity into a six-face map, and smooth surfaces inside its box of influence reflect it, so mirrors and metals show the room around them, including what is off screen. The entity's Transform places the capture origin and orients and scales the box. Captures are derived runtime data (a recapture job; cached under <c>.ara/cache/probes</c>), never authored edits: a change to these settings, the geometry, materials, lighting or environment marks the capture stale, and the last valid capture stays in use until its replacement is published. Authored probes always capture at High and Epic; a scene without any gets automatic captures over its content only with the look-development opt-in <c>ARA_REFLECTION_CAPTURES=1</c>.
+/// An authored reflection probe (High and Epic): the renderer captures the lit scene around the entity into a six-face map, and smooth surfaces inside its box of influence reflect it, so mirrors and metals show the room around them, including what is off screen. The entity's Transform places the capture origin and orients and scales the box. Captures are derived runtime data (a recapture job; cached under <c>.ara/cache/probes</c>), never authored edits: a change to these settings, the geometry, materials, lighting or environment marks the capture stale, and the last valid capture stays in use until its replacement is published. Authored probes always capture at High and Epic; a scene without any places captures itself where its probe volume saw enclosed open space (<c>ARA_REFLECTION_CAPTURES=0</c> turns that off).
 /// </summary>
 [StructLayout(LayoutKind.Explicit, Size = 68)]
 [EngineComponent("ReflectionProbe", Module = "render")]
@@ -4499,14 +4571,14 @@ public static class EngineComponents
         "{\"grounded\":false,\"groundNormal\":[0,0]}",
         "{\"kind\":\"box\",\"center\":[0,0,0],\"halfExtents\":[0.5,0.5,0.5],\"radius\":0.5,\"halfHeight\":0.5,\"asset\":null,\"node\":null,\"primitive\":null,\"layer\":0,\"sensor\":false,\"friction\":0.6,\"restitution\":0}",
         "{\"kind\":\"box\",\"halfExtents\":[0.5,0.5],\"radius\":0.5,\"halfHeight\":0.5,\"points\":[],\"layer\":0,\"sensor\":false,\"friction\":0.6,\"restitution\":0}",
-        "{\"sky\":[0.22,0.32,0.6,1],\"horizon\":[0.95,0.62,0.4,1],\"ground\":[0.18,0.16,0.14,1],\"intensity\":900,\"exposure\":0.0015}",
+        "{\"sky\":[0.22,0.32,0.6,1],\"horizon\":[0.95,0.62,0.4,1],\"skyFalloff\":3,\"glow\":[0,0,0,1],\"glowFalloff\":10,\"ground\":[0.18,0.16,0.14,1],\"intensity\":900,\"skyLight\":1,\"exposure\":0.0015}",
         "{\"frames\":[],\"startTick\":0,\"looping\":false}",
         "{\"target\":null,\"distance\":5,\"height\":0.8,\"yaw\":0,\"pitch\":20,\"sensitivity\":2.5,\"player\":1}",
         "{\"density\":0.002,\"baseHeight\":0,\"falloff\":60,\"albedo\":[0.9,0.9,0.9,1],\"anisotropy\":0.3}",
         "{\"kind\":\"fixed\",\"connectedBody\":0,\"anchorA\":[0,0,0],\"anchorB\":[0,0,0],\"axis\":[1,0,0],\"normal\":[0,1,0],\"translationMin\":[0,0,0],\"translationMax\":[0,0,0],\"rotationMin\":[0,0,0],\"rotationMax\":[0,0,0]}",
         "{\"kind\":\"point\",\"color\":[1,1,1,1],\"intensity\":800,\"range\":10,\"innerAngle\":20,\"outerAngle\":30}",
         "{\"position\":[0,0,0],\"color\":[1,1,1],\"radius\":5,\"shadows\":false}",
-        "{\"shape\":\"box\",\"size\":[1,1,1],\"model\":null,\"node\":null,\"primitive\":null,\"materialOverrides\":[],\"color\":[1,1,1,1],\"roughness\":0.6,\"metallic\":0,\"emissive\":[0,0,0],\"emissiveEnabled\":true,\"emissiveStrength\":1,\"emissiveFactor\":null,\"emissiveMaterials\":[]}",
+        "{\"shape\":\"box\",\"size\":[1,1,1],\"model\":null,\"node\":null,\"primitive\":null,\"materialOverrides\":[],\"color\":[1,1,1,1],\"roughness\":0.6,\"metallic\":0,\"emissive\":[0,0,0],\"emissiveEnabled\":true,\"emissiveStrength\":1,\"emissiveFactor\":null,\"emissiveMaterials\":[],\"castShadows\":true}",
         "{\"music\":null,\"bus\":\"music\",\"intensity\":0,\"segment\":\"\"}",
         "{\"profile\":0,\"radius\":0.3,\"height\":1.8,\"maxSpeed\":3,\"acceleration\":8,\"areaMask\":65535,\"stoppingDistance\":0.1}",
         "{\"profile\":0,\"name\":\"\",\"radius\":0.3,\"height\":1.8,\"climb\":0.4,\"slope\":45,\"areaCosts\":[],\"areaMask\":65535}",
@@ -5468,8 +5540,12 @@ internal static class EngineValueCodecs
         {
             Sky = new Color(Field(v, "sky", "[0.22,0.32,0.6,1]")[0].GetSingle(), Field(v, "sky", "[0.22,0.32,0.6,1]")[1].GetSingle(), Field(v, "sky", "[0.22,0.32,0.6,1]")[2].GetSingle(), Field(v, "sky", "[0.22,0.32,0.6,1]")[3].GetSingle()),
             Horizon = new Color(Field(v, "horizon", "[0.95,0.62,0.4,1]")[0].GetSingle(), Field(v, "horizon", "[0.95,0.62,0.4,1]")[1].GetSingle(), Field(v, "horizon", "[0.95,0.62,0.4,1]")[2].GetSingle(), Field(v, "horizon", "[0.95,0.62,0.4,1]")[3].GetSingle()),
+            SkyFalloff = Field(v, "skyFalloff", "3").GetSingle(),
+            Glow = new Color(Field(v, "glow", "[0,0,0,1]")[0].GetSingle(), Field(v, "glow", "[0,0,0,1]")[1].GetSingle(), Field(v, "glow", "[0,0,0,1]")[2].GetSingle(), Field(v, "glow", "[0,0,0,1]")[3].GetSingle()),
+            GlowFalloff = Field(v, "glowFalloff", "10").GetSingle(),
             Ground = new Color(Field(v, "ground", "[0.18,0.16,0.14,1]")[0].GetSingle(), Field(v, "ground", "[0.18,0.16,0.14,1]")[1].GetSingle(), Field(v, "ground", "[0.18,0.16,0.14,1]")[2].GetSingle(), Field(v, "ground", "[0.18,0.16,0.14,1]")[3].GetSingle()),
             Intensity = Field(v, "intensity", "900").GetSingle(),
+            SkyLight = Field(v, "skyLight", "1").GetSingle(),
             Exposure = Field(v, "exposure", "0.0015").GetSingle(),
         };
     internal static void WriteEnvironment(Utf8JsonWriter w, Environment v)
@@ -5493,6 +5569,23 @@ internal static class EngineValueCodecs
         WriteFloat(w, v.Horizon.A);
         w.WriteEndArray();
         }
+        w.WritePropertyName("skyFalloff");
+        {
+        WriteFloat(w, v.SkyFalloff);
+        }
+        w.WritePropertyName("glow");
+        {
+        w.WriteStartArray();
+        WriteFloat(w, v.Glow.R);
+        WriteFloat(w, v.Glow.G);
+        WriteFloat(w, v.Glow.B);
+        WriteFloat(w, v.Glow.A);
+        w.WriteEndArray();
+        }
+        w.WritePropertyName("glowFalloff");
+        {
+        WriteFloat(w, v.GlowFalloff);
+        }
         w.WritePropertyName("ground");
         {
         w.WriteStartArray();
@@ -5506,9 +5599,32 @@ internal static class EngineValueCodecs
         {
         WriteFloat(w, v.Intensity);
         }
+        w.WritePropertyName("skyLight");
+        {
+        WriteFloat(w, v.SkyLight);
+        }
         w.WritePropertyName("exposure");
         {
         WriteFloat(w, v.Exposure);
+        }
+        w.WriteEndObject();
+    }
+    internal static ExposureKey ReadExposureKey(JsonElement v)
+        => new()
+        {
+            Ev100 = Field(v, "ev100", "0").GetSingle(),
+            Stops = Field(v, "stops", "0").GetSingle(),
+        };
+    internal static void WriteExposureKey(Utf8JsonWriter w, ExposureKey v)
+    {
+        w.WriteStartObject();
+        w.WritePropertyName("ev100");
+        {
+        WriteFloat(w, v.Ev100);
+        }
+        w.WritePropertyName("stops");
+        {
+        WriteFloat(w, v.Stops);
         }
         w.WriteEndObject();
     }
@@ -5970,6 +6086,7 @@ internal static class EngineValueCodecs
             EmissiveStrength = Field(v, "emissiveStrength", "1").GetSingle(),
             EmissiveFactor = Field(v, "emissiveFactor", "null").ValueKind == JsonValueKind.Null ? null : (Vector3?)(new Vector3(Field(v, "emissiveFactor", "null")[0].GetSingle(), Field(v, "emissiveFactor", "null")[1].GetSingle(), Field(v, "emissiveFactor", "null")[2].GetSingle())),
             EmissiveMaterials = Field(v, "emissiveMaterials", "[]").EnumerateArray().Select(static item0 => item0.ValueKind == JsonValueKind.Null ? null : item0.GetString()).ToArray(),
+            CastShadows = Field(v, "castShadows", "true").GetBoolean(),
         };
     internal static void WriteMeshRenderer(Utf8JsonWriter w, MeshRenderer v)
     {
@@ -6068,6 +6185,10 @@ internal static class EngineValueCodecs
         w.WriteStringValue(item0);
         }
         w.WriteEndArray();
+        }
+        w.WritePropertyName("castShadows");
+        {
+        w.WriteBooleanValue(v.CastShadows);
         }
         w.WriteEndObject();
     }
@@ -6636,6 +6757,7 @@ internal static class EngineValueCodecs
             MinEv100 = Field(v, "minEv100", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "minEv100", "null").GetSingle()),
             MaxEv100 = Field(v, "maxEv100", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "maxEv100", "null").GetSingle()),
             AdaptationSpeed = Field(v, "adaptationSpeed", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "adaptationSpeed", "null").GetSingle()),
+            CompensationCurve = Field(v, "compensationCurve", "null").ValueKind == JsonValueKind.Null ? null : (ExposureKey[]?)(Field(v, "compensationCurve", "null").EnumerateArray().Select(static item1 => ReadExposureKey(item1)).ToArray()),
             ToneMapping = Field(v, "toneMapping", "null").ValueKind == JsonValueKind.Null ? null : (ToneMapping?)(ReadToneMapping(Field(v, "toneMapping", "null"))),
             Bloom = Field(v, "bloom", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "bloom", "null").GetSingle()),
             WhiteBalance = Field(v, "whiteBalance", "null").ValueKind == JsonValueKind.Null ? null : (float?)(Field(v, "whiteBalance", "null").GetSingle()),
@@ -6705,6 +6827,18 @@ internal static class EngineValueCodecs
         if (v.AdaptationSpeed is { } option0)
         {
         WriteFloat(w, option0);
+        } else w.WriteNullValue();
+        }
+        w.WritePropertyName("compensationCurve");
+        {
+        if (v.CompensationCurve is { } option0)
+        {
+        w.WriteStartArray();
+        if (option0 is not null) foreach (var item1 in option0)
+        {
+        WriteExposureKey(w, item1);
+        }
+        w.WriteEndArray();
         } else w.WriteNullValue();
         }
         w.WritePropertyName("toneMapping");

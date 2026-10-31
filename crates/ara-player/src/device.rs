@@ -22,6 +22,9 @@ const ESCAPE: i32 = 41;
 
 /// The player's window and device-input state.
 pub struct Windowed {
+    vsync: bool,
+    frame_rate_cap: u32,
+    last_graphics_frame: Option<Instant>,
     pub(crate) game_ui: Option<crate::game_ui::Surface>,
     window: Window,
     present: Option<Present>,
@@ -66,6 +69,58 @@ pub fn warm_frame() -> RenderFrame {
 }
 
 impl Windowed {
+    pub(crate) fn graphics_display_available(&self) -> bool {
+        !self.hidden && self.present_enabled
+    }
+    pub(crate) fn current_monitor(&self) -> u32 {
+        self.window.current_monitor()
+    }
+    pub(crate) fn graphics_modes(&self) -> Result<Vec<ara_graphics_settings::DisplayMode>> {
+        Ok(self
+            .window
+            .supported_modes()?
+            .into_iter()
+            .map(|m| ara_graphics_settings::DisplayMode {
+                monitor: m.monitor,
+                width: m.width,
+                height: m.height,
+                refresh_rate_millihz: m.refresh_rate_millihz,
+            })
+            .collect())
+    }
+
+    pub(crate) fn apply_graphics(
+        &mut self,
+        settings: &ara_graphics_settings::Settings,
+    ) -> Result<()> {
+        use ara_graphics_settings::WindowMode;
+        let mode = match settings.window_mode {
+            WindowMode::Windowed => ara_platform::GameWindowMode::Windowed,
+            WindowMode::Borderless => ara_platform::GameWindowMode::Borderless,
+            WindowMode::Fullscreen => ara_platform::GameWindowMode::Fullscreen,
+        };
+        self.window.set_display_mode(
+            mode,
+            [settings.width, settings.height],
+            settings.monitor,
+            settings.refresh_rate_millihz,
+        )?;
+        self.vsync = settings.vsync;
+        self.frame_rate_cap = settings.frame_rate_cap;
+        Ok(())
+    }
+
+    fn pace_graphics(&mut self) {
+        if self.frame_rate_cap != 0 {
+            let interval = Duration::from_secs_f64(1. / f64::from(self.frame_rate_cap));
+            if let Some(last) = self.last_graphics_frame
+                && let Some(wait) = interval.checked_sub(last.elapsed())
+            {
+                std::thread::sleep(wait);
+            }
+        }
+        self.last_graphics_frame = Some(Instant::now());
+    }
     pub(crate) fn raw_events(&mut self) -> Result<Vec<Event>> {
         self.window.poll()
     }
@@ -206,6 +261,7 @@ impl Windowed {
         resolve: impl FnOnce() -> Result<ara_runtime_render::fidelity::native::Content>,
     ) -> Result<()> {
         ara_gpu::cpu_scope!("Player.window_present");
+        self.pace_graphics();
         let started = Instant::now();
         let size = self.window.size()?;
         if size.contains(&0) {
@@ -257,6 +313,10 @@ impl Windowed {
         // (`finish_loading`) starts synchronous, and its copy would wait for this
         // frame's GPU work before the next frame could record.
         if let Some(present) = &mut self.present {
+            // SAFETY: the presentation and window retain this same device.
+            if !unsafe { present.set_vsync_device(renderer.gpu(), &self.window, self.vsync)? } {
+                return Ok(());
+            }
             // SAFETY: created on this renderer's device, or on the loading device that
             // shares its native device; both are live.
             unsafe { present.set_frames_in_flight(renderer.gpu(), true)? };
@@ -351,6 +411,7 @@ impl Windowed {
     /// Renders and blits the native 2D target; no pixel data crosses the CPU. Skips
     /// the frame its prepare skipped (`ready_2d`).
     pub fn present_2d(&mut self, presenter: &mut Presenter2d) -> Result<()> {
+        self.pace_graphics();
         if std::mem::take(&mut self.skip_2d) {
             return Ok(());
         }
@@ -369,6 +430,9 @@ impl Windowed {
         let result = match &mut self.present2d {
             // SAFETY: this completed image is CopySource and both owners are live.
             Some(present) => unsafe {
+                if !present.set_vsync_device(renderer.gpu(), &self.window, self.vsync)? {
+                    return Ok(());
+                }
                 present.present_image(renderer.gpu(), image, renderer.size())
             },
             None => Ok(()),

@@ -61,8 +61,9 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
 - [ ] **Cooker determinism.** An incremental re-cook of unchanged sources rewrote Metal
   metadata (`ResourceCount` 31 to 224 on fullscreenVertex) relative to the fresh cohort cook.
 
-- [ ] **C# graphics settings.** Quality presets and individual settings readable and
-  writable from game scripts (Unreal's `UGameUserSettings` scalability).
+- [x] **C# graphics settings.** Typed per-user presets/scalability, live renderer/display
+  application, explicit RT restart, persistence, C# events and engine protocol/CLI
+  (`a63467bc7`; [API and application boundaries](../dev/graphics-settings.md)).
 - [~] **Debugging.** Done: `ara capture --reference [spp] --bounces n` (path-traced ground
   truth, 2ef3a3419), `--ev100` exposure lock (2ef3a3419), `--view` buffer visualization
   (510d884ca, 0a864f5c5). Open: editor toggles for each, region luminance tooling in-engine.

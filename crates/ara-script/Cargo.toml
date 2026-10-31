@@ -10,6 +10,7 @@ publish.workspace = true
 profiling = ["dep:ara-profile", "dep:tracing"]
 
 [dependencies]
+ara-graphics-settings = { path = "../ara-graphics-settings" }
 ara-profile = { path = "../ara-profile", optional = true, features = ["instrumentation"] }
 tracing = { workspace = true, optional = true }
 ara-components.workspace = true

@@ -154,6 +154,8 @@ pub struct DeviceInfo {
     pub unified_device_local: bool,
     /// Optional RT-tier support; the raster baseline never requires it.
     pub ray_tracing: bool,
+    /// Physical adapter ray-query support, independent of logical-device enablement.
+    pub ray_tracing_supported: bool,
     /// Enabled BC4/BC5/BC6H/BC7 sampled textures, without CPU decompression.
     pub texture_compression_bc: bool,
     /// Allocated variable-count sampled-image slots at binding 5, capped at 65,536
@@ -432,6 +434,7 @@ pub(crate) fn test_info() -> DeviceInfo {
         device_local_mib: 0,
         unified_device_local: false,
         ray_tracing: false,
+        ray_tracing_supported: false,
         texture_compression_bc: false,
         sampled_image_capacity: 65_536,
         storage_buffer_capacity: 128,

@@ -11,6 +11,7 @@ fidelity-lab = ["ara-render/fidelity-lab"]
 hotpatch = ["ara-runtime/hotpatch", "ara-render/hotpatch", "ara-render-fidelity/hotpatch"]
 
 [dependencies]
+ara-graphics-settings = { path = "../ara-graphics-settings" }
 ara-asset = { path = "../ara-asset" }
 anyhow = { workspace = true }
 ara-2d = { path = "../ara-2d" }

@@ -34,28 +34,59 @@ impl App {
                 self.screen(Screen::Game)?;
             }
             "settings" => {
+                if let Some(world) = &self.world {
+                    let state = world
+                        .runtime
+                        .world()
+                        .resource::<ara_graphics_settings::Service>()
+                        .state();
+                    self.settings.quality = state.applied.tier(&state.capabilities).index();
+                    self.settings.resolution = Settings::SIZES
+                        .iter()
+                        .position(|s| *s == [state.applied.width, state.applied.height])
+                        .unwrap_or(self.settings.resolution);
+                    self.settings.window_mode = match state.applied.window_mode {
+                        ara_graphics_settings::WindowMode::Windowed => 0,
+                        ara_graphics_settings::WindowMode::Borderless => 1,
+                        ara_graphics_settings::WindowMode::Fullscreen => 2,
+                    };
+                }
                 self.settings_return = self.screen;
                 self.screen(Screen::Settings)?;
             }
             "quality" => {
                 self.settings.quality = (self.settings.quality + 1) % 4;
+                self.graphics.quality = Some(self.settings.quality());
                 self.presenter.set_quality(self.settings.quality());
+                self.apply_graphics_menu(false)?;
             }
             "resolution" => {
                 self.settings.resolution = (self.settings.resolution + 1) % 3;
+                self.graphics.size = Some(format!(
+                    "{}x{}",
+                    self.settings.size()[0],
+                    self.settings.size()[1]
+                ));
                 if let Some(window) = &self.window {
                     window.set_window_mode(self.settings.window_mode(), self.settings.size())?;
                 }
+                self.apply_graphics_menu(false)?;
             }
             "window-mode" => {
                 self.settings.window_mode = (self.settings.window_mode + 1) % 3;
+                self.graphics.options.window_mode = Some(
+                    ["windowed", "borderless", "fullscreen"][self.settings.window_mode % 3].into(),
+                );
                 if let Some(window) = &self.window {
                     window.set_window_mode(self.settings.window_mode(), self.settings.size())?;
                 }
+                self.apply_graphics_menu(false)?;
             }
             "apply" => {
                 self.read_settings();
                 self.settings.save()?;
+                self.graphics.save_on_start = self.world.is_none();
+                self.apply_graphics_menu(true)?;
                 self.screen(self.settings_return)?;
             }
             "resume" => {
@@ -86,6 +117,40 @@ impl App {
             _ => self.read_settings(),
         }
         self.settings_labels()
+    }
+
+    fn apply_graphics_menu(&mut self, save: bool) -> Result<()> {
+        use ara_graphics_settings::{Preset, Request, Service, WindowMode};
+        let Some(world) = &mut self.world else {
+            return Ok(());
+        };
+        let mut service = world
+            .runtime
+            .play_mut()
+            .session_mut()
+            .world_mut()
+            .resource_mut::<Service>();
+        let mut settings = service.state().applied.clone();
+        settings.preset =
+            [Preset::Low, Preset::Medium, Preset::High, Preset::Epic][self.settings.quality % 4];
+        [settings.width, settings.height] = self.settings.size();
+        settings.window_mode = [
+            WindowMode::Windowed,
+            WindowMode::Borderless,
+            WindowMode::Fullscreen,
+        ][self.settings.window_mode % 3];
+        service
+            .request(Request::Set { settings })
+            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        service
+            .request(Request::Apply)
+            .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        if save {
+            service
+                .request(Request::Save)
+                .map_err(|d| anyhow::anyhow!(d.to_string()))?;
+        }
+        Ok(())
     }
     pub(super) fn read_settings(&mut self) {
         let Some(surface) = self.window.as_mut().and_then(|w| w.game_ui.as_mut()) else {

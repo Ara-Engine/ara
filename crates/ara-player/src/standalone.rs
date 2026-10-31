@@ -137,7 +137,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     let quality = args
         .quality
         .unwrap_or_else(|| scene.rendering.quality.into());
-    let size = parse_size(&args.size)?;
+    let size = parse_size(args.size.as_deref().unwrap_or("1280x720"))?;
     let render_options = ara_runtime_render::RenderOptions {
         ray_tracing: args.ray_tracing.unwrap_or(scene.rendering.ray_tracing),
     };
@@ -198,11 +198,17 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
         &mut presentation.presenter,
         &mut presentation.presenter2d,
     );
+    world.configure_graphics(
+        &args.graphics,
+        args.quality,
+        args.ray_tracing,
+        args.size.as_deref(),
+        args.standalone.windowed,
+    )?;
+    world.sync_graphics(Some(presenter), window.as_mut())?;
     let started = world.start(args.standalone.headless, build_ms)?;
     phases.insert("world_ready_ms", began.elapsed().as_millis());
     let mut frame = RenderFrame::default();
-    presenter.set_quality(quality);
-    presenter.set_render_options(render_options);
     phases
         .entry("device_ready_ms")
         .or_insert_with(|| began.elapsed().as_millis());
@@ -213,6 +219,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
     let mut frame_gpu_ms = 0_f64;
     if args.standalone.headless {
         world.runtime.step(args.standalone.ticks, &[])?;
+        world.sync_graphics(Some(presenter), None)?;
         phases.insert("simulation_ready_ms", began.elapsed().as_millis());
     } else if let Some(window) = window.as_mut() {
         let source = world.asset_source()?;
@@ -273,6 +280,7 @@ pub(super) fn run(args: Args, began: Instant) -> Result<()> {
                 }
             }
             previous = now;
+            world.sync_graphics(Some(presenter), Some(window))?;
             world.mark();
             window.update_game_ui(world.ui.as_ref(), &world.runtime, world.runtime.player().0)?;
             {
