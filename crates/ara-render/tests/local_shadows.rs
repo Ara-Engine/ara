@@ -54,6 +54,7 @@ fn scene() -> Scene {
         material: 0,
         world,
         previous_world: world,
+        casts_shadows: true,
     };
     Scene {
         geometry: vec![Geometry {

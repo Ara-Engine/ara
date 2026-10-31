@@ -310,10 +310,11 @@ impl Culling {
                 self.draws[pass][group.slot + lod].count = 0;
                 self.scratch[lod].clear();
             }
+            // Pass 4 is the camera; every other opaque-path pass is a shadow view.
             let drawn = if pass == TRANSLUCENT_PASS {
-                group.translucent
+                group.translucent && group.casts
             } else {
-                !group.transparent
+                !group.transparent && (pass == 4 || group.casts)
             };
             if !drawn {
                 continue;

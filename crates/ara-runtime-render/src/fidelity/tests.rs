@@ -20,6 +20,7 @@ fn draw(geometry: Geometry) -> Draw {
         emissive_factor: None,
         material: None,
         skin: None,
+        casts_shadows: true,
     }
 }
 
@@ -40,6 +41,7 @@ fn model_factors_alpha_emission_and_cooked_lod_reach_fidelity() {
             }],
             material: Some(0),
             skin: None,
+            casts_shadows: true,
         }],
         materials: vec![ModelMaterial {
             name: "Source material".into(),
@@ -148,6 +150,7 @@ fn materialless_models_have_zero_source_emission_and_allow_an_explicit_factor() 
             lods: Vec::new(),
             material: None,
             skin: None,
+            casts_shadows: true,
         }],
         nodes: BTreeMap::new(),
         node_names: BTreeMap::new(),

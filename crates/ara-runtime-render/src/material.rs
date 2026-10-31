@@ -120,6 +120,7 @@ mod tests {
             emissive_factor: None,
             material: Some(material),
             skin: None,
+            casts_shadows: true,
         };
         let first = draw(1, asset(b"first"));
         let second = draw(2, asset(b"second"));

@@ -59,6 +59,8 @@ pub struct Draw {
     pub material: Option<Arc<crate::material::MaterialAsset>>,
     /// Skin-order palette range in [`RenderFrame::palettes`] for skinned primitives.
     pub skin: Option<Range<usize>>,
+    /// Whether it blocks light (`MeshRenderer::cast_shadows` and the model node's own).
+    pub casts_shadows: bool,
 }
 
 /// A point or spot light in world space.
@@ -366,6 +368,7 @@ impl RenderFrame {
                     emissive_factor: None,
                     material,
                     skin: None,
+                    casts_shadows: renderer.cast_shadows,
                 };
                 if base.material.is_some() {
                     base.emissive = emission_multiplier(renderer, strength);
@@ -432,6 +435,7 @@ impl RenderFrame {
                                     primitive: i,
                                 },
                                 skin: primitive.skin.and(palette.clone()),
+                                casts_shadows: base.casts_shadows && primitive.casts_shadows,
                                 emissive_factor: emission_override(
                                     renderer,
                                     &model,

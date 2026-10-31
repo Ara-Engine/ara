@@ -103,6 +103,7 @@ fn native(skin: bool) -> ara_render::instanced::Scene {
                     material: 0,
                     world: Default::default(),
                     previous_world: Default::default(),
+                    casts_shadows: true,
                 };
                 instance.world.w_axis.x = c[0];
                 instance.world.w_axis.y = c[1];

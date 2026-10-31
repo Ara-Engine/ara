@@ -60,7 +60,7 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   restoring the selected pivot while retaining rotation/scale. Geometry stays shared.
   `MeshRenderer` emission defaults to the imported factor, with explicit enable,
   strength, optional factor and material selectors; `Draw.emissive_factor` replaces
-  the source factor before `Draw.emissive` multiplies it once. Shape emission is radiance.
+  the source factor before `Draw.emissive` multiplies it once. Shape emission is radiance. `castShadows` (and a glTF node's `extras.castShadows: false`, for its subtree: `Primitive::casts_shadows`) gives `Draw.casts_shadows`.
   `MeshRenderer.material_overrides` resolves graph/instance assets into immutable
   `material::MaterialAsset` data at content boundaries; `Draw.material` replaces one
   subtree-local primitive slot. Texture generation metadata stays aligned with bytes.

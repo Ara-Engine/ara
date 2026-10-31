@@ -67,6 +67,7 @@ fn box_draw(id: u64, size: [f32; 3], position: [f32; 3], emission: [f32; 3]) -> 
         emissive_factor: None,
         material: None,
         skin: None,
+        casts_shadows: true,
     }
 }
 

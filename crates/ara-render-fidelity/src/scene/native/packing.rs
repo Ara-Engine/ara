@@ -140,10 +140,16 @@ pub(super) fn instances(
             Ok(AccelerationInstance {
                 geometry,
                 custom_index: id as u32,
-                mask: if scene.materials[instance.material].pbr.flags[0] == 0 {
-                    1
-                } else {
-                    2
+                // shaders/common.slangh traceImpl: opaque 1, alpha-tested 2; geometry
+                // that casts no shadow takes 4 or 8, which shadow rays skip.
+                mask: match (
+                    scene.materials[instance.material].pbr.flags[0] == 0,
+                    instance.casts_shadows,
+                ) {
+                    (true, true) => 1,
+                    (false, true) => 2,
+                    (true, false) => 4,
+                    (false, false) => 8,
                 },
                 transform: [
                     w[0][0], w[1][0], w[2][0], w[3][0], w[0][1], w[1][1], w[2][1], w[3][1],

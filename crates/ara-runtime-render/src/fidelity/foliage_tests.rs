@@ -48,6 +48,7 @@ fn foliage_uses_the_rule_model_and_respects_exclusion_zones() {
                 lods: Vec::new(),
                 material: None,
                 skin: None,
+                casts_shadows: true,
             }],
             materials: Vec::new(),
             textures: Vec::new(),

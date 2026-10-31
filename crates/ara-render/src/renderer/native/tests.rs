@@ -94,6 +94,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
                 material: 0,
                 world: Mat4::from_translation(Vec3::new(x, 0., 0.)),
                 previous_world: Mat4::IDENTITY,
+                casts_shadows: true,
             })
             .collect(),
         materials: vec![instanced::Material {
@@ -121,6 +122,7 @@ fn native_raster_keeps_instances_local_and_tracks_moving_and_skinned_poses_witho
             material: 1,
             world: Mat4::from_translation(Vec3::new(entity as f32 + 1000., 0., 0.)),
             previous_world: Mat4::IDENTITY,
+            casts_shadows: true,
         }));
     let mut renderer = Renderer::new_native(
         &scene,

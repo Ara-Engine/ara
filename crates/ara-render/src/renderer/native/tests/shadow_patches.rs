@@ -26,6 +26,7 @@ fn scene() -> NativeScene {
         material: 0,
         world,
         previous_world: world,
+        casts_shadows: true,
     };
     NativeScene {
         geometry: vec![instanced::Geometry {

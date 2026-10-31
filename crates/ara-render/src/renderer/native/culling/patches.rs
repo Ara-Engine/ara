@@ -122,7 +122,7 @@ impl Culling {
             work.cull_tests += 1;
             let g = groups.instance_group[i];
             let group = &groups.groups[g];
-            if group.transparent || !visible(&planes, bounds[i]) {
+            if group.transparent || !group.casts || !visible(&planes, bounds[i]) {
                 continue;
             }
             if let Some(lod) = view.lod(group, self.projections[i]) {

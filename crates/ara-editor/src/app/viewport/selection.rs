@@ -320,6 +320,7 @@ mod tests {
                     material: 0,
                     world: Mat4::from_translation(Vec3::new(0., 0., -5.)),
                     previous_world: Mat4::IDENTITY,
+                    casts_shadows: true,
                 })
                 .collect(),
             materials: Vec::new(),

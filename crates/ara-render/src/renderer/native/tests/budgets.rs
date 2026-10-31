@@ -46,6 +46,7 @@ fn scene() -> NativeScene {
                     material: 0,
                     world,
                     previous_world: world,
+                    casts_shadows: true,
                 }
             })
             .collect(),

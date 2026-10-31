@@ -112,7 +112,8 @@ impl Culling {
             ..LightGrid::default()
         };
         for (i, &b) in bounds.iter().enumerate() {
-            if !groups.groups[groups.instance_group[i]].transparent {
+            let group = &groups.groups[groups.instance_group[i]];
+            if !group.transparent && group.casts {
                 self.grid.insert(i as u32, b);
             }
         }
@@ -157,7 +158,7 @@ impl Culling {
                 let i = i as usize;
                 work.cull_tests += 1;
                 let group = &groups.groups[groups.instance_group[i]];
-                if group.transparent || !visible(&planes, bounds[i]) {
+                if group.transparent || !group.casts || !visible(&planes, bounds[i]) {
                     continue;
                 }
                 if let Some(lod) = view.lod(group, self.projections[i]) {

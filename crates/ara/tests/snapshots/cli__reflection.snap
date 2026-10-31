@@ -4745,6 +4745,11 @@ expression: out
           "type": "list<string>",
           "doc": "Source material names or numeric indices affected by `emissiveFactor`. Empty targets all; `name:3` disambiguates a numeric material name.",
           "default": []
+        },
+        "castShadows": {
+          "type": "bool",
+          "doc": "Whether this geometry blocks light: off, it is still drawn, reflected and bounces light, but casts no shadow. Model nodes whose glTF `extras` set `castShadows: false` never cast, whatever this says.",
+          "default": true
         }
       }
     },

@@ -177,6 +177,7 @@ impl Builder {
             material,
             world,
             previous_world: world,
+            casts_shadows: draw.casts_shadows,
         });
         Ok(())
     }

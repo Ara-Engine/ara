@@ -74,6 +74,7 @@ fn scene(world: Mat4) -> ara_render::instanced::Scene {
             material: 0,
             world,
             previous_world: world,
+            casts_shadows: true,
         }],
         materials: vec![Material::default()],
         textures: 0,
@@ -302,6 +303,7 @@ fn loading_model_shapes_and_stale_native_content_never_claim_real_model_bounds()
         emissive_factor: None,
         material: None,
         skin: None,
+        casts_shadows: true,
     });
     let mut wires = Vec::new();
     let mut counts = Counts::default();

@@ -87,6 +87,11 @@ pub struct MeshRenderer {
     /// Source material names or numeric indices affected by `emissiveFactor`.
     /// Empty targets all; `name:3` disambiguates a numeric material name.
     pub emissive_materials: Vec<String>,
+    /// Whether this geometry blocks light: off, it is still drawn, reflected and
+    /// bounces light, but casts no shadow. Model nodes whose glTF `extras` set
+    /// `castShadows: false` never cast, whatever this says.
+    #[ara(default = true)]
+    pub cast_shadows: bool,
 }
 impl Default for MeshRenderer {
     fn default() -> Self {
@@ -105,6 +110,7 @@ impl Default for MeshRenderer {
             emissive_strength: 1.0,
             emissive_factor: None,
             emissive_materials: Vec::new(),
+            cast_shadows: true,
         }
     }
 }

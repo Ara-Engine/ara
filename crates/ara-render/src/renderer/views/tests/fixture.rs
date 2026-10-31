@@ -31,6 +31,7 @@ pub(in crate::renderer) fn scene() -> instanced::Scene {
             material: 0,
             world: Mat4::IDENTITY,
             previous_world: Mat4::IDENTITY,
+            casts_shadows: true,
         }],
         materials: vec![instanced::Material {
             pbr: crate::scene::Material {

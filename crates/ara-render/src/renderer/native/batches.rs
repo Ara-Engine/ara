@@ -57,6 +57,9 @@ pub(super) struct Group {
     pub refract: bool,
     /// A blended group (`is_translucent`), drawn into the translucent sun map.
     pub translucent: bool,
+    /// Its instances block light (`Instance::casts_shadows`); every shadow pass and
+    /// shadow ray skips a group that doesn't.
+    pub casts: bool,
     /// Its geometry is flat (`is_planar`).
     pub planar: bool,
     /// Its forward draws take a back-face and a front-face pass (`is_two_pass`).
@@ -75,10 +78,10 @@ pub(super) struct Groups {
 }
 impl Groups {
     pub(super) fn new(scene: &NativeScene, pool: &GeometryGpu) -> Result<Self> {
-        let mut grouped = BTreeMap::<(usize, usize), Vec<usize>>::new();
+        let mut grouped = BTreeMap::<(usize, usize, bool), Vec<usize>>::new();
         for (index, instance) in scene.instances.iter().enumerate() {
             grouped
-                .entry((instance.geometry, instance.material))
+                .entry((instance.geometry, instance.material, instance.casts_shadows))
                 .or_default()
                 .push(index);
         }
@@ -86,7 +89,7 @@ impl Groups {
         let mut slot = 0;
         let groups: Vec<_> = grouped
             .into_iter()
-            .map(|((geometry, material), instances)| {
+            .map(|((geometry, material, casts), instances)| {
                 let range = pool
                     .lods(geometry)
                     .expect("validated instance geometry has LODs");
@@ -121,6 +124,7 @@ impl Groups {
                     transparent: is_transparent(&scene.materials[material]),
                     refract: is_refractive(&scene.materials[material]),
                     translucent: is_translucent(&scene.materials[material]),
+                    casts,
                     planar: is_planar(scene.geometry[geometry].bounds),
                     two_pass: is_two_pass(
                         &scene.materials[material],
@@ -151,7 +155,7 @@ impl Groups {
             identities: scene
                 .instances
                 .iter()
-                .map(|i| (i.entity, i.geometry, i.material))
+                .map(|i| (i.entity, i.geometry, i.material, i.casts_shadows))
                 .collect(),
         })
     }
@@ -159,7 +163,12 @@ impl Groups {
     pub(super) fn validate(&self, scene: &NativeScene) -> Result<()> {
         for (instance, identity) in scene.instances.iter().zip(&self.identities) {
             ensure!(
-                (instance.entity, instance.geometry, instance.material) == *identity,
+                (
+                    instance.entity,
+                    instance.geometry,
+                    instance.material,
+                    instance.casts_shadows
+                ) == *identity,
                 "Native instance identity/layout changed"
             );
         }
@@ -177,7 +186,12 @@ impl Groups {
         instance: &crate::instanced::Instance,
     ) -> Result<()> {
         ensure!(
-            (instance.entity, instance.geometry, instance.material) == self.identities[index],
+            (
+                instance.entity,
+                instance.geometry,
+                instance.material,
+                instance.casts_shadows
+            ) == self.identities[index],
             "Native instance identity/layout changed"
         );
         Ok(())

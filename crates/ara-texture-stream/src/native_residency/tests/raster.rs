@@ -83,6 +83,7 @@ fn native_raster_samples_compressed_raw_maps_with_independent_uvs_and_decode_pol
                 material: id,
                 world: Mat4::from_translation(Vec3::new(x, 0., 0.)),
                 previous_world: Mat4::IDENTITY,
+                casts_shadows: true,
             })
             .collect(),
         materials: vec![left, right],

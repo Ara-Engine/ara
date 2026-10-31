@@ -80,6 +80,7 @@ fn native_fidelity_traces_shared_transforms_and_independent_emissive_uv1() -> Re
                     material: id,
                     world,
                     previous_world: world,
+                    casts_shadows: true,
                 }
             })
             .collect(),

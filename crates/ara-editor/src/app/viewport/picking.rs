@@ -275,6 +275,7 @@ mod tests {
                     material: 0,
                     world: *world,
                     previous_world: *world,
+                    casts_shadows: true,
                 })
                 .collect(),
             materials: Vec::new(),

@@ -1417,6 +1417,7 @@ mod tests {
                 material: i,
                 world: Mat4::IDENTITY,
                 previous_world: Mat4::IDENTITY,
+                casts_shadows: true,
             })
             .collect();
         Scene {

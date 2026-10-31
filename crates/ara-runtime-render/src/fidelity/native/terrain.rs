@@ -99,6 +99,7 @@ impl Builder {
                 material,
                 world: glam30::Mat4::IDENTITY,
                 previous_world: glam30::Mat4::IDENTITY,
+                casts_shadows: true,
             });
         }
         let resident: std::collections::BTreeSet<_> = view.tiles.iter().copied().collect();

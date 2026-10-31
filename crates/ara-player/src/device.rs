@@ -60,6 +60,7 @@ pub fn warm_frame() -> RenderFrame {
         emissive_factor: None,
         material: None,
         skin: None,
+        casts_shadows: true,
     });
     warm
 }

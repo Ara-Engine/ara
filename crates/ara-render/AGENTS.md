@@ -23,7 +23,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   refractive forward PSOs over `look::refract`'s copy of the lit scene; blended films draw back then front faces and cast
   `look::translucent` sun shadows on High/Epic) and terrain layer IDs. Texture IDs address the residency table; u32::MAX is neutral.
   Validate only at content publication; do not hash/traverse static vertices
-  when moving instances. Culling bounds handle mirrored/nonuniform transforms.
+  when moving instances. Culling bounds handle mirrored/nonuniform transforms. `Instance::casts_shadows` false skips every shadow pass and shadow ray (`RAY_*_SHADOWLESS` masks) but still draws, reflects and bounces light.
 - `Renderer::new_native` consumes this scene and an owned `instanced::Textures`
   provider on a raster-only device. `ara-texture-stream::NativeResidency` implements
   the provider without reversing its dependency on ara-render. Native fill uses

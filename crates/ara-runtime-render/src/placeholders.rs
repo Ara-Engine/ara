@@ -114,6 +114,7 @@ mod tests {
             emissive_factor: None,
             material: None,
             skin: None,
+            casts_shadows: true,
         }];
         frame
     }

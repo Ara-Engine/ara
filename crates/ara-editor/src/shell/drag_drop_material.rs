@@ -183,6 +183,7 @@ mod tests {
                     lods: Vec::new(),
                     material: None,
                     skin: None,
+                    casts_shadows: true,
                 })
                 .collect(),
             nodes: BTreeMap::from([(
@@ -216,6 +217,7 @@ mod tests {
             emissive_factor: None,
             material: None,
             skin: None,
+            casts_shadows: true,
         };
         let renderer =
             json!({"model":"@assets/model.glb#as_model001","node":"Branch","primitive":1});

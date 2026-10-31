@@ -40,6 +40,7 @@ fn mirror_scene() -> NativeScene {
         material: i,
         world,
         previous_world: world,
+        casts_shadows: true,
     };
     NativeScene {
         geometry: vec![quad(29)],

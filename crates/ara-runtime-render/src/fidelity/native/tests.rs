@@ -35,6 +35,7 @@ fn draw(entity: u64) -> Draw {
         emissive_factor: Some([0.5, 1.0, 2.0]),
         material: None,
         skin: None,
+        casts_shadows: true,
     }
 }
 

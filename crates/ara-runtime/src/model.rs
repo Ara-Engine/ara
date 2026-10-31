@@ -51,6 +51,9 @@ pub struct Primitive {
     pub material: Option<usize>,
     /// Index into [`Model::skins`] for skinned primitives.
     pub skin: Option<usize>,
+    /// False under a node whose glTF `extras` set `castShadows: false` (the node
+    /// or any ancestor): drawn, but blocking no light.
+    pub casts_shadows: bool,
 }
 
 /// A simplified level of detail of a primitive.
@@ -205,6 +208,17 @@ impl Model {
                 ),
             );
         }
+        // A node's `castShadows: false` extra holds for its whole subtree.
+        let casts_shadows = |node: usize| -> bool {
+            let mut cursor = Some(node);
+            while let Some(n) = cursor {
+                if nodes[n]["extras"]["castShadows"] == Value::Bool(false) {
+                    return false;
+                }
+                cursor = parents.get(&n).copied();
+            }
+            true
+        };
         let mut primitives = Vec::new();
         let scene_order = scene_nodes(document, &nodes);
         let mut model_nodes = BTreeMap::new();
@@ -239,6 +253,7 @@ impl Model {
                 }
                 decoded.material = material.filter(|&m| m < materials.len());
                 decoded.skin = skin;
+                decoded.casts_shadows = casts_shadows(node);
                 for v in &decoded.vertices {
                     min = min.min(Vec3::from_array(v.position));
                     max = max.max(Vec3::from_array(v.position));
@@ -487,6 +502,7 @@ fn decode_mesh(bytes: &[u8], transform: Mat4) -> Result<Primitive> {
         lods,
         material: None,
         skin: None,
+        casts_shadows: true,
     })
 }
 

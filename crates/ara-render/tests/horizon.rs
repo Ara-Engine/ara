@@ -54,6 +54,7 @@ fn scene() -> Scene {
         material: 0,
         world,
         previous_world: world,
+        casts_shadows: true,
     };
     let elevation = 10f32.to_radians();
     Scene {

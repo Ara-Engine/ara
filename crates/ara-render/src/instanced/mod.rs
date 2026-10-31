@@ -84,6 +84,9 @@ pub struct Instance {
     pub world: Mat4,
     /// Previous presented local-to-world matrix for motion reconstruction.
     pub previous_world: Mat4,
+    /// Whether it blocks light. False still draws, reflects and bounces light, but
+    /// leaves it out of every shadow map and ray-traced shadow.
+    pub casts_shadows: bool,
 }
 
 impl Instance {

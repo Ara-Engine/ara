@@ -405,7 +405,7 @@ impl Renderer {
             .groups
             .groups
             .iter()
-            .filter(|group| group.translucent)
+            .filter(|group| group.translucent && group.casts)
             .flat_map(|group| &group.instances)
             .map(|&i| native.bounds[i])
             .filter(|&[lo, hi]| {

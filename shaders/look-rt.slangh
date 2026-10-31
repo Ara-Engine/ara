@@ -23,7 +23,8 @@ BIND(4) RaytracingAccelerationStructure acceleration[16] : register(t0,space4);
 static const uint RT_ENABLED=1,RT_HAS_MASKED=2,RT_SCREEN_AMBIENT=4;
 // Instance masks (renderer::native::rays): opaque geometry, alpha-tested cutouts
 // (resolved in a non-opaque query) and blended/transmissive surfaces.
-static const uint RT_OPAQUE=1,RT_MASKED=2,RT_TRANSPARENT=4;
+// *_SHADOWLESS: geometry that casts no shadow; every query but rtOccluded sees it.
+static const uint RT_OPAQUE=1,RT_MASKED=2,RT_TRANSPARENT=4,RT_OPAQUE_SHADOWLESS=8,RT_MASKED_SHADOWLESS=16;
 // Scene lights a hit evaluates directly (tiled lists only cover the screen).
 static const uint RT_HIT_LIGHTS=64;
 bool rtEnabled(Look l){return (l.rtInfo[1].w&RT_ENABLED)!=0;}
@@ -149,7 +150,8 @@ bool rtAlphaAccept(Look l,uint instance,uint primitive,float2 bary,float width){
 bool rtTrace(Frame f,Look l,float3 origin,float3 direction,float tmax,out RtHit hit,uint mask=RT_OPAQUE|RT_MASKED,float spread=0.002){
     hit=(RtHit)0;hit.distance=tmax;bool found=false;
     RayDesc ray;ray.Origin=origin;ray.Direction=direction;ray.TMin=1e-4;ray.TMax=tmax;
-    uint solid=mask&~RT_MASKED;
+    uint solid=(mask&(RT_OPAQUE|RT_TRANSPARENT))|((mask&RT_OPAQUE)!=0?RT_OPAQUE_SHADOWLESS:0);
+    uint cutout=(mask&RT_MASKED)!=0?RT_MASKED|RT_MASKED_SHADOWLESS:0;
     if(solid!=0){
         RayQuery<RAY_FLAG_NONE> q;q.TraceRayInline(acceleration[l.rtInfo[0].x],RAY_FLAG_FORCE_OPAQUE,solid,ray);
         while(q.Proceed()){}

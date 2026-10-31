@@ -20,6 +20,7 @@ pub(super) fn scene() -> NativeScene {
             material: i,
             world: Mat4::from_translation(Vec3::new(x, 0., 0.)),
             previous_world: Mat4::IDENTITY,
+            casts_shadows: true,
         })
         .collect();
     instances.extend((0..512).map(|i| instanced::Instance {
@@ -29,6 +30,7 @@ pub(super) fn scene() -> NativeScene {
         material: 0,
         world: Mat4::from_translation(Vec3::new(1000. + i as f32 * 2., 0., 0.)),
         previous_world: Mat4::IDENTITY,
+        casts_shadows: true,
     }));
     NativeScene {
         geometry: vec![instanced::Geometry {
@@ -328,6 +330,48 @@ fn local_shadow_slots_keep_faces_independent_cache_casters_and_record_depth() ->
     println!(
         "100 two-face culls: shared far list {far_us:.2} us, independent cached slots {cached_us:.2} us; depth counts {counts:?}; {}",
         root.display()
+    );
+    Ok(())
+}
+
+#[test]
+fn instances_that_cast_no_shadow_draw_for_the_camera_only() -> Result<()> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-render/shadowless-casters")
+        .join(std::process::id().to_string());
+    std::fs::create_dir_all(&root)?;
+    let mut scene = scene();
+    scene.instances[0].casts_shadows = false;
+    let mut renderer = Renderer::new_native(
+        &scene,
+        Box::new(EmptyTextures),
+        [128, 96],
+        &[],
+        root.join("gpu"),
+    )?;
+    let camera = CameraSpec::LookAt {
+        position: Vec3::new(0., 0., 3.),
+        target: Vec3::ZERO,
+        vertical_fov: 1.,
+    };
+    renderer.render_view(&camera, 1., ViewMode::Albedo)?;
+    assert!(
+        selected(&renderer, 4).contains(&0),
+        "the camera still draws it"
+    );
+    renderer.cull_native_shadow(Mat4::IDENTITY)?;
+    assert_eq!(selected(&renderer, 6), [1], "the far shadow map skips it");
+    renderer.reserve_native_shadow_passes(1)?;
+    let pass = renderer.cull_native_shadow_pass(0, Mat4::IDENTITY)?;
+    assert_eq!(selected(&renderer, pass), [1], "local shadow faces skip it");
+    let native = renderer.native.as_ref().unwrap();
+    assert_eq!(
+        native.ray_instance(0).2,
+        crate::renderer::native::rays::RAY_OPAQUE_SHADOWLESS
+    );
+    assert_eq!(
+        native.ray_instance(1).2,
+        crate::renderer::native::rays::RAY_MASKED
     );
     Ok(())
 }

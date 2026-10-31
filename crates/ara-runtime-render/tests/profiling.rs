@@ -35,6 +35,7 @@ fn overlapped_gpu_samples_keep_the_submitting_profiler_frame() {
         emissive_factor: None,
         material: None,
         skin: None,
+        casts_shadows: true,
     });
     let mut presenter = Presenter::new(
         [96, 64],
