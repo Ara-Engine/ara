@@ -32,8 +32,44 @@ pub struct RenderDebug {
     pub exposure: Option<f32>,
     /// What captures show (Unreal's buffer visualization): the lit image, a G-buffer
     /// channel, shadow cascades, the diffuse GI, wireframe or overdraw. Applied where
-    /// a capture asks for the lit image.
+    /// a capture asks for the lit image. camelCase on the wire, as Play's BufferView.
+    #[serde(with = "camel_view")]
     pub view: crate::capture::ViewMode,
+}
+
+/// `RenderDebug::view` in camelCase (`giDiffuse`), the protocol's naming; `ViewMode`'s
+/// own snake_case serialization belongs to capture metadata.
+mod camel_view {
+    use crate::capture::ViewMode;
+    use serde::{Deserialize, Deserializer, Serializer, de::Error};
+
+    const NAMES: [(ViewMode, &str); 11] = [
+        (ViewMode::Lit, "lit"),
+        (ViewMode::Albedo, "albedo"),
+        (ViewMode::Normals, "normals"),
+        (ViewMode::Depth, "depth"),
+        (ViewMode::RoughnessMetal, "roughnessMetal"),
+        (ViewMode::EntityIds, "entityIds"),
+        (ViewMode::ShadowCascades, "shadowCascades"),
+        (ViewMode::Wireframe, "wireframe"),
+        (ViewMode::LitWireframe, "litWireframe"),
+        (ViewMode::GiDiffuse, "giDiffuse"),
+        (ViewMode::Overdraw, "overdraw"),
+    ];
+
+    pub(super) fn serialize<S: Serializer>(view: &ViewMode, s: S) -> Result<S::Ok, S::Error> {
+        let name = NAMES.iter().find(|(v, _)| v == view).map_or("lit", |(_, n)| n);
+        s.serialize_str(name)
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<ViewMode, D::Error> {
+        let name = String::deserialize(d)?;
+        NAMES
+            .iter()
+            .find(|(_, n)| *n == name)
+            .map(|(v, _)| *v)
+            .ok_or_else(|| D::Error::custom(format!("unknown view `{name}`")))
+    }
 }
 
 /// The path-traced reference's budget ([`RenderDebug::reference`]).

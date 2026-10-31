@@ -118,6 +118,20 @@ impl CaptureArgs {
     }
 }
 
+/// A kebab-case flag value in camelCase (`gi-diffuse` -> `giDiffuse`).
+fn camel(value: &str) -> String {
+    let mut parts = value.split('-');
+    let mut out = parts.next().unwrap_or_default().to_owned();
+    for part in parts {
+        let mut chars = part.chars();
+        if let Some(first) = chars.next() {
+            out.extend(first.to_uppercase());
+            out.push_str(chars.as_str());
+        }
+    }
+    out
+}
+
 /// `capture`'s `renderDebug` for `--without`, `--full-resolution`,
 /// `--reflections`, `--reference`, `--ev100` and `--view`; omitted when every
 /// effect stays at its default.
@@ -147,8 +161,8 @@ fn render_debug(
         "reflections": reflections.unwrap_or("lit"),
         "reference": reference.map(|(samples, bounces)| json!({"samples": samples, "bounces": bounces})),
         "exposure": ev100,
-        // kebab-case flag values name the snake_case BufferView variants.
-        "view": view.map_or_else(|| "lit".to_owned(), |v| v.replace('-', "_")),
+        // kebab-case flag values name the camelCase BufferView variants.
+        "view": view.map_or_else(|| "lit".to_owned(), camel),
     })
 }
 
@@ -175,7 +189,7 @@ mod tests {
         let lock = render_debug(&[], false, None, None, Some(7.), Some("gi-diffuse"));
         assert!(lock["reference"].is_null());
         assert_eq!(lock["exposure"], 7.);
-        assert_eq!(lock["view"], "gi_diffuse");
+        assert_eq!(lock["view"], "giDiffuse");
         assert_eq!(debug["view"], "lit");
     }
 }
