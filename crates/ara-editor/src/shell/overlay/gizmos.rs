@@ -40,6 +40,7 @@ pub(crate) const TYPES: &[GizmoType] = &[
     kind("ReflectionProbe", "Reflection Probe"),
     kind("PostProcessVolume", "Post-process Volume"),
     kind("HeightFog", "Fog, Sky & Environment"),
+    kind("LocalFogVolume", "Local Fog Volume"),
     kind("VisualEffect", "Visual Effect"),
     kind("Collider", "Collider"),
     kind("CharacterController", "Character Controller"),

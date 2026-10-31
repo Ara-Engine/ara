@@ -13,6 +13,7 @@ pub(super) fn component_icon(name: &str) -> &'static str {
         "Light" => "lightbulb",
         "VisualEffect" => "sparkles",
         "Environment" | "HeightFog" => "sun",
+        "LocalFogVolume" => "cloud-fog",
         _ if has("PostProcess") => "sliders-horizontal",
         _ if has("Camera") => "camera",
         _ if has("Audio") || has("Acoustic") => "volume-2",

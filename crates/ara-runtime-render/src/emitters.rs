@@ -642,8 +642,8 @@ impl Part {
                 self.direction.z,
                 self.outer,
             ],
-            // Unshadowed, so kept out of fog in-scattering (w).
-            parameters: [f32::from(u8::from(spot)), 1., self.radius, 1.],
+            // Unshadowed, so kept out of fog in-scattering (w: no volumetric scattering).
+            parameters: [f32::from(u8::from(spot)), 1., self.radius, 0.],
         }
     }
 }

@@ -187,7 +187,7 @@ fn thousand_identical_lights_preserve_analytic_energy_through_reuse() -> Result<
         position_range: [0., 0., 2., 1e6],
         color_lumens: [1., 1., 1., 16. * std::f32::consts::PI / 1000.],
         direction_outer: [0., 0., -1., -1.],
-        parameters: [0.; 4],
+        parameters: [0., 0., 0., 1.],
     };
     scene.lights = vec![light; 1000];
     let camera = CameraSpec::LookAt {

@@ -416,7 +416,7 @@ impl DocumentView {
                                 .into(),
                         color_lumens: color.extend(intensity).into(),
                         direction_outer: direction.extend(0.8).into(),
-                        parameters: [if kind == "spot" { 1. } else { 0. }, 0.94, 0., 0.],
+                        parameters: [if kind == "spot" { 1. } else { 0. }, 0.94, 0., 1.],
                     });
                 }
             }

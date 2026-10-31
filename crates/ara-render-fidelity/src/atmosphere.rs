@@ -30,6 +30,15 @@ pub struct Atmosphere {
     pub fog_tint: [f32; 3],
     /// Henyey-Greenstein anisotropy of the fog, from zero to 0.9.
     pub fog_anisotropy: f32,
+    /// Volumetric fog: shadowed sun shafts and local lights in the fog (the raster
+    /// near volume follows it); false is plain height fog.
+    pub fog_volumetric: bool,
+    /// View depth in metres the raster near fog volume covers (1 to 1000).
+    pub fog_volumetric_distance: f32,
+    /// Light the fog emits: linear radiance per metre at `fog_extinction`.
+    pub fog_emissive: [f32; 3],
+    /// Scale of the fog's extinction (not its scattering) on volumetric fog, 0.1 to 10.
+    pub fog_extinction_scale: f32,
 }
 impl Default for Atmosphere {
     fn default() -> Self {
@@ -45,6 +54,10 @@ impl Default for Atmosphere {
             fog_base: 0.,
             fog_tint: [1.; 3],
             fog_anisotropy: 0.3,
+            fog_volumetric: true,
+            fog_volumetric_distance: 60.,
+            fog_emissive: [0.; 3],
+            fog_extinction_scale: 1.,
         }
     }
 }
@@ -63,7 +76,10 @@ impl Atmosphere {
                 && (0.0..=20.0).contains(&self.aerosols)
                 && self.fog_base.is_finite()
                 && self.fog_tint.iter().all(|c| (0.0..=1.0).contains(c))
-                && (0.0..=0.9).contains(&self.fog_anisotropy),
+                && (0.0..=0.9).contains(&self.fog_anisotropy)
+                && (1.0..=1000.0).contains(&self.fog_volumetric_distance)
+                && self.fog_emissive.iter().all(|c| c.is_finite() && *c >= 0.)
+                && (0.1..=10.0).contains(&self.fog_extinction_scale),
             "Invalid atmosphere"
         );
         Ok(())

@@ -56,6 +56,10 @@ pub struct FrameEnvironment {
     /// drawn (raster renderer, `Look::sky_light`): `Environment.skyLight`, which
     /// `resolve` leaves at 1 for the caller to set.
     pub sky_light: f32,
+    /// Scale of the sun's in-scattering in fog (raster renderer, `Look::sun_scattering`):
+    /// the directional light's volumetric scattering, which `resolve` leaves at 1 for
+    /// the caller to set.
+    pub sun_scattering: f32,
 }
 
 impl FrameEnvironment {
@@ -87,6 +91,12 @@ impl FrameEnvironment {
                     a.fog_tint =
                         [f.albedo.0[0], f.albedo.0[1], f.albedo.0[2]].map(|c| c.clamp(0., 1.));
                     a.fog_anisotropy = f.anisotropy.clamp(0., 0.9);
+                    a.fog_volumetric = f.volumetric;
+                    a.fog_volumetric_distance = f.volumetric_distance.clamp(1., 1000.);
+                    a.fog_emissive = f
+                        .volumetric_emissive
+                        .map(|c| if c.is_finite() { c.max(0.) } else { 0. });
+                    a.fog_extinction_scale = f.volumetric_extinction_scale.clamp(0.1, 10.);
                 }
                 Some(a)
             }
@@ -109,6 +119,7 @@ impl FrameEnvironment {
                 lut: None,
                 lut_contribution: 0.,
                 sky_light: 1.,
+                sun_scattering: 1.,
             };
         };
         let (low, high) = (p.min_ev100.min(p.max_ev100), p.min_ev100.max(p.max_ev100));
@@ -169,6 +180,7 @@ impl FrameEnvironment {
             }),
             lut_contribution: p.lut_contribution.clamp(0., 1.),
             sky_light: 1.,
+            sun_scattering: 1.,
         }
     }
 
@@ -271,6 +283,7 @@ impl FrameEnvironment {
             ao: self.ao,
             ssr: self.ssr,
             sky_light: self.sky_light,
+            sun_scattering: self.sun_scattering,
             sky: self.atmosphere.filter(|a| a.physical_sky).map(|a| Sky {
                 sea_level: a.sea_level,
                 aerosols: a.aerosols,
@@ -288,6 +301,11 @@ impl FrameEnvironment {
                     tint: a.fog_tint,
                     albedo: a.fog_albedo,
                     anisotropy: a.fog_anisotropy,
+                    volumetric: a.fog_volumetric.then_some(ara_render::look::VolumetricFog {
+                        distance: a.fog_volumetric_distance,
+                        emissive: a.fog_emissive,
+                        extinction_scale: a.fog_extinction_scale,
+                    }),
                 }),
         }
     }
@@ -308,6 +326,60 @@ impl FidelityView {
         self.set_atmosphere(environment.atmosphere)?;
         self.set_post(environment.post(self.settings.post))
     }
+}
+
+/// The scene's local fog volumes for the raster renderer
+/// (`ara_render::Renderer::set_fog_volumes`), seen from `camera` (world position):
+/// the highest priority first, then the nearest (distance to each box's surface),
+/// ties in entity order; at most `ara_render::look::MAX_FOG_VOLUMES`. Volumes with
+/// non-finite poses or no extent are skipped; values clamp into their ranges.
+pub fn fog_volumes(look: &SceneLook, camera: Vec3) -> Vec<ara_render::look::FogVolume> {
+    use ara_components::render::FogVolumeShape;
+    use ara_render::look::{FogVolume, FogVolumeShape as Shape, MAX_FOG_VOLUMES};
+    let clean = |c: f32| if c.is_finite() { c.max(0.) } else { 0. };
+    let mut volumes: Vec<(i32, f32, FogVolume)> = look
+        .fog_volumes
+        .iter()
+        .filter_map(|v| {
+            let half = Vec3::from_array(v.volume.size) * Vec3::from_array(v.scale).abs() * 0.5;
+            let rotation = glam::Quat::from_array(v.rotation);
+            let centre = Vec3::from_array(v.translation);
+            let finite = half.is_finite() && centre.is_finite() && rotation.is_finite();
+            if !finite || half.min_element() < 0.01 || rotation.length_squared() < 1e-6 {
+                return None;
+            }
+            let rotation = rotation.normalize();
+            // Distance from the camera to the oriented box around the volume.
+            let local = (rotation.inverse() * (camera - centre)).abs() - half;
+            let distance = local.max(Vec3::ZERO).length();
+            let [r, g, b, _] = v.volume.albedo.0;
+            Some((
+                v.volume.priority,
+                distance,
+                FogVolume {
+                    centre: centre.to_array(),
+                    rotation: rotation.to_array(),
+                    half_extent: half.to_array(),
+                    shape: match v.volume.shape {
+                        FogVolumeShape::Sphere => Shape::Sphere,
+                        FogVolumeShape::Box => Shape::Box,
+                    },
+                    density: clean(v.volume.density).min(10.),
+                    height_falloff: clean(v.volume.height_falloff).min(10.),
+                    radial_falloff: clean(v.volume.radial_falloff).min(1.),
+                    albedo: [r, g, b].map(|c| clean(c).min(1.)),
+                    emissive: v.volume.emissive.map(clean),
+                },
+            ))
+        })
+        .collect();
+    // Stable: equal keys keep entity order.
+    volumes.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.total_cmp(&b.1)));
+    volumes
+        .into_iter()
+        .take(MAX_FOG_VOLUMES)
+        .map(|(_, _, v)| v)
+        .collect()
 }
 
 /// A volume blend's lens effects: depth of field where the focus distance is positive,
@@ -414,6 +486,7 @@ mod tests {
                 base_height: 4.,
                 ..Default::default()
             }),
+            fog_volumes: Vec::new(),
             volumes: volume(vec![
                 PostOverride {
                     module: PostModule::Exposure,
@@ -462,6 +535,7 @@ mod tests {
             }),
             volumes: volume(Vec::new()),
             luts: Vec::new(),
+            fog_volumes: Vec::new(),
         };
         let env = FrameEnvironment::resolve(&look, Vec3::ZERO, 1.);
         let raster = env.raster();

@@ -1,8 +1,8 @@
 //! The authorable look of a scene: physical sky and height fog (the first entity in
-//! stable-ID order carrying each), post-process volumes (`crate::post`, all of them),
-//! reflection captures (all of them), plus the project's rendering quality setting. Renderers receive them through the
-//! runtime extraction; the sun is the scene's directional light. Every field doc is an
-//! inspector tooltip.
+//! stable-ID order carrying each), local fog volumes, post-process volumes
+//! (`crate::post`) and reflection captures (all of them), plus the project's rendering
+//! quality setting. Renderers receive them through the runtime extraction; the sun is
+//! the scene's directional light. Every field doc is an inspector tooltip.
 
 use ara_schema::{Color, Schema};
 use bevy_ecs::prelude::Component;
@@ -73,9 +73,11 @@ impl Default for SkyAtmosphere {
     }
 }
 
-/// Exponential height fog lit by the sun, the sky and local lights (volumetric
-/// shafts where shadows cut the beams). Density halves every `falloff × ln 2`
-/// metres above `baseHeight`. The first entity in ID order wins.
+/// Exponential height fog lit by the sun, the sky and local lights. Volumetric fog
+/// (the default) casts shafts where shadows cut the beams, lets lamps glow in it and
+/// renders the near field at screen-tile detail from the Medium preset up (Unreal's
+/// volumetric fog). Density halves every `falloff × ln 2` metres above `baseHeight`.
+/// The first entity in ID order wins.
 #[derive(Debug, Clone, Copy, PartialEq, Component, Schema, Serialize, Deserialize)]
 #[ara(component, module = "render")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
@@ -97,6 +99,23 @@ pub struct HeightFog {
     /// Forward-scattering bias: 0 is uniform, toward 1 the fog glows around the sun and lamps.
     #[ara(default = 0.3, range(min = 0, max = 0.9))]
     pub anisotropy: f32,
+    /// Volumetric fog: shadows cut sun shafts and lamp cones into the fog (and into
+    /// local fog volumes) and local lights scatter in it. Off, the fog is plain
+    /// height fog: unshadowed sun glow and sky light only.
+    #[ara(default = true)]
+    pub volumetric: bool,
+    /// How far from the camera the detailed (froxel) volumetric fog reaches; beyond it
+    /// a coarser grid carries the fog. Larger distances spread the same slices thinner.
+    #[ara(default = 60, unit = Meters, range(min = 1, max = 1000))]
+    pub volumetric_distance: f32,
+    /// Light the fog itself emits (linear radiance per metre of fog at `density`,
+    /// following the height falloff), for glowing haze. Black emits none.
+    #[ara(range(min = 0), editor(color, hdr))]
+    pub volumetric_emissive: [f32; 3],
+    /// Scales how much light the fog absorbs (not how much it scatters): above 1 the
+    /// fog darkens what lies behind it more for the same glow.
+    #[ara(default = 1, range(min = 0.1, max = 10))]
+    pub volumetric_extinction_scale: f32,
 }
 impl Default for HeightFog {
     fn default() -> Self {
@@ -106,8 +125,95 @@ impl Default for HeightFog {
             falloff: 60.0,
             albedo: Color([0.9, 0.9, 0.9, 1.0]),
             anisotropy: 0.3,
+            volumetric: true,
+            volumetric_distance: 60.0,
+            volumetric_emissive: [0.0; 3],
+            volumetric_extinction_scale: 1.0,
         }
     }
+}
+
+/// The shape of a [`LocalFogVolume`].
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Schema, Serialize, Deserialize)]
+#[ara(module = "render")]
+#[serde(rename_all = "camelCase")]
+pub enum FogVolumeShape {
+    /// An ellipsoid filling `size`.
+    #[default]
+    Sphere,
+    /// A box of `size`.
+    Box,
+}
+
+/// A local volume of fog, mist or smoke placed by the entity's transform (Unreal's
+/// Local Fog Volume). It is lit like height fog (sun shafts, lamps, the sky or probe
+/// GI) and rendered in the volumetric fog; overlapping volumes add up. At most 16
+/// render at once: the highest priority first, then the nearest to the camera.
+#[derive(Debug, Clone, Copy, PartialEq, Component, Schema, Serialize, Deserialize)]
+#[ara(component, module = "render")]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalFogVolume {
+    /// Whether the volume renders.
+    #[ara(default = true)]
+    pub enabled: bool,
+    /// Sphere (an ellipsoid filling `size`) or box.
+    pub shape: FogVolumeShape,
+    /// Full size along the entity's axes, centred on its origin and scaled by its
+    /// transform.
+    #[ara(default = [10, 10, 10], unit = Meters, range(min = 0.02, max = 100000))]
+    pub size: [f32; 3],
+    /// Extinction at the centre, per metre: 0.05 is a light mist (visibility about
+    /// 60 m), 1 a thick smoke (about 3 m).
+    #[ara(default = 0.1, range(min = 0, max = 10), example = 0.2)]
+    pub density: f32,
+    /// Share of the radius, from the edge inwards, over which the fog thins to
+    /// nothing: 0 is a hard edge, 1 fades all the way from the centre.
+    #[ara(default = 1, range(min = 0, max = 1))]
+    pub radial_falloff: f32,
+    /// How fast density falls with height above the centre (and rises below it), per
+    /// metre: 0 is uniform; around 0.5 the fog pools near the bottom.
+    #[ara(default = 0, range(min = 0, max = 10))]
+    pub height_falloff: f32,
+    /// Scattering colour (single-scattering albedo, linear).
+    #[ara(default = [0.9, 0.9, 0.9, 1])]
+    pub albedo: Color,
+    /// Light the fog emits (linear radiance per metre at the centre's density), for
+    /// glowing haze. Black emits none.
+    #[ara(range(min = 0), editor(color, hdr))]
+    pub emissive: [f32; 3],
+    /// Which volumes render when more than 16 are in view: higher first, then nearer
+    /// the camera.
+    #[ara(default = 0, range(min = -1000, max = 1000))]
+    pub priority: i32,
+}
+impl Default for LocalFogVolume {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            shape: FogVolumeShape::Sphere,
+            size: [10.0; 3],
+            density: 0.1,
+            radial_falloff: 1.0,
+            height_falloff: 0.0,
+            albedo: Color([0.9, 0.9, 0.9, 1.0]),
+            emissive: [0.0; 3],
+            priority: 0,
+        }
+    }
+}
+
+/// A local fog volume as extracted for one frame: the component and its entity's
+/// world pose. `SceneLook::fog_volumes` keeps them in entity ID order.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FogVolumeView {
+    /// The authored volume.
+    pub volume: LocalFogVolume,
+    /// World position of the entity, in metres.
+    pub translation: [f32; 3],
+    /// World rotation of the entity (unit quaternion, x y z w).
+    pub rotation: [f32; 4],
+    /// World scale of the entity, multiplying `size`.
+    pub scale: [f32; 3],
 }
 
 /// An authored reflection probe (High and Epic): the renderer captures the lit scene
@@ -266,8 +372,8 @@ pub enum ToneMapping {
 }
 
 /// The scene's authored look as extracted for renderers: the first entity in ID order
-/// carrying the sky and the fog, and every post-process volume (blend them for a
-/// camera with `post_at`).
+/// carrying the sky and the fog, every local fog volume and every post-process volume
+/// (blend them for a camera with `post_at`).
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct SceneLook {
     /// Physical sky, when authored.
@@ -276,6 +382,8 @@ pub struct SceneLook {
     pub fog: Option<HeightFog>,
     /// Post-process volumes with their entity poses, in entity ID order.
     pub volumes: Vec<crate::post::PostVolume>,
+    /// Enabled local fog volumes with their entity poses, in entity ID order.
+    pub fog_volumes: Vec<FogVolumeView>,
     /// The decoded lookup tables the volumes reference, by asset ID (shared with the
     /// runtime's library; never copied per frame).
     pub luts: Vec<(String, std::sync::Arc<crate::post::ColorLut>)>,

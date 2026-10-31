@@ -172,6 +172,11 @@ pub struct Light {
     /// Spot outer cone half-angle.
     #[ara(default = 30, unit = Degrees, range(min = 0.1, max = 89), editor(show_if(field = "kind", one_of = ["spot"])))]
     pub outer_angle: f32,
+    /// How strongly the light scatters in volumetric fog (Unreal's volumetric scattering
+    /// intensity): 1 is physical, 0 keeps it out of the fog, above 1 exaggerates its
+    /// shafts and glow. Surfaces are lit the same either way.
+    #[ara(default = 1, range(min = 0, max = 16))]
+    pub volumetric_scattering: f32,
 }
 impl Default for Light {
     fn default() -> Self {
@@ -182,6 +187,7 @@ impl Default for Light {
             range: 10.0,
             inner_angle: 20.0,
             outer_angle: 30.0,
+            volumetric_scattering: 1.0,
         }
     }
 }

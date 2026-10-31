@@ -33,6 +33,9 @@ pub(crate) struct GpuFrame {
     fog: [f32; 4],
     grading: [f32; 4],
     look: [f32; 4],
+    /// Volumetric fog (`Atmosphere::fog_volumetric`): emitted radiance per metre at
+    /// base density (rgb; volumetric fog only) and the extinction scale (w; 1 otherwise).
+    fog_light: [f32; 4],
     pub(crate) read: [[u32; 4]; 7],
     write: [[u32; 4]; 7],
     // Shader helpers fetch descriptor rows by offset; their by-value Frame ends
@@ -230,9 +233,11 @@ impl FidelityView {
             atmosphere: self.atmosphere.map_or([0.; 4], |a| {
                 [a.sea_level, a.fog_extinction, a.fog_height, a.fog_albedo]
             }),
-            weather: self
-                .atmosphere
-                .map_or([0.; 4], |a| [a.cloud_coverage, a.cloud_height, 0., 0.]),
+            // z: volumetric fog (shadowed sun, local lights).
+            weather: self.atmosphere.map_or([0.; 4], |a| {
+                let volumetric = f32::from(u8::from(a.fog_volumetric));
+                [a.cloud_coverage, a.cloud_height, volumetric, 0.]
+            }),
             fog: self.atmosphere.map_or([0.; 4], |a| {
                 let [r, g, b] = a.fog_tint;
                 [r, g, b, a.fog_anisotropy]
@@ -247,6 +252,13 @@ impl FidelityView {
                 self.atmosphere.map_or(0., |a| a.fog_base),
                 self.atmosphere.map_or(1., |a| a.aerosols),
             ],
+            fog_light: self
+                .atmosphere
+                .filter(|a| a.fog_volumetric)
+                .map_or([0., 0., 0., 1.], |a| {
+                    let [r, g, b] = a.fog_emissive;
+                    [r, g, b, a.fog_extinction_scale]
+                }),
             read: self.targets.sampled[..28].as_chunks::<4>().0.try_into()?,
             write: self.targets.storage[..28].as_chunks::<4>().0.try_into()?,
             reservoirs,

@@ -384,6 +384,7 @@ impl Presenter {
             renderer.set_look(look)?;
         }
         apply_lut(renderer, frame, &environment, &mut self.lut)?;
+        apply_fog_volumes(renderer, frame)?;
         self.stats.prepare = started.elapsed();
         Ok(resolved)
     }
@@ -938,10 +939,11 @@ fn lights(frame: &RenderFrame) -> Vec<scene::Light> {
                         0.0
                     },
                 ],
+                // w: the light's volumetric fog scattering intensity.
                 parameters: if spot {
-                    [1.0, l.cone[0].to_radians().cos(), 0.0, 0.0]
+                    [1.0, l.cone[0].to_radians().cos(), 0.0, l.volumetric]
                 } else {
-                    [0.0; 4]
+                    [0.0, 0.0, 0.0, l.volumetric]
                 },
             }
         })
@@ -981,12 +983,28 @@ pub fn environment_at(
 ) -> ara_render_fidelity::environment::FrameEnvironment {
     ara_render_fidelity::environment::FrameEnvironment {
         sky_light: frame.environment.sky_light,
+        sun_scattering: frame.sun_volumetric.unwrap_or(1.),
         ..ara_render_fidelity::environment::FrameEnvironment::resolve(
             &frame.look,
             eye,
             frame.environment.exposure,
         )
     }
+}
+
+/// Hands the raster renderer `frame`'s local fog volumes (priority, then distance to
+/// the frame's camera; `ara_render_fidelity::environment::fog_volumes`) when they change.
+pub fn apply_fog_volumes(renderer: &mut Renderer, frame: &RenderFrame) -> Result<()> {
+    if frame.look.fog_volumes.is_empty() && renderer.fog_volumes().is_empty() {
+        return Ok(());
+    }
+    let eye = frame.camera.map_or(OVERVIEW, |c| c.position);
+    let volumes =
+        ara_render_fidelity::environment::fog_volumes(&frame.look, glam30::Vec3::from_array(eye));
+    if renderer.fog_volumes() != volumes.as_slice() {
+        renderer.set_fog_volumes(&volumes)?;
+    }
+    Ok(())
 }
 
 /// Hands the raster renderer the colour lookup table `look` selects from `frame`'s

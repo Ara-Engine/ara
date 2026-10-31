@@ -113,6 +113,7 @@ fn all_local_lights_and_environment_survive_the_adapter() {
             direction: [0.0, -1.0, 0.0],
             color: [1.0, 0.5, 0.2],
             lumens: 500.0,
+            volumetric: 1.0,
             range: 10.0,
             cone: [15.0, 30.0],
         })
