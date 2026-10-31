@@ -485,6 +485,11 @@ impl Presenter {
                     live.view.set_environment(&look)?;
                     live.look = look;
                 }
+                live.view.set_sun_radius(frame.sun_radius)?;
+                live.view.set_light_tables(
+                    renderer.gpu_mut(),
+                    &crate::lights::tables(&frame.lights).0,
+                )?;
                 settings.configure(renderer.gpu_mut(), &mut live.view)?;
                 live.view.prepare_transport(renderer.gpu_mut())?;
                 let update = live

@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "16d0fc54a5b9f12e3f91f817c921ff0add6b7f3d63ac80dbcd5027e7160cd316",
+  "key": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed",
   "stages": [
     {
-      "dxil": "16d0fc54a5b9f12e3f91f817c921ff0add6b7f3d63ac80dbcd5027e7160cd316/look_fog/fogMain.dxil",
-      "dxil_hash": "12aff72bcd576e4bcae76ff110d829fd6899bc9d9d22e7e592e27b02f77a40d7",
+      "dxil": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/look_fog/fogMain.dxil",
+      "dxil_hash": "f4317783382241daf6c4831feef5ded55a7bb165d25c29b1c1c23b2275cd0230",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "16d0fc54a5b9f12e3f91f817c921ff0add6b7f3d63ac80dbcd5027e7160cd316/look_fog/fogMain.metallib",
-        "metallib_hash": "8b6cc397768eb729c7325dcacd15a0bcf54f1e9d8f614ad88a044db6b1e37986",
-        "reflection": "16d0fc54a5b9f12e3f91f817c921ff0add6b7f3d63ac80dbcd5027e7160cd316/look_fog/fogMain.metal.json",
+        "metallib": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/look_fog/fogMain.metallib",
+        "metallib_hash": "bdfb16de9d33beb2bc3a247eb20395b19633dd88159b8aab756cbd1e331cf8f5",
+        "reflection": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/look_fog/fogMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "fogMain",
-      "spirv": "16d0fc54a5b9f12e3f91f817c921ff0add6b7f3d63ac80dbcd5027e7160cd316/look_fog/fogMain.spv",
+      "spirv": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/look_fog/fogMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "1cc309c683e82ac4782140d2e4b2d0755ac0517efdc64cbfcdf50d0768f26e23",
+      "spirv_hash": "f976309af37a1166390a0c37baa01f99f1feb92fed91a42231d2319b5d4f1e56",
       "stage": "compute"
     }
   ],

@@ -36,11 +36,12 @@ void fogMain(uint3 tid:SV_DispatchThreadID){
         source+=f.fogLight.rgb*profile;
         uint4 head=buffers[f.scene.x].Load<uint4>(0);
         for(uint i=0;i<(volumetric?head.w:0);i++){
-            float4 p=buffers[f.scene.x].Load<float4>(head.z+i*64),c=buffers[f.scene.x].Load<float4>(head.z+i*64+16);
-            float3 delta=p.xyz-at;float distance=length(delta);if(distance>p.w)continue;
-            float4 cone=buffers[f.scene.x].Load<float4>(head.z+i*64+32),params=buffers[f.scene.x].Load<float4>(head.z+i*64+48);if(params.w<=0)continue;
-            float3 l=delta/max(distance,0.001);float spot=params.x<0.5?1:smoothstep(cone.w,max(cone.w+1e-4,params.y),dot(-l,normalize(cone.xyz)));float fade=pow(saturate(1-pow(distance/p.w,4)),2);
-            if(!occluded(f,at,l,max(0.001,distance-0.02),rng))source+=density*albedo*c.rgb*(c.w*params.w)/(4*PI*max(distance*distance,0.01))*fade*spot*phaseM(dot(d,l),g);
+            // local-lights.slangh: one sample of the light's area (an ideal point's
+            // centre), so beams near rects, discs, spheres and tubes and their soft
+            // shadows are exact; scaled by the light's volumetric intensity.
+            LocalLight light=localLight(f,head.z+i*LIGHT_BYTES);if(light.params.w<=0)continue;
+            LocalSample s=sampleLocalLight(light,at,rng);
+            if(s.distance>0&&any(s.value>0)&&!occluded(f,at,s.direction,s.distance,rng))source+=density*albedo*s.value*(light.params.w*phaseM(dot(d,s.direction),g));
         }
         float3 segment=exp(-e*ds);integral+=trans*source*(1-segment)/max(e,float3(1e-9));trans*=segment;
         store(f,FROXELS,uint2(z*128+tid.x,tid.y),float4(integral,1));

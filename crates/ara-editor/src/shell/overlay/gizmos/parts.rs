@@ -58,14 +58,35 @@ pub(super) enum Constraint {
 /// Angles are half-angles in radians; nav links and surfaces are world space.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Shape {
+    /// Point and spot lights also outline their emitter: a sphere of `radius`, or a
+    /// tube `length` long along local X.
     PointLight {
         range: f32,
+        radius: f32,
+        length: f32,
         color: [f32; 3],
     },
     SpotLight {
         range: f32,
         inner: f32,
         outer: f32,
+        radius: f32,
+        length: f32,
+        color: [f32; 3],
+    },
+    /// A rect (`width` along local X, `height` along local Y) emitting along -Z, its
+    /// barn doors (`doors`: angle from the normal in radians, length) and reach.
+    RectLight {
+        range: f32,
+        width: f32,
+        height: f32,
+        doors: (f32, f32),
+        color: [f32; 3],
+    },
+    /// A disc of `radius` emitting along -Z, and its reach.
+    DiscLight {
+        range: f32,
+        radius: f32,
         color: [f32; 3],
     },
     DirectionalLight {
@@ -190,6 +211,8 @@ pub(super) fn classify(record: &ara_doc::Record) -> (Vec<Part>, Option<Icon>) {
                 "lightbulb",
                 Shape::PointLight {
                     range: light.range,
+                    radius: light.source_radius,
+                    length: light.source_length,
                     color,
                 },
             ),
@@ -199,10 +222,33 @@ pub(super) fn classify(record: &ara_doc::Record) -> (Vec<Part>, Option<Icon>) {
                     range: light.range,
                     inner: light.inner_angle.min(light.outer_angle).to_radians(),
                     outer: light.outer_angle.to_radians(),
+                    radius: light.source_radius,
+                    length: light.source_length,
                     color,
                 },
             ),
             LightKind::Directional => ("sun", Shape::DirectionalLight { color }),
+            LightKind::Rect => (
+                "square",
+                Shape::RectLight {
+                    range: light.range,
+                    width: light.source_width,
+                    height: light.source_height,
+                    doors: (
+                        light.barn_door_angle.clamp(0., 90.).to_radians(),
+                        light.barn_door_length.max(0.),
+                    ),
+                    color,
+                },
+            ),
+            LightKind::Disc => (
+                "circle",
+                Shape::DiscLight {
+                    range: light.range,
+                    radius: light.source_radius,
+                    color,
+                },
+            ),
         };
         part("Light", shape);
         icons.push(("Light", glyph, Tint::Light(color)));

@@ -18,6 +18,7 @@ mod rt;
 mod submission;
 mod targets;
 mod transfer;
+pub(crate) use transfer::upload_image;
 mod upload;
 mod views;
 use crate::{
@@ -543,6 +544,49 @@ impl Renderer {
         self.gpu
             .upload_queued(self.look.lut, bytemuck::cast_slice(texels))?;
         self.look.lut_size = size;
+        Ok(())
+    }
+    /// Replace the light tables `scene::Light::tables` offsets address (photometric
+    /// profiles; word 0 reserved): host words, written in place; the buffer grows only
+    /// when a larger table arrives.
+    pub fn set_light_tables(&mut self, words: &[u32]) -> Result<()> {
+        if (words.len() <= 1 && self.look.light_tables.is_none())
+            || self.look.light_table_words == words
+        {
+            return Ok(());
+        }
+        let fits = self
+            .look
+            .light_tables
+            .is_some_and(|(_, _, capacity)| words.len() <= capacity);
+        if !fits {
+            let capacity = words.len().next_power_of_two().max(4096);
+            let buffer = self.gpu.create_buffer(
+                (capacity * 4) as u64,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                true,
+            )?;
+            let index = self.gpu.storage_buffer(buffer)?.index;
+            // The superseded buffer stays alive: secondary views copied its handle at
+            // creation, and growth is power-of-two, so few ever exist.
+            self.look.light_tables = Some((buffer, index, capacity));
+        }
+        if let Some((buffer, _, _)) = self.look.light_tables {
+            self.gpu
+                .upload_queued(buffer, bytemuck::cast_slice(words))?;
+        }
+        self.look.light_table_words = words.to_vec();
+        Ok(())
+    }
+    /// The directional light's angular radius in radians (half its source angle), or
+    /// `None` for the look's sky default: it widens the sun's contact-hardened shadows
+    /// (`Look.sunLux.w`) and its disc.
+    pub fn set_sun_radius(&mut self, radius: Option<f32>) -> Result<()> {
+        ensure!(
+            radius.is_none_or(|r| r.is_finite() && (0.0..=0.2).contains(&r)),
+            "a sun radius is 0 to 0.2 radians"
+        );
+        self.look.sun_radius = radius;
         Ok(())
     }
     /// The look applied to rendered frames.

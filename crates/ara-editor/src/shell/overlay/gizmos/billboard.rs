@@ -15,6 +15,8 @@ const GLYPHS: &[&str] = &[
     "lightbulb",
     "flashlight",
     "sun",
+    "square",
+    "circle",
     "video",
     "volume-2",
     "audio-lines",

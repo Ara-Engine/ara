@@ -143,6 +143,15 @@ pub(crate) struct LookGpu {
     pub lut_index: u32,
     /// Steps per channel of the current table; zero without one.
     pub lut_size: u32,
+    /// Area-light LTC tables (`look::ltc`), uploaded once; secondary views share them.
+    pub ltc: super::ltc::LtcTables,
+    /// The sun's angular radius (`Renderer::set_sun_radius`); `None` keeps the sky's.
+    pub sun_radius: Option<f32>,
+    /// Light tables (`Renderer::set_light_tables`): host-visible words, their storage
+    /// index and capacity in words; secondary views share them.
+    pub light_tables: Option<(Buffer, u32, usize)>,
+    /// The words last written there, so unchanged tables are not rewritten.
+    pub light_table_words: Vec<u32>,
     pub images: [Option<Image>; IMAGES],
     pub sampled: [u32; IMAGES],
     pub storage: [u32; IMAGES],
@@ -315,6 +324,7 @@ impl LookGpu {
             true,
         )?;
         let lut_index = gpu.storage_buffer(lut)?.index;
+        let ltc = super::ltc::LtcTables::new(gpu)?;
         Ok(Self {
             look: Look::default(),
             quality: Quality::default(),
@@ -327,6 +337,10 @@ impl LookGpu {
             lut,
             lut_index,
             lut_size: 0,
+            ltc,
+            sun_radius: None,
+            light_tables: None,
+            light_table_words: Vec::new(),
             images: [None; IMAGES],
             sampled: [0; IMAGES],
             storage: [0; IMAGES],

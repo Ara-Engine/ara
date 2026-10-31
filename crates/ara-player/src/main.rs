@@ -1278,6 +1278,7 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
                 D::VertexColorBlue => V::VertexColorBlue,
                 D::VertexColorAlpha => V::VertexColorAlpha,
                 D::DecalCoverage => V::DecalCoverage,
+                D::LightComplexity => V::LightComplexity,
             }
         },
     }

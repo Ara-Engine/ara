@@ -4277,12 +4277,14 @@ expression: out
       "fields": {
         "kind": {
           "type": "LightKind",
-          "doc": "Point, spot or directional.",
+          "doc": "Point, spot, directional, rect or disc.",
           "default": "point",
           "options": [
             "point",
             "spot",
-            "directional"
+            "directional",
+            "rect",
+            "disc"
           ]
         },
         "color": {
@@ -4295,13 +4297,36 @@ expression: out
         },
         "intensity": {
           "type": "f32",
-          "doc": "Luminous flux in lumens (point/spot) or illuminance in lux (directional).",
+          "doc": "Brightness: illuminance in lux for a directional light, otherwise in `units`.",
           "default": 800,
           "range": [0, null]
         },
+        "units": {
+          "type": "LightUnits",
+          "doc": "What a local light's `intensity` measures: lumens, candela or nits.",
+          "default": "lumens",
+          "options": [
+            "lumens",
+            "candela",
+            "nits"
+          ],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "point",
+                  "spot",
+                  "rect",
+                  "disc"
+                ]
+              }
+            }
+          }
+        },
         "range": {
           "type": "f32",
-          "doc": "Influence radius of point and spot lights.",
+          "doc": "Influence radius of local lights, from the light's centre; their light fades to zero there.",
           "default": 10,
           "unit": "m",
           "range": [0.01, null],
@@ -4311,7 +4336,9 @@ expression: out
               "when": {
                 "oneOf": [
                   "point",
-                  "spot"
+                  "spot",
+                  "rect",
+                  "disc"
                 ]
               }
             }
@@ -4356,6 +4383,162 @@ expression: out
           "doc": "How strongly the light scatters in volumetric fog (Unreal's volumetric scattering intensity): 1 is physical, 0 keeps it out of the fog, above 1 exaggerates its shafts and glow. Surfaces are lit the same either way.",
           "default": 1,
           "range": [0, 16]
+        },
+        "sourceRadius": {
+          "type": "f32",
+          "doc": "Radius of the emitter: a point's or spot's sphere (or tube, with `sourceLength`) or the disc. Larger sources give broader highlights and softer shadows; zero is an ideal point (Unreal's Source Radius).",
+          "default": 0,
+          "unit": "m",
+          "range": [0, null],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "point",
+                  "spot",
+                  "disc"
+                ]
+              }
+            }
+          }
+        },
+        "sourceLength": {
+          "type": "f32",
+          "doc": "Length of a point's or spot's tube along the entity's local X axis, capped by `sourceRadius`; zero is a sphere (Unreal's Source Length).",
+          "default": 0,
+          "unit": "m",
+          "range": [0, null],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "point",
+                  "spot"
+                ]
+              }
+            }
+          }
+        },
+        "sourceWidth": {
+          "type": "f32",
+          "doc": "Rect width along the entity's local X axis (Unreal's Source Width).",
+          "default": 0.64,
+          "unit": "m",
+          "range": [0.001, null],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "rect"
+                ]
+              }
+            }
+          }
+        },
+        "sourceHeight": {
+          "type": "f32",
+          "doc": "Rect height along the entity's local Y axis (Unreal's Source Height).",
+          "default": 0.64,
+          "unit": "m",
+          "range": [0.001, null],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "rect"
+                ]
+              }
+            }
+          }
+        },
+        "barnDoorAngle": {
+          "type": "f32",
+          "doc": "Angle of the rect's four barn doors from its normal: 0 points them straight ahead (the narrowest beam), 90 folds them flat (no effect).",
+          "default": 88,
+          "unit": "deg",
+          "range": [0, 90],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "rect"
+                ]
+              }
+            }
+          }
+        },
+        "barnDoorLength": {
+          "type": "f32",
+          "doc": "Length of the rect's barn doors; zero has none.",
+          "default": 0.2,
+          "unit": "m",
+          "range": [0, null],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "rect"
+                ]
+              }
+            }
+          }
+        },
+        "profile": {
+          "type": "option<asset>",
+          "doc": "Photometric light profile (an imported IES file) shaping a point's, spot's or rect's intensity by direction, about the entity's local -Z axis.",
+          "default": null,
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "point",
+                  "spot",
+                  "rect"
+                ]
+              }
+            }
+          }
+        },
+        "profileIntensity": {
+          "type": "bool",
+          "doc": "Take the brightness from the profile's own candela instead of `intensity` (Unreal's Use IES Intensity); `intensity` then scales it (one is as measured).",
+          "default": false,
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "point",
+                  "spot",
+                  "rect"
+                ]
+              }
+            }
+          }
+        },
+        "sourceAngle": {
+          "type": "f32",
+          "doc": "Angular diameter of a directional light's disc: wider suns cast softer shadow edges and broader highlights (Unreal's Light Source Angle; 0.5357 is the Sun).",
+          "default": 0.5357,
+          "unit": "deg",
+          "range": [0, 20],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "directional"
+                ]
+              }
+            }
+          }
         }
       }
     },
@@ -4409,13 +4592,35 @@ expression: out
       "module": "render",
       "variants": {
         "point": {
-          "doc": "Omnidirectional point light."
+          "doc": "Omnidirectional point light; a source radius makes it a sphere, and a source length a tube along the entity's local X axis."
         },
         "spot": {
-          "doc": "Cone light aimed along the entity's local -Z axis."
+          "doc": "Cone light aimed along the entity's local -Z axis; a source radius or length sizes its emitter as for a point."
         },
         "directional": {
           "doc": "Sun-like light shining along the entity's local -Z axis; casts cascaded shadows."
+        },
+        "rect": {
+          "doc": "One-sided rectangle emitting along the entity's local -Z axis: `sourceWidth` along local X, `sourceHeight` along local Y, with optional barn doors."
+        },
+        "disc": {
+          "doc": "One-sided disc of radius `sourceRadius` emitting along the entity's local -Z axis."
+        }
+      }
+    },
+    "LightUnits": {
+      "kind": "enum",
+      "doc": "The unit of a local light's `intensity` (directional lights always take lux).",
+      "module": "render",
+      "variants": {
+        "lumens": {
+          "doc": "Luminous flux in lumens: everything a point emits (a spot's cone masks a point of that flux, as Unreal's spot lumens), or a rect's or disc's over its front hemisphere."
+        },
+        "candela": {
+          "doc": "Luminous intensity in candela: in every direction for points and spots, along the normal for rects and discs."
+        },
+        "nits": {
+          "doc": "Luminance of the emitting surface in nits (candela per square metre); a light without a source size emits nothing."
         }
       }
     },

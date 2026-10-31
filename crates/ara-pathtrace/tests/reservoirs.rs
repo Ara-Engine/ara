@@ -188,6 +188,7 @@ fn thousand_identical_lights_preserve_analytic_energy_through_reuse() -> Result<
         color_lumens: [1., 1., 1., 16. * std::f32::consts::PI / 1000.],
         direction_outer: [0., 0., -1., -1.],
         parameters: [0., 0., 0., 1.],
+        ..ara_render::scene::Light::ZERO
     };
     scene.lights = vec![light; 1000];
     let camera = CameraSpec::LookAt {

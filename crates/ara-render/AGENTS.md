@@ -110,10 +110,10 @@ roughness/metal/AO occluder (zero for cutouts), B10G11R11 emissive, R32 ID and
 RG16F motion; positions are rebuilt from depth. Shaders read and write it only through raster.slangh's
 `gbuffer*` helpers, so the formats change there and in `Renderer::targets` together.
 Material AO (glTF occlusion maps) scales ambient light only without screen AO + probe GI (Low, or either off): `dynamicOcclusion`.
-Local light lists are tiled 16x16 (`scene::MAX_LOCAL_LIGHTS` 256 per scene, the
-first `TILE_LIGHTS` 128 per tile); `look::local` shadows the brightest few in view
-(cube or spot faces, one cached D32 atlas). Spot lumens are point-equivalent, as in
-the path tracer; `Light::parameters.z` softens the near field, `w` scales its fog scattering (0: none).
+Local lights: 112-byte `scene::Light` records, read only through `look-lights.slangh` (points, spots,
+sphere/tube sources, rects with barn doors, discs; areas by LTC, `look::ltc`, refit by `examples/ltc_fit.rs`;
+profiles via `set_light_tables`). Tiles 16x16 (256 per scene, 128 per tile); `look::local` shadows the brightest
+few (PCSS, at most 4 texels). `colorLumens.w` = 4 pi x axial candela; `parameters.w` scales its fog scattering (0: none).
 
 Capture determinism resets history, fixes host tick/seed, disables jitter/history
 blending, locks exposure and renders the explicit settle count. No wall clock or

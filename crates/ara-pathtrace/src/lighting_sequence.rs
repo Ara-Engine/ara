@@ -34,6 +34,7 @@ pub(crate) fn run(gpu: &mut GpuDevice, root: &Path) -> Result<()> {
         color_lumens: [1., 0.62, 0.3, 0.],
         direction_outer: [0., -1., 0., -1.],
         parameters: [0., 1., 0., 1.],
+        ..ara_render::scene::Light::ZERO
     });
     let camera = content::camera();
     let mut s = settings([640, 360], [640, 360]);

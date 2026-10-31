@@ -16,6 +16,7 @@ device and per-view upload state; no simulation, window or process code.
 - `set_quality(QualityChoice)`: Auto, Low, Medium, High or Epic. The caller supplies
   the project default or user override. `set_pixel_budget` (editor Game views) renders the preset's 1440p pixel count below 1440p. `set_render_options` selects experimental
   RT before device creation; otherwise no RT presentation resources are enabled.
+  Lights convert once (`lights::scene_lights`, profiles in `lights::tables`, set with the sun radius each frame).
   Rendering failures retain the completed image and expose `presentation_error`. `set_debug`: `RenderDebug::reference` forces the path-traced reference (Epic fidelity plan, full res, ARA6009 without RT; captures present until its samples accumulate); `exposure` locks EV100 via `environment_locked` on every path.
 - `RasterView`: caller-owned renderer/device view shared by editor Scene and
   Presenter. `prepare` adopts published native generations, `render` draws native

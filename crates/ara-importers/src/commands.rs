@@ -27,11 +27,20 @@ pub fn importer_for_source(source: &str) -> Result<&'static str, Diagnostic> {
         "png" | "jpg" | "jpeg" | "hdr" | "exr" | "tga" | "tif" | "tiff" | "webp" | "bmp"
         | "dds" => Ok("ara.texture"),
         "wav" | "flac" | "ogg" | "vorbis" | "opus" => Ok("ara.audio"),
+        "ies" => Ok("ara.ies"),
         _ => Err(invalid(format!("no installed importer for .{extension}"))),
     }
 }
 
 fn validate_settings(importer: &str, settings: &Value, db: &SchemaDb) -> Result<(), Diagnostic> {
+    // IES profiles import as measured: no settings.
+    if importer == "ara.ies" {
+        return if settings.as_object().is_some_and(serde_json::Map::is_empty) {
+            Ok(())
+        } else {
+            Err(invalid("IES profile imports take no settings"))
+        };
+    }
     let ty = match importer {
         "ara.gltf" | "ara.fbx" => "MeshSettings",
         "ara.texture" => "TextureSettings",

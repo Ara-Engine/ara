@@ -1117,6 +1117,7 @@ fn view_mode(name: &str) -> ViewMode {
         "vertexColorBlue" => ViewMode::VertexColorBlue,
         "vertexColorAlpha" => ViewMode::VertexColorAlpha,
         "decalCoverage" => ViewMode::DecalCoverage,
+        "lightComplexity" => ViewMode::LightComplexity,
         _ => ViewMode::Lit,
     }
 }

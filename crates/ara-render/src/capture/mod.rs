@@ -63,6 +63,12 @@ pub enum ViewMode {
     /// land, how many stack, and which surfaces refuse them. Only where
     /// [`RenderCapabilities::decals`] holds.
     DecalCoverage = 16,
+    /// Local-light shading cost per pixel (Unreal's light complexity) on the
+    /// [`Overdraw`](Self::Overdraw) heat legend: each light reaching the opaque surface
+    /// (in range, in front of a rect or disc, within a spot's cone) counts one, an
+    /// area light (sphere, tube, rect or disc) three, and one more when it has a local
+    /// shadow this frame. Black where none reach; the background is black.
+    LightComplexity = 17,
 }
 impl ViewMode {
     /// Complete baseline debug capture set.
@@ -95,6 +101,7 @@ impl ViewMode {
             Self::VertexColorBlue => "vertex_color_blue",
             Self::VertexColorAlpha => "vertex_color_alpha",
             Self::DecalCoverage => "decal_coverage",
+            Self::LightComplexity => "light_complexity",
         }
     }
     /// Renders the lit scene (`Lit`, and under `LitWireframe`'s edges).

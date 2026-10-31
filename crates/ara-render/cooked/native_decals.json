@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "16d0fc54a5b9f12e3f91f817c921ff0add6b7f3d63ac80dbcd5027e7160cd316",
+  "key": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed",
   "stages": [
     {
-      "dxil": "16d0fc54a5b9f12e3f91f817c921ff0add6b7f3d63ac80dbcd5027e7160cd316/native_decals/decalsMain.dxil",
+      "dxil": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/native_decals/decalsMain.dxil",
       "dxil_hash": "ae5f77d4f009fa8a4f61c92f2babac445741f96d87373222fdc480e435ccb807",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "16d0fc54a5b9f12e3f91f817c921ff0add6b7f3d63ac80dbcd5027e7160cd316/native_decals/decalsMain.metallib",
+        "metallib": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/native_decals/decalsMain.metallib",
         "metallib_hash": "4bd231eaa57f884c35489e8d78d8fd638f236ba6cd830ccedd2196b594bb4df3",
-        "reflection": "16d0fc54a5b9f12e3f91f817c921ff0add6b7f3d63ac80dbcd5027e7160cd316/native_decals/decalsMain.metal.json",
+        "reflection": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/native_decals/decalsMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "decalsMain",
-      "spirv": "16d0fc54a5b9f12e3f91f817c921ff0add6b7f3d63ac80dbcd5027e7160cd316/native_decals/decalsMain.spv",
+      "spirv": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/native_decals/decalsMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "0a93e1658d2b29d7079737479eee33ddc85437cb71362b6f8e55366c53e473c7",
       "stage": "compute"

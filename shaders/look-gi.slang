@@ -8,11 +8,8 @@
 float3 localIrradiance(Frame f,Look l,float3 p,float3 n){
     float3 sum=0;
     for(uint i=0;i<f.extent.z;i++){
-        Light light=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64);
-        float3 delta=light.positionRange.xyz-p;float d2=max(dot(delta,delta),max(0.01,light.parameters.z*light.parameters.z)),d=sqrt(d2);if(d>light.positionRange.w)continue;
-        float3 toLight=normalize(delta);float fade=pow(saturate(1-pow(d/light.positionRange.w,4)),2);float spot=1;
-        if(light.parameters.x>0.5)spot=smoothstep(light.directionOuter.w,light.parameters.y,dot(-toLight,light.directionOuter.xyz));
-        float3 e=light.colorLumens.rgb*(light.colorLumens.w/(4*PI*d2))*fade*spot*saturate(dot(n,toLight));
+        // look-lights.slangh: each light's form factor over its area.
+        Light light=loadLight(f.lighting.w,i);float3 e=lightIrradiance(f,l,light,i,p,n);
         if(any(e>0) && (l.flags.y&LOOK_LOCAL_INDIRECT)!=0)e*=localShadow(l,i,p,n,light.positionRange.xyz);
         sum+=e;
     }return sum;

@@ -89,9 +89,9 @@ pub struct CaptureArgs {
     ev100: Option<f32>,
     /// Debug view to capture instead of the lit image: albedo, normals, depth,
     /// roughness-metal, entity-ids, shadow-cascades, wireframe, lit-wireframe,
-    /// gi-diffuse, overdraw, vertex-color (and -red/-green/-blue/-alpha) or
-    /// decal-coverage.
-    #[arg(long, value_parser = ["lit", "albedo", "normals", "depth", "roughness-metal", "entity-ids", "shadow-cascades", "wireframe", "lit-wireframe", "gi-diffuse", "overdraw", "vertex-color", "vertex-color-red", "vertex-color-green", "vertex-color-blue", "vertex-color-alpha", "decal-coverage"])]
+    /// gi-diffuse, overdraw, vertex-color (and -red/-green/-blue/-alpha),
+    /// decal-coverage or light-complexity.
+    #[arg(long, value_parser = ["lit", "albedo", "normals", "depth", "roughness-metal", "entity-ids", "shadow-cascades", "wireframe", "lit-wireframe", "gi-diffuse", "overdraw", "vertex-color", "vertex-color-red", "vertex-color-green", "vertex-color-blue", "vertex-color-alpha", "decal-coverage", "light-complexity"])]
     view: Option<String>,
     /// Measure flicker: settle this many live frames, then report how much they change.
     #[arg(long)]

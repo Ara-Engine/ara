@@ -16,12 +16,23 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   profiles for point and spot ("shaped lights"), source radius/length softening, their
   shadows (local faces, contact-hardened by source size), GI relight and fog. Unreal:
   `URectLightComponent`, source radius/length, `IESTexture`.
+  Done (2026-11-01): `Light` kinds Rect/Disc, `LightUnits` (lm/cd/nits), source radius/length,
+  rect size and barn doors, `sourceAngle`; 112-byte record; LTC shading fitted to Ara's GGX
+  (`examples/ltc_fit.rs`, exact per-edge horizon clipping, ellipse form factor for discs and
+  spheres) in deferred, forward, ray hits, probe relight and fog; IES import (`ara.ies`) with
+  profiles in raster and the path tracer; reference samples every shape with MIS hits; PCSS
+  local shadows; light complexity view; editor gizmos and Create entries. Open: penumbrae
+  wider than 4 shadow texels (big rects stay hard-edged; needs filterable shadow mips) and the
+  hard self-shadow terminator of centre-point shadow maps; rect source textures; promoting
+  large emissive surfaces to rect/disc lights; Unreal converter rect export.
 - [ ] **Emissive surfaces light the scene.** Emissive meshes feed probe GI (hit radiance)
   and screen-space GI; large or bright emitters can be promoted to area lights for direct
   light and shadows (Lumen's emissive lighting; Unreal's "Emissive Light Source").
 - [ ] **Soft sun shadows.** Source-angle penumbrae on cascades and the far map (PCSS
   blocker search, the VSM path already contact-hardens), matching the light's angular
-  diameter (`Light.sourceAngle`, Unreal's `LightSourceAngle`).
+  diameter (`Light.sourceAngle`, Unreal's `LightSourceAngle`). `sourceAngle` is authored and
+  feeds `Look.sunLux.w` (VSM PCSS) and the path tracer's sun cone (2026-11-01); cascades
+  and the far map are open.
 - [ ] **Global illumination ("Lumen alternative").** Finding (2026-10-31, Polar at EV100 -2,
   4096-spp reference): raster matches the reference on walls, the opening and the back room
   (within ~10%); the metal ceiling is 2.4x short (0.0021 vs 0.0050) and the floor centre 1.6x
