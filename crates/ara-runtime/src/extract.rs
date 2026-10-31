@@ -66,7 +66,7 @@ pub struct Draw {
 }
 
 /// A local light in world space (points, spots, rects and discs).
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct LightView {
     /// Point, spot, rect or disc.
     pub kind: LightKind,
@@ -96,6 +96,8 @@ pub struct LightView {
     pub size: [f32; 2],
     /// Rect barn doors: angle from the normal in degrees and length in metres.
     pub barn_doors: [f32; 2],
+    /// Photometric profile shaping the intensity by direction (peak 1), if any.
+    pub profile: Option<std::sync::Arc<crate::light_profile::LightProfile>>,
 }
 
 impl LightView {
@@ -340,7 +342,12 @@ impl RenderFrame {
                 ));
             }
             if let Some(light) = entity.get::<Light>() {
-                self.light(light, &pose);
+                let profile = light
+                    .profile
+                    .as_ref()
+                    .and_then(|p| crate::assets::asset_id(p).ok())
+                    .and_then(|id| library?.light_profiles.get(id).cloned());
+                self.light(light, &pose, profile);
             }
             if let Some(probe) = entity.get::<ara_components::render::ReflectionProbe>() {
                 self.reflection_probes.push(ProbeView {
@@ -496,7 +503,12 @@ impl RenderFrame {
         self.camera = camera.map(|(_, c)| c);
     }
 
-    fn light(&mut self, light: &Light, pose: &Pose) {
+    fn light(
+        &mut self,
+        light: &Light,
+        pose: &Pose,
+        profile: Option<std::sync::Arc<crate::light_profile::LightProfile>>,
+    ) {
         let [r, g, b, _] = light.color.0;
         match light.kind {
             LightKind::Directional => {
@@ -520,13 +532,20 @@ impl RenderFrame {
                 direction: (pose.rotation * Vec3::NEG_Z).normalize().to_array(),
                 tangent: (pose.rotation * Vec3::X).normalize().to_array(),
                 color: [r, g, b],
-                lumens: LightView::point_lumens(light),
+                lumens: match &profile {
+                    // The profile's measured peak, scaled by `intensity`.
+                    Some(p) if light.profile_intensity => {
+                        4. * std::f32::consts::PI * p.peak * light.intensity.max(0.)
+                    }
+                    _ => LightView::point_lumens(light),
+                },
                 range: light.range,
                 cone: [light.inner_angle, light.outer_angle],
                 radius: light.source_radius.max(0.),
                 length: light.source_length.max(0.),
                 size: [light.source_width, light.source_height],
                 barn_doors: [light.barn_door_angle, light.barn_door_length],
+                profile,
             }),
         }
     }

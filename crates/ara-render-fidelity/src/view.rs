@@ -58,6 +58,10 @@ pub struct FidelityView {
     pub(crate) shadow_source: crate::SunShadowSource,
     /// The sun's angular radius in radians (`set_sun_radius`).
     pub(crate) sun_radius: f32,
+    /// Light tables (`set_light_tables`): host-visible words, storage index, capacity.
+    pub(crate) light_tables: Option<(ara_gpu::Buffer, u32, usize)>,
+    /// The words last written there.
+    pub(crate) light_table_words: Vec<u32>,
     /// The uploaded frame of the last completed render, replayed by `post_process`.
     pub(crate) last_frame: Option<crate::frame::GpuFrame>,
 }
@@ -255,6 +259,8 @@ impl FidelityView {
             reservoirs: None,
             shadow_source: crate::SunShadowSource::RayQueries,
             sun_radius: SUN_RADIUS,
+            light_tables: None,
+            light_table_words: Vec::new(),
             last_frame: None,
         })
     }

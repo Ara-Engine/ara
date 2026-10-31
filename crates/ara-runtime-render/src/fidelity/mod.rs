@@ -327,9 +327,5 @@ fn solid(rgba: [u8; 4], srgb: bool) -> Texture {
 
 /// Every local light (the fidelity view has no 64-light cap).
 fn lights(frame: &RenderFrame) -> Vec<scene::Light> {
-    frame
-        .lights
-        .iter()
-        .map(crate::lights::scene_light)
-        .collect()
+    crate::lights::scene_lights(&frame.lights)
 }

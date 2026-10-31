@@ -7,19 +7,33 @@
 // range window apply at the light's centre, as in the raster renderer.
 // Included by lighting.slangh.
 static const uint LIGHT_BYTES=112;
-struct LocalLight{float4 p;float4 colour;float4 cone;float4 params;float4 tangentLength;float4 rect;};
+struct LocalLight{float4 p;float4 colour;float4 cone;float4 params;float4 tangentLength;float4 rect;uint4 tables;};
 LocalLight localLight(Frame f,uint at){
     LocalLight l;l.p=buffers[f.scene.x].Load<float4>(at);l.colour=buffers[f.scene.x].Load<float4>(at+16);
     l.cone=buffers[f.scene.x].Load<float4>(at+32);l.params=buffers[f.scene.x].Load<float4>(at+48);
-    l.tangentLength=buffers[f.scene.x].Load<float4>(at+64);l.rect=buffers[f.scene.x].Load<float4>(at+80);return l;
+    l.tangentLength=buffers[f.scene.x].Load<float4>(at+64);l.rect=buffers[f.scene.x].Load<float4>(at+80);l.tables=buffers[f.scene.x].Load<uint4>(at+96);return l;
 }
 uint localKind(LocalLight l){return uint(l.params.x+0.5)%4;}
 bool localArea(LocalLight l){return localKind(l)>=2||l.params.z>0;}
-// Cone and range window towards `position` from the light's centre (zero past its range).
+// The light's photometric profile towards `fromLight` (unit, from the light), from the
+// light tables (private frame row 9, FidelityView::set_light_tables): look-lights.slangh
+// lightProfile. One without a profile.
+float localProfile(LocalLight l,float3 fromLight){
+    uint offset=l.tables.x,buffer=extensionRow(9).x;if(offset==0||buffer==0)return 1;
+    uint2 size=buffers[NonUniformResourceIndex(buffer)].Load2(offset*4);
+    float3 n=normalize(l.cone.xyz),t=l.tangentLength.xyz,b=cross(t,n);
+    float v=acos(clamp(dot(fromLight,n),-1.,1.))/PI*float(size.x-1),h=(atan2(dot(fromLight,b),dot(fromLight,t))/(2*PI)+1)*float(size.y);
+    uint v0=min(uint(v),size.x-2),h0=uint(h)%size.y,h1=(h0+1)%size.y;float tv=saturate(v-float(v0)),th=frac(h);uint at=(offset+2)*4;
+    float a0=asfloat(buffers[NonUniformResourceIndex(buffer)].Load(at+(h0*size.x+v0)*4)),a1=asfloat(buffers[NonUniformResourceIndex(buffer)].Load(at+(h0*size.x+v0+1)*4));
+    float b0=asfloat(buffers[NonUniformResourceIndex(buffer)].Load(at+(h1*size.x+v0)*4)),b1=asfloat(buffers[NonUniformResourceIndex(buffer)].Load(at+(h1*size.x+v0+1)*4));
+    return lerp(lerp(a0,a1,tv),lerp(b0,b1,tv),th);
+}
+// Cone, profile and range window towards `position` from the light's centre (zero past
+// its range).
 float localWindow(LocalLight l,float3 position){
     float3 delta=position-l.p.xyz;float d=length(delta);if(d>=l.p.w)return 0;float3 fromLight=delta/max(d,1e-6);
     float spot=localKind(l)==1?smoothstep(l.cone.w,max(l.cone.w+1e-4,l.params.y),dot(fromLight,normalize(l.cone.xyz))):1;
-    return spot*pow(saturate(1-pow(d/l.p.w,4)),2);
+    return spot*pow(saturate(1-pow(d/l.p.w,4)),2)*localProfile(l,fromLight);
 }
 // A rect's span on one axis visible from offset `p`, height `z`, past barn-door tips
 // `door` (outward, along the normal): look-lights.slangh barnDoorSpan.

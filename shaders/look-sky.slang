@@ -106,7 +106,7 @@ void fogMain(uint3 tid:SV_DispatchThreadID){
             // disc cosine, barn doors, range), as from its centre.
             float r2=max(0.01,light.parameters.z*light.parameters.z);
             float shadow=(l.flags.y&LOOK_LOCAL_INDIRECT)!=0?localShadow(l,i,at,0,light.positionRange.xyz):1;
-            source+=density*albedo*lightIntensity(f,light,i,at)/max(distance*distance,r2)*shadow*phaseM(dot(d,toLight),g);
+            source+=density*albedo*lightIntensity(f,l,light,i,at)/max(distance*distance,r2)*shadow*phaseM(dot(d,toLight),g);
         }
         float3 segment=exp(-e*ds);integral+=trans*source*(1-segment)/max(e,float3(1e-9));trans*=segment;
         store(l.storage0.w,uint2(z*128+tid.x,tid.y),integral);

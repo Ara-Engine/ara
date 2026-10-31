@@ -41,6 +41,9 @@ pub(crate) struct GpuFrame {
     extra_read: [[u32; 4]; 3],
     extra_write: [[u32; 4]; 3],
     shadow: [u32; 4],
+    /// Private row 9: x the light tables (`FidelityView::set_light_tables`; storage,
+    /// zero none).
+    lights: [u32; 4],
 }
 impl FidelityView {
     pub(crate) fn frame(&self, input: &FrameInput<'_>) -> Result<(GpuFrame, Mat4, Vec3)> {
@@ -263,6 +266,7 @@ impl FidelityView {
                     render_size,
                 } => [visibility.sampled_index, 1, render_size[0], render_size[1]],
             },
+            lights: [self.light_tables.map_or(0, |(_, index, _)| index), 0, 0, 0],
         };
         Ok((f, unjittered, camera.position))
     }

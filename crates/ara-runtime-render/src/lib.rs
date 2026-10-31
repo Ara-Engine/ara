@@ -894,6 +894,8 @@ impl Presenter {
             self.sun = sun;
         }
         renderer.set_sun_radius(frame.sun_radius)?;
+        let shown = &frame.lights[..frame.lights.len().min(64)];
+        renderer.set_light_tables(&lights::tables(shown).0)?;
         Ok(())
     }
 }
@@ -904,12 +906,7 @@ fn sun(frame: &RenderFrame) -> ([f32; 3], [f32; 3]) {
 }
 
 fn lights(frame: &RenderFrame) -> Vec<scene::Light> {
-    frame
-        .lights
-        .iter()
-        .take(64)
-        .map(lights::scene_light)
-        .collect()
+    lights::scene_lights(&frame.lights[..frame.lights.len().min(64)])
 }
 
 /// Where [`camera`] looks from when the world has no camera.

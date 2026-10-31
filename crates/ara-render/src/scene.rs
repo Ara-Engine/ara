@@ -103,7 +103,7 @@ pub struct Light {
     /// lie: outward of the edges and along the normal, in metres (zero: no doors).
     pub rect: [f32; 4],
     /// Light-table offsets in words (`Renderer::set_light_tables`; zero none): x the
-    /// light profile, y a rect's source texture; z, w reserved.
+    /// light profile; y, z, w reserved.
     pub tables: [u32; 4],
 }
 

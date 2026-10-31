@@ -4371,21 +4371,6 @@ expression: out
             }
           }
         },
-        "sourceTexture": {
-          "type": "option<asset>",
-          "doc": "Image across a rect's surface tinting what it emits (Unreal's Source Texture).",
-          "default": null,
-          "editor": {
-            "showIf": {
-              "field": "kind",
-              "when": {
-                "oneOf": [
-                  "rect"
-                ]
-              }
-            }
-          }
-        },
         "sourceAngle": {
           "type": "f32",
           "doc": "Angular diameter of a directional light's disc: wider suns cast softer shadow edges and broader highlights (Unreal's Light Source Angle; 0.5357 is the Sun).",

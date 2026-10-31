@@ -27,7 +27,7 @@ struct Frame {
     float4 fog;float4 grading;float4 look;
 };
 Frame frame(){return buffers[root.frame].Load<Frame>(0);}
-// Rust retains seven read rows, seven write rows, then nine private rows.
+// Rust retains seven read rows, seven write rows, then ten private rows.
 // Fetch uniform descriptors by byte offset instead of passing these dynamically
 // indexed arrays by value through every material/path/denoiser call.
 uint4 extensionRow(uint row){

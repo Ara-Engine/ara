@@ -255,6 +255,8 @@ fn fork_look(
         lut_size: source.lut_size,
         ltc: source.ltc,
         sun_radius: source.sun_radius,
+        light_tables: source.light_tables,
+        light_table_words: source.light_table_words.clone(),
         images: source.images.map(|_| None),
         sampled: source.sampled.map(|_| 0),
         storage: source.storage.map(|_| 0),

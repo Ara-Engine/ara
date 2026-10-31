@@ -213,7 +213,7 @@ float lightComplexity(Frame g,int2 r){
     uint count=buffers[NonUniformResourceIndex(g.lighting.z)].Load(tile*4);float cost=0;
     for(uint i=0;i<count;i++){
         uint index=buffers[NonUniformResourceIndex(g.lighting.z)].Load((tile+1+i)*4);Light light=loadLight(g.lighting.w,index);
-        if(all(lightIntensity(g,light,index,w)<=0))continue;
+        if(all(lightIntensity(g,l,light,index,w)<=0))continue;
         cost+=lightHasArea(light)?3:1;
         if(l.localShadows.y!=0&&buffers[NonUniformResourceIndex(l.localShadows.x)].Load2(index*8).y!=0)cost+=1;
     }

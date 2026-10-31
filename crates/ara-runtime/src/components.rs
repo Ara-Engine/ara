@@ -231,9 +231,6 @@ pub struct Light {
     /// (Unreal's Use IES Intensity); `intensity` then scales it (one is as measured).
     #[ara(editor(show_if(field = "kind", one_of = ["point", "spot", "rect"])))]
     pub profile_intensity: bool,
-    /// Image across a rect's surface tinting what it emits (Unreal's Source Texture).
-    #[ara(editor(show_if(field = "kind", one_of = ["rect"])))]
-    pub source_texture: Option<AssetRef>,
     /// Angular diameter of a directional light's disc: wider suns cast softer shadow
     /// edges and broader highlights (Unreal's Light Source Angle; 0.5357 is the Sun).
     #[ara(default = 0.5357, unit = Degrees, range(min = 0, max = 20), editor(show_if(field = "kind", one_of = ["directional"])))]
@@ -257,7 +254,6 @@ impl Default for Light {
             barn_door_length: 0.2,
             profile: None,
             profile_intensity: false,
-            source_texture: None,
             source_angle: 0.5357,
         }
     }
