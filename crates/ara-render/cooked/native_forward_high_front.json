@@ -1,36 +1,36 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7",
+  "key": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094",
   "stages": [
     {
-      "dxil": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/native_forward_high_front/nativeForwardHighFrontFragment.dxil",
-      "dxil_hash": "0ea2c286f56b9dc40bf09549799bd1af9b74a784a9da92e2758620011caf84f6",
+      "dxil": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_high_front/nativeForwardHighFrontFragment.dxil",
+      "dxil_hash": "5176c8556eba315b55fe169b77d1f9b1c232a74d10d9cb8d7631f452e0dee76d",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/native_forward_high_front/nativeForwardHighFrontFragment.metallib",
-        "metallib_hash": "a9a329f368051e7035a50e029dfc97093006747de2af40360bad2ac82e7c8d41",
-        "reflection": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/native_forward_high_front/nativeForwardHighFrontFragment.metal.json",
+        "metallib": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_high_front/nativeForwardHighFrontFragment.metallib",
+        "metallib_hash": "5582f3c8f533f6f573434207809d86b8bd21eaef063d95720edb5948e8dbb153",
+        "reflection": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_high_front/nativeForwardHighFrontFragment.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "nativeForwardHighFrontFragment",
-      "spirv": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/native_forward_high_front/nativeForwardHighFrontFragment.spv",
+      "spirv": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_high_front/nativeForwardHighFrontFragment.spv",
       "spirv_entry": "main",
-      "spirv_hash": "74794792d5d932469903bb4816ebce2705857745df05b153d2a9c5ae0297e0a0",
+      "spirv_hash": "f2a7003302f9bf0b8b0fb1cec842daf910b5492cca57651ec51d7a91b55bf7a2",
       "stage": "fragment"
     },
     {
-      "dxil": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/native_forward_high_front/nativeForwardVertex.dxil",
+      "dxil": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_high_front/nativeForwardVertex.dxil",
       "dxil_hash": "6f2a74444ca0c5bf6703bf38f1d62a817776e6cb570e410bf3419142e44926a9",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/native_forward_high_front/nativeForwardVertex.metallib",
+        "metallib": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_high_front/nativeForwardVertex.metallib",
         "metallib_hash": "950c16603b91f11cda0b20d39199a9c15b36299bbd90f642d00fe8d73d137e45",
-        "reflection": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/native_forward_high_front/nativeForwardVertex.metal.json",
+        "reflection": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_high_front/nativeForwardVertex.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "nativeForwardVertex",
-      "spirv": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/native_forward_high_front/nativeForwardVertex.spv",
+      "spirv": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_high_front/nativeForwardVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "20b969245fbaea404e8933e3bbff9ad8817be3a72fb234f45afb8c1a753431b3",
       "stage": "vertex"

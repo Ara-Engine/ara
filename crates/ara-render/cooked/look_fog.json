@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7",
+  "key": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094",
   "stages": [
     {
-      "dxil": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_fog/fogMain.dxil",
-      "dxil_hash": "87cdd9dabc2c0b83e398c952cb323c20e366a667cff273ea88e7ca1726c09210",
+      "dxil": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/look_fog/fogMain.dxil",
+      "dxil_hash": "4ddc07fab71443d35b7e8f9eb3a6262b02a9f31a4311ed30cd06b81f39fadb12",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_fog/fogMain.metallib",
-        "metallib_hash": "d41053cc5604be490ad11b6d0157189e1678441e0eb4dda4cf0437eeb39e05d2",
-        "reflection": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_fog/fogMain.metal.json",
+        "metallib": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/look_fog/fogMain.metallib",
+        "metallib_hash": "243877df2fe85e6c3ae3a78837c0ed325a185eea578ea42805742901fb1bf06d",
+        "reflection": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/look_fog/fogMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "fogMain",
-      "spirv": "2b05018b13ceb51603ad7972f86dbe03e27a5d087a0f26829bd5260bd25654c7/look_fog/fogMain.spv",
+      "spirv": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/look_fog/fogMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "d59fd21e207332f7aa4d0258a3936c197e10ceefbe9745b15dc690f56ede7f92",
+      "spirv_hash": "a5e6c0fea03bd0fdf1b6f5db12e7e7b17d8b081b03be25e6dca3dde1633f71d2",
       "stage": "compute"
     }
   ],

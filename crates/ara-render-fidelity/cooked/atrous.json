@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19",
+  "key": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7",
   "stages": [
     {
-      "dxil": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/atrous/atrousMain.dxil",
+      "dxil": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/atrous/atrousMain.dxil",
       "dxil_hash": "454a8e361c0ebc4d2c73514e3428309891cfddcb6bb8c9d76fb833e6d3b1a2c9",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/atrous/atrousMain.metallib",
+        "metallib": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/atrous/atrousMain.metallib",
         "metallib_hash": "c0d9ed798a9e798e4ba3e526ef5c963ae4d85c2598640c2874a8d26569be3d47",
-        "reflection": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/atrous/atrousMain.metal.json",
+        "reflection": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/atrous/atrousMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "atrousMain",
-      "spirv": "0d6de37aeafe62fc23d4d54d8ee20e22a35a1c341159f8c26cfe602ce65fcf19/atrous/atrousMain.spv",
+      "spirv": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/atrous/atrousMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "492468569d7bce6080474c9a80601d63e6d9024960dcbef282045ec278b4688a",
       "stage": "compute"
