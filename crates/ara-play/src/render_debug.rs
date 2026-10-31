@@ -36,10 +36,11 @@ pub struct RenderDebug {
     pub view: BufferView,
 }
 
-/// The images a capture can show ([`RenderDebug::view`]).
+/// The images a capture can show ([`RenderDebug::view`]). Snake case on the wire, as
+/// the renderer's `ViewMode` the editor sends.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
 #[ara(module = "play")]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub enum BufferView {
     /// The lit image.
     #[default]

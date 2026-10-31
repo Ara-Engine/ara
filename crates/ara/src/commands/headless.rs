@@ -147,15 +147,8 @@ fn render_debug(
         "reflections": reflections.unwrap_or("lit"),
         "reference": reference.map(|(samples, bounces)| json!({"samples": samples, "bounces": bounces})),
         "exposure": ev100,
-        // kebab-case flag values name the camelCase BufferView variants.
-        "view": view.map_or_else(|| "lit".to_owned(), |v| {
-            let mut out = String::new();
-            let mut upper = false;
-            for c in v.chars() {
-                if c == '-' { upper = true; } else if upper { out.extend(c.to_uppercase()); upper = false; } else { out.push(c); }
-            }
-            out
-        }),
+        // kebab-case flag values name the snake_case BufferView variants.
+        "view": view.map_or_else(|| "lit".to_owned(), |v| v.replace('-', "_")),
     })
 }
 
@@ -182,7 +175,7 @@ mod tests {
         let lock = render_debug(&[], false, None, None, Some(7.), Some("gi-diffuse"));
         assert!(lock["reference"].is_null());
         assert_eq!(lock["exposure"], 7.);
-        assert_eq!(lock["view"], "giDiffuse");
+        assert_eq!(lock["view"], "gi_diffuse");
         assert_eq!(debug["view"], "lit");
     }
 }
