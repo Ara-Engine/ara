@@ -61,7 +61,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   Same-queue passes share a submission; cross-queue edges and deferred helper boundaries retain GPU waits/timestamps. Synchronous `render`/`render_view` remain available.
 - `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer: physical sky LUTs and their IBL,
   CSM-shadowed froxel fog, histogram or manual exposure (snaps to its meter on a reset and while new GI arrives;
-  `exposure`/`seed_exposure` carry a converged exposure across views), bloom, grading and the display curve,
+  `exposure`/`seed_exposure` carry a converged exposure across views; `exposure_settled` reads whether it reached its meter), bloom, grading and the display curve,
   plus volume lens effects (`look::lens`): display lift/gamma/gain and chromatic aberration in the post pass,
   half-res gather DoF before TAA (TAA reads `DOF_COMPOSITE`), McGuire motion blur as the `look_post_motion`
   variant, AO/SSR tuning `OverPreset`. Their images allocate with the quality budget, never on a look edit.

@@ -409,6 +409,15 @@ impl SceneView {
                 return Ok(());
             }
             self.convergence.completed();
+            // Automatic exposure still adapting when the budget runs out (it moves a
+            // little each frame): keep drawing until it lands, so a still view never
+            // freezes halfway and resumes on the next input. Bounded per input.
+            if !self.convergence.needs_frame()
+                && !matches!(work, RasterWork::Capture(_))
+                && renderer.exposure_settled() == Some(false)
+            {
+                self.convergence.adapt();
+            }
             self.frame_pending = false;
             if renderer.scene_frame_async() {
                 self.active = renderer.presentation_ready();

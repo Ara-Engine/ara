@@ -217,6 +217,8 @@ impl SceneQuality {
             "sceneMs": scene_ms,
             "gpuStartMs": gpu_start,
             "gpuMs": gpu_ms,
+            "exposure": renderer.exposure().ok().flatten(),
+            "exposureSettled": renderer.exposure_settled(),
             "importing": importing,
             "camera": {"target": camera.target.to_array(), "yaw": camera.yaw, "pitch": camera.pitch, "distance": camera.distance},
             "capture": capture,
