@@ -103,11 +103,11 @@ public sealed record GraphicsOptions
     public uint? TextureBudgetMib { get; init; }
     /// <summary>Native game window policy.</summary>
     public GraphicsWindowMode WindowMode { get; init; } = GraphicsWindowMode.Borderless;
-    /// <summary>Physical display pixels, clamped to 320..8192.</summary>
+    /// <summary>Physical window/exclusive pixels, clamped to 320..8192. Borderless uses the desktop extent.</summary>
     public uint Width { get; init; } = 1280;
-    /// <summary>Physical display pixels, clamped to 180..8192.</summary>
+    /// <summary>Physical window/exclusive pixels, clamped to 180..8192. Borderless uses the desktop extent.</summary>
     public uint Height { get; init; } = 720;
-    /// <summary>Refresh rate in millihertz; zero uses the desktop/default rate.</summary>
+    /// <summary>Exclusive refresh in millihertz; zero uses the desktop/default rate. Other modes retain desktop refresh.</summary>
     public uint RefreshRateMillihz { get; init; }
     /// <summary>Platform monitor ID from Capabilities.Modes; zero keeps the current monitor.</summary>
     public uint Monitor { get; init; }

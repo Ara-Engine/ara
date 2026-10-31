@@ -46,8 +46,9 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
 
 ## Tools
 
-- [ ] **C# graphics settings.** Quality presets and individual settings readable and
-  writable from game scripts (Unreal's `UGameUserSettings` scalability).
+- [x] **C# graphics settings.** Typed per-user presets/scalability, live renderer/display
+  application, explicit RT restart, persistence, C# events and engine protocol/CLI
+  (`a63467bc7`; [API and application boundaries](../dev/graphics-settings.md)).
 - [ ] **Debugging.** A debug view for every effect above (`ViewMode`, `RenderDebug`),
   `ara capture` switches for each (`--view`, `--without`), a path-traced reference capture
   (`ara capture --reference`), and region luminance/compare tooling.
