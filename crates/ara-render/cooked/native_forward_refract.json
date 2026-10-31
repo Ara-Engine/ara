@@ -1,36 +1,36 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094",
+  "key": "e01c371a8e80977489e1913fe9b08339f401e14abe3d6862e64baafbfb637e73",
   "stages": [
     {
-      "dxil": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract/nativeForwardRefractFragment.dxil",
-      "dxil_hash": "6f8d044967d70bb3741bb19c368a8deba26d05391137319caa4552957454730c",
+      "dxil": "e01c371a8e80977489e1913fe9b08339f401e14abe3d6862e64baafbfb637e73/native_forward_refract/nativeForwardRefractFragment.dxil",
+      "dxil_hash": "25fc4b9bb4c8ae9f82d9e2ce8dd67cbd82d91ff09bbb327200e0ad6be423affb",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract/nativeForwardRefractFragment.metallib",
-        "metallib_hash": "b9b1fe637d5d08b671dcc46b33a86392e383caf8a95eaac96940706636e2718c",
-        "reflection": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract/nativeForwardRefractFragment.metal.json",
+        "metallib": "e01c371a8e80977489e1913fe9b08339f401e14abe3d6862e64baafbfb637e73/native_forward_refract/nativeForwardRefractFragment.metallib",
+        "metallib_hash": "eb87894b75ed038839b5997d3921dfe91b5a9191ec56d2a66f5e367d9a68705e",
+        "reflection": "e01c371a8e80977489e1913fe9b08339f401e14abe3d6862e64baafbfb637e73/native_forward_refract/nativeForwardRefractFragment.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "nativeForwardRefractFragment",
-      "spirv": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract/nativeForwardRefractFragment.spv",
+      "spirv": "e01c371a8e80977489e1913fe9b08339f401e14abe3d6862e64baafbfb637e73/native_forward_refract/nativeForwardRefractFragment.spv",
       "spirv_entry": "main",
-      "spirv_hash": "36954e919519c54d118d3b7f7ed7fd11b65df725763e307e0b1beba108c5b84f",
+      "spirv_hash": "15e89df904040df718c147f4e88e586f9b2fd0e2c10a8960fdc2c62bc4e0f1cc",
       "stage": "fragment"
     },
     {
-      "dxil": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract/nativeGeometryVertex.dxil",
+      "dxil": "e01c371a8e80977489e1913fe9b08339f401e14abe3d6862e64baafbfb637e73/native_forward_refract/nativeGeometryVertex.dxil",
       "dxil_hash": "bac22c88e6a71908abdd701c74cf7a138808675ef4f32804eccf7d93ea5e702e",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract/nativeGeometryVertex.metallib",
+        "metallib": "e01c371a8e80977489e1913fe9b08339f401e14abe3d6862e64baafbfb637e73/native_forward_refract/nativeGeometryVertex.metallib",
         "metallib_hash": "05055473cf32d0d6ea16009c70bee178487027bb6526624be58e90d1e7292cd4",
-        "reflection": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract/nativeGeometryVertex.metal.json",
+        "reflection": "e01c371a8e80977489e1913fe9b08339f401e14abe3d6862e64baafbfb637e73/native_forward_refract/nativeGeometryVertex.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "nativeGeometryVertex",
-      "spirv": "8856433b20b03b3f0560810234775b3f85994b5a0e98d3ab4c9aa3598d079094/native_forward_refract/nativeGeometryVertex.spv",
+      "spirv": "e01c371a8e80977489e1913fe9b08339f401e14abe3d6862e64baafbfb637e73/native_forward_refract/nativeGeometryVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "0dd39af89ab1a347edff9b8779e8c57953fe7ce677cd4461f318e40e4d3f5695",
       "stage": "vertex"

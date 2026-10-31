@@ -1,0 +1,32 @@
+{
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "e01c371a8e80977489e1913fe9b08339f401e14abe3d6862e64baafbfb637e73",
+  "stages": [
+    {
+      "dxil": "e01c371a8e80977489e1913fe9b08339f401e14abe3d6862e64baafbfb637e73/look_fog_inject/fogInjectMain.dxil",
+      "dxil_hash": "dcb752a764137b0336027a7c033fc0d6b195a87b057fe3a0c9256a948f09e784",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "e01c371a8e80977489e1913fe9b08339f401e14abe3d6862e64baafbfb637e73/look_fog_inject/fogInjectMain.metallib",
+        "metallib_hash": "9827dd004a06f472669e71407d190ab7489a27ceb69f1acfb80bdb46e707cd2c",
+        "reflection": "e01c371a8e80977489e1913fe9b08339f401e14abe3d6862e64baafbfb637e73/look_fog_inject/fogInjectMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "fogInjectMain",
+      "spirv": "e01c371a8e80977489e1913fe9b08339f401e14abe3d6862e64baafbfb637e73/look_fog_inject/fogInjectMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "ae3d47dcb4d9eafa1b376d4f5dd0a44847f54217d950622aeaa4f42455b62268",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7",
+  "key": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3",
   "stages": [
     {
-      "dxil": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/hybrid_emissive/hybridEmissiveMain.dxil",
-      "dxil_hash": "679300a5ef32a419fbcde726842db6156226ca5fbf7240f0a74dc2fc21c6eb81",
+      "dxil": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/hybrid_emissive/hybridEmissiveMain.dxil",
+      "dxil_hash": "365ec22c84efde672866e2c62f990326a319ab8228c0115a2b86c732159c0ca1",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/hybrid_emissive/hybridEmissiveMain.metallib",
-        "metallib_hash": "f5d0b1c2f03afe8c9bcf38dfa05f1d303776a382b90ee14b3bd96ae7aa9b3acf",
-        "reflection": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/hybrid_emissive/hybridEmissiveMain.metal.json",
+        "metallib": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/hybrid_emissive/hybridEmissiveMain.metallib",
+        "metallib_hash": "23ce8e32fe8306dfb73afb819220aedb851b9848078a01125b844f29db8b5a2d",
+        "reflection": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/hybrid_emissive/hybridEmissiveMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "hybridEmissiveMain",
-      "spirv": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/hybrid_emissive/hybridEmissiveMain.spv",
+      "spirv": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/hybrid_emissive/hybridEmissiveMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "3752bb3db732e53f6d5c4f5580194f5a6f4331e8c7a8e80702e272377837cbdb",
+      "spirv_hash": "d1159ed62d083574baf81ba63a42d8953cac7d7c2f3432f09da80fe0d510dfc0",
       "stage": "compute"
     }
   ],

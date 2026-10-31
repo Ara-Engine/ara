@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7",
+  "key": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3",
   "stages": [
     {
-      "dxil": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/reference_atmosphere/referenceAtmosphereMain.dxil",
-      "dxil_hash": "2881ddd6ecc01b2e3d4e39cf469d7d5f2c4e87ebefc8cff0ac54894bdf974bc4",
+      "dxil": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/reference_atmosphere/referenceAtmosphereMain.dxil",
+      "dxil_hash": "b9ac06f8520651b8e46e241852072d2a9902763c358440a80b1a7af76f708650",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/reference_atmosphere/referenceAtmosphereMain.metallib",
-        "metallib_hash": "38a60698a1c2051984892adf2af5623e52360f07128ff32c9e226d32eb63a626",
-        "reflection": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/reference_atmosphere/referenceAtmosphereMain.metal.json",
+        "metallib": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/reference_atmosphere/referenceAtmosphereMain.metallib",
+        "metallib_hash": "13aa9c26bbc4afe9749316a9a13e783003d46742883aae6bc6bee41c588acaa4",
+        "reflection": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/reference_atmosphere/referenceAtmosphereMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "referenceAtmosphereMain",
-      "spirv": "958671636da6c1e696caffad9a3ab25283057e40862fabe9d8b6705c5b1363f7/reference_atmosphere/referenceAtmosphereMain.spv",
+      "spirv": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/reference_atmosphere/referenceAtmosphereMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "21f07c5dea9ba204fb76fa20401646e3c2143b32942c8ec3171e07b060bf3546",
+      "spirv_hash": "e9f76831f484464bc67ed0fd073feeea15119b7417c9b9624bfa3db45973a770",
       "stage": "compute"
     }
   ],
