@@ -4,17 +4,17 @@
   "key": "e25ad9427e6a77327d195fa9694925e73bc01e1a47e3220bf3193c4a291588ce",
   "stages": [
     {
-      "dxil": "7e4b2eed04325a657d7f70d8d5fa83d66c2b3c6cdd5f3d20ff772d4acfdb899e/look_gi_gather/giGatherMain.dxil",
+      "dxil": "e25ad9427e6a77327d195fa9694925e73bc01e1a47e3220bf3193c4a291588ce/look_gi_gather/giGatherMain.dxil",
       "dxil_hash": "7a93319955081ef8e370b0c8bd4eb5b7f101ca7b2691698e558ad452c7adb47c",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "7e4b2eed04325a657d7f70d8d5fa83d66c2b3c6cdd5f3d20ff772d4acfdb899e/look_gi_gather/giGatherMain.metallib",
+        "metallib": "e25ad9427e6a77327d195fa9694925e73bc01e1a47e3220bf3193c4a291588ce/look_gi_gather/giGatherMain.metallib",
         "metallib_hash": "467b759e36eb418bd700ad53b9fa700f819154f2937368ed6976e0238a62e131",
-        "reflection": "7e4b2eed04325a657d7f70d8d5fa83d66c2b3c6cdd5f3d20ff772d4acfdb899e/look_gi_gather/giGatherMain.metal.json",
+        "reflection": "e25ad9427e6a77327d195fa9694925e73bc01e1a47e3220bf3193c4a291588ce/look_gi_gather/giGatherMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "giGatherMain",
-      "spirv": "7e4b2eed04325a657d7f70d8d5fa83d66c2b3c6cdd5f3d20ff772d4acfdb899e/look_gi_gather/giGatherMain.spv",
+      "spirv": "e25ad9427e6a77327d195fa9694925e73bc01e1a47e3220bf3193c4a291588ce/look_gi_gather/giGatherMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "9df7b7736825790d07a78b92b9573c403c52e8423fd7ea01619c01bb593d068a",
       "stage": "compute"

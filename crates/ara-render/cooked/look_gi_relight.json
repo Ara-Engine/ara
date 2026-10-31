@@ -4,17 +4,17 @@
   "key": "e25ad9427e6a77327d195fa9694925e73bc01e1a47e3220bf3193c4a291588ce",
   "stages": [
     {
-      "dxil": "7e4b2eed04325a657d7f70d8d5fa83d66c2b3c6cdd5f3d20ff772d4acfdb899e/look_gi_relight/giRelightMain.dxil",
+      "dxil": "e25ad9427e6a77327d195fa9694925e73bc01e1a47e3220bf3193c4a291588ce/look_gi_relight/giRelightMain.dxil",
       "dxil_hash": "a66875124983a68ac0f5cd74bbfe18050479e9d360d370a8e3b1f585a307eef1",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "7e4b2eed04325a657d7f70d8d5fa83d66c2b3c6cdd5f3d20ff772d4acfdb899e/look_gi_relight/giRelightMain.metallib",
+        "metallib": "e25ad9427e6a77327d195fa9694925e73bc01e1a47e3220bf3193c4a291588ce/look_gi_relight/giRelightMain.metallib",
         "metallib_hash": "6c43bdff961d27450800990bd55b3f2eda77d01ee716462306b6818eb95dc61d",
-        "reflection": "7e4b2eed04325a657d7f70d8d5fa83d66c2b3c6cdd5f3d20ff772d4acfdb899e/look_gi_relight/giRelightMain.metal.json",
+        "reflection": "e25ad9427e6a77327d195fa9694925e73bc01e1a47e3220bf3193c4a291588ce/look_gi_relight/giRelightMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "giRelightMain",
-      "spirv": "7e4b2eed04325a657d7f70d8d5fa83d66c2b3c6cdd5f3d20ff772d4acfdb899e/look_gi_relight/giRelightMain.spv",
+      "spirv": "e25ad9427e6a77327d195fa9694925e73bc01e1a47e3220bf3193c4a291588ce/look_gi_relight/giRelightMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "3f139afb5064f050d96a10b6964a4b0687eec0106a69f904167630a456b2854f",
       "stage": "compute"
