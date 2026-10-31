@@ -30,6 +30,10 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   ceiling 0.0033, floor centre 0.0028 (= reference), right wall 0.0045 (ref 0.0024); no
   captures ceiling 0.0030. Screen traces and captures both return darker rough reflections
   than the probes, while the probes overshoot on the right wall: per-source bias to fix.
+  Tried and reverted: tracing SSR along the GGX dominant direction (floor centre 0.0018 to
+  0.0014). Likely cause: SSR reads last frame, so the ceiling and floor reflect each other
+  already too dark (a dim fixed point); the missing energy is first-order bounce from the
+  sunlit floor/snow into rough metal.
   Original item: Bounce energy that matches the path
   tracer: screen-space GI over the probe field, a per-probe radiance cache with sky and
   emissive, multi-bounce, metals; temporal stability with no noise (D27). Measured against
@@ -53,6 +57,9 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   normal, roughness/metal, emissive, fade, sort order, receivers filter.
 
 ## Tools
+
+- [ ] **Cooker determinism.** An incremental re-cook of unchanged sources rewrote Metal
+  metadata (`ResourceCount` 31 to 224 on fullscreenVertex) relative to the fresh cohort cook.
 
 - [ ] **C# graphics settings.** Quality presets and individual settings readable and
   writable from game scripts (Unreal's `UGameUserSettings` scalability).
