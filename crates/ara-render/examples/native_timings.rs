@@ -7,7 +7,10 @@ use anyhow::Result;
 use ara_gpu::{Access, GpuDevice, Resource};
 use ara_render::{
     Renderer,
-    instanced::{self, Changes, Decal, Geometry, Instance, Lod, Material, Scene, TextureStats, Textures, Vertex},
+    instanced::{
+        self, Changes, Decal, Geometry, Instance, Lod, Material, Scene, TextureStats, Textures,
+        Vertex,
+    },
     scene::{CameraSpec, VERTEX_COLOR_TINT},
 };
 use glam::{Mat4, Vec3};
@@ -42,14 +45,25 @@ fn geometry(key: u8, floor: bool) -> Geometry {
     let faces: &[(Vec3, Vec3)] = if floor {
         &[(Vec3::Y, Vec3::X)]
     } else {
-        &[(Vec3::X, Vec3::Z), (Vec3::NEG_X, Vec3::Z), (Vec3::Y, Vec3::X), (Vec3::NEG_Y, Vec3::X), (Vec3::Z, Vec3::X), (Vec3::NEG_Z, Vec3::X)]
+        &[
+            (Vec3::X, Vec3::Z),
+            (Vec3::NEG_X, Vec3::Z),
+            (Vec3::Y, Vec3::X),
+            (Vec3::NEG_Y, Vec3::X),
+            (Vec3::Z, Vec3::X),
+            (Vec3::NEG_Z, Vec3::X),
+        ]
     };
     let half = if floor { 60.0 } else { 0.5 };
     for &(n, t) in faces {
         let b = n.cross(t);
         let base = vertices.len() as u32;
         for (u, v) in [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)] {
-            let p = if floor { (t * u + b * v) * half } else { n * 0.5 + (t * u + b * v) * 0.5 };
+            let p = if floor {
+                (t * u + b * v) * half
+            } else {
+                n * 0.5 + (t * u + b * v) * 0.5
+            };
             vertices.push(Vertex {
                 position: p.to_array(),
                 normal: n.to_array(),
@@ -62,11 +76,18 @@ fn geometry(key: u8, floor: bool) -> Geometry {
         }
         indices.extend([base, base + 2, base + 1, base, base + 3, base + 2]);
     }
-    let extent = if floor { Vec3::new(half, 0.0, half) } else { Vec3::splat(0.5) };
+    let extent = if floor {
+        Vec3::new(half, 0.0, half)
+    } else {
+        Vec3::splat(0.5)
+    };
     Geometry {
         key: [key; 32],
         vertices,
-        lods: vec![Lod { indices, error: 0.0 }],
+        lods: vec![Lod {
+            indices,
+            error: 0.0,
+        }],
         bounds: [-extent, extent],
         deforming: false,
         vertex_colors: false,
@@ -106,7 +127,9 @@ fn scene(painted: bool, decals: usize) -> Scene {
             world,
             previous_world: world,
             casts_shadows: true,
-            paint: painted.then(|| vec![instanced::pack_color([1.0, (i % 7) as f32 / 7.0, 0.3, 1.0]); 24].into()),
+            paint: painted.then(|| {
+                vec![instanced::pack_color([1.0, (i % 7) as f32 / 7.0, 0.3, 1.0]); 24].into()
+            }),
             receives_decals: true,
         });
     }
@@ -155,10 +178,18 @@ fn main() -> Result<()> {
         target: Vec3::new(0.0, 0.0, -10.0),
         vertical_fov: 60f32.to_radians(),
     };
-    let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/ara-render/native-timings");
-    let mut renderer = Renderer::new_native(&scene(false, 0), Box::new(NoTextures), SIZE, &[], cache)?;
+    let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-render/native-timings");
+    let mut renderer =
+        Renderer::new_native(&scene(false, 0), Box::new(NoTextures), SIZE, &[], cache)?;
     let mut report = BTreeMap::new();
-    for (name, painted, decals) in [("plain", false, 0), ("painted", true, 0), ("decals128", false, 128), ("decals512", false, 512), ("decals1024", false, 1024)] {
+    for (name, painted, decals) in [
+        ("plain", false, 0),
+        ("painted", true, 0),
+        ("decals128", false, 128),
+        ("decals512", false, 512),
+        ("decals1024", false, 1024),
+    ] {
         let scene = scene(painted, decals);
         renderer.replace_native_scene(&scene, Box::new(NoTextures))?;
         let mut samples = BTreeMap::<String, Vec<f64>>::new();
@@ -170,7 +201,10 @@ fn main() -> Result<()> {
                 for timing in renderer.timings() {
                     frame += timing.milliseconds;
                     if matches!(timing.pass.as_str(), "GBuffer" | "Decals") {
-                        samples.entry(timing.pass.clone()).or_default().push(timing.milliseconds);
+                        samples
+                            .entry(timing.pass.clone())
+                            .or_default()
+                            .push(timing.milliseconds);
                     }
                 }
                 samples.entry("frame".into()).or_default().push(frame);

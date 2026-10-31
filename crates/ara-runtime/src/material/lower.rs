@@ -218,10 +218,7 @@ type Outputs = Vec<(String, Signal)>;
 /// Splits evaluated outputs into paint layers: the common refinement of every
 /// output's lerp tree (each layer's weight the product of the terms it lies under),
 /// each with the output signals that layer sees. Unlayered outputs are shared.
-fn split(
-    evaluate: &Evaluator<'_>,
-    outputs: Outputs,
-) -> Result<Vec<(Terms, Outputs)>> {
+fn split(evaluate: &Evaluator<'_>, outputs: Outputs) -> Result<Vec<(Terms, Outputs)>> {
     let mut weights: Vec<Terms> = vec![[0; 4]];
     for (_, signal) in &outputs {
         if let Signal::Layered(terms) = signal {

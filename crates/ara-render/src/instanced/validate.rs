@@ -159,7 +159,10 @@ impl Scene {
                     && decal.occlusion[1] <= 4.0
                     && decal.occlusion[0].is_finite()
                     && decal.specular.is_finite()
-                    && decal.fade_distance.iter().all(|d| d.is_finite() && *d >= 0.0)
+                    && decal
+                        .fade_distance
+                        .iter()
+                        .all(|d| d.is_finite() && *d >= 0.0)
                     && decal.fade_angle.iter().all(|a| (0.0..=180.0).contains(a))
                     && (0.0..=1.0).contains(&decal.fade_screen_size),
                 "invalid native decal `{}`",

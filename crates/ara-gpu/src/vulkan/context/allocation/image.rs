@@ -24,9 +24,7 @@ pub(crate) fn image(
     unsafe {
         let mut info = vk::ImageCreateInfo::default();
         if alias.is_some() {
-            info = info
-                .flags(storage_alias_flags())
-                .push(&mut list);
+            info = info.flags(storage_alias_flags()).push(&mut list);
         }
         let handle = device.create_image(
             &info
@@ -90,17 +88,19 @@ pub(crate) fn image(
             }
             view = device.create_image_view(&view_info, None)?;
             if let Some(alias) = alias {
-                let mut storage = vk::ImageViewUsageCreateInfo::default()
-                    .usage(vk::ImageUsageFlags::STORAGE);
-                storage_view = Some(device.create_image_view(
-                    &vk::ImageViewCreateInfo::default()
-                        .image(handle)
-                        .view_type(vk::ImageViewType::TYPE_2D)
-                        .format(alias)
-                        .subresource_range(range(aspect).level_count(mip_levels))
-                        .push(&mut storage),
-                    None,
-                )?);
+                let mut storage =
+                    vk::ImageViewUsageCreateInfo::default().usage(vk::ImageUsageFlags::STORAGE);
+                storage_view = Some(
+                    device.create_image_view(
+                        &vk::ImageViewCreateInfo::default()
+                            .image(handle)
+                            .view_type(vk::ImageViewType::TYPE_2D)
+                            .format(alias)
+                            .subresource_range(range(aspect).level_count(mip_levels))
+                            .push(&mut storage),
+                        None,
+                    )?,
+                );
             }
             Ok(ImageAllocation {
                 handle,

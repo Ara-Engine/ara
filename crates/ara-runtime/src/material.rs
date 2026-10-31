@@ -308,7 +308,8 @@ pub(crate) fn patch_references(ops: &[ara_doc::Op]) -> BTreeSet<String> {
             } if {
                 let path = path.to_string();
                 path.contains("MeshRenderer") || path.contains("Decal")
-            } => {
+            } =>
+            {
                 collect_material_refs(value, &mut assets)
             }
             ara_doc::Op::Create { record, .. } => {

@@ -189,19 +189,34 @@ fn decals_map_to_native_decals_and_stream_their_poses() {
     frame.decals.push(view(1.0, None));
     let mut prepared = prepare(&frame, Content::default(), config()).unwrap();
     let scene = &prepared.scene;
-    assert_eq!(scene.decals.len(), 1, "a decal without its material draws nothing");
+    assert_eq!(
+        scene.decals.len(),
+        1,
+        "a decal without its material draws nothing"
+    );
     let decal = &scene.decals[0];
     assert_eq!(decal.opacity[0], 0.5, "colour alpha scales every channel");
     assert_eq!(decal.opacity_channel, 4);
     let row = scene.materials[decal.material];
-    assert_eq!(row.pbr.base_color, [0.5, 0.25, 0.5, 0.75], "tint and opacity factor");
+    assert_eq!(
+        row.pbr.base_color,
+        [0.5, 0.25, 0.5, 0.75],
+        "tint and opacity factor"
+    );
     assert!(scene.instances[0].receives_decals);
 
     prepared.enable_motion();
     frame.decals[0] = view(2.0, Some(Arc::clone(&asset)));
-    assert!(matches!(prepared.update_frame(&frame).unwrap(), FrameChange::Ready { .. }));
+    assert!(matches!(
+        prepared.update_frame(&frame).unwrap(),
+        FrameChange::Ready { .. }
+    ));
     assert!(prepared.changes().decals);
     assert_eq!(prepared.scene.decals[0].world.w_axis.x, 2.0);
     frame.decals[0].decal.color.0[0] = 0.25;
-    assert_eq!(prepared.update_frame(&frame).unwrap(), FrameChange::Rebuild, "colour is in the row");
+    assert_eq!(
+        prepared.update_frame(&frame).unwrap(),
+        FrameChange::Rebuild,
+        "colour is in the row"
+    );
 }
