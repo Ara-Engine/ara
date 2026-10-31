@@ -33,7 +33,7 @@ pub(super) struct Bindings {
     environment: Environment,
     lights: Vec<ara_runtime::extract::LightView>,
     /// Decal identities (`decals::identity`) and whether each drew.
-    decals: Vec<((u64, Option<[u8; 32]>, [u32; 3]), bool)>,
+    decals: Vec<(super::decals::Identity, bool)>,
     scratch: Vec<ara_render::scene::Vertex>,
     live: bool,
 }
@@ -278,12 +278,26 @@ impl Prepared {
         }
         let mut drawn = self.scene.decals.iter_mut();
         for (view, (_, draws)) in frame.decals.iter().zip(&bindings.decals) {
-            if *draws
-                && let Some(decal) = drawn.next()
-            {
-                let before = (decal.world, decal.opacity, decal.fade_distance, decal.fade_angle, decal.sort_order, decal.fade_screen_size.to_bits());
+            if *draws && let Some(decal) = drawn.next() {
+                let before = (
+                    decal.world,
+                    decal.opacity,
+                    decal.fade_distance,
+                    decal.fade_angle,
+                    decal.sort_order,
+                    decal.fade_screen_size.to_bits(),
+                );
                 super::decals::update(decal, view);
-                if before != (decal.world, decal.opacity, decal.fade_distance, decal.fade_angle, decal.sort_order, decal.fade_screen_size.to_bits()) {
+                if before
+                    != (
+                        decal.world,
+                        decal.opacity,
+                        decal.fade_distance,
+                        decal.fade_angle,
+                        decal.sort_order,
+                        decal.fade_screen_size.to_bits(),
+                    )
+                {
                     self.changes.decals = true;
                 }
             }

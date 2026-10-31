@@ -63,7 +63,11 @@ impl Decals {
             entries: Vec::new(),
         };
         if !decals.is_empty() {
-            let bytes: Vec<u8> = this.decals.iter().flat_map(|d| bytemuck::bytes_of(&record(d)).to_vec()).collect();
+            let bytes: Vec<u8> = this
+                .decals
+                .iter()
+                .flat_map(|d| bytemuck::bytes_of(&record(d)).to_vec())
+                .collect();
             gpu.upload(this.records, &bytes)?;
         }
         this.dirty = true;
@@ -77,7 +81,10 @@ impl Decals {
             "Native decal count changed; replace the scene"
         );
         self.decals.clone_from_slice(decals);
-        let bytes: Vec<u8> = decals.iter().flat_map(|d| bytemuck::bytes_of(&record(d)).to_vec()).collect();
+        let bytes: Vec<u8> = decals
+            .iter()
+            .flat_map(|d| bytemuck::bytes_of(&record(d)).to_vec())
+            .collect();
         if !bytes.is_empty() {
             gpu.upload_queued_range(self.records, 0, &bytes)?;
         }
@@ -101,11 +108,17 @@ impl Decals {
         let height = (camera.projection.y_axis.y).abs().max(1e-6);
         for (index, decal) in self.decals.iter().enumerate() {
             let corners = corners(decal.world);
-            if planes.iter().any(|p| corners.iter().all(|c| p.dot(c.extend(1.0)) < 0.0)) {
+            if planes
+                .iter()
+                .any(|p| corners.iter().all(|c| p.dot(c.extend(1.0)) < 0.0))
+            {
                 continue;
             }
             let centre = decal.world.transform_point3(Vec3::ZERO);
-            let radius = corners.iter().map(|c| c.distance(centre)).fold(0.0, f32::max);
+            let radius = corners
+                .iter()
+                .map(|c| c.distance(centre))
+                .fold(0.0, f32::max);
             let distance = centre.distance(camera.position);
             let mut fade = 1.0;
             let [start, end] = decal.fade_distance;
@@ -120,7 +133,8 @@ impl Decals {
             };
             if decal.fade_screen_size > 0.0 {
                 // Fade over the size's first doubling, as Unreal's FadeScreenSize does over time.
-                fade *= ((screen - decal.fade_screen_size) / decal.fade_screen_size).clamp(0.0, 1.0);
+                fade *=
+                    ((screen - decal.fade_screen_size) / decal.fade_screen_size).clamp(0.0, 1.0);
             }
             if fade <= 0.0 || decal.opacity.iter().all(|o| *o <= 0.0) {
                 continue;
@@ -133,7 +147,8 @@ impl Decals {
             entry[3] = fade.to_bits();
             entry[4] = depth[0].to_bits();
             entry[5] = depth[1].to_bits();
-            self.entries.push((decal.sort_order, decal.entity, screen, entry));
+            self.entries
+                .push((decal.sort_order, decal.entity, screen, entry));
         }
         if self.entries.len() > MAX_VISIBLE {
             // Keep the largest on screen; the rest are the least visible.
@@ -143,7 +158,16 @@ impl Decals {
         self.entries.sort_by_key(|e| (e.0, e.1));
         self.count = self.entries.len();
         let mut bytes = Vec::with_capacity(HEADER + self.count * ENTRY);
-        let header = [self.count as u32, storage[0], storage[1], storage[2], storage[3], 0, 0, 0];
+        let header = [
+            self.count as u32,
+            storage[0],
+            storage[1],
+            storage[2],
+            storage[3],
+            0,
+            0,
+            0,
+        ];
         bytes.extend_from_slice(bytemuck::cast_slice(&header));
         for (.., entry) in &self.entries {
             bytes.extend_from_slice(bytemuck::cast_slice(entry));
@@ -205,7 +229,8 @@ fn footprint(vp: Mat4, corners: &[Vec3; 8], size: [u32; 2]) -> ([u32; 4], [f32; 
             return ([0, 0, size[0], size[1]], [1.0, 0.0]);
         }
         let ndc = clip.truncate() / clip.w;
-        let pixel = Vec2::new(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5) * Vec2::new(size[0] as f32, size[1] as f32);
+        let pixel = Vec2::new(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5)
+            * Vec2::new(size[0] as f32, size[1] as f32);
         lo = lo.min(pixel);
         hi = hi.max(pixel);
         depth[0] = depth[0].max(ndc.z);
@@ -221,31 +246,6 @@ fn footprint(vp: Mat4, corners: &[Vec3; 8], size: [u32; 2]) -> ([u32; 4], [f32; 
         ],
         [depth[0].min(1.0), depth[1].max(0.0)],
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_box_in_front_covers_its_projection_and_one_crossing_the_camera_everything() {
-        let camera = crate::scene::CameraSpec::LookAt {
-            position: Vec3::new(0.0, 0.0, 5.0),
-            target: Vec3::ZERO,
-            vertical_fov: 0.8,
-        }
-        .resolve([200, 100])
-        .expect("camera");
-        let vp = camera.projection * camera.view;
-        let (rect, depth) = footprint(vp, &corners(Mat4::IDENTITY), [200, 100]);
-        assert!(rect[0] > 60 && rect[2] < 140 && rect[1] > 20 && rect[3] < 80, "{rect:?}");
-        assert!(depth[0] > depth[1] && depth[1] > 0.0, "reversed-Z near over far: {depth:?}");
-        let crossing = Mat4::from_translation(Vec3::new(0.0, 0.0, 5.0));
-        assert_eq!(
-            footprint(vp, &corners(crossing), [200, 100]),
-            ([0, 0, 200, 100], [1.0, 0.0])
-        );
-    }
 }
 
 impl Native {
@@ -282,6 +282,41 @@ impl Native {
         constants.words[6] = self.textures.binding().map_or(0, |b| b.buffer_index);
         constants.words[7] = u32::from(coverage);
         recorder.push(Command::Constants(constants));
-        recorder.push(Command::Dispatch([size[0].div_ceil(16), size[1].div_ceil(16), 1]));
+        recorder.push(Command::Dispatch([
+            size[0].div_ceil(16),
+            size[1].div_ceil(16),
+            1,
+        ]));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_box_in_front_covers_its_projection_and_one_crossing_the_camera_everything() {
+        let camera = crate::scene::CameraSpec::LookAt {
+            position: Vec3::new(0.0, 0.0, 5.0),
+            target: Vec3::ZERO,
+            vertical_fov: 0.8,
+        }
+        .resolve([200, 100])
+        .expect("camera");
+        let vp = camera.projection * camera.view;
+        let (rect, depth) = footprint(vp, &corners(Mat4::IDENTITY), [200, 100]);
+        assert!(
+            rect[0] > 60 && rect[2] < 140 && rect[1] > 20 && rect[3] < 80,
+            "{rect:?}"
+        );
+        assert!(
+            depth[0] > depth[1] && depth[1] > 0.0,
+            "reversed-Z near over far: {depth:?}"
+        );
+        let crossing = Mat4::from_translation(Vec3::new(0.0, 0.0, 5.0));
+        assert_eq!(
+            footprint(vp, &corners(crossing), [200, 100]),
+            ([0, 0, 200, 100], [1.0, 0.0])
+        );
     }
 }

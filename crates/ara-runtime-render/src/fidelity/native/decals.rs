@@ -53,7 +53,9 @@ fn decal(builder: &mut Builder, view: &DecalView) -> Result<Option<render::Decal
         world: glam30::Mat4::from_cols_array(&view.world.to_cols_array()),
         material: row,
         opacity: d.opacities(),
-        opacity_channel: surface.opacity_texture.map_or(4, |(.., channel)| channel.min(4)),
+        opacity_channel: surface
+            .opacity_texture
+            .map_or(4, |(.., channel)| channel.min(4)),
         occlusion: [
             surface.occlusion,
             if asset.material.occlusion_texture.is_some() {
@@ -83,7 +85,10 @@ pub(super) fn update(decal: &mut render::Decal, view: &DecalView) {
 
 /// What a live frame must match to stream decal edits: identity, material
 /// generation and the colour (folded into the material row).
-pub(super) fn identity(view: &DecalView) -> (u64, Option<[u8; 32]>, [u32; 3]) {
+/// A decal's entity, material generation and colour bits.
+pub(super) type Identity = (u64, Option<[u8; 32]>, [u32; 3]);
+
+pub(super) fn identity(view: &DecalView) -> Identity {
     (
         view.entity,
         view.material

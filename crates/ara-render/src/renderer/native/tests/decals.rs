@@ -47,7 +47,8 @@ fn decal(entity: u64, x: f32, material: usize, sort_order: i32) -> instanced::De
     instanced::Decal {
         entity,
         name: format!("decal-{entity}"),
-        world: Mat4::from_translation(Vec3::new(x, 0.0, 0.0)) * Mat4::from_scale(Vec3::new(1.0, 1.0, 1.0)),
+        world: Mat4::from_translation(Vec3::new(x, 0.0, 0.0))
+            * Mat4::from_scale(Vec3::new(1.0, 1.0, 1.0)),
         material,
         opacity: [1.0; 7],
         opacity_channel: 4,
@@ -148,14 +149,32 @@ fn decals_blend_receivers_fade_and_order_in_the_gbuffer() -> Result<()> {
     let albedo = renderer.capture(&request(ViewMode::Albedo))?;
     albedo.image.save(root.join("albedo.png"))?;
     let grey = at(&albedo, 0.0, 0.0);
-    assert!(grey[0] == grey[1] && grey[0] > 150, "refused decals: {grey:?}");
-    assert_eq!(at(&albedo, 3.0, 0.0), [255, 0, 0], "a decal replaces base colour");
-    assert_eq!(at(&albedo, -3.0, 0.0), [0, 255, 0], "the higher sort order draws on top");
-    assert_eq!(at(&albedo, 3.0, 0.8), grey, "outside the box the surface keeps its colour");
+    assert!(
+        grey[0] == grey[1] && grey[0] > 150,
+        "refused decals: {grey:?}"
+    );
+    assert_eq!(
+        at(&albedo, 3.0, 0.0),
+        [255, 0, 0],
+        "a decal replaces base colour"
+    );
+    assert_eq!(
+        at(&albedo, -3.0, 0.0),
+        [0, 255, 0],
+        "the higher sort order draws on top"
+    );
+    assert_eq!(
+        at(&albedo, 3.0, 0.8),
+        grey,
+        "outside the box the surface keeps its colour"
+    );
     let rm = renderer.capture(&request(ViewMode::RoughnessMetal))?;
     let rough = at(&rm, 3.0, 0.0)[0];
     // The view shows sRGB-encoded values: 0.2 is 124, 0.8 is 231.
-    assert!(rough.abs_diff(124) <= 3, "roughness 0.2 replaces 0.8: {rough}");
+    assert!(
+        rough.abs_diff(124) <= 3,
+        "roughness 0.2 replaces 0.8: {rough}"
+    );
 
     // Distance fade: past the end the decal is gone; the change streams.
     scene.decals[3].fade_distance = [1.0, 2.0];
@@ -169,6 +188,12 @@ fn decals_blend_receivers_fade_and_order_in_the_gbuffer() -> Result<()> {
     let faded = renderer.capture(&request(ViewMode::Albedo))?;
     assert_eq!(at(&faded, 3.0, 0.0), grey, "faded out by distance");
 
+    let colours = renderer.capture(&request(ViewMode::VertexColor))?;
+    assert_eq!(
+        at(&colours, -3.0, 0.0),
+        [255; 3],
+        "vertex-colour views show no decals"
+    );
     let coverage = renderer.capture(&request(ViewMode::DecalCoverage))?;
     coverage.image.save(root.join("coverage.png"))?;
     assert_eq!(at(&coverage, -3.0, 0.0), [0, 255, 0], "two decals: green");

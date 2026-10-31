@@ -125,6 +125,7 @@ fn render_debug(
         "temporalJitter": on("temporal-jitter"),
         "fullResolution": full_resolution,
         "reflections": reflections.unwrap_or("lit"),
-        "view": view.unwrap_or("lit").replace('-', "_"),
+        // kebab-case flags name the camelCase views (`vertex-color-red` is `vertexColorRed`).
+        "view": view.unwrap_or("lit").split('-').enumerate().map(|(i, w)| if i == 0 { w.to_owned() } else { w[..1].to_uppercase() + &w[1..] }).collect::<String>(),
     })
 }

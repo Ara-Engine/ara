@@ -136,7 +136,10 @@ impl Renderer {
         // runs the pass without decals too (it shows where none land).
         let decal_coverage = mode == ViewMode::DecalCoverage;
         let decals = match &self.native {
-            Some(native) if native.has_decals() || decal_coverage => {
+            // The vertex-colour views show colours alone.
+            Some(native)
+                if (native.has_decals() && mode.vertex_color().is_none()) || decal_coverage =>
+            {
                 let mut storage = [0; 4];
                 for (slot, target) in storage.iter_mut().zip([ALBEDO, NORMAL, MATERIAL, EMISSIVE]) {
                     *slot = self.gpu.storage_image(self.targets.images[target])?.index;
