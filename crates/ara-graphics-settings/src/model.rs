@@ -187,6 +187,8 @@ pub struct Capabilities {
     pub device_local_mib: Option<u64>,
     /// This player owns a mutable display surface (false in headless/embedded play).
     pub display_available: bool,
+    /// Platform ID of the window's current monitor, or zero without a display.
+    pub current_monitor: u32,
     /// This surface advertises HDR10 precision and transfer.
     pub hdr_supported: bool,
     /// Enumerated fullscreen modes; empty for headless/embedded players.

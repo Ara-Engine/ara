@@ -149,3 +149,99 @@ fn save_uses_applied_values_and_auto_keeps_rt_an_explicit_opt_in() {
         );
     }
 }
+
+#[test]
+fn startup_reconciles_disconnected_monitors_and_unsupported_output() {
+    let requested = Settings {
+        hdr: true,
+        ray_tracing: true,
+        monitor: 44,
+        ..Default::default()
+    };
+    let mut service = Service::new(requested, None);
+    service.set_capabilities(Capabilities {
+        device_known: true,
+        display_available: true,
+        ..Default::default()
+    });
+    let state = service.state();
+    assert!(!state.applied.hdr && !state.applied.ray_tracing && !state.active_ray_tracing);
+    assert_eq!(state.applied.monitor, 0);
+    assert_eq!(state.diagnostics.len(), 3);
+}
+
+#[test]
+fn backend_rejection_keeps_the_candidate_and_restores_last_good() {
+    let mut service = Service::default();
+    let before = service.state().applied.clone();
+    let candidate = Settings {
+        width: 1920,
+        height: 1080,
+        ..before.clone()
+    };
+    service
+        .request(Request::Set {
+            settings: candidate.clone(),
+        })
+        .unwrap();
+    service.request(Request::Apply).unwrap();
+    service.reject_application("native mode switch failed");
+    assert_eq!(service.state().applied, before);
+    assert_eq!(service.state().pending, candidate);
+    assert_eq!(
+        service.request(Request::Get).unwrap().diagnostics[0].code,
+        INVALID
+    );
+}
+
+#[test]
+fn missing_persisted_fields_inherit_project_defaults_and_exclusive_modes_normalize() {
+    let dir = scratch();
+    let path = dir.path().join("graphics.json");
+    std::fs::write(
+        &path,
+        r#"{"version":1,"settings":{"groups":{"shadows":"low"}}}"#,
+    )
+    .unwrap();
+    let defaults = Settings {
+        preset: Preset::Epic,
+        width: 1920,
+        ..Default::default()
+    };
+    let loaded = Store::at(path).load(&defaults).0;
+    assert_eq!(loaded.preset, Preset::Epic);
+    assert_eq!(loaded.width, 1920);
+    assert_eq!(loaded.groups.shadows, Some(Tier::Low));
+    let mut service = Service::default();
+    service.set_capabilities(Capabilities {
+        display_available: true,
+        current_monitor: 5,
+        modes: vec![DisplayMode {
+            monitor: 5,
+            width: 1920,
+            height: 1080,
+            refresh_rate_millihz: 60000,
+        }],
+        ..Default::default()
+    });
+    service
+        .request(Request::Set {
+            settings: Settings {
+                window_mode: WindowMode::Fullscreen,
+                width: 1900,
+                height: 1000,
+                refresh_rate_millihz: 61000,
+                ..Default::default()
+            },
+        })
+        .unwrap();
+    let state = service.request(Request::Apply).unwrap();
+    assert_eq!(
+        [
+            state.applied.width,
+            state.applied.height,
+            state.applied.refresh_rate_millihz
+        ],
+        [1920, 1080, 60000]
+    );
+}

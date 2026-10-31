@@ -100,7 +100,55 @@ impl Service {
     /// Publish physical device/display capabilities. Never infer physical RT support
     /// from whether ray queries were enabled on the logical device.
     pub fn set_capabilities(&mut self, caps: Capabilities) {
+        if caps == self.state.capabilities && !self.state.applied.hdr {
+            return;
+        }
+        let mut corrected = self.state.applied.clone();
+        let mut reasons = Vec::new();
+        if corrected.hdr && !caps.hdr_supported {
+            corrected.hdr = false;
+            reasons.push("HDR output is unavailable; using SDR");
+        }
+        if corrected.ray_tracing && caps.device_known && !caps.ray_tracing_supported {
+            corrected.ray_tracing = false;
+            self.state.active_ray_tracing = false;
+            reasons.push("this GPU has no hardware ray queries; using raster");
+        }
+        if corrected.monitor != 0
+            && caps.display_available
+            && !caps.modes.iter().any(|m| m.monitor == corrected.monitor)
+        {
+            corrected.monitor = 0;
+            reasons.push("saved monitor is disconnected; using the current monitor");
+        }
+        if corrected != self.state.applied {
+            if self.state.pending == self.state.applied {
+                self.state.pending = corrected.clone();
+            }
+            self.state.applied = corrected.clone();
+            self.previous = corrected;
+            self.state.restart_required =
+                self.state.applied.ray_tracing != self.state.active_ray_tracing;
+            self.state.revision += 1;
+            self.state.diagnostics.extend(
+                reasons
+                    .into_iter()
+                    .map(|reason| Diagnostic::warning(INVALID, reason)),
+            );
+        }
         self.state.capabilities = caps;
+    }
+
+    /// Reject a backend application without discarding the editable candidate or
+    /// terminating the player. The owner restores this last-good configuration.
+    pub fn reject_application(&mut self, message: impl Into<String>) -> Diagnostic {
+        let diagnostic = Diagnostic::error(INVALID, message);
+        self.state.applied = self.previous.clone();
+        self.state.restart_required =
+            self.state.applied.ray_tracing != self.state.active_ray_tracing;
+        self.state.revision += 1;
+        self.state.diagnostics = vec![diagnostic.clone()];
+        diagnostic
     }
 
     /// Startup command-line overrides win over saved preferences for this launch.
@@ -116,7 +164,15 @@ impl Service {
     /// Execute one typed settings operation. Invalid capabilities reject Apply
     /// atomically, retaining the candidate and the previous applied configuration.
     pub fn request(&mut self, request: Request) -> Result<State, Diagnostic> {
-        self.state.diagnostics.clear();
+        let result = self.execute(request);
+        if let Err(diagnostic) = &result { self.state.diagnostics.push(diagnostic.clone()); }
+        result
+    }
+
+    fn execute(&mut self, request: Request) -> Result<State, Diagnostic> {
+        if !matches!(request, Request::Get) {
+            self.state.diagnostics.clear();
+        }
         match request {
             Request::Get => {}
             Request::Set { settings } => self.state.pending = settings,
@@ -155,6 +211,37 @@ impl Service {
                         INVALID,
                         "the selected monitor is no longer connected",
                     ));
+                }
+                if next.window_mode == crate::WindowMode::Fullscreen && caps.display_available {
+                    let monitor = if next.monitor == 0 {
+                        caps.current_monitor
+                    } else {
+                        next.monitor
+                    };
+                    if let Some(mode) = caps
+                        .modes
+                        .iter()
+                        .filter(|mode| {
+                            mode.monitor == monitor && mode.width <= 8192 && mode.height <= 8192
+                        })
+                        .min_by_key(|mode| {
+                            (
+                                mode.width.abs_diff(next.width) + mode.height.abs_diff(next.height),
+                                if next.refresh_rate_millihz == 0 {
+                                    0
+                                } else {
+                                    mode.refresh_rate_millihz
+                                        .abs_diff(next.refresh_rate_millihz)
+                                },
+                            )
+                        })
+                    {
+                        next.width = mode.width;
+                        next.height = mode.height;
+                        if next.refresh_rate_millihz != 0 {
+                            next.refresh_rate_millihz = mode.refresh_rate_millihz;
+                        }
+                    }
                 }
                 self.state.diagnostics = rows;
                 self.previous = std::mem::replace(&mut self.state.applied, next.clone());

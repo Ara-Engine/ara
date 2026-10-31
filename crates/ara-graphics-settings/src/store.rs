@@ -68,7 +68,7 @@ impl Store {
             if text.len() as u64 > MAX_BYTES {
                 return Err("settings file exceeds 64 KiB".to_owned());
             }
-            let value = ara_json::parse(&text).map_err(|e| e.to_string())?;
+            let mut value = ara_json::parse(&text).map_err(|e| e.to_string())?;
             let version = value
                 .get("version")
                 .and_then(|v| v.as_u64())
@@ -78,6 +78,12 @@ impl Store {
                 return Err(format!(
                     "unsupported graphics settings version {version}; file retained"
                 ));
+            }
+            self.future = false;
+            if let Some(settings) = value.get_mut("settings") {
+                let mut base = ara_json::to_value(defaults).map_err(|e| e.to_string())?;
+                overlay(&mut base, settings);
+                *settings = base;
             }
             let file: File = serde_json::from_value(value).map_err(|e| e.to_string())?;
             Ok(Some(file.settings))
@@ -120,6 +126,21 @@ impl Store {
     fn error(&self, message: impl std::fmt::Display) -> Diagnostic {
         Diagnostic::error(STORAGE, format!("graphics settings: {message}"))
             .file(self.path.to_string_lossy())
+    }
+}
+
+fn overlay(base: &mut serde_json::Value, saved: &serde_json::Value) {
+    match (base, saved) {
+        (serde_json::Value::Object(base), serde_json::Value::Object(saved)) => {
+            for (key, value) in saved {
+                if let Some(default) = base.get_mut(key) {
+                    overlay(default, value);
+                } else {
+                    base.insert(key.clone(), value.clone());
+                }
+            }
+        }
+        (base, saved) => *base = saved.clone(),
     }
 }
 
