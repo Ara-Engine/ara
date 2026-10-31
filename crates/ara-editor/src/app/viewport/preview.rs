@@ -117,8 +117,8 @@ impl SceneView {
             exposure,
         };
         if !renderer.preallocate_view(view, &request)? {
-            // A resizing panel keeps rendering at the extent it has (drawn
-            // unscaled) while the new one allocates; only a first frame waits.
+            // A resizing panel keeps rendering at the extent it has (scaled to the
+            // panel, `draw_view_image`) while the new one allocates; only a first frame waits.
             let shown = renderer.view_output(view)?;
             match (renderer.view_extent(view), &shown) {
                 (Some((render_size, size)), Some(_)) => {

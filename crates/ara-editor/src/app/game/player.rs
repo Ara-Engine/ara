@@ -2,14 +2,27 @@ use super::*;
 use ara_play_host::embed::Surfaces;
 use std::collections::VecDeque;
 
+/// Quiet time after a change of the wanted size before the next resize goes out (the
+/// first change after a quiet spell goes at once, a lone dock change waits for nothing):
+/// each player resize reallocates its targets and restarts temporal history, so a
+/// splitter drag resizes once it rests instead of several times a second. The frame
+/// shown meanwhile is scaled to the panel (`viewport::draw_view_image`).
+const RESIZE_REST: Duration = Duration::from_millis(90);
+/// A wanted size that keeps changing (a long drag) still resizes this often.
+const RESIZE_EVERY: Duration = Duration::from_millis(400);
+
+/// One player's imported surfaces, the frame it shows and its resize requests.
 #[derive(Default)]
 pub(super) struct PlayerView {
     shown: Option<PlaySurface>,
     pending: Option<PlaySurface>,
-    resized: Option<Instant>,
-    /// UI scale most recently requested for this player's surface.
-    scale: Option<f32>,
+    /// Size and UI scale last requested from the player, and when.
+    requested: Option<([u32; 2], f32, Instant)>,
+    /// The wanted size and scale, and since when.
+    wanted: Option<([u32; 2], f32, Instant)>,
     frames: VecDeque<Instant>,
+    /// Pixels of the frame shown (its surface generation), never of a newer surface
+    /// whose first frame has not arrived: the view draws the image it holds.
     size: [u32; 2],
     fps: u32,
     live: bool,
@@ -45,7 +58,6 @@ impl PlayerView {
             return Ok(false);
         };
         let generation = state.generation;
-        self.size = state.size;
         let known = |surface: &Option<PlaySurface>| {
             surface
                 .as_ref()
@@ -80,6 +92,7 @@ impl PlayerView {
                     surfaces.release(world, player, previous);
                 }
                 changed = true;
+                self.size = surface.size();
                 self.live = true;
                 let now = Instant::now();
                 self.frames.push_back(now);
@@ -103,18 +116,48 @@ impl PlayerView {
                 surfaces.release(world, player, frame);
             }
         }
-        if wanted[0] >= 16
-            && wanted[1] >= 16
-            && (wanted != self.size || self.scale != Some(scale))
-            && self
-                .resized
-                .is_none_or(|at| at.elapsed() > Duration::from_millis(150))
-        {
-            surfaces.resize(world, player, wanted, scale);
-            self.scale = Some(scale);
-            self.resized = Some(Instant::now());
+        let current = self.pending.as_ref().or(self.shown.as_ref());
+        let current = current.map(PlaySurface::size);
+        if let Some((size, scale)) = self.resize_due(wanted, scale, current, Instant::now()) {
+            surfaces.resize(world, player, size, scale);
         }
         Ok(changed)
+    }
+    /// The resize to request now, if any: the wanted size once it rests
+    /// ([`RESIZE_REST`]), or every [`RESIZE_EVERY`] while it keeps changing. A request
+    /// is never repeated while unanswered (each one recreates the player's ring).
+    /// `current` is the newest imported surface's size: before any request, the
+    /// surface Play opened with (its embed size and scale, the panel's at the time).
+    fn resize_due(
+        &mut self,
+        wanted: [u32; 2],
+        scale: f32,
+        current: Option<[u32; 2]>,
+        now: Instant,
+    ) -> Option<([u32; 2], f32)> {
+        if wanted.iter().any(|v| *v < 16) {
+            return None;
+        }
+        let since = match self.wanted {
+            Some((size, s, at)) if size == wanted && s == scale => at,
+            _ => {
+                self.wanted = Some((wanted, scale, now));
+                now
+            }
+        };
+        let satisfied = match self.requested {
+            Some((size, s, _)) => (size, s) == (wanted, scale),
+            None => current.is_none_or(|size| size == wanted),
+        };
+        let due = now.duration_since(since) >= RESIZE_REST
+            || self
+                .requested
+                .is_none_or(|(_, _, at)| now.duration_since(at) >= RESIZE_EVERY);
+        if satisfied || !due {
+            return None;
+        }
+        self.requested = Some((wanted, scale, now));
+        Some((wanted, scale))
     }
     pub fn close(
         &mut self,
@@ -136,5 +179,63 @@ impl PlayerView {
         self.frames.clear();
         self.live = false;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resizes_wait_for_the_size_to_rest_and_are_never_repeated_unanswered() {
+        let mut view = PlayerView::default();
+        let start = Instant::now();
+        let at = |ms: u64| start + Duration::from_millis(ms);
+        // The embed size already matches: nothing to ask.
+        assert_eq!(
+            view.resize_due([800, 450], 1., Some([800, 450]), at(0)),
+            None
+        );
+        // A stale embed size (the panel was never laid out) resizes at once.
+        let mut stale = PlayerView::default();
+        assert_eq!(
+            stale.resize_due([1600, 900], 1., Some([1280, 720]), at(0)),
+            Some(([1600, 900], 1.))
+        );
+        // Unanswered, the same request never goes out again.
+        assert_eq!(
+            stale.resize_due([1600, 900], 1., Some([1280, 720]), at(900)),
+            None
+        );
+        // A drag: its first change goes out at once (a lone dock change waits for
+        // nothing); the frames after it wait until the size rests...
+        assert_eq!(
+            stale.resize_due([1500, 900], 1., Some([1600, 900]), at(1000)),
+            Some(([1500, 900], 1.))
+        );
+        for (ms, w) in [(1016, 1490), (1033, 1480)] {
+            assert_eq!(
+                stale.resize_due([w, 900], 1., Some([1600, 900]), at(ms)),
+                None
+            );
+        }
+        assert_eq!(
+            stale.resize_due([1480, 900], 1., Some([1600, 900]), at(1033 + 90)),
+            Some(([1480, 900], 1.))
+        );
+        // ...or every RESIZE_EVERY while it keeps moving.
+        let mut ms = 1200;
+        let mut sent = Vec::new();
+        while ms < 2100 {
+            if let Some((size, _)) = stale.resize_due([1000 + ms as u32, 900], 1., None, at(ms)) {
+                sent.push(size[0]);
+            }
+            ms += 16;
+        }
+        assert_eq!(sent.len(), 2, "{sent:?}");
+        // A new UI scale is a new request.
+        assert!(stale.resize_due([3100, 900], 2., None, at(3000)).is_some());
+        // Too small to render: nothing.
+        assert_eq!(view.resize_due([8, 8], 1., None, at(5000)), None);
     }
 }

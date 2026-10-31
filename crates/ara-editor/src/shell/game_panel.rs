@@ -304,7 +304,8 @@ impl Shell {
     /// The gameplay camera's preview image, letterboxed like Play's frames. Before the
     /// Game surface is laid out (its tab just shown) the frame is empty: `game_frame_stale`
     /// rebuilds it at the real size before it is drawn. The image keeps its own pixel
-    /// size (`app::viewport::draw_unscaled`), cropped by the frame.
+    /// size, or covers the frame while a resized one is in flight
+    /// (`app::viewport::draw_view_image`), cropped by the frame.
     fn preview_frame(&self, out: &mut String, description: &str) {
         let Some([w, h]) = self.game_frame() else {
             out.push_str(

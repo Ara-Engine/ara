@@ -2069,7 +2069,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 let render_at = Instant::now();
                 {
                     ara_gpu::cpu_scope!("UI.render");
-                    unscaled_views(&mut shell, &renderer, scene_dpi, None);
+                    place_view_images(&mut shell, &renderer, scene_dpi, None);
                     // Exactly the drawable: a one-pixel miss rescales the whole UI.
                     gpu.pin_target_size(physical);
                     ui_renderer.render(
@@ -2184,7 +2184,7 @@ pub fn run(mut options: Options) -> ara_ui::Result<()> {
                 }
                 let float_dpi = options.dpi.unwrap_or_else(|| float.window.display_scale())
                     * windows::ui_scale(&editor);
-                unscaled_views(&mut shell, &renderer, scene_dpi, Some(&float.id));
+                place_view_images(&mut shell, &renderer, scene_dpi, Some(&float.id));
                 let Some(surface) = shell.surface(&float.id) else {
                     continue;
                 };
@@ -2941,8 +2941,9 @@ fn set_camera(
     Ok(())
 }
 /// Show the Scene, Game preview and live Game images of one window (`float`, or the
-/// main window) at their own pixel size, never stretched (`viewport::draw_unscaled`).
-fn unscaled_views(
+/// main window): 1:1 when rendered for their node, scaled to cover it while a
+/// resized frame is in flight (`viewport::draw_view_image`).
+fn place_view_images(
     shell: &mut crate::shell::Shell,
     renderer: &Renderer,
     scene_dpi: Option<f32>,
@@ -2956,7 +2957,7 @@ fn unscaled_views(
         },
     };
     if let Some(dpi) = scene_dpi {
-        viewport::draw_unscaled(
+        viewport::draw_view_image(
             display,
             overlay::viewport_image(),
             renderer.output_size(),
@@ -2964,10 +2965,10 @@ fn unscaled_views(
         );
     }
     if let Some(size) = shell.game_preview {
-        viewport::draw_unscaled(display, game_preview::texture(), size, shell.game_scale);
+        viewport::draw_view_image(display, game_preview::texture(), size, shell.game_scale);
     }
     for (player, info) in &shell.play_controls.players {
-        viewport::draw_unscaled(
+        viewport::draw_view_image(
             display,
             game::player_texture(*player),
             info.size,

@@ -1083,12 +1083,14 @@ fn pose_key(gesture: Option<&crate::world::gesture::Gesture>) -> Option<u64> {
     })
 }
 
-/// Draw view image `image` at its own pixel size (`size` physical pixels at `dpi`),
-/// centred on its node and cropped by the panel's clip, never stretched
-/// over the node: a resized panel or window shows the last completed frame at its
-/// native size until the frame at the new size lands. Run on the display list right
-/// before the UI renders; picking and overlays keep the node's rect.
-pub(super) fn draw_unscaled(
+/// Draw view image `image` (`size` physical pixels at `dpi`) on its node, centred
+/// and cropped by the panel's clip. A frame rendered for the node (within a pixel)
+/// draws 1:1, never resampled. A frame from before a resize (the panel, dock, aspect
+/// or DPI changed and the frame at the new size is in flight, a few frames) is scaled
+/// to cover the node, keeping its aspect: never a small image with bars around it,
+/// never stretched out of aspect; the cameras keep their FOV around the view centre,
+/// so the next frame lands on it. Run on the display list right before the UI renders.
+pub(super) fn draw_view_image(
     display: &mut ara_ui::paint::DisplayList,
     image: u32,
     size: [u32; 2],
@@ -1103,14 +1105,30 @@ pub(super) fn draw_unscaled(
         } = draw
             && *id == image
         {
-            let (w, h) = (size[0] as f32 / dpi, size[1] as f32 / dpi);
-            // Centred: the cameras keep their vertical FOV around the view centre,
-            // so a frame from before a resize lines up with the next one.
-            rect.x += ((rect.w - w) * 0.5).round();
-            rect.y += ((rect.h - h) * 0.5).round();
-            rect.w = w;
-            rect.h = h;
+            *rect = view_image_rect(*rect, size, dpi);
         }
+    }
+}
+
+/// Where [`draw_view_image`] puts a `size`-pixel frame on `node` (logical px at `dpi`).
+/// Its corner lands on a physical pixel: the UI samples images bilinearly, so a 1:1
+/// frame at a fractional offset (layout is logical; 125% and 150% scales put nodes
+/// between pixels) would blur the whole view by half a pixel.
+fn view_image_rect(node: ara_ui::paint::Box2, size: [u32; 2], dpi: f32) -> ara_ui::paint::Box2 {
+    let (mut w, mut h) = (size[0] as f32 / dpi, size[1] as f32 / dpi);
+    // One physical pixel of rounding either way is the same frame.
+    let slack = 1.5 / dpi;
+    if (w - node.w).abs() > slack || (h - node.h).abs() > slack {
+        let cover = (node.w / w).max(node.h / h);
+        w *= cover;
+        h *= cover;
+    }
+    let snap = |v: f32| (v * dpi).round() / dpi;
+    ara_ui::paint::Box2 {
+        x: snap(node.x + (node.w - w) * 0.5),
+        y: snap(node.y + (node.h - h) * 0.5),
+        w,
+        h,
     }
 }
 
@@ -1120,6 +1138,38 @@ mod patch_tests;
 mod tests {
     use super::*;
     use ara_ui_render::gpu::UiGpu;
+
+    #[test]
+    fn view_images_draw_one_to_one_or_cover_their_node_on_whole_pixels() {
+        use ara_ui::paint::Box2;
+        let node = Box2 {
+            x: 301.,
+            y: 87.,
+            w: 800.,
+            h: 450.,
+        };
+        // At 125% a 1000x563 frame is the node's own: 1:1, its corner on a pixel.
+        let one = view_image_rect(node, [1000, 563], 1.25);
+        assert!((one.w - 800.).abs() < 1e-3 && (one.h - 563. / 1.25).abs() < 1e-3);
+        for v in [one.x, one.y] {
+            assert!(
+                ((v * 1.25) - (v * 1.25).round()).abs() < 1e-3,
+                "{v} is between pixels"
+            );
+        }
+        // A frame from before the panel grew covers it, never a small image with
+        // bars around it.
+        let grown = view_image_rect(node, [640, 360], 1.25);
+        assert!((grown.h - 450.).abs() < 0.01);
+        assert!((grown.w - 800.).abs() < 0.01);
+        // Other aspects keep theirs, cropped by the clip: wider at the sides, taller
+        // (the panel lost height) at the top and bottom.
+        let wide = view_image_rect(node, [1600, 600], 1.);
+        assert_eq!((wide.h, wide.w), (450., 1200.));
+        assert!((wide.x + wide.w * 0.5 - (node.x + node.w * 0.5)).abs() <= 1.);
+        let tall = view_image_rect(node, [800, 600], 1.);
+        assert_eq!((tall.w, tall.h), (800., 600.));
+    }
 
     fn submit_ui(scene: &SceneView, renderer: &Renderer, ui: &mut NativeUi) -> anyhow::Result<()> {
         scene
