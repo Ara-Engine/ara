@@ -48,7 +48,7 @@ PreviewOutput previewFragment(PreviewVarying v){
         if(swatch){p=float3(uv.x*2-1,1-uv.y*2,0);hit=true;}
         // Every sample evaluates the material so texture derivatives stay uniform.
         float3 n=plane||swatch?float3(0,0,1):normalize(p);float3 tangent=normalize(cross(abs(n.y)>0.99?float3(0,0,1):float3(0,1,0),n));
-        AraMaterialInput input;input.worldPosition=p;input.worldNormal=n;input.worldTangent=tangent;input.worldBitangent=cross(n,tangent);input.viewDirection=swatch?float3(0,0,1):normalize(eye-p);
+        AraMaterialInput input;input.worldPosition=p;input.worldNormal=n;input.worldTangent=tangent;input.worldBitangent=cross(n,tangent);input.viewDirection=swatch?float3(0,0,1):normalize(eye-p);input.vertexColor=float4(1,1,1,1);
         input.uv=swatch?uv:plane?p.xy*0.5+0.5:float2(atan2(n.z,n.x)/(2*3.14159265)+0.5,acos(clamp(n.y,-1,1))/3.14159265);
         AraSurface surface=ara_evaluate(input);
         float3 radiance=surface.color;

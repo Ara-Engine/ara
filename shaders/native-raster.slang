@@ -4,7 +4,7 @@
 #include "look-shading.slangh"
 #include "look-refract.slangh"
 #include "native_sample.slangh"
-struct NativeVertex {float3 position;float3 normal;float2 uv;float4 tangent;float2 uv1;uint weights;uint reserved;};
+struct NativeVertex {float3 position;float3 normal;float2 uv;float4 tangent;float2 uv1;uint weights;uint color;};
 struct NativeUv {float2 offset;float2 scale;float rotation;uint set;uint2 reserved;};
 struct NativeMaterial {Material pbr;NativeUv uv[6];uint4 slots;float4 factors;uint4 layers;};
 struct Instance {uint4 meta;float4x4 world;float4x4 previous;float4 nx;float4 ny;float4 nz;};
@@ -24,7 +24,13 @@ struct Varying {
 // Forward draws' varyings (nativeForwardVertex): the scene's, and this frame's HDR
 // exposure (hdrExposure), loaded per vertex rather than per fragment. Only the
 // forward pipelines carry it, so no other stage writes an output nothing reads.
-struct ForwardVarying {Varying v;nointerpolation float exposure:TEXCOORD10;};
+struct ForwardVarying {Varying v;nointerpolation float exposure:TEXCOORD10;float4 color:TEXCOORD11;};
+// Vertex-colour draws' varyings (nativePaintVertex: the gbuffer_paint and vertex_color
+// PSOs, and the refractive forward PSOs): the scene's and the interpolated linear
+// vertex colour. Only those carry it, so ordinary G-buffer draws pay no interpolant.
+struct PaintVarying {Varying v;float4 color:TEXCOORD10;};
+// Linear RGBA of a vertex colour word (instanced::Vertex::color, red in the low byte).
+float4 unpackColor(uint c){return float4(c&255,(c>>8)&255,(c>>16)&255,c>>24)/255.;}
 // Shadow draws' light matrix: cascades 0-3 from the frame record, 4+ the
 // local-shadow tiles' matrices in the look's table (look::local::FACES), and
 // VSM_PAGE_DRAWS+ this frame's virtual shadow pages (look::vsm PAGE_DRAWS).
@@ -37,7 +43,10 @@ float4x4 shadowMatrix(Frame f,uint cascade){
 // `vertex` is the index itself in indexed draws (Command::DrawIndexedProcedural,
 // so the post-transform cache shades shared vertices once); non-indexed draws (the
 // wire PSO, which needs each triangle's own corners) pass the corner and load it.
-Varying nativeVertex(uint vertex,uint instance,bool shadow,bool indexed) {
+// `color`: the vertex's linear colour, from the instance's paint (Instance::paint:
+// row meta.y bits 1.. its buffer, meta.z one plus its first word) or the geometry's;
+// entries that ignore it compile its load away.
+Varying nativeVertex(uint vertex,uint instance,bool shadow,bool indexed,out float4 color) {
     uint2 draw=buffers[NonUniformResourceIndex(root.flags)].Load2((root.entity+instance)*8);
     Instance i=buffers[NonUniformResourceIndex(root.material)].Load<Instance>(128+draw.x*192);
     uint4 g=buffers[NonUniformResourceIndex(root.mode)].Load4(draw.y*32);
@@ -57,15 +66,21 @@ Varying nativeVertex(uint vertex,uint instance,bool shadow,bool indexed) {
     float4x4 vp=buffers[NonUniformResourceIndex(root.material)].Load<float4x4>(0);
     float4x4 previousVp=buffers[NonUniformResourceIndex(root.material)].Load<float4x4>(64);
     o.currentClip=mul(vp,world);o.previousClip=mul(previousVp,mul(i.previous,float4(p.position,1)));
+    color=unpackColor(i.meta.z!=0?buffers[NonUniformResourceIndex(i.meta.y>>1)].Load((i.meta.z-1+index)*4):v.color);
     o.material=i.meta.x;o.id=draw.x+1;return o;
 }
+// The vertex shader of entries that read no vertex colour.
+Varying nativeVertex(uint vertex,uint instance,bool shadow,bool indexed){float4 unused;return nativeVertex(vertex,instance,shadow,indexed,unused);}
 [shader("vertex")]
 Varying nativeGeometryVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){return nativeVertex(vertex,instance,false,true);}
-// The forward pipelines' vertices also carry the exposure their fragments apply.
+// The forward pipelines' vertices also carry the exposure their fragments apply and
+// the vertex colour (forward surfaces always read it: blended draws are few).
 [shader("vertex")]
 ForwardVarying nativeForwardVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){
-    ForwardVarying o;o.v=nativeVertex(vertex,instance,false,true);Frame f=frame();o.exposure=hdrExposure(f,look(f));return o;
+    ForwardVarying o;o.v=nativeVertex(vertex,instance,false,true,o.color);Frame f=frame();o.exposure=hdrExposure(f,look(f));return o;
 }
+[shader("vertex")]
+PaintVarying nativePaintVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){PaintVarying o;o.v=nativeVertex(vertex,instance,false,true,o.color);return o;}
 // Wireframe view modes (Renderer `Wire.Draw`): the camera's draws again, with the same
 // clip position as the G-buffer (so the depth test against it passes on visible
 // surfaces). Draws are procedural over each triangle's corners in order, so a vertex's
@@ -98,6 +113,13 @@ ShadowVarying nativeShadowVertex(uint vertex:SV_VertexID,uint instance:SV_Instan
 struct ShadowCasterVarying {float4 clip:SV_Position;float2 uv:TEXCOORD0;float2 uv1:TEXCOORD1;nointerpolation uint material:TEXCOORD2;nointerpolation uint id:TEXCOORD3;};
 [shader("vertex")]
 ShadowCasterVarying nativeShadowCasterVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){Varying v=nativeVertex(vertex,instance,true,true);ShadowCasterVarying s;s.clip=v.clip;s.uv=v.uv;s.uv1=v.uv1;s.material=v.material;s.id=v.id;return s;}
+// Masked casters whose alpha reads vertex colours (the shadow_paint PSO).
+struct ShadowPaintVarying {ShadowCasterVarying s;float4 color:TEXCOORD4;};
+[shader("vertex")]
+ShadowPaintVarying nativeShadowPaintVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){
+    ShadowPaintVarying o;Varying v=nativeVertex(vertex,instance,true,true,o.color);
+    o.s.clip=v.clip;o.s.uv=v.uv;o.s.uv1=v.uv1;o.s.material=v.material;o.s.id=v.id;return o;
+}
 NativeMaterial material(uint id){return buffers[NonUniformResourceIndex(root.materials)].Load<NativeMaterial>(id*320);}
 float2 coordinates(NativeUv transform,Varying v){float2 p=(transform.set==0?v.uv:v.uv1)*transform.scale;float s,c;sincos(transform.rotation,s,c);return transform.offset+float2(c*p.x-s*p.y,s*p.x+c*p.y);}
 // Texture footprint scale of the pass (Frame.upscale.z, root word 4): surface()
@@ -157,6 +179,46 @@ Surface surfaceMaterial(NativeMaterial m,Varying v){
     // Transmission is the dielectric layer's (glTF KHR_materials_transmission): metal
     // reflects whatever its transmission factor says.
     s.ao=lerp(1,sampleMap(m,4,v).r,m.factors.x);s.transmission=saturate(m.factors.y*sampleMap(m,5,v).r)*(1-s.metal);return s;
+}
+// Material flags.y bits of the vertex-colour paths (ara_render::scene).
+static const uint VERTEX_COLOR_TINT=1u<<29,VERTEX_PAINT_LAYERS=1u<<30;
+// Vertex-paint layer `i`'s weight at `color` (scene::PaintWeight): flags.z holds a byte
+// per layer, two bits per channel R, G, B, A: 1 scales by the channel, 2 by one minus it.
+float paintWeight(NativeMaterial m,uint i,float4 color){
+    uint byte=(m.pbr.flags.z>>(8*i))&255;float w=1;
+    for(uint c=0;c<4;c++){uint term=(byte>>(2*c))&3;float x=component(color,c);w*=term==1?x:term==2?1-x:1;}
+    return w;
+}
+// The layer weights of a paint-layered material (scene::VERTEX_PAINT_LAYERS), past the
+// layer count zero; a flattened lerp tree sums to one, else they normalize.
+float4 paintWeights(NativeMaterial m,float4 color){
+    uint layers=m.slots.z;float4 w=float4(layers>0?paintWeight(m,0,color):0,layers>1?paintWeight(m,1,color):0,layers>2?paintWeight(m,2,color):0,layers>3?paintWeight(m,3,color):0);
+    float sum=dot(w,float4(1));return sum>1e-6?w/sum:float4(1,0,0,0);
+}
+// A vertex-paint layered surface (Unreal's VertexColor lerps between material layers):
+// each layer is a whole material, its surface blended by its paint weight. Normals blend
+// after each layer's own tangent mapping and renormalize; a layer absent from a whole
+// pixel quad is skipped (its samples' derivatives stay valid).
+Surface paintSurface(NativeMaterial m,Varying v,float4 color){
+    float4 weights=paintWeights(m,color);Surface s=(Surface)0;float3 normal=0;
+    for(uint i=0;i<m.slots.z;i++){
+        float w=component(weights,i);
+        [branch]if(max(max(w,QuadReadAcrossX(w)),max(QuadReadAcrossY(w),QuadReadAcrossDiagonal(w)))<=0)continue;
+        Surface l=surfaceMaterial(material(component(m.layers,i)),v);
+        s.albedo+=l.albedo*w;s.alpha+=l.alpha*w;normal+=l.normal*w;s.roughness+=l.roughness*w;
+        s.metal+=l.metal*w;s.emissive+=l.emissive*w;s.ao+=l.ao*w;s.transmission+=l.transmission*w;
+    }
+    s.normal=safeNormalize(normal,safeNormalize(v.normal,float3(0,1,0)));return s;
+}
+// The opacity a vertex-colour draw's alpha test sees: the paint layers' blended base
+// alpha (or the material's), times the vertex alpha under a tint.
+float paintAlpha(NativeMaterial m,Varying v,float4 color){
+    float alpha;
+    if((m.pbr.flags.y&VERTEX_PAINT_LAYERS)!=0){
+        float4 weights=paintWeights(m,color);alpha=0;
+        for(uint i=0;i<m.slots.z;i++){NativeMaterial l=material(component(m.layers,i));alpha+=component(weights,i)*sampleMap(l,0,v).a*l.pbr.color.a;}
+    }else alpha=sampleMap(m,0,v).a*m.pbr.color.a;
+    return (m.pbr.flags.y&VERTEX_COLOR_TINT)!=0?alpha*color.a:alpha;
 }
 // Terrain projection weights from the surface normal: the top projection (world
 // X/Z, the layers' UVs) alone on gentle slopes; past about 26 degrees the world Z/Y
@@ -263,10 +325,12 @@ Surface terrainSurface<let SIDES:int>(NativeMaterial m,Varying v){
     s.normal=safeNormalize(t*tangentNormal.x+cross(normal,t)*handedness*tangentNormal.y+normal*tangentNormal.z,normal);
     return s;
 }
-// A native fragment's surface. SIDES is a compile-time choice: the side projections
-// cost every G-buffer pixel registers even when no terrain uses them, so presets
-// without terrain detail bind a PSO compiled without (nativeGeometryTopFragment).
-Surface surface<let SIDES:int>(Varying v){
+// A native fragment's surface. SIDES and PAINT are compile-time choices: code in the
+// G-buffer shader costs every pixel registers even where nothing uses it. Presets
+// without terrain detail bind a PSO without the side projections
+// (nativeGeometryTopFragment); only vertex-colour draws bind PAINT (`color`: their
+// interpolated vertex colour): paint layers and the vertex-colour tint, never terrain.
+Surface surface<let SIDES:int,let PAINT:int>(Varying v,float4 color){
     footprint=root.cascade==0?1:asfloat(root.cascade);NativeMaterial m=material(v.material);
     // Guessed loading bounds must not cover the view or form stair-like bands
     // across pending foliage. Keep only short one-pixel corner brackets; tiny
@@ -276,7 +340,11 @@ Surface surface<let SIDES:int>(Varying v){
         float2 edge=min(v.uv,1-v.uv)/step;
         if(min(edge.x,edge.y)>1 || max(edge.x,edge.y)>8 || max(step.x,step.y)>0.125)discard;
     }
-    Surface s=m.slots.z>0?terrainSurface<SIDES>(m,v):surfaceMaterial(m,v);
+    Surface s;
+    if(PAINT!=0){
+        s=(m.pbr.flags.y&VERTEX_PAINT_LAYERS)!=0?paintSurface(m,v,color):surfaceMaterial(m,v);
+        if((m.pbr.flags.y&VERTEX_COLOR_TINT)!=0){s.albedo*=color.rgb;s.alpha*=color.a;}
+    }else s=m.slots.z>0?terrainSurface<SIDES>(m,v):surfaceMaterial(m,v);
     if(m.pbr.flags.x==1 && s.alpha<m.pbr.surface.w)discard;
     float3 du=ddx(s.normal),dv=ddy(s.normal);float kernel=min(2*0.15915494*(dot(du,du)+dot(dv,dv)),0.18);
     s.roughness=sqrt(sqrt(saturate(pow(s.roughness,4)+kernel)));return s;
@@ -296,26 +364,45 @@ bool backFace(Varying v,bool front){
     bool mirrored=asfloat(buffers[NonUniformResourceIndex(root.material)].Load(128+(v.id-1)*192+12))<0;
     return front==mirrored && dot(v.normal,frame().camera.xyz-v.world)<0;
 }
-GBuffer geometry<let SIDES:int>(Varying v,bool front){Surface s=surface<SIDES>(v);if(backFace(v,front))s.normal=-s.normal;GBuffer g;g.albedo=float4(s.albedo,s.ao);g.normal=gbufferEncodeNormal(s.normal,1);g.material=gbufferEncodeMaterial(s.roughness,s.metal,material(v.material).pbr.flags.x==1?0:1,1);g.emissive=gbufferEncodeEmissive(s.emissive,1);g.id=float(v.id);g.velocity=motion(v);return g;}
+GBuffer geometry<let SIDES:int,let PAINT:int>(Varying v,float4 color,bool front){Surface s=surface<SIDES,PAINT>(v,color);if(backFace(v,front))s.normal=-s.normal;GBuffer g;g.albedo=float4(s.albedo,s.ao);g.normal=gbufferEncodeNormal(s.normal,1);g.material=gbufferEncodeMaterial(s.roughness,s.metal,material(v.material).pbr.flags.x==1?0:1,1);g.emissive=gbufferEncodeEmissive(s.emissive,1);g.id=float(v.id);g.velocity=motion(v);return g;}
 [shader("fragment")]
-GBuffer nativeGeometryFragment(Varying v,bool front:SV_IsFrontFace){return geometry<1>(v,front);}
+GBuffer nativeGeometryFragment(Varying v,bool front:SV_IsFrontFace){return geometry<1,0>(v,1,front);}
 // The G-buffer for presets without terrain detail: terrain keeps its top projection.
 [shader("fragment")]
-GBuffer nativeGeometryTopFragment(Varying v,bool front:SV_IsFrontFace){return geometry<0>(v,front);}
+GBuffer nativeGeometryTopFragment(Varying v,bool front:SV_IsFrontFace){return geometry<0,0>(v,1,front);}
+// The G-buffer of draws that read vertex colours (NativePipelines::gbuffer_paint).
+[shader("fragment")]
+GBuffer nativeGeometryPaintFragment(PaintVarying p,bool front:SV_IsFrontFace){return geometry<0,1>(p.v,p.color,front);}
+// The vertex-colour views (ViewMode::VertexColor*, Frame.temporal.z 11-15: RGB, then R,
+// G, B, A alone as grey): the colour as unlit albedo, through the sRGB albedo target
+// decoded so the view shows the stored value (0.5 mid-grey). Masked cutouts stay holes.
+[shader("fragment")]
+GBuffer nativeVertexColorFragment(PaintVarying p,bool front:SV_IsFrontFace){
+    Varying v=p.v;footprint=root.cascade==0?1:asfloat(root.cascade);NativeMaterial m=material(v.material);
+    if(m.pbr.flags.x==1 && paintAlpha(m,v,p.color)<m.pbr.surface.w)discard;
+    uint channel=frame().temporal.z-11;float3 c=saturate(channel==0?p.color.rgb:float3(component(p.color,channel-1)));
+    float3 n=safeNormalize(v.normal,float3(0,1,0));if(backFace(v,front))n=-n;
+    GBuffer g;g.albedo=float4(ntDecodeColor(c),1);g.normal=gbufferEncodeNormal(n,1);g.material=gbufferEncodeMaterial(1,0,1,1);
+    g.emissive=gbufferEncodeEmissive(0,1);g.id=float(v.id);g.velocity=motion(v);return g;
+}
 // Shadow casters, as Unreal's shadow depth pass culls them (SetupShadowCullMode): a
 // single-sided material casts only from the faces turned towards the light, a
 // double-sided one from both. Casting every back face let open shells (terrain sheets,
 // one-sided walls) block light arriving from behind them. The winding test is
 // backFace's: counter-clockwise front, reversed for mirrored instances.
-[shader("fragment")]
-void nativeShadowFragment(ShadowCasterVarying shadow,bool front:SV_IsFrontFace){
+// PAINT (the shadow_paint PSO) alpha-tests through the vertex colour (paintAlpha).
+void shadowCaster<let PAINT:int>(ShadowCasterVarying shadow,bool front,float4 color){
     Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);
     if((m.pbr.flags.y&DOUBLE_SIDED)==0){
         bool mirrored=asfloat(buffers[NonUniformResourceIndex(root.material)].Load(128+(shadow.id-1)*192+12))<0;
         if(front==mirrored)discard;
     }
-    if(m.pbr.flags.x==1 && sampleMap(m,0,v).a*m.pbr.color.a<m.pbr.surface.w)discard;
+    if(m.pbr.flags.x==1 && (PAINT!=0?paintAlpha(m,v,color):sampleMap(m,0,v).a*m.pbr.color.a)<m.pbr.surface.w)discard;
 }
+[shader("fragment")]
+void nativeShadowFragment(ShadowCasterVarying shadow,bool front:SV_IsFrontFace){shadowCaster<0>(shadow,front,1);}
+[shader("fragment")]
+void nativeShadowPaintFragment(ShadowPaintVarying p,bool front:SV_IsFrontFace){shadowCaster<1>(p.s,front,p.color);}
 // The overdraw view (ViewMode::Overdraw, Renderer `Overdraw.Count`): the camera's
 // draws again without the depth test, each fragment adding one to the count target
 // through premultiplied blending (alpha 0). Masked materials discard by the casters'
@@ -349,20 +436,21 @@ bool facesViewer(Varying v){return dot(v.normal,frame().camera.xyz-v.world)>=0;}
 // The sun is a disk, not a point: forward surfaces (often thin, glossy and lit at
 // grazing angles) widen their lobe to at least its angular radius (GGX alpha), so a
 // mirror-like rim shows the sun's area-filtered highlight rather than a sub-pixel peak.
-Surface forwardSurface<let FACES:int>(Varying v){
+// `color`: the vertex colour (blended surfaces tint and blend paint layers by it).
+Surface forwardSurface<let FACES:int>(Varying v,float4 color){
     bool front=facesViewer(v);if((FACES==1 && front)||(FACES==2 && !front))discard;
-    Surface s=surface<1>(v);if(!front)s.normal=-s.normal;
+    Surface s=surface<0,1>(v,color);if(!front)s.normal=-s.normal;
     s.roughness=max(s.roughness,sqrt(max(look(frame()).sunLux.w,0)));return s;
 }
 // The forward pass; `high` selects the High/Epic tier's code at compile time.
-Forward nativeForward(ForwardVarying i,bool high){Varying v=i.v;Surface s=forwardSurface<0>(v);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),i.exposure,high);o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;}
+Forward nativeForward(ForwardVarying i,bool high){Varying v=i.v;Surface s=forwardSurface<0>(v,i.color);Frame f=frame();Look l=look(f);Forward o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),i.exposure,high);o.id=float(v.id);o.albedo=float4(s.albedo,s.alpha);o.normal=gbufferEncodeNormal(s.normal,s.alpha);o.material=gbufferEncodeMaterial(s.roughness,s.metal,1,s.alpha);o.emissive=gbufferEncodeEmissive(s.emissive,s.alpha);o.velocity=float4(motion(v),0,1);return o;}
 [shader("fragment")]
 Forward nativeForwardFragment(ForwardVarying i){return nativeForward(i,false);}
 // Lit frames' forward pass: nothing reads the G-buffer after it (only the debug
 // views do, through nativeForwardFragment), so it writes colour, id and motion only;
 // `high` selects the High/Epic tier's code at compile time.
 struct ForwardLit {float4 color:SV_Target0;float id:SV_Target1;float4 velocity:SV_Target2;};
-ForwardLit nativeForwardLit<let FACES:int>(ForwardVarying i,bool high){Varying v=i.v;Surface s=forwardSurface<FACES>(v);Frame f=frame();Look l=look(f);ForwardLit o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),i.exposure,high);o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;}
+ForwardLit nativeForwardLit<let FACES:int>(ForwardVarying i,bool high){Varying v=i.v;Surface s=forwardSurface<FACES>(v,i.color);Frame f=frame();Look l=look(f);ForwardLit o;o.color=forwardColour(f,l,s,v.world,int2(v.clip.xy),i.exposure,high);o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;}
 [shader("fragment")]
 ForwardLit nativeForwardLitFragment(ForwardVarying i){return nativeForwardLit<0>(i,false);}
 [shader("fragment")]
@@ -379,10 +467,11 @@ ForwardLit nativeForwardHighBackFragment(ForwardVarying i){return nativeForwardL
 // opaque scene it refracts (look-refract.slangh) instead of blending a film. A
 // volume's back faces are its far side, which its front faces already refract
 // through; a thin wall shades both sides, facing the viewer.
-ForwardLit nativeRefract(Varying v,bool high){
+ForwardLit nativeRefract(PaintVarying i,bool high){
+    Varying v=i.v;
     NativeMaterial m=material(v.material);uint2 volume=uint2(asuint(m.factors.z),asuint(m.factors.w));
     bool front=facesViewer(v);if(!front && (volume.x&0xffff)!=0)discard;
-    Surface s=forwardSurface<0>(v);float3 geometric=safeNormalize(v.normal,float3(0,1,0))*(front?1:-1);
+    Surface s=forwardSurface<0>(v,i.color);float3 geometric=safeNormalize(v.normal,float3(0,1,0))*(front?1:-1);
     // The instance's scale (the cube root of its determinant) for the mesh-space thickness.
     float4x4 world=buffers[NonUniformResourceIndex(root.material)].Load<float4x4>(128+(v.id-1)*192+16);
     float scale=pow(abs(determinant((float3x3)world)),1./3.);
@@ -390,6 +479,6 @@ ForwardLit nativeRefract(Varying v,bool high){
     o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;
 }
 [shader("fragment")]
-ForwardLit nativeForwardRefractFragment(Varying v){return nativeRefract(v,false);}
+ForwardLit nativeForwardRefractFragment(PaintVarying i){return nativeRefract(i,false);}
 [shader("fragment")]
-ForwardLit nativeForwardRefractHighFragment(Varying v){return nativeRefract(v,true);}
+ForwardLit nativeForwardRefractHighFragment(PaintVarying i){return nativeRefract(i,true);}

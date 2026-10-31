@@ -1057,6 +1057,8 @@ mod tests {
             material: None,
             skin: None,
             casts_shadows: true,
+            paint: None,
+            receives_decals: true,
         };
         let mut frame = RenderFrame::default();
         frame.draws = vec![

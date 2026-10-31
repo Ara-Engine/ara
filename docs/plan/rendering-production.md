@@ -51,10 +51,15 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   of and through glass, sorting.
 - [ ] **Screen-space reflections.** Hi-Z traced SSR (min-depth pyramid), stochastic rough
   lobes with a deterministic, noise-free resolve, then captures and probes.
-- [ ] **Vertex painting.** Vertex colours imported (glTF `COLOR_0`, FBX), stored per
+- [x] **Vertex painting.** Vertex colours imported (glTF `COLOR_0`, FBX), stored per
   mesh, editable with an editor paint tool, readable in material graphs (layer blends).
-- [ ] **Decals.** Deferred decals (Unreal's `DecalComponent`): box projection, base colour,
-  normal, roughness/metal, emissive, fade, sort order, receivers filter.
+  e3f51b456 (import through render, `vertexColor()` paint layers, per-instance `VertexPaint`),
+  fa146c6d6 (Mesh Paint mode). Open: the Polar floor's layered UE master materials need
+  Ara graphs; virtual geometry (ARAG) carries no colours yet.
+- [x] **Decals.** Deferred decals (Unreal's `DecalComponent`): box projection, base colour,
+  normal, roughness/metal, emissive, fade, sort order, receivers filter. cb5fda5ee
+  (tiled G-buffer decals), fa146c6d6 (Create > Decal, gizmo). Open: a specular G-buffer
+  channel for decal specular; Metal's storage alias view; Polar decal conversion.
 
 ## Tools
 
@@ -82,5 +87,6 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   (510d884ca, 0a864f5c5). Open: editor toggles for each, region luminance tooling in-engine.
   Original item: A debug view for every effect above (`ViewMode`, `RenderDebug`),
   `ara capture` switches for each (`--view`, `--without`), a path-traced reference capture
-  (`ara capture --reference`), and region luminance/compare tooling.
+  (`ara capture --reference`), and region luminance/compare tooling. Done: `--view` for
+  every view mode, vertex-colour and decal-coverage views (7d53e77ee).
 - [x] Per-mesh Cast Shadows (3f2a35625); horizon shadows past the maps' reach (e3f974ddd).

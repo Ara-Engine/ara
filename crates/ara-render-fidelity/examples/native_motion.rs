@@ -81,7 +81,7 @@ fn native(skin: bool) -> ara_render::instanced::Scene {
                         uv1: [0.0; 2],
                         tangent: [1.0, 0.0, 0.0, 1.0],
                         terrain_weights: 0,
-                        reserved: 0,
+                        color: u32::MAX,
                     })
                     .to_vec(),
                 lods: vec![Lod {
@@ -90,6 +90,7 @@ fn native(skin: bool) -> ara_render::instanced::Scene {
                 }],
                 bounds: [[-0.08, -0.08, 0.0].into(), [0.08, 0.08, 0.0].into()],
                 deforming: index == 1,
+                vertex_colors: false,
                 revision: 0,
             })
             .collect(),

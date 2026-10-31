@@ -27,6 +27,8 @@ fn draw(entity: u64, size: [f32; 3], at: [f32; 3]) -> Draw {
         material: None,
         skin: None,
         casts_shadows: true,
+        paint: None,
+        receives_decals: true,
     }
 }
 

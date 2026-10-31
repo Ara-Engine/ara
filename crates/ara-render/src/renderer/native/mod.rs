@@ -11,6 +11,7 @@ use glam::Vec4;
 
 mod batches;
 mod culling;
+pub(in crate::renderer) mod decals;
 mod environment;
 pub(in crate::renderer) mod pipelines;
 mod prepared;
@@ -80,6 +81,20 @@ pub(super) struct Native {
     /// Advances whenever a blended caster moves, deforms or changes material, or a
     /// material becomes or stops being blended: the translucent sun map's cache key.
     translucent_revision: u64,
+    /// Per-instance vertex colours (`Instance::paint`), one word per vertex, each
+    /// painted instance in its own range (`paint_offsets`).
+    paint: Buffer,
+    paint_index: u32,
+    /// Per instance, its first word in `paint`; `u32::MAX` without paint.
+    paint_offsets: Vec<u32>,
+    /// Per instance, the paint last written (snapshot updates find edits by it).
+    paint_sources: Vec<Option<std::sync::Arc<[u32]>>>,
+    /// Whether `paint` was written since the consuming frame.
+    paint_dirty: bool,
+    /// Published paint content and every update since (capture provenance).
+    paint_digest: [u8; 32],
+    /// Deferred decals (`decals.rs`): records and this frame's visible list.
+    decals: decals::Decals,
 }
 
 impl Renderer {
@@ -801,6 +816,29 @@ impl Native {
                 }
             }
         };
+        // Each painted instance owns one range of the paint buffer (no sharing, so a
+        // live edit of one instance never shows on another).
+        let (paint_words, paint_offsets, paint_digest) = {
+            ara_gpu::cpu_scope!("RasterNative.publish_paint");
+            use sha2::Digest;
+            let mut words = Vec::new();
+            let mut digest = sha2::Sha256::new();
+            let offsets: Vec<u32> = scene
+                .instances
+                .iter()
+                .map(|instance| match &instance.paint {
+                    Some(paint) => {
+                        let offset = words.len() as u32;
+                        words.extend_from_slice(paint);
+                        digest.update(offset.to_le_bytes());
+                        digest.update(bytemuck::cast_slice::<u32, u8>(paint));
+                        offset
+                    }
+                    None => u32::MAX,
+                })
+                .collect();
+            (words, offsets, <[u8; 32]>::from(digest.finalize()))
+        };
         let mut owned = Vec::new();
         let prepared = (|| {
             let materials = host_buffer(
@@ -820,6 +858,15 @@ impl Native {
                 crate::renderer::outline::COLOURS + scene.instances.len() * 8,
                 &mut owned,
             )?;
+            // Shaders address paint in u32 bytes.
+            ensure!(
+                paint_words.len() < (u32::MAX / 4) as usize,
+                "Native per-instance paint exceeds the 4 GiB shader address range"
+            );
+            let paint = host_buffer(gpu, (paint_words.len() * 4).max(16), &mut owned)?;
+            if !paint_words.is_empty() {
+                gpu.upload(paint, bytemuck::cast_slice(&paint_words))?;
+            }
             Ok((
                 materials,
                 gpu.storage_buffer(materials)?.index,
@@ -828,6 +875,8 @@ impl Native {
                 visible,
                 gpu.storage_buffer(visible)?.index,
                 (outline, gpu.storage_buffer(outline)?.index),
+                (paint, gpu.storage_buffer(paint)?.index),
+                decals::Decals::new(gpu, &scene.decals, &mut owned)?,
             ))
         })();
         let (
@@ -838,6 +887,8 @@ impl Native {
             visible,
             visible_index,
             (outline, outline_index),
+            (paint, paint_index),
+            decals,
         ) = match prepared {
             Ok(result) => result,
             Err(error) => {
@@ -850,7 +901,12 @@ impl Native {
                 return Err(error);
             }
         };
-        let rows = scene.instances.iter().map(|i| row(i, i.world)).collect();
+        let rows = scene
+            .instances
+            .iter()
+            .zip(&paint_offsets)
+            .map(|(i, &offset)| row(i, i.world, paint_index, offset))
+            .collect();
         let groups = Groups::new(scene, &pool)?;
         let mut culling = Culling::new(&groups, scene);
         culling.reserve(&groups, passes);
@@ -891,6 +947,13 @@ impl Native {
             material_dirty: true,
             update_gpu_ms: 0.,
             translucent_revision: 0,
+            paint,
+            paint_index,
+            paint_offsets,
+            paint_sources: scene.instances.iter().map(|i| i.paint.clone()).collect(),
+            paint_dirty: true,
+            paint_digest,
+            decals,
         };
         Ok(result)
     }
@@ -911,6 +974,17 @@ impl Native {
         visit(Resource::Buffer(self.instances), Access::HostWrite);
         visit(Resource::Buffer(self.visible), Access::HostWrite);
         visit(Resource::Buffer(self.outline), Access::HostWrite);
+        for buffer in [self.decals.records, self.decals.visible] {
+            visit(Resource::Buffer(buffer), Access::HostWrite);
+        }
+        visit(
+            Resource::Buffer(self.paint),
+            if self.paint_dirty {
+                Access::HostWrite
+            } else {
+                Access::ShaderRead
+            },
+        );
     }
 
     /// Uploads the outline colour table and the selected instances' rows (LOD 0, one
@@ -947,6 +1021,7 @@ impl Native {
                     count: chunk.len() as u32,
                     vertices: group.counts[0],
                     first_index: group.first_indices[0],
+                    paint: false,
                 },
             ));
             rows.extend(chunk.iter().map(|&(_, _, i)| [i as u32, group.first]));
@@ -991,12 +1066,12 @@ impl Native {
     }
 
     pub(super) fn record(&self, recorder: &mut Recorder, root: RootConstants, pass: usize) {
-        let pipeline = match pass {
-            4 => self.pipelines.gbuffer,
-            5 => self.pipelines.forward,
-            _ => self.pipelines.shadow,
-        };
-        self.record_with(recorder, root, pass, pipeline);
+        let p = &self.pipelines;
+        match pass {
+            4 => self.record_with(recorder, root, pass, p.gbuffer, Some(p.gbuffer_paint)),
+            5 => self.record_with(recorder, root, pass, p.forward, None),
+            _ => self.record_with(recorder, root, pass, p.shadow, Some(p.shadow_paint)),
+        }
     }
 
     /// Records the translucent sun casters (`look::translucent`): their nearest depth
@@ -1012,14 +1087,14 @@ impl Native {
         } else {
             self.pipelines.shadow
         };
-        self.record_with(recorder, root, culling::TRANSLUCENT_PASS, pipeline);
+        self.record_with(recorder, root, culling::TRANSLUCENT_PASS, pipeline, None);
     }
 
     /// Records the camera's opaque and forward draws (passes 4 and 5) again through
     /// the wire PSO: the wireframe view modes' edge mask.
     pub(super) fn record_wire(&self, recorder: &mut Recorder, root: RootConstants) {
         for pass in [4, 5] {
-            self.record_with(recorder, root, pass, self.pipelines.wire);
+            self.record_with(recorder, root, pass, self.pipelines.wire, None);
         }
     }
 
@@ -1027,7 +1102,7 @@ impl Native {
     /// overdraw count (`ViewMode::Overdraw`).
     pub(super) fn record_overdraw(&self, recorder: &mut Recorder, root: RootConstants) {
         for pass in [4, 5] {
-            self.record_with(recorder, root, pass, self.pipelines.overdraw);
+            self.record_with(recorder, root, pass, self.pipelines.overdraw, None);
         }
     }
 
@@ -1095,15 +1170,31 @@ impl Native {
     }
 
     /// Records the G-buffer draws (pass 4) through the PSO for the preset's
-    /// `terrain_detail` (`NativePipelines::gbuffer_for`).
+    /// `terrain_detail` (`NativePipelines::gbuffer_for`), and draws that read vertex
+    /// colours through `gbuffer_paint`. The vertex-colour views (`vertex_colors`)
+    /// draw the opaque and forward lists (passes 4 and 5) through `vertex_color`,
+    /// so blended surfaces show their colours too; their forward pass draws nothing.
     pub(super) fn record_gbuffer(
         &self,
         recorder: &mut Recorder,
         root: RootConstants,
         terrain_detail: f32,
+        vertex_colors: bool,
     ) {
+        if vertex_colors {
+            for pass in [4, 5] {
+                self.record_with(recorder, root, pass, self.pipelines.vertex_color, None);
+            }
+            return;
+        }
         let pipeline = self.pipelines.gbuffer_for(terrain_detail);
-        self.record_with(recorder, root, 4, pipeline);
+        self.record_with(
+            recorder,
+            root,
+            4,
+            pipeline,
+            Some(self.pipelines.gbuffer_paint),
+        );
     }
 
     /// One draw of `batch`: indexed, so shared vertices are shaded once, except
@@ -1126,17 +1217,26 @@ impl Native {
         }
     }
 
+    /// Records pass `pass` through `pipeline`, and its `Batch::paint` draws through
+    /// `paint` when given, binding each PSO only when the draws switch.
     fn record_with(
         &self,
         recorder: &mut Recorder,
         root: RootConstants,
         pass: usize,
         pipeline: Pipeline,
+        paint: Option<Pipeline>,
     ) {
         ara_gpu::cpu_scope!("RasterNative.record");
         recorder.push(Command::Pipeline(pipeline));
+        let mut bound = pipeline;
         for batch in &self.culling.draws[pass] {
-            self.record_batch(recorder, root, batch, pipeline);
+            let wanted = paint.filter(|_| batch.paint).unwrap_or(pipeline);
+            if batch.count > 0 && wanted != bound {
+                recorder.push(Command::Pipeline(wanted));
+                bound = wanted;
+            }
+            self.record_batch(recorder, root, batch, wanted);
         }
     }
 
@@ -1170,8 +1270,19 @@ impl Native {
         rows: u32,
         page: usize,
     ) {
-        recorder.push(Command::Pipeline(self.pipelines.shadow));
+        let plain = self.pipelines.shadow;
+        recorder.push(Command::Pipeline(plain));
+        let mut bound = plain;
         for batch in self.culling.page_batches.get(page).into_iter().flatten() {
+            let wanted = if batch.paint {
+                self.pipelines.shadow_paint
+            } else {
+                plain
+            };
+            if wanted != bound {
+                recorder.push(Command::Pipeline(wanted));
+                bound = wanted;
+            }
             let mut constants = root;
             constants.words[1] = self.material_index;
             constants.words[2] = self.instance_index;
@@ -1196,13 +1307,28 @@ impl Native {
         hash.update(bytemuck::cast_slice(&self.geometry_revisions));
         hash.update(bytemuck::cast_slice(&self.material_data));
         hash.update(self.texture_digest);
+        hash.update(self.paint_digest);
+        for decal in &self.decals.decals {
+            hash.update(decal.entity.to_le_bytes());
+            hash.update(bytemuck::bytes_of(&decal.world));
+            hash.update((decal.material as u64).to_le_bytes());
+            hash.update(bytemuck::cast_slice(&decal.opacity));
+        }
     }
 
     fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         ara_gpu::cpu_scope!("RasterNative.retire_content");
         self.pool.destroy(gpu)?;
         self.textures.destroy(gpu)?;
-        for buffer in [self.materials, self.instances, self.visible, self.outline] {
+        for buffer in [
+            self.materials,
+            self.instances,
+            self.visible,
+            self.outline,
+            self.paint,
+            self.decals.records,
+            self.decals.visible,
+        ] {
             gpu.retire(Resource::Buffer(buffer))?;
         }
         gpu.collect()?;
@@ -1216,13 +1342,24 @@ fn host_buffer(gpu: &mut GpuDevice, size: usize, owned: &mut Vec<Resource>) -> R
     Ok(buffer)
 }
 
-fn row(instance: &crate::instanced::Instance, previous: Mat4) -> InstanceRow {
+/// An instance's GPU row. `meta`: material, skin-history bit 0, the paint buffer's
+/// bindless index in bits 1..31 and bit 31 set when it receives no decals (the decal
+/// pass reads it by the pixel's ID), one plus its first paint word (zero without
+/// paint: `offset` `u32::MAX`), and the transform's determinant sign.
+fn row(
+    instance: &crate::instanced::Instance,
+    previous: Mat4,
+    paint_index: u32,
+    offset: u32,
+) -> InstanceRow {
     let normal = instance.world.inverse().transpose();
+    let painted = offset != u32::MAX;
     InstanceRow {
         meta: [
             instance.material as u32,
-            0,
-            0,
+            (if painted { paint_index << 1 } else { 0 })
+                | (u32::from(!instance.receives_decals) << 31),
+            if painted { offset + 1 } else { 0 },
             instance.world.determinant().signum().to_bits(),
         ],
         world: instance.world,

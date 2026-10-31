@@ -77,6 +77,7 @@ mod material_panel;
 mod memo;
 mod names;
 pub(crate) use names::is_texture;
+mod mesh_paint_panel;
 mod probes;
 mod project_actions;
 mod render_debug_panel;

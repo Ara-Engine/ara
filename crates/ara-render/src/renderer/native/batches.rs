@@ -34,6 +34,16 @@ pub(super) fn is_refractive(material: &crate::instanced::Material) -> bool {
     material.extras.transmission_factor > 0.
 }
 
+/// Whether an opaque or masked draw of `material` reads vertex colours and so needs
+/// the vertex-colour PSO variants (`NativePipelines::gbuffer_paint`): paint layers
+/// always do; a tint only where the colours are not all white (`colored`: the
+/// geometry declares colours or the instance carries paint).
+pub(super) fn reads_vertex_colors(material: &crate::instanced::Material, colored: bool) -> bool {
+    let flags = material.pbr.flags[1];
+    flags & crate::scene::VERTEX_PAINT_LAYERS != 0
+        || (colored && flags & crate::scene::VERTEX_COLOR_TINT != 0)
+}
+
 /// One instanced draw: `count` visible rows from `first`, all of one LOD entry,
 /// `vertices` indices from `first_index` of the geometry pool each.
 #[derive(Clone, Copy, Default)]
@@ -42,6 +52,9 @@ pub(super) struct Batch {
     pub count: u32,
     pub vertices: u32,
     pub first_index: u32,
+    /// Draw through the pass's vertex-colour PSO variant: `Group::paint` for the
+    /// G-buffer, `Group::paint_shadow` for shadow passes; forward PSOs always read them.
+    pub paint: bool,
 }
 pub(super) struct Group {
     pub geometry: usize,
@@ -64,6 +77,15 @@ pub(super) struct Group {
     pub planar: bool,
     /// Its forward draws take a back-face and a front-face pass (`is_two_pass`).
     pub two_pass: bool,
+    /// Its vertex colours may differ from white: the geometry declares colours or
+    /// its instances carry paint (`Instance::paint`).
+    pub colored: bool,
+    /// Its opaque/masked draws read vertex colours (`reads_vertex_colors`), so they
+    /// draw through the vertex-colour PSO variants.
+    pub paint: bool,
+    /// A masked `paint` group: its shadow alpha test reads vertex colours, so its
+    /// shadow draws take the vertex-colour shadow PSO (opaque casters never test).
+    pub paint_shadow: bool,
     pub offset: usize,
     pub slot: usize,
 }
@@ -74,14 +96,29 @@ pub(super) struct Groups {
     pub geometry_instances: Vec<Vec<usize>>,
     pub material_instances: Vec<Vec<usize>>,
     pub batches: usize,
-    identities: Vec<(u64, usize, usize, bool)>,
+    identities: Vec<Identity>,
 }
+
+/// What groups an instance: its geometry, material, shadow casting and whether
+/// it carries per-instance paint. Changing any of these is a structural edit.
+type Identity = (u64, usize, usize, bool, bool);
+fn identity(instance: &crate::instanced::Instance) -> Identity {
+    (
+        instance.entity,
+        instance.geometry,
+        instance.material,
+        instance.casts_shadows,
+        instance.paint.is_some(),
+    )
+}
+
 impl Groups {
     pub(super) fn new(scene: &NativeScene, pool: &GeometryGpu) -> Result<Self> {
-        let mut grouped = BTreeMap::<(usize, usize, bool), Vec<usize>>::new();
+        let mut grouped = BTreeMap::<(usize, usize, bool, bool), Vec<usize>>::new();
         for (index, instance) in scene.instances.iter().enumerate() {
+            let (_, geometry, material, casts, painted) = identity(instance);
             grouped
-                .entry((instance.geometry, instance.material, instance.casts_shadows))
+                .entry((geometry, material, casts, painted))
                 .or_default()
                 .push(index);
         }
@@ -89,7 +126,7 @@ impl Groups {
         let mut slot = 0;
         let groups: Vec<_> = grouped
             .into_iter()
-            .map(|((geometry, material, casts), instances)| {
+            .map(|((geometry, material, casts, painted), instances)| {
                 let range = pool
                     .lods(geometry)
                     .expect("validated instance geometry has LODs");
@@ -130,6 +167,16 @@ impl Groups {
                         &scene.materials[material],
                         is_planar(scene.geometry[geometry].bounds),
                     ),
+                    colored: painted || scene.geometry[geometry].vertex_colors,
+                    paint: reads_vertex_colors(
+                        &scene.materials[material],
+                        painted || scene.geometry[geometry].vertex_colors,
+                    ),
+                    paint_shadow: scene.materials[material].pbr.flags[0] == 1
+                        && reads_vertex_colors(
+                            &scene.materials[material],
+                            painted || scene.geometry[geometry].vertex_colors,
+                        ),
                 }
             })
             .collect();
@@ -152,23 +199,14 @@ impl Groups {
             geometry_instances,
             material_instances,
             batches: slot,
-            identities: scene
-                .instances
-                .iter()
-                .map(|i| (i.entity, i.geometry, i.material, i.casts_shadows))
-                .collect(),
+            identities: scene.instances.iter().map(identity).collect(),
         })
     }
 
     pub(super) fn validate(&self, scene: &NativeScene) -> Result<()> {
-        for (instance, identity) in scene.instances.iter().zip(&self.identities) {
+        for (instance, known) in scene.instances.iter().zip(&self.identities) {
             ensure!(
-                (
-                    instance.entity,
-                    instance.geometry,
-                    instance.material,
-                    instance.casts_shadows
-                ) == *identity,
+                identity(instance) == *known,
                 "Native instance identity/layout changed"
             );
         }
@@ -186,12 +224,7 @@ impl Groups {
         instance: &crate::instanced::Instance,
     ) -> Result<()> {
         ensure!(
-            (
-                instance.entity,
-                instance.geometry,
-                instance.material,
-                instance.casts_shadows
-            ) == self.identities[index],
+            identity(instance) == self.identities[index],
             "Native instance identity/layout changed"
         );
         Ok(())

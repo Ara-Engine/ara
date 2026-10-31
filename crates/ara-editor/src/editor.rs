@@ -43,6 +43,12 @@ pub struct Editor {
     pub session: String,
     /// Active provisional spatial edit.
     pub gesture: Option<Gesture>,
+    /// A Mesh Paint stroke's transient colours by Scene draw (`Draw::entity`): the
+    /// Scene shows them until the stroke commits or cancels (`paint_revision`).
+    pub paint_preview:
+        Option<std::sync::Arc<std::collections::BTreeMap<u64, std::sync::Arc<[u32]>>>>,
+    /// Advances whenever `paint_preview` changes.
+    pub paint_revision: u64,
     active_fields: BTreeSet<(String, String, String)>,
     /// Frozen trace selected for frame inspection; immutable and shared only with IO workers.
     pub profile_current: Option<std::sync::Arc<ara_profile::Profile>>,
@@ -258,6 +264,8 @@ impl Editor {
             state,
             session,
             gesture: None,
+            paint_preview: None,
+            paint_revision: 0,
             active_fields: BTreeSet::new(),
             profile_current: None,
             profile_baseline: None,

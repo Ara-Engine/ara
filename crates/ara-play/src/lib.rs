@@ -21,7 +21,7 @@ pub use editor_control::{Control, Controlled, View, ViewCamera};
 pub use game_ui::{GameUi, UiBinding, UiMusic, UiSound};
 pub use imports::{ImportState, Stall};
 pub use process::ProcessMode;
-pub use render_debug::{BufferView, ReferenceTrace, ReflectionView, RenderDebug};
+pub use render_debug::{DebugView, ReferenceTrace, ReflectionView, RenderDebug};
 
 use ara_doc::{AssetId, Document, Record, RecordId, Workspace};
 use serde::{Deserialize, Serialize};

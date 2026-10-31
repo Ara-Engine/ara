@@ -61,6 +61,12 @@ pub struct Draw {
     pub skin: Option<Range<usize>>,
     /// Whether it blocks light (`MeshRenderer::cast_shadows` and the model node's own).
     pub casts_shadows: bool,
+    /// Whether decals project onto it (`MeshRenderer::receives_decals`).
+    pub receives_decals: bool,
+    /// Per-instance vertex colours ([`crate::paint::VertexPaint`]): one linear RGBA8
+    /// word (red low) per drawn vertex, replacing the geometry's colours for this
+    /// draw only. Shapes carry one per generated vertex.
+    pub paint: Option<Arc<[u32]>>,
 }
 
 /// A point or spot light in world space.
@@ -203,6 +209,8 @@ pub struct RenderFrame {
     pub reflection_probes: Vec<ProbeView>,
     /// Draws in stable order.
     pub draws: Vec<Draw>,
+    /// Deferred decals in stable order (renderers sort by `Decal::sort_order`).
+    pub decals: Vec<crate::decal::DecalView>,
     /// Flat skinning palettes (model space, skin joint order).
     pub palettes: Vec<Mat4>,
     /// GPU particle effects in stable order.
@@ -211,6 +219,7 @@ pub struct RenderFrame {
     pub terrain: Option<TerrainView>,
     scratch: Vec<Mat4>,
     palette: Vec<Mat4>,
+    paints: crate::paint::PaintCache,
 }
 
 impl RenderFrame {
@@ -228,6 +237,7 @@ impl RenderFrame {
         self.lights.clear();
         self.reflection_probes.clear();
         self.draws.clear();
+        self.decals.clear();
         self.palettes.clear();
         self.effects.clear();
         self.terrain = world
@@ -332,6 +342,28 @@ impl RenderFrame {
                     intensity: effect.intensity,
                 });
             }
+            if let Some(decal) = entity.get::<crate::decal::Decal>() {
+                let name = entity
+                    .get::<SceneMetadata>()
+                    .map(|m| m.name.as_str())
+                    .filter(|n| !n.is_empty())
+                    .unwrap_or("decal");
+                let size = Vec3::from_array(decal.size).max(Vec3::splat(1e-3));
+                self.decals.push(crate::decal::DecalView {
+                    entity: stable_id(address),
+                    address: address.to_owned(),
+                    label: format!("{name} ({address})"),
+                    world: pose.matrix() * Mat4::from_scale(size),
+                    decal: decal.clone(),
+                    material: decal
+                        .material
+                        .as_ref()
+                        .and_then(|m| asset_id(m).ok())
+                        .and_then(|id| library?.materials.get(id))
+                        .filter(|m| m.decal.is_some())
+                        .cloned(),
+                });
+            }
             if let Some(renderer) = entity.get::<MeshRenderer>() {
                 let name = entity
                     .get::<SceneMetadata>()
@@ -369,10 +401,25 @@ impl RenderFrame {
                     material,
                     skin: None,
                     casts_shadows: renderer.cast_shadows,
+                    paint: None,
+                    receives_decals: renderer.receives_decals,
                 };
                 if base.material.is_some() {
                     base.emissive = emission_multiplier(renderer, strength);
                     base.emissive_factor = renderer.emissive_factor;
+                }
+                let painted = entity.get::<crate::paint::VertexPaint>();
+                if renderer.model.is_none()
+                    && let Some(paint) = painted.and_then(|p| p.get(0))
+                {
+                    // Procedural shapes: source vertex i is generated vertex i.
+                    base.paint = self.paints.get(
+                        base.entity,
+                        paint,
+                        ara_asset::Digest([0; 32]),
+                        usize::MAX,
+                        |c| Some(c.iter().map(|&c| u32::from_le_bytes(c)).collect()),
+                    );
                 }
                 let model = renderer
                     .model
@@ -428,6 +475,13 @@ impl RenderFrame {
                         for i in selection.primitives {
                             let primitive = &model.primitives[i];
                             let material = material_override(renderer, i - selection.base, library);
+                            let slot = (i - selection.base) as u32;
+                            let id = base.entity.wrapping_add(i as u64);
+                            let paint = painted.and_then(|p| p.get(slot)).and_then(|paint| {
+                                self.paints.get(id, paint, model.digest, i, |c| {
+                                    crate::paint::cooked(primitive, c)
+                                })
+                            });
                             self.draws.push(Draw {
                                 entity: base.entity.wrapping_add(i as u64),
                                 geometry: Geometry::Model {
@@ -442,6 +496,7 @@ impl RenderFrame {
                                     primitive.material,
                                 ),
                                 material,
+                                paint,
                                 ..base.clone()
                             });
                         }
@@ -450,6 +505,7 @@ impl RenderFrame {
             }
         }
         self.camera = camera.map(|(_, c)| c);
+        self.paints.retain_seen();
     }
 
     fn light(&mut self, light: &Light, pose: &Pose) {

@@ -46,7 +46,7 @@ impl Builder {
                         uv1: [px, pz],
                         tangent: t.extend(-1.0).to_array(),
                         terrain_weights: u32::from_le_bytes(tile.weights[index]),
-                        reserved: 0,
+                        color: u32::MAX,
                     });
                 }
             }
@@ -89,6 +89,7 @@ impl Builder {
                 }],
                 bounds,
                 deforming: false,
+                vertex_colors: false,
                 revision: 0,
             });
             self.scene.instances.push(Instance {
@@ -100,6 +101,8 @@ impl Builder {
                 world: glam30::Mat4::IDENTITY,
                 previous_world: glam30::Mat4::IDENTITY,
                 casts_shadows: true,
+                paint: None,
+                receives_decals: true,
             });
         }
         let resident: std::collections::BTreeSet<_> = view.tiles.iter().copied().collect();

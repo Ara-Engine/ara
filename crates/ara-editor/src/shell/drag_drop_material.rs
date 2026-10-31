@@ -184,6 +184,8 @@ mod tests {
                     material: None,
                     skin: None,
                     casts_shadows: true,
+                    source_vertices: Vec::new(),
+                    vertex_colors: false,
                 })
                 .collect(),
             nodes: BTreeMap::from([(
@@ -218,6 +220,8 @@ mod tests {
             material: None,
             skin: None,
             casts_shadows: true,
+            paint: None,
+            receives_decals: true,
         };
         let renderer =
             json!({"model":"@assets/model.glb#as_model001","node":"Branch","primitive":1});

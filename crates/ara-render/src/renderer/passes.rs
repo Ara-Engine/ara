@@ -28,7 +28,11 @@ enum Recipe {
     HorizonCapture(usize),
     /// This frame's virtual shadow pages (`look::vsm`).
     VsmPages,
-    GBuffer,
+    /// The G-buffer fill; `true`: the vertex-colour views (`ViewMode::vertex_color`).
+    GBuffer(bool),
+    /// Deferred decals blended into the G-buffer (`native/decals.rs`); `true`: the
+    /// decal coverage view (`ViewMode::DecalCoverage`).
+    Decals(bool),
     Tile,
     /// Deferred lighting; `true`: the gi_diffuse view's variant (`ViewMode::GiDiffuse`).
     Lighting(bool),
@@ -127,6 +131,25 @@ impl Renderer {
         if let Some(native) = &mut self.native {
             native.prepare(&mut self.gpu, &frame, &camera, &self.look.quality)?;
         }
+        // Deferred decals: this frame's visible, faded and ordered list, written with
+        // the G-buffer storage views the tile pass blends through. The coverage view
+        // runs the pass without decals too (it shows where none land).
+        let decal_coverage = mode == ViewMode::DecalCoverage;
+        let decals = match &self.native {
+            // The vertex-colour views show colours alone.
+            Some(native)
+                if (native.has_decals() && mode.vertex_color().is_none()) || decal_coverage =>
+            {
+                let mut storage = [0; 4];
+                for (slot, target) in storage.iter_mut().zip([ALBEDO, NORMAL, MATERIAL, EMISSIVE]) {
+                    *slot = self.gpu.storage_image(self.targets.images[target])?.index;
+                }
+                let native = self.native.as_mut().expect("matched native content");
+                native.prepare_decals(&mut self.gpu, &camera, self.render, storage)? > 0
+                    || decal_coverage
+            }
+            _ => false,
+        };
         self.rays.prepare(
             &mut self.gpu,
             self.native.as_ref(),
@@ -801,7 +824,25 @@ impl Renderer {
             .into_iter()
             .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color))),
         );
-        declare(gbuffer, Recipe::GBuffer);
+        declare(gbuffer, Recipe::GBuffer(mode.vertex_color().is_some()));
+        // Decals land on the G-buffer before anything reads it (AO, SSR, GI, lighting).
+        if decals {
+            let pass = graph.pass(
+                "Decals",
+                Queue::Graphics,
+                [
+                    (ids[ALBEDO], Access::Storage),
+                    (ids[NORMAL], Access::Storage),
+                    (ids[MATERIAL], Access::Storage),
+                    (ids[EMISSIVE], Access::Storage),
+                    (ids[DEPTH], Access::ShaderRead),
+                    (ids[ID], Access::ShaderRead),
+                ]
+                .into_iter()
+                .chain(graphics.iter().copied()),
+            );
+            declare(pass, Recipe::Decals(decal_coverage));
+        }
         // Page visibility for lighting and the pages this frame's pixels sample
         // (look::vsm), read back once the frame completes.
         let mut vsm_mask = None;
@@ -1006,7 +1047,7 @@ impl Renderer {
             forward,
             Recipe::Forward {
                 lit: forward_lit,
-                draws: !gi_diffuse,
+                draws: !gi_diffuse && mode.vertex_color().is_none(),
             },
         );
         let mut shaded = shadow_passes;
@@ -1510,7 +1551,7 @@ impl Renderer {
                         }
                         recorder.push(Command::EndRendering);
                     }
-                    Recipe::GBuffer => {
+                    Recipe::GBuffer(vertex_colors) => {
                         recorder.push(Command::Pipeline(self.pipelines.gbuffer));
                         recorder.push(Command::BeginRendering {
                             colors: [ALBEDO, NORMAL, MATERIAL, EMISSIVE, ID]
@@ -1529,7 +1570,7 @@ impl Renderer {
                         });
                         if let Some(native) = &self.native {
                             let detail = self.look.quality.terrain_detail;
-                            native.record_gbuffer(&mut recorder, footprint, detail);
+                            native.record_gbuffer(&mut recorder, footprint, detail, vertex_colors);
                         }
                         for (index, mesh) in self
                             .content
@@ -1545,6 +1586,11 @@ impl Renderer {
                             recorder.push(Command::Draw(draw(mesh)));
                         }
                         recorder.push(Command::EndRendering);
+                    }
+                    Recipe::Decals(coverage) => {
+                        if let Some(native) = &self.native {
+                            native.record_decals(&mut recorder, root, self.render, coverage);
+                        }
                     }
                     Recipe::Tile => {
                         recorder.push(Command::Pipeline(self.pipelines.tile));

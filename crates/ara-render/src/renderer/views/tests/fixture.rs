@@ -13,7 +13,7 @@ pub(in crate::renderer) fn scene() -> instanced::Scene {
                     tangent: [1., 0., 0., 1.],
                     uv1: [0.; 2],
                     terrain_weights: 0,
-                    reserved: 0,
+                    color: u32::MAX,
                 })
                 .collect(),
             lods: vec![instanced::Lod {
@@ -22,6 +22,7 @@ pub(in crate::renderer) fn scene() -> instanced::Scene {
             }],
             bounds: [Vec3::new(-0.7, -0.6, 0.), Vec3::new(0.7, 0.7, 0.)],
             deforming: true,
+            vertex_colors: false,
             revision: 0,
         }],
         instances: vec![instanced::Instance {
@@ -32,6 +33,8 @@ pub(in crate::renderer) fn scene() -> instanced::Scene {
             world: Mat4::IDENTITY,
             previous_world: Mat4::IDENTITY,
             casts_shadows: true,
+            paint: None,
+            receives_decals: true,
         }],
         materials: vec![instanced::Material {
             pbr: crate::scene::Material {
@@ -48,5 +51,6 @@ pub(in crate::renderer) fn scene() -> instanced::Scene {
         sun_lux: Vec3::splat(10.),
         environment: vec![[0.04, 0.04, 0.04, 1.]],
         environment_size: [1, 1],
+        decals: Vec::new(),
     }
 }

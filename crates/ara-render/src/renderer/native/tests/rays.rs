@@ -24,7 +24,7 @@ fn mirror_scene() -> NativeScene {
                 uv: [0.; 2],
                 uv1: [0.; 2],
                 terrain_weights: 0,
-                reserved: 0,
+                color: u32::MAX,
             })
             .collect(),
         lods: vec![instanced::Lod {
@@ -32,6 +32,7 @@ fn mirror_scene() -> NativeScene {
             error: 0.,
         }],
         bounds: [Vec3::new(-1., -1., 0.), Vec3::new(1., 1., 0.)],
+        vertex_colors: false,
     };
     let instance = |i: usize, world| instanced::Instance {
         entity: i as u64,
@@ -41,6 +42,8 @@ fn mirror_scene() -> NativeScene {
         world,
         previous_world: world,
         casts_shadows: true,
+        paint: None,
+        receives_decals: true,
     };
     NativeScene {
         geometry: vec![quad(29)],
@@ -60,6 +63,7 @@ fn mirror_scene() -> NativeScene {
         sun_lux: Vec3::ONE,
         environment: vec![[0.02, 0.02, 0.02, 1.]],
         environment_size: [1, 1],
+        decals: Vec::new(),
     }
 }
 

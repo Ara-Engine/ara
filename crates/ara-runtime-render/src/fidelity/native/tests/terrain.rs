@@ -168,6 +168,8 @@ fn signed_terrain_splats_and_rule_prefab_parts_use_runtime_placements_once() {
                 texture_generations: Vec::new(),
                 base_color_decode_srgb: false,
                 emissive_decode_srgb: false,
+                paint_layers: Vec::new(),
+                decal: None,
             }),
         );
     }

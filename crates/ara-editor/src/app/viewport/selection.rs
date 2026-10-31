@@ -309,6 +309,7 @@ mod tests {
                 lods: Vec::new(),
                 bounds: [Vec3::splat(-0.5), Vec3::splat(0.5)],
                 deforming: false,
+                vertex_colors: false,
                 revision: 0,
             }],
             instances: [id, id + 1]
@@ -321,6 +322,8 @@ mod tests {
                     world: Mat4::from_translation(Vec3::new(0., 0., -5.)),
                     previous_world: Mat4::IDENTITY,
                     casts_shadows: true,
+                    paint: None,
+                    receives_decals: true,
                 })
                 .collect(),
             materials: Vec::new(),
@@ -330,6 +333,7 @@ mod tests {
             sun_lux: Vec3::ONE,
             environment: Vec::new(),
             environment_size: [0; 2],
+            decals: Vec::new(),
         };
         let camera = ara_render::scene::CameraSpec::LookAt {
             position: Vec3::ZERO,

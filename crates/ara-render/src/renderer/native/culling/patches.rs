@@ -150,6 +150,7 @@ impl Culling {
                 count: chunk.len() as u32,
                 vertices: group.counts[lod],
                 first_index: group.first_indices[lod],
+                paint: group.paint_shadow,
             };
             cursor += chunk.len();
         }

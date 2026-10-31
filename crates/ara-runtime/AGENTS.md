@@ -54,7 +54,7 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
   diagnostic; the first generation replaces that cooked placeholder at a tick boundary.
 - `model::Model` decodes a glTF import generation (FORMAT.md v1); `skin::Skin` turns
   the cooked skeleton/clips into ara-anim data (parent-first reorder, `joint_map`).
-  ModelVertex retains UV0/UV1; ModelMaterial retains independent slot transforms,
+  ModelVertex retains UV0/UV1 and linear RGBA8 `color` (Primitive keeps `source_vertices` from VSRC and `vertex_colors`); `paint::VertexPaint` stores per-instance colours per source vertex (zlib + base64, `vertexPaint.set/fill/clear` typed commands), mapped onto cooked vertices into `Draw.paint` through `paint::PaintCache` (O(1) per unchanged draw); a changed source vertex count draws unpainted. `decal::Decal` (box `size` around the entity projecting along local -Z, per-channel opacities, distance/angle/screen-size fades, sort order) extracts into `RenderFrame::decals` with its decal-domain `MaterialAsset` (`material::DecalSurface`: opacity/AO channel, specular); `MeshRenderer.receivesDecals` reaches `Draw::receives_decals`. ModelMaterial (glTF `vertex_color_tint`) retains independent slot transforms,
   emissive strength (folded once), transmission and occlusion factors/textures.
   `Model::select` resolves source node names/indices and subtree-local primitives,
   restoring the selected pivot while retaining rotation/scale. Geometry stays shared.

@@ -32,6 +32,8 @@ pub(super) struct Bindings {
     tiles: Vec<ara_terrain::TileCoord>,
     environment: Environment,
     lights: Vec<ara_runtime::extract::LightView>,
+    /// Decal identities (`decals::identity`) and whether each drew.
+    decals: Vec<(super::decals::Identity, bool)>,
     scratch: Vec<ara_render::scene::Vertex>,
     live: bool,
 }
@@ -78,6 +80,11 @@ impl Bindings {
                 .map_or_else(Vec::new, |t| t.tiles.to_vec()),
             environment: frame.environment,
             lights: frame.lights.to_vec(),
+            decals: frame
+                .decals
+                .iter()
+                .map(|view| (super::decals::identity(view), view.material.is_some()))
+                .collect(),
             scratch: Vec::new(),
             live: false,
         })
@@ -191,7 +198,26 @@ impl Prepared {
                 poses += 1;
                 self.changes.instances.push(index);
             }
+            let vertices = self.scene.geometry[instance.geometry].vertices.len();
+            match (super::paint(draw, vertices), &instance.paint) {
+                (None, None) => {}
+                (Some(next), Some(known)) => {
+                    if !Arc::ptr_eq(&next, known) && next != *known {
+                        instance.paint = Some(next);
+                        self.changes.paint.push(index);
+                    }
+                }
+                // Adding or removing paint changes how draws group.
+                _ => return Ok(FrameChange::Rebuild),
+            }
             let current = source(draw);
+            // Paint layers are their own material rows: a new source or a factor
+            // edit rebuilds them with the parent.
+            let layered = Source::of(draw)
+                .is_some_and(|s| matches!(s, Source::Native(m) if !m.paint_layers.is_empty()));
+            if layered && current != link.source {
+                return Ok(FrameChange::Rebuild);
+            }
             let material = &mut self.scene.materials[instance.material];
             let previous = *material;
             if current != link.source {
@@ -206,6 +232,9 @@ impl Prepared {
             }
             material::apply_draw(material, draw, Source::of(draw));
             if bytemuck::bytes_of(material) != bytemuck::bytes_of(&previous) {
+                if layered {
+                    return Ok(FrameChange::Rebuild);
+                }
                 self.changes.materials.push(instance.material);
             }
             if let Some(range) = &draw.skin {
@@ -234,6 +263,42 @@ impl Prepared {
                     link.palette.copy_from_slice(palette);
                     skins += 1;
                     self.changes.geometries.push(instance.geometry);
+                }
+            }
+        }
+        // Decals stream poses and parameters; new, removed or re-materialled ones rebuild.
+        if frame.decals.len() != bindings.decals.len()
+            || frame
+                .decals
+                .iter()
+                .zip(&bindings.decals)
+                .any(|(view, (known, _))| super::decals::identity(view) != *known)
+        {
+            return Ok(FrameChange::Rebuild);
+        }
+        let mut drawn = self.scene.decals.iter_mut();
+        for (view, (_, draws)) in frame.decals.iter().zip(&bindings.decals) {
+            if *draws && let Some(decal) = drawn.next() {
+                let before = (
+                    decal.world,
+                    decal.opacity,
+                    decal.fade_distance,
+                    decal.fade_angle,
+                    decal.sort_order,
+                    decal.fade_screen_size.to_bits(),
+                );
+                super::decals::update(decal, view);
+                if before
+                    != (
+                        decal.world,
+                        decal.opacity,
+                        decal.fade_distance,
+                        decal.fade_angle,
+                        decal.sort_order,
+                        decal.fade_screen_size.to_bits(),
+                    )
+                {
+                    self.changes.decals = true;
                 }
             }
         }

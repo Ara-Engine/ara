@@ -40,39 +40,63 @@ pub struct RenderDebug {
     /// renderers and presets compare at the same brightness.
     #[ara(range(min = -10, max = 24))]
     pub exposure: Option<f32>,
-    /// What captures show instead of the lit image (default `lit`), as Unreal's
-    /// buffer visualization.
-    pub view: BufferView,
+    /// The debug view drawn instead of Lit, in the window and in captures (default
+    /// `lit`; `ara capture --view`).
+    pub view: DebugView,
 }
 
-/// The images a capture can show ([`RenderDebug::view`]).
+/// The renderer's debug views (`ara_render::capture::ViewMode`): camelCase names, and
+/// its snake_case names (the editor sends `ara_render::RenderDebug`) as aliases.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Schema, Serialize, Deserialize)]
 #[ara(module = "play")]
 #[serde(rename_all = "camelCase")]
-pub enum BufferView {
+pub enum DebugView {
     /// The lit image.
     #[default]
     Lit,
-    /// Material base colour.
+    /// Linear base colour.
     Albedo,
     /// World normals.
     Normals,
-    /// Scene depth.
+    /// Reversed-Z depth.
     Depth,
     /// Roughness (red) and metalness (green).
+    #[serde(alias = "roughness_metal")]
     RoughnessMetal,
-    /// A stable colour per entity.
+    /// Pseudocolour entity IDs.
+    #[serde(alias = "entity_ids")]
     EntityIds,
-    /// Each pixel's sun shadow cascade, times its shadow.
+    /// Cascade selection times shadow visibility.
+    #[serde(alias = "shadow_cascades")]
     ShadowCascades,
     /// Triangle edges.
     Wireframe,
-    /// The lit image with triangle edges over it.
+    /// The lit image with triangle edges.
+    #[serde(alias = "lit_wireframe")]
     LitWireframe,
-    /// The diffuse indirect light shading samples (probe GI, sky, screen bounce, AO).
+    /// Diffuse indirect light alone.
+    #[serde(alias = "gi_diffuse")]
     GiDiffuse,
-    /// Fragments drawn per pixel, on a heat legend.
+    /// Fragments per pixel before depth rejection.
     Overdraw,
+    /// Vertex colour RGB as stored.
+    #[serde(alias = "vertex_color")]
+    VertexColor,
+    /// Vertex colour red alone.
+    #[serde(alias = "vertex_color_red")]
+    VertexColorRed,
+    /// Vertex colour green alone.
+    #[serde(alias = "vertex_color_green")]
+    VertexColorGreen,
+    /// Vertex colour blue alone.
+    #[serde(alias = "vertex_color_blue")]
+    VertexColorBlue,
+    /// Vertex colour alpha alone.
+    #[serde(alias = "vertex_color_alpha")]
+    VertexColorAlpha,
+    /// Deferred decals per pixel.
+    #[serde(alias = "decal_coverage")]
+    DecalCoverage,
 }
 
 /// The path-traced reference's budget ([`RenderDebug::reference`]).
@@ -126,7 +150,7 @@ impl Default for RenderDebug {
             global_illumination: true,
             reference: None,
             exposure: None,
-            view: BufferView::Lit,
+            view: DebugView::Lit,
         }
     }
 }

@@ -19,7 +19,7 @@ mod extraction_tests;
 pub(crate) mod selection_tests;
 
 /// A decoded model-space vertex with up to eight skin influences.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ModelVertex {
     /// Position in model space (metres before entity scale).
     pub position: [f32; 3],
@@ -35,6 +35,25 @@ pub struct ModelVertex {
     pub joints: [u16; 8],
     /// Normalized influence weights; all zero for rigid vertices.
     pub weights: [f32; 8],
+    /// Linear RGBA8 vertex colour (glTF `COLOR_0`, FBX vertex colours); opaque white
+    /// without. glTF materials multiply base colour by it.
+    pub color: [u8; 4],
+}
+
+/// Zero attributes and influences, opaque white.
+impl Default for ModelVertex {
+    fn default() -> Self {
+        Self {
+            position: [0.; 3],
+            normal: [0.; 3],
+            uv: [0.; 2],
+            uv1: [0.; 2],
+            tangent: [0.; 4],
+            joints: [0; 8],
+            weights: [0.; 8],
+            color: [255; 4],
+        }
+    }
 }
 
 /// One drawable triangle list.
@@ -54,6 +73,30 @@ pub struct Primitive {
     /// False under a node whose glTF `extras` set `castShadows: false` (the node
     /// or any ancestor): drawn, but blocking no light.
     pub casts_shadows: bool,
+    /// Each vertex's source vertex (glTF accessor element, FBX control-point corner),
+    /// stable across re-cooks: per-instance paint (`VertexPaint`) is stored per source
+    /// vertex. Empty means vertex `i` is source vertex `i` (procedural geometry).
+    pub source_vertices: Vec<u32>,
+    /// Whether any vertex colour differs from opaque white.
+    pub vertex_colors: bool,
+}
+
+impl Primitive {
+    /// Source vertices the primitive draws from: one past the largest source index.
+    pub fn source_vertex_count(&self) -> usize {
+        if self.source_vertices.is_empty() {
+            self.vertices.len()
+        } else {
+            self.source_vertices
+                .iter()
+                .max()
+                .map_or(0, |&max| max as usize + 1)
+        }
+    }
+    /// Vertex `i`'s source vertex.
+    pub fn source_vertex(&self, i: usize) -> usize {
+        self.source_vertices.get(i).map_or(i, |&s| s as usize)
+    }
 }
 
 /// A simplified level of detail of a primitive.
@@ -457,9 +500,10 @@ fn decode_mesh(bytes: &[u8], transform: Mat4) -> Result<Primitive> {
                 ],
                 joints,
                 weights,
+                color: q.color,
             }
         })
-        .collect();
+        .collect::<Vec<_>>();
     let read = |lod: &Lod| -> Result<Vec<u32>> {
         let first = lod.first_index as usize * 4;
         let mut indices: Vec<u32> = mesh
@@ -496,13 +540,22 @@ fn decode_mesh(bytes: &[u8], transform: Mat4) -> Result<Primitive> {
             })
         })
         .collect::<Result<_>>()?;
+    let source_vertices = mesh
+        .source_vertices
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| u32::from_le_bytes(*b))
+        .collect();
     Ok(Primitive {
+        vertex_colors: vertices.iter().any(|v| v.color != [255; 4]),
         vertices,
         indices,
         lods,
         material: None,
         skin: None,
         casts_shadows: true,
+        source_vertices,
     })
 }
 

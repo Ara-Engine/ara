@@ -18,7 +18,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   No primary render/readback. `render_secondary` waits for captures; Drop/release retire after pending use.
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and camera pose/bounds requests. Materials use bindless texture indices.
 - `instanced::Scene`: native model-space content contract for shared geometry,
-  current/previous instance transforms, deforming revisions, 64-byte UV0/UV1
+  current/previous instance transforms, deforming revisions, 64-byte UV0/UV1 (+ linear RGBA8 `Vertex::color`; `Geometry::vertex_colors` declares non-white, validated; per-instance paint `Instance::paint` lives in one host buffer range per instance, addressed by row meta.y bits 1../meta.z, streamed by `Changes::paint`; adding/removing paint regroups)
   vertices and 320-byte materials with six map transforms, AO, transmission (+ IOR/volume packed by `instanced::Volume`:
   refractive forward PSOs over `look::refract`'s copy of the lit scene; blended films draw back then front faces and cast
   `look::translucent` sun shadows on High/Epic) and terrain layer IDs. Texture IDs address the residency table; u32::MAX is neutral.
@@ -105,7 +105,7 @@ Frames use reversed-Z, metres and linear HDR: sun in lux, point/spot flux in
 lumens, environments in cd/m2, exposure a linear multiplier (README.md: tone mapper,
 GPU numbers). Only the TAA history is RGBA16F and pre-exposed (`look.slangh`
 exposureState); look passes learn from root word 7 whether input is history.
-The G-buffer is compact: RGBA8 sRGB albedo + AO, RG16 octahedral normal, RGBA8
+Vertex colours: `VERTEX_COLOR_TINT` (glTF COLOR_0 multiplies base/alpha) and `VERTEX_PAINT_LAYERS` (layer materials weighted by `PaintWeight` bytes in flags[2]) draw only through the `gbuffer_paint`/`shadow_paint` PSO variants (`Batch::paint`, set per pass from `Group::paint`/`paint_shadow`), so other pixels pay nothing; forward/refract PSOs always read colours; `ViewMode::VertexColor*` (11-15) draw colours as albedo (`native_vertex_color`). Tests: `native/tests/paint.rs`. Decals (`instanced::Decal`, `Scene::decals`; G-buffer decals, not DBuffer: Ara has no depth prepass and lights fully deferred, so blending into the G-buffer before AO/SSR/GI/lighting lets every term see them): `native/decals.rs` culls, fades (distance, screen size) and sorts up to 1,024 visible per frame on the CPU; `shaders/decals.slang` (`native_decals`) bins them per 16x16 tile (one bit each, draw order kept) and blends base colour, tangent-frame normal, roughness, metal, emissive and AO in registers, writing the G-buffer once through storage views (albedo via its UNORM alias); footprints come from neighbour rays on the surface plane (no depth-edge LOD breaks); `Instance::receives_decals` false sets row meta.y bit 31; `ViewMode::DecalCoverage` (16); `Changes::decals` streams edits; specular waits for a G-buffer channel. Tests: `native/tests/decals.rs`, `--example native_timings`. The G-buffer is compact: RGBA8 sRGB albedo + AO, RG16 octahedral normal, RGBA8
 roughness/metal/AO occluder (zero for cutouts), B10G11R11 emissive, R32 ID and
 RG16F motion; positions are rebuilt from depth. Shaders read and write it only through raster.slangh's
 `gbuffer*` helpers, so the formats change there and in `Renderer::targets` together.

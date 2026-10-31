@@ -2,7 +2,10 @@ use super::*;
 use crate::material::Source;
 use ara_render::{
     instanced::NO_TEXTURE,
-    scene::{BASE_COLOR_DECODE_SRGB, DOUBLE_SIDED, EMISSIVE_DECODE_SRGB},
+    scene::{
+        BASE_COLOR_DECODE_SRGB, DOUBLE_SIDED, EMISSIVE_DECODE_SRGB, VERTEX_COLOR_TINT,
+        VERTEX_PAINT_LAYERS,
+    },
 };
 use ara_runtime::model::TextureTransform;
 use ara_texture_stream::{NativeSource, NativeView};
@@ -41,6 +44,8 @@ pub(super) fn apply_draw(out: &mut Material, draw: &Draw, source: Option<Source<
         out.pbr.emissive_roughness = [emission[0], emission[1], emission[2], draw.roughness];
         out.pbr.surface = [draw.metallic, 1.0, 1.0, 0.5];
         out.pbr.flags[0] = u32::from(draw.color[3] < 1.0) * 2;
+        // Procedural shapes show their paint, as glTF materials do.
+        out.pbr.flags[1] |= VERTEX_COLOR_TINT;
     }
 }
 
@@ -86,7 +91,8 @@ fn properties(out: &mut Material, source: Source<'_>) {
     out.pbr.flags[0] = m.alpha_mode;
     out.pbr.flags[1] = (u32::from(source.decode(0)) * BASE_COLOR_DECODE_SRGB)
         | (u32::from(source.decode(3)) * EMISSIVE_DECODE_SRGB)
-        | (u32::from(m.double_sided) * DOUBLE_SIDED);
+        | (u32::from(m.double_sided) * DOUBLE_SIDED)
+        | (u32::from(m.vertex_color_tint) * VERTEX_COLOR_TINT);
     out.extras.uv = [
         m.base_color_uv,
         m.normal_uv,
@@ -134,9 +140,44 @@ impl Builder {
         let mut material = Material::default();
         if let Some(source) = Source::of(draw) {
             self.source_material(&mut material, source)?;
+            if let Source::Native(asset) = source
+                && !asset.paint_layers.is_empty()
+            {
+                self.paint_layers(&mut material, asset, draw)?;
+            }
         }
         apply_draw(&mut material, draw, Source::of(draw));
         Ok(self.add_material(material))
+    }
+
+    /// Makes `out` a vertex-paint layered material (`VERTEX_PAINT_LAYERS`): each layer
+    /// its own native material (with this draw's factors), named by `layer_materials`
+    /// and weighted by its channel terms in `flags[2]` (`scene::PaintWeight`, one byte
+    /// per layer).
+    fn paint_layers(
+        &mut self,
+        out: &mut Material,
+        asset: &MaterialAsset,
+        draw: &Draw,
+    ) -> Result<()> {
+        let mut ids = [NO_TEXTURE; 4];
+        let mut weights = 0;
+        for (i, layer) in asset.paint_layers.iter().enumerate().take(4) {
+            let source = Source::Layer(asset, layer);
+            let mut material = Material::default();
+            self.source_material(&mut material, source)?;
+            apply_draw(&mut material, draw, Some(source));
+            ids[i] = self.add_material(material) as u32;
+            let byte = (0..4).fold(0u32, |byte, c| {
+                byte | u32::from(layer.terms[c] & 3) << (2 * c)
+            });
+            weights |= byte << (8 * i);
+        }
+        out.extras.terrain_layers = asset.paint_layers.len().min(4) as u32;
+        out.extras.layer_materials = ids;
+        out.pbr.flags[1] |= VERTEX_PAINT_LAYERS;
+        out.pbr.flags[2] = weights;
+        Ok(())
     }
 
     pub(super) fn source_material(&mut self, out: &mut Material, source: Source<'_>) -> Result<()> {

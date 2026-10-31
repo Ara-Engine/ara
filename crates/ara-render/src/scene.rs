@@ -15,6 +15,50 @@ pub const MODEL_BOUNDS: u32 = 1 << 27;
 /// own side (its normal reversed, as glTF requires); single-sided materials keep
 /// their normals.
 pub const DOUBLE_SIDED: u32 = 1 << 28;
+/// `Material.flags[1]`: base colour and opacity multiply by the vertex colour
+/// (glTF `COLOR_0`, per-instance paint). Without it vertex colours stay data
+/// that only vertex-paint layers and debug views read.
+pub const VERTEX_COLOR_TINT: u32 = 1 << 29;
+/// `Material.flags[1]`: a vertex-paint layered material (Unreal's VertexColor
+/// lerps between material layers). Native `MaterialExtras::terrain_layers` counts
+/// its layers and `layer_materials` names them, as for terrain splats, but each
+/// layer's weight comes from the vertex colour: `flags[2]` holds one byte per
+/// layer (layer `i` in bits `8i..8i+8`), two bits per channel R, G, B, A
+/// ([`PaintWeight`]); the weight is the product of the used channels' terms.
+pub const VERTEX_PAINT_LAYERS: u32 = 1 << 30;
+
+/// How one vertex-colour channel scales a paint layer's weight
+/// ([`VERTEX_PAINT_LAYERS`]): the material graph's lerp tree, flattened.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[repr(u8)]
+pub enum PaintWeight {
+    /// The channel does not affect this layer.
+    #[default]
+    Unused = 0,
+    /// Weight times the channel value `c` (the lerp's second input).
+    Channel = 1,
+    /// Weight times `1 - c` (the lerp's first input).
+    Inverse = 2,
+}
+
+impl PaintWeight {
+    /// Packs one layer's four channel terms (R, G, B, A) into its `flags[2]` byte.
+    pub fn pack(channels: [Self; 4]) -> u8 {
+        channels
+            .iter()
+            .enumerate()
+            .fold(0, |byte, (i, term)| byte | ((*term as u8) << (2 * i)))
+    }
+    /// The weight of a layer byte at linear vertex colour `rgba`, as the shader
+    /// evaluates it.
+    pub fn weight(byte: u8, rgba: [f32; 4]) -> f32 {
+        (0..4).fold(1.0, |w, i| match (byte >> (2 * i)) & 3 {
+            1 => w * rgba[i],
+            2 => w * (1.0 - rgba[i]),
+            _ => w,
+        })
+    }
+}
 
 /// Interleaved position/normal/UV/tangent vertex ABI, 48 bytes.
 #[repr(C)]
@@ -42,8 +86,9 @@ pub struct Material {
     /// Scene texture indices: base color (sRGB), normal, metallic/roughness (G/B), emissive (sRGB).
     pub textures: [u32; 4],
     /// Word 0: alpha mode (opaque/mask/blend). Word 1: layer/AO bits 0..24 and
-    /// decode-after-sampling bits 25/26, unpublished model bounds bit 27 and
-    /// double-sided bit 28.
+    /// decode-after-sampling bits 25/26, unpublished model bounds bit 27,
+    /// double-sided bit 28, vertex-colour tint bit 29 and paint layers bit 30.
+    /// Word 2: paint layer weights ([`VERTEX_PAINT_LAYERS`]) on native content.
     /// Word 3 is reserved for the fidelity tag.
     pub flags: [u32; 4],
 }

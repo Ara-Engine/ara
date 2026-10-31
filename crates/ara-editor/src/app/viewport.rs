@@ -48,6 +48,9 @@ pub(super) struct SceneView {
     raster: Option<ara_runtime_render::RasterView>,
     raster_frame: Option<ara_runtime::extract::RenderFrame>,
     raster_snapshot_dirty: bool,
+    /// The `Editor::paint_revision` the frame shows, and whether a preview is applied.
+    paint_revision: u64,
+    paint_applied: bool,
     /// One submitted Scene frame; UI draws its previous completed color/ID pair.
     frame_pending: bool,
     fidelity: Option<FidelityView>,
@@ -88,6 +91,32 @@ pub(super) struct SceneView {
     recovery: recovery::Recovery,
 }
 impl SceneView {
+    /// Entity `address`'s drawn model primitives (Mesh Paint targets): draw identity,
+    /// model generation, primitive index and model-to-world.
+    pub(super) fn paint_targets(
+        &self,
+        address: &str,
+    ) -> Vec<(
+        u64,
+        std::sync::Arc<ara_runtime::model::Model>,
+        usize,
+        glam::Mat4,
+    )> {
+        self.raster_frame
+            .iter()
+            .flat_map(|frame| &frame.draws)
+            .filter(|d| d.address == address)
+            .filter_map(|draw| match &draw.geometry {
+                ara_runtime::extract::Geometry::Model { model, primitive } => Some((
+                    draw.entity,
+                    std::sync::Arc::clone(model),
+                    *primitive,
+                    glam::Mat4::from_cols_array(&draw.world.to_cols_array()),
+                )),
+                ara_runtime::extract::Geometry::Shape { .. } => None,
+            })
+            .collect()
+    }
     /// Recheck native input at the next render boundary. Notifications for an
     /// already adopted publication coalesce; changed input retains last-good GPU
     /// content until its replacement or in-place update succeeds.
@@ -677,6 +706,24 @@ impl SceneView {
         }
         {
             let frame = self.raster_frame.as_mut().ok_or("raster frame")?;
+            // A Mesh Paint stroke's colours stream into the drawn instances; when it
+            // ends, the document (committed or not) extracts again.
+            if editor.paint_revision != self.paint_revision {
+                self.paint_revision = editor.paint_revision;
+                if let Some(preview) = &editor.paint_preview {
+                    for draw in &mut frame.draws {
+                        if let Some(colors) = preview.get(&draw.entity) {
+                            draw.paint = Some(std::sync::Arc::clone(colors));
+                        }
+                    }
+                    self.raster_snapshot_dirty = true;
+                    self.paint_applied = true;
+                    self.convergence.reset();
+                } else if std::mem::take(&mut self.paint_applied) {
+                    self.revision = None;
+                    self.remaining = self.remaining.max(8);
+                }
+            }
             if let Some(changed) =
                 content.style_pending(frame, self.preview_view.as_ref().unwrap_or(view))
             {
@@ -1064,6 +1111,12 @@ fn view_mode(name: &str) -> ViewMode {
         "litWireframe" => ViewMode::LitWireframe,
         "gi_diffuse" => ViewMode::GiDiffuse,
         "overdraw" => ViewMode::Overdraw,
+        "vertexColor" => ViewMode::VertexColor,
+        "vertexColorRed" => ViewMode::VertexColorRed,
+        "vertexColorGreen" => ViewMode::VertexColorGreen,
+        "vertexColorBlue" => ViewMode::VertexColorBlue,
+        "vertexColorAlpha" => ViewMode::VertexColorAlpha,
+        "decalCoverage" => ViewMode::DecalCoverage,
         _ => ViewMode::Lit,
     }
 }

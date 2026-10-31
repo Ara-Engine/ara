@@ -27,6 +27,8 @@ fn diagnostic_cache_measurement() {
             world,
             previous_world: world,
             casts_shadows: true,
+            paint: None,
+            receives_decals: true,
         });
     }
     let mut results = Vec::new();

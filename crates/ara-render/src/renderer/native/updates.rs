@@ -121,6 +121,14 @@ impl Native {
                     discovered.geometries.push(i);
                 }
             }
+            for (i, instance) in scene.instances.iter().enumerate() {
+                if let (Some(next), Some(known)) = (&instance.paint, &self.paint_sources[i])
+                    && !std::sync::Arc::ptr_eq(next, known)
+                    && next != known
+                {
+                    discovered.paint.push(i);
+                }
+            }
         }
         let changes = changes.unwrap_or(&discovered);
         // Validate every candidate before touching any published row.
@@ -153,6 +161,19 @@ impl Native {
         }
         for &i in &changes.geometries {
             ensure!(i < scene.geometry.len(), "Invalid native geometry row");
+        }
+        if changes.decals {
+            scene.validate_decals()?;
+        }
+        for &i in &changes.paint {
+            let instance = scene.instances.get(i).context("Invalid native paint row")?;
+            self.groups.validate_instance(i, instance)?;
+            ensure!(
+                instance.paint.as_ref().is_some_and(|paint| {
+                    paint.len() == scene.geometry[instance.geometry].vertices.len()
+                }),
+                "Native paint must keep one colour per vertex"
+            );
         }
         if snapshot || !changes.geometries.is_empty() {
             if let Some(pose) = self.pool.prepare_pose(gpu, scene)? {
@@ -196,13 +217,47 @@ impl Native {
             if self.rows[i].world == scene.instances[i].world {
                 continue;
             }
-            self.rows[i] = row(&scene.instances[i], self.presented[i]);
+            self.rows[i] = row(
+                &scene.instances[i],
+                self.presented[i],
+                self.paint_index,
+                self.paint_offsets[i],
+            );
             self.changes.rows.insert(i);
             self.update_bounds(i, scene);
+        }
+        for &i in &changes.paint {
+            let paint = scene.instances[i]
+                .paint
+                .as_ref()
+                .expect("validated paint rows carry paint");
+            self.paint_sources[i] = Some(paint.clone());
+            gpu.upload_queued_range(
+                self.paint,
+                u64::from(self.paint_offsets[i]) * 4,
+                bytemuck::cast_slice(paint),
+            )?;
+            use sha2::Digest;
+            let mut digest = sha2::Sha256::new();
+            digest.update(self.paint_digest);
+            digest.update((i as u64).to_le_bytes());
+            digest.update(bytemuck::cast_slice::<u32, u8>(paint));
+            self.paint_digest = digest.finalize().into();
+            self.paint_dirty = true;
+            // Masked casters' alpha test reads the colours.
+            if self.groups.groups[self.groups.instance_group[i]].paint_shadow {
+                self.changes.caster(i, self.bounds[i], self.bounds[i]);
+            }
+        }
+        // Snapshot callers report no rows: their decals rewrite (a few records).
+        if changes.decals || (snapshot && !scene.decals.is_empty()) {
+            scene.validate_decals()?;
+            self.decals.update(gpu, &scene.decals)?;
         }
         if !changes.instances.is_empty()
             || !changes.materials.is_empty()
             || !changes.geometries.is_empty()
+            || !changes.paint.is_empty()
         {
             self.view_revision = self.view_revision.wrapping_add(1);
         }
@@ -237,11 +292,11 @@ impl Native {
         // instances are not serialized or visited again on idle frames.
         for i in self.changes.settle.drain(..) {
             self.rows[i].previous = self.presented[i];
-            self.rows[i].meta[1] = 0;
+            self.rows[i].meta[1] &= !1;
             self.changes.rows.insert(i);
         }
         for &i in &self.changes.skins.list {
-            self.rows[i].meta[1] = 1;
+            self.rows[i].meta[1] |= 1;
             self.changes.rows.insert(i);
         }
         self.changes.rows.list.sort_unstable();
@@ -298,7 +353,7 @@ impl Native {
         for &i in &self.changes.rows.list {
             let row = &self.rows[i];
             self.presented[i] = row.world;
-            if row.previous != row.world || row.meta[1] != 0 {
+            if row.previous != row.world || row.meta[1] & 1 != 0 {
                 self.changes.settle.push(i);
             }
         }
@@ -309,6 +364,8 @@ impl Native {
         self.changes.materials = 0;
         self.previous_vp = Some(camera.projection * camera.view);
         self.material_dirty = false;
+        self.paint_dirty = false;
+        self.decals.dirty = false;
         if advance_geometry {
             self.pool.presented();
         }

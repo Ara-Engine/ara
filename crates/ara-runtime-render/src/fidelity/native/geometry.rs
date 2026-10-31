@@ -24,7 +24,7 @@ impl Builder {
             return Ok(index);
         }
         let shape;
-        let (vertices, indices, lods, extent) = match &draw.geometry {
+        let (vertices, indices, lods, extent, vertex_colors) = match &draw.geometry {
             Geometry::Shape { shape: kind, size } => {
                 shape = crate::geometry::shape(*kind, *size);
                 (
@@ -32,6 +32,7 @@ impl Builder {
                     shape.indices.as_slice(),
                     &[][..],
                     1.0,
+                    false,
                 )
             }
             Geometry::Model { model, primitive } => {
@@ -41,6 +42,7 @@ impl Builder {
                     p.indices.as_slice(),
                     p.lods.as_slice(),
                     super::super::extent(model),
+                    p.vertex_colors,
                 )
             }
         };
@@ -97,6 +99,7 @@ impl Builder {
             lods: native_lods,
             bounds,
             deforming: draw.skin.is_some(),
+            vertex_colors,
             revision: 0,
         });
         self.geometry_keys.insert(key, index);
@@ -112,6 +115,6 @@ fn vertex(v: &ModelVertex) -> render::Vertex {
         tangent: v.tangent,
         uv1: v.uv1,
         terrain_weights: 0,
-        reserved: 0,
+        color: u32::from_le_bytes(v.color),
     }
 }

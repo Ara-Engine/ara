@@ -42,10 +42,11 @@ float4 refractColourRt(Frame f,Look l,Surface s,uint2 volume,float scale,float3 
     return forwardOutput(f,reflected+s.transmission*through*transmitted,s.alpha,s.alpha,refractExposure(f,l));
 }
 [shader("fragment")]
-ForwardLit nativeForwardRefractRtFragment(Varying v){
+ForwardLit nativeForwardRefractRtFragment(PaintVarying i){
+    Varying v=i.v;
     NativeMaterial m=material(v.material);uint2 volume=uint2(asuint(m.factors.z),asuint(m.factors.w));
     bool front=facesViewer(v);if(!front && (volume.x&0xffff)!=0)discard;
-    Surface s=forwardSurface<0>(v);float3 geometric=safeNormalize(v.normal,float3(0,1,0))*(front?1:-1);
+    Surface s=forwardSurface<0>(v,i.color);float3 geometric=safeNormalize(v.normal,float3(0,1,0))*(front?1:-1);
     float4x4 world=buffers[NonUniformResourceIndex(root.material)].Load<float4x4>(128+(v.id-1)*192+16);
     float scale=pow(abs(determinant((float3x3)world)),1./3.);
     Frame f=frame();Look l=look(f);ForwardLit o;o.color=refractColourRt(f,l,s,volume,scale,v.world,geometric,int2(v.clip.xy));

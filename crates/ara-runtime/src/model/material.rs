@@ -56,6 +56,10 @@ pub struct ModelMaterial {
     pub alpha_mode: u32,
     /// Mask cutoff.
     pub alpha_cutoff: f32,
+    /// Base colour and opacity multiply by the vertex colour: always for glTF
+    /// materials (`COLOR_0` semantics); graphs only where they multiply by
+    /// `vertexColor()`.
+    pub vertex_color_tint: bool,
 }
 
 /// A transmissive material's medium (KHR_materials_ior, KHR_materials_volume).
@@ -139,6 +143,7 @@ pub(super) fn decode(
             _ => 0,
         },
         alpha_cutoff: m["alphaCutoff"].as_f64().unwrap_or(0.5) as f32,
+        vertex_color_tint: true,
     })
 }
 

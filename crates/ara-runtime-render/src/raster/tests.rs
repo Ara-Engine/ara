@@ -68,6 +68,8 @@ fn box_draw(id: u64, size: [f32; 3], position: [f32; 3], emission: [f32; 3]) -> 
         material: None,
         skin: None,
         casts_shadows: true,
+        paint: None,
+        receives_decals: true,
     }
 }
 
@@ -86,6 +88,8 @@ fn terrain_content(color: [f32; 4]) -> Content {
                 texture_generations: Vec::new(),
                 base_color_decode_srgb: false,
                 emissive_decode_srgb: false,
+                paint_layers: Vec::new(),
+                decal: None,
             }),
         )]),
         ..Default::default()

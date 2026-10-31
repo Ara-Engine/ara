@@ -347,6 +347,7 @@ impl Job {
                             .collect(),
                         bounds: geometry.bounds,
                         deforming: geometry.deforming,
+                        vertex_colors: false,
                         revision: geometry.revision,
                     },
                     material: *material,
@@ -714,7 +715,7 @@ mod tests {
                     tangent: [1., 0., 0., 1.],
                     uv1: [0.; 2],
                     terrain_weights: 0,
-                    reserved: 0,
+                    color: u32::MAX,
                 }),
             );
             indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
@@ -729,6 +730,7 @@ mod tests {
                 lods: vec![Lod { indices, error: 0. }],
                 bounds: [Vec3::new(-10., 0., -10.), Vec3::new(10., 4., 10.)],
                 deforming: false,
+                vertex_colors: false,
                 revision: 0,
             }],
             instances: vec![Instance {
@@ -739,6 +741,8 @@ mod tests {
                 world: Mat4::IDENTITY,
                 previous_world: Mat4::IDENTITY,
                 casts_shadows: true,
+                paint: None,
+                receives_decals: true,
             }],
             materials: vec![material],
             textures: 0,
@@ -747,6 +751,7 @@ mod tests {
             sun_lux: Vec3::ZERO,
             environment: Vec::new(),
             environment_size: [0, 0],
+            decals: Vec::new(),
         }
     }
 

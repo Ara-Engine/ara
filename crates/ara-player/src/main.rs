@@ -1257,20 +1257,26 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
         }),
         exposure: debug.exposure.filter(|ev| ev.is_finite()),
         view: {
-            use ara_play::BufferView as B;
+            use ara_play::DebugView as D;
             use ara_render::capture::ViewMode as V;
             match debug.view {
-                B::Lit => V::Lit,
-                B::Albedo => V::Albedo,
-                B::Normals => V::Normals,
-                B::Depth => V::Depth,
-                B::RoughnessMetal => V::RoughnessMetal,
-                B::EntityIds => V::EntityIds,
-                B::ShadowCascades => V::ShadowCascades,
-                B::Wireframe => V::Wireframe,
-                B::LitWireframe => V::LitWireframe,
-                B::GiDiffuse => V::GiDiffuse,
-                B::Overdraw => V::Overdraw,
+                D::Lit => V::Lit,
+                D::Albedo => V::Albedo,
+                D::Normals => V::Normals,
+                D::Depth => V::Depth,
+                D::RoughnessMetal => V::RoughnessMetal,
+                D::EntityIds => V::EntityIds,
+                D::ShadowCascades => V::ShadowCascades,
+                D::Wireframe => V::Wireframe,
+                D::LitWireframe => V::LitWireframe,
+                D::GiDiffuse => V::GiDiffuse,
+                D::Overdraw => V::Overdraw,
+                D::VertexColor => V::VertexColor,
+                D::VertexColorRed => V::VertexColorRed,
+                D::VertexColorGreen => V::VertexColorGreen,
+                D::VertexColorBlue => V::VertexColorBlue,
+                D::VertexColorAlpha => V::VertexColorAlpha,
+                D::DecalCoverage => V::DecalCoverage,
             }
         },
     }

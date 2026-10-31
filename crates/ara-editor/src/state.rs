@@ -337,6 +337,10 @@ pub struct EditorState {
     /// applies them at once, Play from its next start. Session only, never persisted.
     #[serde(skip)]
     pub render_debug: ara_render::RenderDebug,
+    /// Mesh Paint mode (`paint.*` commands, `editor.paint`): its brush and colours
+    /// while on; presses in the Scene paint the selected meshes. Session only.
+    #[serde(skip)]
+    pub paint: Option<crate::paint::PaintSettings>,
     /// Use the same-device fidelity view for Scene lighting: false only when the
     /// effective quality resolves to Low. Derived from `render_quality` (and the
     /// project's default) in `apply_settings`; never set it directly.
@@ -511,6 +515,7 @@ impl Default for EditorState {
             hide_orientation: false,
             maximized: None,
             playing: None,
+            paint: None,
         }
     }
 }
@@ -680,7 +685,7 @@ pub fn panel_visible(state: &EditorState, panel: &str) -> bool {
 fn home(panel: &str) -> &'static str {
     match panel {
         "hierarchy" => "outline",
-        "inspector" | "render-debug" => "right",
+        "inspector" | "render-debug" | "mesh-paint" => "right",
         "assets" | "console" | "problems" | "agents" | "history" => "bottom",
         _ => "view",
     }

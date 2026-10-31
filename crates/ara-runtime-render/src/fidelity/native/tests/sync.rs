@@ -63,6 +63,8 @@ fn changed_palettes_update_only_skin_attributes_and_keep_original_uv_sets() {
             material: None,
             skin: Some(0),
             casts_shadows: true,
+            source_vertices: Vec::new(),
+            vertex_colors: false,
         }],
         nodes: BTreeMap::new(),
         node_names: BTreeMap::new(),

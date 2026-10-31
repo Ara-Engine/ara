@@ -4,6 +4,7 @@ use glam::Vec2;
 use std::collections::BTreeSet;
 #[cfg(test)]
 mod navigation_tests;
+mod paint;
 mod selection;
 #[cfg(test)]
 mod selection_gesture_tests;
@@ -41,6 +42,8 @@ pub(super) struct Controller {
     /// Scene icon under the pointer (`render_id` of its entity), when no handle is.
     icon: Option<u64>,
     marquee: Option<selection::Press>,
+    /// A Mesh Paint stroke in progress.
+    paint: Option<paint::Stroke>,
 }
 impl Controller {
     /// Whether any mouse button is held (window moves persist after release).
@@ -84,6 +87,7 @@ impl Controller {
     ) -> ara_ui::Result<()> {
         editor.finish_gesture(true)?;
         editor.end_field_gestures()?;
+        self.finish_paint(editor, false)?;
         self.gizmo = None;
         self.marquee = None;
         self.buttons = [false; 4];
@@ -428,7 +432,10 @@ impl Controller {
                 } else {
                     self.keys.remove(&scancode);
                 }
-                if pressed && scancode == 41 && (self.marquee.is_some() || self.gizmo.is_some()) {
+                if pressed
+                    && scancode == 41
+                    && (self.marquee.is_some() || self.gizmo.is_some() || self.paint.is_some())
+                {
                     // A viewport gesture owns Escape before menu mnemonics,
                     // text composition or any other Shell early return.
                     self.cancel_pointer_gestures(editor, shell)?;
@@ -542,7 +549,9 @@ impl Controller {
                         .is_none()
                     && !editor.state.palette
                     && shell.menu.is_none();
-                if self.gizmo.is_some() {
+                if self.paint.is_some() && self.buttons[1] {
+                    scene_dirty |= self.drive_paint(editor, shell, renderer.size())?;
+                } else if self.gizmo.is_some() {
                     if self.gizmo.as_ref().is_some_and(|g| g.typed.is_empty()) {
                         let text = self.drive_snap(editor, shell, view, scene_view);
                         shell.show_readout(text.map(|t| (t, position)));
@@ -740,7 +749,17 @@ impl Controller {
                             shell.commit_fields(editor)?;
                             shell.input.blur(&mut shell.ui);
                             let rect = shell.viewport().ok_or("viewport missing")?;
-                            if self.begin_vertex(editor, shell, view, scene_view)? {
+                            if (editor.state.paint.is_some()
+                                && !shell.modifiers[2]
+                                && self.begin_paint(
+                                    editor,
+                                    shell,
+                                    view,
+                                    scene_view,
+                                    renderer.size(),
+                                )?)
+                                || self.begin_vertex(editor, shell, view, scene_view)?
+                            {
                                 scene_dirty = true;
                             } else if let Some(handles) =
                                 overlay::handles(view, &editor.state, rect)
@@ -804,6 +823,9 @@ impl Controller {
                         let native_scrub = shell.input.scrubbing();
                         if shell.finish_picker(editor)? || shell.finish_scrub(editor, false)? {
                             shell.event(InputEvent::Cancel, clipboard)?;
+                        } else if self.paint.is_some() {
+                            self.finish_paint(editor, true)?;
+                            scene_dirty = true;
                         } else if self.gizmo.is_some() {
                             self.finish_snap(editor, shell)?;
                             shell.show_readout(None);

@@ -36,6 +36,8 @@ fn independent_lods() -> RenderFrame {
             material: None,
             skin: None,
             casts_shadows: true,
+            source_vertices: Vec::new(),
+            vertex_colors: false,
         }],
         nodes: BTreeMap::new(),
         node_names: BTreeMap::new(),

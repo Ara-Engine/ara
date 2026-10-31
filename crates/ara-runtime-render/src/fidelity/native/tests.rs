@@ -13,6 +13,7 @@ mod bounds;
 mod document;
 mod generations;
 mod geometry;
+mod paint;
 mod publication;
 mod sync;
 mod terrain;
@@ -36,6 +37,8 @@ fn draw(entity: u64) -> Draw {
         material: None,
         skin: None,
         casts_shadows: true,
+        paint: None,
+        receives_decals: true,
     }
 }
 
@@ -85,6 +88,8 @@ fn native_material_retains_each_uv_channel_and_never_folds_maps_into_factors() {
         emissive: [100.0; 3],
         occlusion_strength: 0.25,
         transmission_factor: 0.6,
+        // A graph material (lowered with no vertex-colour multiply).
+        vertex_color_tint: false,
         ..Default::default()
     };
     let transforms = std::array::from_fn::<_, 6, _>(|i| TextureTransform {
@@ -112,6 +117,8 @@ fn native_material_retains_each_uv_channel_and_never_folds_maps_into_factors() {
         }],
         base_color_decode_srgb: true,
         emissive_decode_srgb: true,
+        paint_layers: Vec::new(),
+        decal: None,
     });
     let mut frame = RenderFrame::default();
     let mut instance = draw(1);
@@ -170,6 +177,8 @@ fn hundreds_of_native_maps_remain_bound_instead_of_becoming_constant_factors() {
             }],
             base_color_decode_srgb: false,
             emissive_decode_srgb: false,
+            paint_layers: Vec::new(),
+            decal: None,
         }));
         frame.draws.push(instance);
     }

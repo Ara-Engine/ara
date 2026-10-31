@@ -19,6 +19,9 @@ pub(crate) struct ImageAllocation {
     pub handle: vk::Image,
     pub memory: vk::DeviceMemory,
     pub view: vk::ImageView,
+    /// A storage image whose format cannot be written in shaders (sRGB) is created
+    /// mutable, with this UNORM alias view for storage (`storage_alias`).
+    pub storage_view: Option<vk::ImageView>,
     pub width: u32,
     pub height: u32,
     pub mip_levels: u32,

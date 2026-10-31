@@ -12,7 +12,7 @@ fn triangle() -> Scene {
                     tangent: [1.0, 0.0, 0.0, -1.0],
                     uv1: [0.0; 2],
                     terrain_weights: 0,
-                    reserved: 0,
+                    color: u32::MAX,
                 })
                 .to_vec(),
             lods: vec![Lod {
@@ -21,6 +21,7 @@ fn triangle() -> Scene {
             }],
             bounds: [Vec3::ZERO, Vec3::new(1.0, 2.0, 3.0)],
             deforming: false,
+            vertex_colors: false,
             revision: 0,
         }],
         instances: vec![Instance {
@@ -31,6 +32,8 @@ fn triangle() -> Scene {
             world: Mat4::IDENTITY,
             previous_world: Mat4::IDENTITY,
             casts_shadows: true,
+            paint: None,
+            receives_decals: true,
         }],
         materials: vec![Material::default()],
         textures: 0,
@@ -39,6 +42,7 @@ fn triangle() -> Scene {
         sun_lux: Vec3::ONE,
         environment: vec![[1.0; 4]],
         environment_size: [1, 1],
+        decals: Vec::new(),
     }
 }
 
@@ -87,6 +91,8 @@ fn more_than_4096_instances_share_geometry_and_keep_mirrored_bounds() {
             world: matrix,
             previous_world: matrix,
             casts_shadows: true,
+            paint: None,
+            receives_decals: true,
         });
     }
     scene.validate().unwrap();

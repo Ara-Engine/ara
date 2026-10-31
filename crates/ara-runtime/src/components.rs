@@ -92,6 +92,10 @@ pub struct MeshRenderer {
     /// `castShadows: false` never cast, whatever this says.
     #[ara(default = true)]
     pub cast_shadows: bool,
+    /// Whether decals project onto this geometry (Unreal's bReceivesDecals). Off for
+    /// characters or moving props a level's decals should not stick to.
+    #[ara(default = true)]
+    pub receives_decals: bool,
 }
 impl Default for MeshRenderer {
     fn default() -> Self {
@@ -111,6 +115,7 @@ impl Default for MeshRenderer {
             emissive_factor: None,
             emissive_materials: Vec::new(),
             cast_shadows: true,
+            receives_decals: true,
         }
     }
 }
@@ -532,6 +537,9 @@ pub fn register_schemas(db: &mut SchemaDb) {
     ara_nav::register(db);
     db.register::<PrimitiveMaterialOverride>()
         .register::<MeshRenderer>()
+        .register::<crate::paint::PaintedPrimitive>()
+        .register::<crate::paint::VertexPaint>()
+        .register::<crate::decal::Decal>()
         .register::<Light>()
         .register::<Environment>()
         .register::<Camera>()

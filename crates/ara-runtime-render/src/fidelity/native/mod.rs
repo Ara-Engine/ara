@@ -10,6 +10,7 @@ use ara_texture_stream::NativeResidency;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, sync::Arc};
 
+mod decals;
 mod document;
 mod geometry;
 pub use document::{document_frame, document_frame_selected};
@@ -96,6 +97,7 @@ pub fn prepare_with_foliage(
             sun_lux: glam30::Vec3::from_array(lux),
             environment: pixels,
             environment_size: size,
+            decals: Vec::new(),
         },
         textures: NativeResidency::new(config)?,
         texture_keys: BTreeMap::new(),
@@ -120,6 +122,7 @@ pub fn prepare_with_foliage(
     if let Some(terrain) = &frame.terrain {
         builder.terrain(terrain, &content)?;
     }
+    builder.decals(&frame.decals)?;
     if let Some(environment) = content.environment {
         builder.scene.environment = environment.pixels;
         builder.scene.environment_size = environment.size;
@@ -138,6 +141,12 @@ pub fn prepare_with_foliage(
             .map(|(asset, materials)| (asset, materials.into_values().collect()))
             .collect(),
     })
+}
+
+/// A draw's per-instance paint when it covers every vertex of its geometry
+/// (procedural shapes carry one colour per generated vertex; a mismatch draws unpainted).
+pub(super) fn paint(draw: &Draw, vertices: usize) -> Option<Arc<[u32]>> {
+    draw.paint.clone().filter(|paint| paint.len() == vertices)
 }
 
 impl Builder {
@@ -191,6 +200,8 @@ impl Builder {
             world,
             previous_world: world,
             casts_shadows: draw.casts_shadows,
+            paint: paint(draw, self.scene.geometry[geometry].vertices.len()),
+            receives_decals: draw.receives_decals,
         });
         Ok(())
     }

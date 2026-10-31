@@ -87,9 +87,11 @@ pub struct CaptureArgs {
     /// volume, so captures from different renderers compare at the same brightness.
     #[arg(long, allow_hyphen_values = true)]
     ev100: Option<f32>,
-    /// Show a buffer instead of the lit image (Unreal's buffer visualization).
-    #[arg(long, value_parser = ["albedo", "normals", "depth", "roughness-metal", "entity-ids",
-        "shadow-cascades", "wireframe", "lit-wireframe", "gi-diffuse", "overdraw"])]
+    /// Debug view to capture instead of the lit image: albedo, normals, depth,
+    /// roughness-metal, entity-ids, shadow-cascades, wireframe, lit-wireframe,
+    /// gi-diffuse, overdraw, vertex-color (and -red/-green/-blue/-alpha) or
+    /// decal-coverage.
+    #[arg(long, value_parser = ["lit", "albedo", "normals", "depth", "roughness-metal", "entity-ids", "shadow-cascades", "wireframe", "lit-wireframe", "gi-diffuse", "overdraw", "vertex-color", "vertex-color-red", "vertex-color-green", "vertex-color-blue", "vertex-color-alpha", "decal-coverage"])]
     view: Option<String>,
     /// Measure flicker: settle this many live frames, then report how much they change.
     #[arg(long)]
