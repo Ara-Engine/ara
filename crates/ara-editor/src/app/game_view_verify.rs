@@ -191,9 +191,9 @@ impl GameViewCheck {
             && placement.is_some()
             && match step {
                 Step::Preview => since == 60,
-                Step::Play => self.since.is_some() && (since < 30 || since % 30 == 0),
-                Step::Change(_) => self.age <= 20 || self.age % 30 == 0,
-                Step::Steady => self.age % 100 == 0,
+                Step::Play => self.since.is_some() && (since < 30 || since.is_multiple_of(30)),
+                Step::Change(_) => self.age <= 20 || self.age.is_multiple_of(30),
+                Step::Steady => self.age.is_multiple_of(100),
                 Step::Stop => false,
             };
         let label = Self::label(step);
