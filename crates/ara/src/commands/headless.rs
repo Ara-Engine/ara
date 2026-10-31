@@ -64,7 +64,7 @@ pub struct CaptureArgs {
     #[arg(long)]
     marks: Option<u32>,
     /// Turn a rendering effect off to see what it contributes (repeatable).
-    #[arg(long, value_parser = ["ambient-occlusion", "shadows", "temporal-jitter"])]
+    #[arg(long, value_parser = ["ambient-occlusion", "shadows", "temporal-jitter", "volumetric-fog"])]
     without: Vec<String>,
     /// Render at display resolution instead of the preset's upscaled scale.
     #[arg(long)]
@@ -156,6 +156,7 @@ fn render_debug(
     json!({
         "ambientOcclusion": on("ambient-occlusion"),
         "shadows": on("shadows"),
+        "volumetricFog": on("volumetric-fog"),
         "temporalJitter": on("temporal-jitter"),
         "fullResolution": full_resolution,
         "reflections": reflections.unwrap_or("lit"),
@@ -184,6 +185,7 @@ mod tests {
         );
         assert_eq!(debug["shadows"], false);
         assert_eq!(debug["ambientOcclusion"], true);
+        assert_eq!(debug["volumetricFog"], true);
         assert_eq!(debug["reference"], json!({"samples": 2048, "bounces": 6}));
         assert_eq!(debug["exposure"], -2.);
         let lock = render_debug(&[], false, None, None, Some(7.), Some("gi-diffuse"));

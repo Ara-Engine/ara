@@ -1195,6 +1195,7 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
     ara_render::RenderDebug {
         ambient_occlusion: debug.ambient_occlusion,
         shadows: debug.shadows,
+        volumetric_fog: debug.volumetric_fog,
         temporal_jitter: debug.temporal_jitter,
         full_resolution: debug.full_resolution,
         reflections: match debug.reflections {
@@ -1286,6 +1287,7 @@ mod cli_tests {
             ara_render::RenderDebug {
                 ambient_occlusion: false,
                 shadows: false,
+                volumetric_fog: false,
                 temporal_jitter: false,
                 full_resolution: true,
                 reflections: ara_render::ReflectionView::Sources,
@@ -1304,5 +1306,6 @@ mod cli_tests {
         let partial: ara_play::RenderDebug =
             serde_json::from_value(serde_json::json!({"shadows": false})).unwrap();
         assert!(partial.ambient_occlusion && !partial.shadows && !partial.full_resolution);
+        assert!(partial.volumetric_fog);
     }
 }

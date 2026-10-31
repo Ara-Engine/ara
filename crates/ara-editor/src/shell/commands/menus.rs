@@ -352,6 +352,7 @@ pub(crate) const MENUS: &[Menu] = &[
                     S,
                     C("view.debug.ambient_occlusion"),
                     C("view.debug.shadows"),
+                    C("view.debug.volumetric_fog"),
                     C("view.debug.temporal_jitter"),
                     S,
                     C("view.debug.reflections"),
@@ -439,7 +440,12 @@ pub(crate) const MENUS: &[Menu] = &[
             C("create.camera"),
             Sub(
                 "Effects",
-                &[C("create.vfx"), C("create.decal"), C("create.fog")],
+                &[
+                    C("create.vfx"),
+                    C("create.decal"),
+                    C("create.fog"),
+                    C("create.fog_volume"),
+                ],
             ),
             Sub(
                 "Physics",
@@ -898,6 +904,7 @@ pub(crate) fn context(kind: Context) -> &'static [Item] {
             S,
             C("view.debug.ambient_occlusion"),
             C("view.debug.shadows"),
+            C("view.debug.volumetric_fog"),
             C("view.debug.temporal_jitter"),
             C("view.debug.reflections"),
             C("view.debug.reflection_sources"),

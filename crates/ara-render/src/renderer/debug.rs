@@ -12,6 +12,9 @@ pub struct RenderDebug {
     /// Sun shadows (cascades, far map, virtual shadow maps, terrain horizon) and
     /// local-light shadows.
     pub shadows: bool,
+    /// The near froxel volume of volumetric fog (`Quality::volumetric_fog`): off, fog
+    /// falls back to the coarse 4 km grid alone, as on Low.
+    pub volumetric_fog: bool,
     /// The temporal sub-pixel jitter that temporal anti-aliasing and upscaling
     /// accumulate; off, edges alias but hold still.
     pub temporal_jitter: bool,
@@ -58,7 +61,10 @@ mod camel_view {
     ];
 
     pub(super) fn serialize<S: Serializer>(view: &ViewMode, s: S) -> Result<S::Ok, S::Error> {
-        let name = NAMES.iter().find(|(v, _)| v == view).map_or("lit", |(_, n)| n);
+        let name = NAMES
+            .iter()
+            .find(|(v, _)| v == view)
+            .map_or("lit", |(_, n)| n);
         s.serialize_str(name)
     }
 
@@ -111,6 +117,7 @@ impl Default for RenderDebug {
         Self {
             ambient_occlusion: true,
             shadows: true,
+            volumetric_fog: true,
             temporal_jitter: true,
             full_resolution: false,
             reflections: ReflectionView::Lit,
@@ -128,6 +135,9 @@ impl RenderDebug {
         if !self.ambient_occlusion {
             quality.ambient_occlusion = None;
         }
+        if !self.volumetric_fog {
+            quality.volumetric_fog = None;
+        }
         if !self.shadows {
             quality.shadows.far = None;
             quality.local_shadows = None;
@@ -144,15 +154,23 @@ mod tests {
 
     #[test]
     fn turning_effects_off_removes_only_their_budgets() {
-        let quality = crate::look::Quality::default();
+        let quality = crate::look::Quality {
+            volumetric_fog: Some(crate::look::VolumetricFogQuality {
+                tile: 8,
+                slices: 64,
+            }),
+            ..crate::look::Quality::default()
+        };
         assert_eq!(RenderDebug::default().apply(quality), quality);
         let off = RenderDebug {
             ambient_occlusion: false,
             shadows: false,
+            volumetric_fog: false,
             ..RenderDebug::default()
         }
         .apply(quality);
         assert!(off.ambient_occlusion.is_none());
+        assert!(off.volumetric_fog.is_none());
         assert!(off.shadows.far.is_none() && off.local_shadows.is_none());
         assert!(off.virtual_shadows.is_none() && off.horizon.is_none());
         // Cascades stay valid (the frame samples none of them instead).
