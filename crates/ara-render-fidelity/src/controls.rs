@@ -4,7 +4,22 @@ use anyhow::{Result, ensure};
 use ara_gpu::{Access, Device, GpuDevice, Queue, Resource, vk};
 use ara_render::graph::State;
 impl FidelityView {
-    /// Enable physical sky illumination and frustum fog, or restore the extracted
+    /// The directional light's angular radius in radians (half its source angle), or
+    /// `None` for the Sun's: the cone sun rays sample, as the raster renderer's soft
+    /// shadows (`ara_render::Renderer::set_sun_radius`). A change resets history.
+    pub fn set_sun_radius(&mut self, radius: Option<f32>) -> Result<()> {
+        let radius = radius.unwrap_or(crate::view::SUN_RADIUS);
+        ensure!(
+            radius.is_finite() && (0.0..=0.2).contains(&radius),
+            "a sun radius is 0 to 0.2 radians"
+        );
+        if self.sun_radius != radius {
+            self.sun_radius = radius;
+            self.history = false;
+        }
+        Ok(())
+    }
+    /// Enable physical sky illumination) and frustum fog, or restore the extracted
     /// environment. Changing atmospheric composition resets temporal transport.
     pub fn set_atmosphere(
         &mut self,

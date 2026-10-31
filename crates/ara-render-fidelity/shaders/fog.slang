@@ -33,11 +33,11 @@ void fogMain(uint3 tid:SV_DispatchThreadID){
         else source+=density*albedo*ambient;
         uint4 head=buffers[f.scene.x].Load<uint4>(0);
         for(uint i=0;i<head.w;i++){
-            float4 p=buffers[f.scene.x].Load<float4>(head.z+i*64),c=buffers[f.scene.x].Load<float4>(head.z+i*64+16);
-            float3 delta=p.xyz-at;float distance=length(delta);if(distance>p.w)continue;
-            float4 cone=buffers[f.scene.x].Load<float4>(head.z+i*64+32),params=buffers[f.scene.x].Load<float4>(head.z+i*64+48);
-            float3 l=delta/max(distance,0.001);float spot=params.x<0.5?1:smoothstep(cone.w,max(cone.w+1e-4,params.y),dot(-l,normalize(cone.xyz)));float fade=pow(saturate(1-pow(distance/p.w,4)),2);
-            if(!occluded(f,at,l,max(0.001,distance-0.02),rng))source+=density*albedo*c.rgb*c.w/(4*PI*max(distance*distance,0.01))*fade*spot*phaseM(dot(d,l),g);
+            // local-lights.slangh: the light's intensity towards the sample, from its centre.
+            LocalLight light=localLight(f,head.z+i*LIGHT_BYTES);
+            float3 delta=light.p.xyz-at;float distance=length(delta);if(distance>light.p.w)continue;
+            float3 l=delta/max(distance,0.001),intensity=localIntensity(light,at);
+            if(any(intensity>0)&&!occluded(f,at,l,max(0.001,distance-0.02),rng))source+=density*albedo*intensity/max(distance*distance,0.01)*phaseM(dot(d,l),g);
         }
         float3 segment=exp(-e*ds);integral+=trans*source*(1-segment)/max(e,float3(1e-9));trans*=segment;
         store(f,FROXELS,uint2(z*128+tid.x,tid.y),float4(integral,1));

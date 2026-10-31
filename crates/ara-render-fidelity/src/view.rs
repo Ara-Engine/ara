@@ -12,6 +12,9 @@ use ara_render::graph::State;
 use glam::{Mat4, Vec3};
 use std::collections::BTreeMap;
 
+/// The Sun's angular radius (radians), unless a host sets its own.
+pub(crate) const SUN_RADIUS: f32 = 0.00465;
+
 /// An offscreen fidelity view. The host owns the device and invokes render at frame
 /// boundaries. Resources and temporal histories belong to this view alone.
 pub struct FidelityView {
@@ -53,6 +56,8 @@ pub struct FidelityView {
     pub(crate) timings: Vec<PassTiming>,
     pub(crate) reservoirs: Option<crate::resampling::Reservoirs>,
     pub(crate) shadow_source: crate::SunShadowSource,
+    /// The sun's angular radius in radians (`set_sun_radius`).
+    pub(crate) sun_radius: f32,
     /// The uploaded frame of the last completed render, replayed by `post_process`.
     pub(crate) last_frame: Option<crate::frame::GpuFrame>,
 }
@@ -249,6 +254,7 @@ impl FidelityView {
             timings: Vec::new(),
             reservoirs: None,
             shadow_source: crate::SunShadowSource::RayQueries,
+            sun_radius: SUN_RADIUS,
             last_frame: None,
         })
     }

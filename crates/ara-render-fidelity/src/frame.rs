@@ -151,7 +151,11 @@ impl FidelityView {
                     .min(self.volume.len() as u32),
                 self.probe_start,
             ],
-            sun_direction: self.scene.sun_direction.extend(0.00465).to_array(),
+            sun_direction: self
+                .scene
+                .sun_direction
+                .extend(self.sun_radius.tan())
+                .to_array(),
             sun_lux: self.scene.sun_lux.extend(f32::from(responsive)).to_array(),
             temporal: [
                 f32::from(reset),

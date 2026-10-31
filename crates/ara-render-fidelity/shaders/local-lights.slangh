@@ -1,0 +1,155 @@
+// Local lights (ara_render::scene::Light records, LIGHT_BYTES each): the model
+// shaders/look-lights.slangh shades in the raster renderer, sampled here without
+// approximation, so the reference stays its ground truth. Points are 2.5 cm soft
+// sources; spheres sample their visible cone, tubes their surface, rects the part of
+// their area the barn doors leave visible, discs their area. Area sources emit uniform
+// luminance (intensity colour.w / 4 pi over the projected area); a spot's cone and the
+// range window apply at the light's centre, as in the raster renderer.
+// Included by lighting.slangh.
+static const uint LIGHT_BYTES=112;
+struct LocalLight{float4 p;float4 colour;float4 cone;float4 params;float4 tangentLength;float4 rect;};
+LocalLight localLight(Frame f,uint at){
+    LocalLight l;l.p=buffers[f.scene.x].Load<float4>(at);l.colour=buffers[f.scene.x].Load<float4>(at+16);
+    l.cone=buffers[f.scene.x].Load<float4>(at+32);l.params=buffers[f.scene.x].Load<float4>(at+48);
+    l.tangentLength=buffers[f.scene.x].Load<float4>(at+64);l.rect=buffers[f.scene.x].Load<float4>(at+80);return l;
+}
+uint localKind(LocalLight l){return uint(l.params.x+0.5)%4;}
+bool localArea(LocalLight l){return localKind(l)>=2||l.params.z>0;}
+// Cone and range window towards `position` from the light's centre (zero past its range).
+float localWindow(LocalLight l,float3 position){
+    float3 delta=position-l.p.xyz;float d=length(delta);if(d>=l.p.w)return 0;float3 fromLight=delta/max(d,1e-6);
+    float spot=localKind(l)==1?smoothstep(l.cone.w,max(l.cone.w+1e-4,l.params.y),dot(fromLight,normalize(l.cone.xyz))):1;
+    return spot*pow(saturate(1-pow(d/l.p.w,4)),2);
+}
+// A rect's span on one axis visible from offset `p`, height `z`, past barn-door tips
+// `door` (outward, along the normal): look-lights.slangh barnDoorSpan.
+float2 barnDoorSpan(float a,float p,float z,float2 door){
+    if(door.y<=0)return float2(-a,a);
+    if(z<=door.y){float reach=a+door.x*z/door.y;return abs(p)<=reach?float2(-a,a):float2(1,-1);}
+    float k=door.y/z,edge=a+door.x;
+    return float2(max(-a,(-edge-p*k)/(1-k)),min(a,(edge-p*k)/(1-k)));
+}
+// The rect's area visible from `position` through its doors: spans (x, then y; empty
+// when lo >= hi); `z` is the height above its plane.
+float4 rectSpans(LocalLight l,float3 position,out float z){
+    float3 n=normalize(l.cone.xyz),t=l.tangentLength.xyz,b=cross(t,n),rel=position-l.p.xyz;z=dot(rel,n);
+    float2 extent=max(l.rect.xy,0.001);
+    return float4(barnDoorSpan(extent.x,dot(rel,t),z,l.rect.zw),barnDoorSpan(extent.y,dot(rel,b),z,l.rect.zw));
+}
+// Luminance of an area source per unit tint: intensity over its projected area.
+float localLuminance(LocalLight l){
+    uint kind=localKind(l);float r=max(l.params.z,0.001),intensity=l.colour.w/(4*PI);
+    if(kind==2)return intensity/(4*max(l.rect.x,0.001)*max(l.rect.y,0.001));
+    if(kind==3||l.tangentLength.w<=0)return intensity/(PI*r*r);
+    return intensity/(2*r*l.tangentLength.w+PI*r*r);
+}
+// One emitter sample for a surface at `s` seen from `v`: BSDF times radiance over the
+// sample's solid-angle pdf (unoccluded), its direction and distance, and that pdf
+// (zero for ideal points, which MIS never weighs).
+struct LocalSample{float3 value;float3 direction;float distance;float pdf;};
+LocalSample sampleLocal(Frame f,Surface s,float3 v,LocalLight l,inout uint rng){
+    LocalSample o;o.value=0;o.direction=s.normal;o.distance=0;o.pdf=0;
+    float window=localWindow(l,s.position);if(window<=0)return o;
+    float3 delta=l.p.xyz-s.position;float d=length(delta);float3 toLight=delta/max(d,1e-6);float bsdfPdf;
+    if(!localArea(l)){
+        o.direction=coneDirection(toLight,0.025/max(d,0.025),rng);o.distance=max(d-0.03,0.001);
+        o.value=evaluate(s,v,o.direction,bsdfPdf)*l.colour.rgb*(l.colour.w/(4*PI*max(d*d,0.01)))*window;return o;
+    }
+    uint kind=localKind(l);float r=max(l.params.z,0.001);float3 point,normal;float area;
+    if(kind<2&&l.tangentLength.w<=0){
+        // Sphere: uniform over the visible cone.
+        float dd=max(d,r*1.001),cosMax=sqrt(saturate(1-r*r/(dd*dd)));
+        float u=random(rng),w=random(rng),c=1-u*(1-cosMax),sn=sqrt(saturate(1-c*c));
+        o.direction=normalize(basis(toLight,float3(sn*cos(2*PI*w),sn*sin(2*PI*w),c)));
+        float b=dot(o.direction,delta),h=b*b-(d*d-r*r);o.distance=max((h>0?b-sqrt(h):b)-0.001,0.001);
+        o.pdf=1/(2*PI*(1-cosMax));
+        o.value=evaluate(s,v,o.direction,bsdfPdf)*l.colour.rgb*(localLuminance(l)*window/o.pdf);return o;
+    }
+    float3 n=normalize(l.cone.xyz),t=l.tangentLength.xyz,b=cross(t,n);
+    if(kind==2){
+        float z;float4 span=rectSpans(l,s.position,z);if(z<=0||span.x>=span.y||span.z>=span.w)return o;
+        float x=lerp(span.x,span.y,random(rng)),y=lerp(span.z,span.w,random(rng));
+        point=l.p.xyz+t*x+b*y;normal=n;area=(span.y-span.x)*(span.w-span.z);
+    }else if(kind==3){
+        if(dot(s.position-l.p.xyz,n)<=0)return o;
+        float rr=r*sqrt(random(rng)),phi=2*PI*random(rng);point=l.p.xyz+(t*cos(phi)+b*sin(phi))*rr;normal=n;area=PI*r*r;
+    }else{
+        // Tube: uniform over the capsule's surface (its far side shades nothing).
+        float len=l.tangentLength.w,cylinder=2*PI*r*len,caps=4*PI*r*r;area=cylinder+caps;
+        float3 e1=normalize(cross(t,abs(t.y)<0.999?float3(0,1,0):float3(1,0,0))),e2=cross(t,e1);
+        if(random(rng)*area<cylinder){float u=random(rng)-0.5,phi=2*PI*random(rng);normal=e1*cos(phi)+e2*sin(phi);point=l.p.xyz+t*(u*len)+normal*r;}
+        else{float zc=1-2*random(rng),phi=2*PI*random(rng),sc=sqrt(saturate(1-zc*zc));normal=t*zc+(e1*cos(phi)+e2*sin(phi))*sc;point=l.p.xyz+t*(len*0.5*(zc>=0?1:-1))+normal*r;}
+    }
+    float3 toPoint=point-s.position;float distance=length(toPoint);o.direction=toPoint/max(distance,1e-6);
+    float cosine=dot(normal,-o.direction);if(cosine<=0||distance<1e-4)return o;
+    o.distance=max(distance-0.001,0.001);o.pdf=distance*distance/(area*cosine);
+    o.value=evaluate(s,v,o.direction,bsdfPdf)*l.colour.rgb*(localLuminance(l)*window/o.pdf);return o;
+}
+// The solid-angle pdf sampleLocal gives direction `d` from `position` for a ray that
+// hits area light `l` at distance `t` (normal `normal` there).
+float localPdf(LocalLight l,float3 position,float3 d,float t,float3 normal){
+    uint kind=localKind(l);float r=max(l.params.z,0.001);
+    if(kind<2&&l.tangentLength.w<=0){float dd=max(length(l.p.xyz-position),r*1.001);return 1/(2*PI*(1-sqrt(saturate(1-r*r/(dd*dd)))));}
+    float cosine=max(dot(normal,-d),1e-6),area;
+    if(kind==2){float z;float4 span=rectSpans(l,position,z);area=max((span.y-span.x)*(span.w-span.z),1e-8);}
+    else if(kind==3)area=PI*r*r;
+    else area=2*PI*r*l.tangentLength.w+4*PI*r*r;
+    return t*t/(area*cosine);
+}
+// Where a ray from `o` along `d` first meets area light `l`'s emitting side before
+// `maximum`: the distance (negative: none) and the surface normal there.
+float localHit(LocalLight l,float3 o,float3 d,float maximum,out float3 normal){
+    normal=0;uint kind=localKind(l);float r=max(l.params.z,0.001);float3 c=l.p.xyz;
+    if(kind>=2){
+        float3 n=normalize(l.cone.xyz);float denom=dot(d,n);if(denom>=0)return -1;
+        float t=dot(c-o,n)/denom;if(t<=0||t>=maximum)return -1;float3 q=o+d*t-c,tg=l.tangentLength.xyz,b=cross(tg,n);normal=n;
+        if(kind==3)return dot(q,q)<=r*r?t:-1;
+        float z;float4 span=rectSpans(l,o,z);float x=dot(q,tg),y=dot(q,b);
+        return x>=span.x&&x<=span.y&&y>=span.z&&y<=span.w?t:-1;
+    }
+    float len=l.tangentLength.w;float3 a=c-l.tangentLength.xyz*(len*0.5),ba=l.tangentLength.xyz*len,oa=o-a;
+    // Capsule (a sphere when len is zero): the open cylinder, then the end spheres.
+    float baba=dot(ba,ba),bard=dot(ba,d),baoa=dot(ba,oa),rdoa=dot(d,oa),oaoa=dot(oa,oa);
+    float A=baba-bard*bard,B=baba*rdoa-baoa*bard,C=baba*oaoa-baoa*baoa-r*r*baba,h=B*B-A*C;float t=-1;
+    if(len>0&&h>=0&&A>1e-12){float tc=(-B-sqrt(h))/A,y=baoa+tc*bard;if(y>0&&y<baba&&tc>0){t=tc;normal=normalize(oa+d*tc-ba*(y/baba));}}
+    if(t<0){
+        for(uint e=0;e<2;e++){
+            float3 oc=o-(e==0?a:a+ba);float bb=dot(oc,d),cc=dot(oc,oc)-r*r,hh=bb*bb-cc;
+            if(hh>=0){float ts=-bb-sqrt(hh);if(ts>0&&(t<0||ts<t)){t=ts;normal=normalize(oc+d*ts);}}
+        }
+    }
+    return t>0&&t<maximum?t:-1;
+}
+// Whether local lights take part in MIS: the exact all-light estimator of small scenes
+// without emissive triangles (RIS selection has no closed-form pdf).
+bool localMis(Frame f){
+#ifdef EMISSIVE_LIGHTS
+    return emitterCount(f)==0 && buffers[f.scene.x].Load(12)<=8;
+#else
+    return true;
+#endif
+}
+// Emission a BSDF-sampled ray (pdf `bsdfPdf`) from `s` sees on area lights before
+// `maximum` (the geometry it hits), power-heuristic weighted against sampleLocal.
+float3 localHits(Frame f,Surface s,float3 o,float3 d,float maximum,float bsdfPdf){
+    if(!localMis(f))return 0;
+    float3 sum=0;uint count=buffers[f.scene.x].Load(12);
+    for(uint i=0;i<count;i++){
+        LocalLight l=localLight(f,buffers[f.scene.x].Load(8)+i*LIGHT_BYTES);if(!localArea(l))continue;
+        float3 normal;float t=localHit(l,o,d,maximum,normal);if(t<0)continue;
+        float window=localWindow(l,s.position);if(window<=0)continue;
+        float light=localPdf(l,s.position,d,t,normal),w=bsdfPdf*bsdfPdf/max(bsdfPdf*bsdfPdf+light*light,1e-30);
+        sum+=l.colour.rgb*localLuminance(l)*window*w;
+    }return sum;
+}
+// Luminous intensity (cd, tinted) light `l` sends towards `p` as from its centre:
+// look-lights.slangh lightIntensity (fog in-scattering).
+float3 localIntensity(LocalLight l,float3 p){
+    float scale=l.colour.w/(4*PI)*localWindow(l,p);uint kind=localKind(l);
+    if(kind>=2){
+        float3 delta=p-l.p.xyz;float z=dot(delta,normalize(l.cone.xyz));if(z<=0)return 0;
+        scale*=z/max(length(delta),1e-6);
+        if(kind==2){float h;float4 span=rectSpans(l,p,h);scale*=max(span.y-span.x,0)*max(span.w-span.z,0)/(4*max(l.rect.x,0.001)*max(l.rect.y,0.001));}
+    }
+    return l.colour.rgb*scale;
+}
