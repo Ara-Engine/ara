@@ -1225,6 +1225,7 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
                 B::LitWireframe => V::LitWireframe,
                 B::GiDiffuse => V::GiDiffuse,
                 B::Overdraw => V::Overdraw,
+                B::LightComplexity => V::LightComplexity,
             }
         },
     }

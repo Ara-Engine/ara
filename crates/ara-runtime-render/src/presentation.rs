@@ -429,6 +429,7 @@ impl Presenter {
                     live.view.set_environment(&look)?;
                     live.look = look;
                 }
+                live.view.set_sun_radius(frame.sun_radius)?;
                 settings.configure(renderer.gpu_mut(), &mut live.view)?;
                 live.view.prepare_transport(renderer.gpu_mut())?;
                 let update = live

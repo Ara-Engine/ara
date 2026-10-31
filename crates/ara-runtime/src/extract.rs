@@ -3,7 +3,9 @@
 use crate::{
     animation::{AnimatorSlot, Library},
     assets::asset_id,
-    components::{Camera, Environment, Light, LightKind, MeshRenderer, MeshShape, VisualEffect},
+    components::{
+        Camera, Environment, Light, LightKind, LightUnits, MeshRenderer, MeshShape, VisualEffect,
+    },
     math::{Pose, stable_id},
     model::{Model, ModelSelection},
     sync::{PreviousPose, WorldPose},
@@ -63,23 +65,62 @@ pub struct Draw {
     pub casts_shadows: bool,
 }
 
-/// A point or spot light in world space.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// A local light in world space (points, spots, rects and discs).
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct LightView {
-    /// Point or spot.
+    /// Point, spot, rect or disc.
     pub kind: LightKind,
-    /// World position.
+    /// World position (the emitter's centre).
     pub position: [f32; 3],
-    /// Unit emission direction (spot).
+    /// Unit emission axis, the entity's local -Z: a spot's cone, a rect's or disc's
+    /// normal, a profile's nadir.
     pub direction: [f32; 3],
+    /// Unit width axis, the entity's local +X: a rect's width, a tube's axis, a
+    /// profile's zero azimuth.
+    pub tangent: [f32; 3],
     /// Linear RGB tint.
     pub color: [f32; 3],
-    /// Luminous flux in lumens.
+    /// Point-equivalent lumens: 4 pi times the luminous intensity in candela, along
+    /// `direction` for rects and discs, in every direction for points and spots (their
+    /// luminous flux), resolved from `Light::units` and the source size.
     pub lumens: f32,
     /// Influence radius in metres.
     pub range: f32,
     /// Inner/outer cone half-angles in degrees.
     pub cone: [f32; 2],
+    /// Emitter radius in metres: sphere, tube or disc (zero: an ideal point).
+    pub radius: f32,
+    /// Tube length in metres along `tangent` (zero: a sphere).
+    pub length: f32,
+    /// Rect width and height in metres.
+    pub size: [f32; 2],
+    /// Rect barn doors: angle from the normal in degrees and length in metres.
+    pub barn_doors: [f32; 2],
+}
+
+impl LightView {
+    /// Point-equivalent lumens (`lumens`) of `light`'s `intensity` in its units and
+    /// source size.
+    pub fn point_lumens(light: &Light) -> f32 {
+        use std::f32::consts::PI;
+        let i = light.intensity.max(0.);
+        let (r, length) = (light.source_radius.max(0.), light.source_length.max(0.));
+        let area = match light.kind {
+            LightKind::Rect => light.source_width.max(0.) * light.source_height.max(0.),
+            LightKind::Disc => PI * r * r,
+            _ if length > 0. => 2. * r.max(0.001) * length + PI * r * r,
+            _ => PI * r * r,
+        };
+        let surface = matches!(light.kind, LightKind::Rect | LightKind::Disc);
+        4. * PI
+            * match light.units {
+                // A Lambertian surface's on-axis intensity is its flux over pi.
+                LightUnits::Lumens if surface => i / PI,
+                LightUnits::Lumens => i / (4. * PI),
+                LightUnits::Candela => i,
+                LightUnits::Nits => i * area,
+            }
+    }
 }
 
 /// An authored reflection probe with its entity's world pose (interpolated).
@@ -196,6 +237,8 @@ pub struct RenderFrame {
     pub look: ara_components::render::SceneLook,
     /// Directional light: direction toward the light and linear RGB lux.
     pub sun: Option<([f32; 3], [f32; 3])>,
+    /// The directional light's angular radius in radians (half its `sourceAngle`).
+    pub sun_radius: Option<f32>,
     /// Local lights in stable order.
     pub lights: Vec<LightView>,
     /// Authored reflection probes in stable order (renderers place their own
@@ -225,6 +268,7 @@ impl RenderFrame {
         self.look.volumes.clear();
         self.look.luts.clear();
         self.sun = None;
+        self.sun_radius = None;
         self.lights.clear();
         self.reflection_probes.clear();
         self.draws.clear();
@@ -457,6 +501,7 @@ impl RenderFrame {
         match light.kind {
             LightKind::Directional => {
                 if self.sun.is_none() {
+                    self.sun_radius = Some(light.source_angle.max(0.).to_radians() * 0.5);
                     // Shines along local -Z; the renderer wants the direction toward it.
                     let toward = (pose.rotation * Vec3::Z).normalize();
                     self.sun = Some((
@@ -473,10 +518,15 @@ impl RenderFrame {
                 kind,
                 position: pose.translation.to_array(),
                 direction: (pose.rotation * Vec3::NEG_Z).normalize().to_array(),
+                tangent: (pose.rotation * Vec3::X).normalize().to_array(),
                 color: [r, g, b],
-                lumens: light.intensity,
+                lumens: LightView::point_lumens(light),
                 range: light.range,
                 cone: [light.inner_angle, light.outer_angle],
+                radius: light.source_radius.max(0.),
+                length: light.source_length.max(0.),
+                size: [light.source_width, light.source_height],
+                barn_doors: [light.barn_door_angle, light.barn_door_length],
             }),
         }
     }

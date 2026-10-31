@@ -89,7 +89,8 @@ pub struct CaptureArgs {
     ev100: Option<f32>,
     /// Show a buffer instead of the lit image (Unreal's buffer visualization).
     #[arg(long, value_parser = ["albedo", "normals", "depth", "roughness-metal", "entity-ids",
-        "shadow-cascades", "wireframe", "lit-wireframe", "gi-diffuse", "overdraw"])]
+        "shadow-cascades", "wireframe", "lit-wireframe", "gi-diffuse", "overdraw",
+        "light-complexity"])]
     view: Option<String>,
     /// Measure flicker: settle this many live frames, then report how much they change.
     #[arg(long)]

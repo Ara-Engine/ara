@@ -73,6 +73,9 @@ pub enum BufferView {
     GiDiffuse,
     /// Fragments drawn per pixel, on a heat legend.
     Overdraw,
+    /// Local-light shading cost per pixel, on the overdraw heat legend: each light
+    /// reaching the surface counts one, an area light three, a shadowed one one more.
+    LightComplexity,
 }
 
 /// The path-traced reference's budget ([`RenderDebug::reference`]).

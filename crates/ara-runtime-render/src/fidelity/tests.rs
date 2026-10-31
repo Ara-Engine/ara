@@ -1,5 +1,6 @@
 use super::*;
 use ara_runtime::{
+    components::LightKind,
     extract::{Draw, LightView},
     model::{ModelLod, ModelMaterial},
 };
@@ -115,6 +116,7 @@ fn all_local_lights_and_environment_survive_the_adapter() {
             lumens: 500.0,
             range: 10.0,
             cone: [15.0, 30.0],
+            ..LightView::default()
         })
         .collect();
     let (scene, stats) = scene(

@@ -489,6 +489,7 @@ impl RasterView {
                 renderer.set_look(raster_look)?;
             }
             crate::apply_lut(renderer, frame, &look, &mut self.lut)?;
+            renderer.set_sun_radius(frame.sun_radius)?;
             // Reflection captures: authored, else placed over this generation's content.
             if let Some(prepared) = &self.prepared {
                 let (limit, automatic) = plan

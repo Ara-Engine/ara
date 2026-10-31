@@ -19,6 +19,7 @@ pub use gpu_costs::GpuFrameCosts;
 pub mod landscape;
 #[cfg(test)]
 mod landscape_tests;
+mod lights;
 mod material;
 mod placeholders;
 mod presentation;
@@ -41,7 +42,7 @@ use ara_render::{
     scene::{self, CameraSpec, Scene, Vertex},
 };
 use ara_runtime::{
-    components::{Environment, LightKind},
+    components::Environment,
     extract::{Draw, Geometry, RenderFrame},
 };
 use geometry::Source;
@@ -879,7 +880,7 @@ impl Presenter {
             || lights
                 .iter()
                 .zip(&self.lights)
-                .any(|(a, b)| bytes(a) != bytes(b))
+                .any(|(a, b)| bytemuck::bytes_of(a) != bytemuck::bytes_of(b))
         {
             renderer.set_lights(&lights)?;
             self.lights = lights;
@@ -892,23 +893,9 @@ impl Presenter {
             )?;
             self.sun = sun;
         }
+        renderer.set_sun_radius(frame.sun_radius)?;
         Ok(())
     }
-}
-
-fn bytes(light: &scene::Light) -> [u32; 16] {
-    let mut out = [0; 16];
-    for (i, v) in light
-        .position_range
-        .iter()
-        .chain(&light.color_lumens)
-        .chain(&light.direction_outer)
-        .chain(&light.parameters)
-        .enumerate()
-    {
-        out[i] = v.to_bits();
-    }
-    out
 }
 
 /// The frame's sun, or a dim default so the renderer always has a directional light.
@@ -921,30 +908,7 @@ fn lights(frame: &RenderFrame) -> Vec<scene::Light> {
         .lights
         .iter()
         .take(64)
-        .map(|l| {
-            let [x, y, z] = l.position;
-            let [dx, dy, dz] = l.direction;
-            let spot = l.kind == LightKind::Spot;
-            scene::Light {
-                position_range: [x, y, z, l.range],
-                color_lumens: [l.color[0], l.color[1], l.color[2], l.lumens],
-                direction_outer: [
-                    dx,
-                    dy,
-                    dz,
-                    if spot {
-                        l.cone[1].to_radians().cos()
-                    } else {
-                        0.0
-                    },
-                ],
-                parameters: if spot {
-                    [1.0, l.cone[0].to_radians().cos(), 0.0, 0.0]
-                } else {
-                    [0.0; 4]
-                },
-            }
-        })
+        .map(lights::scene_light)
         .collect()
 }
 
