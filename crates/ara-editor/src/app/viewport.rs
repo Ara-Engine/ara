@@ -1055,6 +1055,7 @@ fn view_mode(name: &str) -> ViewMode {
         "litWireframe" => ViewMode::LitWireframe,
         "gi_diffuse" => ViewMode::GiDiffuse,
         "overdraw" => ViewMode::Overdraw,
+        "lightComplexity" => ViewMode::LightComplexity,
         _ => ViewMode::Lit,
     }
 }

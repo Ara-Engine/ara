@@ -46,6 +46,8 @@ impl Shell {
             ("lighting-create-sun", "create.light.sun", "Sun"),
             ("lighting-create-point", "create.light.point", "Point light"),
             ("lighting-create-spot", "create.light.spot", "Spot light"),
+            ("lighting-create-rect", "create.light.rect", "Rect light"),
+            ("lighting-create-disc", "create.light.disc", "Disc light"),
             (
                 "lighting-create-global",
                 "create.post.global",

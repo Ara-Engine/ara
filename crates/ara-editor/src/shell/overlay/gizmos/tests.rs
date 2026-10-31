@@ -211,3 +211,37 @@ fn icons_pick_nearest_first_and_fade_near_the_camera() {
         billboard::radius(&settings, 5.)
     );
 }
+
+#[test]
+fn area_lights_draw_their_emitter_barn_doors_and_reach() {
+    // A fresh cache per light: parts are cached per entity.
+    let selected = |light: serde_json::Value, _: &mut Gizmos| {
+        let scene = view(&[("e_light1", record(json!({ "Light": light })))]);
+        lines(&draw(&mut Gizmos::default(), &scene, &state(&["e_light1"])))
+    };
+    let mut gizmos = Gizmos::default();
+    let (rect, _) = parts::classify(&record(json!({"Light":{"kind":"rect"}})));
+    assert!(matches!(rect[0].shape, parts::Shape::RectLight { .. }));
+    let (disc, icon) = parts::classify(&record(json!({"Light":{"kind":"disc"}})));
+    assert!(matches!(disc[0].shape, parts::Shape::DiscLight { .. }));
+    assert_eq!(icon.map(|i| i.glyph), Some("circle"));
+    // Barn doors draw their four flaps; zero-length doors none.
+    let none = selected(json!({"kind":"rect","barnDoorLength":0}), &mut gizmos);
+    let doors = selected(json!({"kind":"rect","barnDoorAngle":30}), &mut gizmos);
+    assert_eq!(doors, none + 16, "four flaps and their tips, with halos");
+    // A sized point outlines its sphere, a tube its capsule, over the range sphere.
+    let ideal = selected(json!({"kind":"point","range":4}), &mut gizmos);
+    let sphere = selected(
+        json!({"kind":"point","range":4,"sourceRadius":0.3}),
+        &mut gizmos,
+    );
+    let tube = selected(
+        json!({"kind":"point","range":4,"sourceRadius":0.1,"sourceLength":1}),
+        &mut gizmos,
+    );
+    assert!(
+        sphere > ideal && tube > sphere,
+        "{ideal} < {sphere} < {tube}"
+    );
+    assert!(selected(json!({"kind":"disc","sourceRadius":0.4}), &mut gizmos) > 0);
+}

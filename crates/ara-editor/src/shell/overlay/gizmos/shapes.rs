@@ -108,21 +108,127 @@ pub(super) fn draw(pen: &mut Pen, part: &Part, world: Mat4, detail: Detail, pale
     let (right, up, forward) = (rotation * Vec3::X, rotation * Vec3::Y, rotation * -Vec3::Z);
     let pp = pen.per_pixel(position);
     match part.shape {
-        Shape::PointLight { range, color } => {
+        Shape::PointLight {
+            range,
+            radius,
+            length,
+            color,
+        } => {
             let c = with_alpha(mix(palette.light, color, 0.55), alpha);
             if full {
                 pen.sphere(position, rotation, range, width, c);
+                emitter(
+                    pen,
+                    position,
+                    (right, up, forward),
+                    radius,
+                    length,
+                    width,
+                    c,
+                );
             } else {
                 pen.horizon(position, range, width, c);
+            }
+        }
+        Shape::RectLight {
+            range,
+            width: w,
+            height: h,
+            doors: (angle, door),
+            color,
+        } => {
+            let c = with_alpha(mix(palette.light, color, 0.55), alpha);
+            let (hw, hh) = (w.max(0.001) * 0.5, h.max(0.001) * 0.5);
+            let corner = |x: f32, y: f32| position + right * (hw * x) + up * (hh * y);
+            let corners = [
+                corner(-1., -1.),
+                corner(1., -1.),
+                corner(1., 1.),
+                corner(-1., 1.),
+            ];
+            for n in 0..4 {
+                pen.line(corners[n], corners[(n + 1) % 4], width, c);
+            }
+            let tip = position + forward * (hw.max(hh) + 24. * pp);
+            pen.line(position, tip, width, c);
+            arrowhead(pen, tip, forward, 8., width, c);
+            if !full {
+                return;
+            }
+            // Barn doors: each edge's flap, tilted `angle` from the normal.
+            if door > 0. && angle < std::f32::consts::FRAC_PI_2 - 1e-3 {
+                let (out, ahead) = (door * angle.sin(), door * angle.cos());
+                let tips = [
+                    corner(-1., -1.) - (right + up) * out + forward * ahead,
+                    corner(1., -1.) + (right - up) * out + forward * ahead,
+                    corner(1., 1.) + (right + up) * out + forward * ahead,
+                    corner(-1., 1.) + (up - right) * out + forward * ahead,
+                ];
+                for n in 0..4 {
+                    pen.line(corners[n], tips[n], width, with_alpha(c, 0.7));
+                    pen.line(tips[n], tips[(n + 1) % 4], width, with_alpha(c, 0.7));
+                }
+            }
+            // The reach: the front half of the range sphere.
+            for across in [right, up] {
+                pen.arc(
+                    position,
+                    forward,
+                    across,
+                    range,
+                    (-std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2),
+                    width,
+                    with_alpha(c, 0.5),
+                    None,
+                );
+            }
+        }
+        Shape::DiscLight {
+            range,
+            radius,
+            color,
+        } => {
+            let c = with_alpha(mix(palette.light, color, 0.55), alpha);
+            let r = radius.max(6. * pp);
+            pen.circle(position, right, up, r, width, c, None);
+            let tip = position + forward * (r + 24. * pp);
+            pen.line(position, tip, width, c);
+            arrowhead(pen, tip, forward, 8., width, c);
+            if full {
+                for across in [right, up] {
+                    pen.arc(
+                        position,
+                        forward,
+                        across,
+                        range,
+                        (-std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2),
+                        width,
+                        with_alpha(c, 0.5),
+                        None,
+                    );
+                }
             }
         }
         Shape::SpotLight {
             range,
             inner,
             outer,
+            radius,
+            length,
             color,
         } => {
             let c = with_alpha(mix(palette.light, color, 0.55), alpha);
+            if full {
+                emitter(
+                    pen,
+                    position,
+                    (right, up, forward),
+                    radius,
+                    length,
+                    width,
+                    c,
+                );
+            }
             // The cone meets the range sphere: `range` along its slant.
             let rim = |angle: f32| {
                 (
@@ -472,6 +578,45 @@ pub(super) fn draw(pen: &mut Pen, part: &Part, world: Mat4, detail: Detail, pale
                 }
             }
             pen.circle(at, ahead, side, peripheral, width, with_alpha(c, 0.6), None);
+        }
+    }
+}
+
+/// A point's or spot's emitter at `position` in its frame (right, up, forward): a sphere
+/// of `radius`, or a tube `length` long along `right` capped by half spheres; nothing
+/// for an ideal point.
+fn emitter(
+    pen: &mut Pen,
+    position: Vec3,
+    (right, up, forward): (Vec3, Vec3, Vec3),
+    radius: f32,
+    length: f32,
+    width: f32,
+    c: [f32; 4],
+) {
+    if radius <= 0. {
+        return;
+    }
+    let half = right * (length.max(0.) * 0.5);
+    let (a, b) = (position - half, position + half);
+    for (centre, sign) in [(a, -1.), (b, 1.)] {
+        pen.circle(centre, up, forward, radius, width, c, None);
+        for across in [up, forward] {
+            pen.arc(
+                centre,
+                right * sign,
+                across,
+                radius,
+                (-PI * 0.5, PI * 0.5),
+                width,
+                c,
+                None,
+            );
+        }
+    }
+    if length > 0. {
+        for side in [up, -up, forward, -forward] {
+            pen.line(a + side * radius, b + side * radius, width, c);
         }
     }
 }
