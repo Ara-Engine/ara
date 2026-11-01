@@ -22,7 +22,12 @@ fn main() {
     let dir = std::path::PathBuf::from(args.next().expect("r4-1 directory"));
     let set = args.next().unwrap_or_else(|| "a".into());
     let v = floats(&dir.join(format!("vertices_{set}.bin")));
-    let positions: Vec<[f32; 3]> = v.chunks_exact(4).map(|c| [c[0], c[1], c[2]]).collect();
+    let positions: Vec<[f32; 3]> = v
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|c| [c[0], c[1], c[2]])
+        .collect();
     let indices: Vec<u32> = (0..positions.len() as u32).collect();
     let mesh = Mesh {
         positions: &positions,
@@ -47,7 +52,9 @@ fn main() {
     let count = rays.len() / 8;
     let (mut mismatch, mut dist, mut max_dt) = (0, 0, 0f32);
     for k in 0..4096u64 {
-        let i = (k * count as u64 / 4096 + u64::from((k as u32).wrapping_mul(2654435761)) % (count as u64 / 4096)) as usize;
+        let i = (k * count as u64 / 4096
+            + u64::from((k as u32).wrapping_mul(2654435761)) % (count as u64 / 4096))
+            as usize;
         let r = &rays[i * 8..i * 8 + 8];
         let ray = Ray {
             origin: Vec3::new(r[0], r[1], r[2]),
@@ -55,7 +62,11 @@ fn main() {
             t_min: 0.0,
             t_max: 1e30,
         };
-        let want_t = f32::from_le_bytes(refs[k as usize * 8..k as usize * 8 + 4].try_into().expect("t"));
+        let want_t = f32::from_le_bytes(
+            refs[k as usize * 8..k as usize * 8 + 4]
+                .try_into()
+                .expect("t"),
+        );
         let got = blas.intersect(&ray, RayFlags::NONE);
         let want_hit = want_t < 1e29;
         if got.is_some() != want_hit {
@@ -70,5 +81,7 @@ fn main() {
             }
         }
     }
-    println!("4096 reference rays: {mismatch} hit/miss mismatches, {dist} distance failures, max |dt| {max_dt}");
+    println!(
+        "4096 reference rays: {mismatch} hit/miss mismatches, {dist} distance failures, max |dt| {max_dt}"
+    );
 }

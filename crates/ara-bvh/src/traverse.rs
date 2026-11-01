@@ -90,6 +90,10 @@ pub struct Hit {
     pub front: bool,
 }
 
+/// Barycentric slack per unit of the test terms' magnitudes (8 ulps; the shader's
+/// `TRACE_EDGE_EPS`).
+pub const EDGE_EPS: f32 = 1.0 / (1 << 20) as f32;
+
 fn f(bits: u32) -> f32 {
     f32::from_bits(bits)
 }
@@ -202,7 +206,12 @@ impl Blas {
                 let ((n0, w0), (n1, w1)) = (row(0), row(1));
                 let u = n0.dot(i) + w0;
                 let v = n1.dot(i) + w1;
-                if !(u >= 0.0 && v >= 0.0 && u + v <= 1.0) {
+                // Accept points within the test's own float error outside the
+                // triangle, so rays cannot slip between triangles sharing an edge.
+                let size = o.abs() + (t * d).abs();
+                let eu = EDGE_EPS * (n0.abs().dot(size) + w0.abs());
+                let ev = EDGE_EPS * (n1.abs().dot(size) + w1.abs());
+                if !(u >= -eu && v >= -ev && u + v <= 1.0 + eu + ev) {
                     continue;
                 }
                 let meta = self.triangles[addr + 3];

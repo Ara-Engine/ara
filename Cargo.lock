@@ -699,6 +699,8 @@ name = "ara-bvh"
 version = "0.0.1-alpha"
 dependencies = [
  "bytemuck",
+ "glam 0.30.9",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -1529,7 +1531,13 @@ dependencies = [
 name = "ara-patch-charts"
 version = "0.0.1-alpha"
 dependencies = [
+ "anyhow",
+ "ara-bvh",
  "bytemuck",
+ "glam 0.30.9",
+ "gltf",
+ "sha2 0.10.9",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

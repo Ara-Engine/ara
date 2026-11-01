@@ -4,7 +4,8 @@
 //!
 //! Layout (little-endian): magic `ARABVH`, format and [`BUILDER_VERSION`] words,
 //! node and triangle-reference counts, the [`BlasStats`] words, the bounds (6 f32),
-//! the mesh hash, the node and triangle words, then SHA-256 of everything before it.
+//! the mesh hash, the submesh starts, the node and triangle words, then SHA-256 of
+//! everything before it.
 use crate::cwbvh::{Blas, BlasStats, NODE_WORDS, TRIANGLE_WORDS};
 use crate::{Aabb, BUILDER_VERSION, BuildError, MeshHash, TRACE_STACK};
 use sha2::{Digest, Sha256};
@@ -50,6 +51,9 @@ pub fn encode(blas: &Blas) -> Vec<u8> {
         out.extend_from_slice(&v.to_le_bytes());
     }
     out.extend_from_slice(&blas.hash.0);
+    for s in &blas.submeshes {
+        out.extend_from_slice(&s.to_le_bytes());
+    }
     for w in blas.nodes.iter().chain(&blas.triangles) {
         out.extend_from_slice(bytemuck::cast_slice(w));
     }
@@ -102,7 +106,20 @@ pub fn decode(bytes: &[u8], expected: MeshHash) -> Result<Blas, BuildError> {
     if hash != expected {
         return Err(fail("built from another mesh"));
     }
-    let payload = &body[HEADER..];
+    let starts = stats.submeshes as usize * 4;
+    if body.len() < HEADER + starts {
+        return Err(fail("truncated submeshes"));
+    }
+    let submeshes: Vec<u32> = body[HEADER..HEADER + starts]
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|c| u32::from_le_bytes(*c))
+        .collect();
+    if submeshes.first() != Some(&0) || submeshes.windows(2).any(|w| w[0] >= w[1]) {
+        return Err(fail("submesh starts"));
+    }
+    let payload = &body[HEADER + starts..];
     if payload.len() != (nodes * NODE_WORDS + refs * TRIANGLE_WORDS) * 16 {
         return Err(fail("truncated payload"));
     }
@@ -122,6 +139,7 @@ pub fn decode(bytes: &[u8], expected: MeshHash) -> Result<Blas, BuildError> {
         nodes: node_words.to_vec(),
         triangles: tri_words.to_vec(),
         bounds,
+        submeshes,
         stats,
     };
     if stats.nodes as usize != nodes || stats.references as usize != refs {

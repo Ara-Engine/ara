@@ -1,0 +1,235 @@
+// trace(): software ray queries for every non-primary visibility and lighting caller
+// (render v3, council-v3 architecture D1; ara_render look::trace, ara_bvh). A
+// threaded binary TLAS over instances and one compressed eight-wide BVH (CWBVH,
+// Ylitie et al. 2017) per mesh with precomputed triangles (Baldwin and Weber 2016):
+// the R4-1/R5-6 tuned kernel's data and traversal, plus world transforms, t ranges,
+// ray flags, instance masks, face culling and alpha tests. No hardware RT, no
+// stochastic choice: the same ray always gives the same hit.
+// Include after raster.slangh (bindless buffers[], textures[], samplers[]).
+//
+// Hardware backend seam (not built; hardware RT stays an optional backend, off by
+// default): a TRACE_HARDWARE build would implement traceClosestWith/traceAnyWith with
+// RayQuery over a TLAS whose instance custom index is the trace instance slot and
+// whose BLASes index triangles in source order, call the same ITraceAlpha on
+// non-opaque candidates and fill the same TraceHit; callers do not change.
+#pragma once
+
+// Traversal stack entries per BLAS (ara_bvh::TRACE_STACK; every BLAS fits).
+#ifndef TRACE_STACK
+#define TRACE_STACK 12
+#endif
+
+// Ray flags (ara_bvh::RayFlags): end at the first accepted hit (shadow and
+// visibility queries); skip back or front faces; treat alpha-tested materials as
+// opaque.
+static const uint TRACE_ACCEPT_FIRST_HIT=1,TRACE_CULL_BACK_FACES=2,TRACE_CULL_FRONT_FACES=4,TRACE_FORCE_OPAQUE=8;
+// Instance record word a.z: bits 0-7 the instance mask, then flags (look/trace/gpu.rs).
+static const uint TRACE_INSTANCE_MIRRORED=1u<<8,TRACE_INSTANCE_ALPHA=1u<<9;
+// Scene record flags: some instance exists; some instance is alpha tested.
+static const uint TRACE_SCENE_NONEMPTY=1,TRACE_SCENE_ALPHA=2;
+static const uint TRACE_NONE=0xffffffff;
+// Barycentric slack per unit of the terms' magnitudes (8 ulps): a triangle accepts
+// points just outside it, within the float error of its own test, so rays cannot
+// slip between triangles that share an edge.
+static const float TRACE_EDGE_EPS=1.0/(1<<20);
+
+// The scene record (look/trace/gpu.rs SceneRecord): heap indices of the BLAS nodes
+// (80 B each), compressed triangles (64 B), TLAS nodes (32 B), instance records
+// (80 B), per-instance submesh material indices (u32), alpha materials (48 B) and
+// alpha UV rows (48 B per source triangle), then the scene flags.
+struct TraceScene {uint nodes;uint triangles;uint tlas;uint instances;uint materials;uint alpha;uint uvs;uint flags;};
+// The record at heap index `record` (uniform across the dispatch).
+TraceScene traceScene(uint record){return buffers[record].Load<TraceScene>(0);}
+
+// A query: origin + t * direction for t in (tMin, tMax), any non-zero direction
+// length (t is in its units). `mask` is ANDed with each instance's mask. `spread` is
+// the cone's width growth per unit of t (radians for a unit direction): alpha tests
+// read the texture mip its footprint covers.
+struct TraceRay {float3 origin;float tMin;float3 direction;float tMax;uint flags;uint mask;float spread;};
+TraceRay traceRay(float3 origin,float3 direction,float tMin,float tMax,uint flags=0,uint mask=0xff,float spread=0){
+    TraceRay r;r.origin=origin;r.direction=direction;r.tMin=tMin;r.tMax=tMax;r.flags=flags;r.mask=mask;r.spread=spread;return r;
+}
+
+// A committed hit: distance, instance slot (look::trace InstanceKey::slot), source
+// triangle in the mesh (stable primitive id), its submesh, barycentric weights of
+// corners 1 and 2, whether the ray met the front (counter-clockwise in world space)
+// side, the instance's caller word and the hit triangle's word address (for
+// traceHitNormal). instance is TRACE_NONE on a miss.
+struct TraceHit {float t;uint instance;uint primitive;uint submesh;float2 barycentrics;bool front;uint user;uint triangle;};
+
+// Instance record: world-to-object rows; a = (BLAS node base, BLAS triangle word
+// base, mask | flags, material base); b = (caller word, UV row base, generation
+// low, generation high).
+struct TraceInstanceRecord {float4 r0;float4 r1;float4 r2;uint4 a;uint4 b;};
+TraceInstanceRecord traceInstance(TraceScene s,uint instance){return buffers[s.instances].Load<TraceInstanceRecord>(instance*80);}
+// The generation (low, high) of an instance slot: compare with a cached
+// look::trace InstanceKey before trusting cached primitive ids.
+uint2 traceInstanceGeneration(TraceScene s,uint instance){return traceInstance(s,instance).b.zw;}
+
+// A candidate an alpha test judges: as TraceHit, plus the cone footprint at the hit
+// in object units and the instance's material and UV bases.
+struct TraceCandidate {uint instance;uint user;uint primitive;uint submesh;float2 barycentrics;float t;uint triangle;float footprint;uint materialBase;uint uvBase;};
+
+// Alpha tests: accept() decides whether a candidate on an alpha-tested instance is
+// solid. TraceAlphaTables reads trace's own tables; callers may supply another (a
+// native-content residency lookup) through the *With entry points.
+interface ITraceAlpha {bool accept(TraceScene s,TraceCandidate c);};
+
+// Alpha material (look/trace/scene.rs AlphaMaterial): base colour texture (sampled
+// heap index; TRACE_NONE opaque), UV set, cutoff, alpha factor and the texture
+// transform (scale, then rotation, then offset).
+struct TraceAlphaMaterial {uint texture;uint uvSet;float cutoff;float factor;float2 offset;float2 scale;float rotation;uint3 reserved;};
+
+// Object-space area of a compressed triangle: |plane row| / |u row x v row| is the
+// unnormalized normal's length.
+float traceTriangleArea(TraceScene s,uint triangle){
+    float4 t0=asfloat(buffers[s.triangles].Load4(triangle*16)),t1=asfloat(buffers[s.triangles].Load4(triangle*16+16));
+    float4 t2=asfloat(buffers[s.triangles].Load4(triangle*16+32));
+    return 0.5*length(t2.xyz)/max(length(cross(t0.xyz,t1.xyz)),1e-30);
+}
+
+struct TraceAlphaTables : ITraceAlpha {
+    bool accept(TraceScene s,TraceCandidate c){
+        uint id=buffers[s.materials].Load((c.materialBase+c.submesh)*4);
+        if(id==TRACE_NONE)return true;
+        TraceAlphaMaterial m=buffers[s.alpha].Load<TraceAlphaMaterial>(id*48);
+        if(m.texture==TRACE_NONE || c.uvBase==TRACE_NONE)return true;
+        uint row=(c.uvBase+c.primitive)*48+min(m.uvSet,1u)*24;
+        float2 a=asfloat(buffers[s.uvs].Load2(row)),b=asfloat(buffers[s.uvs].Load2(row+8)),d=asfloat(buffers[s.uvs].Load2(row+16));
+        uint w,h;textures[NonUniformResourceIndex(m.texture)].GetDimensions(w,h);
+        // The mip a cone `footprint` wide covers: the triangle's texels per unit area.
+        float2 size=float2(w,h);float2 du=(b-a)*m.scale*size,dv=(d-a)*m.scale*size;
+        float texels=abs(du.x*dv.y-du.y*dv.x),area=traceTriangleArea(s,c.triangle);
+        float lod=max(0,log2(max(c.footprint,1e-6))+0.5*log2(max(texels,1e-12)/max(area,1e-12)));
+        float2 uv=a*(1-c.barycentrics.x-c.barycentrics.y)+b*c.barycentrics.x+d*c.barycentrics.y;
+        float2 p=uv*m.scale;float sn,cs;sincos(m.rotation,sn,cs);uv=m.offset+float2(cs*p.x-sn*p.y,sn*p.x+cs*p.y);
+        return textures[NonUniformResourceIndex(m.texture)].SampleLevel(samplers[0],uv,lod).a*m.factor>=m.cutoff;
+    }
+};
+// Every candidate solid.
+struct TraceAlphaOpaque : ITraceAlpha {bool accept(TraceScene s,TraceCandidate c){return true;}};
+
+// Box tests of one half (four slots) of a CWBVH node: the hit children's bits
+// (interior children at 24 + slot ^ octant, leaf triangles at their offsets).
+uint traceChildren(uint meta,uint octinv,uint lx,uint hx,uint ly,uint hy,uint lz,uint hz,float3 rd,float3 scale,float3 orig,float tMin,float tMax){
+    if(rd.x<0){uint t=lx;lx=hx;hx=t;}
+    if(rd.y<0){uint t=ly;ly=hy;hy=t;}
+    if(rd.z<0){uint t=lz;lz=hz;hz=t;}
+    uint inner=(meta&(meta<<1))&0x10101010u;uint innerMask=(inner<<4)-(inner>>4);
+    uint bits=(meta^((octinv*0x01010101u)&innerMask))&0x1f1f1f1fu;uint children=(meta>>5)&0x07070707u;
+    uint mask=0;
+    [unroll] for(uint k=0;k<4;k++){
+        uint sh=k*8;
+        float3 lo=float3(float((lx>>sh)&255),float((ly>>sh)&255),float((lz>>sh)&255))*scale+orig;
+        float3 hi=float3(float((hx>>sh)&255),float((hy>>sh)&255),float((hz>>sh)&255))*scale+orig;
+        if(max(max(max(lo.x,lo.y),lo.z),tMin)<=min(min(min(hi.x,hi.y),hi.z),tMax))mask|=((children>>sh)&255)<<((bits>>sh)&31);
+    }
+    return mask;
+}
+
+// One BLAS with the object-space ray (o, d): commits accepted candidates into `hit`
+// and shortens tMax. Returns true when an accepted hit ends the query.
+bool traceBlas<A:ITraceAlpha>(TraceScene s,A alpha,uint instance,TraceInstanceRecord inst,float3 o,float3 d,float tMin,inout float tMax,uint flags,float footprintPerT,inout TraceHit hit){
+    float3 rd=select(d==0,float3(1e30),1/d);
+    uint octinv=7-((d.x<0?4u:0u)|(d.y<0?2u:0u)|(d.z<0?1u:0u));
+    uint root=inst.a.x,triBase=inst.a.y;
+    bool alphaTested=(inst.a.z&TRACE_INSTANCE_ALPHA)!=0 && (flags&TRACE_FORCE_OPAQUE)==0;
+    bool mirrored=(inst.a.z&TRACE_INSTANCE_MIRRORED)!=0;
+    uint2 stack[TRACE_STACK];uint sp=0;
+    uint2 ng=uint2(root,0x80000000u),tg=uint2(0,0);
+    for(;;){
+        if(ng.y>0x00ffffffu){
+            uint imask=ng.y;uint bit=firstbithigh(ng.y);uint base=ng.x;
+            ng.y&=~(1u<<bit);
+            if(ng.y>0x00ffffffu){stack[sp]=ng;sp++;}
+            uint slot=(bit-24)^octinv;
+            uint rel=countbits(imask&~(0xffffffffu<<slot));
+            uint ix=(base+rel)*80;
+            uint4 n0=buffers[s.nodes].Load4(ix),n1=buffers[s.nodes].Load4(ix+16),n2=buffers[s.nodes].Load4(ix+32);
+            uint4 n3=buffers[s.nodes].Load4(ix+48),n4=buffers[s.nodes].Load4(ix+64);
+            uint e=n0.w;
+            float3 scale=asfloat(uint3((e&255)<<23,((e>>8)&255)<<23,((e>>16)&255)<<23))*rd;
+            float3 orig=(asfloat(n0.xyz)-o)*rd;
+            ng.x=n1.x+root;tg=uint2(n1.y+triBase,0);
+            uint mask=traceChildren(n1.z,octinv,n2.x,n3.z,n2.z,n4.x,n3.x,n4.z,rd,scale,orig,tMin,tMax)
+                     |traceChildren(n1.w,octinv,n2.y,n3.w,n2.w,n4.y,n3.y,n4.w,rd,scale,orig,tMin,tMax);
+            ng.y=(mask&0xff000000u)|(e>>24);tg.y=mask&0x00ffffffu;
+        }else{tg=ng;ng=uint2(0,0);}
+        while(tg.y!=0){
+            uint bit=firstbithigh(tg.y);uint addr=tg.x+bit*4;tg.y&=~(1u<<bit);
+            float4 t2=asfloat(buffers[s.triangles].Load4(addr*16+32));
+            float transD=dot(t2.xyz,d);if(transD==0)continue;
+            float t=-(dot(t2.xyz,o)+t2.w)/transD;if(!(t>tMin && t<tMax))continue;
+            float3 p=o+t*d;
+            float4 t0=asfloat(buffers[s.triangles].Load4(addr*16)),t1=asfloat(buffers[s.triangles].Load4(addr*16+16));
+            float u=dot(t0.xyz,p)+t0.w,v=dot(t1.xyz,p)+t1.w;
+            float3 size=abs(o)+abs(t*d);
+            float eu=TRACE_EDGE_EPS*(dot(abs(t0.xyz),size)+abs(t0.w)),ev=TRACE_EDGE_EPS*(dot(abs(t1.xyz),size)+abs(t1.w));
+            if(!(u>=-eu && v>=-ev && u+v<=1+eu+ev))continue;
+            uint4 m=buffers[s.triangles].Load4(addr*16+48);
+            bool front=((transD<0)!=((m.y&1)!=0))!=mirrored;
+            if((flags&(front?TRACE_CULL_FRONT_FACES:TRACE_CULL_BACK_FACES))!=0)continue;
+            if(alphaTested){
+                TraceCandidate c;c.instance=instance;c.user=inst.b.x;c.primitive=m.w;c.submesh=m.x;c.barycentrics=float2(u,v);
+                c.t=t;c.triangle=addr;c.footprint=t*footprintPerT;c.materialBase=inst.a.w;c.uvBase=inst.b.y;
+                if(!alpha.accept(s,c))continue;
+            }
+            tMax=t;hit.t=t;hit.instance=instance;hit.primitive=m.w;hit.submesh=m.x;hit.barycentrics=float2(u,v);
+            hit.front=front;hit.user=inst.b.x;hit.triangle=addr;
+            if((flags&TRACE_ACCEPT_FIRST_HIT)!=0)return true;
+        }
+        if(ng.y>0x00ffffffu)continue;
+        if(sp==0)break;
+        sp--;ng=stack[sp];
+    }
+    return false;
+}
+
+// Nearest accepted hit along `ray` (any accepted hit with TRACE_ACCEPT_FIRST_HIT),
+// alpha tests through `alpha`. The TLAS is walked threaded (no stack), larger
+// subtrees first; each instance hit transforms the ray to object space.
+bool traceClosestWith<A:ITraceAlpha>(TraceScene s,TraceRay ray,A alpha,out TraceHit hit){
+    hit=(TraceHit)0;hit.t=ray.tMax;hit.instance=TRACE_NONE;
+    if((s.flags&TRACE_SCENE_NONEMPTY)==0)return false;
+    float3 o=ray.origin,d=ray.direction;
+    float3 rd=select(d==0,float3(1e30),1/d);
+    float tMax=ray.tMax;
+    uint node=0;
+    for(;;){
+        uint4 a=buffers[s.tlas].Load4(node*32),b=buffers[s.tlas].Load4(node*32+16);
+        float3 lo=(asfloat(a.xyz)-o)*rd,hi=(asfloat(b.xyz)-o)*rd;
+        float3 near3=min(lo,hi),far3=max(lo,hi);
+        if(max(max(max(near3.x,near3.y),near3.z),ray.tMin)<=min(min(min(far3.x,far3.y),far3.z),tMax)){
+            if((a.w&0x80000000u)==0){node=a.w;continue;}
+            uint i=a.w&0x7fffffffu;
+            TraceInstanceRecord inst=traceInstance(s,i);
+            if((inst.a.z&ray.mask&0xffu)!=0){
+                float3 oo=float3(dot(inst.r0.xyz,o)+inst.r0.w,dot(inst.r1.xyz,o)+inst.r1.w,dot(inst.r2.xyz,o)+inst.r2.w);
+                float3 dd=float3(dot(inst.r0.xyz,d),dot(inst.r1.xyz,d),dot(inst.r2.xyz,d));
+                if(traceBlas(s,alpha,i,inst,oo,dd,ray.tMin,tMax,ray.flags,ray.spread*length(dd),hit))return true;
+            }
+        }
+        node=b.w;
+        if(node==TRACE_NONE)break;
+    }
+    return hit.instance!=TRACE_NONE;
+}
+// Whether any accepted hit lies along `ray` (shadow and visibility queries).
+bool traceAnyWith<A:ITraceAlpha>(TraceScene s,TraceRay ray,A alpha){
+    ray.flags|=TRACE_ACCEPT_FIRST_HIT;TraceHit hit;return traceClosestWith(s,ray,alpha,hit);
+}
+// The default queries, alpha-testing through trace's own tables.
+bool traceClosest(TraceScene s,TraceRay ray,out TraceHit hit){TraceAlphaTables a;return traceClosestWith(s,ray,a,hit);}
+bool traceAny(TraceScene s,TraceRay ray){TraceAlphaTables a;return traceAnyWith(s,ray,a);}
+
+// World-space unit geometric normal of a hit, on its front (counter-clockwise) side.
+float3 traceHitNormal(TraceScene s,TraceHit hit){
+    float4 t2=asfloat(buffers[s.triangles].Load4(hit.triangle*16+32));
+    uint flags=buffers[s.triangles].Load(hit.triangle*16+52);
+    TraceInstanceRecord inst=traceInstance(s,hit.instance);
+    float3 n=(flags&1)!=0?-t2.xyz:t2.xyz;
+    float3 w=inst.r0.xyz*n.x+inst.r1.xyz*n.y+inst.r2.xyz*n.z;
+    return normalize((inst.a.z&TRACE_INSTANCE_MIRRORED)!=0?-w:w);
+}
+// World-space hit point.
+float3 traceHitPosition(TraceRay ray,TraceHit hit){return ray.origin+hit.t*ray.direction;}

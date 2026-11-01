@@ -1343,6 +1343,34 @@
       "vertex_stride": 0
     }
   },
+  "trace_bench": {
+    "entries": {
+      "traceBenchMain": "compute"
+    },
+    "source": "trace-test.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "trace_test": {
+    "entries": {
+      "traceTestMain": "compute"
+    },
+    "source": "trace-test.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "tsr_accumulate": {
     "entries": {
       "tsrAccumulateMain": "compute"

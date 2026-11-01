@@ -85,6 +85,8 @@ pub struct Blas {
     pub triangles: Vec<[u32; 4]>,
     /// Object-space bounds of every hittable triangle (empty when there is none).
     pub bounds: Aabb,
+    /// First source triangle of each submesh (ascending from zero).
+    pub submeshes: Vec<u32>,
     /// Build statistics.
     pub stats: BlasStats,
 }
@@ -108,6 +110,11 @@ impl Blas {
                 source.push(t);
             }
         }
+        let submeshes = if mesh.submeshes.is_empty() {
+            vec![0]
+        } else {
+            mesh.submeshes.to_vec()
+        };
         let mut stats = BlasStats {
             triangles: total,
             degenerate: total - tris.len() as u32,
@@ -122,6 +129,7 @@ impl Blas {
                 nodes: vec![[0; 4]; NODE_WORDS],
                 triangles: Vec::new(),
                 bounds: Aabb::EMPTY,
+                submeshes,
                 stats,
             });
         }
@@ -141,8 +149,16 @@ impl Blas {
             nodes,
             triangles,
             bounds: binary.nodes[0].bounds,
+            submeshes,
             stats,
         })
+    }
+
+    /// Submesh of source triangle `t`.
+    pub fn submesh_of(&self, t: u32) -> u32 {
+        self.submeshes
+            .partition_point(|&s| s <= t)
+            .saturating_sub(1) as u32
     }
 
     /// GPU bytes of this BLAS (nodes plus triangles).
