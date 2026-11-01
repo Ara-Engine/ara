@@ -381,6 +381,17 @@ hold the evidence and causes.
   area-light shapes floor SSR reads within 7% of the path tracer, the probe fallback 1.10-1.24x
   under the lamp pools, so the step is the probes' reflected radiance of the lamp-lit wall, open). Open: per-pixel cone
   footprints from the Hi-Z cell, measured before/after cost at equal settings.
+  Polar's "smeared" floor, root cause (2026-11-01, scratch `D:\AraScratch\polarrefl`): the reference's
+  blue streaks are sky seen through the narrow slots between the hanging pipe bundle and the
+  ceiling grilles, as the floor sees them (a floorless mirror-camera reference, flipped, shows
+  them; bounces 1 has none). Ara's scene and lighting have them too, but the main camera and the
+  eye-height captures see the pipes in front of the slots: SSR accepts the grazing rays as pipe
+  hits (thickness 2% of depth, 20 cm at 10 m) and reflects pipe brown. Not normal maps (removed:
+  stripes stay), not roughness, not capture exposure. Fix in progress, not merged: automatic
+  planar reflections (G-buffer height histogram picks the floor, half-res mirror view clipped
+  above it via SV_ClipDistance, atlas read by SSR.Trace) on WIP branch `t3/a12c4f62-planar-wip`
+  (1737c32d2): builds, never rendered, shaders uncooked, adds a Vulkan shaderClipDistance
+  requirement. The hybrid RT path also misses the stripes (its misses take probe light, unchecked).
   Original item: Hi-Z traced SSR (min-depth pyramid), stochastic rough
   lobes with a deterministic, noise-free resolve, then captures and probes.
 - [x] **Vertex painting.** Vertex colours imported (glTF `COLOR_0`, FBX), stored per
