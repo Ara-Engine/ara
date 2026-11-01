@@ -177,11 +177,14 @@ pub(crate) struct LookFrame {
     pub screen_params: [[f32; 4]; 2],
     pub screen_info: [[u32; 4]; 4],
     /// Per-pixel local-light scattering in fog (`look::volumetric`, look-fog-lights.slang):
-    /// params x angular bins per half circle; info x scatter image (sampled), y
-    /// (storage), z render pixels per texel side (zero: local lights scatter in the
-    /// froxels), w its width.
+    /// params x angular bins per half circle; info x the render-size scatter the
+    /// composite reads (sampled), y the pass's target (storage), z render pixels per
+    /// texel side (zero: local lights scatter in the froxels).
     pub fog_lights_params: [f32; 4],
     pub fog_lights_info: [u32; 4],
+    /// Half-resolution frames: x the pass's target (sampled), y the render-size scatter
+    /// the resolve writes (storage).
+    pub fog_lights_resolve: [u32; 4],
     /// Local fog volume records (`FogVolume::row`), read by offset: not part of the
     /// shader's `Look` struct (a variable index into it would spill to memory). Last,
     /// so the shader struct is a prefix of this one.
@@ -359,6 +362,7 @@ impl LookFrame {
             screen_info: [[0; 4]; 4],
             fog_lights_params: [0.; 4],
             fog_lights_info: [0; 4],
+            fog_lights_resolve: [0; 4],
         }
     }
 }

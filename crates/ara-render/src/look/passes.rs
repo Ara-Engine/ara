@@ -34,6 +34,10 @@ pub(crate) enum LookPass {
     FogIntegrate,
     /// Per-pixel local-light scattering in fog (`look::volumetric`, look-fog-lights.slang).
     FogLights,
+    /// Its render-size resolve, which lists the edge pixels.
+    FogLightsResolve,
+    /// The resolve's edge pixels at full resolution (an indirect dispatch).
+    FogLightsEdges,
     /// Metering: 0 bins the history, 1 meters the bins into the exposure state.
     Exposure(u32),
     Bloom(u32),
@@ -565,6 +569,20 @@ impl LookGpu {
             self.record_scatter(recorder, pass);
             return;
         }
+        // The fog lights' edges: as many groups as the resolve listed (its header).
+        if pass == LookPass::FogLightsEdges {
+            if let Some(edges) = &self.fog_edges {
+                recorder.push(Command::Pipeline(p.fog_lights_edges));
+                recorder.push(Command::Constants(RootConstants {
+                    words: [frame_index, 0, 0, 0, 0, 0, 0, 0],
+                }));
+                recorder.push(Command::DispatchIndirect {
+                    arguments: edges.buffer,
+                    offset: 0,
+                });
+            }
+            return;
+        }
         let groups = |[w, h]: [u32; 2]| [w.div_ceil(8), h.div_ceil(8), 1];
         let (pipeline, argument, dispatch) = match pass {
             LookPass::Transmittance => (p.transmittance, 0, groups([256, 64])),
@@ -578,6 +596,8 @@ impl LookGpu {
             LookPass::FogInject => (p.fog_inject, 0, self.volumetric_dispatch(pass)),
             LookPass::FogIntegrate => (p.fog_integrate, 0, self.volumetric_dispatch(pass)),
             LookPass::FogLights => (p.fog_lights, 0, self.volumetric_dispatch(pass)),
+            LookPass::FogLightsResolve => (p.fog_lights_resolve, 0, self.volumetric_dispatch(pass)),
+            LookPass::FogLightsEdges => return,
             // One grid sample per thread (128x72), then one metering group.
             LookPass::Exposure(n) => (p.exposure, n, [if n == 0 { 36 } else { 1 }, 1, 1]),
             LookPass::Bloom(n) => {

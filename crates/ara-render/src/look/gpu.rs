@@ -56,7 +56,11 @@ pub(crate) const SCREEN_EMISSION: usize = 29;
 /// in-scattered light and its mean view depth, RGBA16F at the render size over
 /// `VolumetricFogQuality::light_scale`.
 pub(crate) const VOLUME_SCATTER: usize = 30;
-const IMAGES: usize = 31;
+/// The scatter at the render size the composite reads on half-resolution frames: the
+/// half-resolution one resolved, its disagreeing pixels integrated at full resolution
+/// (look-fog-lights.slang `fogLightsResolveMain`).
+pub(crate) const VOLUME_SCATTER_FULL: usize = 31;
+const IMAGES: usize = 32;
 /// Depth of a visibility-bitmask sample (`LookGpu::bitmask_ao`) behind its front, as
 /// a share of the AO radius: thinner foreground hides less of what lies behind it.
 /// 0.4 treated branches, rails and posts as 40 cm slabs: ground under a sky-lit tree
@@ -113,6 +117,10 @@ pub(crate) struct Pipelines {
     pub fog_ambient: Pipeline,
     /// Per-pixel local-light scattering (look-fog-lights.slang).
     pub fog_lights: Pipeline,
+    /// Its render-size resolve, which lists the edge pixels.
+    pub fog_lights_resolve: Pipeline,
+    /// Its edges, integrated at full resolution by an indirect dispatch.
+    pub fog_lights_edges: Pipeline,
     pub exposure: Pipeline,
     pub bloom: Pipeline,
     pub post: Pipeline,
@@ -253,6 +261,8 @@ pub(crate) struct LookGpu {
     pub volumetric_slot: usize,
     /// Near volume frames accumulated since its history last reset.
     pub volumetric_frames: u32,
+    /// The edge list of half-resolution fog lights' resolve (`ensure_volumetric`).
+    pub fog_edges: Option<super::volumetric::FogEdges>,
     /// This frame renders the near volume (`begin_volumetric`).
     pub frame_volumetric: bool,
     /// This frame runs screen probe GI (`screen_gi_active`): its passes, rows and
@@ -285,6 +295,8 @@ pub(crate) struct LookIds {
     pub horizon: Option<[ResourceId; 3]>,
     /// The virtual shadow atlas (`look::vsm`).
     pub vsm: Option<ResourceId>,
+    /// The fog lights' edge list (`look::volumetric::FogEdges`).
+    pub fog_edges: Option<ResourceId>,
 }
 
 impl LookIds {
@@ -322,6 +334,8 @@ impl LookGpu {
             fog_integrate: load("look_fog_integrate")?,
             fog_ambient: load("look_fog_ambient")?,
             fog_lights: load("look_fog_lights")?,
+            fog_lights_resolve: load("look_fog_lights_resolve")?,
+            fog_lights_edges: load("look_fog_lights_edges")?,
             exposure: load("look_exposure")?,
             bloom: load("look_bloom")?,
             post: load("look_post")?,
@@ -426,6 +440,7 @@ impl LookGpu {
             volumetric: None,
             volumetric_slot: 0,
             volumetric_frames: 0,
+            fog_edges: None,
             frame_volumetric: false,
             frame_screen: false,
             frame_hiz: false,
@@ -480,6 +495,7 @@ impl LookGpu {
             SCREEN_SPECULAR,
             SCREEN_EMISSION,
             VOLUME_SCATTER,
+            VOLUME_SCATTER_FULL,
         ] {
             if let Some(old) = self.images[i].take() {
                 gpu.retire(Resource::Image(old))?;
@@ -537,6 +553,7 @@ impl LookGpu {
             screen,
             screen,
             // The per-pixel fog lights follow the near volume (`ensure_volumetric`).
+            false,
             false,
         ];
         for (i, needed) in needed.into_iter().enumerate() {
@@ -736,6 +753,15 @@ impl LookGpu {
                 .vsm
                 .as_ref()
                 .map(|v| graph.import(Resource::Image(v.atlas), v.atlas_state)),
+            fog_edges: self.fog_edges.as_ref().map(|e| {
+                graph.import(
+                    Resource::Buffer(e.buffer),
+                    State {
+                        access: e.access,
+                        queue: Queue::Graphics,
+                    },
+                )
+            }),
             horizon: self.horizon.as_ref().map(|h| {
                 let mut import = |image, state| graph.import(Resource::Image(image), state);
                 [
@@ -794,6 +820,9 @@ impl LookGpu {
             gi.access[read] = final_states[ids[3].0].access;
             gi.access[write] = final_states[ids[4].0].access;
             gi.radiance_access = final_states[ids[5].0].access;
+        }
+        if let (Some(edges), Some(id)) = (&mut self.fog_edges, ids.fog_edges) {
+            edges.access = final_states[id.0].access;
         }
         if let (Some(far), Some(id)) = (&mut self.far, ids.far) {
             far.state = final_states[id.0];

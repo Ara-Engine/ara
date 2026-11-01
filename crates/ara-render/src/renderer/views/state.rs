@@ -190,6 +190,9 @@ impl ViewState {
         for image in self.look.images.into_iter().flatten() {
             gpu.retire(Resource::Image(image))?;
         }
+        if let Some(edges) = self.look.fog_edges {
+            gpu.retire(Resource::Buffer(edges.buffer))?;
+        }
         if let Some(far) = self.look.far {
             far.destroy(gpu)?;
         }
@@ -293,6 +296,7 @@ fn fork_look(
         volumetric: None,
         volumetric_slot: 0,
         volumetric_frames: 0,
+        fog_edges: None,
         frame_volumetric: false,
         frame_screen: false,
         frame_hiz: false,

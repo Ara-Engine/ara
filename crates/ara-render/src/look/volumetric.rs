@@ -29,7 +29,7 @@ use super::{
     frame::LookFrame,
     gpu::{
         FROXELS, LookGpu, LookIds, MULTISCATTER, SKY_IRRADIANCE, TRANSMITTANCE, VOLUME_A,
-        VOLUME_AMBIENT, VOLUME_B, VOLUME_LIGHT, VOLUME_SCATTER,
+        VOLUME_AMBIENT, VOLUME_B, VOLUME_LIGHT, VOLUME_SCATTER, VOLUME_SCATTER_FULL,
     },
     passes::LookPass,
 };
@@ -275,6 +275,27 @@ impl Layout {
     }
 }
 
+/// Bytes before the edge list's entries: the edge pass's dispatch arguments (three u32)
+/// and the count of pixels appended (look-fog-lights.slang `fogLightsEdgesMain`).
+const EDGE_HEADER: u32 = 16;
+/// Render pixels per edge-list entry: the list holds an eighth of the frame's pixels,
+/// and edge pixels past it keep their half-resolution blend.
+const EDGE_SHARE: u32 = 8;
+
+/// The pixels a half-resolution resolve finds on edges (look-fog-lights.slang
+/// `fogLightsResolveMain` appends them): a header (dispatch arguments, count), then one
+/// u32 per pixel (x | y << 16), integrated at full resolution by an indirect dispatch of
+/// full groups (`Fog.Lights.Edges`), so their cost follows their number.
+pub(crate) struct FogEdges {
+    pub buffer: ara_gpu::Buffer,
+    /// Storage buffer index.
+    pub index: u32,
+    /// Entries the list holds.
+    pub capacity: u32,
+    /// Last access recorded (`LookGpu::finish`).
+    pub access: Access,
+}
+
 /// A slice atlas of `grid` cells, `columns` slices per row.
 fn atlas([x, y, z]: [u32; 3], columns: u32) -> [u32; 2] {
     [x * columns, y * z.div_ceil(columns)]
@@ -313,6 +334,7 @@ impl LookGpu {
             VOLUME_LIGHT,
             VOLUME_AMBIENT,
             VOLUME_SCATTER,
+            VOLUME_SCATTER_FULL,
         ] {
             if let Some(old) = self.images[i].take() {
                 gpu.retire(Resource::Image(old))?;
@@ -322,6 +344,11 @@ impl LookGpu {
                 VOLUME_SCATTER => match layout.lights {
                     Some(lights) => lights.size,
                     None => continue,
+                },
+                // The render-size resolve of a half-resolution scatter.
+                VOLUME_SCATTER_FULL => match layout.lights {
+                    Some(lights) if lights.scale > 1 => self.render,
+                    _ => continue,
                 },
                 _ => layout.atlas(),
             };
@@ -338,6 +365,23 @@ impl LookGpu {
                 queue: Queue::Graphics,
             };
             self.images[i] = Some(image);
+        }
+        if let Some(old) = self.fog_edges.take() {
+            gpu.retire(Resource::Buffer(old.buffer))?;
+        }
+        if layout.lights.is_some_and(|l| l.scale > 1) {
+            let capacity = (self.render[0] * self.render[1]).div_ceil(EDGE_SHARE).max(64);
+            let buffer = gpu.create_buffer(
+                u64::from(EDGE_HEADER + 4 * capacity),
+                vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::INDIRECT_BUFFER,
+                false,
+            )?;
+            self.fog_edges = Some(FogEdges {
+                buffer,
+                index: gpu.storage_buffer(buffer)?.index,
+                capacity,
+                access: Access::Undefined,
+            });
         }
         self.volumetric = Some(layout);
         self.volumetric_frames = 0;
@@ -430,11 +474,23 @@ impl LookGpu {
         if let Some(lights) = layout.lights {
             frame.fog_lights_params = [lights.samples as f32, 0., 0., 0.];
             frame.fog_lights_info = [
-                self.sampled[VOLUME_SCATTER],
+                self.sampled[Self::fog_lights_image(lights)],
                 self.storage[VOLUME_SCATTER],
                 lights.scale,
-                lights.size[0],
+                0,
             ];
+            if lights.scale > 1 {
+                let (list, capacity) = self
+                    .fog_edges
+                    .as_ref()
+                    .map_or((0, 0), |e| (e.index, e.capacity));
+                frame.fog_lights_resolve = [
+                    self.sampled[VOLUME_SCATTER],
+                    self.storage[VOLUME_SCATTER_FULL],
+                    list,
+                    capacity,
+                ];
+            }
         }
         self.volumetric_frames = n.saturating_add(1);
     }
@@ -541,6 +597,10 @@ impl LookGpu {
             (integrate, LookPass::FogIntegrate),
         ];
         if self.frame_fog_lights().is_some() {
+            // At half resolution it also resets the edge list its resolve fills.
+            let edges = ids
+                .fog_edges
+                .filter(|_| self.frame_fog_lights().is_some_and(|l| l.scale > 1));
             let lights = graph.pass(
                 "Fog.Lights",
                 Queue::Graphics,
@@ -551,12 +611,58 @@ impl LookGpu {
                     (ids.frame, Access::ShaderRead),
                 ]
                 .into_iter()
+                .chain(edges.map(|e| (e, Access::Storage)))
                 .chain(pixels.iter().copied())
                 .chain(reads.iter().copied()),
             );
             passes.push((lights, LookPass::FogLights));
+            // Half resolution: the render-size image the composite reads, whose
+            // disagreeing pixels (edges, apexes, thin occluders) the resolve lists (it reads
+            // depth and the exposure, the edge floor), then integrates again at full
+            // resolution, reading what the pass above reads.
+            if let Some(edges) = edges {
+                let resolve = graph.pass(
+                    "Fog.Lights.Resolve",
+                    Queue::Graphics,
+                    [
+                        (ids.image(VOLUME_SCATTER), Access::ShaderRead),
+                        (ids.image(VOLUME_SCATTER_FULL), Access::Storage),
+                        (edges, Access::Storage),
+                        (ids.state, Access::ShaderRead),
+                        (ids.frame, Access::ShaderRead),
+                    ]
+                    .into_iter()
+                    .chain(pixels.iter().copied()),
+                );
+                let refine = graph.pass(
+                    "Fog.Lights.Edges",
+                    Queue::Graphics,
+                    [
+                        (edges, Access::Indirect),
+                        (ids.image(VOLUME_LIGHT), Access::ShaderRead),
+                        (ids.image(FROXELS), Access::ShaderRead),
+                        (ids.image(VOLUME_SCATTER_FULL), Access::Storage),
+                        (ids.frame, Access::ShaderRead),
+                    ]
+                    .into_iter()
+                    .chain(pixels.iter().copied())
+                    .chain(reads.iter().copied()),
+                );
+                passes.push((resolve, LookPass::FogLightsResolve));
+                passes.push((refine, LookPass::FogLightsEdges));
+            }
         }
         passes
+    }
+
+    /// The render-size scatter the composite reads: the pass's own at full resolution,
+    /// else its resolve.
+    fn fog_lights_image(lights: Lights) -> usize {
+        if lights.scale > 1 {
+            VOLUME_SCATTER_FULL
+        } else {
+            VOLUME_SCATTER
+        }
     }
 
     /// The fog images shading samples: the coarse grid, and the near volume and the
@@ -569,15 +675,15 @@ impl LookGpu {
         if self.frame_volumetric {
             reads.push((ids.image(VOLUME_LIGHT), Access::ShaderRead));
         }
-        if self.frame_fog_lights().is_some() {
-            reads.push((ids.image(VOLUME_SCATTER), Access::ShaderRead));
+        if let Some(lights) = self.frame_fog_lights() {
+            reads.push((ids.image(Self::fog_lights_image(lights)), Access::ShaderRead));
         }
         reads
     }
 
     /// Dispatch size of a near volume pass: one thread per ambient cell, froxel
-    /// (injection) or local-light scatter texel, or per column (integration), 8x8 per
-    /// group.
+    /// (injection), local-light scatter texel or render pixel (its resolve), or per column
+    /// (integration), 8x8 per group.
     pub(crate) fn volumetric_dispatch(&self, pass: LookPass) -> [u32; 3] {
         let Some(layout) = self.volumetric else {
             return [0; 3];
@@ -589,6 +695,7 @@ impl LookGpu {
                 Some(Lights { size: [x, y], .. }) => [x, y, 1],
                 None => [0; 3],
             },
+            LookPass::FogLightsResolve => [self.render[0], self.render[1], 1],
             _ => [layout.grid[0], layout.grid[1], 1],
         };
         [x.div_ceil(8), y.div_ceil(8), z]

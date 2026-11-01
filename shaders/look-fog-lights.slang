@@ -125,55 +125,152 @@ float4 fogLightBounds(Light light){
 // summation order fixed (deterministic).
 groupshared uint fogTileLights[TILE_LIGHTS/32];
 groupshared uint fogGroupFar;
+// The tile-list offset of the 16x16 light tile holding render pixel `p`.
+uint fogTile(Frame f,float2 p){uint tilesX=(f.extent.x+15)/16;return (uint(p.y)/16*tilesX+uint(p.x)/16)*TILE_STRIDE;}
+// Marks fogTileLights for the group's render rectangle [lo, hi) (inside light tile
+// `tile`) in front of `far`: every thread of the group calls it between barriers.
+void fogCullTileLights(Frame f,uint tile,float2 lo,float2 hi,float far,uint thread){
+    // The frustum: planes through the camera and the rectangle's corner rays, normals inwards.
+    float3 r0=viewRay(f,lo),r1=viewRay(f,float2(hi.x,lo.y)),r2=viewRay(f,hi),r3=viewRay(f,float2(lo.x,hi.y)),mid=r0+r2;
+    float3 n0=normalize(cross(r0,r1)),n1=normalize(cross(r1,r2)),n2=normalize(cross(r2,r3)),n3=normalize(cross(r3,r0));
+    n0*=sign(dot(n0,mid));n1*=sign(dot(n1,mid));n2*=sign(dot(n2,mid));n3*=sign(dot(n3,mid));
+    uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);
+    [loop]for(uint i=thread;i<count;i+=64){
+        Light light=loadLight(f.lighting.w,buffers[NonUniformResourceIndex(f.lighting.z)].Load((tile+1+i)*4));
+        float4 s=fogLightBounds(light);float3 c=s.xyz-f.camera.xyz;
+        if(light.parameters.w>0&&dot(n0,c)>=-s.w&&dot(n1,c)>=-s.w&&dot(n2,c)>=-s.w&&dot(n3,c)>=-s.w&&length(c)-s.w<=far)
+            InterlockedOr(fogTileLights[i/32],1u<<(i%32));
+    }
+}
+// The view ray through render pixel `p`'s centre and the distance to its opaque surface
+// (1e30 over the background).
+float3 fogPixelRay(Frame f,int2 p,out float end){
+    bool covered;float3 world=gbufferWorld(f,p,covered);end=covered?length(world-f.camera.xyz):1e30;
+    return viewRay(f,float2(p)+0.5);
+}
+// The scatter along render pixel `p`'s ray `d` (to `end`) from the lights of light tile
+// `tile` (those fogTileLights marks with `culled`, else every one with volumetric
+// scattering, each clipped to its reach along the ray), and its mean view depth (look.slangh
+// fogLightsAt); `scale`: render pixels per texel side, which widens the narrowest shadow
+// filter. Lights sum in tile-list order (deterministic).
+float4 fogLightsPixel(Frame f,Look l,int2 p,float3 d,float end,uint tile,uint scale,bool culled=true){
+    float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
+    // A render pixel's angular radius (half its neighbour's ray offset), widened to the texel.
+    float cone=0.5*float(scale)*length(viewRay(f,float2(p)+float2(1.5,0.5))-d);
+    uint samples=uint(l.fogLightsParams.x);
+    float3 sum=0;float2 centroid=0;
+    if(culled){
+        [loop]for(uint word=0;word<TILE_LIGHTS/32;word++){
+            uint bits=fogTileLights[word];
+            [loop]while(bits!=0){
+                uint i=word*32+firstbitlow(bits);bits&=bits-1;
+                uint index=buffers[NonUniformResourceIndex(f.lighting.z)].Load((tile+1+i)*4);
+                sum+=fogLightRay(f,l,loadLight(f.lighting.w,index),index,f.camera.xyz,d,end,uv,samples,cone,centroid);
+            }
+        }
+    }else{
+        uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);
+        [loop]for(uint i=0;i<count;i++){
+            uint index=buffers[NonUniformResourceIndex(f.lighting.z)].Load((tile+1+i)*4);
+            Light light=loadLight(f.lighting.w,index);
+            if(light.parameters.w>0)sum+=fogLightRay(f,l,light,index,f.camera.xyz,d,end,uv,samples,cone,centroid);
+        }
+    }
+    float4 result=float4(min(sum,60000),centroid.y>0?centroid.x/centroid.y:0);
+    return any(isnan(result))||any(isinf(result))?0:result;
+}
 // One thread per fog-lights texel (look.fogLightsInfo.z render pixels a side, holding
 // render pixel z*q's ray; one group stays inside one 16x16 light tile): every light of
 // its tile that can reach the group's rays (look-lights.slangh; parameters.w), up to the
-// opaque surface or, over the background, through the lights' whole reach. Stores the
-// scatter and its mean view depth (look.slangh fogLightsAt).
+// opaque surface or, over the background, through the lights' whole reach. At half
+// resolution fogLightsResolveMain then makes the render-size image the composite reads
+// (this pass resets its edge list: no groups, no entries).
 [shader("compute")][numthreads(8,8,1)]
 void fogLightsMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint thread:SV_GroupIndex){
     Frame f=frame();Look l=look(f);uint scale=l.fogLightsInfo.z;
     if(thread<TILE_LIGHTS/32)fogTileLights[thread]=0;
     if(thread==0)fogGroupFar=0;
+    if(scale>1&&all(tid==0))buffers[NonUniformResourceIndex(l.fogLightsResolve.z)].Store4(0,uint4(0,1,1,0));
     int2 p=int2(tid.xy*scale);bool inside=scale!=0&&all(p<int2(f.extent.xy));p=min(p,int2(f.extent.xy)-1);
-    float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
-    float3 d=viewRay(f,float2(p)+0.5),o=f.camera.xyz;
-    bool covered;float3 world=gbufferWorld(f,p,covered);
-    float end=covered?length(world-o):1e30;
+    float end;float3 d=fogPixelRay(f,p,end);
     GroupMemoryBarrierWithGroupSync();
     if(inside)InterlockedMax(fogGroupFar,asuint(end));
-    // The group's frustum: planes through the camera and its rectangle's corner rays,
-    // normals inwards.
-    float2 lo=float2(group.xy*8*scale),hi=min(lo+float(8*scale),float2(f.extent.xy));
-    float3 r0=viewRay(f,lo),r1=viewRay(f,float2(hi.x,lo.y)),r2=viewRay(f,hi),r3=viewRay(f,float2(lo.x,hi.y)),mid=r0+r2;
-    float3 n0=normalize(cross(r0,r1)),n1=normalize(cross(r1,r2)),n2=normalize(cross(r2,r3)),n3=normalize(cross(r3,r0));
-    n0*=sign(dot(n0,mid));n1*=sign(dot(n1,mid));n2*=sign(dot(n2,mid));n3*=sign(dot(n3,mid));
-    uint tilesX=(f.extent.x+15)/16,tile=(uint(lo.y)/16*tilesX+uint(lo.x)/16)*TILE_STRIDE;
-    uint count=scale!=0?buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4):0;
+    float2 lo=float2(group.xy*8*scale),hi=min(lo+float(8*scale),float2(f.extent.xy));uint tile=fogTile(f,lo);
     GroupMemoryBarrierWithGroupSync();
-    float far=asfloat(fogGroupFar);
-    [loop]for(uint i=thread;i<count;i+=64){
-        Light light=loadLight(f.lighting.w,buffers[NonUniformResourceIndex(f.lighting.z)].Load((tile+1+i)*4));
-        float4 s=fogLightBounds(light);float3 c=s.xyz-o;
-        if(light.parameters.w>0&&dot(n0,c)>=-s.w&&dot(n1,c)>=-s.w&&dot(n2,c)>=-s.w&&dot(n3,c)>=-s.w&&length(c)-s.w<=far)
-            InterlockedOr(fogTileLights[i/32],1u<<(i%32));
-    }
+    if(scale!=0)fogCullTileLights(f,tile,lo,hi,asfloat(fogGroupFar),thread);
     GroupMemoryBarrierWithGroupSync();
     if(!inside)return;
-    // A render pixel's angular radius (half its neighbour's ray offset), widened to the
-    // texel: the narrowest shadow filter.
-    float cone=0.5*float(scale)*length(viewRay(f,float2(p)+float2(1.5,0.5))-d);
-    uint samples=uint(l.fogLightsParams.x);
-    float3 sum=0;float2 centroid=0;
-    [loop]for(uint word=0;word<TILE_LIGHTS/32;word++){
-        uint bits=fogTileLights[word];
-        [loop]while(bits!=0){
-            uint i=word*32+firstbitlow(bits);bits&=bits-1;
-            uint index=buffers[NonUniformResourceIndex(f.lighting.z)].Load((tile+1+i)*4);
-            sum+=fogLightRay(f,l,loadLight(f.lighting.w,index),index,o,d,end,uv,samples,cone,centroid);
+    images[NonUniformResourceIndex(l.fogLightsInfo.y)][tid.xy]=fogLightsPixel(f,l,p,d,end,tile,scale);
+}
+// Relative luminance spread between the half-resolution texels a render pixel blends
+// above which it integrates its own ray (fogLightsResolveMain), and the exposed spread
+// below which it never does (steps darker than about two 8-bit codes near black).
+static const float FOG_EDGE_CONTRAST=0.04,FOG_EDGE_FLOOR=0.0005;
+// Relative depth difference within which a half-resolution texel lies on a render
+// pixel's own surface.
+static const float FOG_EDGE_DEPTH=0.05;
+// The half-resolution scatter (look.fogLightsResolve.x; texel q holds render pixel 2q's
+// ray) at render pixel `p`: even pixels read their own texel exactly; the others blend
+// the two or four around them bilinearly, each weighted by how close its opaque depth is
+// to the pixel's (FOG_EDGE_DEPTH: the same surface). `edge`: the blend cannot stand for
+// the pixel, because the texels on its surface disagree (a beam's edge, a spot's apex, a
+// shaft's border: their luminance spread passes FOG_EDGE_CONTRAST and FOG_EDGE_FLOOR),
+// or none lies on its surface (a thin occluder) and they carry visible light.
+float4 fogLightsUpsample(Frame f,Look l,int2 p,out bool edge){
+    uint image=l.fogLightsResolve.x;int2 q=p/2,t=p&1;edge=false;
+    if(all(t==0))return pixel(image,q);
+    int2 last=int2((f.extent.xy+1)/2)-1;float depth=gbufferDepth(f,p);
+    float4 sum=0;float total=0,lo=1e30,hi=0,peak=0;
+    [unroll]for(uint k=0;k<4;k++){
+        int2 o=int2(k&1,k>>1);
+        if(any(o>t))continue;
+        int2 at=min(q+o,last);float z=gbufferDepth(f,at*2),rel=abs(z-depth)/max(max(z,depth),1e-30);
+        float4 s=pixel(image,at);float y=luminance(s.rgb),w=1/(rel+0.01);
+        sum+=s*w;total+=w;peak=max(peak,y);
+        if(rel<=FOG_EDGE_DEPTH){lo=min(lo,y);hi=max(hi,y);}
+    }
+    float exposure=hdrExposure(f,l);
+    edge=hi<lo?peak*exposure>4*FOG_EDGE_FLOOR:hi-lo>FOG_EDGE_CONTRAST*hi&&(hi-lo)*exposure>FOG_EDGE_FLOOR;
+    return total>0?sum/total:0;
+}
+// The edge list (look.fogLightsResolve.z, `capacity` entries in w; look/volumetric.rs
+// FogEdges): bytes 0..12 the edge pass's dispatch groups, 12 the count appended, then one
+// u32 per pixel (x | y << 16). fogLightsMain resets the header each frame.
+static const uint FOG_EDGE_HEADER=16;
+// One thread per render pixel on half-resolution frames: the render-size scatter the
+// composite reads (look.fogLightsResolve.y). Where fogLightsUpsample's blend stands for
+// the pixel it writes the blend; edge pixels go to the edge list for fogLightsEdgesMain,
+// which integrates their own rays at full resolution (past the list's capacity they keep
+// the blend), so hard edges stay crisp at 1:1 while smooth beams keep half resolution's
+// cost.
+[shader("compute")][numthreads(8,8,1)]
+void fogLightsResolveMain(uint3 tid:SV_DispatchThreadID){
+    Frame f=frame();Look l=look(f);
+    int2 p=int2(tid.xy);if(any(p>=int2(f.extent.xy)))return;
+    bool edge;float4 blend=fogLightsUpsample(f,l,p,edge);
+    if(edge){
+        uint list=l.fogLightsResolve.z,slot;
+        buffers[NonUniformResourceIndex(list)].InterlockedAdd(12,1,slot);
+        if(slot<l.fogLightsResolve.w){
+            buffers[NonUniformResourceIndex(list)].Store(FOG_EDGE_HEADER+slot*4,uint(p.x)|(uint(p.y)<<16));
+            // One more group of 64 each time a group's first entry lands.
+            if(slot%64==0){uint unused;buffers[NonUniformResourceIndex(list)].InterlockedAdd(0,1,unused);}
+            return;
         }
     }
-    float4 result=float4(min(sum,60000),centroid.y>0?centroid.x/centroid.y:0);
-    if(any(isnan(result))||any(isinf(result)))result=0;
-    images[NonUniformResourceIndex(l.fogLightsInfo.y)][tid.xy]=result;
+    images[NonUniformResourceIndex(l.fogLightsResolve.y)][p]=blend;
+}
+// One thread per edge-list entry (an indirect dispatch of the groups fogLightsResolveMain
+// counted): the pixel's own ray against every light of its tile, written over the render-
+// size scatter. Full groups whatever the pixels' tiles, so the cost follows the number of
+// edges; each light is clipped to its reach along the ray (fogLightRay).
+[shader("compute")][numthreads(64,1,1)]
+void fogLightsEdgesMain(uint3 tid:SV_DispatchThreadID){
+    Frame f=frame();Look l=look(f);uint list=l.fogLightsResolve.z;
+    uint count=min(buffers[NonUniformResourceIndex(list)].Load(12),l.fogLightsResolve.w);
+    if(tid.x>=count)return;
+    uint entry=buffers[NonUniformResourceIndex(list)].Load(FOG_EDGE_HEADER+tid.x*4);
+    int2 p=int2(entry&0xffff,entry>>16);
+    float end;float3 d=fogPixelRay(f,p,end);
+    images[NonUniformResourceIndex(l.fogLightsResolve.y)][p]=fogLightsPixel(f,l,p,d,end,fogTile(f,float2(p)),1,false);
 }
