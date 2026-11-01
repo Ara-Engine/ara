@@ -1792,6 +1792,7 @@ dependencies = [
  "ara-components",
  "ara-gpu",
  "ara-hotpatch",
+ "ara-pathtrace",
  "ara-render",
  "ara-schema",
  "ara-texture-stream",
