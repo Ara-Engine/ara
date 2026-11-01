@@ -5,145 +5,64 @@
 #include "look-vsm.slangh"
 #include "look-captures.slangh"
 #include "look-translucent.slangh"
-// Cascaded sun shadows (renderer/frame.rs): f.look.y texels per cascade side in a
-// 2x2 D32 atlas, f.look.z active cascades, far distances in f.splits.
+#include "look-shadow.slangh"
+// Cascaded sun shadows (renderer/frame.rs): f.look.y texels per cascade side, f.look.z
+// active cascades, far distances in f.splits.
 uint cascadeIndex(Frame f,float3 world){float d=dot(world-f.camera.xyz,f.forward.xyz);return d<f.splits.x?0:d<f.splits.y?1:d<f.splits.z?2:3;}
-// A 3x3 box of bilinear compares (16 texels from four gathers) inside cascade `c`,
-// with normal offset and depth bias both scaled to the cascade's texel size.
-float cascadeVisibility(Frame f,Look l,uint c,float3 world,float3 normal){
-    float res=float(f.look.y);float4x4 m=frameShadow(c);float texel=2/(length(m[0].xyz)*res);
-    float4 h=mul(m,float4(world+normal*texel*1.5,1));float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
-    if(any(uv<0)||any(uv>1)||q.z<0||q.z>1)return 1;
-    float depth=q.z+texel*length(m[2].xyz);
-    float2 position=uv*res-0.5,base=floor(position),t=position-base;
-    float4 wx=float4(1-t.x,1,1,t.x)/3,wy=float4(1-t.y,1,1,t.y)/3;float sum=0;
-    [unroll]for(uint j=0;j<2;j++)[unroll]for(uint i=0;i<2;i++){
-        // Gather the 2x2 texels (base-1+2i.., base-1+2j..); w is top-left, z top-right,
-        // x bottom-left, y bottom-right. Centres stay inside the cascade's map.
-        float2 g=clamp(base+float2(2*i,2*j),1,res-1)/res;
-        float4 d=textures[NonUniformResourceIndex(component(l.cascadeMaps,c))].GatherRed(samplers[2],g);float4 lit=step(d,depth);
-        sum+=wx[2*i]*wy[2*j]*lit.w+wx[2*i+1]*wy[2*j]*lit.z+wx[2*i]*wy[2*j+1]*lit.x+wx[2*i+1]*wy[2*j+1]*lit.y;
+// Sun visibility for fog samples of footprint radius `footprint` (m): the cascade
+// holding `world`, else the far map (look-shadow.slangh shadowFog: soft shafts in a
+// few gathers). (The horizon describes the ground, not the air above it: fog keeps the
+// maps.)
+float fogVisibility(Frame f,Look l,float3 world,float footprint=0){
+    uint c=cascadeIndex(f,world);float d=dot(world-f.camera.xyz,f.forward.xyz);ShadowLight sun=shadowSun(l.sunLux.w);
+    bool cascade=c<f.look.z && d<component(f.splits,c);
+    [loop]for(uint k=cascade?0u:1u;k<(l.farInfo.z!=0?2u:1u);k++){
+        float v=shadowFog(l,k==0?shadowCascade(f,l,c):shadowFar(l),world,f.sunDirection.xyz,sun,footprint);if(v>=0)return v;
     }
-    return sum;
-}
-// Distant sun visibility from the far shadow map (look/far.rs): the cascades'
-// 3x3 box of bilinear compares (four gathers), with normal offset and bias
-// scaled to its (metre-sized) texels, so distant edges stay smooth.
-// `mapped`: the map holds `world` (false past it, where it is lit).
-float farVisibility(Look l,float3 world,float3 normal,out bool mapped){
-    mapped=false;if(l.farInfo.z==0)return 1;
-    float res=float(l.farInfo.y);float4x4 m=l.farShadow;float texel=2/(length(m[0].xyz)*res);
-    float4 h=mul(m,float4(world+normal*texel*1.5,1));float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
-    if(any(uv<0)||any(uv>1)||q.z<0||q.z>1)return 1;
-    mapped=true;
-    float depth=q.z+texel*length(m[2].xyz);
-    float2 position=uv*res-0.5,base=floor(position),t=position-base;
-    float4 wx=float4(1-t.x,1,1,t.x)/3,wy=float4(1-t.y,1,1,t.y)/3;float sum=0;
-    [unroll]for(uint j=0;j<2;j++)[unroll]for(uint i=0;i<2;i++){
-        float2 g=clamp(base+float2(2*i,2*j),1,res-1)/res;
-        float4 lit=step(textures[NonUniformResourceIndex(l.farInfo.x)].GatherRed(samplers[2],g),depth);
-        sum+=wx[2*i]*wy[2*j]*lit.w+wx[2*i+1]*wy[2*j]*lit.z+wx[2*i]*wy[2*j+1]*lit.x+wx[2*i+1]*wy[2*j+1]*lit.y;
-    }
-    return sum;
-}
-// One bilinear compare (a single gather) of `world` in a sun map: lit share, or -1
-// outside the map.
-float bilinearShadow(uint map,float4x4 m,float res,float3 world){
-    float4 h=mul(m,float4(world,1));float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
-    if(any(uv<0)||any(uv>1)||q.z<0||q.z>1)return -1;
-    float texel=2/(length(m[0].xyz)*res);float depth=q.z+texel*length(m[2].xyz);
-    float2 position=uv*res-0.5,base=floor(position),t=position-base;
-    float4 lit=step(textures[NonUniformResourceIndex(map)].GatherRed(samplers[2],(clamp(base,0,res-2)+1)/res),depth);
-    return lerp(lerp(lit.w,lit.z,t.x),lerp(lit.x,lit.y,t.x),t.y);
-}
-// Cheap sun visibility for fog samples: the cascade holding `world`, else the far map.
-// (The horizon describes the ground, not the air above it: fog keeps the maps.)
-float fogVisibility(Frame f,Look l,float3 world){
-    uint c=cascadeIndex(f,world);float d=dot(world-f.camera.xyz,f.forward.xyz);
-    if(c<f.look.z && d<component(f.splits,c)){float v=bilinearShadow(component(l.cascadeMaps,c),frameShadow(c),float(f.look.y),world);if(v>=0)return v;}
-    if(l.farInfo.z!=0){float v=bilinearShadow(l.farInfo.x,l.farShadow,float(l.farInfo.y),world);if(v>=0)return v;}
     return 1;
 }
-// Local-shadow table layout (ara_render look::local::{FACES, RECORDS}).
-static const uint LOCAL_FACES=2048,LOCAL_RECORDS=8192;
-// Widest local-light penumbra, in texels of radius (localTent's cost grows with its square).
-static const float LOCAL_SOFT_TEXELS=4;
-// Tent-filtered compares of `depth` in an atlas tile (texel origin `lo`, side `res`)
-// around texel-space point `c` (texel centres on integers), half-width `radius` texels:
-// gathers cover every texel the tent weighs, clamped inside the tile.
-float localTent(Look l,float2 lo,float res,float2 atlas,float2 c,float depth,float radius){
-    int2 first=int2(floor(c-radius))+1,last=int2(ceil(c+radius))-1;float sum=0,total=0;
-    for(int gy=first.y+1;gy<=last.y+1;gy+=2){
-        float2 oy=float2(gy-1,gy)-c.y,wy=max(radius-abs(oy),0);
-        for(int gx=first.x+1;gx<=last.x+1;gx+=2){
-            float2 ox=float2(gx-1,gx)-c.x,wx=max(radius-abs(ox),0);
-            float4 lit=step(textures[NonUniformResourceIndex(l.localShadows.y)].GatherRed(samplers[2],clamp(float2(gx,gy),lo+1,lo+res-1)/atlas),depth);
-            float4 w=float4(wx.x*wy.x,wx.y*wy.x,wx.x*wy.y,wx.y*wy.y);
-            sum+=dot(w,lit.wzxy);total+=dot(w,1);
-        }
-    }
-    return total>0?sum/total:1;
+// Visibility of `world` from shadowed local light `index` (look::local) at `light`,
+// reaching `range`, whose source `shape` spans half-axes a, b (m; zero for an ideal
+// point): look-shadow.slangh shadowSoft in the light's face. `penumbra`: the kernel's
+// half-width (m).
+float localShadowShape(Look l,uint index,float3 world,float3 normal,float3 light,float range,ShadowLight shape,out float penumbra){
+    penumbra=0;ShadowMap s;if(!shadowLocal(l,index,world,light,range,s))return 1;
+    float v=shadowSoft(l,s,world,normal,normalize(light-world),shape,penumbra);return v<0?1:v;
 }
-// Visibility of `world` from shadowed local light `index` (look::local): the
-// light's face (a cube's by the major axis from the light), its atlas tile, a
-// slope-scaled normal offset (shadowOffset) and a 3x3 tent filter in the tile.
-// `size` (m, the source's extent; zero for an ideal point): contact-hardening
-// shadows (PCSS, Fernando 2005) of an area source reaching `range`: the blockers in
-// the 4x4 texels around the point set the penumbra, size x (receiver - blocker) /
-// blocker in linear face depth, which a tent of up to LOCAL_SOFT_TEXELS filters.
-// Every pattern is fixed, so penumbrae are smooth and stable without accumulation.
+// localShadowShape for a round source `size` metres across (zero: an ideal point)
+// facing the receiver (probe relight and ray hits).
 float localShadow(Look l,uint index,float3 world,float3 normal,float3 light,float size=0,float range=1){
-    if(l.localShadows.y==0)return 1;
-    uint2 entry=buffers[NonUniformResourceIndex(l.localShadows.x)].Load2(index*8);if(entry.y==0)return 1;
-    float3 d=world-light,a=abs(d);
-    uint face=entry.y==1?0:(a.x>=a.y&&a.x>=a.z?(d.x>0?0:1):a.y>=a.z?(d.y>0?2:3):(d.z>0?4:5));
-    uint at=LOCAL_RECORDS+(entry.x+face)*80;
-    float4x4 m=buffers[NonUniformResourceIndex(l.localShadows.x)].Load<float4x4>(at);
-    float4 tile=asfloat(buffers[NonUniformResourceIndex(l.localShadows.x)].Load4(at+64));
-    float2 atlas=float2(l.localShadows.zw);float res=tile.z*atlas.x;
-    // A face's view depth is the major axis of the light-to-point vector (a
-    // spot's is close to its length): texel size without a second transform.
-    float axial=max(entry.y==1?length(d):max(a.x,max(a.y,a.z)),0.01),texel=2*axial/(length(m[0].xyz)*res);
-    // Wider filters reach further across a slanted receiver: a larger normal offset.
-    float offset=texel*shadowOffset(saturate(dot(normal,normalize(light-world))))*(size>0?2:1);
-    float4 h=mul(m,float4(world+normal*offset,1));if(h.w<=0)return 1;
-    float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
-    if(any(uv<0)||any(uv>1)||q.z<=0||q.z>1)return 1;
-    float depth=q.z*1.002;
-    float2 lo=tile.xy*atlas,position=lo+uv*res-0.5,base=floor(position),t=position-base;
-    if(size>0){
-        // Reversed-Z faces (near look::local NEAR, far the range): linear depth
-        // = b / (ndc - a).
-        float near=0.05,far=max(range,0.1),za=-near/(far-near),zb=near*far/(far-near);
-        float blockers=0,count=0;
-        [unroll]for(uint j=0;j<2;j++)[unroll]for(uint i=0;i<2;i++){
-            float4 texels=textures[NonUniformResourceIndex(l.localShadows.y)].GatherRed(samplers[2],clamp(base+float2(2*i,2*j),lo+1,lo+res-1)/atlas);
-            float4 blocking=step(depth,texels);
-            blockers+=dot(blocking,zb/max(texels-za,1e-6));count+=dot(blocking,1);
-        }
-        if(count==0)return 1;
-        float receiver=zb/max(q.z-za,1e-6),blocker=blockers/count;
-        float penumbra=0.5*size*max(receiver-blocker,0)/max(blocker,1e-3)/texel;
-        return localTent(l,lo,res,atlas,position,depth,clamp(penumbra,1,LOCAL_SOFT_TEXELS));
-    }
-    float4 wx=float4(1-t.x,1,1,t.x)/3,wy=float4(1-t.y,1,1,t.y)/3;float sum=0;
-    [unroll]for(uint j=0;j<2;j++)[unroll]for(uint i=0;i<2;i++){
-        float2 g=clamp(base+float2(2*i,2*j),lo+1,lo+res-1)/atlas;
-        float4 lit=step(textures[NonUniformResourceIndex(l.localShadows.y)].GatherRed(samplers[2],g),depth);
-        sum+=wx[2*i]*wy[2*j]*lit.w+wx[2*i+1]*wy[2*j]*lit.z+wx[2*i]*wy[2*j+1]*lit.x+wx[2*i+1]*wy[2*j+1]*lit.y;
-    }
-    return sum;
+    float3 d=normalize(light-world),u=normalize(cross(d,abs(d.y)<0.9?float3(0,1,0):float3(1,0,0)));
+    ShadowLight shape;shape.a=u*(size*0.5);shape.b=cross(d,u)*(size*0.5);shape.disc=true;shape.tangent=0;
+    float unused;return localShadowShape(l,index,world,normal,light,range,shape,unused);
 }
-// Sun visibility at `world` in the sun maps: blends into the next cascade over the
-// last tenth of each, then the far map, past which it is lit (`mapped` false).
-float mapVisibility(Frame f,Look l,float3 world,float3 normal,out bool mapped) {
+// Sun visibility at `world` in the sun maps (renderer/frame.rs cascades, look/far.rs):
+// contact-hardening penumbrae of the sun disc (look-shadow.slangh shadowSoft;
+// Look.sunLux.w its angular radius). Blends into the next cascade over the last tenth
+// of each, then the far map, past which it is lit (`mapped` false). `penumbra`: the
+// kernel's half-width (m). One lookup per map in a loop: each inlined copy would add
+// to every lighting shader's size.
+float mapVisibility(Frame f,Look l,float3 world,float3 normal,out bool mapped,out float penumbra) {
     float d=dot(world-f.camera.xyz,f.forward.xyz);float4 splits=f.splits;uint count=f.look.z,c=cascadeIndex(f,world);
-    if(c>=count)return farVisibility(l,world,normal,mapped);
-    mapped=true;bool unused;
-    float far=component(splits,c),near=c==0?0:component(splits,c-1),band=(far-near)*0.1,blend=saturate((d-(far-band))/max(band,1e-3));
-    float v=cascadeVisibility(f,l,c,world,normal);
-    if(blend>0)v=lerp(v,c+1<count?cascadeVisibility(f,l,c+1,world,normal):farVisibility(l,world,normal,unused),blend);
+    float blend=0;
+    if(c<count){float far=component(splits,c),near=c==0?0:component(splits,c-1),band=(far-near)*0.1;blend=saturate((d-(far-band))/max(band,1e-3));}
+    else if(l.farInfo.z==0){mapped=false;penumbra=0;return 1;}
+    mapped=c<count;float v=0;penumbra=0;ShadowLight sun=shadowSun(l.sunLux.w);
+    [loop]for(uint k=0;k<(blend>0?2u:1u);k++){
+        uint m=c+k;bool cascade=m<count;
+        float p,s=shadowSoft(l,cascade?shadowCascade(f,l,m):shadowFar(l),world,normal,f.sunDirection.xyz,sun,p);
+        if(s<0){if(!cascade&&k==0){mapped=false;return 1;}s=1;}
+        else if(!cascade&&k==0)mapped=true;
+        float w=k==0?1-blend:blend;v+=w*s;penumbra+=w*p;
+    }
     return v;
+}
+// The sun's penumbra half-width (m) at `world` from the cascade holding it, else the
+// far map (look-shadow.slangh shadowReach: the blocker search alone); zero where no
+// blocker is near or no map holds it.
+float mapReach(Frame f,Look l,float3 world,float3 normal){
+    uint c=cascadeIndex(f,world);bool cascade=c<f.look.z;if(!cascade&&l.farInfo.z==0)return 0;
+    return max(shadowReach(cascade?shadowCascade(f,l,c):shadowFar(l),world,normal,f.sunDirection.xyz,shadowSun(l.sunLux.w)),0);
 }
 // Sun visibility at `world`: `pages` where the virtual shadow map resolved it
 // (look-vsm.slangh: vsmMask, vsmVisibility), else the sun maps; at every distance the
@@ -153,7 +72,7 @@ float mapVisibility(Frame f,Look l,float3 world,float3 normal,out bool mapped) {
 // every preset registers (and occupancy).
 float visibility(Frame f,Look l,float3 world,float3 normal,float pages=-1){
     bool mapped=pages>=0;
-    float v=mapped?pages:mapVisibility(f,l,world,normal,mapped);
+    float penumbra;float v=mapped?pages:mapVisibility(f,l,world,normal,mapped,penumbra);
     return v>0?min(v,horizonSun(l,world,mapped)):0;
 }
 // Schlick's Fresnel. Cycles' metals use the F82-tint model (Hoffman 2023, "Generalization
@@ -480,6 +399,22 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,b
 }
 // Local lights (after Lobes and brdf, which they shade with).
 #include "look-lights.slangh"
+// The shadow shape of local light `index` (`light`) seen from `world` (look-shadow.slangh
+// ShadowLight): a rect's or disc's half-axes, a sphere's disc facing the point, a tube's
+// half-length and radius as a box; zero for an ideal point or spot.
+ShadowLight localShadowLight(Frame f,Light light,uint index,float3 world){
+    ShadowLight s;s.a=0;s.b=0;s.disc=true;s.tangent=0;
+    if(!lightHasArea(light))return s;
+    uint kind=lightKind(light);LightShape shape=loadLightShape(f.lighting.w,index);
+    float3 n=light.directionOuter.xyz,t=shape.tangentLength.xyz,d=normalize(light.positionRange.xyz-world);
+    if(kind==LIGHT_RECT){float2 e=max(shape.rect.xy,0.001);s.a=t*e.x;s.b=cross(t,n)*e.y;s.disc=false;return s;}
+    float r=max(light.parameters.z,0.001);
+    if(kind==LIGHT_DISC){s.a=t*r;s.b=cross(t,n)*r;return s;}
+    float3 u=normalize(cross(d,abs(d.y)<0.9?float3(0,1,0):float3(1,0,0)));float span=shape.tangentLength.w;
+    if(span<=0){s.a=u*r;s.b=cross(d,u)*r;return s;}
+    float3 side=cross(t,d);float sl=dot(side,side);side=sl>1e-8?side*rsqrt(sl):u;
+    s.a=t*(span*0.5+r);s.b=side*r;s.disc=false;return s;
+}
 // Linear HDR radiance leaving `world` towards the camera (before fog and exposure).
 // `gathered`: deferred G-buffer pixels read the half-resolution probe gather.
 float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered,bool high=false,bool rays=false) {
@@ -499,7 +434,7 @@ float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered,bool hig
         // look-lights.slangh: points, spots, spheres, tubes, rects and discs.
         Light light=loadLight(f.lighting.w,index);
         float size;float3 c=localLight(f,l,s,o,v,world,index,light,area,size);
-        if(any(c>0))c*=localShadow(l,index,world,s.normal,light.positionRange.xyz,size,light.positionRange.w);
+        if(any(c>0)){float unused;c*=localShadowShape(l,index,world,s.normal,light.positionRange.xyz,light.positionRange.w,localShadowLight(f,light,index,world),unused);}
         result+=c;
     }
     return result;

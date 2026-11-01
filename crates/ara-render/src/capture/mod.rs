@@ -69,6 +69,12 @@ pub enum ViewMode {
     /// area light (sphere, tube, rect or disc) three, and one more when it has a local
     /// shadow this frame. Black where none reach; the background is black.
     LightComplexity = 17,
+    /// Soft-shadow penumbra widths (`shaders/look-shadow.slangh`): the widest
+    /// kernel half-width of the sun and the shadowed local lights reaching each opaque
+    /// surface, on the [`Overdraw`](Self::Overdraw) legend as sqrt(width / 1 cm): 1 cm
+    /// blue, 4 cm green, 16 cm yellow, 64 cm orange, 2.56 m or more red; grey where
+    /// no blocker is near; darker where shadowed. The background is black.
+    ShadowPenumbra = 18,
 }
 impl ViewMode {
     /// Complete baseline debug capture set.
@@ -102,6 +108,7 @@ impl ViewMode {
             Self::VertexColorAlpha => "vertex_color_alpha",
             Self::DecalCoverage => "decal_coverage",
             Self::LightComplexity => "light_complexity",
+            Self::ShadowPenumbra => "shadow_penumbra",
         }
     }
     /// Renders the lit scene (`Lit`, and under `LitWireframe`'s edges).

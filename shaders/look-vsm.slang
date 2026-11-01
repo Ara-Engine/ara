@@ -4,13 +4,12 @@
 // fallback while a page renders, and the blocker search's level), plus the neighbours
 // its filters reach near a page's edge; its own dispatch, so whole waves gather their
 // distinct pages and request each once. vsmProjectMain: each lit-facing G-buffer pixel's contact-hardening sun
-// visibility from the pages (vsmSoftVisibility; -1 where none is resident) and its
-// tent's half-width into the render-size mask lighting reads (vsmMask). Root word 0 is
-// the frame record.
+// visibility from the pages (vsmSoftVisibility; -1 where none is resident), wider
+// penumbrae from the sun maps (look-shadow.slangh), and its tent's half-width into the
+// render-size mask lighting reads (vsmMask). Root word 0 is the frame record.
 #include "raster.slangh"
 #include "look.slangh"
-#include "look-vsm.slangh"
-#include "look-translucent.slangh"
+#include "look-shading.slangh"
 
 // Widest tent (half-width, texels at the pixel's level) the contact-hardening filter
 // uses; wider penumbrae clamp to it (about four to eight render pixels).
@@ -159,16 +158,17 @@ float vsmTent(Look l,VsmSoftTap t,float radius){
 // pixel's own compares block, it is in umbra. Penumbrae stay sharp at contact and widen
 // with the occluder's height; every pattern is fixed, so the mask is smooth and stable
 // without temporal accumulation. Levels and the slope-scaled normal offset follow
-// vsmVisibility; -1 where no page is resident or the map is off.
-float vsmSoftVisibility(Frame f,Look l,float3 world,float3 normal,out float tent){
-    tent=1;if(l.vsm.y==0)return -1;
+// vsmVisibility; -1 where no page is resident or the map is off. `texel`: the width (m)
+// of a texel at the level filtered.
+float vsmSoftVisibility(Frame f,Look l,float3 world,float3 normal,out float tent,out float texel){
+    tent=1;texel=0;if(l.vsm.y==0)return -1;
     float nl=saturate(dot(normal,f.sunDirection.xyz));
     // The receiver plane's light z gradient (light z points at the sun), clamped near grazing.
     float3 n=mul(l.vsmSpace,float4(normal,0)).xyz;float2 plane=clamp(-n.xy/max(n.z,0.05),-8,8);
     float tangent=tan(l.sunLux.w);
     uint first=vsmLevel(f,l,world,vsmLight(l,world));
     for(uint level=first;level<min(first+4,VSM_LEVELS);level++){
-        float texel=vsmStep(l,level)/VSM_PAGE;
+        texel=vsmStep(l,level)/VSM_PAGE;
         float3 q=vsmLight(l,world+normal*texel*shadowOffset(nl));
         VsmSoftTap t=vsmSoftTap(l,level,q,plane);
         if(t.slot<0)continue;
@@ -191,7 +191,15 @@ void vsmProjectMain(uint3 tid:SV_DispatchThreadID){
     float visible=-1,tent=1,depth=gbufferDepth(f,p);
     float3 normal=gbufferNormal(f,p);
     if(depth>0&&dot(normal,f.sunDirection.xyz)>0){
-        float3 world=worldAtDepth(f,float2(p)+0.5,depth);visible=vsmSoftVisibility(f,l,world,normal,tent);
+        float3 world=worldAtDepth(f,float2(p)+0.5,depth);float texel;visible=vsmSoftVisibility(f,l,world,normal,tent,texel);
+        // Penumbrae past the tent's reach (VSM_SOFT_TEXELS) come from the sun maps,
+        // whose search and filter have no width limit (look-shadow.slangh): blended in
+        // from three texels at the page level to six. Their search first, alone; their
+        // filter only where it is that wide.
+        if(visible>=0){
+            float blend=saturate((mapReach(f,l,world,normal)/max(texel,1e-6)-(VSM_SOFT_TEXELS-1))/3);
+            [branch]if(blend>0){bool mapped;float wide,v=mapVisibility(f,l,world,normal,mapped,wide);if(mapped)visible=lerp(visible,v,blend);}
+        }
     }
     images[NonUniformResourceIndex(l.vsmMask.y)][p]=float4(visible,tent,0,0);
 }

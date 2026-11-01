@@ -54,8 +54,8 @@ groupshared float3 fogGroupMin,fogGroupMax;
 // grey extinction (a) at a point jittered by the frame's Halton offset (the same for
 // every froxel, so the volume stays coherent while history integrates the offsets),
 // blended into the reprojected history by volumetric.z (zero after a reset; an even
-// average over the first frames, then 0.9). The sun is the lit share of two points
-// half a froxel apart; local lights are culled per group against its froxels' bounds.
+// average over the first frames, then 0.9). Shadows filter at least a froxel's width
+// (look-shadow.slangh shadowFog); local lights are culled per group against its froxels' bounds.
 [shader("compute")][numthreads(8,8,1)]
 void fogInjectMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint index:SV_GroupIndex){
     Frame f=frame();Look l=look(f);uint3 grid=l.volumetricGrid.xyz;bool shadowed=(l.flags.y&LOOK_FOG_SHADOWED)!=0;
@@ -80,7 +80,8 @@ void fogInjectMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint ind
     float e=m.extinction;
     float3 sun=f.sunDirection.xyz;float cosine=dot(d,sun),g=l.fog.w;
     float lit=1;
-    if(shadowed){float3 unused;lit=0.5*(fogVisibility(f,l,p)+fogVisibility(f,l,froxelWorld(f,l,float3(tid)+frac(jitter+0.5),unused)));}
+    float3 across;float footprint=0.5*length(froxelWorld(f,l,float3(tid)+jitter+float3(1,0,0),across)-p);
+    if(shadowed)lit=fogVisibility(f,l,p,footprint);
     // Glass and films tint the sunlight reaching the froxel (look-translucent.slangh).
     float3 glass=translucentSun(l,p);
     float3 source=sunAt(f,l,p)*lit*glass*m.scattering*(phaseM(cosine,g)*l.volumetricEmissive.w);
@@ -98,7 +99,7 @@ void fogInjectMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint ind
             uint bits=fogGroupLights[word];
             while(bits!=0){
                 uint i=word*32+firstbitlow(bits);bits&=bits-1;
-                source+=m.scattering*fogLocalLight(f,l,loadLight(f.lighting.w,i),i,p,d,g);
+                source+=m.scattering*fogLocalLight(f,l,loadLight(f.lighting.w,i),i,p,d,g,footprint);
             }
         }
     }

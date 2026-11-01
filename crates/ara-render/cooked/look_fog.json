@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "58f1b9a96d979497f5aa08a21b39bd962b3acd0eed9096f2f57424d23cf019e9",
+  "key": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41",
   "stages": [
     {
-      "dxil": "58f1b9a96d979497f5aa08a21b39bd962b3acd0eed9096f2f57424d23cf019e9/look_fog/fogMain.dxil",
-      "dxil_hash": "30c541780b38a5172ca0896002d98797e79e9eb8e096fa8be910a87ab7dd922e",
+      "dxil": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/look_fog/fogMain.dxil",
+      "dxil_hash": "59c2e3e2e95e9083ec234ede5f22d5e9eb803a518999b1d75984ec7b84fd9137",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "58f1b9a96d979497f5aa08a21b39bd962b3acd0eed9096f2f57424d23cf019e9/look_fog/fogMain.metallib",
-        "metallib_hash": "ade98b6d238538e88b501e4354b4747957152acb2cc1e3fbc5588b1ed08384e5",
-        "reflection": "58f1b9a96d979497f5aa08a21b39bd962b3acd0eed9096f2f57424d23cf019e9/look_fog/fogMain.metal.json",
+        "metallib": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/look_fog/fogMain.metallib",
+        "metallib_hash": "4012146a73531787633cb1435a0ffd8c4837e270418ea5e680a13ed5648780ff",
+        "reflection": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/look_fog/fogMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "fogMain",
-      "spirv": "58f1b9a96d979497f5aa08a21b39bd962b3acd0eed9096f2f57424d23cf019e9/look_fog/fogMain.spv",
+      "spirv": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/look_fog/fogMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "be48ef8b3866eb0424fa79fac25fc9237ed6cffd83e51adfac9b799f39370403",
+      "spirv_hash": "b2128d9f4e6c05aa0a744e6703ea1d965d6bef103d6213d5b2506863401e332a",
       "stage": "compute"
     }
   ],

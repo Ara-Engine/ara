@@ -1,0 +1,32 @@
+{
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41",
+  "stages": [
+    {
+      "dxil": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/look_shadow_moments/shadowMomentsMain.dxil",
+      "dxil_hash": "da31f776cc52c83703555bd2ad50e19932b8c877b2086057bb0040c9ce3c186b",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/look_shadow_moments/shadowMomentsMain.metallib",
+        "metallib_hash": "6496ee6b88a90725a0e20f0618c01d36932ca0ad46ffc4a59864dc058b8e97d3",
+        "reflection": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/look_shadow_moments/shadowMomentsMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "shadowMomentsMain",
+      "spirv": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/look_shadow_moments/shadowMomentsMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "a3514b5f3410232a923039fdaecb88cde402690c66777740d76193d11f2abdbc",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}
