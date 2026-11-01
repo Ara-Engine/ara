@@ -168,17 +168,8 @@ impl LookGpu {
     /// build it (`frame_hiz`), the probes' and the `SCREEN_GI` flag on frames with
     /// screen probe GI.
     pub(crate) fn screen_gi_rows(&self, frame: &mut super::frame::LookFrame) {
-        if self.frame_hiz {
-            frame.screen_params[0][1] = hiz_levels(self.render) as f32;
-            frame.screen_info[0][0] = self.sampled[HIZ];
-            frame.screen_info[0][1] = self.storage[HIZ];
-        }
-        let Some(budget) = self.quality.screen_gi.filter(|_| self.frame_screen) else {
-            return;
-        };
-        frame.flags[1] |= super::frame::SCREEN_GI;
-        let probes = grid(self.render, budget.tile);
-        // Hits on emission the host promoted to emitter lights drop it (counted once).
+        // Emission the host promoted to emitter lights lights the scene directly:
+        // screen probe hits and reflection capture faces drop it (counted once).
         frame.screen_params[1] = [
             if self.quality.emitter_lights > 0 {
                 super::EMITTER_RADIANCE
@@ -189,6 +180,16 @@ impl LookGpu {
             0.,
             0.,
         ];
+        if self.frame_hiz {
+            frame.screen_params[0][1] = hiz_levels(self.render) as f32;
+            frame.screen_info[0][0] = self.sampled[HIZ];
+            frame.screen_info[0][1] = self.storage[HIZ];
+        }
+        let Some(budget) = self.quality.screen_gi.filter(|_| self.frame_screen) else {
+            return;
+        };
+        frame.flags[1] |= super::frame::SCREEN_GI;
+        let probes = grid(self.render, budget.tile);
         frame.screen_params[0] = [
             budget.steps as f32,
             hiz_levels(self.render) as f32,

@@ -45,7 +45,10 @@ float captureHdrExposure(Frame f,Look l){return hdrExposure(f,l);}
 // Projects the rendered face `root.entity` (0..5: +x, -x, +y, -y, +z, -z) into
 // the scratch column's level 0 with four samples per texel; faces after the first
 // add to what earlier faces wrote. Open sky is re-evaluated without the sun disk:
-// shading adds the sun's specular analytically.
+// shading adds the sun's specular analytically. Emission the host promoted to emitter
+// lights (brighter than screenParams[1].x, look::EMITTER_RADIANCE) comes off: those
+// lights already reach every surface's specular directly, and a rough-metal ceiling
+// reflected an emissive panel twice.
 [shader("compute")][numthreads(8,8,1)]
 void captureFaceMain(uint3 tid:SV_DispatchThreadID){
     int n=int(root.mode);if(any(tid.xy>=uint2(n+2,n+2)))return;
@@ -63,6 +66,7 @@ void captureFaceMain(uint3 tid:SV_DispatchThreadID){
         c=all(c==c)?clamp(c,0,60000):0;
         // How far the face saw along this sample: the depth texel under it.
         int2 px=clamp(int2(uv*float2(f.extent.xy)),int2(0),int2(f.extent.xy)-1);float depth=pixel(f.extra.x,px).x;
+        float3 e=gbufferEmissive(f,px);if(!open&&luminance(e)>l.screenParams[1].x)c=max(c-e,0);
         float seen=open||depth<=0?CAPTURE_SKY:min(length(worldAtDepth(f,float2(px)+0.5,depth)-f.camera.xyz),CAPTURE_SKY);
         sum+=float4(c,seen);
     }

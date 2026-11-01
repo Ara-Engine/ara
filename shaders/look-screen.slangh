@@ -9,6 +9,8 @@
 //   screenInfo[3]: x promoted-emission pyramid (sampled), y (storage)
 //   screenParams[0]: x Hi-Z steps per ray, y Hi-Z levels, z probe trace reach (m), w probe bias (render px)
 //   screenParams[1]: x emitted luminance (cd/m2) above which hosts made emitter lights
+//     (every frame, screen GI or not; huge without emitter lights): screen probe hits
+//     and reflection capture faces drop that emission
 // Colour pyramid of the previous resolved frame: levels 1..SSR_LEVELS of the render size
 // packed side by side (as the bloom atlas), sampled between levels by footprint.
 static const uint SSR_LEVELS=6;
