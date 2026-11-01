@@ -1,0 +1,25 @@
+// Glass (KHR_materials_transmission, ior, volume) terms every renderer shares, so
+// raster refraction (look-refract.slangh), the translucent sun map
+// (native-raster.slang), hybrid ray hits (look-rt.slangh) and the path tracer
+// (ara-render-fidelity common.slangh) take the same light through the same surface.
+#pragma once
+// A transmissive material's IOR from its volume's first word (high 16 bits; zero for
+// glTF's default 1.5; ara_render::instanced::Volume::pack).
+float glassIor(uint word){uint code=word>>16;return code==0?1.5:1+float(code-1)/32767.;}
+// The medium's absorption coefficients per metre from the volume's second word (RGB9E5).
+float3 glassAbsorption(uint word){return float3(word&511,(word>>9)&511,(word>>18)&511)*exp2(float(word>>27)-24.);}
+// Unpolarised Fresnel reflectance of a dielectric interface at incident cosine `c`,
+// `eta` the IOR beyond it over the IOR before it; one past the critical angle.
+float glassFresnel(float c,float eta){
+    c=saturate(c);float s2=(1-c*c)/(eta*eta);if(s2>=1)return 1;float t=sqrt(1-s2);
+    float rs=(c-eta*t)/(c+eta*t),rp=(eta*c-t)/(eta*c+t);return 0.5*(rs*rs+rp*rp);
+}
+// The share of light a surface passes straight through at cosine `c` to its normal:
+// `coverage` (base alpha of blended films, else one) of it is the surface, whose
+// transmissive share `transmission` passes tinted by `tint` (the base colour) less
+// the interface's reflection, at the outside's Fresnel on either side (a straight
+// ray leaves a volume at the angle it entered). The path tracer's shadow rays take
+// the same (ara-render-fidelity common.slangh glassTransmittance).
+float3 glassTransmittance(float coverage,float transmission,float3 tint,float ior,float c){
+    return 1-coverage+coverage*transmission*tint*(1-glassFresnel(abs(c),ior));
+}

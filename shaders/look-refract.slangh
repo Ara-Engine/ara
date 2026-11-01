@@ -1,5 +1,6 @@
 // Screen-space refraction of transmissive forward surfaces (look/refract.rs).
 // Include after look-shading.slangh.
+#include "look-glass.slangh"
 //
 // The copy: frames whose forward pass draws a transmissive material copy the lit
 // opaque scene after deferred lighting (Refract.Copy), inside the render-pixel rect
@@ -66,10 +67,10 @@ float refractLevelFor(Frame f,float radius,float depth){
 // thickness (zero: thin-walled) and absorption coefficients per metre.
 struct RefractVolume {float ior;float thickness;float3 absorption;};
 RefractVolume refractVolume(uint2 words){
-    RefractVolume m;uint code=words.x>>16,h=words.x&0xffff;
-    m.ior=code==0?1.5:1+float(code-1)/32767.;
+    RefractVolume m;uint h=words.x&0xffff;
+    m.ior=glassIor(words.x);
     m.thickness=h<0x400?float(h)*5.96046448e-8:asfloat((((h>>10)+112)<<23)|((h&0x3ff)<<13));
-    m.absorption=float3(words.y&511,(words.y>>9)&511,(words.y>>18)&511)*exp2(float(words.y>>27)-24.);
+    m.absorption=glassAbsorption(words.y);
     return m;
 }
 // Radiance the ray (o, d) brings back from the opaque scene: a march of the copied

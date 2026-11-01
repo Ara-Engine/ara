@@ -83,7 +83,8 @@ void fogInjectMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint ind
     float3 sun=f.sunDirection.xyz;float cosine=dot(d,sun),g=l.fog.w;
     float lit=1;
     if(shadowed){float3 unused;lit=0.5*(fogVisibility(f,l,p)+fogVisibility(f,l,froxelWorld(f,l,float3(tid)+frac(jitter+0.5),unused)));}
-    float3 source=sunAt(f,l,p)*lit*(sr*phaseR(cosine)+sm*phaseM(cosine,0.8)+m.scattering*(phaseM(cosine,g)*l.volumetricEmissive.w));
+    // Glass and films tint the shafts behind them (look-translucent.slangh).
+    float3 source=sunAt(f,l,p)*lit*translucentSun(l,p)*(sr*phaseR(cosine)+sm*phaseM(cosine,0.8)+m.scattering*(phaseM(cosine,g)*l.volumetricEmissive.w));
     if(physical)source+=(sr+sm)*multiScattering(l,height,sun.y)*l.sunLux.rgb;
     if(any(m.scattering>0)){
         // Ambient light from its coarse grid (fogAmbientMain), at the jittered point.

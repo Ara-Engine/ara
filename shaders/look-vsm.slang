@@ -192,8 +192,6 @@ void vsmProjectMain(uint3 tid:SV_DispatchThreadID){
     float3 normal=gbufferNormal(f,p);
     if(depth>0&&dot(normal,f.sunDirection.xyz)>0){
         float3 world=worldAtDepth(f,float2(p)+0.5,depth);visible=vsmSoftVisibility(f,l,world,normal,tent);
-        // Sun through blended casters (look-translucent.slangh); -1 stays unresolved.
-        if(visible>0)visible*=translucentSun(l,world);
     }
     images[NonUniformResourceIndex(l.vsmMask.y)][p]=float4(visible,tent,0,0);
 }

@@ -232,7 +232,8 @@ float3 rtShadeHit(Frame f,Look l,Surface s,float3 position,float3 geometric,floa
         // The ray below sees every caster within its reach (rtParams[0].y).
         float lit=horizonSun(l,position,l.rtParams[0].y>=HORIZON_NEAR);
         float bias=l.rtParams[1].x+l.rtParams[1].y*length(position-f.camera.xyz);
-        if(lit>0 && !rtOccluded(f,l,position+geometric*bias,sun,l.rtParams[0].y))c+=brdf(s,v,sun,o)*sunAt(f,l,position)*lit;
+        // Glass and films between the hit and the sun: the translucent sun map.
+        if(lit>0 && !rtOccluded(f,l,position+geometric*bias,sun,l.rtParams[0].y))c+=brdf(s,v,sun,o)*sunAt(f,l,position)*lit*translucentSun(l,position);
     }
     uint count=min(f.extent.z,RT_HIT_LIGHTS);AreaPixel area=(AreaPixel)0;
     for(uint i=0;i<count;i++){

@@ -6,9 +6,10 @@ pub(super) fn is_transparent(material: &crate::instanced::Material) -> bool {
     material.pbr.flags[0] == 2 || is_refractive(material)
 }
 
-/// Blended (alpha-film) materials cast translucent sun shadows (`look::translucent`).
+/// Blended (alpha-film) and transmissive materials cast coloured sun shadows
+/// through the translucent sun map (`look::translucent`), not opaque ones.
 pub(super) fn is_translucent(material: &crate::instanced::Material) -> bool {
-    material.pbr.flags[0] == 2
+    material.pbr.flags[0] == 2 || is_refractive(material)
 }
 
 /// Blended double-sided volumes (`Group::planar` false) draw their back faces, then

@@ -107,8 +107,14 @@ float4 nativeOutlineVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID):
 [shader("fragment")]
 float4 nativeOutlineFragment():SV_Target0{return float4(float(root.cascade),0,0,0);}
 struct ShadowVarying {float4 clip:SV_Position;float2 uv:TEXCOORD0;float2 uv1:TEXCOORD1;nointerpolation uint material:TEXCOORD2;};
+// Translucent sun casters (native_shadow_translucent) also carry their world position,
+// normal and instance: the optical depth they add depends on facing and depth.
+struct TranslucentVarying {float4 clip:SV_Position;float3 world:TEXCOORD0;float3 normal:TEXCOORD1;float2 uv:TEXCOORD2;float2 uv1:TEXCOORD3;nointerpolation uint material:TEXCOORD4;nointerpolation uint id:TEXCOORD5;};
 [shader("vertex")]
-ShadowVarying nativeShadowVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){Varying v=nativeVertex(vertex,instance,true,true);ShadowVarying s;s.clip=v.clip;s.uv=v.uv;s.uv1=v.uv1;s.material=v.material;return s;}
+TranslucentVarying nativeShadowVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){
+    Varying v=nativeVertex(vertex,instance,true,true);TranslucentVarying s;s.clip=v.clip;s.world=v.world;s.normal=v.normal;
+    s.uv=v.uv;s.uv1=v.uv1;s.material=v.material;s.id=v.id;return s;
+}
 // Opaque and masked casters also carry their instance for the facing test.
 struct ShadowCasterVarying {float4 clip:SV_Position;float2 uv:TEXCOORD0;float2 uv1:TEXCOORD1;nointerpolation uint material:TEXCOORD2;nointerpolation uint id:TEXCOORD3;};
 [shader("vertex")]
@@ -411,14 +417,30 @@ void nativeShadowPaintFragment(ShadowPaintVarying p,bool front:SV_IsFrontFace){s
 ShadowVarying nativeOverdrawVertex(uint vertex:SV_VertexID,uint instance:SV_InstanceID){Varying v=nativeVertex(vertex,instance,false,true);ShadowVarying s;s.clip=v.clip;s.uv=v.uv;s.uv1=v.uv1;s.material=v.material;return s;}
 [shader("fragment")]
 float4 nativeOverdrawFragment(ShadowVarying shadow):SV_Target0{Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);if(m.pbr.flags.x==1 && sampleMap(m,0,v).a*m.pbr.color.a<m.pbr.surface.w)discard;return float4(1,0,0,0);}
-// Translucent sun casters' film opacity (look-translucent.slangh): coverage times the
-// share the film stops, blended ONE, ONE_MINUS_SRC_ALPHA from a zero colour over a
-// map cleared to one, so the map keeps the product of (1 - opacity) over every film.
+// Translucent sun casters (look-translucent.slangh): the optical depth (-ln of the
+// transmittance) each face adds along the sun's rays, blended additively (zero alpha
+// under ONE, ONE_MINUS_SRC_ALPHA) over a map cleared to zero, so the map holds the sum
+// over every film and glass face: their transmittances' product. A face passes
+// glassTransmittance (blended films their coverage's complement; transmissive
+// surfaces their tint less Fresnel). A volume's medium absorbs along the chord
+// between where the sun's ray enters and leaves it: faces towards the sun subtract
+// their absorption times their depth along the rays, faces away add it, so each
+// enter/leave pair adds the absorption over the depth between them, as the path
+// tracer's shadow rays take it. Depths are measured from the instance's origin.
 [shader("fragment")]
-float4 nativeShadowTranslucentFragment(ShadowVarying shadow):SV_Target0{
-    Varying v=(Varying)0;v.uv=shadow.uv;v.uv1=shadow.uv1;NativeMaterial m=material(shadow.material);
-    float alpha=saturate(sampleMap(m,0,v).a*m.pbr.color.a)*(1-saturate(m.factors.y*sampleMap(m,5,v).r));
-    return float4(0,0,0,alpha);
+float4 nativeShadowTranslucentFragment(TranslucentVarying t):SV_Target0{
+    Varying v=(Varying)0;v.uv=t.uv;v.uv1=t.uv1;NativeMaterial m=material(t.material);
+    float4 base=sampleMap(m,0,v)*m.pbr.color;float coverage=m.pbr.flags.x==2?saturate(base.a):1;
+    float metal=saturate(m.pbr.surface.x*sampleMap(m,2,v).b),transmission=saturate(m.factors.y*sampleMap(m,5,v).r)*(1-metal);
+    RefractVolume volume=refractVolume(uint2(asuint(m.factors.z),asuint(m.factors.w)));
+    float3 sun=frame().sunDirection.xyz,n=safeNormalize(t.normal,sun);
+    float3 depth=-log(max(glassTransmittance(coverage,transmission,max(base.rgb,0),volume.ior,dot(n,sun)),1e-6));
+    if(volume.thickness>0 && transmission>0){
+        float4x4 world=buffers[NonUniformResourceIndex(root.material)].Load<float4x4>(128+(t.id-1)*192+16);
+        float z=dot(t.world-float3(world[0].w,world[1].w,world[2].w),-sun);
+        depth+=volume.absorption*coverage*transmission*(dot(n,sun)>0?-z:z);
+    }
+    return float4(depth,0);
 }
 struct Forward {float4 color:SV_Target0;float id:SV_Target1;float4 albedo:SV_Target2;float4 normal:SV_Target3;float4 material:SV_Target4;float4 emissive:SV_Target5;float4 velocity:SV_Target6;};
 // Whether a forward fragment faces the viewer, by its interpolated normal rather than

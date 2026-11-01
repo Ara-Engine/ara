@@ -591,8 +591,8 @@ impl Renderer {
         if let Some(rect) = refract_rect {
             self.look.refraction(&mut self.gpu, &mut look_frame, rect)?;
         }
-        // Blended casters' sun shadows (look::translucent) on High/Epic, whose shading
-        // and virtual page projection alone compile the lookup.
+        // Blended and transmissive casters' coloured sun shadows (look::translucent)
+        // on High/Epic, whose shading alone compiles the lookup.
         // Only casters within the cascades' reach shadow anything they show.
         let translucent_casters = self
             .native_translucent_casters(camera.position, self.look.quality.shadows.distance)
@@ -1847,7 +1847,8 @@ impl Renderer {
                         let mut constants = root;
                         constants.words[0] = map.frame_index;
                         constants.words[4] = 0;
-                        // Nearest film depth, then every film's opacity over a clear of one.
+                        // Nearest caster depth, then every face's optical depth over a
+                        // clear of zero.
                         for (transmittance, colors, depth) in [
                             (false, Vec::new(), Some(map.depth)),
                             (true, vec![map.transmittance], None),
@@ -1857,7 +1858,7 @@ impl Renderer {
                                     .into_iter()
                                     .map(|image| Attachment {
                                         image,
-                                        clear: Some([1.; 4]),
+                                        clear: Some([0.; 4]),
                                     })
                                     .collect(),
                                 depth: depth.map(|image| Attachment {
