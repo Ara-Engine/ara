@@ -45,6 +45,11 @@ pub(super) struct Culling {
     /// draws sample the opaque scene in: their bounds, widened by their own size
     /// on every side for rays bent sideways; `None` without refractive draws.
     pub(super) refract_rect: Option<[f32; 4]>,
+    /// Forward draws (indices into `draws[5]`, ascending) before which the lit scene
+    /// is copied again (`look::refract` layers): a refractive draw whose sampled rect
+    /// overlaps transparent draws made since the last copy, so glass, films and
+    /// particles behind glass show through it. At most `REFRACT_LAYERS` - 1.
+    pub(super) refract_layers: Vec<usize>,
     scratch: Vec<Vec<[u32; 2]>>,
     /// Per shadow pass, its culled instances by clip cell (`patches::Grid`).
     grids: Vec<patches::Grid>,
@@ -109,6 +114,7 @@ impl Culling {
             refract: Vec::new(),
             two_pass: Vec::new(),
             refract_rect: None,
+            refract_layers: Vec::new(),
             scratch: (0..groups
                 .groups
                 .iter()
@@ -405,6 +411,9 @@ impl Culling {
         self.refract.clear();
         self.two_pass.clear();
         self.refract_rect = None;
+        self.refract_layers.clear();
+        // Screen rect of the transparent draws since the last copy.
+        let mut drawn: Option<[f32; 4]> = None;
         let matrix = camera.projection * camera.view;
         for (n, &(_, i, g)) in self.transparent.iter().enumerate() {
             let lod = self.selected[i].expect("visible transparent instance has a selected LOD");
@@ -419,17 +428,18 @@ impl Culling {
             let refract = groups.groups[g].refract;
             self.refract.push(refract);
             self.two_pass.push(groups.groups[g].two_pass);
+            let screen = projected_rect(matrix, bounds[i]);
             if refract {
-                let rect = refract_rect(matrix, bounds[i]);
-                self.refract_rect = Some(self.refract_rect.map_or(rect, |r| {
-                    [
-                        r[0].min(rect[0]),
-                        r[1].min(rect[1]),
-                        r[2].max(rect[2]),
-                        r[3].max(rect[3]),
-                    ]
-                }));
+                let rect = widened(screen);
+                if drawn.is_some_and(|d| overlaps(d, rect))
+                    && self.refract_layers.len() + 1 < REFRACT_LAYERS
+                {
+                    self.refract_layers.push(n);
+                    drawn = None;
+                }
+                self.refract_rect = Some(self.refract_rect.map_or(rect, |r| union(r, rect)));
             }
+            drawn = Some(drawn.map_or(screen, |d| union(d, screen)));
         }
         let count = self.transparent.len();
         if count > 0 {
@@ -444,10 +454,42 @@ impl Culling {
     }
 }
 
-/// The normalised screen rect a refractive instance's rays may sample: its
-/// projected bounds widened by their own size on every side, clamped to the
-/// screen; the whole screen when the bounds reach behind the camera.
-fn refract_rect(matrix: Mat4, bounds: [Vec3; 2]) -> [f32; 4] {
+/// Copies of the lit scene a frame's refractive draws may read (`refract_layers`
+/// plus the first): later overlapping glass reads the last copy.
+pub(super) const REFRACT_LAYERS: usize = 4;
+
+fn union(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
+    [
+        a[0].min(b[0]),
+        a[1].min(b[1]),
+        a[2].max(b[2]),
+        a[3].max(b[3]),
+    ]
+}
+
+fn overlaps(a: [f32; 4], b: [f32; 4]) -> bool {
+    a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
+}
+
+/// The normalised screen rect a refractive instance's rays may sample (`screen`,
+/// its projected bounds): widened by its own size on every side, clamped to the
+/// screen.
+fn widened(screen: [f32; 4]) -> [f32; 4] {
+    let (lo, hi) = (
+        glam::Vec2::new(screen[0], screen[1]),
+        glam::Vec2::new(screen[2], screen[3]),
+    );
+    let size = hi - lo;
+    let (lo, hi) = (
+        (lo - size).max(glam::Vec2::ZERO),
+        (hi + size).min(glam::Vec2::ONE),
+    );
+    [lo.x, lo.y, hi.x, hi.y]
+}
+
+/// The normalised screen rect (x0, y0, x1, y1; +y down) of world bounds `bounds`;
+/// the whole screen when they reach behind the camera.
+fn projected_rect(matrix: Mat4, bounds: [Vec3; 2]) -> [f32; 4] {
     let (mut lo, mut hi) = (glam::Vec2::splat(f32::MAX), glam::Vec2::splat(f32::MIN));
     for corner in 0..8 {
         let p = Vec3::new(
@@ -475,12 +517,8 @@ fn refract_rect(matrix: Mat4, bounds: [Vec3; 2]) -> [f32; 4] {
         lo = lo.min(uv);
         hi = hi.max(uv);
     }
-    let size = hi - lo;
-    let (lo, hi) = (
-        (lo - size).max(glam::Vec2::ZERO),
-        (hi + size).min(glam::Vec2::ONE),
-    );
-    [lo.x, lo.y, hi.x, hi.y]
+    let (lo, hi) = (lo.max(glam::Vec2::ZERO), hi.min(glam::Vec2::ONE));
+    [lo.x, lo.y, hi.x.max(lo.x), hi.y.max(lo.y)]
 }
 
 pub(super) fn planes(matrix: Mat4) -> [Vec4; 6] {

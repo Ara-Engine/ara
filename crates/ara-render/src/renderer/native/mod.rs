@@ -1120,6 +1120,7 @@ impl Native {
         lit: bool,
         high: bool,
         traced: Option<Pipeline>,
+        range: std::ops::Range<usize>,
     ) {
         let p = &self.pipelines;
         // One pass over both sides, the back- and front-face passes of double-sided
@@ -1139,7 +1140,8 @@ impl Native {
         };
         let mut bound = None;
         let kinds = self.culling.refract.iter().zip(&self.culling.two_pass);
-        for (batch, (&refractive, &two_pass)) in self.culling.draws[5].iter().zip(kinds) {
+        let draws = self.culling.draws[5].iter().zip(kinds);
+        for (batch, (&refractive, &two_pass)) in draws.skip(range.start).take(range.len()) {
             let passes = match (refractive, two_pass, sides) {
                 (true, _, _) => [Some(refract), None],
                 (false, true, Some([back, front])) => [Some(back), Some(front)],
@@ -1153,6 +1155,17 @@ impl Native {
                 self.record_batch(recorder, root, batch, pipeline);
             }
         }
+    }
+
+    /// The forward draws (into the transparent list) before which `look::refract`
+    /// copies the lit scene again, so glass behind glass shows through it.
+    pub(super) fn refraction_layers(&self) -> &[usize] {
+        &self.culling.refract_layers
+    }
+
+    /// The number of this frame's forward draws.
+    pub(super) fn forward_draws(&self) -> usize {
+        self.culling.draws[5].len()
     }
 
     /// The render-pixel rect (x0, y0, x1, y1) this frame's refractive forward draws
