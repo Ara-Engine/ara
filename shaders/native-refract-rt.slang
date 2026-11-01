@@ -12,7 +12,12 @@
 // already crossed inside the medium (widens the footprint by `spread`).
 float3 refractRay(Frame f,Look l,float3 o,float3 d,float spread,float travelled,float roughness){
     RtHit hit;float bias=l.rtParams[1].x+l.rtParams[1].y*length(o-f.camera.xyz);
-    if(!rtTrace(f,l,o+d*bias,d,l.rtParams[0].y,hit,RT_OPAQUE|RT_MASKED,max(spread,0.002)))return rtMiss(f,l,d,roughness)*refractExposure(f,l);
+    if(!rtTrace(f,l,o+d*bias,d,l.rtParams[0].y,hit,RT_OPAQUE|RT_MASKED,max(spread,0.002))){
+        // Off into the sky: the copy's background where it shows it (with the
+        // transparent layers drawn before this one), else the sky itself.
+        float3 drawn;if(refractBackground(f,l,o,d,roughness*4,drawn))return drawn;
+        return rtMiss(f,l,d,roughness)*refractExposure(f,l);
+    }
     float3 at=o+d*(bias+hit.distance);float depth=refractViewDepth(f,at);float2 px=refractPixel(f,at);
     float copied=refractDepthAt(l,int2(px));
     if(copied>0 && abs(copied-depth)<max(0.05,0.02*depth))

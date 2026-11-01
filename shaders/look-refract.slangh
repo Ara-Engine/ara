@@ -73,6 +73,15 @@ RefractVolume refractVolume(uint2 words){
     m.absorption=glassAbsorption(words.y);
     return m;
 }
+// Radiance of the background a ray (o, d) leaving the scene meets, from the copy:
+// where its direction lands on screen inside the copied rect with no surface there,
+// the sky as drawn (fog, sun disk) under any transparent layers drawn before this
+// one (glass behind glass against the sky), blurred to `level`. False elsewhere.
+bool refractBackground(Frame f,Look l,float3 o,float3 d,float level,out float3 c){
+    c=0;float2 px=refractPixel(f,o+d*FOG_RANGE);
+    if(px.x<0 || refractDepthAt(l,int2(px))!=0)return false;
+    c=refractSample(f,l,px/float2(f.extent.xy),level);return true;
+}
 // Radiance the ray (o, d) brings back from the opaque scene: a march of the copied
 // depth over `reach` metres (quadratic steps, then a binary refinement), read at the
 // blur level of the rough lobe's footprint there (`spread` radians per metre past
@@ -83,14 +92,18 @@ float3 refractTrace(Frame f,Look l,float3 o,float3 d,float reach,float spread,fl
     // End in front of the near plane, as the reflection march does.
     float ahead=refractViewDepth(f,o),toward=dot(d,f.forward.xyz);
     if(toward<0)reach=min(reach,max(ahead-f.camera.w*2,0)/-toward);
-    uint steps=max(uint(l.refractParams[0].x),1u);float previous=0;
+    uint steps=max(uint(l.refractParams[0].x),1u);float previous=0,before=-1;bool front=true;
     for(uint i=1;i<=steps;i++){
         float s=float(i)/float(steps),t=reach*s*s;float3 q=o+d*t;
         float scene=refractDepthAt(l,int2(refractPixel(f,q)));if(scene<0)break;
         float depth=refractViewDepth(f,q);
-        // Behind the copied surface: a crossing within this step is a hit; far behind,
-        // the ray passed behind a nearer object and marches on.
-        if(scene>0 && depth>scene && depth-scene<(t-previous)*max(abs(toward),0.2)+0.02*depth){
+        // Behind the copied surface: a crossing within this step is a hit, either close
+        // behind it or where the ray was in front of a surface continuous with this
+        // one at the last step (a floor met at a grazing angle, whose depth moves with
+        // the ray). Far behind a surface that jumped nearer, the ray passed behind a
+        // nearer object and marches on.
+        bool continuous=front && before>0 && abs(scene-before)<(t-previous)*1.5+0.02*depth;
+        if(scene>0 && depth>scene && (depth-scene<(t-previous)*max(abs(toward),0.2)+0.02*depth || continuous)){
             float lo=previous,hi=t;
             for(uint k=0;k<4;k++){
                 float m=(lo+hi)*0.5;float3 c=o+d*m;float z=refractDepthAt(l,int2(refractPixel(f,c)));
@@ -99,8 +112,9 @@ float3 refractTrace(Frame f,Look l,float3 o,float3 d,float reach,float spread,fl
             float3 at=o+d*hi;
             return refractSample(f,l,refractPixel(f,at)/float2(f.extent.xy),refractLevelFor(f,spread*(travelled+hi),refractViewDepth(f,at)));
         }
-        previous=t;
+        previous=t;before=scene;front=scene<=0 || depth<=scene;
     }
+    float3 drawn;if(refractBackground(f,l,o,d,roughness*4,drawn))return drawn;
     uint prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;float2 e=environmentUv(d);float level=roughness*4,low=floor(level),high=min(low+1,4);
     float3 sky=lerp(envTex(prefilter,float2(e.x,(e.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(e.x,(e.y*127+0.5+high*128)/640)).rgb,frac(level));
     return (physicalSky(l)?sky:applyFog(f,l,sky,f.camera.xyz+d*FOG_RANGE,uv))*refractExposure(f,l);
