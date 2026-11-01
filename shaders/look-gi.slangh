@@ -110,8 +110,8 @@ float giLatticeCoverage(GiLattice g,float3 p){
 // radiance a surface of perceptual `roughness` reflects along `reflection`: the
 // probes' parallax-corrected radiance (giProbeReflection), blending into their
 // irradiance (a cosine lobe, over PI) by GGX's alpha as the lobe outgrows the
-// radiance texels. DDGI weights: trilinear, backface and Chebyshev visibility against
-// static moments, the latter two crushed cubically below 0.2 so probes behind thin
+// radiance texels. DDGI weights: trilinear, backface (from the unbiased point) and
+// Chebyshev visibility against static moments, the latter two crushed cubically below 0.2 so probes behind thin
 // walls do not leak; a point seeing under a third of its probes' unoccluded weight
 // darkens by its share. The point is offset along the normal and towards `v` by the
 // lattice's surface bias.
@@ -131,7 +131,11 @@ void giLatticeLobes(Look l,GiLattice g,uint image,float3 position,float3 normal,
         float3 tested=delta+normal*lift;float far=length(tested);
         float visibility=giVisibility(l,id,tested/max(far,1e-6),far,giMomentLimit(g));
         float3 trilinear=lerp(1-alpha,alpha,float3(d));float cell=trilinear.x*trilinear.y*trilinear.z;
-        float facing=max(0.02,pow(saturate(dot(-dir,normal)*0.5+0.5),2));float unseen=facing<0.2?facing*facing*facing/0.04:facing;
+        // Backface weight from the true surface point, as DDGI: from the biased point, a
+        // probe nearer the wall than the bias lies behind it, and every point right in
+        // front of such a probe would turn it away (a grid of dark dots on walls).
+        float3 toProbe=g.origin+float3(p)*g.spacing+meta.xyz-position;
+        float facing=max(0.02,pow(saturate(dot(toProbe,normal)/max(length(toProbe),1e-6)*0.5+0.5),2));float unseen=facing<0.2?facing*facing*facing/0.04:facing;
         float weight=facing*visibility;if(weight<0.2)weight*=weight*weight/0.04;weight*=cell;
         if(irradiance)diffuse+=giSampleIrradiance(l,image,id,normal)*weight;
         if(both){
