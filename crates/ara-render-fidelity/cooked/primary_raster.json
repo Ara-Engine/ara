@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "7cd7a2bf94d9182da93be21ad54aefca81d7d4166b7af9982934ff3521b156e5",
+  "key": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c",
   "stages": [
     {
-      "dxil": "7cd7a2bf94d9182da93be21ad54aefca81d7d4166b7af9982934ff3521b156e5/primary_raster/primaryRasterMain.dxil",
+      "dxil": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/primary_raster/primaryRasterMain.dxil",
       "dxil_hash": "1b60e1e95c3419fcaa478f02f7c5236b507ba6c09a746ec5ac744a40d2b65e59",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "7cd7a2bf94d9182da93be21ad54aefca81d7d4166b7af9982934ff3521b156e5/primary_raster/primaryRasterMain.metallib",
+        "metallib": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/primary_raster/primaryRasterMain.metallib",
         "metallib_hash": "28deeac494ddd12a893f9e1c1bdc03bc6500a1c42016c7b1116c0839352091fd",
-        "reflection": "7cd7a2bf94d9182da93be21ad54aefca81d7d4166b7af9982934ff3521b156e5/primary_raster/primaryRasterMain.metal.json",
+        "reflection": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/primary_raster/primaryRasterMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "primaryRasterMain",
-      "spirv": "7cd7a2bf94d9182da93be21ad54aefca81d7d4166b7af9982934ff3521b156e5/primary_raster/primaryRasterMain.spv",
+      "spirv": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/primary_raster/primaryRasterMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "8e10b3ca309407f36e3a3735086b6c1f0f5a9bb29a2fffb251f5b6cf007afedd",
       "stage": "compute"

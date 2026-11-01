@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "7cd7a2bf94d9182da93be21ad54aefca81d7d4166b7af9982934ff3521b156e5",
+  "key": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c",
   "stages": [
     {
-      "dxil": "7cd7a2bf94d9182da93be21ad54aefca81d7d4166b7af9982934ff3521b156e5/reservoir_spatial_layers/reservoirSpatialLayers.dxil",
+      "dxil": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/reservoir_spatial_layers/reservoirSpatialLayers.dxil",
       "dxil_hash": "c70047685733e771053606e0832a7754da4006f241f087e4c42ed9f117edfb93",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "7cd7a2bf94d9182da93be21ad54aefca81d7d4166b7af9982934ff3521b156e5/reservoir_spatial_layers/reservoirSpatialLayers.metallib",
+        "metallib": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/reservoir_spatial_layers/reservoirSpatialLayers.metallib",
         "metallib_hash": "4d9e16d5f3f5cc9c1f82bfde0edfdee5d831cc325be568e185d50b8fd5f7599a",
-        "reflection": "7cd7a2bf94d9182da93be21ad54aefca81d7d4166b7af9982934ff3521b156e5/reservoir_spatial_layers/reservoirSpatialLayers.metal.json",
+        "reflection": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/reservoir_spatial_layers/reservoirSpatialLayers.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "reservoirSpatialLayers",
-      "spirv": "7cd7a2bf94d9182da93be21ad54aefca81d7d4166b7af9982934ff3521b156e5/reservoir_spatial_layers/reservoirSpatialLayers.spv",
+      "spirv": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/reservoir_spatial_layers/reservoirSpatialLayers.spv",
       "spirv_entry": "main",
       "spirv_hash": "6f67003b757a8c22676254ca068855769e67246c7ddbbd9ce8bc8c508dfbe9e7",
       "stage": "compute"
