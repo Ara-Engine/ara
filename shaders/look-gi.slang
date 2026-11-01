@@ -43,14 +43,16 @@ float shadowTexel(Frame f,Look l,float3 world){
 // the far map; virtual shadow pages first where resident (`pages`).
 float giSunVisibility(Frame f,Look l,float3 world,float3 normal,bool pages){
     float v=pages?vsmVisibility(f,l,world,normal,true):-1;bool mapped=v>=0;
-    if(!mapped){
-        uint count=f.look.z;
-        for(uint c=0;c<4&&c<count&&!mapped;c++){
-            float4 h=mul(frameShadow(c),float4(world,1));float3 q=h.xyz/h.w;
-            if(all(abs(q.xy)<0.98)&&q.z>0&&q.z<1){v=cascadeVisibility(f,l,c,world,normal);mapped=true;}
-        }
-        if(!mapped)v=farVisibility(l,world,normal,mapped);
+    ShadowLight sun=shadowSun(l.sunLux.w);uint maps=min(f.look.z,4u);
+    // Cascades in order, then the far map (k == 4); look-shadow.slangh shadowSoft is -1
+    // outside a map.
+    [loop]for(uint k=0;k<5&&!mapped;k++){
+        if(k<4&&k>=maps)continue;
+        if(k==4&&l.farInfo.z==0)break;
+        float penumbra,s=shadowSoft(l,k<4?shadowCascade(f,l,k):shadowFar(l),world,normal,f.sunDirection.xyz,sun,penumbra);
+        if(s>=0){v=s;mapped=true;}
     }
+    if(!mapped)v=1;
     return v>0?min(v,horizonSun(l,world,mapped)):0;
 }
 // One workgroup per relit probe, one lane per cache texel: this frame's window
