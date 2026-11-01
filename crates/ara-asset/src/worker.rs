@@ -608,6 +608,10 @@ impl ImportJob {
             return Ok(());
         };
         self.started = Instant::now();
+        // `ara` refuses an import worker older than its sources (ARA7308): an old one
+        // imports with old code and models silently render as placeholders.
+        ara_companion::verify(Path::new(pending.command.get_program()))
+            .map_err(|refusal| Error::Worker(format!("ARA7308: {refusal}")))?;
         // A worker that cannot start (not built, wrong ARA_IMPORT_WORKER) names itself.
         let mut child = pending.command.spawn().map_err(|e| {
             Error::Worker(format!(

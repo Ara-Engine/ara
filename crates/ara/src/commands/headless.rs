@@ -86,6 +86,9 @@ pub struct CaptureArgs {
     bounces: u32,
     /// Lock exposure at this EV100 (manual, no compensation) over every post-process
     /// volume, so captures from different renderers compare at the same brightness.
+    /// Without it a scene with no post-process volume is metered automatically like one
+    /// with a default volume (not the legacy daylight exposure), and the capture JSON
+    /// reports the exposure applied.
     #[arg(long, allow_hyphen_values = true)]
     ev100: Option<f32>,
     /// Debug view to capture instead of the lit image: albedo, normals, depth,

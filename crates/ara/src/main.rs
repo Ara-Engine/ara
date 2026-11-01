@@ -566,6 +566,9 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     }
+    // Play, capture and imports spawn the sibling player and import worker; refuse
+    // ones built before their sources changed (`ara_companion`, ARA7308).
+    ara_companion::enforce();
     let cli = Cli::parse();
     let _capture = if matches!(
         &cli.command,

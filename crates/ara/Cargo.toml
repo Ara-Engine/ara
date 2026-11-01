@@ -7,6 +7,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
+ara-companion = { path = "../ara-companion" }
 ara-asset = { path = "../ara-asset" }
 ara-asset-host = { path = "../ara-asset-host" }
 ara-update = { path = "../ara-update" }

@@ -809,6 +809,7 @@ impl World {
             let tick = self.runtime.tick();
             let source = self.asset_source()?;
             let world = self.runtime.play_mut().session_mut().world_mut();
+            let mut applied = None;
             // A Camera2d makes it a 2D scene: ara-render2d draws it.
             let capture = if two_d::camera(world).is_some() {
                 let atlases = two_d::atlases(world, source.as_ref())?;
@@ -833,6 +834,10 @@ impl World {
                     );
                 }
                 let presenter = presenter.context("no presenter")?;
+                // Without a post-process volume, meter like the volume defaults do
+                // (the settle frames snap the meter, so captures stay deterministic)
+                // instead of the legacy daylight exposure; `--ev100` still locks over it.
+                frame.look.meter_without_volumes();
                 let request = ara_render::capture::CaptureRequest {
                     camera: ara_runtime_render::camera(frame)?,
                     size,
@@ -847,6 +852,7 @@ impl World {
                 };
                 let capture =
                     presenter.capture_with(frame, &request, || self.fidelity_content(frame))?;
+                applied = presenter.applied_exposure(frame);
                 if let Some(frames) = params.stability {
                     let live = std::path::Path::new(path).with_extension("live.png");
                     stability = Some(stability::measure(
@@ -875,6 +881,10 @@ impl World {
                 capture
             };
             let mut capture = capture;
+            // The metadata echoes the request's legacy multiplier; report what rendered.
+            if let Some(exposure) = applied {
+                capture.metadata.request.exposure = exposure;
+            }
             if let Some(ui) = &self.ui {
                 crate::game_ui::capture(
                     ui,

@@ -384,19 +384,33 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   adaptation rate the Unreal speeds map to and decide the editor policy (finish adaptation
   quickly at rest). Standalone games still upscale (unchanged cost).
 
-- [ ] **Capture exposure defaults.** A scene with no post-process volume captures at the
-  legacy manual exposure 0.0015 (EV 9.1, daylight), so lamp-lit scenes come out ~4.5 stops
-  dark unless `--ev100` is passed, and the capture JSON reports `"exposure": 0.0015` even
-  under `--ev100`. Report the exposure actually applied, and default captures without a
-  volume to the same metering the editor and Play use.
+- [x] **Capture exposure defaults.** A scene with no post-process volume captured at the
+  legacy manual exposure 0.0015 (EV 9.1, daylight), so lamp-lit scenes came out ~4.5 stops
+  dark unless `--ev100` was passed, and the capture JSON reported `"exposure": 0.0015` even
+  under `--ev100`. Now `World::capture` gives a volume-less scene one empty global volume
+  (`SceneLook::meter_without_volumes`), so it meters like the volume defaults do; the
+  settle frames snap the meter, so captures stay deterministic (two runs, same PNG hash).
+  The JSON's `exposure` is the linear multiplier applied (`Presenter::applied_exposure`):
+  the `--ev100` lock (2 gives 0.2083), else the metered or manual value. The area-light
+  shapes scene went from near black (0.0015) to metered 0.0923 (EV 3.4). `--ev100` still
+  locks over everything; live Play and the editor keep the legacy exposure for scenes
+  without a volume (only captures changed). Scenes that already had a volume are unchanged.
 
-- [ ] **Stale player under `ara capture`.** `ara capture` renders through the sibling
-  `ara-player` binary, and building only `-p ara` leaves an older player that loads the
+- [x] **Stale player under `ara capture`.** `ara capture` renders through the sibling
+  `ara-player` binary, and building only `-p ara` left an older player that loaded the
   tree's new cooked shaders against its old data (an old CPU probe bake drew star patterns
-  over every wall). Refuse a player built from different sources, as `ara-dev` already
-  does for the editor's companion. Likewise a missing `ara-import-worker` (build `-p ara -p
-  ara-player -p ara-import-worker`): imported models then render as placeholders without a
-  diagnostic (the glass rooms' windows went dark purple and blocked the sun).
+  over every wall); a missing or stale `ara-import-worker` left imported models as
+  placeholders without a diagnostic (the glass rooms' windows went dark purple and blocked
+  the sun). `ara-dev`'s editor flow guards this by building the companions in one Cargo
+  invocation, which cannot cover `cargo build -p ara` run by hand, so the `ara` binary now
+  checks at spawn (`ara-companion`, `ARA7308`): in a source checkout it refuses a player or
+  import worker that is missing, or older than a source in its path-dependency closure,
+  naming the binary, the changed file and the `cargo build -p ...` that fixes it. Packaged
+  builds have no tree and are never refused; `ARA_ALLOW_STALE_COMPANIONS=1`, or an
+  `ARA_PLAYER`/`ARA_IMPORT_WORKER` outside the `ara` directory, runs an old companion on
+  purpose (before/after timing). Limits: an mtime rule (Cargo's own), so a stray `.rs` file
+  Cargo never compiles can read as newer; `optional` dependencies (feature-only crates such
+  as `ara-pathtrace`) are not followed.
 
 - [ ] **Cooker determinism.** An incremental re-cook of unchanged sources rewrote Metal
   metadata (`ResourceCount` 31 to 224 on fullscreenVertex) relative to the fresh cohort cook.
