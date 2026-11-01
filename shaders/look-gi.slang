@@ -50,51 +50,71 @@ float giSunVisibility(Frame f,Look l,float3 world,float3 normal,float radius,boo
     }
     return v>0?min(v,horizonSun(l,world,mapped)):0;
 }
-// Where the direction `k` of an n x n grid across probe texel `texel` (octahedral, of
-// 8x8) meets the hit plane through `hit` (normal `normal`, `along` its signed distance
-// from the probe at `origin`, `distance` the hit's): the hit itself where that
-// direction meets the plane edge-on, or far off the hit's distance (the texel
-// straddles an edge).
-float3 giFootprintPoint(float3 origin,uint2 texel,uint k,uint n,float3 hit,float3 normal,float along,float distance){
-    float3 d=octDecode((float2(texel)+(float2(k%n,k/n)+0.5)/float(n))/8);
+// Where the direction `k` of an n x n grid (n = 2 or 4) across probe texel `texel`
+// (octahedral, of 8x8) meets the hit plane through `hit` (normal `normal`, `along`
+// its signed distance from the probe at `origin`, `distance` the hit's), and whether
+// it counts (w): only where the bake found the texel's sub-rays there on that plane
+// (`mask`, bit k of its 4x4; two of a 2x2 cell's four) and the direction meets the plane
+// near the hit's distance. The plane goes on past the surface (a floor's beyond the
+// room's walls, a wall's across its window), and those points were sunlit where the
+// texel sees a wall or the sky: rooms read half as bright again.
+float4 giFootprintPoint(float3 origin,uint2 texel,uint k,uint n,uint mask,float3 hit,float3 normal,float along,float distance){
+    uint2 sub=uint2(k%n,k/n);float3 d=octDecode((float2(texel)+(float2(sub)+0.5)/float(n))/8);
+    uint bits=n==4?(mask>>k)&1:countbits((mask>>(sub.y*8+sub.x*2))&0x33);
     float cosine=dot(d,normal);float t=cosine<-0.05?along/cosine:-1;
-    return t>0.5*distance&&t<2*distance?origin+d*t:hit;
+    return t>0.5*distance&&t<2*distance&&bits>=(n==4?1u:2u)?float4(origin+d*t,1):float4(hit,0);
 }
 // The direct light (sun and local lights) a probe texel's hit receives, averaged over
 // the texel's footprint: one point stood for the whole texel (some 22 degrees), so a
 // probe point-sampled sharp lighting (a light profile's spokes, a sunlit patch smaller
 // than the texel) and neighbouring probes disagreed: blotches, and bright patches
 // over-weighted. The hit plane (point `hit`, normal `normal`, seen from `origin`;
-// octahedral `texel` of 8x8, solid angle `omega`) takes each local light's unshadowed
-// light at a grid of points across the texel (giFootprintPoint: 4x4 for light profiles
-// and hard-edged spot cones, whose patterns are sharp; 2x2 for the rest, smooth across
-// it), and
-// every shadow once over the footprint's disc (giShadowFootprint): the sun's (where no
-// virtual shadow page holds the hit), and with
-// LOOK_LOCAL_INDIRECT each local light's that owns a shadow map this frame
-// (look::local; the rest stay unshadowed).
-float3 giFootprintDirect(Frame f,Look l,float3 origin,uint2 texel,float omega,float3 hit,float3 normal,bool pages){
+// octahedral `texel` of 8x8, solid angle `omega`, bake plane `mask`) takes each local
+// light's unshadowed light at a grid of points across the texel (giFootprintPoint: 4x4
+// for light profiles and hard-edged spot cones, whose patterns are sharp; 2x2 for the
+// rest, smooth across it); the sun's shadow at 4x4 such points, each over a quarter of
+// the footprint's disc (virtual shadow pages first, else giShadowFootprint), averaged
+// over the points on the texel's surface (the hit alone where none is); and with
+// LOOK_LOCAL_INDIRECT each local light's shadow once over the whole disc where it owns
+// a shadow map this frame (look::local; the rest stay unshadowed).
+float3 giFootprintDirect(Frame f,Look l,float3 origin,uint2 texel,float omega,uint mask,float3 hit,float3 normal,bool pages){
     float3 toward=hit-origin;float along=dot(toward,normal),distance=length(toward);
     float facing=abs(along)/max(distance,1e-4);
     // The footprint's disc: the texel's cone at the hit, widened by the plane's slant.
     float radius=distance*sqrt(omega/PI)*rsqrt(max(facing,0.25));
     // Shadow tests sit eight shadow texels off the plane, so it does not shadow itself.
     float3 lifted=hit+normal*(8*shadowTexel(f,l,hit)),sun=f.sunDirection.xyz;
-    float3 light=sunAt(f,l,hit)*saturate(dot(normal,sun))*giSunVisibility(f,l,lifted,normal,radius,pages)*translucentSun(l,lifted);
+    // The sun at a 4x4 grid of points across the footprint, each over a quarter of its
+    // disc: one test per texel (a virtual page is a point compare, and a disc's PCF on
+    // a coarse cascade level turns a sunlit patch edge all-or-nothing) aliased the
+    // light of a patch smaller than a few texels, so probe columns alternated between
+    // 0.6 and 1.8 times the light past a sunlit wall.
+    // Glass and films between each point and the sun tint it (look-translucent.slangh).
+    float3 sunSeen=0;float sunPoints=0;float3 lift=lifted-hit;
+    for(uint k=0;k<16;k++){
+        float4 q=giFootprintPoint(origin,texel,k,4,mask,hit,normal,along,distance);
+        if(q.w>0){float3 p=q.xyz+lift;sunSeen+=giSunVisibility(f,l,p,normal,radius*0.25,pages)*translucentSun(l,p);sunPoints+=1;}
+    }
+    if(sunPoints==0){sunSeen=giSunVisibility(f,l,lifted,normal,radius*0.25,pages)*translucentSun(l,lifted);sunPoints=1;}
+    float3 light=sunAt(f,l,hit)*saturate(dot(normal,sun))*(sunSeen/sunPoints);
     for(uint i=0;i<f.extent.z;i++){
         // look-lights.slangh: each light's form factor over its area.
         Light source=loadLight(f.lighting.w,i);
         float3 delta=source.positionRange.xyz-hit;float reach=source.positionRange.w+radius;
         if(dot(delta,delta)>=reach*reach)continue;
         bool sharp=uint(source.parameters.x+0.5)>=LIGHT_SHAPED||(lightKind(source)==LIGHT_SPOT&&source.parameters.y-source.directionOuter.w<0.05);
-        uint n=sharp?4:2;float3 e=0;
-        for(uint k=0;k<n*n;k++)e+=lightIrradiance(f,l,source,i,giFootprintPoint(origin,texel,k,n,hit,normal,along,distance),normal);
+        uint n=sharp?4:2;float3 e=0;float points=0;
+        for(uint k=0;k<n*n;k++){
+            float4 q=giFootprintPoint(origin,texel,k,n,mask,hit,normal,along,distance);
+            if(q.w>0){e+=lightIrradiance(f,l,source,i,q.xyz,normal);points+=1;}
+        }
+        if(points==0){e=lightIrradiance(f,l,source,i,hit,normal);points=1;}
         ShadowMap s;
         if(any(e>0)&&(l.flags.y&LOOK_LOCAL_INDIRECT)!=0&&shadowLocal(l,i,hit,source.positionRange.xyz,source.positionRange.w,s)){
             float v=giShadowFootprint(s,lifted,normal,normalize(delta),radius);
             if(v>=0)e*=v;
         }
-        light+=e/float(n*n);
+        light+=e/points;
     }
     return light;
 }
@@ -121,14 +141,13 @@ void giRelight(uint3 group,uint lane,bool pages){
     uint4 t=buffers[NonUniformResourceIndex(l.giBuffers.x)].Load<uint4>((id*64+lane)*16);
     float3 albedo=float3(t.x&255,(t.x>>8)&255,(t.x>>16)&255)/255.;float sky=float(t.x>>24)/255.;
     float3 normal=octDecode(float2(t.y&1023,(t.y>>10)&1023)/1023.);
-    float3 emissive=float3(halfToFloat(t.z&65535),halfToFloat(t.z>>16),halfToFloat(t.w&65535));float distance=halfToFloat(t.w>>16);
+    float3 emissive=float3(t.z&511,(t.z>>9)&511,(t.z>>18)&511)*exp2(float(t.z>>27)-24);float distance=halfToFloat(t.w>>16);
     float3 dir=octDecode((float2(lane%8,lane/8)+0.5)/8),origin=giProbePosition(l,id)+meta.xyz,light=0;
     if(sky<1){
         // The texel's relit hit is one of its sixteen bake sub-rays (ProbeSurfaces::texels).
         uint ray=(t.y>>20)&15;float3 toward=octDecode((float2(lane%8,lane/8)+(float2(ray%4,ray/4)+0.5)/4)/8);
         float3 hit=origin+toward*distance;
-        // Glass and films between the hit and the sun tint it (look-translucent.slangh).
-        float3 irradiance=giFootprintDirect(f,l,origin,uint2(lane%8,lane/8),octSolidAngle(uint2(lane%8,lane/8),8),hit,normal,pages);
+        float3 irradiance=giFootprintDirect(f,l,origin,uint2(lane%8,lane/8),octSolidAngle(uint2(lane%8,lane/8),8),t.w&65535,hit,normal,pages);
         // Last frame's probes close the loop: multiple bounces converge over frames.
         irradiance+=giIrradiance(l,read,hit,normal);
         light=(1-sky)*(emissive+albedo/PI*irradiance);

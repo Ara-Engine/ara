@@ -898,8 +898,9 @@ const FINER: f32 = 0.5;
 /// Version of what a probe texel records (bump when the bake's shading changes,
 /// such as [`bounce_albedo`]; 5: probe rays pass glass by its transmittance; 7: 16x16
 /// distance moments, each ray clamped at the moment limit, misses at it; 13: texels relight
-/// at a real hit, the most central one, the mean distance kept for parallax).
-const SURFACE_VERSION: u32 = 13;
+/// at a real hit, the most central one, the mean distance kept for parallax; 14: emissive
+/// as RGB9E5 and a mask of the sub-rays on the relit hit's plane).
+const SURFACE_VERSION: u32 = 14;
 
 /// The lattice rule's identity, part of the probe cache's file names
 /// (`gi.rs`): any change to the constants above misses older bakes.
@@ -1187,6 +1188,45 @@ fn half_bits(v: f32) -> u32 {
     }
 }
 
+/// Nonnegative RGB as RGB9E5 (shared five-bit exponent, nine-bit mantissas, red in the
+/// low bits), as probeSurfacesMain packs emissive light (`giEmissive` decodes it).
+fn rgb9e5(c: Vec3) -> u32 {
+    const MAX: f32 = 65408.;
+    let c = c.clamp(Vec3::ZERO, Vec3::splat(MAX));
+    let top = c.max_element();
+    let mut exponent = top.log2().floor().max(-16.) as i32 + 16;
+    let mut scale = 2f32.powi(exponent - 24);
+    if (top / scale + 0.5).floor() >= 512. {
+        scale *= 2.;
+        exponent += 1;
+    }
+    let m = |v: f32| ((v / scale + 0.5).floor() as u32).min(511);
+    m(c.x) | m(c.y) << 9 | m(c.z) << 18 | (exponent as u32) << 27
+}
+
+/// Which of a texel's sixteen sub-rays (bit k) found a front hit on the relit hit's
+/// plane (`relit`: sub-ray, distance, normal): within 2% of its distance and a
+/// centimetre of the plane, facing within 25 degrees. Relighting spreads the texel's
+/// light over these sub-rays only (look-gi.slang giFootprintPoint): the plane goes on
+/// where the texel sees other surfaces (a floor's beyond the room's walls, a wall's
+/// across its window), and those points could be sunlit where the texel sees none.
+fn plane_mask(hits: &[Option<(Vec3, Hit)>; 16], (ray, distance, normal): (usize, f32, Vec3)) -> u32 {
+    let Some((dir, _)) = hits[ray] else {
+        return 1 << ray;
+    };
+    let point = dir * distance;
+    hits.iter().enumerate().fold(0, |mask, (k, hit)| match hit {
+        Some((d, h))
+            if h.normal.dot(*d) < 0.
+                && h.normal.dot(normal) > 0.9
+                && (*d * h.distance - point).dot(normal).abs() <= 0.02 * distance + 0.01 =>
+        {
+            mask | 1 << k
+        }
+        _ => mask,
+    })
+}
+
 /// The real hit a cache texel is relit at (sub-ray index, distance, normal), as
 /// `probeSurfacesMain`: the front hit closest to the texel's centre (nearest first on
 /// ties), with its own normal. A point rebuilt from the hits' mean would float between
@@ -1318,7 +1358,9 @@ fn probe(
         } else {
             centroid.length()
         };
-        let (ray, distance, normal) = relit_hit(&hits).unwrap_or((5, parallax, normal));
+        let relit = relit_hit(&hits);
+        let mask = relit.map_or(1 << 5, |r| plane_mask(&hits, r));
+        let (ray, distance, normal) = relit.unwrap_or((5, parallax, normal));
         let n = oct_encode(normal);
         texels[lane] = [
             unorm8(albedo.x) | unorm8(albedo.y) << 8 | unorm8(albedo.z) << 16 | unorm8(sky) << 24,
@@ -1326,8 +1368,8 @@ fn probe(
                 | ((n.y * 1023.).round() as u32) << 10
                 | (ray as u32) << 20
                 | ara_render::look::gi::log_distance(parallax) << 24,
-            half_bits(emissive.x) | half_bits(emissive.y) << 16,
-            half_bits(emissive.z) | half_bits(distance) << 16,
+            rgb9e5(emissive),
+            mask | half_bits(distance) << 16,
         ];
         statics[lane] =
             std::array::from_fn(|q| pack_moments(moment1[q] / 4., moment2[q] / 4., limit));
@@ -1670,6 +1712,16 @@ mod tests {
             assert!((oct_decode(oct_encode(d)) - d).length() < 1e-4);
         }
         assert_eq!(half_bits(1.), 0x3c00);
+        // RGB9E5: the brightest channel keeps nine bits; zero stays zero.
+        let decode = |v: u32| {
+            let scale = 2f32.powi((v >> 27) as i32 - 24);
+            Vec3::new((v & 511) as f32, (v >> 9 & 511) as f32, (v >> 18 & 511) as f32) * scale
+        };
+        assert_eq!(rgb9e5(Vec3::ZERO) & 0x7ff_ffff, 0);
+        for c in [Vec3::new(4., 2., 0.5), Vec3::new(60., 45., 25.), Vec3::splat(1e-3)] {
+            let back = decode(rgb9e5(c));
+            assert!((back - c).abs().max_element() <= c.max_element() / 256., "{c} {back}");
+        }
         assert_eq!(half_bits(1e9), 0x7bff);
     }
 
@@ -1712,7 +1764,12 @@ mod tests {
         assert_eq!(statics[64][3], 1., "an open probe is active");
         // Every texel hits a wall (no sky); some see the emissive ceiling.
         assert!(texels.iter().all(|t| t[0] >> 24 == 0));
-        let emitting = texels.iter().filter(|t| (t[2] & 0xffff) != 0).count();
+        let emitting = texels.iter().filter(|t| t[2] != 0).count();
         assert!(emitting > 0 && emitting < SURFACE_TEXELS, "{emitting}");
+        // Each texel's plane mask holds its relit sub-ray; texels that see a wall alone
+        // hold all sixteen, those across a corner only the relit wall's share.
+        let full = texels.iter().filter(|t| t[3] & 0xffff == 0xffff).count();
+        assert!(texels.iter().all(|t| t[3] & (1 << ((t[1] >> 20) & 15)) != 0));
+        assert!(full > 0 && full < SURFACE_TEXELS, "{full}");
     }
 }

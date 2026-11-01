@@ -75,9 +75,11 @@ pub struct ProbeSurfaces {
     /// diffuse albedo RGB8 and sky fraction 8 (low to high bits); y the relit hit's
     /// octahedral normal as two UNORM10, its bake sub-ray (4 bits: (k % 4, k / 4) of the
     /// texel's 4x4) and the hits' mean distance ([`log_distance`], what reflections
-    /// parallax-correct with); z emissive red and green as f16; w emissive blue and the
-    /// relit hit's distance along its sub-ray (metres, f16). The relit hit is a real
-    /// one on the nearest surface the texel sees (ara-runtime-render `relit_hit`).
+    /// parallax-correct with); z emissive as RGB9E5; w a mask of the sub-rays (bit k)
+    /// whose hits lie on the relit hit's plane (16 bits; relighting spreads the texel's
+    /// light over those only), then the relit hit's distance along its sub-ray (metres,
+    /// f16). The relit hit is a real one on the nearest surface the texel sees
+    /// (ara-runtime-render `relit_hit`).
     /// Albedo and emissive average the texel's geometry hits; the sky fraction is the
     /// share of misses.
     pub texels: Vec<[u32; 4]>,

@@ -13,6 +13,13 @@ uint unorm8(float v){return uint(round(saturate(v)*255));}
 // Nonnegative float to IEEE half bits (truncating, flushing denormals, clamping to
 // the largest finite half); avoids 16-bit shader capabilities.
 uint halfBits(float v){uint x=asuint(max(v,0.));int e=int((x>>23)&255)-112;if(e<=0)return 0;if(e>=31)return 0x7bff;return (uint(e)<<10)|((x&0x7fffff)>>13);}
+// Nonnegative RGB as RGB9E5 (gi_cpu::rgb9e5): shared five-bit exponent, nine-bit
+// mantissas, red in the low bits.
+uint rgb9e5(float3 c){
+    c=clamp(c,0,65408);float top=max(c.r,max(c.g,c.b));int e=max(int(floor(log2(max(top,1e-30)))),-16)+16;
+    float scale=exp2(float(e-24));if(floor(top/scale+0.5)>=512){scale*=2;e+=1;}
+    uint3 m=min(uint3(floor(c/scale+0.5)),uint3(511,511,511));return m.r|(m.g<<9)|(m.b<<18)|(uint(e)<<27);
+}
 // Root: pass = surface cache buffer, arg = statics buffer, pad0 = first probe.
 // One workgroup per probe, one lane per 8x8 octahedral cache texel.
 // gi_cpu::bounce_albedo: diffuse plus the specular lobe's directional albedo at
@@ -97,12 +104,23 @@ void probeSurfacesMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
         float c=pow(float(k%4)-1.5,2)+pow(float(k/4)-1.5,2);
         if(c<best||(c==best&&fronts[k]<fronts[ray])){best=c;ray=k;}
     }
-    if(best<1e9){hitDistance=fronts[ray];normal=normals[ray];}
+    // Sub-rays on the relit hit's plane (gi_cpu::plane_mask): relighting spreads the
+    // texel's light over these only.
+    uint mask=1u<<ray;
+    if(best<1e9){
+        hitDistance=fronts[ray];normal=normals[ray];
+        float3 point=octDecode((float2(lane%8,lane/8)+(float2(ray%4,ray/4)+0.5)/4)/8)*hitDistance;mask=0;
+        for(uint k=0;k<16;k++){
+            if(fronts[k]<0||dot(normals[k],normal)<=0.9)continue;
+            float3 d=octDecode((float2(lane%8,lane/8)+(float2(k%4,k/4)+0.5)/4)/8);
+            if(abs(dot(d*fronts[k]-point,normal))<=0.02*hitDistance+0.01)mask|=1u<<k;
+        }
+    }
     float2 n=octEncode(normal);
     uint4 packed=uint4(unorm8(albedo.r)|(unorm8(albedo.g)<<8)|(unorm8(albedo.b)<<16)|(unorm8(sky)<<24),
         uint(round(n.x*1023))|(uint(round(n.y*1023))<<10)|(ray<<20)|(parallax<<24),
-        halfBits(emissive.r)|(halfBits(emissive.g)<<16),
-        halfBits(emissive.b)|(halfBits(hitDistance)<<16));
+        rgb9e5(emissive),
+        mask|(halfBits(hitDistance)<<16));
     buffers[NonUniformResourceIndex(root.pass)].Store<uint4>((id*64+lane)*16,packed);
     // ara_render::look::gi::pack_moments: UNORM16 mean | mean squared << 16, over the
     // limit (and its square).
