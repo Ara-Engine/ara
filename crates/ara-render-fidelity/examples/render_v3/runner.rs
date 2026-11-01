@@ -129,16 +129,23 @@ fn run(
     renderer.set_jitter_override(Some([0.; 2]));
     let exposure = ara_render_fidelity::settings::exposure_from_ev100(f.ev100, 0.);
     renderer.set_tone_curve(ara_render::renderer::post::ToneCurve::Neutral);
-    let mut result=RunResult {version:VERSION,case:case.clone(),run:mode,renderer:"today-native-raster-high-no-hardware-rt".into(),
+    // Acquire the current renderer's startup surface cache before measuring.
+    // This is offline acquisition, not hardware RT in the scored frame loop.
+    let surfaces = startup_surfaces(&f, &output.join("startup-gi-cache"))?;
+    renderer.set_probe_surfaces(Some(&surfaces))?;
+    renderer.set_unseen(true);
+    let mut result=RunResult {version:VERSION,case:case.clone(),run:mode,renderer:"today-native-raster-high-startup-probes-no-frame-hardware-rt".into(),
         device:renderer.gpu().info().name.clone(),revision:revision(),size,fps:60,uncapped_supported:false,caps_applied:mode==RunKind::Capped,
         timing_valid:std::env::var("ARA_RENDER_V3_TIMING_VALID").is_ok_and(|v|v=="1"),reference_samples:samples,reference_bounces:8,reference_converged:false,reference_white:1./f64::from(exposure),
         notes:vec!["Control uncapped mode removes exposed page redraw quotas only; stage demand, hidden caps, debt and deadlines remain n/a.".into(),
+            "Startup probe surfaces are acquired offline with the existing fidelity baker, then relit by today's raster renderer. The runtime host's asynchronous CPU surface reacquisition is not connected: geometry/material changes retain their startup surfaces. This is a renderer-core control, not a complete Play-host/G3 control; no discovery/repair timing or correctness is claimed.".into(),
             "Finite-budget undenoised ara-pathtrace references are not certified exact solutions. Exact max-error gate stays n/a until convergence evidence is supplied.".into(),
             "gpu_frame_ms spans the update and render submissions, including GPU gaps. Pass sums and CPU update/render wall time are separate; CPU critical-path attribution is unavailable.".into(),
             "Fixture motions are deterministic scripted stress, not a physics simulation; foliage uses moving leaf cards. Polar loads the real pinned model and cooked textures in a controlled finite-range light rig.".into()],frames:Vec::new()};
     for _ in 0..16 {
         renderer.render(&f.camera, exposure)?;
     }
+    renderer.set_unseen(false);
     let mut previous: Option<Previous> = None;
     let mut reference_gpu = if mode == RunKind::Capped {
         Some(GpuDevice::new(&[], output.join("reference-cache"))?)
@@ -358,6 +365,49 @@ fn reference(
     let data = reference.radiance(gpu)?;
     reference.destroy(gpu)?;
     Ok((image, data))
+}
+
+/// The same optional startup acquisition used by the runtime, outside replay timing.
+fn startup_surfaces(
+    f: &fixture::Fixture,
+    cache: &Path,
+) -> Result<ara_render::look::gi::ProbeSurfaces> {
+    let mut gpu = GpuDevice::new(&[], cache)?;
+    let mut view = FidelityView::new_native(
+        &mut gpu,
+        &f.scene,
+        super::polar::residency(f)?,
+        Settings {
+            render_size: [64, 36],
+            display_size: [64, 36],
+            tier: Tier::Rt,
+            mode: Mode::Hybrid,
+            upscaler: Upscaler::Taau,
+            probe_ray_budget: 64,
+            reflection_cutoff: 1.,
+            post: PostSettings::default(),
+        },
+        None,
+    )?;
+    for _ in 0..256 {
+        if view.refine_native_textures(&mut gpu)?.pending_textures == 0 {
+            break;
+        }
+    }
+    view.render(
+        &mut gpu,
+        &ara_render_fidelity::FrameInput {
+            camera: &f.camera,
+            tick: 0,
+            delta_seconds: 1. / 60.,
+            reset: true,
+            lighting_changed: false,
+            deterministic: true,
+        },
+    )?;
+    let surfaces = view.bake_probe_surfaces(&mut gpu);
+    view.destroy(&mut gpu)?;
+    surfaces
 }
 
 fn save_png(image: &image::RgbaImage, path: &Path) -> Result<()> {

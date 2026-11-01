@@ -97,6 +97,12 @@ control. Its uncapped mode removes exposed local/VSM redraw quotas but cannot re
 all internal limits. It explicitly reports `uncapped_supported: false`. Raw GPU pass
 times are useful A/B control observations, not certified uncapped-demand numbers.
 Today's renderer has no transport debt or exact error counters: they remain n/a.
+Startup probe surfaces are acquired offline with the existing fidelity baker and
+relit during replay. This worker does not connect the Play host's asynchronous CPU
+surface reacquisition: geometry and material edits retain their startup surfaces.
+It is therefore a renderer-core control, not a complete Play-host/G3 control. No
+discovery/repair correctness or cost is inferred from it. Offline acquisition uses
+hardware RT before measurement; scored raster frames never use hardware RT.
 The control table reports the measured GPU span across update/render submissions,
 including submission gaps. Repeated pass labels are summed instead of overwritten.
 Finite references remain `reference_converged: false`; no exact-solution pass is

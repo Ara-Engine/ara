@@ -81,12 +81,17 @@ pub fn create(case: &Case) -> anyhow::Result<Fixture> {
         let x = ((i % cols) as f32 + 0.5) / cols as f32 - 0.5;
         let z = ((i / cols) as f32 + 0.5) / case.lights.div_ceil(cols) as f32 - 0.5;
         scene.lights.push(Light {
-            position_range: [
-                x * extent * std::f32::consts::SQRT_2,
-                case.range_m * 0.3,
-                z * extent / std::f32::consts::SQRT_2,
-                case.range_m,
-            ],
+            position_range: if case.lights == 1 {
+                // Keep the key outside the breach wall and the moving body field.
+                [0., 4., 5., case.range_m]
+            } else {
+                [
+                    x * extent * std::f32::consts::SQRT_2,
+                    case.range_m * 0.3,
+                    z * extent / std::f32::consts::SQRT_2,
+                    case.range_m,
+                ]
+            },
             // Scale power with the authored range so the range sweep preserves
             // receiver illuminance while changing spatial coverage and demand.
             color_lumens: [1., 0.85, 0.65, light_power(case)],
