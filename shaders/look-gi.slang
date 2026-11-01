@@ -6,6 +6,8 @@ groupshared float3 radiance[64];
 groupshared float4 directions[64];
 groupshared float3 tile[36];
 groupshared float4 seen[64];
+// Each texel's direct irradiance on its relit plane (w: 1 for a texel with surface hits).
+groupshared float4 directs[64];
 // Distance (m) recorded for sky texels: reflections of the sky need no parallax.
 static const float GI_SKY_DISTANCE=10000;
 // Writes this probe's bordered 10x10 radiance tile (giSampleRadiance) from `seen`.
@@ -123,7 +125,13 @@ float3 giFootprintDirect(Frame f,Look l,float3 origin,uint2 texel,float omega,ui
 // probe two frames ago, so only last frame's window is stale in it: those groups copy
 // it forward, skipping probes this frame relights. Inactive probes stay black. A
 // texel's hit plane is relit across its footprint (giFootprintDirect); `pages` (a
-// literal per entry point) tests the sun against virtual shadow pages first.
+// literal per entry point) tests the sun against virtual shadow pages first. That light
+// reaches the texel's hits on the plane (the bake's mask); its other surface hits take
+// the direct light of the neighbouring texel they lie towards, which usually relit the
+// surface they found. The texel's albedo averages every hit, so with the plane's light
+// for all of them a texel across a sunlit patch's edge credited the wall or ceiling
+// beside it, in shadow, with the patch's sun (a white room 2.4 times too bright), and
+// one across a shadow's edge took none of the lit surface beside it.
 void giRelight(uint3 group,uint lane,bool pages){
     Frame f=frame();Look l=look(f);uint cursor=l.giUpdate.x,window=l.giUpdate.y,read=l.giImages.x;
     if(group.x>=window){
@@ -142,12 +150,30 @@ void giRelight(uint3 group,uint lane,bool pages){
     float3 albedo=float3(t.x&255,(t.x>>8)&255,(t.x>>16)&255)/255.;float sky=float(t.x>>24)/255.;
     float3 normal=octDecode(float2(t.y&1023,(t.y>>10)&1023)/1023.);
     float3 emissive=float3(t.z&511,(t.z>>9)&511,(t.z>>18)&511)*exp2(float(t.z>>27)-24);float distance=halfToFloat(t.w>>16);
-    float3 dir=octDecode((float2(lane%8,lane/8)+0.5)/8),origin=giProbePosition(l,id)+meta.xyz,light=0;
+    float3 dir=octDecode((float2(lane%8,lane/8)+0.5)/8),origin=giProbePosition(l,id)+meta.xyz,light=0,direct=0,hit=0;
+    int2 texel=int2(lane%8,lane/8);uint mask=t.w&65535;
     if(sky<1){
         // The texel's relit hit is one of its sixteen bake sub-rays (ProbeSurfaces::texels).
-        uint ray=(t.y>>20)&15;float3 toward=octDecode((float2(lane%8,lane/8)+(float2(ray%4,ray/4)+0.5)/4)/8);
-        float3 hit=origin+toward*distance;
-        float3 irradiance=giFootprintDirect(f,l,origin,uint2(lane%8,lane/8),octSolidAngle(uint2(lane%8,lane/8),8),t.w&65535,hit,normal,pages);
+        uint ray=(t.y>>20)&15;float3 toward=octDecode((float2(texel)+(float2(ray%4,ray/4)+0.5)/4)/8);
+        hit=origin+toward*distance;
+        direct=giFootprintDirect(f,l,origin,uint2(texel),octSolidAngle(uint2(texel),8),mask,hit,normal,pages);
+    }
+    directs[lane]=float4(direct,sky<1?1:0);
+    GroupMemoryBarrierWithGroupSync();
+    if(sky<1){
+        // Sub-rays off the plane (or in the sky: the mask cannot tell them apart) take
+        // the neighbour nearest them: across the texel edge they lie closer to (both at
+        // a corner), folded across the octahedral border.
+        float3 off=0;float neighbours=0;
+        for(uint k=0;k<16;k++){
+            if(((mask>>k)&1)!=0)continue;
+            int2 sub=int2(k%4,k/4);int2 side=int2(sub.x<2?-1:1,sub.y<2?-1:1);
+            int ex=sub.x<2?sub.x:3-sub.x,ey=sub.y<2?sub.y:3-sub.y;
+            float4 d=directs[octIndex(texel+int2(ex<=ey?side.x:0,ey<=ex?side.y:0),8)];
+            if(d.w>0){off+=min(d.xyz,direct);neighbours+=1;}
+        }
+        float hits=max(16*(1-sky),1),plane=min(float(countbits(mask)),hits);
+        float3 irradiance=(plane*direct+(hits-plane)*(neighbours>0?off/neighbours:direct))/hits;
         // Last frame's probes close the loop: multiple bounces converge over frames.
         irradiance+=giIrradiance(l,read,hit,normal);
         light=(1-sky)*(emissive+albedo/PI*irradiance);
