@@ -190,6 +190,12 @@ fn execute(
         }
     }
     let mut command = Command::new(runner);
+    let profile = out.join("profile").join(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos()
+            .to_string(),
+    );
     command
         .current_dir(root)
         .arg(cache.join(format!("{}.json", case.id)))
@@ -198,8 +204,8 @@ fn execute(
         .arg(options.width.to_string())
         .arg(options.height.to_string())
         .arg(options.reference_samples.to_string())
-        .env("ARA_CONFIG_DIR", out.join("profile/config"))
-        .env("ARA_CRASH_DIR", out.join("profile/crashes"))
+        .env("ARA_CONFIG_DIR", profile.join("config"))
+        .env("ARA_CRASH_DIR", profile.join("crashes"))
         .env("ARA_RENDER_V3_TIMING_VALID", "0")
         .stdin(Stdio::null())
         .stdout(fs::File::create(out.join("stdout.log"))?)
@@ -234,6 +240,9 @@ fn execute(
 }
 
 fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<()> {
-    fs::write(path, serde_json::to_vec_pretty(value)?)?;
+    fs::write(
+        path,
+        ara_json::to_canonical_string(&ara_json::sort_keys(&ara_json::to_value(value)?)),
+    )?;
     Ok(())
 }

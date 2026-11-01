@@ -1,10 +1,9 @@
 use super::{contract::*, coverage, fixture, metrics, replay};
 use anyhow::{Result, ensure};
-use ara_gpu::{Access, Device, GpuDevice, Resource};
+use ara_gpu::{Device, GpuDevice};
 use ara_render::{
     Renderer,
     capture::{CaptureRequest, ViewMode},
-    instanced::{TextureBinding, TextureStats, Textures},
 };
 use ara_render_fidelity::{
     FidelityView, Mode, PostSettings, Settings, Tier, ToneMapper, Upscaler, presets::QualityPreset,
@@ -16,29 +15,10 @@ use std::{
     time::Instant,
 };
 
-struct NoTextures;
 struct Previous {
     frame: u32,
     test: Vec<[f32; 4]>,
     reference: Vec<[f32; 4]>,
-}
-impl Textures for NoTextures {
-    fn content_digest(&self) -> [u8; 32] {
-        [0; 32]
-    }
-    fn initialize(&mut self, _: &mut GpuDevice) -> Result<TextureStats> {
-        Ok(TextureStats::default())
-    }
-    fn refine(&mut self, _: &mut GpuDevice) -> Result<TextureStats> {
-        Ok(TextureStats::default())
-    }
-    fn binding(&self) -> Option<TextureBinding> {
-        None
-    }
-    fn visit_resources(&self, _: &mut dyn FnMut(Resource, Access)) {}
-    fn destroy(self: Box<Self>, _: &mut GpuDevice) -> Result<()> {
-        Ok(())
-    }
 }
 
 pub fn main() -> Result<()> {
@@ -118,15 +98,13 @@ fn run(
         &output.join("sequence.json"),
         &serde_json::json!({"version":VERSION,"case":case,"fps":60,"frames":script}),
     )?;
-    let mut f = fixture::create(case);
+    let mut f = fixture::create(case)?;
     if let Some(first) = script.first() {
         fixture::apply(&mut f, case, first);
     }
-    let assets=f.scene.geometry.iter().map(|g|serde_json::json!({"key":g.key,"vertices":g.vertices.iter().map(|v|serde_json::json!({"position":v.position,"normal":v.normal,"uv":v.uv,"tangent":v.tangent})).collect::<Vec<_>>(),"indices":g.lods[0].indices})).collect::<Vec<_>>();
-    ara_gpu::cooked::write_json(&output.join("geometry.json"), &assets)?;
     let mut renderer = Renderer::new_native(
         &f.scene,
-        Box::new(NoTextures),
+        Box::new(super::polar::residency(&f)?),
         size,
         &[],
         output.join("gpu-cache"),
@@ -149,15 +127,15 @@ fn run(
     look.bloom = 0.;
     renderer.set_look(look)?;
     renderer.set_jitter_override(Some([0.; 2]));
-    let exposure = ara_render_fidelity::settings::exposure_from_ev100(5., 0.);
+    let exposure = ara_render_fidelity::settings::exposure_from_ev100(f.ev100, 0.);
     renderer.set_tone_curve(ara_render::renderer::post::ToneCurve::Neutral);
     let mut result=RunResult {version:VERSION,case:case.clone(),run:mode,renderer:"today-native-raster-high-no-hardware-rt".into(),
         device:renderer.gpu().info().name.clone(),revision:revision(),size,fps:60,uncapped_supported:false,caps_applied:mode==RunKind::Capped,
         timing_valid:std::env::var("ARA_RENDER_V3_TIMING_VALID").is_ok_and(|v|v=="1"),reference_samples:samples,reference_bounces:8,reference_converged:false,reference_white:1./f64::from(exposure),
         notes:vec!["Control uncapped mode removes exposed page redraw quotas only; stage demand, hidden caps, debt and deadlines remain n/a.".into(),
             "Finite-budget undenoised ara-pathtrace references are not certified exact solutions. Exact max-error gate stays n/a until convergence evidence is supplied.".into(),
-            "Native render passes are reported individually. Their sum is not a complete-frame GPU span; CPU update/render wall time is not CPU critical-path attribution.".into(),
-            "Fixture motions are deterministic scripted stress, not a physics simulation; foliage uses moving leaf cards. Polar fixture is a procedural floor, not the external Polar asset.".into()],frames:Vec::new()};
+            "gpu_frame_ms spans the update and render submissions, including GPU gaps. Pass sums and CPU update/render wall time are separate; CPU critical-path attribution is unavailable.".into(),
+            "Fixture motions are deterministic scripted stress, not a physics simulation; foliage uses moving leaf cards. Polar loads the real pinned model and cooked textures in a controlled finite-range light rig.".into()],frames:Vec::new()};
     for _ in 0..16 {
         renderer.render(&f.camera, exposure)?;
     }
@@ -174,7 +152,7 @@ fn run(
         let events = replay.apply(frame.frame, &mut f.scene)?;
         fixture::camera(&mut f, case, frame);
         if frame.cold_residency || layout != (f.scene.geometry.len(), f.scene.instances.len()) {
-            renderer.replace_native_scene(&f.scene, Box::new(NoTextures))?;
+            renderer.replace_native_scene(&f.scene, Box::new(super::polar::residency(&f)?))?;
         } else {
             renderer.update_native(&f.scene)?;
         }
@@ -183,19 +161,11 @@ fn run(
         }
         renderer.render(&f.camera, exposure)?;
         let wall = started.elapsed().as_secs_f64() * 1000.;
-        let mut stages: BTreeMap<String, StageCounters> = renderer
-            .timings()
-            .iter()
-            .map(|t| {
-                (
-                    t.pass.to_string(),
-                    StageCounters {
-                        gpu_ms: Some(t.milliseconds),
-                        ..Default::default()
-                    },
-                )
-            })
-            .collect();
+        let mut stages: BTreeMap<String, StageCounters> = BTreeMap::new();
+        for timing in renderer.timings() {
+            let stage = stages.entry(timing.pass.to_string()).or_default();
+            *stage.gpu_ms.get_or_insert(0.) += timing.milliseconds;
+        }
         for name in [
             "local_lights",
             "local_pages",
@@ -238,6 +208,11 @@ fn run(
         };
         row.evidence
             .insert("fixture_extent_m".into(), f64::from(f.extent));
+        row.evidence
+            .insert("authored_ev100".into(), f64::from(f.ev100));
+        if case.recipe == "polar" {
+            row.evidence.insert("real_polar_asset".into(), 1.);
+        }
         if let Some(gaps) = renderer.gpu().timing_window_gaps() {
             row.evidence
                 .insert("gpu_inter_submission_gaps_ms".into(), gaps);
@@ -287,6 +262,20 @@ fn run(
             )?;
             let ref_path = output.join(format!("reference-{:04}.png", frame.frame));
             save_png(&image, &ref_path)?;
+            let reference_root = std::env::var_os("ARA_LAB_REFERENCES")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| "D:/AraBench/report/images".into());
+            let archived = reference_root
+                .join("render-v3")
+                .join(&result.revision)
+                .join(format!("{}-{}x{}-{samples}spp", case.id, size[0], size[1]));
+            fs::create_dir_all(&archived)?;
+            let name = format!("reference-{:04}.png", frame.frame);
+            fs::copy(&ref_path, archived.join(name))?;
+            ara_gpu::cooked::write_json(
+                &archived.join("provenance.json"),
+                &serde_json::json!({"case":case,"worker_sha256":result.revision,"size":size,"samples":samples,"bounces":8,"ev100":f.ev100,"finite_range_window":true,"convergence_certified":false,"textures_blake3":f.textures.iter().map(|(key,_)|key).collect::<Vec<_>>()}),
+            )?;
             let temporal = previous
                 .as_ref()
                 .filter(|p| p.frame + 1 == frame.frame)
@@ -326,6 +315,9 @@ fn run(
             eprintln!("{} {mode:?} frame {}/{}", case.id, frame.frame, case.frames);
         }
     }
+    let assets=f.scene.geometry.iter().map(|g|serde_json::json!({"key":g.key,"vertices":g.vertices.iter().map(|v|serde_json::json!({"position":v.position,"normal":v.normal,"uv":v.uv,"uv1":v.uv1,"tangent":v.tangent,"color":v.color,"terrain_weights":v.terrain_weights})).collect::<Vec<_>>(),"indices":g.lods[0].indices})).collect::<Vec<_>>();
+    ara_gpu::cooked::write_json(&output.join("geometry.json"), &assets)?;
+    ara_gpu::cooked::write_json(&output.join("textures.json"), &f.textures.iter().map(|(key,source)|serde_json::json!({"blake3":key,"size":source.size(),"mips":source.mip_count()})).collect::<Vec<_>>())?;
     renderer.gpu_mut().collect()?;
     renderer.gpu().assert_clean()?;
     Ok(result)
@@ -349,7 +341,7 @@ fn reference(
         probe_ray_budget: 64,
         reflection_cutoff: 1.,
         post: PostSettings {
-            ev100: Some(5.),
+            ev100: Some(f.ev100),
             tone_mapper: ToneMapper::PbrNeutral,
             bloom: 0.,
             fog_density: 0.,
@@ -358,10 +350,7 @@ fn reference(
             ..Default::default()
         },
     };
-    let residency = ara_texture_stream::NativeResidency::new(ara_texture_stream::NativeConfig {
-        resident_bytes: 1 << 20,
-        upload_bytes: 1 << 20,
-    })?;
+    let residency = super::polar::residency(f)?;
     let view = FidelityView::new_native(gpu, &f.scene, residency, settings, None)?;
     let mut reference = ara_pathtrace::Reference::from_view(view)?;
     reference.converge(gpu, &f.camera)?;
@@ -382,12 +371,10 @@ fn save_png(image: &image::RgbaImage, path: &Path) -> Result<()> {
     Ok(())
 }
 fn revision() -> String {
-    std::process::Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .output()
+    use sha2::{Digest, Sha256};
+    std::env::current_exe()
         .ok()
-        .filter(|v| v.status.success())
-        .and_then(|v| String::from_utf8(v.stdout).ok())
-        .map(|v| v.trim().to_string())
+        .and_then(|path| fs::read(path).ok())
+        .map(|bytes| format!("{:x}", Sha256::digest(bytes)))
         .unwrap_or_else(|| "unknown".into())
 }

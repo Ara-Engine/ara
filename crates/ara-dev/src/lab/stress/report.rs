@@ -13,23 +13,40 @@ pub fn write(gate: u8, suite: &Suite, output: &Path) -> Result<()> {
     let mut rows = Vec::new();
     let mut verdicts = Vec::new();
     let mut text = format!(
-        "# G{gate} renderer gate\n\nContract: council-v3 architecture v9, sections 5 and 6.3. Cost uses uncapped replay; quality uses capped frames. Missing evidence is **n/a**, never zero. PNGs are bounded to 1920x1080; scoring uses native frames.\n\nThis is one-device evidence. Promotion additionally requires the complete case list on **both** target GPUs.\n\n| Case | Verdict | Control GPU pass sum p50 / p99 / max / average (ms) | Worst sampled region FLIP |\n|---|---|---|---|\n"
+        "# G{gate} renderer gate\n\nContract: council-v3 architecture v9, sections 5 and 6.3. Cost uses uncapped replay; quality uses capped frames. Missing evidence is **n/a**, never zero. PNGs are bounded to 1920x1080; scoring uses native frames.\n\nThis is one-device evidence. Promotion additionally requires the complete case list on **both** target GPUs.\n\n| Case | Verdict | Control full GPU span p50 / p99 / max / average (ms) | Worst sampled region FLIP |\n|---|---|---|---|\n"
     );
     for case in suite.cases.iter().filter(|c| c.gates.contains(&gate)) {
         let base = output.join("cases").join(&case.id);
         let read = |kind: &str| -> Result<RunResult> {
-            Ok(serde_json::from_slice(&fs::read(
-                base.join(kind).join("run.json"),
-            )?)?)
+            let run: RunResult =
+                serde_json::from_slice(&fs::read(base.join(kind).join("run.json"))?)?;
+            anyhow::ensure!(
+                serde_json::to_value(&run.case)? == serde_json::to_value(case)?,
+                "receipt does not match the versioned case"
+            );
+            Ok(run)
         };
         let a = read("uncapped");
         let b = read("capped");
+        let pass_sum = a.as_ref().ok().and_then(|r| {
+            let samples: Option<Vec<_>> = r
+                .frames
+                .iter()
+                .map(|f| {
+                    f.stages
+                        .values()
+                        .filter_map(|s| s.gpu_ms)
+                        .reduce(|a, b| a + b)
+                })
+                .collect();
+            samples.and_then(distribution)
+        });
         let control = a.as_ref().ok().and_then(|r| {
-            distribution(
-                r.frames
-                    .iter()
-                    .map(|f| f.stages.values().filter_map(|s| s.gpu_ms).sum::<f64>()),
-            )
+            r.frames
+                .iter()
+                .map(|f| f.gpu_frame_ms)
+                .collect::<Option<Vec<_>>>()
+                .and_then(distribution)
         });
         let flip = b.as_ref().ok().and_then(|r| {
             r.frames
@@ -102,7 +119,7 @@ pub fn write(gate: u8, suite: &Suite, output: &Path) -> Result<()> {
         let attribution = (gate == 5)
             .then(|| a.as_ref().ok().map(super::attribution::route))
             .flatten();
-        rows.push(json!({"case":case,"verdict":verdict,"score":score.as_ref().ok(),"error":score.as_ref().err().map(ToString::to_string),"control_pass_sum_ms":control,"stage_gpu_ms":stages,"uncapped":base.join("uncapped/run.json"),"capped":base.join("capped/run.json"),"worst_sampled_region_flip":flip,"timing_valid":a.as_ref().ok().map(|r|r.timing_valid),"G5_attribution_only":attribution}));
+        rows.push(json!({"case":case,"verdict":verdict,"score":score.as_ref().ok(),"error":score.as_ref().err().map(ToString::to_string),"control_gpu_span_ms":control,"control_pass_sum_ms":pass_sum,"stage_gpu_ms":stages,"uncapped":base.join("uncapped/run.json"),"capped":base.join("capped/run.json"),"worst_sampled_region_flip":flip,"timing_valid":a.as_ref().ok().map(|r|r.timing_valid),"G5_attribution_only":attribution}));
     }
     let verdict = gates::combine(verdicts);
     let worst_sun_flip = rows
@@ -118,7 +135,7 @@ pub fn write(gate: u8, suite: &Suite, output: &Path) -> Result<()> {
         .iter()
         .filter(|r| r["case"]["recipe"] == "sun" && r["timing_valid"] == true)
         .filter_map(|r| {
-            r["control_pass_sum_ms"]["average"]
+            r["control_gpu_span_ms"]["average"]
                 .as_f64()
                 .map(|v| (r["case"]["id"].clone(), v))
         })
@@ -126,7 +143,7 @@ pub fn write(gate: u8, suite: &Suite, output: &Path) -> Result<()> {
     if gate == 2 {
         writeln!(
             text,
-            "\nWorst sampled sun band (FLIP): {}. Worst measured control cost band (average pass sum): {}. Missing bands remain required.\n",
+            "\nWorst sampled sun band (FLIP): {}. Worst measured control cost band (average GPU span): {}. Missing bands remain required.\n",
             worst_sun_flip
                 .as_ref()
                 .map_or("n/a".into(), |v| format!("{}: {:.6}", v.0, v.1)),

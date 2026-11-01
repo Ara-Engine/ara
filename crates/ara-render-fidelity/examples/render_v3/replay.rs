@@ -8,7 +8,7 @@ use std::{
 };
 
 pub fn record(case: &Case, output: impl Write) -> Result<()> {
-    let mut fixture = fixture::create(case);
+    let mut fixture = fixture::create(case)?;
     let mut feed = ChangeFeed::default();
     let mut writer = ReplayWriter::new(output)?;
     let mut previous = BTreeSet::new();
@@ -210,8 +210,8 @@ mod tests {
             let mut bytes = Vec::new();
             record(case, &mut bytes).unwrap();
             let mut replay = Replay::new(bytes.as_slice()).unwrap();
-            let mut expected = fixture::create(case);
-            let mut actual = fixture::create(case);
+            let mut expected = fixture::create(case).unwrap();
+            let mut actual = fixture::create(case).unwrap();
             let mut saw_sleep = false;
             let mut saw_wake = false;
             for frame in case.script(60) {

@@ -10,6 +10,7 @@ publish.workspace = true
 ara-bench = { path = "../ara-bench", default-features = false }
 blake3.workspace = true
 ara-hotpatch = { path = "../ara-hotpatch" }
+ara-json.workspace = true
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 notify = "8.2"
@@ -33,6 +34,5 @@ workspace = true
 
 [dev-dependencies]
 ara-doc.workspace = true
-ara-json.workspace = true
 proc-macro2.workspace = true
 tempfile.workspace = true

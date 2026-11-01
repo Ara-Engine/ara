@@ -1796,6 +1796,7 @@ dependencies = [
  "ara-render",
  "ara-schema",
  "ara-texture-stream",
+ "blake3",
  "bytemuck",
  "glam 0.30.9",
  "image",

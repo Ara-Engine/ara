@@ -80,6 +80,9 @@ fn complete_max(run: &RunResult, metric: impl Fn(&FrameResult) -> Option<f64>) -
     distribution(values?).map(|d| d.max)
 }
 fn stage(run: &RunResult, name: &str) -> Option<Distribution> {
+    if !run.timing_valid {
+        return None;
+    }
     let values: Option<Vec<_>> = run
         .frames
         .iter()
@@ -99,15 +102,27 @@ fn evidence(run: &RunResult, name: &str) -> Option<f64> {
 }
 
 fn common_quality(lines: &mut Vec<Line>, run: &RunResult, flip_limit: f64, kill: Option<f64>) {
+    let measured_flip = run
+        .frames
+        .iter()
+        .filter_map(|f| f.quality.region_flip.values().copied().reduce(f64::max))
+        .reduce(f64::max);
     upper(
         lines,
         "worst_region_flip",
         complete_max(run, |f| {
             f.quality.region_flip.values().copied().reduce(f64::max)
-        }),
+        })
+        .or(measured_flip.filter(|v| *v > flip_limit)),
         flip_limit,
         kill,
     );
+    let measured_temporal = run
+        .frames
+        .iter()
+        .skip(1)
+        .filter_map(|f| f.quality.temporal_block_rms_white)
+        .reduce(f64::max);
     let temporal = run
         .frames
         .iter()
@@ -115,7 +130,8 @@ fn common_quality(lines: &mut Vec<Line>, run: &RunResult, flip_limit: f64, kill:
         .map(|f| f.quality.temporal_block_rms_white)
         .collect::<Option<Vec<_>>>()
         .and_then(distribution)
-        .map(|d| d.max);
+        .map(|d| d.max)
+        .or(measured_temporal.filter(|v| *v > 0.005));
     if run.case.frames > 1 {
         upper(
             lines,
@@ -419,7 +435,8 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
                 .iter()
                 .map(|f| f.gpu_frame_ms)
                 .collect::<Option<Vec<_>>>()
-                .and_then(distribution);
+                .and_then(distribution)
+                .filter(|_| a.timing_valid);
             upper(
                 &mut lines,
                 "measured_complete_frame_p99_ms",
@@ -474,6 +491,13 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
             common_quality(&mut lines, b, 0.02, Some(0.02));
         }
         6 => {
+            if b.case.recipe == "polar" {
+                required(
+                    &mut lines,
+                    "real_Polar_asset",
+                    evidence(b, "real_polar_asset") == Some(1.),
+                );
+            }
             common_quality(&mut lines, b, 0.02, Some(0.02));
             required(
                 &mut lines,

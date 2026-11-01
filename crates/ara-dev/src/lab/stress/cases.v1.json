@@ -1124,7 +1124,7 @@
                       "event_frame":  0,
                       "bodies":  0,
                       "triangles":  108,
-                      "lights":  1,
+                      "lights":  0,
                       "range_m":  8,
                       "target_lpp":  null,
                       "sun_deg_s":  0,
@@ -1174,7 +1174,7 @@
                       "event_frame":  0,
                       "bodies":  0,
                       "triangles":  108,
-                      "lights":  1,
+                      "lights":  0,
                       "range_m":  8,
                       "target_lpp":  null,
                       "sun_deg_s":  0,
@@ -1252,7 +1252,7 @@
                       "event_frame":  8,
                       "bodies":  0,
                       "triangles":  108,
-                      "lights":  1,
+                      "lights":  4,
                       "range_m":  8,
                       "target_lpp":  null,
                       "sun_deg_s":  0,
@@ -1352,6 +1352,206 @@
                                                12,
                                                306,
                                                307
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-sun-1",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_sun",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  1,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-sun-3",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_sun",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-sun-10",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_sun",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  10,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-rect-1",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_rect",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  10,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  1,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-rect-3",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_rect",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  14,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-contact-rect-10",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "contact_rect",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  1,
+                      "range_m":  28,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  10,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-pole-sweep",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "pole_sweep",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  0,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  10,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
+                                           ]
+                  },
+                  {
+                      "id":  "shadow-eight-lights",
+                      "gates":  [
+                                    4
+                                ],
+                      "recipe":  "eight_lights",
+                      "frames":  32,
+                      "event_frame":  0,
+                      "bodies":  0,
+                      "triangles":  108,
+                      "lights":  8,
+                      "range_m":  8,
+                      "target_lpp":  null,
+                      "sun_deg_s":  0,
+                      "elevation_deg":  45,
+                      "contact_m":  0.3,
+                      "reference_frames":  [
+                                               0,
+                                               1,
+                                               2,
+                                               3,
+                                               30,
+                                               31
                                            ]
                   }
               ]

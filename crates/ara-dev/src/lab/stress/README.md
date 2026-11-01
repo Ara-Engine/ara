@@ -3,7 +3,9 @@
 `ara-dev lab gate` runs an explicitly selected, prebuilt headless worker. It does
 not start/restart a lab daemon, change a renderer default, or build another checkout.
 `cases.v1.json` is the versioned scene recipe catalogue; each run writes its exact
-60 Hz frame script to `sequence.json`. Both runs consume the same case definition.
+60 Hz frame script to `sequence.json`. Both runs consume the same case definition
+and A3's `ARACHG01` binary stream (`changes.bin`). The 57 recipes include all five
+R5-5 contact heights, the pole sweep and eight separate shadowed sources.
 
 Build the worker and lab in your own target directory, after checking the overnight
 quiet-window lock. The task coordinator's builder rules govern admission.
@@ -42,6 +44,13 @@ The existing `lab reference` Cycles workflow remains available for supported exp
 scenes. Procedural fixtures use ara-pathtrace's native reference view with the exact
 same geometry, material extensions and finite light ranges. No shader changes are
 needed: its local-light sampler already applies the renderer's range window.
+Reference PNGs and provenance are archived beneath
+`ARA_LAB_REFERENCES/render-v3/<worker-sha256>/`, defaulting to
+`D:/AraBench/report/images/render-v3/`. `revision` identifies the worker executable
+by SHA-256, so a later source commit cannot silently relabel an existing binary.
+The authored range sweep scales power by range squared; dense cases raise EV100
+by log2(LPP/2.4) to keep the receiver in the measurable exposure range. Both runs
+and references use the identical radiometric white recorded in the receipt.
 
 ## Worker and instrumentation contract
 
@@ -88,14 +97,25 @@ control. Its uncapped mode removes exposed local/VSM redraw quotas but cannot re
 all internal limits. It explicitly reports `uncapped_supported: false`. Raw GPU pass
 times are useful A/B control observations, not certified uncapped-demand numbers.
 Today's renderer has no transport debt or exact error counters: they remain n/a.
+The control table reports the measured GPU span across update/render submissions,
+including submission gaps. Repeated pass labels are summed instead of overwritten.
 Finite references remain `reference_converged: false`; no exact-solution pass is
 claimed from a finite noisy reference. A stage can already produce an observed kill
 while another required field is unavailable. A complete gate needs both GPU targets.
 
-The current Polar case is a procedural roughness-floor surrogate, clearly recorded
-in run notes; the real Polar asset/transform and matched Cycles reference must replace
-it before G6 promotion. Foliage consists of deterministic moving leaf cards; body
-motion is a scripted stress trajectory rather than a physics simulation.
+Polar loads the actual exported model and existing cooked compressed textures from
+`ARA_LAB_POLAR` (default `D:/AraScratch/AraPolar`) and a pinned cache action selected
+by `ARA_LAB_POLAR_ACTION`. The model buffer is SHA-256 pinned; each cooked artifact
+is checked against its BLAKE3 content key. Node transforms and model-space geometry
+are retained. This is a controlled finite-range light rig, not a reproduction of
+the editor project's fog, sky and post-processing. No project files are written.
+Foliage consists of deterministic moving leaf cards; body motion is a scripted
+stress trajectory rather than a physics simulation. The sealed flicker case has
+200 closed cells and observes one cell from inside; all 200 sources change.
+
+`inspect.ps1 -Root <campaign> -Output <directory>` creates labelled contact sheets
+from every raw capture/reference pair. It records no automatic visual approval;
+the operator must open and inspect the sheets and any suspicious native PNGs.
 
 ## Focused verification
 
