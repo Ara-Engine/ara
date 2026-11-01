@@ -2,8 +2,8 @@
 //! (`shaders/look-shadow.slangh`: contact-hardening soft shadows). One RG32F image per
 //! map kind mirrors it at half resolution and below: the local-light atlas, the
 //! cascades (as a 2x2 atlas of cascade-sized tiles) and the far map. Per texel it holds
-//! the mean stored depth of the map texels it covers and their variance about that
-//! mean. Levels pack side by side (level 0 at the origin, level k >= 1 at
+//! the mean stored depth of the map texels it covers, their variance about that mean
+//! and the farthest of them from the light (blue; alpha unused). Levels pack side by side (level 0 at the origin, level k >= 1 at
 //! `[W, H - H / 2^(k-1)]`), so each level is one storage view.
 //!
 //! A tile's pyramid is rebuilt (every level, `shaders/look-shadow-moments.slang`) in the
@@ -13,8 +13,8 @@ use crate::graph::State;
 use anyhow::Result;
 use ara_gpu::{Access, Device, GpuDevice, Image, Queue, Resource, vk};
 
-/// The pyramids' format: mean and variance of stored depth.
-const FORMAT: vk::Format = vk::Format::R32G32_SFLOAT;
+/// The pyramids' format: mean, variance and minimum of stored depth.
+const FORMAT: vk::Format = vk::Format::R32G32B32A32_SFLOAT;
 /// Most levels a pyramid builds (a 2048-texel tile's nine).
 pub(crate) const MAX_LEVELS: u32 = 9;
 

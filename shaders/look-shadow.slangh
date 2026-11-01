@@ -3,8 +3,9 @@
 // Include after raster.slangh and look.slangh.
 //
 // Every map has a moment pyramid (look-shadow-moments.slang): level 0 holds, per 2x2
-// depth texels, their mean stored depth and its variance (centred, so exact in fp32),
-// and each further level halves the one before. The levels pack into one RG32F image:
+// depth texels, their mean stored depth, its variance (centred, so exact in fp32) and
+// the farthest depth, and each further level halves the one before. The levels pack
+// into one RGBA32F image:
 // level 0 at the origin (W x H, half the map), level k >= 1 at (W, H - H/2^(k-1)). A
 // tile of the map at texel origin o, side s, sits at level k at origin(k) + o/2^(k+1),
 // side s/2^(k+1). Level -1 names the depth map itself (no variance).
@@ -15,7 +16,9 @@
 // projected into the map (shadowKernel), at the level whose texels it spans, blended
 // with the next coarser one, so widths change continuously. Per texel, the share of
 // depth that blocks comes from its mean and variance (Chebyshev's two-layer split: exact
-// for one occluder over one background inside a texel). A depth blocks only above the
+// for one occluder over one background inside a texel; a texel whose farthest depth
+// lies above the receiver blocks whole, which Chebyshev's bound would under-count for
+// an occluder spanning many depths, a sphere). A depth blocks only above the
 // receiver's tangent plane and nearer the light than the receiver: no acne and no
 // self-shadowing at any filter width (the light's horizon is lit by its shading, LTC
 // clipping included), and no normal offset, so contact shadows stay attached. The bias
@@ -88,21 +91,22 @@ int shadowTop(ShadowMap s){return s.moments==0?-1:max(int(log2(s.res))-4,-1);}
 // (Chebyshev, as variance shadow maps: exact for two layers, the lower at `t`).
 float shadowExceeds(float mu,float v,float t){float d=mu-t;return d<=0?0:v<=0?1:d*d/(v+d*d);}
 // Blocked share of a texel at tile offset `o` from the receiver (level texel `size`
-// texels wide) with depth mean `mu` and variance `v`, and its blockers' mean depth (y).
+// texels wide) with depth mean `mu`, variance `v` and farthest depth `far`, and its
+// blockers' mean depth (y).
 // The texel splits at the receiver's plane there (or the receiver's own depth, where
 // the plane lies farther from the light): the plane is one layer, the blockers the
 // other. Blockers within the bias of that split (height along the light) are the
 // receiving surface itself and fade out over a second bias; where the light's centre
 // lies below the plane (pz < 0), blockers lie between the receiver's depth and the
-// plane.
-float2 shadowBlocked(ShadowReceiver r,float2 o,float size,float mu,float v){
+// plane. A texel whose farthest depth clears the split blocks whole.
+float2 shadowBlocked(ShadowReceiver r,float2 o,float size,float mu,float v,float far){
     float pz=r.plane.z,plane=r.d-dot(r.plane.xy,o)/(abs(pz)>1e-30?pz:1e-30);
     float low=pz>=0?max(plane,r.d):r.d;
-    float b=shadowExceeds(mu,v,low);
+    float bias=r.texel*(SHADOW_BIAS+SHADOW_SLOPE*length(o));
+    float b=max(shadowExceeds(mu,v,low),pz>=0?saturate(((far-low)/r.rise-bias)/bias):0);
     if(pz<0)b=plane>low?max(b-shadowExceeds(mu,v,plane),0):0;
     float depth=b>1e-6?(mu-(1-b)*low)/b:low;
     if(pz<0)depth=min(depth,plane);
-    float bias=r.texel*(SHADOW_BIAS+SHADOW_SLOPE*length(o));
     b*=saturate(((depth-low)/r.rise-bias)/bias);
     return float2(b,depth);
 }
@@ -110,16 +114,17 @@ float2 shadowBlocked(ShadowReceiver r,float2 o,float size,float mu,float v){
 float2 shadowLevelOrigin(float2 msize,int level){return level<=0?0:float2(msize.x,msize.y-msize.y/float(1u<<uint(level-1)));}
 // The 2x2 texels of level `level` (-1: depth) around boundary `g` (level texels g-1, g
 // of the tile, clamped inside it): stored means (w top-left, z top-right, x bottom-left,
-// y bottom-right) and variances, and the clamped boundary.
-void shadowGather(ShadowMap s,int level,int2 g,out float4 mu,out float4 v,out float2 at){
+// y bottom-right), variances and farthest depths, and the clamped boundary.
+void shadowGather(ShadowMap s,int level,int2 g,out float4 mu,out float4 v,out float4 far,out float2 at){
     float size=level<0?1:float(1u<<uint(level+1)),side=s.res/size;
     at=clamp(float2(g),1,side-1);
-    mu=0;v=0;
-    [branch]if(level<0)mu=textures[NonUniformResourceIndex(s.depth)].GatherRed(samplers[2],(s.lo+at)/s.depthSize);
+    mu=0;v=0;far=0;
+    [branch]if(level<0){mu=textures[NonUniformResourceIndex(s.depth)].GatherRed(samplers[2],(s.lo+at)/s.depthSize);far=mu;}
     else{
         float2 uv=(shadowLevelOrigin(s.msize,level)+s.mlo/size+at)/float2(s.msize.x*1.5,s.msize.y);
         mu=textures[NonUniformResourceIndex(s.moments)].GatherRed(samplers[2],uv);
         v=textures[NonUniformResourceIndex(s.moments)].GatherGreen(samplers[2],uv);
+        far=textures[NonUniformResourceIndex(s.moments)].GatherBlue(samplers[2],uv);
     }
 }
 // Tile offsets from the receiver of the four texels around clamped boundary `at` at
@@ -136,68 +141,91 @@ float2 shadowBlockers(ShadowMap s,ShadowReceiver r,int level,float window,float 
     float size=level<0?1:float(1u<<uint(level+1));float2 x=(r.c+0.5)/size-0.5;int2 base=int2(floor(x))-1;
     float blocked=0,depth=0,weight=0,total=0;
     [loop]for(uint q=0;q<4;q++){
-        float4 mu,v,ox,oy;float2 at;shadowGather(s,level,base+int2(1+2*(q&1),1+2*(q>>1)),mu,v,at);shadowOffsets(r,at,size,ox,oy);
+        float4 mu,v,far,ox,oy;float2 at;shadowGather(s,level,base+int2(1+2*(q&1),1+2*(q>>1)),mu,v,far,at);shadowOffsets(r,at,size,ox,oy);
         [unroll]for(uint k=0;k<4;k++){
             float2 o=float2(ox[k],oy[k]);
             float w=saturate((window-abs(o.x))/size+0.5)*saturate((window-abs(o.y))/size+0.5);
-            float2 b=shadowBlocked(r,o,size,mu[k],v[k]);
+            float2 b=shadowBlocked(r,o,size,mu[k],v[k],far[k]);
             float reach=shadowPenumbra(s,r,extent,tangent,b.y)+size;
             float cone=saturate((reach-length(o))/size+0.5);
-            // The mean leans towards blockers with narrower cones (a round blocker's
-            // silhouette rather than its top, which the coverage mean favours).
-            float found=w*cone*b.x;blocked+=found;depth+=found/reach*b.y;weight+=found/reach;total+=w;
+            // The mean leans towards the blockers nearest the receiver in the map (inverse
+            // square): at a round blocker's shadow edge its silhouette, not its top, which
+            // a coverage mean favours and which casts a penumbra twice as wide; inside the
+            // umbra the blockers overhead, whose wider kernel stays covered.
+            float found=w*cone*b.x,inside=found/(dot(o,o)+size*size);
+            blocked+=found;depth+=inside*b.y;weight+=inside;total+=w;
         }
     }
     return float2(total>0?blocked/total:0,weight>0?depth/weight:r.d);
 }
-// Visibility through the kernel of half-axes `a`, `b` (tile texels; elliptical with
-// `disc`, else rectangular) at `level`: each of the 6x6 texels around the receiver (nine
-// gathers) weighted by its overlap with the kernel, its lit share from shadowBlocked.
-float shadowKernel(ShadowMap s,ShadowReceiver r,int level,float2 a,float2 b,bool disc){
+/// Kernel scale (tile texels per unit of the light's axes) of a blocker at stored depth
+// `d`: the sun's height times its tangent (orthographic; axes of one), or (receiver -
+// blocker) / blocker depth (perspective; axes in metres).
+float shadowScale(ShadowMap s,ShadowReceiver r,ShadowLight light,float d){
+    if(s.far>0)return max(r.axial/shadowLinear(s,d)-1,0)/r.texel;
+    return max(d-r.d,0)/r.rise*light.tangent/r.texel;
+}
+// Overlap (texels) along one kernel axis of a texel `size` wide centred at `u` with
+// the kernel's span [-e, e].
+float shadowOverlap(float u,float e,float size){return clamp(min(u+0.5*size,e)-max(u-0.5*size,-e),0,size);}
+// Visibility at `level` through the light's kernel, its unit half-axes `a`, `b` (tile
+// texels per unit of shadowScale; elliptical with `disc`, else rectangular), over the
+// 6x6 texels around the receiver (nine gathers). Each texel's blockers hide the share of
+// the source its own depth's kernel gives (its overlap with that kernel over the
+// kernel's area, a disc as the square of its area): one blocker depth gives PCF with
+// that kernel; stacked depths, a round blocker on its receiver, add up to the umbra
+// they cast (clamped), where one mean depth would spread it thin. `fixed`: one kernel of
+// half-axes `a`, `b` for every texel, weighted and normalised as plain PCF (points).
+float shadowKernel(ShadowMap s,ShadowReceiver r,ShadowLight light,int level,float2 a,float2 b,bool disc,bool fixed){
     float size=level<0?1:float(1u<<uint(level+1));float2 x=(r.c+0.5)/size-0.5;int2 base=int2(floor(x))-2;
-    float ea=max(length(a),1e-4),eb=max(length(b),1e-4);float2 ua=a/ea,ub=length(b)>1e-4?b/eb:float2(-ua.y,ua.x);
-    float lit=0,total=0;
+    float la=max(length(a),1e-6),lb=max(length(b),1e-6);float2 ua=a/la,ub=length(b)>1e-6?b/lb:float2(-ua.y,ua.x);
+    // A disc as the square of its area; never narrower than half a texel.
+    float shape=disc?0.8862:1,reach=2.5*size;
+    float hidden=0,lit=0,total=0;
     [loop]for(uint q=0;q<9;q++){
-        float4 mu,v,ox,oy;float2 at;shadowGather(s,level,base+int2(1+2*(q%3),1+2*(q/3)),mu,v,at);shadowOffsets(r,at,size,ox,oy);
+        float4 mu,v,far,ox,oy;float2 at;shadowGather(s,level,base+int2(1+2*(q%3),1+2*(q/3)),mu,v,far,at);shadowOffsets(r,at,size,ox,oy);
         [unroll]for(uint k=0;k<4;k++){
-            float2 o=float2(ox[k],oy[k]);float u=dot(o,ua),t=dot(o,ub),w;
-            if(disc){float rho=length(float2(u/ea,t/eb)),len=length(o);w=saturate((rho>1e-4?len/rho:1e9)/size-len/size+0.5);}
-            else w=saturate((ea-abs(u))/size+0.5)*saturate((eb-abs(t))/size+0.5);
-            lit+=w*(1-shadowBlocked(r,o,size,mu[k],v[k]).x);total+=w;
+            float2 o=float2(ox[k],oy[k]),blocked=shadowBlocked(r,o,size,mu[k],v[k],far[k]);
+            float scale=fixed?1:shadowScale(s,r,light,blocked.y);
+            float ea=clamp(la*scale*shape,0.5,reach),eb=clamp(lb*scale*shape,0.5,reach);
+            float w=shadowOverlap(dot(o,ua),ea,size)*shadowOverlap(dot(o,ub),eb,size);
+            hidden+=blocked.x*w/(4*ea*eb);lit+=w*(1-blocked.x);total+=w;
         }
     }
-    return total>0?lit/total:1;
+    return fixed?(total>0?lit/total:1):1-saturate(hidden);
 }
-// The kernel blended across the two levels its major half-width `h` spans (at level L
-// it spans one to two of that level's texels, so its shape resolves).
-float shadowFiltered(ShadowMap s,ShadowReceiver r,float2 a,float2 b,bool disc){
+// The kernel at the levels the half-axes `a`, `b` (tile texels, from the blockers' mean
+// depth) span, blended across the two (at level L the major one spans one to two of its
+// texels, so the shape resolves). `unit`: the per-texel kernels' unit axes
+// (shadowKernel).
+float shadowFiltered(ShadowMap s,ShadowReceiver r,ShadowLight light,float2 a,float2 b,float2 ua,float2 ub){
     float h=max(max(length(a),length(b)),0.75);
     float lambda=max(log2(h)-1,-1);int top=shadowTop(s);
     int level=min(int(floor(lambda)),top);float blend=level<top?saturate(lambda-float(level)):0;
     float v=0;
-    [loop]for(uint k=0;k<(blend>0?2u:1u);k++)v+=(k==0?1-blend:blend)*shadowKernel(s,r,level+int(k),a,b,disc);
+    [loop]for(uint k=0;k<(blend>0?2u:1u);k++)v+=(k==0?1-blend:blend)*shadowKernel(s,r,light,level+int(k),ua,ub,light.disc,false);
     return v;
 }
 // The level whose 4x4 texels cover a box of half-width `window` texels.
 int shadowSearchLevel(ShadowMap s,float window){return min(int(ceil(log2(max(window,1)/1.5)))-1,shadowTop(s));}
-// The kernel half-axes (tile texels) of light `light` for blockers at stored depth `d`.
-void shadowAxes(ShadowMap s,ShadowReceiver r,ShadowLight light,float d,out float2 a,out float2 b){
-    if(s.far<=0){float p=shadowPenumbra(s,r,0,light.tangent,d);a=float2(p,0);b=float2(0,p);return;}
-    float scale=max(r.axial/shadowLinear(s,d)-1,0)/r.texel;
+// The light's kernel unit half-axes in the tile (per unit of shadowScale): the
+// projected source axes (perspective, metres) or the sun disc's (orthographic).
+void shadowAxes(ShadowMap s,ShadowLight light,out float2 a,out float2 b){
+    if(s.far<=0){a=float2(1,0);b=float2(0,1);return;}
     float3 x=normalize(s.m[0].xyz),y=normalize(s.m[1].xyz);
-    a=float2(dot(light.a,x),-dot(light.a,y))*scale;b=float2(dot(light.b,x),-dot(light.b,y))*scale;
+    a=float2(dot(light.a,x),-dot(light.a,y));b=float2(dot(light.b,x),-dot(light.b,y));
 }
 // Soft visibility of `world` (unit `normal`, `toLight` towards the light) in tile `s`
-// from `light`; -1 outside the tile. `penumbra`: the kernel's major half-width (m; zero
-// where no blocker was found), for the penumbra view.
+// from `light`; -1 outside the tile. `penumbra`: the kernel's major half-width at the
+// blockers' mean depth (m; zero where no blocker was found), for the penumbra view.
 float shadowSoft(Look l,ShadowMap s,float3 world,float3 normal,float3 toLight,ShadowLight light,out float penumbra){
     penumbra=0;ShadowReceiver r=shadowReceiver(s,world,normal,toLight);if(!r.inside)return -1;
     float extent=max(length(light.a),length(light.b));
     bool point=(l.shadowInfo[1].w&SHADOW_HARD)!=0||(s.far>0?extent<=0:light.tangent<=0);
-    if(point)return shadowKernel(s,r,-1,float2(0.75,0),float2(0,0.75),true);
+    if(point)return shadowKernel(s,r,light,-1,float2(0.75,0),float2(0,0.75),false,true);
     // The widest cone: blockers as near the light as a fifth of the receiver's depth
-    // (faces), or as high above it as the tile is wide (the sun).
-    // Then again over the penumbra those cast, where it is much narrower.
+    // (faces), or as high above it as the tile is wide (the sun). Then again over the
+    // penumbra those cast, where it is much narrower.
     float window=clamp(s.far>0?extent*4/r.texel:s.res*light.tangent,1,s.res*0.25);float2 found=0;
     [loop]for(uint pass=0;pass<2;pass++){
         float2 b=shadowBlockers(s,r,shadowSearchLevel(s,window),window,extent,light.tangent);
@@ -206,9 +234,9 @@ float shadowSoft(Look l,ShadowMap s,float3 world,float3 normal,float3 toLight,Sh
         if(reach>=window*0.5)break;
         window=reach;
     }
-    float2 a,b;shadowAxes(s,r,light,found.y,a,b);
-    penumbra=max(length(a),length(b))*r.texel;
-    return shadowFiltered(s,r,a,b,light.disc);
+    float2 ua,ub;shadowAxes(s,light,ua,ub);float scale=shadowScale(s,r,light,found.y);
+    penumbra=max(length(ua),length(ub))*scale*r.texel;
+    return shadowFiltered(s,r,light,ua*scale,ub*scale,ua,ub);
 }
 // Soft visibility for a fog sample (no surface) of footprint radius `footprint` (m):
 // one blocker estimate over the widest cone, then the penumbra's kernel (at least the
@@ -223,7 +251,7 @@ float shadowFog(Look l,ShadowMap s,float3 world,float3 toLight,ShadowLight light
         h=max(h,shadowPenumbra(s,r,extent,light.tangent,found.y));
     }
     h=max(h,0.75);int level=min(int(round(log2(h/0.75)-1)),shadowTop(s));
-    return shadowKernel(s,r,level,float2(h,0),float2(0,h),true);
+    return shadowKernel(s,r,light,level,float2(h,0),float2(0,h),true,true);
 }
 
 // The tiles of the sun maps and the local atlas (look.cascadeMaps, farInfo,
