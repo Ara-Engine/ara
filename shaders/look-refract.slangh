@@ -158,8 +158,10 @@ float4 refractColour(Frame f,Look l,Surface s,uint2 volume,float scale,float3 wo
         float thickness=m.thickness*scale;
         float3 t1=refract(-v,n,1/m.ior);if(dot(t1,t1)<1e-6)t1=-v;
         float radius=max(1/max(curvature,1e-4),thickness*0.5),cosine=max(-dot(t1,geometric),0.05);
-        float chord=min(2*radius*cosine,thickness/cosine);
-        float3 exit=world+t1*chord,n2=normalize(exit-(world-geometric*radius));
+        // The far side's outward normal: the sphere's at the exit, or a slab's flat
+        // back face (facing away from the viewer) where the thickness bounds the chord.
+        float sphere=2*radius*cosine,slab=thickness/cosine,chord=min(sphere,slab);
+        float3 exit=world+t1*chord,n2=sphere<slab?normalize(exit-(world-geometric*radius)):-geometric;
         float3 t2=refract(t1,-n2,m.ior);float leave;
         // Total internal reflection where the far side's estimate is too steep: keep
         // the ray, at the normal-incidence loss.

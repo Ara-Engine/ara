@@ -28,7 +28,8 @@ float4 refractColourRt(Frame f,Look l,Surface s,uint2 volume,float scale,float3 
     if(m.thickness<=0)transmitted=refractRay(f,l,world,-v,spread,0,s.roughness)*s.albedo;
     else{
         float thickness=m.thickness*scale;float3 t1=refract(-v,s.normal,1/m.ior);if(dot(t1,t1)<1e-6)t1=-v;
-        float chord=thickness/max(-dot(t1,geometric),0.05);float3 n2=geometric;RtHit back;
+        // Without a traced far side, a slab's flat back face (outward away from the viewer).
+        float chord=thickness/max(-dot(t1,geometric),0.05);float3 n2=-geometric;RtHit back;
         float bias=l.rtParams[1].x+l.rtParams[1].y*length(world-f.camera.xyz);
         if(rtTrace(f,l,world+t1*bias,t1,thickness*4+bias,back,RT_TRANSPARENT)){
             RtTriangle t=rtHitTriangle(l,back);
