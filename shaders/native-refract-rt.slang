@@ -26,7 +26,9 @@ float3 refractRay(Frame f,Look l,float3 o,float3 d,float spread,float travelled,
     return rtShadeHit(f,l,h,position,geometric,-d)*refractExposure(f,l);
 }
 // refractColour with traced interfaces (see above); always the High/Epic tier's shading.
-float4 refractColourRt(Frame f,Look l,Surface s,uint2 volume,float scale,float3 world,float3 geometric,int2 p){
+// `self`: the surface's native instance; a ray along the refracted path meeting it
+// again found a hollow shell's far wall (refractShell's, taken where it is).
+float4 refractColourRt(Frame f,Look l,Surface s,uint2 volume,float scale,float3 world,float3 geometric,int2 p,uint self){
     RefractVolume m=refractVolume(volume);float3 v=normalize(f.camera.xyz-world);
     float f0=refractF0(m.ior),through;float3 reflected=refractSurface(f,l,s,f0,world,p,true,through);
     float spread=refractSpread(s.roughness,m.ior);float3 transmitted;
@@ -43,7 +45,10 @@ float4 refractColourRt(Frame f,Look l,Surface s,uint2 volume,float scale,float3 
         }
         float3 exit=world+t1*chord,t2=refract(t1,-n2,m.ior);float leave;
         if(dot(t2,t2)<1e-6){t2=t1;leave=1-f0;}else leave=refractLeave(f0,t2,n2);
-        transmitted=refractRay(f,l,exit,t2,spread,chord,s.roughness)*exp(-m.absorption*chord)*s.albedo*s.albedo*leave;
+        float3 shell=1;RtHit far;
+        if(rtTrace(f,l,exit+t2*bias,t2,l.rtParams[0].y,far,RT_OPAQUE|RT_MASKED|RT_TRANSPARENT) && far.instance==self)
+            shell=exp(-m.absorption*chord)*s.albedo*s.albedo*leave*(1-f0);
+        transmitted=refractRay(f,l,exit,t2,spread,chord,s.roughness)*exp(-m.absorption*chord)*s.albedo*s.albedo*leave*shell;
     }
     return forwardOutput(f,reflected+s.transmission*through*transmitted,s.alpha,s.alpha,refractExposure(f,l));
 }
@@ -52,9 +57,17 @@ ForwardLit nativeForwardRefractRtFragment(PaintVarying i){
     Varying v=i.v;
     NativeMaterial m=material(v.material);uint2 volume=uint2(asuint(m.factors.z),asuint(m.factors.w));
     bool front=facesViewer(v);if(!front && (volume.x&0xffff)!=0)discard;
+    Frame f=frame();Look l=look(f);
+    // A volume's surface behind its own nearer wall (a shell's inner far side) is the
+    // far wall the nearer one refracts through (refractShell): only the nearest draws.
+    if((volume.x&0xffff)!=0){
+        float3 toward=f.camera.xyz-v.world;float distance=length(toward);RtHit near;
+        float bias=l.rtParams[1].x+l.rtParams[1].y*distance;
+        if(rtTrace(f,l,v.world+toward/distance*bias,toward/distance,distance,near,RT_TRANSPARENT) && near.instance==v.id-1)discard;
+    }
     Surface s=forwardSurface<0>(v,i.color);float3 geometric=safeNormalize(v.normal,float3(0,1,0))*(front?1:-1);
     float4x4 world=buffers[NonUniformResourceIndex(root.material)].Load<float4x4>(128+(v.id-1)*192+16);
     float scale=pow(abs(determinant((float3x3)world)),1./3.);
-    Frame f=frame();Look l=look(f);ForwardLit o;o.color=refractColourRt(f,l,s,volume,scale,v.world,geometric,int2(v.clip.xy));
+    ForwardLit o;o.color=refractColourRt(f,l,s,volume,scale,v.world,geometric,int2(v.clip.xy),v.id-1);
     o.id=float(v.id);o.velocity=float4(motion(v),0,1);return o;
 }

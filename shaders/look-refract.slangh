@@ -148,6 +148,17 @@ float3 refractSurface(Frame f,Look l,Surface s,float f0,float3 world,int2 p,bool
     through=saturate(1-(f0*ab.x+ab.y));
     return applyFog(f,l,shade(f,l,r,world,p,false,high),world,uv)*refractExposure(f,l);
 }
+// Hollow glass (bottles, bulbs, drinking glasses) is a shell: a wall much thinner than
+// its curvature, whose far wall the same draw holds, so the copy never shows it. Where
+// the curvature's chord `sphere` is longer than the wall's `slab` but at most
+// SHELL_SPAN walls (a curved window is not a shell) and ends before the opaque scene
+// `room` metres behind (zero: none), the ray crosses a far wall like the near one:
+// its medium over `chord`, its tint at both faces and its Fresnel.
+static const float SHELL_SPAN=100;
+float3 refractShell(float sphere,float slab,float chord,float room,float3 absorption,float3 tint,float f0,float leave){
+    bool shell=slab<sphere && sphere<SHELL_SPAN*slab && (room<=0 || sphere<room);
+    return shell?exp(-absorption*chord)*tint*tint*leave*(1-f0):float3(1,1,1);
+}
 // The angular spread (radians per metre travelled, about) a rough interface adds:
 // GGX's lobe width (roughness squared) bent by (1 - 1/IOR), twice that for the tails
 // a single width would miss.
@@ -182,7 +193,8 @@ float4 refractColour(Frame f,Look l,Surface s,uint2 volume,float scale,float3 wo
         if(dot(t2,t2)<1e-6){t2=t1;leave=1-f0;}else leave=refractLeave(f0,t2,n2);
         float reach=behind>0?2.5*max(behind-refractViewDepth(f,exit),thickness):FOG_RANGE*0.01;
         float3 traced=refractTrace(f,l,exit,t2,reach,spread,chord,s.roughness,uv);
-        transmitted=traced*exp(-m.absorption*chord)*s.albedo*s.albedo*leave;
+        float room=behind>0?max(behind-front,0)/max(dot(-v,f.forward.xyz),0.2):0;
+        transmitted=traced*exp(-m.absorption*chord)*s.albedo*s.albedo*leave*refractShell(sphere,slab,chord,room,m.absorption,s.albedo,f0,leave);
     }
     return forwardOutput(f,reflected+tau*through*transmitted,s.alpha,s.alpha,refractExposure(f,l));
 }
