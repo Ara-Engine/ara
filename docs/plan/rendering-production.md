@@ -9,6 +9,34 @@ Each item lands as its own commit(s), with focused tests, a debug view where the
 be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]` open,
 `[~]` in progress, `[x]` done (with the commit).
 
+## Open at the pause (2026-11-01)
+
+Work stopped here for an engine overhaul. Everything below is open; the item sections
+hold the evidence and causes.
+
+- **Glossy floor reflections show the wrong content** (Polar's corridor floor): Ara
+  reflects overhead frames where the reference shows the ceiling skylights. Blur is fixed
+  (0dd2d6068); the cause is the fallback sources missing off-screen content (see
+  Reflections and the planar-reflection checkpoint).
+- **Screen probe GI ships off** (D32): it loses to probe-only GI on Polar, the sky room,
+  the sky-lit box and open ground (diffuse excess there).
+- **Probe GI near-field:** floors within 0.6 m of a lit wall read 1.2-2.3x; a per-probe
+  irradiance gradient is parked in D:AraScratchgi3parked.
+- **Bounce albedo:** the bake adds specular albedo to full diffuse (about 4% per bounce
+  over the path tracer's (1-F) diffuse); correcting it darkens the glass rooms 8%, so
+  they miss light elsewhere.
+- **SSR-to-probe step** on glossy floors under lamp pools (probes read 1.10-1.24x).
+- **Rough-metal ceiling** in the sunlit room reads 0.67x against the corrected reference.
+- **Polar region error** 0.192 (screen GI off); every other test scene is within ~13%.
+- **UE comparison scene:** shafts faint at the authored fog density (check Unreal's
+  FogDensity conversion); UE vertex-paint frost/wet layers and decals not converted.
+- **Play entry:** reflection captures finish ~1 s after Play starts; Scene-view exposure
+  drifts after camera moves (Tools).
+- **Cooker determinism** (Tools); **quiet-machine timings** for every item measured
+  under load today.
+- Fog: faint banding in fog ambient from probe interpolation; the reference leaves out
+  extinction toward local lights; local fog volumes are not in the fidelity renderer.
+
 ## Lighting
 
 - [x] **Area lights.** Merged ab19eac38 (rect/disc/sphere/tube, LTC, IES, soft local shadows,
