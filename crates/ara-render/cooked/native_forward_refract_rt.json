@@ -1,36 +1,36 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41",
+  "key": "e444a0877890c024bad51434c4b6571d6a985b195754e3bea0c0105602c4d6d6",
   "stages": [
     {
-      "dxil": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/native_forward_refract_rt/nativeForwardRefractRtFragment.dxil",
-      "dxil_hash": "1d569ebd55cbcf928d02bf7f126d245fec36c546b22aa166a9dcdfc3b44e5d13",
+      "dxil": "e444a0877890c024bad51434c4b6571d6a985b195754e3bea0c0105602c4d6d6/native_forward_refract_rt/nativeForwardRefractRtFragment.dxil",
+      "dxil_hash": "27a50a9940307793247070c5f5dfe62f470c05c9533d624617528d8901faadd0",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/native_forward_refract_rt/nativeForwardRefractRtFragment.metallib",
-        "metallib_hash": "abab2aa3e506a4249ab1ea43dd2c884a46b226de2f54203cb1b2d376880c49b5",
-        "reflection": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/native_forward_refract_rt/nativeForwardRefractRtFragment.metal.json",
+        "metallib": "e444a0877890c024bad51434c4b6571d6a985b195754e3bea0c0105602c4d6d6/native_forward_refract_rt/nativeForwardRefractRtFragment.metallib",
+        "metallib_hash": "076534849c5f7ce8347a2fcf8f73ef8d358a93e46983164583932212d58da09f",
+        "reflection": "e444a0877890c024bad51434c4b6571d6a985b195754e3bea0c0105602c4d6d6/native_forward_refract_rt/nativeForwardRefractRtFragment.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "nativeForwardRefractRtFragment",
-      "spirv": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/native_forward_refract_rt/nativeForwardRefractRtFragment.spv",
+      "spirv": "e444a0877890c024bad51434c4b6571d6a985b195754e3bea0c0105602c4d6d6/native_forward_refract_rt/nativeForwardRefractRtFragment.spv",
       "spirv_entry": "main",
-      "spirv_hash": "f326af41eb0b3b59cf7a35c73787088ff7302f536b77e5955f2465efa956a4e2",
+      "spirv_hash": "75dd54e58ddc17f59f0d40154d17835920ccfad8f3eb88328952bb175accb706",
       "stage": "fragment"
     },
     {
-      "dxil": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/native_forward_refract_rt/nativePaintVertex.dxil",
+      "dxil": "e444a0877890c024bad51434c4b6571d6a985b195754e3bea0c0105602c4d6d6/native_forward_refract_rt/nativePaintVertex.dxil",
       "dxil_hash": "df9b5fdae1dc409c8c93a8b069364da9a0e7ffcc79d904d89ecf5da28be4a901",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/native_forward_refract_rt/nativePaintVertex.metallib",
+        "metallib": "e444a0877890c024bad51434c4b6571d6a985b195754e3bea0c0105602c4d6d6/native_forward_refract_rt/nativePaintVertex.metallib",
         "metallib_hash": "27615f69fb1b2261d4eb1764e271ba6e61ad00146fc79e96ce15a94652b091b6",
-        "reflection": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/native_forward_refract_rt/nativePaintVertex.metal.json",
+        "reflection": "e444a0877890c024bad51434c4b6571d6a985b195754e3bea0c0105602c4d6d6/native_forward_refract_rt/nativePaintVertex.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "nativePaintVertex",
-      "spirv": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/native_forward_refract_rt/nativePaintVertex.spv",
+      "spirv": "e444a0877890c024bad51434c4b6571d6a985b195754e3bea0c0105602c4d6d6/native_forward_refract_rt/nativePaintVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "4cc707f2d875324a3b376b1793fb1edbe79280d7fdb00c214f575d131cae8415",
       "stage": "vertex"

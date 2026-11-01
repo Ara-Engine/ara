@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903",
+  "key": "692c8e6253affbd127dd62b00296a39cd98d33414c6fd1e51361039169f2d807",
   "stages": [
     {
-      "dxil": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903/reservoir_init_atmosphere/reservoirInitAtmosphere.dxil",
+      "dxil": "692c8e6253affbd127dd62b00296a39cd98d33414c6fd1e51361039169f2d807/reservoir_init_atmosphere/reservoirInitAtmosphere.dxil",
       "dxil_hash": "c24238d1cb9a1fdb5a80427068ba6531b9afad500f0d25eac5bfa9f547ee79c7",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903/reservoir_init_atmosphere/reservoirInitAtmosphere.metallib",
+        "metallib": "692c8e6253affbd127dd62b00296a39cd98d33414c6fd1e51361039169f2d807/reservoir_init_atmosphere/reservoirInitAtmosphere.metallib",
         "metallib_hash": "005e71ac044af8f00dec4c42307870b713a521ff6a2cb061aa629cfc41852808",
-        "reflection": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903/reservoir_init_atmosphere/reservoirInitAtmosphere.metal.json",
+        "reflection": "692c8e6253affbd127dd62b00296a39cd98d33414c6fd1e51361039169f2d807/reservoir_init_atmosphere/reservoirInitAtmosphere.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "reservoirInitAtmosphere",
-      "spirv": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903/reservoir_init_atmosphere/reservoirInitAtmosphere.spv",
+      "spirv": "692c8e6253affbd127dd62b00296a39cd98d33414c6fd1e51361039169f2d807/reservoir_init_atmosphere/reservoirInitAtmosphere.spv",
       "spirv_entry": "main",
       "spirv_hash": "6a5c5ea899e2e418bc97828e102eb95fcfdbf6b372abe9111b2673a4a1f093ce",
       "stage": "compute"

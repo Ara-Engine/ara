@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41",
+  "key": "e444a0877890c024bad51434c4b6571d6a985b195754e3bea0c0105602c4d6d6",
   "stages": [
     {
-      "dxil": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/look_fog/fogMain.dxil",
-      "dxil_hash": "59c2e3e2e95e9083ec234ede5f22d5e9eb803a518999b1d75984ec7b84fd9137",
+      "dxil": "e444a0877890c024bad51434c4b6571d6a985b195754e3bea0c0105602c4d6d6/look_fog/fogMain.dxil",
+      "dxil_hash": "ea9c6629b97ba80214dbce243ee4d8ca43bd9fd3133d77f643eacd697bed5929",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/look_fog/fogMain.metallib",
-        "metallib_hash": "4012146a73531787633cb1435a0ffd8c4837e270418ea5e680a13ed5648780ff",
-        "reflection": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/look_fog/fogMain.metal.json",
+        "metallib": "e444a0877890c024bad51434c4b6571d6a985b195754e3bea0c0105602c4d6d6/look_fog/fogMain.metallib",
+        "metallib_hash": "0ecddcfe124cad4928afcbc74810193ca57769e14ef396e66d6dae533b617ca4",
+        "reflection": "e444a0877890c024bad51434c4b6571d6a985b195754e3bea0c0105602c4d6d6/look_fog/fogMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "fogMain",
-      "spirv": "45b5951147469179001be41e34dff1ed87f7726374ce82096f2a86fe2ccc0e41/look_fog/fogMain.spv",
+      "spirv": "e444a0877890c024bad51434c4b6571d6a985b195754e3bea0c0105602c4d6d6/look_fog/fogMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "b2128d9f4e6c05aa0a744e6703ea1d965d6bef103d6213d5b2506863401e332a",
+      "spirv_hash": "93eee13ab12cdf5522a516fc375222b2f42e56b29857e78e97b48ade586b72de",
       "stage": "compute"
     }
   ],

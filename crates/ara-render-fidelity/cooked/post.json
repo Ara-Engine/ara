@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903",
+  "key": "692c8e6253affbd127dd62b00296a39cd98d33414c6fd1e51361039169f2d807",
   "stages": [
     {
-      "dxil": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903/post/postMain.dxil",
-      "dxil_hash": "c22bf1f15f4824157d09fa2503097005ea0856dc9d1bab34a180cd4033022a6c",
+      "dxil": "692c8e6253affbd127dd62b00296a39cd98d33414c6fd1e51361039169f2d807/post/postMain.dxil",
+      "dxil_hash": "5fb652b8834490f73fda96658ea6f56ec0dc3e5febe871c5869e70520da3f64b",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903/post/postMain.metallib",
-        "metallib_hash": "fb3cb22fe8151a619dbf8b78938e1e113f28cadc45b4eb0079846255ad1a2282",
-        "reflection": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903/post/postMain.metal.json",
+        "metallib": "692c8e6253affbd127dd62b00296a39cd98d33414c6fd1e51361039169f2d807/post/postMain.metallib",
+        "metallib_hash": "fb3f259f69f47797299f8fb87b185863c91c25ea530143495be837716ffc4bc2",
+        "reflection": "692c8e6253affbd127dd62b00296a39cd98d33414c6fd1e51361039169f2d807/post/postMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "postMain",
-      "spirv": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903/post/postMain.spv",
+      "spirv": "692c8e6253affbd127dd62b00296a39cd98d33414c6fd1e51361039169f2d807/post/postMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "b427128211bad61d445d9cd409ddaade6ef7737d9e800704ea5ab523c2e2c98a",
+      "spirv_hash": "4271359eca772189e3e14296c31f398fc164dc536704a9863d6aeb2b42c40a06",
       "stage": "compute"
     }
   ],
