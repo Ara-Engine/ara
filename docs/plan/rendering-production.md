@@ -74,7 +74,7 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
 
 - [~] **Consistent glass.** One transmission model across raster, hybrid and path tracer:
   thin and solid glass, roughness, tint by thickness, shadows by transmittance, reflections
-  of and through glass, sorting. Done (2026-11-01, branch t3/7cab6795): the path tracer's
+  of and through glass, sorting. Done (2026-11-01, branch t3/production-glass-transparency): the path tracer's
   transmission was diffuse (glass a white sheet, opaque to the sun); it is now a GGX
   dielectric (thin and volume, Beer-Lambert absorption) whose shadow rays take glass's
   straight transmittance (`look-glass.slangh` `glassTransmittance`, shared with raster);
