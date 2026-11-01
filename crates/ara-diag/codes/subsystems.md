@@ -690,6 +690,19 @@ Fixes:
 - Start Play again; use `play.status` to see whether the player faulted.
 - Play in a window (`window: true`) when shared surfaces are unavailable on this machine.
 
+## ARA7308 play::STALE_COMPANION: Companion built before its sources changed
+owner: ara-companion
+
+`ara` renders through the sibling `ara-player` and imports through the sibling `ara-import-worker`. In a source checkout it refuses one that is missing, or older than a source file in its dependency closure, instead of running old code against this tree's cooked shaders and importers (an old player draws garbage; an old import worker leaves models as placeholders). The message names the executable, the changed source and the exact `cargo build` that fixes it. Packaged builds have no source tree and are never refused.
+
+Causes:
+- Only `cargo build -p ara` ran after a source change, so the companions are older builds.
+- A companion was never built in this profile.
+
+Fixes:
+- Run the `cargo build -p ...` the message prints, or build them together: `cargo build -p ara -p ara-player -p ara-import-worker` (add `--release` or `--profile <name>` to match `ara`).
+- `ARA_ALLOW_STALE_COMPANIONS=1` runs the old companion anyway (for deliberate before/after comparisons; `ARA_PLAYER` and `ARA_IMPORT_WORKER` pointing outside the `ara` directory are never checked).
+
 ## ARA7401 l10n::MISSING_KEY: Missing localization key
 owner: ara-l10n
 

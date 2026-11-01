@@ -400,6 +400,7 @@ dependencies = [
  "ara-asset",
  "ara-asset-host",
  "ara-audio-why",
+ "ara-companion",
  "ara-crash",
  "ara-diag",
  "ara-doc",
@@ -537,6 +538,7 @@ name = "ara-asset"
 version = "0.0.1-alpha"
 dependencies = [
  "ara-asset-format",
+ "ara-companion",
  "ara-diag",
  "ara-doc",
  "ara-json",
@@ -733,6 +735,13 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-schema",
  "serde",
+]
+
+[[package]]
+name = "ara-companion"
+version = "0.0.1-alpha"
+dependencies = [
+ "tempfile",
 ]
 
 [[package]]
@@ -1614,6 +1623,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "ara-asset",
  "ara-cmd",
+ "ara-companion",
  "ara-diag",
  "ara-doc",
  "ara-gpu",

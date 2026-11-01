@@ -76,6 +76,8 @@ pub mod codes {
     pub const ASSET_UPGRADED: Code = Code(7306);
     /// An embedded player's shared surface could not be created, shared or resized.
     pub const SURFACE: Code = Code(7307);
+    /// `ara` refused a player or import worker built before its sources changed.
+    pub const STALE_COMPANION: Code = Code(7308);
 }
 
 fn fail(code: Code, message: impl Into<String>) -> Vec<Diagnostic> {
@@ -288,6 +290,17 @@ impl PlayService {
                 .is_some_and(|at| std::time::Instant::now() < at)
         {
             return Ok(());
+        }
+        // `ara` refuses a player older than its sources or missing (ARA7308).
+        if let Err(refusal) = ara_companion::verify(&self.config.pool.executable) {
+            return Err(vec![
+                Diagnostic::error(codes::STALE_COMPANION, refusal.to_string()).with_fix(
+                    "Rebuild the companion",
+                    FixAction::Cli {
+                        args: vec![format!("({})", refusal.fix())],
+                    },
+                ),
+            ]);
         }
         if !self.config.pool.executable.exists() {
             return Err(vec![

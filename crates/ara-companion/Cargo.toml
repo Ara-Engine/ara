@@ -1,0 +1,13 @@
+[package]
+name = "ara-companion"
+description = "Refuses an ara-player or ara-import-worker built before the sources it was built from changed."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
