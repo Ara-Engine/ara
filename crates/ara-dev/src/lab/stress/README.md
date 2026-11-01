@@ -12,9 +12,9 @@ quiet-window lock. The task coordinator's builder rules govern admission.
 
 ```powershell
 cargo build -p ara-dev
-cargo build -p ara-render-fidelity --example render_v3
+cargo build --release -p ara-render-fidelity --example render_v3
 .\target\debug\ara-dev.exe lab gate --list
-.\target\debug\ara-dev.exe lab gate --gate G1 --runner .\target\debug\examples\render_v3.exe --width 2560 --height 1440
+.\target\debug\ara-dev.exe lab gate --gate G1 --runner .\target\release\examples\render_v3.exe --width 2560 --height 1440
 .\target\debug\ara-dev.exe lab gate --gate all --report-only
 ```
 
@@ -25,6 +25,9 @@ logs live in `cases/<case>/<uncapped|capped>/`. `--output` makes campaigns indep
 Use 1920x1080 on the 760M and 2560x1440 on the 4070 SUPER. Other sizes retain evidence
 but do not pass a native-resolution gate. `--cases` selects work, not a smaller gate:
 reports still enumerate every required case and leave unrun rows unavailable.
+Use the release worker for performance-bar measurements, as required by the
+workspace profile policy. Development workers are useful for fixture validation;
+their CPU-fed complete-frame spans are not shipping-profile control numbers.
 
 `--timing-only` measures the complete case list in one quiet window. The lab takes
 an atomic overnight lock for at most 44 minutes, enters ara-dev's machine GPU queue
