@@ -3,6 +3,7 @@
 // Wave 1 is an opt-in data layer; wave 2's solver owns production call sites.
 #![allow(dead_code)]
 
+use crate::look::trace::{InstanceKey, Tombstone as TraceTombstone};
 use ara_patch_charts::{Charts, cache::Key};
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -21,7 +22,7 @@ pub(crate) struct PatchId {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct PatchStamp {
     pub id: PatchId,
-    pub generation: u32,
+    pub generation: u64,
 }
 
 /// Compact tombstone for all old chart IDs of one instance, including zero-link patches.
@@ -29,7 +30,7 @@ pub(crate) struct PatchStamp {
 pub(crate) struct Tombstone {
     pub instance: u64,
     pub incarnation: u32,
-    pub generation: u32,
+    pub generation: u64,
     pub count: u32,
 }
 
@@ -124,7 +125,8 @@ struct Resident {
 #[derive(Default)]
 struct Entry {
     incarnation: u32,
-    generation: u32,
+    generation: u64,
+    trace_key: Option<InstanceKey>,
     resident: Option<Resident>,
 }
 
@@ -146,6 +148,31 @@ impl PatchRegistry {
         room: u64,
         placement: Placement,
     ) -> Result<Option<Tombstone>, PatchError> {
+        self.publish_identity((instance, None), key, charts, room, placement)
+    }
+
+    /// Bind charts to A1's exact live instance key. Slot reuse or mesh replacement
+    /// retires the old patch incarnation even when the chart content is identical.
+    pub fn publish_traced(
+        &mut self,
+        instance: u64,
+        trace_key: InstanceKey,
+        key: Key,
+        charts: Arc<Charts>,
+        room: u64,
+        placement: Placement,
+    ) -> Result<Option<Tombstone>, PatchError> {
+        self.publish_identity((instance, Some(trace_key)), key, charts, room, placement)
+    }
+
+    fn publish_identity(
+        &mut self,
+        (instance, trace_key): (u64, Option<InstanceKey>),
+        key: Key,
+        charts: Arc<Charts>,
+        room: u64,
+        placement: Placement,
+    ) -> Result<Option<Tombstone>, PatchError> {
         placement.validate()?;
         if charts.patches.len() > u32::MAX as usize {
             return Err(PatchError::TooManyPatches);
@@ -158,7 +185,8 @@ impl PatchRegistry {
             return Err(PatchError::InvalidPlacement);
         }
         let entry = self.entries.entry(instance).or_default();
-        let replaced = entry.resident.as_ref().is_none_or(|r| r.key != key);
+        let replaced =
+            entry.resident.as_ref().is_none_or(|r| r.key != key) || entry.trace_key != trace_key;
         if let Some(old) = &entry.resident
             && old.key == key
             && old.charts != charts
@@ -193,6 +221,7 @@ impl PatchRegistry {
         };
         entry.incarnation = incarnation;
         entry.generation = generation;
+        entry.trace_key = trace_key;
         entry.resident = Some(Resident {
             key,
             charts,
@@ -250,6 +279,15 @@ impl PatchRegistry {
         tombstone
     }
 
+    /// Consume A1's removal/topology tombstone. Late delivery cannot retire a new
+    /// instance that already replaced the dead slot/generation under the same id.
+    pub fn retire_trace(&mut self, dead: &TraceTombstone) -> Option<Tombstone> {
+        if self.entries.get(&dead.id)?.trace_key != Some(dead.key) {
+            return None;
+        }
+        self.remove(dead.id)
+    }
+
     fn tombstone(instance: u64, entry: &Entry) -> Option<Tombstone> {
         Some(Tombstone {
             instance,
@@ -259,7 +297,7 @@ impl PatchRegistry {
         })
     }
 
-    pub fn generation(&self, id: PatchId) -> Option<u32> {
+    pub fn generation(&self, id: PatchId) -> Option<u64> {
         let entry = self.entries.get(&id.instance)?;
         let resident = entry.resident.as_ref()?;
         (id.incarnation == entry.incarnation && (id.local as usize) < resident.charts.patches.len())
@@ -480,5 +518,99 @@ mod tests {
         for (i, s) in snapshot.stamps.iter().enumerate() {
             assert_eq!(snapshot.index(s.id), Some(i as u32));
         }
+    }
+
+    #[test]
+    fn patches_trace_slot_reuse_and_late_tombstones_cannot_alias() {
+        use crate::look::trace::Death;
+        let mut registry = PatchRegistry::default();
+        let (key, charts) = chart(1.);
+        let old = InstanceKey {
+            slot: 4,
+            generation: 2,
+        };
+        let new = InstanceKey {
+            slot: 9,
+            generation: 2,
+        };
+        registry
+            .publish_traced(12, old, key, Arc::clone(&charts), 0, Placement::default())
+            .unwrap();
+        let before = registry.snapshot().unwrap();
+        let retired = registry
+            .publish_traced(12, new, key, charts, 0, Placement::default())
+            .unwrap()
+            .unwrap();
+        assert!(
+            before
+                .stamps
+                .iter()
+                .all(|s| retired.contains(s.id) && registry.generation(s.id).is_none())
+        );
+        let dead = TraceTombstone {
+            epoch: 10,
+            id: 12,
+            key: old,
+            mesh: ara_bvh::MeshHash([0; 32]),
+            death: Death::Removed,
+        };
+        assert_eq!(registry.retire_trace(&dead), None);
+        assert!(!registry.snapshot().unwrap().stamps.is_empty());
+        assert!(
+            registry
+                .retire_trace(&TraceTombstone { key: new, ..dead })
+                .is_some()
+        );
+        assert!(registry.snapshot().unwrap().stamps.is_empty());
+    }
+
+    #[test]
+    fn patches_source_topology_replacement_tombstones_every_old_identity() {
+        let mut registry = PatchRegistry::default();
+        let (key, charts) = chart(1.);
+        registry
+            .publish(1, key, charts, 0, Placement::default())
+            .unwrap();
+        let old = registry.snapshot().unwrap();
+        let mesh = Mesh {
+            positions: &[[0., 0., 0.], [0.5, 0., 0.], [0., 0.5, 0.], [0.5, 0.5, 0.]],
+            triangles: &[
+                Triangle {
+                    vertices: [0, 1, 2],
+                    material: 0,
+                    albedo: [0.5; 3],
+                },
+                Triangle {
+                    vertices: [1, 3, 2],
+                    material: 0,
+                    albedo: [0.5; 3],
+                },
+            ],
+        };
+        let prepared = cache::prepare(mesh, Settings::default(), None).unwrap();
+        let removed = registry
+            .publish(
+                1,
+                prepared.key,
+                Arc::new(prepared.charts),
+                0,
+                Placement::default(),
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(removed.count as usize, old.len());
+        assert!(
+            old.stamps
+                .iter()
+                .all(|s| removed.contains(s.id) && registry.generation(s.id).is_none())
+        );
+        assert!(
+            registry
+                .snapshot()
+                .unwrap()
+                .stamps
+                .iter()
+                .all(|s| !removed.contains(s.id))
+        );
     }
 }

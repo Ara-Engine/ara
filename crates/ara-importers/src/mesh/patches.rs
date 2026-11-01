@@ -9,7 +9,7 @@ use ara_asset::{Error, Result};
 use ara_patch_charts::{Charts, Mesh, Settings, Triangle, cache};
 
 /// Explicit worker-owned side-car service. Implementations publish writes atomically.
-pub(crate) trait PatchCache {
+pub trait PatchCache {
     /// Read below a project-owned cache root; never the real user profile.
     fn read(&self, key: cache::Key) -> Result<Option<Vec<u8>>>;
     /// Store the versioned bytes separately from the shared asset format.
@@ -17,9 +17,11 @@ pub(crate) trait PatchCache {
 }
 
 /// Builds the reference-scale chart side-car while importing one material primitive.
-/// Use the same source triangle order supplied to the tracing BLAS, before LOD/fetch
-/// remapping. This function is pure apart from the explicitly supplied cache service.
-pub(crate) fn import_charts(
+/// Use exactly the triangle order supplied to the tracing BLAS. A1's native adapter
+/// uses LOD0 indices; if optimization reordered them, chart/rekey that final order
+/// rather than interpreting original import triangle ids as native trace ids.
+/// This function is pure apart from the explicitly supplied cache service.
+pub fn import_charts(
     vertices: &[Vertex],
     indices: &[u32],
     material: u32,
@@ -38,7 +40,7 @@ pub(crate) fn import_charts(
 
 /// Old-project fallback and nonuniform-scale variant. Call on load once scale is
 /// known. A unit-scale hit reuses import charts; other scales get their own key.
-pub(crate) fn load_or_build(
+pub fn load_or_build(
     vertices: &[Vertex],
     indices: &[u32],
     material: u32,

@@ -10,8 +10,13 @@ bytemuck = { workspace = true, features = ["derive"] }
 sha2.workspace = true
 
 [dev-dependencies]
+anyhow.workspace = true
+ara-bvh = { path = "../ara-bvh" }
 gltf = { workspace = true, features = ["utils", "names", "import"] }
 glam.workspace = true
+
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { workspace = true, features = ["Win32_System_ProcessStatus", "Win32_System_Threading"] }
 
 [lints]
 workspace = true

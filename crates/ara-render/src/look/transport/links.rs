@@ -4,6 +4,7 @@
 #![allow(dead_code)]
 
 use super::patches::{PatchBuffers, PatchId};
+use crate::look::trace::{InstanceKey, PrimitiveKey, TraceScene};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -12,20 +13,48 @@ use std::{
 pub(crate) const LANES: usize = 32;
 const SET_BIT: u32 = 1 << 31;
 
-/// Narrow bridge to trace's stable source primitive identity. `primitive` is the
-/// original triangle index, never the BLAS's reordered storage index. The adapter
-/// must supply both topology incarnation and geometry/instance generation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// A1's supported cached primitive identity: (InstanceKey, source triangle).
+/// The instance includes slot AND u64 generation, preventing slot-reuse aliases.
+/// The mesh hash/submesh are validated through A1 when binding, not duplicated for
+/// every primitive. Geometry/material/motion revisions remain in GeometryStamp.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct GeometryKey {
-    pub instance: u64,
-    pub incarnation: u32,
+    pub instance: InstanceKey,
     pub primitive: u32,
+}
+
+impl GeometryKey {
+    /// Validate a trace-returned primitive against its current instance before caching.
+    pub fn from_trace(
+        scene: &TraceScene,
+        instance: InstanceKey,
+        primitive: PrimitiveKey,
+    ) -> Option<Self> {
+        (scene.primitive(instance, primitive.triangle) == Some(primitive)).then_some(Self {
+            instance,
+            primitive: primitive.triangle,
+        })
+    }
+}
+impl Ord for GeometryKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (self.instance.slot, self.instance.generation, self.primitive).cmp(&(
+            other.instance.slot,
+            other.instance.generation,
+            other.primitive,
+        ))
+    }
+}
+impl PartialOrd for GeometryKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct GeometryStamp {
     pub key: GeometryKey,
-    pub generation: u32,
+    pub generation: u64,
 }
 
 /// A cached query's exact finite segment. Arbitrary sample endpoints are supported;
@@ -46,7 +75,7 @@ impl Segment {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ExternalSource {
     pub id: u64,
-    pub generation: u32,
+    pub generation: u64,
     pub position: [f32; 3],
 }
 
@@ -171,7 +200,7 @@ impl Witnesses {
 #[derive(Default)]
 struct WitnessBuilder {
     geometry: BTreeMap<GeometryStamp, u32>,
-    generations: BTreeMap<GeometryKey, u32>,
+    generations: BTreeMap<GeometryKey, u64>,
     sets: BTreeMap<Vec<u32>, u32>,
     pool: Witnesses,
 }
@@ -407,12 +436,34 @@ impl LinkStore {
     }
 
     pub fn segment(&self, link: u32) -> Segment {
+        self.segment_for_receiver(link, self.receiver(link))
+    }
+
+    fn segment_for_receiver(&self, link: u32, receiver: u32) -> Segment {
         if let Ok(i) = self.overrides.binary_search_by_key(&link, |s| s.link) {
             self.overrides[i].segment
         } else {
-            self.implicit_segment(self.receiver(link), self.source[link as usize])
+            self.implicit_segment(receiver, self.source[link as usize])
                 .expect("published links have valid endpoints")
         }
+    }
+
+    /// Enumerate a known coalesced group without a receiver binary search per link.
+    pub fn group_segments(&self, group: u32) -> impl Iterator<Item = (u32, Segment)> + '_ {
+        let group = self.groups[group as usize];
+        let first_receiver = self.tiles[group.tile as usize].first_receiver;
+        let mut lanes = group.lanes;
+        let mut link = group.first;
+        std::iter::from_fn(move || {
+            if lanes == 0 {
+                return None;
+            }
+            let receiver = first_receiver + lanes.trailing_zeros();
+            lanes &= lanes - 1;
+            let current = link;
+            link += 1;
+            Some((current, self.segment_for_receiver(current, receiver)))
+        })
     }
 
     /// Iteration order is this receiver's ordinal order, without padded link records.
@@ -466,9 +517,9 @@ impl LinkStore {
 
 /// Live identity lookup; missing IDs/tombstones are stale, including source deletion.
 pub(crate) trait Generations {
-    fn patch(&self, id: PatchId) -> Option<u32>;
-    fn source(&self, id: u64) -> Option<u32>;
-    fn geometry(&self, key: GeometryKey) -> Option<u32>;
+    fn patch(&self, id: PatchId) -> Option<u64>;
+    fn source(&self, id: u64) -> Option<u64>;
+    fn geometry(&self, key: GeometryKey) -> Option<u64>;
 }
 
 #[cfg(test)]
@@ -537,8 +588,10 @@ pub(super) mod tests {
                             } else {
                                 vec![GeometryStamp {
                                     key: GeometryKey {
-                                        instance: 77,
-                                        incarnation: 1,
+                                        instance: crate::look::trace::InstanceKey {
+                                            slot: 77,
+                                            generation: 1,
+                                        },
                                         primitive: ordinal % 9,
                                     },
                                     generation: 3,
@@ -589,18 +642,18 @@ pub(super) mod tests {
 
     #[derive(Default)]
     struct Current {
-        patches: BTreeMap<PatchId, u32>,
-        sources: BTreeMap<u64, u32>,
-        geometry: BTreeMap<GeometryKey, u32>,
+        patches: BTreeMap<PatchId, u64>,
+        sources: BTreeMap<u64, u64>,
+        geometry: BTreeMap<GeometryKey, u64>,
     }
     impl Generations for Current {
-        fn patch(&self, id: PatchId) -> Option<u32> {
+        fn patch(&self, id: PatchId) -> Option<u64> {
             self.patches.get(&id).copied()
         }
-        fn source(&self, id: u64) -> Option<u32> {
+        fn source(&self, id: u64) -> Option<u64> {
             self.sources.get(&id).copied()
         }
-        fn geometry(&self, key: GeometryKey) -> Option<u32> {
+        fn geometry(&self, key: GeometryKey) -> Option<u64> {
             self.geometry.get(&key).copied()
         }
     }
@@ -661,6 +714,60 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn links_trace_primitive_binding_checks_mesh_submesh_and_liveness() {
+        use crate::look::trace::{TraceInstance, TraceMesh};
+        let mesh = ara_bvh::Mesh {
+            positions: &[[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]],
+            indices: &[0, 1, 2],
+            submeshes: &[0],
+        };
+        let blas = Arc::new(ara_bvh::Blas::build(&mesh).unwrap());
+        let mut scene = TraceScene::default();
+        let hash = blas.hash;
+        scene.add_mesh(TraceMesh { blas, uvs: None });
+        let instance = scene
+            .set_instance(
+                10,
+                TraceInstance {
+                    mesh: hash,
+                    world: glam::Affine3A::IDENTITY,
+                    mask: 255,
+                    materials: vec![crate::look::trace::NO_MATERIAL],
+                    user: 0,
+                },
+            )
+            .unwrap();
+        let primitive = scene.primitive(instance, 0).unwrap();
+        let key = GeometryKey::from_trace(&scene, instance, primitive).unwrap();
+        assert_eq!(key.instance, instance);
+        assert_eq!(key.primitive, 0);
+        assert!(
+            GeometryKey::from_trace(
+                &scene,
+                instance,
+                PrimitiveKey {
+                    submesh: 8,
+                    ..primitive
+                }
+            )
+            .is_none()
+        );
+        assert!(
+            GeometryKey::from_trace(
+                &scene,
+                instance,
+                PrimitiveKey {
+                    mesh: ara_bvh::MeshHash([0; 32]),
+                    ..primitive
+                }
+            )
+            .is_none()
+        );
+        assert!(scene.remove_instance(10));
+        assert!(GeometryKey::from_trace(&scene, instance, primitive).is_none());
+    }
+
+    #[test]
     fn links_visibility_adapter_and_invalid_inputs() {
         struct Visible;
         impl VisibilityQuery for Visible {
@@ -692,8 +799,10 @@ pub(super) mod tests {
         assert!(matches!(result, Err(LinkError::InvalidEndpoint)));
         let mut witnesses = WitnessBuilder::default();
         let key = GeometryKey {
-            instance: 1,
-            incarnation: 1,
+            instance: crate::look::trace::InstanceKey {
+                slot: 1,
+                generation: 1,
+            },
             primitive: 1,
         };
         witnesses

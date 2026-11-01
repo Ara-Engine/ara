@@ -184,7 +184,11 @@ fn aggregate(
             });
         }
     }
-    if area == 0.0 {
+    if (area as f32) == 0.0 {
+        // A clipped boundary residue can be nonzero in f64 yet round to exactly
+        // zero in the required FP32 surface representation (Polar exercises this).
+        // Do not publish a zero-area receiver or reject the remaining mesh.
+        fragments.truncate(first_fragment as usize);
         return Ok(None);
     }
     let length = dot(normal, normal).sqrt();

@@ -127,14 +127,14 @@ struct Node {
     geometry: u64,
 }
 
-/// Implicit complete binary tree over consecutive blocks of 64 forward links.
-/// No per-link IDs or AABBs: leaves recover their link range from heap position.
+/// Implicit binary tree over consecutive coalescing groups (normally 64 links
+/// per leaf). Both children and leaf ranges are implicit, with no per-link IDs.
 /// Bounds/bloom summaries only prune; exact segments/dependency sets decide hits.
 /// Worst-case query work is linear (e.g. long links spanning a whole room).
 pub(crate) struct CrossingIndex {
     nodes: Box<[Node]>,
     leaves: usize,
-    block_size: usize,
+    groups_per_leaf: usize,
 }
 
 impl CrossingIndex {
@@ -142,17 +142,19 @@ impl CrossingIndex {
         Self::with_block_size(links, 64)
     }
 
-    /// Block size is an index cost/query-work tradeoff, never a transport resolution.
+    /// Target block size rounds up to whole 32-lane coalescing groups. It changes
+    /// index cost/query work, never transport resolution or the exact result set.
     pub fn with_block_size(links: &LinkStore, block_size: usize) -> Self {
         assert!(block_size > 0, "crossing index block size must be positive");
+        let groups_per_leaf = block_size.div_ceil(super::links::LANES);
         if links.len() == 0 {
             return Self {
                 nodes: Box::new([]),
                 leaves: 0,
-                block_size,
+                groups_per_leaf,
             };
         }
-        let blocks = links.len().div_ceil(block_size);
+        let blocks = links.groups.len().div_ceil(groups_per_leaf);
         let leaves = blocks.next_power_of_two();
         let empty = Node {
             bounds: Region::empty(),
@@ -160,12 +162,15 @@ impl CrossingIndex {
         };
         let mut nodes = vec![empty; leaves * 2];
         for (block, node) in nodes[leaves..leaves + blocks].iter_mut().enumerate() {
-            for link in block * block_size..((block + 1) * block_size).min(links.len()) {
-                let segment = links.segment(link as u32);
-                node.bounds.include(segment.start);
-                node.bounds.include(segment.end);
-                for stamp in links.witnesses.iter(links.witness[link]) {
-                    node.geometry |= bloom(stamp.key);
+            for group in
+                block * groups_per_leaf..((block + 1) * groups_per_leaf).min(links.groups.len())
+            {
+                for (link, segment) in links.group_segments(group as u32) {
+                    node.bounds.include(segment.start);
+                    node.bounds.include(segment.end);
+                    for stamp in links.witnesses.iter(links.witness[link as usize]) {
+                        node.geometry |= bloom(stamp.key);
+                    }
                 }
             }
         }
@@ -178,7 +183,7 @@ impl CrossingIndex {
         Self {
             nodes: nodes.into_boxed_slice(),
             leaves,
-            block_size,
+            groups_per_leaf,
         }
     }
 
@@ -186,10 +191,10 @@ impl CrossingIndex {
     /// blocked, transparent and previously clear links. No <1 m indexing exemption.
     pub fn region(&self, links: &LinkStore, region: Region, mut visit: impl FnMut(u32)) {
         self.visit(
-            links.len(),
+            links,
             |node| node.bounds.overlaps(region),
-            |link| {
-                if region.crosses(links.segment(link)) {
+            |link, segment| {
+                if region.crosses(segment) {
                     visit(link);
                 }
             },
@@ -201,9 +206,9 @@ impl CrossingIndex {
     pub fn primitive(&self, links: &LinkStore, key: GeometryKey, mut visit: impl FnMut(u32)) {
         let mask = bloom(key);
         self.visit(
-            links.len(),
+            links,
             |node| node.geometry & mask == mask,
-            |link| {
+            |link, _segment| {
                 if links
                     .witnesses
                     .iter(links.witness[link as usize])
@@ -215,7 +220,12 @@ impl CrossingIndex {
         );
     }
 
-    fn visit(&self, count: usize, accepts: impl Fn(Node) -> bool, mut visit: impl FnMut(u32)) {
+    fn visit(
+        &self,
+        links: &LinkStore,
+        accepts: impl Fn(Node) -> bool,
+        mut visit: impl FnMut(u32, Segment),
+    ) {
         if self.leaves == 0 {
             return;
         }
@@ -230,9 +240,11 @@ impl CrossingIndex {
                 continue;
             }
             if index >= self.leaves {
-                let first = (index - self.leaves) * self.block_size;
-                for link in first..(first + self.block_size).min(count) {
-                    visit(link as u32);
+                let first = (index - self.leaves) * self.groups_per_leaf;
+                for group in first..(first + self.groups_per_leaf).min(links.groups.len()) {
+                    for (link, segment) in links.group_segments(group as u32) {
+                        visit(link, segment);
+                    }
                 }
             } else {
                 stack[length] = index * 2 + 1;
@@ -249,7 +261,9 @@ impl CrossingIndex {
 }
 
 fn bloom(key: GeometryKey) -> u64 {
-    let mut value = key.instance ^ (u64::from(key.incarnation) << 32) ^ u64::from(key.primitive);
+    let mut value = u64::from(key.instance.slot)
+        ^ key.instance.generation.rotate_left(32)
+        ^ u64::from(key.primitive);
     value = (value ^ (value >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
     value = (value ^ (value >> 27)).wrapping_mul(0x94d049bb133111eb);
     value ^= value >> 31;
@@ -334,7 +348,7 @@ mod tests {
     #[test]
     fn reverse_region_and_primitive_indexes_match_exhaustive_queries() {
         let graph = graph();
-        for block_size in [1, 7, 64, 127] {
+        for block_size in [1, 64, 96, 127] {
             let index = CrossingIndex::with_block_size(&graph, block_size);
             for i in 0..120 {
                 let x = (i * 17 % 71) as f32 * 0.05 - 0.5;
@@ -346,12 +360,15 @@ mod tests {
                     .collect();
                 let mut found = Vec::new();
                 index.region(&graph, region, |l| found.push(l));
+                found.sort_unstable();
                 assert_eq!(found, expected, "block={block_size} query={i}");
             }
             for primitive in 0..100 {
                 let key = GeometryKey {
-                    instance: 77,
-                    incarnation: 1,
+                    instance: crate::look::trace::InstanceKey {
+                        slot: 77,
+                        generation: 1,
+                    },
                     primitive,
                 };
                 let expected: Vec<_> = (0..graph.len() as u32)
@@ -364,6 +381,7 @@ mod tests {
                     .collect();
                 let mut found = Vec::new();
                 index.primitive(&graph, key, |l| found.push(l));
+                found.sort_unstable();
                 assert_eq!(found, expected);
             }
         }
@@ -407,5 +425,57 @@ mod tests {
             "transport fixture: {memory:?}; index B/link={:.4}",
             memory.index_bytes_per_link()
         );
+    }
+
+    #[test]
+    fn reverse_unique_geometry_cost_can_fail_the_gate_and_is_not_hidden() {
+        use super::super::links::{Candidate, GeometryStamp, Visibility};
+        let fixture = graph();
+        let graph = LinkStore::build(
+            std::sync::Arc::clone(&fixture.patches),
+            vec![],
+            0,
+            |receiver| {
+                Ok((0..3)
+                    .map(|ordinal| Candidate {
+                        ordinal,
+                        source: 0,
+                        weight: 1.,
+                        segment: None,
+                        visibility: Visibility {
+                            transmittance: [0.; 3],
+                            geometry: vec![GeometryStamp {
+                                key: GeometryKey {
+                                    instance: crate::look::trace::InstanceKey {
+                                        slot: 1,
+                                        generation: 1,
+                                    },
+                                    primitive: receiver * 3 + ordinal,
+                                },
+                                generation: 1,
+                            }],
+                        },
+                    })
+                    .collect())
+            },
+        )
+        .unwrap();
+        let reverse = ReverseLinks::build(&graph).unwrap();
+        let index = CrossingIndex::build(&graph);
+        let memory = Memory::measure(&graph, &reverse, &index);
+        assert!(memory.index_bytes_per_link() > 8.);
+        assert!(!memory.within_g3_data_lines());
+        let empty = LinkStore::build(
+            std::sync::Arc::new(super::super::patches::PatchBuffers::default()),
+            vec![],
+            0,
+            |_| unreachable!(),
+        )
+        .unwrap();
+        let empty_index = CrossingIndex::build(&empty);
+        empty_index.region(&empty, Region::new([0.; 3], [1.; 3]).unwrap(), |_| {
+            panic!("empty graph returned a link")
+        });
+        assert_eq!(ReverseLinks::build(&empty).unwrap().offsets(), [0]);
     }
 }

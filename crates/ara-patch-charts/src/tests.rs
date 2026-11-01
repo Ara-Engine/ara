@@ -282,3 +282,88 @@ fn invalid_inputs_and_limits_are_errors_not_quality_reductions() {
         .is_err()
     );
 }
+
+#[test]
+fn clipped_fp32_area_underflow_does_not_reject_the_representable_surface() {
+    // A metre-scale triangle crossing z=0 has a representable main area,
+    // but its positive-z tip clips to an area below FP32's smallest subnormal.
+    let positions = [[0., 0., 1e-23], [1., 0., -1.], [0., 1., -1.]];
+    let triangles = [Triangle {
+        vertices: [0, 1, 2],
+        material: 0,
+        albedo: [0.5; 3],
+    }];
+    let charts = build(
+        Mesh {
+            positions: &positions,
+            triangles: &triangles,
+        },
+        Settings::default(),
+    )
+    .unwrap();
+    let p = positions.map(|p| p.map(f64::from));
+    let n = crate::clip::cross(crate::clip::sub(p[1], p[0]), crate::clip::sub(p[2], p[0]));
+    let expected = crate::clip::dot(n, n).sqrt() * 0.5;
+    let actual: f64 = charts.patches.iter().map(|p| f64::from(p.area)).sum();
+    assert!(
+        (actual / expected - 1.).abs() < 1e-5,
+        "{actual:e} vs {expected:e}"
+    );
+    assert!(charts.patches.iter().all(|p| p.area > 0.));
+    assert_eq!(
+        charts
+            .patches
+            .iter()
+            .map(|p| p.fragment_count as usize)
+            .sum::<usize>(),
+        charts.fragments.len()
+    );
+}
+
+#[test]
+fn oblique_triangles_conserve_area_across_grid_planes_and_mirrored_scale() {
+    let mut seed = 17u64;
+    let mut coordinate = || {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+        ((seed >> 40) as i32 - (1 << 23)) as f32 / (1 << 22) as f32
+    };
+    for _ in 0..96 {
+        let positions: [[f32; 3]; 3] =
+            std::array::from_fn(|_| std::array::from_fn(|_| coordinate()));
+        let triangles = [Triangle {
+            vertices: [0, 1, 2],
+            material: 9,
+            albedo: [0.3, 0.7, 0.1],
+        }];
+        let settings = Settings {
+            scale: [-0.7, 1.3, 1.1],
+            ..Settings::default()
+        };
+        let charts = build(
+            Mesh {
+                positions: &positions,
+                triangles: &triangles,
+            },
+            settings,
+        )
+        .unwrap();
+        let p = positions
+            .map(|p| std::array::from_fn(|i| f64::from(p[i]) * f64::from(settings.scale[i])));
+        let n = crate::clip::cross(crate::clip::sub(p[1], p[0]), crate::clip::sub(p[2], p[0]));
+        let area = crate::clip::dot(n, n).sqrt() * 0.5;
+        let actual: f64 = charts.patches.iter().map(|p| f64::from(p.area)).sum();
+        assert!((actual / area - 1.).abs() < 2e-6, "{actual} vs {area}");
+        for patch in charts.patches.iter() {
+            assert!(
+                patch
+                    .normal
+                    .iter()
+                    .zip(n)
+                    .map(|(&v, n)| f64::from(v) * n / (area * 2.))
+                    .sum::<f64>()
+                    > 0.99999
+            );
+            assert!((0..3).all(|i| patch.max[i] - patch.min[i] <= 0.2500003));
+        }
+    }
+}

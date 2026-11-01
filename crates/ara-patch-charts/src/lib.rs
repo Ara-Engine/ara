@@ -12,7 +12,7 @@ mod clip;
 pub use build::build;
 
 /// Chart algorithm/side-car revision. Changes to chart ordering or arithmetic bump this.
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 
 /// Triangle order is the source primitive order, before any BVH permutation.
 #[derive(Clone, Copy, Debug, PartialEq)]

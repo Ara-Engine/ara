@@ -2,6 +2,18 @@
 //! initialization, shader work or changes to rendering defaults.
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
+// Compile A1's actual identity model so the benchmark has the same types/layout
+// as the renderer, without importing its GPU runtime or maintaining mirror types.
+#[allow(dead_code)]
+#[rustfmt::skip]
+#[path = "../../ara-render/src/look/trace/scene.rs"]
+mod trace_scene;
+mod look {
+    pub(crate) mod trace {
+        pub(crate) use crate::trace_scene::*;
+    }
+}
+
 #[path = "../../ara-render/src/look/transport/links.rs"]
 mod links;
 #[path = "../../ara-render/src/look/transport/patches.rs"]
@@ -74,6 +86,19 @@ fn main() -> Result<()> {
     println!(
         "scene={label}, charts_ms={charts_ms:.3}, snapshot_ms={snapshot_ms:.3}, patches={count}, links_per_patch={degree}, witness_stress={stamps}"
     );
+    let min = patches
+        .position
+        .each_ref()
+        .map(|a| a.iter().copied().fold(f32::INFINITY, f32::min));
+    let max = patches
+        .position
+        .each_ref()
+        .map(|a| a.iter().copied().fold(f32::NEG_INFINITY, f32::max));
+    println!("world_centroid_bounds: min={min:?}, max={max:?}");
+    if args.iter().any(|s| s == "--charts-only") {
+        print_process_peak();
+        return Ok(());
+    }
     let start = Instant::now();
     let graph = LinkStore::build(
         Arc::clone(&patches),
@@ -96,8 +121,10 @@ fn main() -> Result<()> {
                             geometry: if stamps || blocked {
                                 vec![GeometryStamp {
                                     key: GeometryKey {
-                                        instance: 1,
-                                        incarnation: 1,
+                                        instance: trace_scene::InstanceKey {
+                                            slot: 1,
+                                            generation: 1,
+                                        },
                                         primitive: if stamps { source } else { 0 },
                                     },
                                     generation: 1,
@@ -155,8 +182,39 @@ fn main() -> Result<()> {
             start.elapsed().as_secs_f64() * 1000.
         );
     }
+    print_process_peak();
     Ok(())
 }
+
+#[cfg(windows)]
+fn print_process_peak() {
+    use windows_sys::Win32::System::{
+        ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS},
+        Threading::GetCurrentProcess,
+    };
+    let mut counters = PROCESS_MEMORY_COUNTERS {
+        cb: size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: The current-process pseudo handle is valid, and counters points to
+    // initialized writable storage whose byte size matches the supplied structure.
+    let ok = unsafe {
+        GetProcessMemoryInfo(
+            GetCurrentProcess(),
+            &mut counters,
+            size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+        )
+    };
+    if ok != 0 {
+        println!(
+            "process_peak_working_set_bytes={}, process_peak_commit_bytes={} (includes imports, allocator, benchmark scratch and runtime)",
+            counters.PeakWorkingSetSize, counters.PeakPagefileUsage
+        );
+    }
+}
+
+#[cfg(not(windows))]
+fn print_process_peak() {}
 
 #[derive(Default)]
 struct Sizes {
@@ -181,7 +239,7 @@ impl Sizes {
         for (label, values) in [("max_axis_edge_m", &self.edges), ("area_m2", &self.areas)] {
             if !values.is_empty() {
                 println!(
-                    "{label}: min={:.9}, median={:.9}, max={:.9}",
+                    "{label}: min={:.9e}, median={:.9e}, max={:.9e}",
                     values[0],
                     values[values.len() / 2],
                     values[values.len() - 1]
@@ -272,7 +330,15 @@ fn load_scene(path: &Path, registry: &mut PatchRegistry, sizes: &mut Sizes) -> R
                     ..Settings::default()
                 };
                 let key = cache::Key::new(mesh, settings);
-                let charts = Arc::new(ara_patch_charts::build(mesh, settings)?);
+                let charts = Arc::new(ara_patch_charts::build(mesh, settings).map_err(|e| {
+                    format!(
+                        "node={} mesh={} primitive={} scale={:?}: {e}",
+                        node.index(),
+                        variant.0,
+                        primitive.index(),
+                        scale.to_array()
+                    )
+                })?);
                 cached.insert(variant, (key, Arc::clone(&charts)));
                 (key, charts)
             };
