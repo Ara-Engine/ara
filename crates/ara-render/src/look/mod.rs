@@ -22,7 +22,9 @@ pub(crate) mod passes;
 pub mod placement;
 pub(crate) mod refract;
 pub(crate) mod screen_gi;
+pub(crate) mod trace;
 pub(crate) mod translucent;
+pub(crate) mod transport;
 pub mod volumetric;
 pub(crate) mod vsm;
 

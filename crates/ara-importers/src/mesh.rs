@@ -2,7 +2,9 @@ use crate::invalid;
 use ara_asset::{Error, Result};
 use ara_asset_format::{Builder, Kind, Mesh, Meshlet, QuantizedVertex, SkinExtra};
 use bytemuck::{Pod, Zeroable};
+mod bvh;
 mod lods;
+mod patches;
 
 /// Off: current fresh-project ABBA shows no clear win after faster texture prep.
 pub(crate) const PARALLEL_GEOMETRY: bool = false;
