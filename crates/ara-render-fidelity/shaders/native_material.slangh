@@ -91,9 +91,24 @@ Surface nativeSurface(Frame f,uint id,uint primitive,float2 bary){
 }
 bool nativeAccept(Frame f,uint id,uint primitive,float2 bary,inout uint rng){
     uint4 record=mesh(f,id);NativeMaterial m=nativeMaterial(f,record.w);
+#ifdef PROBE_SURFACES
+    if(m.pbr.flags.x==0 && m.factors.y<=0)return true;
+#else
     if(m.pbr.flags.x==0)return true;
+#endif
     uint3 ix=indices(f,record,primitive);Vertex a=vertex(f,record.x,ix.x),b=vertex(f,record.x,ix.y),c=vertex(f,record.x,ix.z);
-    float alpha=m.pbr.colour.a*nativeMap(f,m,0,a,b,c,float3(1-bary.x-bary.y,bary),false).a;
+    float4 base=m.pbr.colour*nativeMap(f,m,0,a,b,c,float3(1-bary.x-bary.y,bary),false);float alpha=base.a;
+#ifdef PROBE_SURFACES
+    // Probe surfaces see through glass (gi_cpu's cutouts take the same share): the
+    // rays a transmissive surface passes straight at normal incidence (coverage,
+    // tint, Fresnel) go on to what lies behind it.
+    if(m.factors.y>0){
+        float ior=asuint(m.factors.z)>>16==0?1.5:1+float((asuint(m.factors.z)>>16)-1)/32767.,f0=pow((ior-1)/(ior+1),2);
+        float coverage=m.pbr.flags.x==2?saturate(alpha):1,metal=saturate(m.pbr.surface.x);
+        float through=1-coverage+coverage*saturate(m.factors.y)*(1-metal)*dot(max(base.rgb,0),float3(0.2126,0.7152,0.0722))*(1-f0);
+        return random(rng)>=through;
+    }
+#endif
     return m.pbr.flags.x==1?alpha>=m.pbr.surface.w:random(rng)<alpha;
 }
 float3 nativeEmission(Frame f,uint id,uint primitive,float2 bary){

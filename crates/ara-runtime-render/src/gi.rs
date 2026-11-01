@@ -767,33 +767,49 @@ fn shade(prepared: &native::Prepared, surface: bool) -> Vec<crate::gi_cpu::Shadi
     };
     // What an alpha-tested (mode 1) or blended (mode 2) material lets through at
     // each texel (gi_cpu::Cutout), from its base colour at up to CUTOUT_SIDE a side:
-    // coverage-preserving mips keep thin features (fence wire) there.
+    // coverage-preserving mips keep thin features (fence wire) there. Glass
+    // (transmission) also passes its straight transmittance at normal incidence
+    // (coverage, tint, Fresnel), as the ray-traced bake's nativeAccept.
     const CUTOUT_SIDE: u32 = 256;
     let mut cutouts = HashMap::new();
     let mut cutout = |m: &ara_render::instanced::Material| {
         let (mode, alpha, cutoff) = (m.pbr.flags[0], m.pbr.base_color[3], m.pbr.surface[3]);
-        if mode == 0 {
+        let glass = glass_share(m);
+        if mode == 0 && glass == 0. {
             return None;
         }
-        let key = (m.pbr.textures[0], mode, alpha.to_bits(), cutoff.to_bits());
+        let srgb = m.pbr.flags[1] & BASE_COLOR_DECODE_SRGB != 0;
+        // The tint matters only to glass.
+        let tint = glam30::Vec3::from_slice(&m.pbr.base_color[..3]);
+        let key = (
+            m.pbr.textures[0],
+            mode,
+            [alpha, cutoff, glass].map(f32::to_bits),
+            (glass > 0.).then(|| tint.to_array().map(f32::to_bits)),
+            srgb,
+        );
         cutouts
             .entry(key)
             .or_insert_with(|| {
-                let (size, alphas): ([u32; 2], Vec<f32>) = match m.pbr.textures[0] {
-                    NO_TEXTURE => ([1, 1], vec![alpha]),
+                let (size, texels): ([u32; 2], Vec<[f32; 4]>) = match m.pbr.textures[0] {
+                    NO_TEXTURE => ([1, 1], vec![[1.; 4]]),
                     id => prepared
                         .textures
-                        .texels(id, CUTOUT_SIDE, false)
-                        .map_or_else(
-                            || ([1, 1], vec![alpha]),
-                            |(size, t)| (size, t.iter().map(|t| alpha * t[3]).collect()),
-                        ),
+                        .texels(id, CUTOUT_SIDE, srgb)
+                        .unwrap_or_else(|| ([1, 1], vec![[1.; 4]])),
                 };
-                let through = |a: f32| match mode {
-                    1 => f32::from(u8::from(a < cutoff)),
-                    _ => 1. - a,
+                let through = |t: [f32; 4]| {
+                    let a = alpha * t[3];
+                    let coverage = match mode {
+                        0 => 1.,
+                        1 => f32::from(u8::from(a >= cutoff)),
+                        _ => a,
+                    };
+                    let luminance = (tint * glam30::Vec3::new(t[0], t[1], t[2]))
+                        .dot(glam30::Vec3::new(0.2126, 0.7152, 0.0722));
+                    1. - coverage + coverage * glass * luminance
                 };
-                crate::gi_cpu::Cutout::new(size, alphas.into_iter().map(through))
+                crate::gi_cpu::Cutout::new(size, texels.into_iter().map(through))
                     .map(std::sync::Arc::new)
             })
             .clone()
@@ -818,7 +834,9 @@ fn shade(prepared: &native::Prepared, surface: bool) -> Vec<crate::gi_cpu::Shadi
             let mr = mean(m.pbr.textures[2], false);
             let metal = (m.pbr.surface[0] * mr[2]).clamp(0., 1.);
             let roughness = (e[3] * mr[1]).clamp(0., 1.);
-            let base = Vec3::new(c[0] * t[0], c[1] * t[1], c[2] * t[2]);
+            // Glass bounces its reflection only; its transmitted share passes (cutout).
+            let transmission = m.extras.transmission_factor.clamp(0., 1.) * (1. - metal);
+            let base = Vec3::new(c[0] * t[0], c[1] * t[1], c[2] * t[2]) * (1. - transmission);
             crate::gi_cpu::Shading {
                 albedo: crate::gi_cpu::bounce_albedo(base, metal, roughness),
                 emissive,
@@ -852,6 +870,19 @@ fn shade(prepared: &native::Prepared, surface: bool) -> Vec<crate::gi_cpu::Shadi
             }
         })
         .collect()
+}
+
+/// The share of light glass passes straight on at normal incidence besides its tint:
+/// its transmissive layer less the interface's reflection at its IOR (zero without
+/// transmission). Probe-surface rays pass glass by this times the tint's luminance.
+fn glass_share(m: &ara_render::instanced::Material) -> f32 {
+    let transmission = m.extras.transmission_factor.clamp(0., 1.);
+    if transmission == 0. {
+        return 0.;
+    }
+    let (ior, _, _) = ara_render::instanced::Volume::unpack(m.extras.volume);
+    let f0 = ((ior - 1.) / (ior + 1.)).powi(2);
+    transmission * (1. - m.pbr.surface[0].clamp(0., 1.)) * (1. - f0)
 }
 
 /// Bakes the probe surfaces of `frame`'s content on a ray-tracing device: the
@@ -946,6 +977,25 @@ fn bake(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn glass_passes_its_straight_transmittance_to_probe_rays() {
+        let mut glass = ara_render::instanced::Material::default();
+        glass.extras.transmission_factor = 1.;
+        glass.pbr.surface[0] = 0.;
+        // IOR 1.5 reflects 4% at normal incidence; 1.33 (water) 2%.
+        assert!((glass_share(&glass) - 0.96).abs() < 1e-4);
+        glass.extras.volume = ara_render::instanced::Volume {
+            ior: 1.33,
+            ..Default::default()
+        }
+        .pack();
+        assert!((glass_share(&glass) - 0.98).abs() < 1e-3);
+        // Metals and opaque materials pass nothing.
+        glass.pbr.surface[0] = 1.;
+        assert_eq!(glass_share(&glass), 0.);
+        assert_eq!(glass_share(&ara_render::instanced::Material::default()), 0.);
+    }
 
     fn lattice(origin: f32) -> ProbeSurfaces {
         ProbeSurfaces {

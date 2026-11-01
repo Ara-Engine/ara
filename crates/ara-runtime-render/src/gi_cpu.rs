@@ -893,8 +893,8 @@ const MARGIN: f32 = 6.;
 const FINER: f32 = 0.5;
 
 /// Version of what a probe texel records (bump when the bake's shading changes,
-/// such as [`bounce_albedo`]).
-const SURFACE_VERSION: u32 = 4;
+/// such as [`bounce_albedo`]; 5: probe rays pass glass by its transmittance).
+const SURFACE_VERSION: u32 = 5;
 
 /// The lattice rule's identity, part of the probe cache's file names
 /// (`gi.rs`): any change to the constants above misses older bakes.
