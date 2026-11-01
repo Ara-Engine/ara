@@ -24,11 +24,6 @@ impl ProbeVolume {
     /// [`ProbeVolume::automatic`] with at most `probes` probes (at least the
     /// eight-probe minimum per axis allows).
     pub fn automatic_within(min: Vec3, max: Vec3, probes: usize) -> Result<Self> {
-        Self::automatic_spaced(min, max, probes, 1.5)
-    }
-    /// [`ProbeVolume::automatic_within`] aiming at `cell` metres between probes
-    /// (coarser where the budget runs out).
-    pub fn automatic_spaced(min: Vec3, max: Vec3, probes: usize, cell: f32) -> Result<Self> {
         ensure!(
             min.is_finite() && max.is_finite() && min.cmple(max).all(),
             "Invalid probe bounds"
@@ -38,7 +33,7 @@ impl ProbeVolume {
         // Keep small diagnostic volumes stable while bounding spacing in real scenes.
         let minimum = [10, 6, 10];
         let mut counts = std::array::from_fn(|i| {
-            ((extent[i] / cell).ceil().min(62.) as u32 + 2).clamp(minimum[i], 64)
+            ((extent[i] / 1.5).ceil().min(62.) as u32 + 2).clamp(minimum[i], 64)
         });
         while counts.iter().map(|n| *n as usize).product::<usize>() > probes.min(32768)
             && counts.iter().any(|&n| n > 3)

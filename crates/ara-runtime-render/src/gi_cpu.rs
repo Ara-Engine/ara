@@ -882,10 +882,6 @@ fn lod_level(scene: &Scene) -> usize {
 const PROBES: usize = 32_768;
 /// Probes of the fine lattice over built-up content.
 const FINE_PROBES: usize = 16_384;
-/// Spacing (m) the fine lattice aims at: probes within a quarter metre of walls,
-/// so the irradiance they carry to a wall (and every bounce off it) sees the room
-/// from nearly where the wall does.
-const FINE_CELL: f32 = 0.5;
 /// Instances wider than this bound radius (m) are landforms, not built-up content.
 const LANDFORM_RADIUS: f32 = 32.;
 /// Ground cells (m) in which built-up content is measured.
@@ -909,7 +905,7 @@ const SURFACE_VERSION: u32 = 13;
 /// (`gi.rs`): any change to the constants above misses older bakes.
 pub(crate) fn lattice_rule() -> String {
     format!(
-        "s{SURFACE_VERSION}-pool-p{PROBES}-f{FINE_PROBES}-c{FINE_CELL}-l{LANDFORM_RADIUS}-g{CELL}-d{DENSITY}-m{MARGIN}-r{FINER}"
+        "s{SURFACE_VERSION}-pool-p{PROBES}-f{FINE_PROBES}-l{LANDFORM_RADIUS}-g{CELL}-d{DENSITY}-m{MARGIN}-r{FINER}"
     )
 }
 
@@ -948,7 +944,7 @@ pub(crate) fn layout(tracer: &Tracer) -> Result<ProbeLayout> {
         .context("the scene has no static triangles to bake")?;
     let single = ProbeVolume::automatic_within(lo, hi, PROBES)?;
     if let Some((flo, fhi)) = tracer.built_up() {
-        let fine = ProbeVolume::automatic_spaced(flo.max(lo), fhi.min(hi), FINE_PROBES, FINE_CELL)?;
+        let fine = ProbeVolume::automatic_within(flo.max(lo), fhi.min(hi), FINE_PROBES)?;
         if fine.spacing.max_element() <= single.spacing.max_element() * FINER {
             return ProbeLayout::new(&[lattice(&fine), lattice(&single)]);
         }
