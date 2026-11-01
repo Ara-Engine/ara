@@ -695,6 +695,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-bvh"
+version = "0.0.1-alpha"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
 name = "ara-cmd"
 version = "0.0.1-alpha"
 dependencies = [
@@ -1258,6 +1265,7 @@ dependencies = [
  "ara-asset",
  "ara-asset-format",
  "ara-audio",
+ "ara-bvh",
  "ara-cmd",
  "ara-diag",
  "ara-doc",
@@ -1265,6 +1273,7 @@ dependencies = [
  "ara-json",
  "ara-meshopt-sys",
  "ara-ops",
+ "ara-patch-charts",
  "ara-schema",
  "base64 0.22.1",
  "bcdec_rs",
@@ -1517,6 +1526,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ara-patch-charts"
+version = "0.0.1-alpha"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
 name = "ara-pathtrace"
 version = "0.0.1-alpha"
 dependencies = [
@@ -1749,9 +1765,11 @@ name = "ara-render"
 version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
+ "ara-bvh",
  "ara-gpu",
  "ara-hotpatch",
  "ara-json",
+ "ara-patch-charts",
  "ara-platform",
  "ara-profile",
  "ara-vsm",

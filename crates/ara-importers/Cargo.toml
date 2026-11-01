@@ -19,7 +19,9 @@ rayon = { workspace = true }
 ara-asset = { path = "../ara-asset" }
 ara-geo = { path = "../ara-geo" }
 ara-asset-format = { path = "../ara-asset-format" }
+ara-bvh = { path = "../ara-bvh" }
 ara-json = { path = "../ara-json" }
+ara-patch-charts = { path = "../ara-patch-charts" }
 ara-schema = { path = "../ara-schema" }
 base64 = "0.22"
 bytemuck = { workspace = true, features = ["derive", "extern_crate_alloc"] }
