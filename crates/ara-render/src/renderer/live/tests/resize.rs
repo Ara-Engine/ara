@@ -26,7 +26,7 @@ fn unchanged_display_resize_preserves_upscaled_targets_and_pending_history() -> 
         target: Vec3::ZERO,
         vertical_fov: 55f32.to_radians(),
     };
-    let mut gate = Gate::new(renderer.gpu(), Queue::Graphics)?;
+    let mut gate = block_queue(renderer.gpu(), Queue::Graphics)?;
     renderer.submit_scene_frame(|r| r.render_view(&camera, 1., ViewMode::Lit))?;
     let history = renderer.targets.history;
     renderer.resize([128, 80])?;
@@ -38,7 +38,7 @@ fn unchanged_display_resize_preserves_upscaled_targets_and_pending_history() -> 
         "polling must not adopt a spurious native-size resize"
     );
     assert_eq!(renderer.targets.history, history);
-    let mut gate = Gate::new(renderer.gpu(), Queue::Graphics)?;
+    let mut gate = block_queue(renderer.gpu(), Queue::Graphics)?;
     renderer.submit_scene_frame(|r| r.render_view(&camera, 1., ViewMode::Lit))?;
     renderer.resize_upscaled([48, 30], [128, 80])?;
     renderer.resize([128, 80])?;
@@ -50,7 +50,7 @@ fn unchanged_display_resize_preserves_upscaled_targets_and_pending_history() -> 
         "window notifications must preserve a queued quality change"
     );
     let scaled_images = renderer.targets.images.to_vec();
-    let mut gate = Gate::new(renderer.gpu(), Queue::Graphics)?;
+    let mut gate = block_queue(renderer.gpu(), Queue::Graphics)?;
     renderer.submit_scene_frame(|r| r.render_view(&camera, 1., ViewMode::Lit))?;
     renderer.resize([160, 100])?;
     renderer.resize([128, 80])?;

@@ -2,8 +2,7 @@
 
 Composes the merged subsystems into one playable world: `ara-sim` session + input
 actions + Jolt physics + ara-anim animation + Recast navigation + cooked assets, with a
-renderer-neutral presentation extraction. No GPU, window or process code (see
-`ara-runtime-render`, `ara-player`).
+renderer-neutral presentation extraction. No GPU, window or process code (`ara-runtime-render`, `ara-player`).
 
 ## Public API
 
@@ -79,7 +78,8 @@ renderer-neutral presentation extraction. No GPU, window or process code (see
 - `extract::RenderFrame`: camera, sun, lights, environment, draws (shape or model
   primitive, interpolated world matrix), skin-order palettes and the look (`SceneLook`: sky,
   fog, enabled `LocalFogVolume`s, every post-process volume, and the volumes' LUTs shared from `Library::luts`, which
-  `lut::Luts` decodes at startup and `reload_assets`; editors use `lut::record_references`).
+  `lut::Luts` decodes at startup and `reload_assets`; editors use `lut::record_references`; lights' IES
+  profiles load alike via `light_profile`, and `LightUnits` resolve to point-equivalent lumens).
 - `control::default_actions()`: `Move`, `Look` (Axis2), `Jump`, `Sprint` + bindings.
 - `follow::FollowView::new(rig, target, walls)`: a follow rig's aim, view direction
   and boom, which stops 0.25 m before static solid box colliders (`follow::Wall`).
@@ -91,8 +91,7 @@ Documented in `lib.rs`. Boundary (inputs, patches, commands, streamed arrivals) 
 input → plugin Gameplay → wander → adoption → `navigation.stream` → obstacles → AI
 (`sync → perceive → think → bridge`) → navigation (exclusive) → `ai.locomotion` →
 `animation ∥ navigation.follow` (parallel group) → root motion → terrain chunks /
-physics adoption → physics.push → physics (exclusive) → physics.pull → camera.place →
-plugin Late → poses.resolve.
+physics adoption → physics.push → physics (exclusive) → physics.pull → camera.place → plugin Late → poses.resolve.
 
 ## State and determinism
 

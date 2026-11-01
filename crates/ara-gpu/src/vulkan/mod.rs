@@ -28,6 +28,8 @@ mod query_tests;
 mod recording;
 mod reload;
 pub use reload::ShaderStatus;
+mod queue_gate;
+pub use queue_gate::QueueGate;
 mod submission;
 mod surface;
 pub use submission::SubmissionStats;

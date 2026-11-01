@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3",
+  "key": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6",
   "stages": [
     {
-      "dxil": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/reservoir_shade_atmosphere/reservoirShadeAtmosphere.dxil",
-      "dxil_hash": "0960fc05e70af21face1dabb005afb10e2c9972a32748e25737c4a9d1065fd6e",
+      "dxil": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/reservoir_shade_atmosphere/reservoirShadeAtmosphere.dxil",
+      "dxil_hash": "e9ba9b4d834b33510d31b244bdfcc7759a28f552236cd16372479a6b11c51bd4",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/reservoir_shade_atmosphere/reservoirShadeAtmosphere.metallib",
-        "metallib_hash": "2bdc62451bde90c38bf0435345f414af1cb9de03ab9a4badacc36f4ede368a37",
-        "reflection": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/reservoir_shade_atmosphere/reservoirShadeAtmosphere.metal.json",
+        "metallib": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/reservoir_shade_atmosphere/reservoirShadeAtmosphere.metallib",
+        "metallib_hash": "665307e72835162159581878265d5553abbaf8e6df6671364f0a69e07bf0bc63",
+        "reflection": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/reservoir_shade_atmosphere/reservoirShadeAtmosphere.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "reservoirShadeAtmosphere",
-      "spirv": "9a75d11735afc0edb72bc532fe4d59ae95b9a4d56cbce1b25d4b7172f8f4f5a3/reservoir_shade_atmosphere/reservoirShadeAtmosphere.spv",
+      "spirv": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/reservoir_shade_atmosphere/reservoirShadeAtmosphere.spv",
       "spirv_entry": "main",
-      "spirv_hash": "a306a69405a11c3e5662a41596acc253deb0f2e1bc290c4012a357310a723aa7",
+      "spirv_hash": "3734b099f3465354ba706df45e234f7e6c3a6e5574145a4eb2b45114b0931161",
       "stage": "compute"
     }
   ],

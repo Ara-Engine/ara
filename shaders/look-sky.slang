@@ -95,7 +95,7 @@ void fogMain(uint3 group:SV_GroupID,uint z:SV_GroupIndex){
         if(physical)source+=(sr+sm)*multiScattering(l,height,sun.y)*l.sunLux.rgb;
         if(any(m.scattering>0)){
             source+=m.scattering*fogAmbient(f,l,at);
-            for(uint i=0;i<lights;i++)source+=m.scattering*fogLocalLight(l,buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64),i,at,d,g);
+            for(uint i=0;i<lights;i++)source+=m.scattering*fogLocalLight(f,l,loadLight(f.lighting.w,i),i,at,d,g);
         }
         source+=m.emission;
         light=source*segmentWeight(e,ds);trans=exp(-e*ds);

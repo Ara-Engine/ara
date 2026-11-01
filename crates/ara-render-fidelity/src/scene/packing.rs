@@ -68,26 +68,7 @@ pub(super) fn validate(s: &Scene) -> Result<()> {
         "Invalid lighting"
     );
     for light in &s.lights {
-        ensure!(
-            light
-                .position_range
-                .iter()
-                .chain(&light.color_lumens)
-                .chain(&light.direction_outer)
-                .chain(&light.parameters)
-                .all(|v| v.is_finite())
-                && light.position_range[3] > 0.
-                && light.color_lumens.iter().all(|v| *v >= 0.),
-            "Invalid local light values"
-        );
-        ensure!(
-            (light.parameters[0] == 0. || light.parameters[0] == 1.)
-                && (light.parameters[0] == 0.
-                    || (Vec3::from_slice(&light.direction_outer).length_squared() > 1e-8
-                        && (-1.0..=1.0).contains(&light.direction_outer[3])
-                        && (light.direction_outer[3]..=1.0).contains(&light.parameters[1]))),
-            "Invalid spot cone/direction"
-        );
+        ensure!(light.is_valid(), "Invalid local light values");
     }
     ensure!(
         !s.environment_size.contains(&0)

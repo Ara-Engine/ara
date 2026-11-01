@@ -85,8 +85,7 @@ and handle generations independent; images and shared surfaces do not use this p
 
 Recording validates generations, queue classes, rendering scopes, attachment
 formats, copy capacities and vertex/index usage before touching native commands.
-`ClearDepth` clears one rectangle of the scope's depth attachment (an atlas tile)
-and must lie within the scope's extent.
+`ClearDepth` clears one rectangle of the scope's depth attachment (an atlas tile) and must lie within the scope's extent.
 Native presentation and raw ash integration remain unsafe, with documented
 lifetime/layout requirements. Never reset a pending native command buffer.
 
@@ -96,8 +95,9 @@ the last completed color/ID pair. `FRAMES_IN_FLIGHT` (2) ended scopes may stay u
 writes busy constants through ordered GPU updates; ordinary `upload` still rejects
 overwrites. A second graphics-family queue isolates Scene work from the native UI
 queue where available; completion publishes a GPU memory dependency to that UI queue.
-Capture/shutdown may use `wait_completion`. `tests/deferred.rs` blocks Scene work
-behind a host gate and checks UI progress, polling and byte-exact ordered updates.
+Capture/shutdown may use `wait_completion`. Tests hold a queue only through `vulkan::QueueGate` (a host
+timeline wait); device teardown waits until no gate is held, as NVIDIA's Windows `vkDestroyDevice` otherwise deadlocks
+under its process-wide lock (`ara-render` AGENTS.md). `tests/deferred.rs` blocks Scene work behind one: UI progress, polling, ordered updates.
 Synchronous presenters use `begin_deferred_completion_on_current_queue`; consecutive
 helpers share one native submit with ordered memory barriers. End the scope before
 host waits. `wait_completion_with` preserves logical pass groups; `submission_stats`

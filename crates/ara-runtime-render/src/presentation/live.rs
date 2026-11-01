@@ -13,6 +13,9 @@ impl Live {
             self.view.set_environment(&look)?;
             self.look = look;
         }
+        self.view.set_sun_radius(frame.sun_radius)?;
+        self.view
+            .set_light_tables(gpu, &crate::lights::tables(&frame.lights).0)?;
         let textures = self.view.refine_native_textures(gpu)?;
         let camera = camera(frame)?;
         self.temporal = self.temporal.wrapping_add(1);

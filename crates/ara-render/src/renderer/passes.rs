@@ -419,6 +419,7 @@ impl Renderer {
             &self.look.effective(),
             &FrameInputs {
                 sun_lux: self.content.sun_lux,
+                sun_radius: self.look.sun_radius,
                 exposure,
                 reset,
                 snap: (reset && !seeded) || arriving || self.look.unseen,
@@ -429,6 +430,12 @@ impl Renderer {
             },
         );
         let mut look_frame = look_frame;
+        look_frame.light_info[0] = [
+            self.look.ltc.sampled[0],
+            self.look.ltc.sampled[1],
+            self.look.light_tables.map_or(0, |(_, index, _)| index),
+            0,
+        ];
         if let Some(cascades) = &self.look.cascades {
             for (slot, &index) in look_frame.cascade_maps.iter_mut().zip(&cascades.sampled) {
                 *slot = index;
@@ -670,6 +677,28 @@ impl Renderer {
                 };
                 graphics.push((id, read));
             });
+        }
+        // Host-written light tables (profiles), read by lighting and fog.
+        if let Some((buffer, _, _)) = self.look.light_tables {
+            let id = graph.import(
+                Resource::Buffer(buffer),
+                State {
+                    access: Access::HostWrite,
+                    queue: Queue::Graphics,
+                },
+            );
+            graphics.push((id, Access::ShaderRead));
+        }
+        // The area-light tables stay in ShaderRead for the renderer's lifetime.
+        for resource in self.look.ltc.resources() {
+            let id = graph.import(
+                resource,
+                State {
+                    access: Access::ShaderRead,
+                    queue: Queue::Graphics,
+                },
+            );
+            graphics.push((id, Access::ShaderRead));
         }
         let mut frame_input = None;
         for buffer in [self.frame, self.display_frame] {

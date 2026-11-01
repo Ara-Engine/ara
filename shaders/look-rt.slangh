@@ -234,17 +234,11 @@ float3 rtShadeHit(Frame f,Look l,Surface s,float3 position,float3 geometric,floa
         float bias=l.rtParams[1].x+l.rtParams[1].y*length(position-f.camera.xyz);
         if(lit>0 && !rtOccluded(f,l,position+geometric*bias,sun,l.rtParams[0].y))c+=brdf(s,v,sun,o)*sunAt(f,l,position)*lit;
     }
-    uint count=min(f.extent.z,RT_HIT_LIGHTS);
+    uint count=min(f.extent.z,RT_HIT_LIGHTS);AreaPixel area=(AreaPixel)0;
     for(uint i=0;i<count;i++){
-        Light light=buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64);
-        float3 delta=light.positionRange.xyz-position;float range=light.positionRange.w;
-        if(dot(delta,delta)>=range*range)continue;
-        float d2=max(dot(delta,delta),max(0.01,light.parameters.z*light.parameters.z));float d=sqrt(d2);float3 toLight=normalize(delta);
-        if(dot(s.normal,toLight)<=0)continue;
-        float fade=pow(saturate(1-pow(d/range,4)),2);float spot=1;
-        if(light.parameters.x>0.5)spot=smoothstep(light.directionOuter.w,light.parameters.y,dot(-toLight,light.directionOuter.xyz));
-        float3 illuminance=light.colorLumens.rgb*(light.colorLumens.w/(4*PI*d2))*fade*spot;
-        if(any(illuminance>0))c+=brdf(s,v,toLight,o)*illuminance*localShadow(l,i,position,s.normal,light.positionRange.xyz);
+        // look-lights.slangh, as deferred pixels shade them.
+        Light light=loadLight(f.lighting.w,i);float size;float3 e=localLight(f,l,s,o,v,position,i,light,area,size);
+        if(any(e>0))c+=e*localShadow(l,i,position,s.normal,light.positionRange.xyz,size,light.positionRange.w);
     }
     return c;
 }

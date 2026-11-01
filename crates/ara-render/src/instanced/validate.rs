@@ -242,27 +242,7 @@ impl Scene {
             }
         }
         for light in &self.lights {
-            ensure!(
-                light
-                    .position_range
-                    .iter()
-                    .chain(&light.color_lumens)
-                    .chain(&light.direction_outer)
-                    .chain(&light.parameters)
-                    .all(|v| v.is_finite())
-                    && light.position_range[3] > 0.0
-                    && light.color_lumens.iter().all(|v| *v >= 0.0)
-                    && (light.parameters[0] == 0.0 || light.parameters[0] == 1.0),
-                "invalid native light"
-            );
-            if light.parameters[0] == 1.0 {
-                ensure!(
-                    Vec3::from_slice(&light.direction_outer).length_squared() > 1e-8
-                        && (-1.0..=1.0).contains(&light.direction_outer[3])
-                        && (light.direction_outer[3]..=1.0).contains(&light.parameters[1]),
-                    "invalid native spot cone"
-                );
-            }
+            ensure!(light.is_valid(), "invalid native light");
         }
         Ok(())
     }

@@ -32,7 +32,8 @@ impl Drop for Initialization {
                 for pool in &self.pools {
                     device.destroy_command_pool(*pool, None);
                 }
-                device.destroy_device(None);
+                // As NativeDevice::drop: never while a queue is held on the host.
+                super::queue_gate::without_held_queues(|| device.destroy_device(None));
             }
             if let Some((debug, messenger)) = &self.debug {
                 debug.destroy_debug_utils_messenger(*messenger, None);

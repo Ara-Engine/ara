@@ -146,30 +146,59 @@ pub(crate) fn matches_emissive_material(selector: &str, index: usize, name: &str
 #[ara(module = "render")]
 #[serde(rename_all = "camelCase")]
 pub enum LightKind {
-    /// Omnidirectional point light.
+    /// Omnidirectional point light; a source radius makes it a sphere, and a source
+    /// length a tube along the entity's local X axis.
     #[default]
     Point,
-    /// Cone light aimed along the entity's local -Z axis.
+    /// Cone light aimed along the entity's local -Z axis; a source radius or length
+    /// sizes its emitter as for a point.
     Spot,
     /// Sun-like light shining along the entity's local -Z axis; casts cascaded shadows.
     Directional,
+    /// One-sided rectangle emitting along the entity's local -Z axis: `sourceWidth`
+    /// along local X, `sourceHeight` along local Y, with optional barn doors.
+    Rect,
+    /// One-sided disc of radius `sourceRadius` emitting along the entity's local -Z axis.
+    Disc,
+}
+
+/// The unit of a local light's `intensity` (directional lights always take lux).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Schema, Serialize, Deserialize)]
+#[ara(module = "render")]
+#[serde(rename_all = "camelCase")]
+pub enum LightUnits {
+    /// Luminous flux in lumens: everything a point emits (a spot's cone masks a point
+    /// of that flux, as Unreal's spot lumens), or a rect's or disc's over its front
+    /// hemisphere.
+    #[default]
+    Lumens,
+    /// Luminous intensity in candela: in every direction for points and spots, along
+    /// the normal for rects and discs.
+    Candela,
+    /// Luminance of the emitting surface in nits (candela per square metre); a light
+    /// without a source size emits nothing.
+    Nits,
 }
 
 /// A light at the entity's world position. Edits apply live in play.
-#[derive(Debug, Clone, Copy, PartialEq, Component, Schema, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Component, Schema, Serialize, Deserialize)]
 #[ara(component, module = "render")]
 #[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 pub struct Light {
-    /// Point, spot or directional.
+    /// Point, spot, directional, rect or disc.
     pub kind: LightKind,
     /// Linear RGB tint (alpha is ignored).
     #[ara(editor(temperature))]
     pub color: Color,
-    /// Luminous flux in lumens (point/spot) or illuminance in lux (directional).
+    /// Brightness: illuminance in lux for a directional light, otherwise in `units`.
     #[ara(default = 800, range(min = 0))]
     pub intensity: f32,
-    /// Influence radius of point and spot lights.
-    #[ara(default = 10, unit = Meters, range(min = 0.01), editor(show_if(field = "kind", one_of = ["point", "spot"])))]
+    /// What a local light's `intensity` measures: lumens, candela or nits.
+    #[ara(editor(show_if(field = "kind", one_of = ["point", "spot", "rect", "disc"])))]
+    pub units: LightUnits,
+    /// Influence radius of local lights, from the light's centre; their light fades
+    /// to zero there.
+    #[ara(default = 10, unit = Meters, range(min = 0.01), editor(show_if(field = "kind", one_of = ["point", "spot", "rect", "disc"])))]
     pub range: f32,
     /// Spot inner cone half-angle.
     #[ara(default = 20, unit = Degrees, range(min = 0, max = 89), editor(show_if(field = "kind", one_of = ["spot"])))]
@@ -182,6 +211,40 @@ pub struct Light {
     /// shafts and glow. Surfaces are lit the same either way.
     #[ara(default = 1, range(min = 0, max = 16))]
     pub volumetric_scattering: f32,
+    /// Radius of the emitter: a point's or spot's sphere (or tube, with
+    /// `sourceLength`) or the disc. Larger sources give broader highlights and softer
+    /// shadows; zero is an ideal point (Unreal's Source Radius).
+    #[ara(unit = Meters, range(min = 0), editor(show_if(field = "kind", one_of = ["point", "spot", "disc"])))]
+    pub source_radius: f32,
+    /// Length of a point's or spot's tube along the entity's local X axis, capped by
+    /// `sourceRadius`; zero is a sphere (Unreal's Source Length).
+    #[ara(unit = Meters, range(min = 0), editor(show_if(field = "kind", one_of = ["point", "spot"])))]
+    pub source_length: f32,
+    /// Rect width along the entity's local X axis (Unreal's Source Width).
+    #[ara(default = 0.64, unit = Meters, range(min = 0.001), editor(show_if(field = "kind", one_of = ["rect"])))]
+    pub source_width: f32,
+    /// Rect height along the entity's local Y axis (Unreal's Source Height).
+    #[ara(default = 0.64, unit = Meters, range(min = 0.001), editor(show_if(field = "kind", one_of = ["rect"])))]
+    pub source_height: f32,
+    /// Angle of the rect's four barn doors from its normal: 0 points them straight
+    /// ahead (the narrowest beam), 90 folds them flat (no effect).
+    #[ara(default = 88, unit = Degrees, range(min = 0, max = 90), editor(show_if(field = "kind", one_of = ["rect"])))]
+    pub barn_door_angle: f32,
+    /// Length of the rect's barn doors; zero has none.
+    #[ara(default = 0.2, unit = Meters, range(min = 0), editor(show_if(field = "kind", one_of = ["rect"])))]
+    pub barn_door_length: f32,
+    /// Photometric light profile (an imported IES file) shaping a point's, spot's or
+    /// rect's intensity by direction, about the entity's local -Z axis.
+    #[ara(editor(show_if(field = "kind", one_of = ["point", "spot", "rect"])))]
+    pub profile: Option<AssetRef>,
+    /// Take the brightness from the profile's own candela instead of `intensity`
+    /// (Unreal's Use IES Intensity); `intensity` then scales it (one is as measured).
+    #[ara(editor(show_if(field = "kind", one_of = ["point", "spot", "rect"])))]
+    pub profile_intensity: bool,
+    /// Angular diameter of a directional light's disc: wider suns cast softer shadow
+    /// edges and broader highlights (Unreal's Light Source Angle; 0.5357 is the Sun).
+    #[ara(default = 0.5357, unit = Degrees, range(min = 0, max = 20), editor(show_if(field = "kind", one_of = ["directional"])))]
+    pub source_angle: f32,
 }
 impl Default for Light {
     fn default() -> Self {
@@ -189,10 +252,20 @@ impl Default for Light {
             kind: LightKind::Point,
             color: Color([1.0; 4]),
             intensity: 800.0,
+            units: LightUnits::Lumens,
             range: 10.0,
             inner_angle: 20.0,
             outer_angle: 30.0,
             volumetric_scattering: 1.0,
+            source_radius: 0.0,
+            source_length: 0.0,
+            source_width: 0.64,
+            source_height: 0.64,
+            barn_door_angle: 88.0,
+            barn_door_length: 0.2,
+            profile: None,
+            profile_intensity: false,
+            source_angle: 0.5357,
         }
     }
 }

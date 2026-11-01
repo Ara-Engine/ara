@@ -6,6 +6,7 @@ pub mod commands;
 mod fbx;
 mod geometry_memo;
 mod gltf;
+pub mod ies;
 mod mesh;
 mod texture;
 mod texture_codec;
@@ -26,6 +27,7 @@ pub fn registry() -> Result<ImporterRegistry> {
     registry.register(FbxImporter)?;
     registry.register(TextureImporter)?;
     registry.register(audio::AudioAsset::default())?;
+    registry.register(ies::IesImporter)?;
     registry.register(ara_geo::GeoImporter)?;
     Ok(registry)
 }

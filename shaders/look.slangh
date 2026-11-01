@@ -77,6 +77,9 @@ struct Look {
     uint4 volumetricImages;    // injection history, injection, integrated (sampled), injection (storage)
     uint4 volumetricStorage;   // x integrated (storage), y ambient (storage), z ambient (sampled)
     uint4 volumetricAmbient;   // ambient light grid: xyz cells (froxels / 4, 4, 2), w slices per atlas row
+    // Local lights (look-lights.slangh): lightInfo[0] x LTC inverse matrices, y LTC sphere
+    // integral (sampled), z light tables (storage; 0 none); lightParams reserved.
+    float4 lightParams[2];   uint4 lightInfo[2];
 };
 static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64,LOOK_REFLECTION_SOURCES=128,LOOK_VOLUMETRIC=256,LOOK_FOG_SHADOWED=512;
 // Automatic exposure's extra compensation (stops) at metered scene EV100 `ev`:

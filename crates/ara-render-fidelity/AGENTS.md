@@ -33,6 +33,9 @@ No authoritative gameplay or authoring state lives here.
 - `set_deferred_post`: live views with particles leave bloom/post/upscale/output to
   `post_process` (otherwise the chain ran twice per frame).
 - `SunShadowSource`, `render_jitter`: completed VSM sun mask with RT residency fallback.
+- Local lights (`shaders/local-lights.slangh`): every `scene::Light` kind sampled exactly (sphere cones,
+  tube surfaces, rect areas through their barn doors, discs); the reference adds MIS-weighted area-light
+  hits for small exact-estimator scenes. `set_light_tables` (profiles, frame row 9), `set_sun_radius`.
 - `presets`: `QualityPreset` (Low/Medium/High/Epic), `QualityChoice` (`--quality`),
   `Capabilities::of`, `Plan::resolve(choice, caps, display, RenderOptions)` →
   `RenderPath::Raster(RasterPlan)` (D27 default: every preset, every GPU;

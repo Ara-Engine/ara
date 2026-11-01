@@ -62,6 +62,8 @@ pub struct Library {
     pub materials: crate::material::Materials,
     /// Post-process volumes' colour lookup tables, decoded outside frame extraction.
     pub luts: crate::lut::Luts,
+    /// Lights' photometric profiles (imported IES files), decoded outside frame extraction.
+    pub light_profiles: crate::light_profile::LightProfiles,
     /// The project's `.animation` records (controllers, clips, motion databases).
     pub documents: Documents,
     programs: BTreeMap<String, Arc<Program>>,

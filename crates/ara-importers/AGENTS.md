@@ -1,6 +1,7 @@
 # ara-importers
 
-Production pure glTF/GLB, FBX, image and audio importers for ara-import-worker.
+Production pure glTF/GLB, FBX, image, audio and IES (`ies`, LM-63 type C profiles resampled to
+64 x 1 or 32 normalised samples, `profile.bin`) importers for ara-import-worker.
 Public API: registry, Importer implementations, cook_mesh/cook_texture/cook_texture_with_preset,
 MeshSettings/TextureSettings and Vertex. Host SourceAsset/snapshot live in ara-asset.
 `TextureUsage::Lut` cooks colour lookup table strips uncompressed (RGBA16F, one level, values as authored).

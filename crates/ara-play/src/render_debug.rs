@@ -101,6 +101,10 @@ pub enum DebugView {
     /// Deferred decals per pixel.
     #[serde(alias = "decal_coverage")]
     DecalCoverage,
+    /// Local-light shading cost per pixel, on the overdraw heat legend: each light
+    /// reaching the surface counts one, an area light three, a shadowed one one more.
+    #[serde(alias = "light_complexity")]
+    LightComplexity,
 }
 
 /// The path-traced reference's budget ([`RenderDebug::reference`]).

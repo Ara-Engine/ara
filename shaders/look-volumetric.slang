@@ -67,8 +67,9 @@ void fogInjectMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint ind
     }
     GroupMemoryBarrierWithGroupSync();
     for(uint i=index;i<(shadowed?f.extent.z:0);i+=64){
-        float4 sphere=buffers[NonUniformResourceIndex(f.lighting.w)].Load<float4>(i*64);float volumetric=asfloat(buffers[NonUniformResourceIndex(f.lighting.w)].Load(i*64+60));
-        if(volumetric>0 && length(clamp(sphere.xyz,fogGroupMin,fogGroupMax)-sphere.xyz)<=sphere.w)InterlockedOr(fogGroupLights[i/32],1u<<(i%32));
+        // Bounding spheres about the centre hold every kind (look-lights.slangh).
+        Light light=loadLight(f.lighting.w,i);float4 sphere=light.positionRange;
+        if(light.parameters.w>0 && length(clamp(sphere.xyz,fogGroupMin,fogGroupMax)-sphere.xyz)<=sphere.w)InterlockedOr(fogGroupLights[i/32],1u<<(i%32));
     }
     GroupMemoryBarrierWithGroupSync();
     if(any(tid>=grid))return;
@@ -92,7 +93,7 @@ void fogInjectMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint ind
             uint bits=fogGroupLights[word];
             while(bits!=0){
                 uint i=word*32+firstbitlow(bits);bits&=bits-1;
-                source+=m.scattering*fogLocalLight(l,buffers[NonUniformResourceIndex(f.lighting.w)].Load<Light>(i*64),i,p,d,g);
+                source+=m.scattering*fogLocalLight(f,l,loadLight(f.lighting.w,i),i,p,d,g);
             }
         }
     }

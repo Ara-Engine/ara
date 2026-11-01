@@ -90,20 +90,32 @@ float fogLocalShadow(Look l,uint index,float3 world,float3 light){
     float4 lit=step(textures[NonUniformResourceIndex(l.localShadows.y)].GatherRed(samplers[2],(clamp(base,lo,lo+res-2)+1)/atlas),q.z*1.002);
     return lerp(lerp(lit.w,lit.z,t.x),lerp(lit.x,lit.y,t.x),t.y);
 }
-// In-scattering a local light gives fog at `p` seen along `d` (illuminance times the
-// phase function; multiply by the scattering coefficient): the surfaces' falloff and
-// cone, its shadow where the fog samples local shadows (LOOK_LOCAL_INDIRECT), and its
-// volumetric scattering intensity (parameters.w; zero keeps it out of fog).
-float3 fogLocalLight(Look l,Light light,uint index,float3 p,float3 d,float g){
-    float3 delta=light.positionRange.xyz-p;float distance=length(delta);
-    if(distance>light.positionRange.w||light.parameters.w<=0)return 0;
-    float3 toLight=delta/max(distance,0.001);
-    float spot=light.parameters.x<0.5?1:smoothstep(light.directionOuter.w,max(light.directionOuter.w+1e-4,light.parameters.y),dot(-toLight,light.directionOuter.xyz));
-    if(spot<=0)return 0;
-    float fade=pow(saturate(1-pow(distance/light.positionRange.w,4)),2);
-    float r2=max(0.01,light.parameters.z*light.parameters.z);
+// Squared distance inside which a source's near field softens for fog, which sees it
+// from its centre: the radius of a disc of its emitting area (a sphere's or disc's
+// radius; a tube's or rect's equal-area radius), at least 10 cm.
+float fogNearField(Frame f,Light light,uint index){
+    float r=light.parameters.z,r2=r*r;
+    if(lightShaped(light)){
+        LightShape shape=loadLightShape(f.lighting.w,index);
+        if(lightKind(light)==LIGHT_RECT)r2=4*shape.rect.x*shape.rect.y/PI;
+        else if(lightKind(light)<LIGHT_RECT)r2+=2*r*shape.tangentLength.w/PI;
+    }
+    return max(0.01,r2);
+}
+// In-scattering local light `index` (`light`) gives fog at `p` seen along `d`
+// (illuminance times the phase function; multiply by the scattering coefficient): its
+// intensity towards `p` (look-lights.slangh lightIntensity: falloff, a spot's cone, a
+// rect's or disc's one-sided cosine, barn doors and light profile), its shadow where
+// the fog samples local shadows (LOOK_LOCAL_INDIRECT), and its volumetric scattering
+// intensity (parameters.w; zero keeps it out of fog).
+float3 fogLocalLight(Frame f,Look l,Light light,uint index,float3 p,float3 d,float g){
+    if(light.parameters.w<=0)return 0;
+    float3 intensity=lightIntensity(f,l,light,index,p);
+    if(all(intensity<=0))return 0;
+    float3 delta=light.positionRange.xyz-p;float d2=dot(delta,delta);
+    float3 toLight=delta*rsqrt(max(d2,1e-12));
     float shadow=(l.flags.y&LOOK_LOCAL_INDIRECT)!=0?fogLocalShadow(l,index,p,light.positionRange.xyz):1;
-    return light.colorLumens.rgb*(light.colorLumens.w*light.parameters.w/(4*PI*max(distance*distance,r2)))*fade*spot*shadow*phaseM(dot(d,toLight),g);
+    return intensity*(light.parameters.w/max(d2,fogNearField(f,light,index)))*shadow*phaseM(dot(d,toLight),g);
 }
 // Length-weighted share of a homogeneous segment's source that leaves it (Hillaire's
 // energy-conserving integral, (1 - exp(-e ds)) / e), stable for clear air.

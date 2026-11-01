@@ -645,6 +645,7 @@ impl Part {
             ],
             // Unshadowed, so kept out of fog in-scattering (w: no volumetric scattering).
             parameters: [f32::from(u8::from(spot)), 1., self.radius, 0.],
+            ..ara_render::scene::Light::ZERO
         }
     }
 }

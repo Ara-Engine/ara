@@ -158,8 +158,14 @@ pub(crate) struct LookFrame {
     /// The ambient light's coarse grid (`volumetric::Layout::ambient`): xyz cells, w
     /// slices per atlas row.
     pub volumetric_ambient: [u32; 4],
+    /// Local lights (`look::ltc`, `look-lights.slangh`): info `[0]` LTC inverse
+    /// matrices and sphere integral (sampled), light tables (storage; zero: none).
+    /// Params are reserved.
+    pub light_params: [[f32; 4]; 2],
+    pub light_info: [[u32; 4]; 2],
     /// Local fog volume records (`FogVolume::row`), read by offset: not part of the
-    /// shader's `Look` struct (a variable index into it would spill to memory).
+    /// shader's `Look` struct (a variable index into it would spill to memory). Last,
+    /// so the shader struct is a prefix of this one.
     pub fog_volumes: [[[f32; 4]; 6]; super::MAX_FOG_VOLUMES],
 }
 
@@ -167,6 +173,8 @@ pub(crate) struct LookFrame {
 pub(crate) struct FrameInputs {
     /// Top-of-atmosphere sun illuminance in lux.
     pub sun_lux: Vec3,
+    /// The sun's angular radius in radians, over the sky's default.
+    pub sun_radius: Option<f32>,
     /// Manual linear exposure multiplier; used unless the look meters automatically.
     pub exposure: f32,
     /// Drop GI hysteresis (first frame, history reset or a capture's settle
@@ -202,7 +210,10 @@ impl LookFrame {
                 0
             };
         Self {
-            sun_lux: inputs.sun_lux.extend(sky.sun_radius).to_array(),
+            sun_lux: inputs
+                .sun_lux
+                .extend(inputs.sun_radius.unwrap_or(sky.sun_radius))
+                .to_array(),
             atmosphere: [
                 sky.sea_level,
                 fog.map_or(0., |f| f.extinction),
@@ -308,6 +319,8 @@ impl LookFrame {
             volumetric_storage: [0; 4],
             volumetric_ambient: [0; 4],
             fog_volumes: [[[0.; 4]; 6]; super::MAX_FOG_VOLUMES],
+            light_params: [[0.; 4]; 2],
+            light_info: [[0; 4]; 2],
         }
     }
 }

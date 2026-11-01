@@ -4,7 +4,52 @@ use anyhow::{Result, ensure};
 use ara_gpu::{Access, Device, GpuDevice, Queue, Resource, vk};
 use ara_render::graph::State;
 impl FidelityView {
-    /// Enable physical sky illumination and frustum fog, or restore the extracted
+    /// The directional light's angular radius in radians (half its source angle), or
+    /// `None` for the Sun's: the cone sun rays sample, as the raster renderer's soft
+    /// shadows (`ara_render::Renderer::set_sun_radius`). A change resets history.
+    pub fn set_sun_radius(&mut self, radius: Option<f32>) -> Result<()> {
+        let radius = radius.unwrap_or(crate::view::SUN_RADIUS);
+        ensure!(
+            radius.is_finite() && (0.0..=0.2).contains(&radius),
+            "a sun radius is 0 to 0.2 radians"
+        );
+        if self.sun_radius != radius {
+            self.sun_radius = radius;
+            self.history = false;
+        }
+        Ok(())
+    }
+    /// Replace the light tables `ara_render::scene::Light::tables` offsets address
+    /// (photometric profiles; word 0 reserved), as the raster renderer's
+    /// `set_light_tables`. The buffer grows only when a larger table arrives.
+    pub fn set_light_tables(&mut self, gpu: &mut GpuDevice, words: &[u32]) -> Result<()> {
+        if (words.len() <= 1 && self.light_tables.is_none()) || self.light_table_words == words {
+            return Ok(());
+        }
+        if !self
+            .light_tables
+            .is_some_and(|(_, _, capacity)| words.len() <= capacity)
+        {
+            let capacity = words.len().next_power_of_two().max(4096);
+            let buffer = gpu.create_buffer(
+                (capacity * 4) as u64,
+                vk::BufferUsageFlags::STORAGE_BUFFER,
+                true,
+            )?;
+            let index = gpu.storage_buffer(buffer)?.index;
+            if let Some((old, _, _)) = self.light_tables.replace((buffer, index, capacity)) {
+                gpu.retire(Resource::Buffer(old))?;
+            }
+            self.history = false;
+        }
+        if let Some((buffer, _, _)) = self.light_tables {
+            gpu.upload(buffer, bytemuck::cast_slice(words))?;
+        }
+        self.light_table_words = words.to_vec();
+        self.history = false;
+        Ok(())
+    }
+    /// Enable physical sky illumination) and frustum fog, or restore the extracted
     /// environment. Changing atmospheric composition resets temporal transport.
     pub fn set_atmosphere(
         &mut self,
