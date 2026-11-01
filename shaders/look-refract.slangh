@@ -127,7 +127,7 @@ float3 refractTrace(Frame f,Look l,float3 o,float3 d,float reach,float spread,fl
     float3 drawn;if(refractBackground(f,l,o,d,roughness*4,drawn))return drawn;
     uint prefilter=physicalSky(l)?l.sampled1.y:f.lighting.y;float2 e=environmentUv(d);float level=roughness*4,low=floor(level),high=min(low+1,4);
     float3 sky=lerp(envTex(prefilter,float2(e.x,(e.y*127+0.5+low*128)/640)).rgb,envTex(prefilter,float2(e.x,(e.y*127+0.5+high*128)/640)).rgb,frac(level));
-    return (physicalSky(l)?sky:applyFog(f,l,sky,f.camera.xyz+d*FOG_RANGE,uv))*refractExposure(f,l);
+    return (physicalSky(l)?sky:applyFog(f,l,sky,f.camera.xyz+d*FOG_RANGE,uv,FOG_LIGHTS_BEHIND))*refractExposure(f,l);
 }
 // Final colour of a transmissive forward surface in the HDR target's space
 // (refractExposure), premultiplied by its coverage
@@ -156,7 +156,7 @@ float3 refractSurface(Frame f,Look l,Surface s,float f0,float3 world,int2 p,bool
     float nv=saturate(dot(s.normal,v));float4 c=s.roughness*float4(-1,-0.0275,-0.572,0.022)+float4(1,0.0425,1.04,-0.04);
     float a004=min(c.x*c.x,exp2(-9.28*nv))*c.x+c.y;float2 ab=float2(-1.04,1.04)*a004+c.zw;
     through=saturate(1-(f0*ab.x+ab.y));
-    return applyFog(f,l,shade(f,l,r,world,p,false,high),world,uv)*refractExposure(f,l);
+    return applyFog(f,l,shade(f,l,r,world,p,false,high),world,uv,FOG_LIGHTS_FRONT)*refractExposure(f,l);
 }
 // Hollow glass (bottles, bulbs, drinking glasses) is a shell: a wall much thinner than
 // its curvature, whose far wall the same draw holds, so the copy never shows it. Where

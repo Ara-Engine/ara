@@ -52,7 +52,11 @@ pub(crate) const SCREEN_SPECULAR: usize = 28;
 /// This frame's emission promoted to emitter lights, as a pyramid in the reflection
 /// pyramid's layout: screen probe hits take their cone's share of it off.
 pub(crate) const SCREEN_EMISSION: usize = 29;
-const IMAGES: usize = 30;
+/// Per-pixel local-light scattering in fog (`look::volumetric`, look-fog-lights.slang):
+/// in-scattered light and its mean view depth, RGBA16F at the render size over
+/// `VolumetricFogQuality::light_scale`.
+pub(crate) const VOLUME_SCATTER: usize = 30;
+const IMAGES: usize = 31;
 /// Depth of a visibility-bitmask sample (`LookGpu::bitmask_ao`) behind its front, as
 /// a share of the AO radius: thinner foreground hides less of what lies behind it.
 /// 0.4 treated branches, rails and posts as 40 cm slabs: ground under a sky-lit tree
@@ -107,6 +111,8 @@ pub(crate) struct Pipelines {
     pub fog_inject: Pipeline,
     pub fog_integrate: Pipeline,
     pub fog_ambient: Pipeline,
+    /// Per-pixel local-light scattering (look-fog-lights.slang).
+    pub fog_lights: Pipeline,
     pub exposure: Pipeline,
     pub bloom: Pipeline,
     pub post: Pipeline,
@@ -315,6 +321,7 @@ impl LookGpu {
             fog_inject: load("look_fog_inject")?,
             fog_integrate: load("look_fog_integrate")?,
             fog_ambient: load("look_fog_ambient")?,
+            fog_lights: load("look_fog_lights")?,
             exposure: load("look_exposure")?,
             bloom: load("look_bloom")?,
             post: load("look_post")?,
@@ -472,6 +479,7 @@ impl LookGpu {
             SCREEN_DIFFUSE,
             SCREEN_SPECULAR,
             SCREEN_EMISSION,
+            VOLUME_SCATTER,
         ] {
             if let Some(old) = self.images[i].take() {
                 gpu.retire(Resource::Image(old))?;
@@ -528,6 +536,8 @@ impl LookGpu {
             screen,
             screen,
             screen,
+            // The per-pixel fog lights follow the near volume (`ensure_volumetric`).
+            false,
         ];
         for (i, needed) in needed.into_iter().enumerate() {
             if !needed || self.images[i].is_some() {

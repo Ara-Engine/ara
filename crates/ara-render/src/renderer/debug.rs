@@ -152,6 +152,7 @@ mod tests {
             volumetric_fog: Some(crate::look::VolumetricFogQuality {
                 tile: 8,
                 slices: 64,
+                ..crate::look::VolumetricFogQuality::default()
             }),
             ..crate::look::Quality::default()
         };

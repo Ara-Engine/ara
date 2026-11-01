@@ -1,6 +1,7 @@
 //! Volumetric fog (look::volumetric) on the native path: a sun shaft through a narrow
 //! gap in a roof stays a sharp shaft in the near froxel volume, captures of it are
-//! deterministic, and a local fog volume glows only where it is.
+//! deterministic, a local fog volume glows only where it is, and a spot light's beam,
+//! scattered per pixel, casts its occluder's shaft and agrees with the froxels' beam.
 use anyhow::{Result, ensure};
 use ara_gpu::{Access, GpuDevice, Resource};
 use ara_render::{
@@ -9,8 +10,8 @@ use ara_render::{
     instanced::{
         Geometry, Instance, Lod, Material, Scene, TextureBinding, TextureStats, Textures, Vertex,
     },
-    look::{Fog, FogVolume, Look, Quality, VolumetricFog, VolumetricFogQuality},
-    scene::CameraSpec,
+    look::{Fog, FogVolume, LocalShadows, Look, Quality, VolumetricFog, VolumetricFogQuality},
+    scene::{CameraSpec, LIGHT_SPOT, Light},
 };
 use glam::{Mat4, Quat, Vec3};
 
@@ -186,6 +187,7 @@ fn near() -> Quality {
         volumetric_fog: Some(VolumetricFogQuality {
             tile: 4,
             slices: 64,
+            ..VolumetricFogQuality::default()
         }),
         ..Quality::default()
     }
@@ -243,6 +245,110 @@ fn a_local_fog_volume_glows_only_where_it_is() -> Result<()> {
     ensure!(
         inside > none + 40. && outside < none + 5.,
         "the volume glows inside its sphere alone: {inside}, {outside}, {none}"
+    );
+    renderer.gpu().assert_clean()?;
+    Ok(())
+}
+
+/// The roofed scene without the sun: a spot light under the roof at (2, 3.5, 0) shining
+/// down (outer cone 20 degrees, inner 14), and a shadow-casting 0.4 m square 1.2 m below
+/// it inside the cone.
+fn spot_scene() -> Scene {
+    let mut scene = scene();
+    scene.sun_lux = Vec3::ZERO;
+    let blocker = |flip: f32| {
+        Mat4::from_translation(Vec3::new(2., 2.3, 0.))
+            * Mat4::from_quat(Quat::from_rotation_x(flip))
+            * Mat4::from_scale(Vec3::splat(0.4))
+    };
+    let first = scene.instances.len() as u64 + 1;
+    for (i, flip) in [0., std::f32::consts::PI].into_iter().enumerate() {
+        let world = blocker(flip);
+        scene.instances.push(Instance {
+            entity: first + i as u64,
+            name: format!("blocker-{i}"),
+            geometry: 0,
+            material: 0,
+            world,
+            previous_world: world,
+            casts_shadows: true,
+            paint: None,
+            receives_decals: true,
+        });
+    }
+    scene.lights = vec![Light {
+        position_range: [2., 3.5, 0., 8.],
+        color_lumens: [1., 1., 1., 400000.],
+        direction_outer: [0., -1., 0., 20f32.to_radians().cos()],
+        parameters: [LIGHT_SPOT, 14f32.to_radians().cos(), 0., 1.],
+        ..Light::ZERO
+    }];
+    scene
+}
+
+/// `near` with the spot's shadow sampled by fog, and its local lights scattered per pixel
+/// (`light_samples`; zero: in the froxels).
+fn spot_quality(light_samples: u32) -> Quality {
+    let mut quality = near();
+    quality.local_shadows = Some(LocalShadows {
+        lights: 1,
+        resolution: 512,
+        redraws: 6,
+        in_gi_and_fog: true,
+    });
+    if let Some(fog) = &mut quality.volumetric_fog {
+        fog.light_samples = light_samples;
+    }
+    quality
+}
+
+/// Along the view the beam is a vertical cone at image x 426 (2 m right of the centre, 8 m
+/// away); the blocker's shaft darkens it below the blocker (image y 206, 1.5 m up) against
+/// the same light unshadowed; above the blocker (y 132) it stands out of the fog beside
+/// the cone and carries the light the froxels scatter.
+#[test]
+fn a_spot_beam_scattered_per_pixel_casts_its_blocker_shaft() -> Result<()> {
+    let cache = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../target/ara-render/volumetric-fog")
+        .join(format!("{}-spot", std::process::id()));
+    let mut renderer = Renderer::new_native(&spot_scene(), Box::new(NoTextures), SIZE, &[], cache)?;
+    renderer.set_look(fog())?;
+    renderer.set_quality(spot_quality(16))?;
+    let pixel = capture(&mut renderer, "spot-pixel")?;
+    let (shaft, beam, outside) = (
+        luminance(&pixel, 426, 206),
+        luminance(&pixel, 426, 132),
+        luminance(&pixel, 470, 132),
+    );
+    renderer.set_quality(spot_quality(0))?;
+    let froxels = luminance(&capture(&mut renderer, "spot-froxels")?, 426, 132);
+    renderer.set_quality(Quality {
+        local_shadows: None,
+        ..spot_quality(16)
+    })?;
+    let unshadowed = luminance(&capture(&mut renderer, "spot-unshadowed")?, 426, 206);
+    eprintln!(
+        "spot: shaft {shaft} (unshadowed {unshadowed}); beam {beam} (froxels {froxels}), outside {outside}"
+    );
+    ensure!(
+        beam > outside + 20.,
+        "the beam stands out of the fog beside it: {beam} vs {outside}"
+    );
+    ensure!(
+        shaft < 0.85 * unshadowed,
+        "the blocker's shaft darkens the beam below it: {shaft} vs {unshadowed} unshadowed"
+    );
+    // The froxels under-resolve this narrow beam (slices there are wider than it), so
+    // they only bound it: the same light, in the same units.
+    ensure!(
+        beam > 0.5 * froxels && beam < 2. * froxels,
+        "per-pixel scattering carries the froxels' light: {beam} vs {froxels}"
+    );
+    renderer.set_quality(spot_quality(16))?;
+    let again = capture(&mut renderer, "spot-pixel-again")?;
+    ensure!(
+        again.image.as_raw() == pixel.image.as_raw(),
+        "per-pixel fog captures repeat exactly"
     );
     renderer.gpu().assert_clean()?;
     Ok(())

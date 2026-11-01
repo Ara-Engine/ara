@@ -72,40 +72,86 @@ float3 fogAmbient(Frame f,Look l,float3 p){
     if(coverage<0.99)sky*=horizonSky(l,p);
     return lerp(sky,probes,coverage)/(2*PI);
 }
-// Visibility of `p` from shadowed local light `index` (`light`) for fog: look-shadow.slangh
-// shadowFog in its face (media have no surface), the source's penumbra or `footprint`
-// (m) wide, whichever is wider.
-float fogLocalShadow(Frame f,Look l,Light light,uint index,float3 p,float footprint){
+// Visibility of `p` from shadowed local light `index` (`light`, shape row `shape`) for fog:
+// look-shadow.slangh shadowFog in its face (media have no surface), the source's penumbra
+// or `footprint` (m) wide, whichever is wider.
+float fogLocalShadow(Look l,Light light,LightShape shape,uint index,float3 p,float footprint,bool smooth=false){
     ShadowMap s;if(!shadowLocal(l,index,p,light.positionRange.xyz,light.positionRange.w,s))return 1;
-    float v=shadowFog(l,s,p,normalize(light.positionRange.xyz-p),localShadowLight(f,light,index,p),footprint);return v<0?1:v;
+    float v=shadowFog(l,s,p,normalize(light.positionRange.xyz-p),localShadowLightShaped(light,shape,p),footprint,smooth);return v<0?1:v;
 }
 // Squared distance inside which a source's near field softens for fog, which sees it
 // from its centre: the radius of a disc of its emitting area (a sphere's or disc's
-// radius; a tube's or rect's equal-area radius), at least 10 cm.
-float fogNearField(Frame f,Light light,uint index){
+// radius; a tube's or rect's equal-area radius), at least 10 cm. `shape`: its shape row.
+float fogNearField(Light light,LightShape shape){
     float r=light.parameters.z,r2=r*r;
-    if(lightShaped(light)){
-        LightShape shape=loadLightShape(f.lighting.w,index);
-        if(lightKind(light)==LIGHT_RECT)r2=4*shape.rect.x*shape.rect.y/PI;
-        else if(lightKind(light)<LIGHT_RECT)r2+=2*r*shape.tangentLength.w/PI;
-    }
+    if(lightKind(light)==LIGHT_RECT)r2=4*shape.rect.x*shape.rect.y/PI;
+    else if(lightKind(light)<LIGHT_RECT)r2+=2*r*shape.tangentLength.w/PI;
     return max(0.01,r2);
 }
-// In-scattering local light `index` (`light`) gives fog at `p` seen along `d`
-// (illuminance times the phase function; multiply by the scattering coefficient): its
-// intensity towards `p` (look-lights.slangh lightIntensity: falloff, a spot's cone, a
-// rect's or disc's one-sided cosine, barn doors and light profile), its shadow where
-// the fog samples local shadows (LOOK_LOCAL_INDIRECT), and its volumetric scattering
-// intensity (parameters.w; zero keeps it out of fog). `footprint`: the sample's radius (m),
-// the shadow's narrowest filter.
-float3 fogLocalLight(Frame f,Look l,Light light,uint index,float3 p,float3 d,float g,float footprint=0){
-    if(light.parameters.w<=0)return 0;
-    float3 intensity=lightIntensity(f,l,light,index,p);
+// The shape row fog's lighting of `light` (`index`) reads; zero when it has none.
+LightShape fogLightShape(Frame f,Light light,uint index){return lightShaped(light)?loadLightShape(f.lighting.w,index):(LightShape)0;}
+// Solid angle of the triangle with corners `a`, `b`, `c` seen from the origin (Van
+// Oosterom and Strackee 1983).
+float solidAngleTriangle(float3 a,float3 b,float3 c){
+    float la=length(a),lb=length(b),lc=length(c);
+    return 2*atan2(abs(dot(a,cross(b,c))),la*lb*lc+dot(a,b)*lc+dot(a,c)*lb+dot(b,c)*la);
+}
+// Light local light `light` (shape row `shape`) sends through `p` from every direction it
+// covers there (luminance times solid angle: what fog scatters, before the phase
+// function), and the direction towards it (`toward`). Area sources keep their exact near
+// field, so beams stay flat and bright right under a wide emitter: a rect's luminance
+// over the solid angle of the part its barn doors leave visible, a sphere's over its cap,
+// a disc's over its ellipse (exact on its axis and far away). Ideal points and tubes take
+// their intensity over the squared distance, at least `nearField` (fogNearField). Far
+// away every kind is its lightIntensity over the squared distance.
+float3 fogLightIllumination(Look l,Light light,LightShape shape,float nearField,float3 p,out float3 toward){
+    float3 delta=light.positionRange.xyz-p;float d2=dot(delta,delta),d=sqrt(d2);toward=delta/max(d,1e-6);
+    uint kind=lightKind(light);float r=light.parameters.z;
+    if(kind==LIGHT_RECT){
+        float3 n=light.directionOuter.xyz,t=shape.tangentLength.xyz,b=cross(t,n);float z=-dot(delta,n);
+        if(z<=0||d>=light.positionRange.w)return 0;
+        float2 extent=max(shape.rect.xy,0.001),sx=barnDoorSpan(extent.x,-dot(delta,t),z,shape.rect.zw),sy=barnDoorSpan(extent.y,-dot(delta,b),z,shape.rect.zw);
+        if(sx.x>=sx.y||sy.x>=sy.y)return 0;
+        float3 c0=delta+t*sx.x+b*sy.x,c1=delta+t*sx.y+b*sy.x,c2=delta+t*sx.y+b*sy.y,c3=delta+t*sx.x+b*sy.y;
+        toward=normalize(c0+c2);
+        float omega=solidAngleTriangle(c0,c1,c2)+solidAngleTriangle(c0,c2,c3);
+        float luminance=light.colorLumens.w/(4*PI)/(4*extent.x*extent.y);
+        return light.colorLumens.rgb*(luminance*omega*lightFade(light,d)*lightProfile(l,shape.tables.x,light,shape,-toward));
+    }
+    float3 intensity=lightIntensityShaped(l,light,shape,p);
     if(all(intensity<=0))return 0;
-    float3 delta=light.positionRange.xyz-p;float d2=dot(delta,delta);
-    float3 toLight=delta*rsqrt(max(d2,1e-12));
-    float shadow=(l.flags.y&LOOK_LOCAL_INDIRECT)!=0?fogLocalShadow(f,l,light,index,p,footprint):1;
-    return intensity*(light.parameters.w/max(d2,fogNearField(f,light,index)))*shadow*phaseM(dot(d,toLight),g);
+    if(kind==LIGHT_DISC){
+        // Omega / (pi r^2 cos) of the disc's ellipse, 2 (1 - d / s) / (r^2 cos), s^2 = d^2 + r^2 cos.
+        float c=-dot(delta,light.directionOuter.xyz)/max(d,1e-6),s=sqrt(d2+r*r*c);
+        return intensity*(2/(s*(s+d)));
+    }
+    if(r>0&&shape.tangentLength.w<=0){
+        // A sphere's cap over its disc: 2 (1 - sqrt(1 - r^2/d^2)) / r^2.
+        float dd=max(d2,r*r);
+        return intensity*(2/(dd*(1+sqrt(1-r*r/dd))));
+    }
+    return intensity/max(d2,nearField);
+}
+// In-scattering local light `index` (`light`) gives fog at `p` seen along `d`
+// (illumination times the phase function; multiply by the scattering coefficient): its
+// light through `p` (fogLightIllumination: its intensity's falloff, a spot's cone, a
+// rect's or disc's one-sided cosine, barn doors and light profile, with area sources'
+// near field), its shadow where the fog samples local shadows (LOOK_LOCAL_INDIRECT), and
+// its volumetric scattering intensity (parameters.w; zero keeps it out of fog).
+// `footprint`: the sample's radius (m), the shadow's narrowest filter. `shape` and
+// `nearField`: fogLightShape and fogNearField, loaded once per light. `smooth`:
+// shadowFog's continuous level blend (per-pixel fog).
+float3 fogLocalLight(Look l,Light light,uint index,LightShape shape,float nearField,float3 p,float3 d,float g,float footprint=0,bool smooth=false){
+    if(light.parameters.w<=0)return 0;
+    float3 toward;float3 lit=fogLightIllumination(l,light,shape,nearField,p,toward);
+    if(all(lit<=0))return 0;
+    float shadow=(l.flags.y&LOOK_LOCAL_INDIRECT)!=0?fogLocalShadow(l,light,shape,index,p,footprint,smooth):1;
+    return lit*(light.parameters.w*shadow*phaseM(dot(d,toward),g));
+}
+// fogLocalLight loading the light's shape row.
+float3 fogLocalLight(Frame f,Look l,Light light,uint index,float3 p,float3 d,float g,float footprint=0){
+    LightShape shape=fogLightShape(f,light,index);
+    return fogLocalLight(l,light,index,shape,fogNearField(light,shape),p,d,g,footprint);
 }
 // Length-weighted share of a homogeneous segment's source that leaves it (Hillaire's
 // energy-conserving integral, (1 - exp(-e ds)) / e), stable for clear air.

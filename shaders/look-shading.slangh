@@ -402,10 +402,11 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,b
 // The shadow shape of local light `index` (`light`) seen from `world` (look-shadow.slangh
 // ShadowLight): a rect's or disc's half-axes, a sphere's disc facing the point, a tube's
 // half-length and radius as a box; zero for an ideal point or spot.
-ShadowLight localShadowLight(Frame f,Light light,uint index,float3 world){
+// `shape`: its shape row (localShadowLight loads it).
+ShadowLight localShadowLightShaped(Light light,LightShape shape,float3 world){
     ShadowLight s;s.a=0;s.b=0;s.disc=true;s.tangent=0;
     if(!lightHasArea(light))return s;
-    uint kind=lightKind(light);LightShape shape=loadLightShape(f.lighting.w,index);
+    uint kind=lightKind(light);
     float3 n=light.directionOuter.xyz,t=shape.tangentLength.xyz,d=normalize(light.positionRange.xyz-world);
     if(kind==LIGHT_RECT){float2 e=max(shape.rect.xy,0.001);s.a=t*e.x;s.b=cross(t,n)*e.y;s.disc=false;return s;}
     float r=max(light.parameters.z,0.001);
@@ -414,6 +415,9 @@ ShadowLight localShadowLight(Frame f,Light light,uint index,float3 world){
     if(span<=0){s.a=u*r;s.b=cross(d,u)*r;return s;}
     float3 side=cross(t,d);float sl=dot(side,side);side=sl>1e-8?side*rsqrt(sl):u;
     s.a=t*(span*0.5+r);s.b=side*r;s.disc=false;return s;
+}
+ShadowLight localShadowLight(Frame f,Light light,uint index,float3 world){
+    return localShadowLightShaped(light,lightHasArea(light)?loadLightShape(f.lighting.w,index):(LightShape)0,world);
 }
 // Linear HDR radiance leaving `world` towards the camera (before fog and exposure).
 // `gathered`: deferred G-buffer pixels read the half-resolution probe gather.
@@ -461,7 +465,7 @@ float4 forwardOutput(Frame f,float3 c,float coverage,float stop,float exposure=1
 float4 forwardColour(Frame f,Look l,Surface s,float3 world,int2 p,float exposure,bool high=false){
     float2 uv=(float2(p)+0.5)/float2(f.extent.xy);
     // Clamped in radiance (forwardOutput), then pre-exposed like every HDR writer.
-    float4 o=forwardOutput(f,applyFog(f,l,shade(f,l,s,world,p,false,high),world,uv),s.alpha,s.alpha*(1-s.transmission));
+    float4 o=forwardOutput(f,applyFog(f,l,shade(f,l,s,world,p,false,high),world,uv,FOG_LIGHTS_FRONT),s.alpha,s.alpha*(1-s.transmission));
     return float4(min(o.rgb*exposure,60000),o.a);
 }
 // World-space view ray through pixel centre `p`.

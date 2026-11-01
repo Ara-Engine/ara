@@ -32,6 +32,8 @@ pub(crate) enum LookPass {
     FogAmbient,
     FogInject,
     FogIntegrate,
+    /// Per-pixel local-light scattering in fog (`look::volumetric`, look-fog-lights.slang).
+    FogLights,
     /// Metering: 0 bins the history, 1 meters the bins into the exposure state.
     Exposure(u32),
     Bloom(u32),
@@ -575,6 +577,7 @@ impl LookGpu {
             LookPass::FogAmbient => (p.fog_ambient, 0, self.volumetric_dispatch(pass)),
             LookPass::FogInject => (p.fog_inject, 0, self.volumetric_dispatch(pass)),
             LookPass::FogIntegrate => (p.fog_integrate, 0, self.volumetric_dispatch(pass)),
+            LookPass::FogLights => (p.fog_lights, 0, self.volumetric_dispatch(pass)),
             // One grid sample per thread (128x72), then one metering group.
             LookPass::Exposure(n) => (p.exposure, n, [if n == 0 { 36 } else { 1 }, 1, 1]),
             LookPass::Bloom(n) => {

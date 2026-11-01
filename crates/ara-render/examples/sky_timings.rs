@@ -26,7 +26,11 @@ fn main() -> Result<()> {
     let request = common::request(size);
     let mut renderer = Renderer::new(common::scene()?, size, &[], ".sn/gpu")?;
     let near = |tile, slices| Quality {
-        volumetric_fog: Some(VolumetricFogQuality { tile, slices }),
+        volumetric_fog: Some(VolumetricFogQuality {
+            tile,
+            slices,
+            ..VolumetricFogQuality::default()
+        }),
         ..Quality::default()
     };
     let fog = Fog {

@@ -55,7 +55,8 @@ groupshared float3 fogGroupMin,fogGroupMax;
 // every froxel, so the volume stays coherent while history integrates the offsets),
 // blended into the reprojected history by volumetric.z (zero after a reset; an even
 // average over the first frames, then 0.9). Shadows filter at least a froxel's width
-// (look-shadow.slangh shadowFog); local lights are culled per group against its froxels' bounds.
+// (look-shadow.slangh shadowFog); local lights scatter here only without the per-pixel
+// pass (look-fog-lights.slang), culled per group against its froxels' bounds.
 [shader("compute")][numthreads(8,8,1)]
 void fogInjectMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint index:SV_GroupIndex){
     Frame f=frame();Look l=look(f);uint3 grid=l.volumetricGrid.xyz;bool shadowed=(l.flags.y&LOOK_FOG_SHADOWED)!=0;
@@ -66,7 +67,8 @@ void fogInjectMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint ind
         fogGroupMin=lo;fogGroupMax=hi;
     }
     GroupMemoryBarrierWithGroupSync();
-    for(uint i=index;i<(shadowed?f.extent.z:0);i+=64){
+    // Local lights scatter here only without the per-pixel pass (look-fog-lights.slang).
+    for(uint i=index;i<(shadowed&&!fogLightsOn(l)?f.extent.z:0);i+=64){
         // Bounding spheres about the centre hold every kind (look-lights.slangh).
         Light light=loadLight(f.lighting.w,i);float4 sphere=light.positionRange;
         if(light.parameters.w>0 && length(clamp(sphere.xyz,fogGroupMin,fogGroupMax)-sphere.xyz)<=sphere.w)InterlockedOr(fogGroupLights[i/32],1u<<(i%32));

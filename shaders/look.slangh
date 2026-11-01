@@ -86,6 +86,10 @@ struct Look {
     AtmosphereModel sky;
     // Screen traces and screen probe GI (look/screen_gi.rs; rows in look-screen.slangh).
     float4 screenParams[2];  uint4 screenInfo[4];
+    // Per-pixel local-light scattering in fog (look/volumetric.rs; look-fog-lights.slang),
+    // composited by applyFog (fogLightsAt). Zero rows: local lights scatter in the froxels.
+    float4 fogLightsParams;  // x angular bins per half circle (one equiangular sample each)
+    uint4 fogLightsInfo;     // x scattered light (sampled), y (storage), z render pixels per texel side (0: off), w the image's width
 };
 static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64,LOOK_REFLECTION_SOURCES=128,LOOK_VOLUMETRIC=256,LOOK_FOG_SHADOWED=512,LOOK_SCREEN_GI=1024;
 // Automatic exposure's extra compensation (stops) at metered scene EV100 `ev`:
@@ -248,33 +252,92 @@ float4 nearTap(Look l,uint image,uint z,float2 xy){
     float2 size=float2(grid.xy)*float2(columns,(grid.z+columns-1)/columns);
     return lut(image,(float2(nearTile(l,z))+clamp(xy,0.5,float2(grid.xy)-0.5))/size);
 }
+// Cubic B-spline tap of slice `z` at froxel coordinates `xy` (texel units) in four
+// bilinear taps (Sigg and Hadwiger 2005), each clamped inside the slice's tile. The
+// B-spline is C2 smooth: froxel boundaries leave neither steps nor bilinear's Mach bands
+// along sun shafts and fog volume edges.
+float4 nearTapSmooth(Look l,uint image,uint z,float2 xy){
+    float2 c=xy-0.5,i=floor(c),t=c-i,t2=t*t,t3=t2*t;
+    float2 w0=(1-3*t+3*t2-t3)/6,w1=(4-6*t2+3*t3)/6,w2=(1+3*t+3*t2-3*t3)/6,w3=t3/6,g0=w0+w1,g1=w2+w3;
+    float2 a=i-0.5+w1/g0,b=i+1.5+w3/g1;
+    return (nearTap(l,image,z,a)*g0.x+nearTap(l,image,z,float2(b.x,a.y))*g1.x)*g0.y
+        +(nearTap(l,image,z,float2(a.x,b.y))*g0.x+nearTap(l,image,z,b)*g1.x)*g1.y;
+}
 // Integrated in-scatter (rgb) and transmittance (a) from the camera to view depth
 // `depth` (at most the volume's distance) through render uv `uv`. Slices store their
-// far ends; between them the value interpolates linearly.
-float4 sampleNear(Frame f,Look l,float2 uv,float depth){
+// far ends; between them the value interpolates linearly; across them, a cubic
+// B-spline (`smooth`: composites) or bilinear (cheap, for smooth transmittance).
+float4 sampleNear(Frame f,Look l,float2 uv,float depth,bool smooth=true){
     float2 xy=uv*float2(f.extent.xy)/float(l.volumetricGrid.w);uint slices=l.volumetricGrid.z,image=l.volumetricImages.z;
     float s=nearSlice(l,depth)*slices;
-    if(s<1)return lerp(float4(0,0,0,1),nearTap(l,image,0,xy),s);
+    if(s<1)return lerp(float4(0,0,0,1),smooth?nearTapSmooth(l,image,0,xy):nearTap(l,image,0,xy),s);
     float z=min(s-1,float(slices-1));uint lo=uint(z),hi=min(lo+1,slices-1);
-    return lerp(nearTap(l,image,lo,xy),nearTap(l,image,hi,xy),frac(z));
+    if(!smooth)return lerp(nearTap(l,image,lo,xy),nearTap(l,image,hi,xy),frac(z));
+    return lerp(nearTapSmooth(l,image,lo,xy),nearTapSmooth(l,image,hi,xy),frac(z));
+}
+// Transmittance from the camera to `t` metres along the ray through render uv `uv` (view
+// depth `depth`) on near volume frames: the near volume's to its distance, then the coarse
+// grid's behind it (which starts there).
+float3 fogTransmittance(Frame f,Look l,float2 uv,float t,float depth){
+    float3 trans=sampleNear(f,l,uv,min(depth,l.volumetric.x),false).a;
+    if(depth>l.volumetric.x){float3 far;sampleFroxel(l,uv,t,far);trans*=far;}
+    return trans;
+}
+// Whether this frame scatters local lights per pixel (look-fog-lights.slang) rather than
+// in the froxels: then neither froxel volume carries them.
+bool fogLightsOn(Look l){return l.fogLightsInfo.z!=0;}
+// The per-pixel local-light scatter at render pixel `p` (look-fog-lights.slang): in-scattered
+// radiance (rgb, transmittance applied) along its ray to its opaque surface or the
+// background, and that light's luminance-weighted mean view depth (a). A reduced-resolution
+// texel q holds render pixel scale*q's ray, so even pixels read their own texel; the others
+// blend the nearest bilinearly, each weighted by how close its opaque depth lies to `depth`
+// (the pixel's reversed-Z; negative: plain bilinear, for passes that cannot read depth).
+float4 fogLightsAt(Frame f,Look l,int2 p,float depth){
+    uint scale=l.fogLightsInfo.z,image=l.fogLightsInfo.x;
+    if(scale<=1)return pixel(image,p);
+    float2 c=float2(p)/float(scale);int2 q=int2(floor(c));float2 t=c-float2(q);
+    int2 last=int2((f.extent.xy+scale-1)/scale)-1;
+    float4 sum=0;float total=0;
+    [unroll]for(uint k=0;k<4;k++){
+        int2 o=int2(k&1,k>>1);float w=(o.x!=0?t.x:1-t.x)*(o.y!=0?t.y:1-t.y);
+        if(w<=0)continue;
+        int2 at=min(q+o,last);
+        if(depth>=0){float z=gbufferDepth(f,at*int(scale));w/=abs(z-depth)/max(max(z,depth),1e-30)+0.01;}
+        sum+=pixel(image,at)*w;total+=w;
+    }
+    return total>0?sum/total:0;
+}
+// How applyFog adds the per-pixel local-light scatter: DEFERRED for the frame's opaque
+// surfaces and background in deferred lighting (depth-aware upsampling), BEHIND for them
+// seen from forward passes (which cannot sample depth), FRONT for forward surfaces, which
+// take the share lying in front of them (about the scatter's mean depth).
+static const uint FOG_LIGHTS_DEFERRED=0,FOG_LIGHTS_BEHIND=1,FOG_LIGHTS_FRONT=2;
+float3 fogLights(Frame f,Look l,float2 uv,float depth,uint mode){
+    int2 p=min(int2(uv*float2(f.extent.xy)),int2(f.extent.xy)-1);
+    float4 s=fogLightsAt(f,l,p,mode==FOG_LIGHTS_DEFERRED?gbufferDepth(f,p):-1);
+    return mode==FOG_LIGHTS_FRONT?s.rgb*saturate((depth-s.a)/max(0.5*s.a,1e-3)+0.5):s.rgb;
 }
 // Aerial perspective and fog between the camera and `world`: on near volume frames
 // the volume up to its distance, and the coarse grid's segment behind it (which it
-// integrates from there), so the two compose exactly; else the coarse grid alone.
-float3 applyFog(Frame f,Look l,float3 colour,float3 world,float2 uv){
+// integrates from there), so the two compose exactly; else the coarse grid alone. Then
+// the per-pixel local-light scatter (`lights`: FOG_LIGHTS_*).
+float3 applyFog(Frame f,Look l,float3 colour,float3 world,float2 uv,uint lights=FOG_LIGHTS_DEFERRED){
     bool near=(l.flags.y&LOOK_VOLUMETRIC)!=0;
     if((l.flags.y&(LOOK_PHYSICAL_SKY|LOOK_FOG))==0 && l.volumetricAtlas.z==0)return colour;
     float3 offset=world-f.camera.xyz;float depth=dot(offset,f.forward.xyz);
     if(!near||depth>l.volumetric.x){float3 trans;float3 light=sampleFroxel(l,uv,length(offset),trans);colour=colour*trans+light;}
     if(near){float4 v=sampleNear(f,l,uv,depth);colour=colour*v.a+v.rgb;}
+    if(fogLightsOn(l))colour+=fogLights(f,l,uv,depth,lights);
     return colour;
 }
 // Fog over background radiance `c` seen along `d`: the whole froxel range over an
 // environment map; the physical sky carries its own aerial perspective, so only the
-// near volume (height fog, fog volumes and shafts in front of the sky) lies over it.
-float3 fogBackground(Frame f,Look l,float3 c,float3 d,float2 uv){
-    if(!physicalSky(l))return applyFog(f,l,c,f.camera.xyz+d*FOG_RANGE,uv);
+// near volume (height fog, fog volumes and shafts in front of the sky) and the local
+// lights' scatter lie over it.
+float3 fogBackground(Frame f,Look l,float3 c,float3 d,float2 uv,uint lights=FOG_LIGHTS_DEFERRED){
+    if(!physicalSky(l))return applyFog(f,l,c,f.camera.xyz+d*FOG_RANGE,uv,lights);
     if((l.flags.y&LOOK_VOLUMETRIC)!=0){float4 v=sampleNear(f,l,uv,l.volumetric.x);c=c*v.a+v.rgb;}
+    if(fogLightsOn(l))c+=fogLights(f,l,uv,FOG_RANGE,lights);
     return c;
 }
 // Normal offset in texels for a surface at `nl` (cosine to the light) in the fine
