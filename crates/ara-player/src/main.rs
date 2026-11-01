@@ -1345,6 +1345,7 @@ mod cli_tests {
             ara_render::RenderDebug {
                 ambient_occlusion: false,
                 shadows: false,
+                soft_shadows: false,
                 volumetric_fog: false,
                 temporal_jitter: false,
                 full_resolution: true,
