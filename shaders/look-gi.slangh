@@ -84,7 +84,7 @@ float giLatticeCoverage(GiLattice g,float3 p){
 // walls do not leak; a point seeing under a third of its probes' unoccluded weight
 // darkens by its share. The point is offset along the normal and towards `v` by the
 // lattice's surface bias.
-void giLatticeLobes(Look l,GiLattice g,uint image,float3 position,float3 normal,float3 reflection,float3 v,float roughness,bool both,out float3 diffuse,out float3 specular){
+void giLatticeLobes(Look l,GiLattice g,uint image,float3 position,float3 normal,float3 reflection,float3 v,float roughness,bool both,out float3 diffuse,out float3 specular,bool irradiance=true){
     float rough=saturate(roughness*roughness);
     float3 biased=position+normal*g.bias+v*(g.bias*0.33);float3 grid=(biased-g.origin)/g.spacing;
     int3 base=clamp(int3(floor(grid)),int3(0),int3(g.counts)-2);float3 alpha=saturate(grid-base);diffuse=0;specular=0;float total=0,open=0;
@@ -97,7 +97,7 @@ void giLatticeLobes(Look l,GiLattice g,uint image,float3 position,float3 normal,
         float3 trilinear=lerp(1-alpha,alpha,float3(d));float cell=trilinear.x*trilinear.y*trilinear.z;
         float facing=max(0.02,pow(saturate(dot(-dir,normal)*0.5+0.5),2));float unseen=facing<0.2?facing*facing*facing/0.04:facing;
         float weight=facing*visibility;if(weight<0.2)weight*=weight*weight/0.04;weight*=cell;
-        diffuse+=giSampleIrradiance(l,image,id,normal)*weight;
+        if(irradiance)diffuse+=giSampleIrradiance(l,image,id,normal)*weight;
         if(both){
             float3 s=0;
             [branch]if(rough<0.98)s=giProbeReflection(l,id,position-(g.origin+float3(p)*g.spacing)-meta.xyz,reflection)*(1-rough);
@@ -117,14 +117,15 @@ void giLatticeLobes(Look l,GiLattice g,uint image,float3 position,float3 normal,
 // each weighted by its coverage of what the finer ones left, so a fine lattice
 // blends into the coarse one across its falloff without a seam. Returns the pool's
 // coverage (the coarsest lattice fades to the sky at its own edge); `v` biases
-// towards the viewer (zero for probe relighting).
-float giPoolLobes(Look l,uint image,float3 position,float3 normal,float3 reflection,float3 v,float roughness,bool both,out float3 diffuse,out float3 specular){
+// towards the viewer (zero for probe relighting). `irradiance` false skips the diffuse
+// lobe (callers that read only the reflection; a literal at every call site).
+float giPoolLobes(Look l,uint image,float3 position,float3 normal,float3 reflection,float3 v,float roughness,bool both,out float3 diffuse,out float3 specular,bool irradiance=true){
     diffuse=0;specular=0;float remaining=1;
     for(uint i=0;i<l.giCounts.x&&remaining>1e-3;i++){
         // Finer lattices cross-fade in once they land after the coarsest (giParams.y).
         GiLattice g=giLattice(l,i);float c=giLatticeCoverage(g,position)*(i+1<l.giCounts.x?l.giParams.y:1);
         if(c<=0)continue;
-        float w=c*remaining;float3 d,s;giLatticeLobes(l,g,image,position,normal,reflection,v,roughness,both,d,s);
+        float w=c*remaining;float3 d,s;giLatticeLobes(l,g,image,position,normal,reflection,v,roughness,both,d,s,irradiance);
         diffuse+=d*w;specular+=s*w;remaining-=w;
     }
     float coverage=1-remaining;if(coverage>1e-6){diffuse/=coverage;specular/=coverage;}

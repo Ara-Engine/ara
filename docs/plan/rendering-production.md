@@ -36,18 +36,35 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   diameter (`Light.sourceAngle`, Unreal's `LightSourceAngle`). `sourceAngle` is authored and
   feeds `Look.sunLux.w` (VSM PCSS) and the path tracer's sun cone (2026-11-01); cascades
   and the far map are open.
-- [ ] **Global illumination ("Lumen alternative").** Finding (2026-10-31, Polar at EV100 -2,
-  4096-spp reference): raster matches the reference on walls, the opening and the back room
-  (within ~10%); the metal ceiling is 2.4x short (0.0021 vs 0.0050) and the floor centre 1.6x
-  (it reflects the ceiling). Ceiling = 0.0011 reflections (SSR-resolved, green in sources)
-  + 0.0011 diffuse. With each reflection source off (`--without`): no screen reflections
-  ceiling 0.0033, floor centre 0.0028 (= reference), right wall 0.0045 (ref 0.0024); no
-  captures ceiling 0.0030. Screen traces and captures both return darker rough reflections
-  than the probes, while the probes overshoot on the right wall: per-source bias to fix.
-  Tried and reverted: tracing SSR along the GGX dominant direction (floor centre 0.0018 to
-  0.0014). Likely cause: SSR reads last frame, so the ceiling and floor reflect each other
-  already too dark (a dim fixed point); the missing energy is first-order bounce from the
-  sunlit floor/snow into rough metal.
+- [~] **Global illumination ("Lumen alternative").** Screen probe GI (D32, `look::screen_gi`,
+  High/Epic, `--without screen-gi`, editor View > Rendering Debug > Screen GI, yellow in
+  `--reflections sources`): 16 px probes on the G-buffer trace 64 fixed directions through a
+  Hi-Z pyramid; hits from last frame's colour (minus promoted emission, capped at what a diffuse
+  surface of the hit's albedo sends, as the bitmask AO's bounce), misses from the probe volume;
+  3x3 tent gather; rough lobes by the view's true GGX lobe. Deterministic, no history.
+  Measured (High, EV-locked, 1280x720, mean |log ratio| of region luminance vs the path-traced
+  reference, `D:AraScratchgi`, before -> after): Polar 0.525 (old SSR) / 0.554 (Hi-Z SSR) ->
+  0.468 (ceiling metal 0.57 -> 0.63, side floors 0.42/0.48 -> 0.49/0.50; glossy floor centre
+  0.55 -> 0.52 as Hi-Z SSR now hits the too-dark ceiling); sky-lit courtyard 0.049 -> 0.052
+  (metal shed 1.40 -> 1.31); sunlit room 0.253 -> 0.382 (ceiling 1.41 -> 3.7); room with an
+  emissive panel 0.127 -> 0.302 (whole frame 1.13 -> 1.45, ceiling 1.27 -> 2.71; 3.10 before the
+  hit cap). Both rooms regress on their rough-metal ceiling: with captures off the old path
+  shows the same overshoot (3.35x), so it is the probe volume's, which High's darker captures
+  had masked. Cost at
+  2560x1440 High: ScreenGI.Probes 0.69 ms + Gather 0.28 ms (+0.94 ms frame); stability equal
+  (0.2% vs 0.1% blocks). Findings: (1) the probe volume overshoots light entering through
+  openings: sky through a window lands 3.4x too bright on a room's back wall even with
+  single-bounce relight, and the volume's rough specular is 3.35x on a metal ceiling (the main
+  open error; screen probe misses inherit it); a thicker ceiling and a smaller sun-test lift
+  change little, so it is not slab leakage; check per-texel solid angles in the octahedral
+  convolution and the sky-fraction texels next. (2) Reflection captures as the miss fallback are
+  too dark (Polar ceiling 0.64 -> 0.33; a black capture in the test room): rejected. (3) Emissive
+  fixtures promoted to emitter lights (spot clusters) make a hotspot under a panel that GI then
+  bounces (panel room 2.85x): promote large panels to rect lights (Area lights item). (4) Polar's
+  ceiling gratings read opaque where the reference sees sky through them (cutout transparency,
+  not GI; the "ceil metal R" region is 89% direct). Open: the probe-volume overshoot, adaptive
+  extra probes where the 3x3 gather finds none, Epic's quality (tile 8 cost 3.4 ms), an
+  in-engine region tool, Medium screen GI.
   Original item: Bounce energy that matches the path
   tracer: screen-space GI over the probe field, a per-probe radiance cache with sky and
   emissive, multi-bounce, metals; temporal stability with no noise (D27). Measured against
@@ -100,7 +117,11 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
 - [ ] **Consistent glass.** One transmission model across raster, hybrid and path tracer:
   thin and solid glass, roughness, tint by thickness, shadows by transmittance, reflections
   of and through glass, sorting.
-- [ ] **Screen-space reflections.** Hi-Z traced SSR (min-depth pyramid), stochastic rough
+- [~] **Screen-space reflections.** Hi-Z traced (look-screen.slangh `hizTrace`: closest-depth
+  pyramid, crawls on behind thin foreground), then captures and probes; rough lobes past 0.25-0.4
+  hand over to screen probes (D32). SSR.Trace 0.60 ms at 2560x1440 High. Open: per-pixel cone
+  footprints from the Hi-Z cell, measured before/after cost at equal settings.
+  Original item: Hi-Z traced SSR (min-depth pyramid), stochastic rough
   lobes with a deterministic, noise-free resolve, then captures and probes.
 - [x] **Vertex painting.** Vertex colours imported (glTF `COLOR_0`, FBX), stored per
   mesh, editable with an editor paint tool, readable in material graphs (layer blends).

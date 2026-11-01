@@ -41,7 +41,18 @@ pub(crate) const VOLUME_B: usize = 21;
 pub(crate) const VOLUME_LIGHT: usize = 22;
 /// The near volume's ambient light on a coarser grid (`volumetric::Layout::ambient`).
 pub(crate) const VOLUME_AMBIENT: usize = 23;
-const IMAGES: usize = 24;
+/// Screen probe GI (`look::screen_gi`): the Hi-Z atlas (R32F closest depth, levels 1..),
+/// the probe atlas (radiance levels and irradiance per probe), the probe records
+/// (RGBA32F position and normal) and the half-resolution gather lighting reads.
+pub(crate) const HIZ: usize = 24;
+pub(crate) const SCREEN_PROBES: usize = 25;
+pub(crate) const SCREEN_PROBE_RECORDS: usize = 26;
+pub(crate) const SCREEN_DIFFUSE: usize = 27;
+pub(crate) const SCREEN_SPECULAR: usize = 28;
+/// This frame's emission promoted to emitter lights, as a pyramid in the reflection
+/// pyramid's layout: screen probe hits take their cone's share of it off.
+pub(crate) const SCREEN_EMISSION: usize = 29;
+const IMAGES: usize = 30;
 /// Depth of a visibility-bitmask sample (`LookGpu::bitmask_ao`) behind its front, as
 /// a share of the AO radius: thinner foreground hides less of what lies behind it.
 /// 0.4 treated branches, rails and posts as 40 cm slabs: ground under a sky-lit tree
@@ -57,8 +68,9 @@ pub(crate) const STATE_BYTES: usize = 16 + 256 * 4;
 pub(crate) const FOG_SLICES: u32 = 46;
 
 /// Fixed LUT extents; the half-resolution effects and reflection pyramid follow
-/// the render size, the bloom atlases the display size.
-fn extent(image: usize, render: [u32; 2], display: [u32; 2]) -> [u32; 2] {
+/// the render size, the bloom atlases the display size; screen probes the render
+/// size in tiles of `tile` pixels.
+fn extent(image: usize, render: [u32; 2], display: [u32; 2], tile: u32) -> [u32; 2] {
     match image {
         TRANSMITTANCE => [256, 64],
         MULTISCATTER => [32, 32],
@@ -66,10 +78,16 @@ fn extent(image: usize, render: [u32; 2], display: [u32; 2]) -> [u32; 2] {
         FROXELS => [FOG_SLICES * 128, 36],
         SKY_IRRADIANCE => [32, 16],
         SKY_PREFILTER => [256, 640],
-        AO_TRACE | AO_DENOISED | GI_DIFFUSE | GI_SPECULAR | SSR_TRACE => {
-            render.map(|v| v.div_ceil(2))
+        HIZ => super::screen_gi::hiz_extent(render),
+        SCREEN_PROBES => {
+            let [x, y] = super::screen_gi::grid(render, tile);
+            let [w, h] = super::screen_gi::PROBE_TILE;
+            [x * w, y * h]
         }
-        SSR_PYRAMID => [render[0], (render[1] / 2).max(1)],
+        SCREEN_PROBE_RECORDS => super::screen_gi::grid(render, tile),
+        AO_TRACE | AO_DENOISED | GI_DIFFUSE | GI_SPECULAR | SSR_TRACE | SCREEN_DIFFUSE
+        | SCREEN_SPECULAR => render.map(|v| v.div_ceil(2)),
+        SSR_PYRAMID | SCREEN_EMISSION => [render[0], (render[1] / 2).max(1)],
         VSM_MASK | DOF_COMPOSITE => render,
         DOF_PREPARED | DOF_GATHERED => render.map(|v| v.div_ceil(2)),
         MOTION_TILES | MOTION_NEIGHBOURS => display.map(|v| v.div_ceil(16)),
@@ -106,6 +124,11 @@ pub(crate) struct Pipelines {
     pub gi_gather: Pipeline,
     pub ssr_pyramid: Pipeline,
     pub ssr_trace: Pipeline,
+    /// Screen probe GI (`look::screen_gi`): Hi-Z levels, the probe trace, the gather.
+    pub hiz: Pipeline,
+    pub screen_probes: Pipeline,
+    pub screen_gather: Pipeline,
+    pub emission_pyramid: Pipeline,
     /// Reflection capture bake (face projection, scratch mips, GGX prefilter) and
     /// the per-frame relight (`look::captures`, look-captures.slang).
     pub capture_face: Pipeline,
@@ -222,6 +245,11 @@ pub(crate) struct LookGpu {
     pub volumetric_frames: u32,
     /// This frame renders the near volume (`begin_volumetric`).
     pub frame_volumetric: bool,
+    /// This frame runs screen probe GI (`screen_gi_active`): its passes, rows and
+    /// lighting reads agree on it.
+    pub frame_screen: bool,
+    /// This frame builds the Hi-Z pyramid (`begin_screen_traces`).
+    pub frame_hiz: bool,
 }
 
 /// Graph identities of the look's persistent resources for one frame.
@@ -296,6 +324,10 @@ impl LookGpu {
             gi_gather: load("look_gi_gather")?,
             ssr_pyramid: load("look_ssr_pyramid")?,
             ssr_trace: load("look_ssr_trace")?,
+            hiz: load("look_hiz")?,
+            screen_probes: load("look_screen_probes")?,
+            screen_gather: load("look_screen_gather")?,
+            emission_pyramid: load("look_emission_pyramid")?,
             capture_face: load("look_capture_face")?,
             capture_mip: load("look_capture_mip")?,
             capture_prefilter: load("look_capture_prefilter")?,
@@ -380,6 +412,8 @@ impl LookGpu {
             volumetric_slot: 0,
             volumetric_frames: 0,
             frame_volumetric: false,
+            frame_screen: false,
+            frame_hiz: false,
         })
     }
 
@@ -424,6 +458,12 @@ impl LookGpu {
             VOLUME_B,
             VOLUME_LIGHT,
             VOLUME_AMBIENT,
+            HIZ,
+            SCREEN_PROBES,
+            SCREEN_PROBE_RECORDS,
+            SCREEN_DIFFUSE,
+            SCREEN_SPECULAR,
+            SCREEN_EMISSION,
         ] {
             if let Some(old) = self.images[i].take() {
                 gpu.retire(Resource::Image(old))?;
@@ -444,6 +484,8 @@ impl LookGpu {
         ara_gpu::cpu_scope!("Look.ensure");
         let look = self.effective();
         let sky = look.sky.is_some();
+        let screen = self.quality.screen_gi.is_some() && self.quality.high_tier;
+        let tile = self.quality.screen_gi.map_or(16, |s| s.tile);
         let needed = [
             sky,
             sky,
@@ -457,7 +499,8 @@ impl LookGpu {
             self.quality.ambient_occlusion.is_some(),
             self.gi.is_some(),
             self.gi.is_some(),
-            self.quality.reflections.is_some(),
+            // The colour pyramid feeds screen probe hits too.
+            self.quality.reflections.is_some() || screen,
             self.quality.reflections.is_some(),
             self.vsm.is_some(),
             self.quality.depth_of_field.is_some(),
@@ -470,16 +513,24 @@ impl LookGpu {
             false,
             false,
             false,
+            // Reflections traverse the Hi-Z pyramid too.
+            screen || self.quality.reflections.is_some(),
+            screen,
+            screen,
+            screen,
+            screen,
+            screen,
         ];
         for (i, needed) in needed.into_iter().enumerate() {
             if !needed || self.images[i].is_some() {
                 continue;
             }
-            let [width, height] = extent(i, self.render, self.display);
-            let format = if i == VSM_MASK {
-                vk::Format::R16G16_SFLOAT
-            } else {
-                vk::Format::R16G16B16A16_SFLOAT
+            let [width, height] = extent(i, self.render, self.display, tile);
+            let format = match i {
+                VSM_MASK => vk::Format::R16G16_SFLOAT,
+                HIZ => vk::Format::R32_SFLOAT,
+                SCREEN_PROBE_RECORDS => vk::Format::R32G32B32A32_SFLOAT,
+                _ => vk::Format::R16G16B16A16_SFLOAT,
             };
             let image = gpu.create_image(
                 width,

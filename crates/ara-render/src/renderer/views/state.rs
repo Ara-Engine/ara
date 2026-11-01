@@ -292,5 +292,7 @@ fn fork_look(
         volumetric_slot: 0,
         volumetric_frames: 0,
         frame_volumetric: false,
+        frame_screen: false,
+        frame_hiz: false,
     })
 }

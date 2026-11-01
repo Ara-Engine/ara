@@ -408,6 +408,8 @@ impl Renderer {
             self.look.frame_outline = true;
         }
         let (sampled, storage) = self.look.indices();
+        self.look
+            .begin_screen_traces(self.targets.history.is_some());
         // Exposure snaps to its meter on a reset unless a host seeded it, while new
         // probe GI converges or fades in (no adaptation swing as the scene brightens
         // under it), and on frames nobody sees (`set_unseen`, a Play entry): the
@@ -529,6 +531,11 @@ impl Renderer {
             ];
             look_frame.ssr_images = self.look.ssr_indices();
         }
+        // Screen probe GI shades its hits from the reflection pyramid.
+        if self.look.frame_screen {
+            look_frame.ssr_images = self.look.ssr_indices();
+        }
+        self.look.screen_gi_rows(&mut look_frame);
         self.rays.write_rows(
             &mut look_frame,
             &self.look.quality,
@@ -966,6 +973,16 @@ impl Renderer {
         ]);
         for (id, pass) in self.look.gather_passes(&mut graph, &look, &gather_reads) {
             declare(id, Recipe::Look(pass));
+        }
+        // Screen probe GI after the relight (misses read the probe volume) and the
+        // reflection pyramid (hits read last frame's colour), before every pass that
+        // reads what lighting reads (its gather images start undefined on a new view).
+        if self.look.frame_screen {
+            let mut screen_reads = gather_reads.clone();
+            screen_reads.extend([MATERIAL, EMISSIVE].map(|t| (ids[t], Access::ShaderRead)));
+            for (id, pass) in self.look.screen_gi_passes(&mut graph, &look, &screen_reads) {
+                declare(id, Recipe::Look(pass));
+            }
         }
         // Hybrid ray-traced reflections (renderer::rt) read what lighting reads, and
         // the exposure state (the rough lobes' radiance ceiling).

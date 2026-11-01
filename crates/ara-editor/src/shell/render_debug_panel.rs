@@ -15,7 +15,7 @@ struct Switch {
     on: fn(&ara_render::RenderDebug) -> bool,
 }
 
-const SWITCHES: [Switch; 10] = [
+const SWITCHES: [Switch; 11] = [
     Switch {
         command: "view.debug.ambient_occlusion",
         title: "Ambient occlusion",
@@ -47,6 +47,12 @@ const SWITCHES: [Switch; 10] = [
         on: |d| d.global_illumination,
     },
     Switch {
+        command: "view.debug.screen_gi",
+        title: "Screen GI",
+        help: "High/Epic screen probes: bounce light and rough reflections traced on screen. Off, the probe volume and ambient occlusion light everything, as on Medium.",
+        on: |d| d.screen_gi,
+    },
+    Switch {
         command: "view.debug.volumetric_fog",
         title: "Volumetric fog",
         help: "The detailed fog near the camera: sun shafts, lamp cones and local fog volumes. Off, fog keeps its coarse far grid.",
@@ -67,7 +73,7 @@ const SWITCHES: [Switch; 10] = [
     Switch {
         command: "view.debug.reflection_sources",
         title: "Reflection sources",
-        help: "Where each reflection comes from: screen green, capture trace blue, box-projected captures cyan, probes orange, sky magenta.",
+        help: "Where each reflection comes from: screen green, capture trace blue, screen probes yellow, box-projected captures cyan, probes orange, sky magenta.",
         on: |d| d.reflections == ara_render::ReflectionView::Sources,
     },
     Switch {

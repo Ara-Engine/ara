@@ -31,6 +31,9 @@ pub struct RenderDebug {
     /// lights everything, as with no probe volume. The probes keep updating (the
     /// frame record's shading weight is zero), so switching back is instant.
     pub global_illumination: bool,
+    /// Screen probe GI (`Quality::screen_gi`, High/Epic); off, the probe volume and
+    /// screen-space ambient occlusion light everything, as on Medium.
+    pub screen_gi: bool,
     /// Render the ground truth instead: the path tracer (ara-render-fidelity
     /// `Mode::Reference`), unbiased and undenoised, on GPUs with hardware ray
     /// tracing whatever the project's ray-tracing opt-in. For judging every real-time
@@ -80,8 +83,8 @@ pub enum ReflectionView {
     /// Only the reflected (indirect specular) light, exposed like the lit image.
     Reflections,
     /// Each pixel coloured by the share of its reflection each source resolved:
-    /// on-screen trace green, capture trace blue, box-projected captures cyan,
-    /// probes orange, sky magenta; surfaces too rough to trace dimmed.
+    /// on-screen trace green, capture trace blue, screen probes yellow, box-projected
+    /// captures cyan, probes orange, sky magenta; surfaces too rough to trace dimmed.
     Sources,
 }
 
@@ -97,6 +100,7 @@ impl Default for RenderDebug {
             screen_reflections: true,
             reflection_captures: true,
             global_illumination: true,
+            screen_gi: true,
             reference: None,
             exposure: None,
             view: crate::capture::ViewMode::Lit,
@@ -126,6 +130,9 @@ impl RenderDebug {
         if !self.reflection_captures {
             quality.reflection_captures = None;
         }
+        if !self.screen_gi {
+            quality.screen_gi = None;
+        }
         quality
     }
 }
@@ -150,11 +157,13 @@ mod tests {
             screen_reflections: false,
             reflection_captures: false,
             global_illumination: false,
+            screen_gi: false,
             volumetric_fog: false,
             ..RenderDebug::default()
         }
         .apply(quality);
         assert!(off.reflections.is_none() && off.reflection_captures.is_none());
+        assert!(off.screen_gi.is_none());
         assert_eq!(off.gi_budget, quality.gi_budget);
         assert!(off.ambient_occlusion.is_none());
         assert!(off.volumetric_fog.is_none());

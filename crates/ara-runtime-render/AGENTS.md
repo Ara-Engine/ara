@@ -1,15 +1,13 @@
 # ara-runtime-render
 
-Raster presentation queues view, particles and post inside one completion scope, then waits before publication. The final particle tick shares its draw graph.
-Submission checkpoints preserve view/feature timings; deferred work is never zero-cost.
+Raster presentation queues view, particles and post inside one completion scope, then waits before publication. The final particle tick shares its draw graph. Submission checkpoints preserve view/feature timings; deferred work is never zero-cost.
 
 Presents `ara_runtime::extract::RenderFrame`s through native raster on every GPU
 and preset (D27), with experimental fidelity as an explicit opt-in. Owns the
 device and per-view upload state; no simulation, window or process code.
 
 ## Public API
-- `graphics::plan` composes user scalability overrides; `Presenter::set_graphics_settings` adopts them at frame boundaries.
-  Texture/foliage budgets replace native content; unchanged preferences reuse the plan. See `docs/dev/graphics-settings.md`.
+- `graphics::plan` composes user scalability overrides (screen GI follows the GI group); `Presenter::set_graphics_settings` adopts them at frame boundaries. Texture/foliage budgets replace native content; unchanged preferences reuse the plan. See `docs/dev/graphics-settings.md`.
 
 - `Presenter::new(size, window_extensions, pipeline_cache_dir)`: the renderer is
   created on the first frame (headless when `window_extensions` is empty).
@@ -80,7 +78,8 @@ device and per-view upload state; no simulation, window or process code.
   fixture (shades, sockets) and its lobe become spot or point lights (two-sided
   only for open sheets, as in the path tracer), clustered until they fit
   `Quality::emitter_lights`. They follow their instances, ride after the scene's
-  own lights and stay out of fog. Probe bakes zero those materials' emission.
+  own lights and stay out of fog. Probe bakes zero those materials' emission; the
+  threshold is `ara_render::look::EMITTER_RADIANCE`, which screen probe GI also skips.
   `stats().gpu: Option<GpuFrameCosts>` splits native scene updates, compressed
   texture uploads, VFX simulation/draw, raster/fidelity passes and publication.
   Residency counters accompany that same frame, including native Low. The legacy

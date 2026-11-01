@@ -310,6 +310,22 @@ float gatheredLobes(Frame f,Look l,int2 p,float distance,out float3 diffuse,out 
     if(total<=1e-3){diffuse=nearestD.rgb;specular=nearestS.rgb;return nearestS.w;}
     diffuse/=total;specular/=total;return coverage/total;
 }
+// Screen probe light at full-resolution pixel `p` (look-screen-gi.slang
+// screenGatherMain): irradiance and pre-filtered specular radiance, upsampled from half
+// resolution with depth-similar weights; returns the share the probes cover (zero
+// without screen probe GI this frame, LOOK_SCREEN_GI).
+float screenLobes(Frame f,Look l,int2 p,out float3 irradiance,out float3 radiance){
+    irradiance=0;radiance=0;if((l.flags.y&LOOK_SCREEN_GI)==0)return 0;
+    int2 half=int2((f.extent.xy+1)/2);float2 h=(float2(p)+0.5)*0.5-0.5;int2 b=int2(floor(h));float2 t=h-float2(b);
+    float depth=pixel(f.extra.x,p).x;float4 d=0,s=0,nearestD=0,nearestS=0;float total=0,best=1e30;
+    for(uint k=0;k<4;k++){
+        int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float dz=abs(pixel(f.extra.x,q*2).x/max(depth,1e-7)-1);
+        float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-dz*50);float4 a=pixel(l.screenInfo[2].x,q),r=pixel(l.screenInfo[2].y,q);
+        d+=a*w;s+=r*w;total+=w;if(dz<best){best=dz;nearestD=a;nearestS=r;}
+    }
+    if(total>1e-3){d/=total;s/=total;}else{d=nearestD;s=nearestS;}
+    irradiance=d.rgb;radiance=s.rgb;return saturate(d.w);
+}
 // The hybrid path's reflections at full-resolution pixel `p` (renderer::rt,
 // look-rt.slang rtFilterMain): ray-traced reflections composited over screen-space
 // ones, rgb and a confidence like screenReflection. Read only by the `rays` PSO
@@ -335,6 +351,10 @@ float4 screenReflection(Frame f,Look l,int2 p,out float captured){
     float4 r=total>1e-3?sum/total:nearest;captured=total>1e-3?fromCaptures/total:nearestCaptured;r.w*=l.ssr.w;return r;
 }
 float4 screenReflection(Frame f,Look l,int2 p){float captured;return screenReflection(f,l,p,captured);}
+// The share of a surface's reflection screen probes resolve (look-screen-gi.slangh):
+// none on near-mirrors, whose lobe is narrower than a probe texel (reflection traces
+// and captures own them), all past roughness 0.35.
+float screenProbeSpecularShare(float roughness){return smoothstep(0.12,0.35,roughness);}
 // The direction probe and sky reflections are looked up along for a lobe of
 // perceptual `roughness` at normal `n`, viewed from `v`: GGX's dominant direction
 // (Lagarde and de Rousiers 2014), the mirror direction pulled towards the normal as
@@ -413,6 +433,15 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
     }
     // Traced reflections (SSR, RT; `r`) carry their own visibility, so specular
     // occlusion and the screen bounce fill darken only the probe/sky/capture fallback.
+    // High/Epic deferred pixels take screen probes (screenLobes) where they cover: they
+    // traced their own occlusion and near-field bounce, so they replace the screen-space
+    // ambient light below, and own rough reflections (screenProbeSpecularShare), under
+    // which single mirror traces fade out.
+    float3 screenIrradiance=0,screenRadiance=0;float sp=0,spSpec=0;
+    if(high&&gathered){
+        sp=screenLobes(f,l,p,screenIrradiance,screenRadiance);spSpec=sp*screenProbeSpecularShare(s.roughness);
+        if(!rays)r.a*=1-sp*smoothstep(0.25,0.4,s.roughness);
+    }
     float3 incident,specular;
     if(high&&gathered){
         // Screen-space ambient light (look-ao.slang aoBitmaskMain; s.ao is the material's
@@ -424,7 +453,9 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
         float3 bounce;float visible=screenAmbient(f,l,p,bounce),ao=min(s.ao,visible);
         float so=specularOcclusion(o.nv,ao,s.roughness),screenSo=specularOcclusion(o.nv,visible,s.roughness);
         incident=(ambient*visible+bounce)*multiBounce(min(1,ao/max(visible,1e-4)),s.albedo);
-        specular=lerp((spec*screenSo+bounce*((1-screenSo)/(PI*max(1-visible,0.05))))*multiBounce(min(1,so/max(screenSo,1e-4)),o.f0),r.rgb,r.a);
+        incident=lerp(incident,screenIrradiance*multiBounce(s.ao,s.albedo),sp);
+        float3 fallback=(spec*screenSo+bounce*((1-screenSo)/(PI*max(1-visible,0.05))))*multiBounce(min(1,so/max(screenSo,1e-4)),o.f0);
+        specular=lerp(lerp(fallback,screenRadiance,spSpec),r.rgb,r.a);
     }else{
         // Multi-bounce for both lobes (Jimenez et al. 2016; F0 for the specular): occluded
         // cavities inter-reflect, so rough metals are not darkened twice (probe lobes
@@ -433,10 +464,11 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
     }
     if(view==1)return specular*o.albedo;
     if(view==2){
-        // Screen green, capture trace blue, box-projected captures cyan, probes
-        // orange, sky magenta; surfaces too rough to trace are dimmed.
-        float screen=r.a*(1-captured),traced=r.a*captured,rest=1-r.a,box=rest*boxed,probes=rest*(1-boxed)*coverage,sky=rest-box-probes;
-        float3 c=screen*float3(0.1,0.85,0.1)+traced*float3(0.15,0.35,1)+box*float3(0,0.8,0.8)+probes*float3(1,0.45,0)+sky*float3(0.9,0.15,0.8);
+        // Screen green, capture trace blue, screen probes yellow, box-projected
+        // captures cyan, probes orange, sky magenta; surfaces too rough to trace are dimmed.
+        float screen=r.a*(1-captured),traced=r.a*captured,rest=1-r.a,screenProbes=rest*spSpec,left=rest-screenProbes;
+        float box=left*boxed,probes=left*(1-boxed)*coverage,sky=left-box-probes;
+        float3 c=screen*float3(0.1,0.85,0.1)+traced*float3(0.15,0.35,1)+screenProbes*float3(1,0.9,0.1)+box*float3(0,0.8,0.8)+probes*float3(1,0.45,0)+sky*float3(0.9,0.15,0.8);
         float shade=0.55+0.45*saturate(dot(s.normal,v));
         return c*shade*(s.roughness<l.ssr.x||(l.flags.y&LOOK_REFLECTIONS)==0?1:0.25)/max(hdrExposure(f,l),1e-6);
     }

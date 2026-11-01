@@ -329,6 +329,20 @@
       "vertex_stride": 0
     }
   },
+  "look_emission_pyramid": {
+    "entries": {
+      "emissionPyramidMain": "compute"
+    },
+    "source": "look-screen-gi.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_exposure": {
     "entries": {
       "exposureMain": "compute"
@@ -446,6 +460,20 @@
       "giScatterMain": "compute"
     },
     "source": "look-gi.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_hiz": {
+    "entries": {
+      "hizMain": "compute"
+    },
+    "source": "look-screen-gi.slang",
     "state": {
       "blend": false,
       "color_formats": [],
@@ -600,6 +628,34 @@
       "rtRoughFilterMain": "compute"
     },
     "source": "look-rt.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_screen_gather": {
+    "entries": {
+      "screenGatherMain": "compute"
+    },
+    "source": "look-screen-gi.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "look_screen_probes": {
+    "entries": {
+      "screenProbeMain": "compute"
+    },
+    "source": "look-screen-gi.slang",
     "state": {
       "blend": false,
       "color_formats": [],

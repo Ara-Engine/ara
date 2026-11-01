@@ -87,6 +87,7 @@ fn rect_light_matches_the_path_traced_reference() {
     let direct = RenderDebug {
         exposure: Some(3.),
         global_illumination: false,
+        screen_gi: false,
         ambient_occlusion: false,
         screen_reflections: false,
         reflection_captures: false,

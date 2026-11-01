@@ -77,8 +77,8 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   distance; stable light space, practical splits, gather PCF, cascade blend; one
   cached D32 map per cascade, redrawn only when its matrix or casters in its light volume change; moved casters
   patch only their texels (a per-list cell grid finds their casters, culling/patches.rs); outer cascades redraw whole at most one per frame, `Cascades::plan`), a cached far map (`look::far`),
-  local-light shadows (`look::local`, patched alike; `in_gi_and_fog` also shadows GI relight and fog), half-res GTAO (High/Epic: visibility bitmask plus one-bounce near-field light, `LookGpu::bitmask_ao`) and SSR (cone footprint into
-  last frame's colour pyramid), GI relight, bloom, emitter lights, LOD/cull pixels, terrain detail (zero binds `gbuffer_top`, no side projections), and the
+  local-light shadows (`look::local`, patched alike; `in_gi_and_fog` also shadows GI relight and fog), half-res GTAO (High/Epic: visibility bitmask plus one-bounce near-field light, `LookGpu::bitmask_ao`) and SSR (Hi-Z traced, `look-screen.slangh`, cone footprint into
+  last frame's colour pyramid), screen probe GI (`look::screen_gi`, D32, High/Epic: 16 px probes, 64 Hi-Z rays, misses from the probe volume, 3x3 gather; `RenderDebug::screen_gi`), GI relight, bloom, emitter lights, LOD/cull pixels, terrain detail (zero binds `gbuffer_top`, no side projections), and the
   heightfield horizon (`look::horizon`: distant landforms' sun shadow, min'd into `visibility`, only past 200 m sunward where a sun map shades the pixel, since a heightfield cannot see through wall openings; and sky visibility
   outside the probe volume), and sun virtual shadow maps (`look::vsm`, High/Epic: clipmap pages that pixels mark in `VSM.Mark`, read back once their frame
   completes, cached in world space, drawn under a per-frame budget; `VSM.Project` resolves them, contact-hardening (PCSS for the sun disc), into a mask lighting reads, GI relight

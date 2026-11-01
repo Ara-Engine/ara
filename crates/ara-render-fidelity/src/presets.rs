@@ -10,7 +10,8 @@ use anyhow::{Result, bail};
 use ara_gpu::GpuDevice;
 use ara_render::look::{
     AmbientOcclusion, DepthOfFieldQuality, FarShadows, LocalShadows, MotionBlurQuality, Quality,
-    RayQueries, ReflectionCaptures, Reflections, Shadows, VirtualShadows, VolumetricFogQuality,
+    RayQueries, ReflectionCaptures, Reflections, ScreenGi, Shadows, VirtualShadows,
+    VolumetricFogQuality,
 };
 
 /// User-facing quality tier. D27: every tier is raster by default
@@ -33,6 +34,21 @@ pub enum QualityPreset {
     /// at two-thirds scale with two traced events before the probe field.
     Epic,
 }
+
+/// Screen probe GI tuned for High (D32), switched on once the probe volume's interior
+/// overshoot is fixed.
+pub const SCREEN_GI_HIGH: ScreenGi = ScreenGi {
+    tile: 16,
+    steps: 32,
+    distance: 30.,
+};
+/// Screen probe GI tuned for Epic: 16-pixel tiles as on High (8 cost 3.4 ms at 1440p),
+/// longer traces.
+pub const SCREEN_GI_EPIC: ScreenGi = ScreenGi {
+    tile: 16,
+    steps: 48,
+    distance: 50.,
+};
 
 impl QualityPreset {
     /// Every preset, cheapest first.
@@ -406,6 +422,7 @@ impl QualityPreset {
                 ray_queries: None,
                 // The coarse fog grid alone (still shadowed).
                 volumetric_fog: None,
+                screen_gi: None,
             },
             Self::Medium => Quality {
                 shadows: shadows(3, 1024, 100., (1024, 1000.)),
@@ -432,6 +449,7 @@ impl QualityPreset {
                 motion_blur: motion(8, 24.),
                 ray_queries: None,
                 volumetric_fog: volumetric(16, 48),
+                screen_gi: None,
             },
             Self::High => Quality {
                 shadows: shadows(4, 2048, 150., (2048, 1500.)),
@@ -465,6 +483,10 @@ impl QualityPreset {
                 motion_blur: motion(12, 32.),
                 ray_queries: rays(0.3, 0.6, 1500.),
                 volumetric_fog: volumetric(12, 64),
+                // Off by default until the probe volume stops over-lighting interiors
+                // through openings (D32's open error): enabled, test rooms regress against
+                // the path tracer. Tuned settings: SCREEN_GI_HIGH.
+                screen_gi: None,
             },
             Self::Epic => Quality {
                 shadows: shadows(4, 2048, 250., (2048, 2000.)),
@@ -495,6 +517,8 @@ impl QualityPreset {
                 motion_blur: motion(16, 32.),
                 ray_queries: rays(0.5, 0.8, 2000.),
                 volumetric_fog: volumetric(8, 96),
+                // Off by default, as on High; tuned settings: SCREEN_GI_EPIC.
+                screen_gi: None,
             },
         }
     }

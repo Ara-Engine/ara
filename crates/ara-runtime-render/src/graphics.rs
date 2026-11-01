@@ -41,6 +41,7 @@ pub fn plan(
             quality.min_pixels = view.min_pixels;
             quality.terrain_detail = view.terrain_detail;
             quality.gi_budget = gi.gi_budget;
+            quality.screen_gi = gi.screen_gi;
             quality.reflections = reflections.reflections;
             quality.reflection_captures = reflections.reflection_captures;
             quality.ray_queries = reflections

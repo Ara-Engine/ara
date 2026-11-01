@@ -65,14 +65,15 @@ pub struct CaptureArgs {
     marks: Option<u32>,
     /// Turn a rendering effect off to see what it contributes (repeatable).
     #[arg(long, value_parser = ["ambient-occlusion", "shadows", "temporal-jitter",
-        "screen-reflections", "reflection-captures", "global-illumination", "volumetric-fog"])]
+        "screen-reflections", "reflection-captures", "global-illumination", "screen-gi", "volumetric-fog"])]
     without: Vec<String>,
     /// Render at display resolution instead of the preset's upscaled scale.
     #[arg(long)]
     full_resolution: bool,
     /// Reflection debug view: `reflections` (the reflected light alone) or `sources`
     /// (where each pixel's reflection comes from: on-screen trace green, capture
-    /// trace blue, box-projected captures cyan, probes orange, sky magenta).
+    /// trace blue, screen probes yellow, box-projected captures cyan, probes orange,
+    /// sky magenta).
     #[arg(long, value_parser = ["reflections", "sources"])]
     reflections: Option<String>,
     /// Render the path-traced ground truth (unbiased, undenoised) with this many
@@ -164,6 +165,7 @@ fn render_debug(
         "screenReflections": on("screen-reflections"),
         "reflectionCaptures": on("reflection-captures"),
         "globalIllumination": on("global-illumination"),
+        "screenGi": on("screen-gi"),
         "fullResolution": full_resolution,
         "reflections": reflections.unwrap_or("lit"),
         "reference": reference.map(|(samples, bounces)| json!({"samples": samples, "bounces": bounces})),

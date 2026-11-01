@@ -654,6 +654,8 @@ impl Renderer {
             }
         }
         self.look.quality = quality;
+        self.look
+            .retile_screen_probes(&mut self.gpu, previous.screen_gi)?;
         Ok(())
     }
     /// One cached map per cascade (look::cascades) at the quality's budget.
