@@ -328,7 +328,8 @@ impl Renderer {
             allocated.push(Resource::Image(image));
             Ok::<_, ara_gpu::GpuError>(image)
         };
-        let moments = image(&mut self.gpu, 10, vk::Format::R32G32B32A32_SFLOAT)?;
+        // 16x16 moments with a folded border (look::gi::MOMENT_SIDE), normalized.
+        let moments = image(&mut self.gpu, 18, vk::Format::R16G16_UNORM)?;
         let irradiance = [
             image(&mut self.gpu, 8, vk::Format::R16G16B16A16_SFLOAT)?,
             image(&mut self.gpu, 8, vk::Format::R16G16B16A16_SFLOAT)?,

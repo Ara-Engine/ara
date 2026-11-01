@@ -15,7 +15,7 @@ float3 localIrradiance(Frame f,Look l,float3 p,float3 n){
     }return sum;
 }
 groupshared float3 radiance[64];
-groupshared float3 directions[64];
+groupshared float4 directions[64];
 groupshared float3 tile[36];
 groupshared float4 seen[64];
 // Distance (m) recorded for sky texels: reflections of the sky need no parallax.
@@ -59,7 +59,7 @@ void giRelight(uint3 group,uint lane,bool pages){
     }
     uint4 t=buffers[NonUniformResourceIndex(l.giBuffers.x)].Load<uint4>((id*64+lane)*16);
     float3 albedo=float3(t.x&255,(t.x>>8)&255,(t.x>>16)&255)/255.;float sky=float(t.x>>24)/255.;
-    float3 normal=octDecode(float2(t.y&65535,t.y>>16)/65535.);
+    float3 normal=octDecode(float2(t.y&4095,(t.y>>12)&4095)/4095.);
     float3 emissive=float3(halfToFloat(t.z&65535),halfToFloat(t.z>>16),halfToFloat(t.w&65535));float distance=halfToFloat(t.w>>16);
     float3 dir=octDecode((float2(lane%8,lane/8)+0.5)/8),origin=giProbePosition(l,id)+meta.xyz,light=0;
     if(sky<1){
@@ -71,12 +71,12 @@ void giRelight(uint3 group,uint lane,bool pages){
         light=(1-sky)*(emissive+albedo/PI*irradiance);
     }
     if(sky>0)light+=sky*skyLight(l)*(physicalSky(l)?skyRadiance(f,l,dir,false):envTex(f.extra.w,environmentUv(dir)).rgb);
-    radiance[lane]=light;directions[lane]=dir;
+    radiance[lane]=light;directions[lane]=float4(dir,octSolidAngle(uint2(lane%8,lane/8),8));
     // The radiance cache keeps what this texel sees, filtered over relights like the
     // irradiance (a reset, or a non-finite history, starts it over).
     {
         float hysteresis=(l.flags.y&LOOK_RESET)!=0?0:l.giParams.x;
-        float4 value=float4(light,sky>0.5?GI_SKY_DISTANCE:distance);
+        float4 value=float4(light,sky>0.5?GI_SKY_DISTANCE:giParallax(t.y));
         float4 old=images[NonUniformResourceIndex(l.giRadiance.y)][giTile(l,id,8)+uint2(lane%8,lane/8)];
         if(hysteresis>0 && all(isfinite(old)))value.rgb=lerp(value.rgb,old.rgb,hysteresis);
         seen[lane]=value;
@@ -84,7 +84,10 @@ void giRelight(uint3 group,uint lane,bool pages){
     GroupMemoryBarrierWithGroupSync();
     if(lane<36){
         float3 n=octDecode((float2(lane%6,lane/6)+0.5)/6),sum=0;float normalization=0;
-        for(uint j=0;j<64;j++){float w=max(dot(n,directions[j]),0);sum+=radiance[j]*w;normalization+=w;}
+        // Each texel weighs by its solid angle: octahedral texels near the axes cover
+        // about half the mean, so equal weights would overcount light from axis-aligned
+        // openings (a window in an axis-aligned room) up to twofold.
+        for(uint j=0;j<64;j++){float w=max(dot(n,directions[j].xyz),0)*directions[j].w;sum+=radiance[j]*w;normalization+=w;}
         float3 value=sum*(PI/max(normalization,1e-5));
         float3 old=textures[NonUniformResourceIndex(read)].Load(int3(giTile(l,id,6)+uint2(lane%6,lane/6),0)).rgb;
         float hysteresis=(l.flags.y&LOOK_RESET)!=0?0:l.giParams.x;
@@ -116,19 +119,14 @@ void giGatherMain(uint3 tid:SV_DispatchThreadID){
     images[NonUniformResourceIndex(l.giGather.z)][tid.xy]=diffuse;
     images[NonUniformResourceIndex(l.giGather.w)][tid.xy]=specular;
 }
-// Bordered moment-tile texel (-1..=8) folded onto the octahedral interior, as
-// renderer/gi.rs `fold` (DDGI borders).
-uint foldMoment(int x,int y){
-    if(x<0){x=-x-1;y=7-y;}else if(x>=8){x=15-x;y=7-y;}
-    if(y<0){y=-y-1;x=7-x;}else if(y>=8){y=15-y;x=7-x;}
-    return uint(y*8+x);
-}
 // Writes probe records (Renderer::update_probe_surfaces) into the surface cache,
 // meta and moment atlas in place, one group per probe. Root words: first record,
 // staging buffer (records of [probe id, 0, 0, 0], 64 cache texels as uint4, 66
-// static vectors as float4), cache, meta, moment atlas (storage), probes per atlas
-// row with bit 31 set to clear instead (probe = record index: zero surfaces, an
-// inactive probe and dark irradiance tiles), then both irradiance atlases.
+// static vectors: 64 of packed 16x16 moments (look/gi.rs pack_moments), then
+// float4s), cache, meta, moment atlas (storage, bordered 18x18 tiles of UNORM16
+// moments), probes per atlas row with bit 31 set to clear instead (probe = record
+// index: zero surfaces, an inactive probe and dark irradiance tiles), then both
+// irradiance atlases.
 static const uint SCATTER_RECORD=16+64*16+66*16;
 [shader("compute")][numthreads(128,1,1)]
 void giScatterMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
@@ -137,10 +135,11 @@ void giScatterMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     uint id=clear?index:buffers[NonUniformResourceIndex(staging)].Load(base);
     if(lane<64)buffers[NonUniformResourceIndex(root.material)].Store<uint4>((id*64+lane)*16,clear?uint4(0,0,0,0):buffers[NonUniformResourceIndex(staging)].Load<uint4>(base+16+lane*16));
     if(lane==0)buffers[NonUniformResourceIndex(root.entity)].Store<float4>(id*16,clear?float4(0,0,0,0):buffers[NonUniformResourceIndex(staging)].Load<float4>(statics+64*16));
-    if(lane<100){
-        int x=int(lane%10),y=int(lane/10);
-        float4 v=clear?float4(0,0,0,0):buffers[NonUniformResourceIndex(staging)].Load<float4>(statics+foldMoment(x-1,y-1)*16);
-        images[NonUniformResourceIndex(root.cascade)][uint2(id%atlas,id/atlas)*10+uint2(x,y)]=float4(v.xy,0,0);
+    for(uint i=lane;i<18*18;i+=128){
+        // Border texels fold across the octahedral edges (DDGI borders, octIndex).
+        uint t=octIndex(int2(i%18,i/18)-1,16),x=t%16,y=t/16;
+        uint v=clear?0:buffers[NonUniformResourceIndex(staging)].Load(statics+((y/2)*8+x/2)*16+((y&1)*2+(x&1))*4);
+        images[NonUniformResourceIndex(root.cascade)][uint2(id%atlas,id/atlas)*18+uint2(i%18,i/18)]=float4(float(v&65535)/65535,float(v>>16)/65535,0,0);
     }
     if(clear && lane<64){
         uint2 texel=uint2(id%atlas,id/atlas)*8+uint2(lane%8,lane/8);

@@ -1171,10 +1171,11 @@ mod tests {
         Ok(())
     }
 
-    fn probe(s: &ProbeSurfaces, id: usize) -> (&[[u32; 4]], &[[f32; 4]]) {
+    /// One probe's texels and statics, as bits (packed moments are not numbers).
+    fn probe(s: &ProbeSurfaces, id: usize) -> (&[[u32; 4]], &[[u32; 4]]) {
         (
             &s.texels[id * SURFACE_TEXELS..(id + 1) * SURFACE_TEXELS],
-            &s.statics[id * STATIC_VECTORS..(id + 1) * STATIC_VECTORS],
+            bytemuck::cast_slice(&s.statics[id * STATIC_VECTORS..(id + 1) * STATIC_VECTORS]),
         )
     }
 

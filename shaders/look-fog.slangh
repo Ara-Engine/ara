@@ -49,8 +49,7 @@ float giFogIrradiance(Look l,uint image,float3 p,out float3 sum){
             uint3 d=uint3(k&1,(k>>1)&1,(k>>2)&1);uint3 q=uint3(base)+d;uint id=g.base+(q.z*g.counts.y+q.y)*g.counts.x+q.x;
             float4 meta=giMeta(l,id);if(meta.w<0.5)continue;
             float3 delta=p-(g.origin+float3(q)*g.spacing)-meta.xyz;float distance=length(delta);
-            float2 moments=giSampleMoments(l,id,delta/max(distance,1e-6));
-            float variance=max(moments.y-moments.x*moments.x,0.0001);float visibility=distance<=moments.x?1:pow(variance/(variance+pow(distance-moments.x,2)),3);
+            float visibility=giVisibility(l,id,delta/max(distance,1e-6),distance,giMomentLimit(g));
             float3 t=lerp(1-alpha,alpha,float3(d));float weight=visibility;if(weight<0.2)weight*=weight*weight/0.04;weight*=t.x*t.y*t.z;
             lattice+=(giSampleIrradiance(l,image,id,float3(0,1,0))+giSampleIrradiance(l,image,id,float3(0,-1,0)))*weight;total+=weight;
         }

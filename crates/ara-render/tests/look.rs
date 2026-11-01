@@ -112,18 +112,21 @@ fn a_seeded_exposure_adapts_from_the_seed() -> Result<()> {
 
 /// A 2x2x2 lattice whose probes all see a grey (albedo 0.5) surface 1 m away
 /// emitting `emission` (f16 bits: 0x6000 is 512); bounces through the volume
-/// approach twice that. Distance moments of 100 m reach every shaded point.
+/// approach twice that. Distance moments at the limit (packed all ones, look::gi::
+/// pack_moments) reach every shaded point.
 fn emissive_surfaces(emission: u32) -> ProbeSurfaces {
     let probes = 8;
-    let mut statics = vec![[100., 10_000., 0., 0.]; probes * STATIC_VECTORS];
+    let mut statics = vec![[f32::from_bits(u32::MAX); 4]; probes * STATIC_VECTORS];
     for p in 0..probes {
         statics[p * STATIC_VECTORS + 64] = [0., 0., 0., 1.];
+        statics[p * STATIC_VECTORS + 65] = [0.; 4];
     }
     // Packed per ProbeSurfaces::texels: albedo 128 grey, no sky; the octahedral
     // centre normal; the emission and a hit distance of 1 (0x3c00).
     let texel = [
         0x0080_8080,
-        0x8000_8000,
+        // Normal (0.5, 0.5) as UNORM12 pairs, parallax 1 m (look::gi::log_distance).
+        0x5580_0800,
         emission | emission << 16,
         emission | 0x3c00 << 16,
     ];

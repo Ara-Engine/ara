@@ -48,7 +48,14 @@ void probeSurfacesMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     uint backCount=0;for(uint j=0;j<64;j++)backCount+=backs[j];
     // Sixteen stratified rays inside this lane's texel: averaged surface data
     // smears small emitters over their texel instead of aliasing them away.
-    float3 albedo=0,emissive=0,normal=0,centroid=0;float moment1=0,moment2=0;uint geometry=0;
+    // Distance moments: this lane's 2x2 of the probe's 16x16 visibility texels, four
+    // rays each, every ray clamped at twice the lattice spacing (DDGI clamps its ray
+    // distances: shading weighs points within one cell, and a missed ray's far
+    // distance would otherwise dominate a texel that also sees a near wall).
+    float3 albedo=0,emissive=0,normal=0,centroid=0;float4 moment1=0,moment2=0;uint geometry=0;
+    float limit=2*max(f.spacing.x,max(f.spacing.y,f.spacing.z));
+    // The nearest front hit (distance, direction, normal).
+    float nearT=RANGE;float3 nearDir=0,nearNormal=0;
     for(uint k=0;k<16;k++){
         float2 uv=(float2(lane%8,lane/8)+(float2(k%4,k/4)+0.5)/4)/8;float3 dir=octDecode(uv);
         Hit h;float t=RANGE;
@@ -59,10 +66,12 @@ void probeSurfacesMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
             // from 60 degrees (gi_cpu::bounce_albedo): metals bounce light rather than absorb it.
             // Glass that stopped the ray bounces its reflection only (its transmitted
             // share went on to the surfaces behind it, nativeAccept).
-            if(front){if(dot(s.normal,-dir)<0)s.normal=-s.normal;albedo+=bounceAlbedo(s.albedo*(1-s.transmission),s.metal,s.roughness);emissive+=s.emissive;normal+=s.normal;}
+            if(front){if(dot(s.normal,-dir)<0)s.normal=-s.normal;albedo+=bounceAlbedo(s.albedo*(1-s.transmission),s.metal,s.roughness);emissive+=s.emissive;normal+=s.normal;
+                if(t<nearT){nearT=t;nearDir=dir;nearNormal=s.normal;}}
             else normal-=dir;
         }
-        moment1+=t;moment2+=t*t;
+        float m=min(t,limit);uint quadrant=(k%4)/2+(k/8)*2;
+        moment1[quadrant]+=m;moment2[quadrant]+=m*m;
     }
     float sky=1-geometry/16.;float g=max(float(geometry),1);
     albedo/=g;emissive/=g;centroid/=g;normal=length(normal)>0?normalize(normal):-octDecode((float2(lane%8,lane/8)+0.5)/8);
@@ -72,13 +81,27 @@ void probeSurfacesMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     // angle (distance grows as 1/cos across the texel), where it shadows itself.
     float3 axis=octDecode((float2(lane%8,lane/8)+0.5)/8);float facing=dot(normal,axis);
     float hitDistance=facing<-0.05?clamp(dot(normal,centroid)/facing,0,RANGE):length(centroid);
+    // Reflections take the probe's radiance at this distance (parallax), as seen;
+    // eight bits of its base-2 log (ara_render::look::gi::log_distance).
+    uint parallax=uint(clamp(round((log2(max(hitDistance,1e-6))+8)/24*255),0,255));
+    // A texel that sees two surfaces far apart (a window frame and the ground outside)
+    // would put that point between them, behind the nearer one: outside the room, where
+    // relighting would bring the outdoor light in. It moves onto the nearest surface's
+    // plane instead (gi_cpu BEHIND).
+    if(nearT<RANGE && dot(nearNormal,axis*hitDistance-nearDir*nearT)<-0.05){
+        float towards=dot(nearNormal,axis);
+        hitDistance=towards<-0.05?clamp(dot(nearNormal,nearDir*nearT)/towards,0,hitDistance):nearT;normal=nearNormal;
+    }
     float2 n=octEncode(normal);
     uint4 packed=uint4(unorm8(albedo.r)|(unorm8(albedo.g)<<8)|(unorm8(albedo.b)<<16)|(unorm8(sky)<<24),
-        uint(round(n.x*65535))|(uint(round(n.y*65535))<<16),
+        uint(round(n.x*4095))|(uint(round(n.y*4095))<<12)|(parallax<<24),
         halfBits(emissive.r)|(halfBits(emissive.g)<<16),
         halfBits(emissive.b)|(halfBits(hitDistance)<<16));
     buffers[NonUniformResourceIndex(root.pass)].Store<uint4>((id*64+lane)*16,packed);
-    buffers[NonUniformResourceIndex(root.arg)].Store<float4>((id*66+lane)*16,float4(moment1/16,moment2/16,0,0));
+    // ara_render::look::gi::pack_moments: UNORM16 mean | mean squared << 16, over the
+    // limit (and its square).
+    uint4 moments=uint4(round(saturate(moment1/(4*limit))*65535))|(uint4(round(saturate(moment2/(4*limit*limit))*65535))<<16);
+    buffers[NonUniformResourceIndex(root.arg)].Store<uint4>((id*66+lane)*16,moments);
     if(lane==0){
         // Still inside geometry after moving: classified inactive, never sampled.
         buffers[NonUniformResourceIndex(root.arg)].Store<float4>((id*66+64)*16,float4(offset,backCount>16?0:1));

@@ -71,7 +71,8 @@ impl ProbeUpdate {
             let distance = std::array::from_fn(|t| {
                 let texel = 4 + t * 4;
                 let sky = (word(texel) >> 24) as f32 / 255.;
-                let mean = half_to_f32((word(texel + 3) >> 16) as u16);
+                // The hits' mean distance (ProbeSurfaces::texels, look::gi::log_distance).
+                let mean = ((word(texel + 1) >> 24) as f32 / 255. * 24. - 8.).exp2();
                 if sky > 0.5 || !mean.is_finite() {
                     OPEN
                 } else {
@@ -81,20 +82,6 @@ impl ProbeUpdate {
             Some((id, ProbeSight { position, distance }))
         })
     }
-}
-
-fn half_to_f32(h: u16) -> f32 {
-    let (sign, exponent, mantissa) = (
-        u32::from(h >> 15),
-        u32::from(h >> 10 & 31),
-        u32::from(h & 1023),
-    );
-    let magnitude = match exponent {
-        0 => mantissa as f32 * 2f32.powi(-24),
-        31 => f32::INFINITY,
-        e => f32::from_bits((e + 112) << 23 | mantissa << 13),
-    };
-    if sign == 1 { -magnitude } else { magnitude }
 }
 
 /// The room a probe sees: from its position, the median distance it saw within 37
