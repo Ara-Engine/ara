@@ -35,6 +35,10 @@ pub struct RenderDebug {
     /// Probe global illumination (default true); off, the sky lights everything.
     #[ara(default = true)]
     pub global_illumination: bool,
+    /// Screen probe GI on High and Epic (default true); off, the probe volume and
+    /// screen-space ambient occlusion light everything, as on Medium.
+    #[ara(default = true)]
+    pub screen_gi: bool,
     /// Render the path-traced ground truth instead (default off): unbiased and
     /// undenoised, on GPUs with hardware ray tracing whatever the project's
     /// ray-tracing setting, to judge the real-time lighting against.
@@ -140,8 +144,8 @@ pub enum ReflectionView {
     /// Only the reflected (indirect specular) light, exposed like the lit image.
     Reflections,
     /// Each pixel coloured by where its reflection comes from: on-screen trace green,
-    /// capture trace blue, box-projected captures cyan, probes orange, sky magenta;
-    /// surfaces too rough to trace dimmed.
+    /// capture trace blue, screen probes yellow, box-projected captures cyan, probes
+    /// orange, sky magenta; surfaces too rough to trace dimmed.
     Sources,
 }
 
@@ -157,6 +161,7 @@ impl Default for RenderDebug {
             screen_reflections: true,
             reflection_captures: true,
             global_illumination: true,
+            screen_gi: true,
             reference: None,
             exposure: None,
             view: DebugView::Lit,
