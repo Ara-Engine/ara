@@ -116,9 +116,15 @@ pub fn write(gate: u8, suite: &Suite, output: &Path) -> Result<()> {
             }
             stages
         });
-        let attribution = (gate == 5)
-            .then(|| a.as_ref().ok().map(super::attribution::route))
-            .flatten();
+        let attribution = if gate == 5 {
+            a.as_ref().ok().zip(b.as_ref().ok()).and_then(|(a, b)| {
+                gates::validate_pair(a, b)
+                    .ok()
+                    .map(|()| super::attribution::route(a, b))
+            })
+        } else {
+            None
+        };
         rows.push(json!({"case":case,"verdict":verdict,"score":score.as_ref().ok(),"error":score.as_ref().err().map(ToString::to_string),"control_gpu_span_ms":control,"control_pass_sum_ms":pass_sum,"stage_gpu_ms":stages,"uncapped":base.join("uncapped/run.json"),"capped":base.join("capped/run.json"),"worst_sampled_region_flip":flip,"timing_valid":a.as_ref().ok().map(|r|r.timing_valid),"G5_attribution_only":attribution}));
     }
     let verdict = gates::combine(verdicts);

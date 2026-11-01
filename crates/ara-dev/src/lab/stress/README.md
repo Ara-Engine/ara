@@ -95,6 +95,9 @@ combine, real-time sample-count declaration, and G5 constituent quality receipts
 G5 requires a complete-frame GPU span, CPU critical-path time and submission stalls;
 summing pass timestamps never creates those measurements. G5's failed-workload
 allocation charges are attribution only and cannot produce a passing verdict.
+Attribution reads `g1_workload_failed`/`g2_workload_failed` from the paired capped
+frame, and costs from the uncapped frame with the same index. Invalid timing or
+unmatched replay identity cannot produce a charged result.
 
 The default worker is today's native raster High, with hardware RT disabled for the
 control. Its uncapped mode removes exposed local/VSM redraw quotas but cannot remove
