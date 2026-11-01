@@ -55,7 +55,10 @@ No authoritative gameplay or authoring state lives here.
   lift/gamma/gain, chromatic aberration, the LUT and AO/SSR tuning are raster-only.
   `HeightFog`'s volumetric fields map onto both renderers' fog (the fidelity froxel fog takes
   emission, extinction scale and per-light `parameters.w`); `fog_volumes()` sorts the scene's
-  `LocalFogVolume`s for `Renderer::set_fog_volumes` (raster only for now).
+  `LocalFogVolume`s for `Renderer::set_fog_volumes` (raster only for now). `sky_model` maps `SkyAtmosphere`
+  (Unreal units) onto `ara_render::look::atmosphere::Atmosphere`; `set_atmosphere_lights` takes the sun's and the
+  second light's settings. `shaders/atmosphere-model.slangh` is a byte copy of ara-render's (a test checks it):
+  edit the root `shaders/` one, copy it here and cook both cohorts.
 
 ## Gates
 Use CARGO_BUILD_JOBS=2. `cargo test -p ara-render-fidelity`,

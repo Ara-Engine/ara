@@ -75,7 +75,8 @@ renderer-neutral presentation extraction. No GPU, window or process code (`ara-r
   `AnimAsset` record by `@path#record`; several clips/controllers per file), `compile` (clip records bind model animations by `name`
   when they hold no keys; motion-matching nodes cook their `motionDatabase`),
   `MatchState` (trajectory predictor + feature query, predictor snapshotted).
-- `extract::RenderFrame`: camera, sun, lights, environment, draws (shape or model
+- `extract::RenderFrame`: camera, sun (`sun_atmosphere`: disc scale, per-pixel transmittance; `moon`: the
+  second atmosphere light, `Light::atmosphere_sun_light_index` 1, sky/aerial perspective only), lights, environment, draws (shape or model
   primitive, interpolated world matrix), skin-order palettes and the look (`SceneLook`: sky,
   fog, enabled `LocalFogVolume`s, every post-process volume, and the volumes' LUTs shared from `Library::luts`, which
   `lut::Luts` decodes at startup and `reload_assets`; editors use `lut::record_references`; lights' IES
