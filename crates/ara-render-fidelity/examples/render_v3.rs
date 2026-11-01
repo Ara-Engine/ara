@@ -17,5 +17,13 @@ mod replay;
 mod runner;
 
 fn main() -> anyhow::Result<()> {
-    runner::main()
+    let timing = std::env::args().nth(2).as_deref() == Some("uncapped");
+    let result = runner::main();
+    if timing {
+        // The load guard samples CPU once per second. Keep the completed child
+        // alive for its final counters, so short replay CPU work is not lost and
+        // charged to foreign load. This wait is outside all recorded frame times.
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
+    result
 }
