@@ -1,6 +1,6 @@
 // Traced reflections (look/passes.rs), noise-free: one mirror ray per
-// half-resolution pixel (no stochastic lobe sampling). First on screen: marched
-// against the G-buffer depth with a binary refinement, then shaded from last frame's
+// half-resolution pixel (no stochastic lobe sampling). First on screen: traced through
+// the Hi-Z pyramid of the G-buffer depth (look-screen.slangh hizTrace), then shaded from last frame's
 // resolved colour, roughness widening it through a colour pyramid instead of
 // jittered rays. What the screen cannot show (the ray leaves it, or its hit fades at
 // the edge) continues through the reflection captures around the surface
@@ -11,27 +11,7 @@
 #include "raster.slangh"
 #include "look.slangh"
 #include "look-captures.slangh"
-// Pixel position (and reversed-Z depth) of a world point in the current frame.
-float3 ssrProject(Frame f,float3 world){
-    float4 c=mul(f.vp,float4(world,1));float3 n=c.xyz/c.w;return float3((n.x*0.5+0.5)*f.extent.x,(0.5-n.y*0.5)*f.extent.y,n.z);
-}
-// Colour pyramid of the previous resolved frame: levels 1..SSR_LEVELS of the render size
-// packed side by side (as the bloom atlas), sampled between levels by roughness.
-static const uint SSR_LEVELS=6;
-uint2 ssrLevelSize(Frame f,uint level){return max(f.extent.xy>>level,uint2(1));}
-uint2 ssrLevelOrigin(Frame f,uint level){uint x=0;for(uint j=1;j<level;j++)x+=max(f.extent.x>>j,1u);return uint2(x,0);}
-float3 ssrLevel(Frame f,Look l,uint level,float2 uv){
-    float2 size=float2(ssrLevelSize(f,level)),atlas=float2(f.extent.x,max(f.extent.y/2,1u));
-    return historyTex(l.ssrImages.x,(float2(ssrLevelOrigin(f,level))+clamp(uv*size,0.5,size-0.5))/atlas).rgb;
-}
-// Level 0: last frame's full-resolution history itself (root word 1, pre-exposed), so a
-// near-mirror lobe reflects at full detail instead of the half-size level 1.
-float3 ssrSharp(Frame f,Look l,float2 uv){return historyTex(root.materials,uv).rgb/exposureScale(f,exposureState(l).y);}
-// The colour pyramid at a fractional level (0: the sharp history).
-float3 ssrPyramid(Frame f,Look l,float2 uv,float level){
-    uint lo=uint(level);
-    return level<1?lerp(ssrSharp(f,l,uv),ssrLevel(f,l,1,uv),level):lerp(ssrLevel(f,l,lo,uv),ssrLevel(f,l,min(lo+1,SSR_LEVELS),uv),frac(level));
-}
+#include "look-screen.slangh"
 // Root word 2: pass (0 pyramid level 1 from the history, 1..5 levels 2..SSR_LEVELS).
 [shader("compute")][numthreads(8,8,1)]
 void ssrPyramidMain(uint3 tid:SV_DispatchThreadID){
@@ -76,46 +56,17 @@ void ssrTraceMain(uint3 tid:SV_DispatchThreadID){
     bool traced=(l.rtInfo[1].w&1)!=0 && roughness<0.8*l.rtParams[0].x;
     if(covered && roughness<l.ssr.x && !traced){
         float3 n=normalize(gbufferNormal(f,p)),v=normalize(world.xyz-f.camera.xyz),r=reflect(v,n);
-        // Clip the ray in world space so it ends in front of the near plane
-        // (camera.w), then march its screen-space projection. A segment reaching
-        // behind the camera has no linear projection: clipping it after projecting
-        // swept arbitrary pixels and reported false hits for rays reflected back
-        // towards the camera (dark discs on mirror spheres).
-        float reach=l.ssr.y;
-        float ahead=dot(world.xyz-f.camera.xyz,f.forward.xyz),toward=dot(r,f.forward.xyz);
-        if(toward<0)reach=min(reach,max(ahead-f.camera.w*2,0)/-toward);
-        float3 a=ssrProject(f,world.xyz+n*0.01),b=ssrProject(f,world.xyz+r*reach);
-        // Then end it at the screen's edge (depth is affine in screen space, so the
-        // clipped end stays on the ray): every step lands on a pixel that can hit.
-        // A floor's reflection of a ceiling ahead travels several times the floor's own
-        // distance, so the ray is never cut shorter than the scene it can see.
-        float2 span=b.xy-a.xy,bound=float2(f.extent.xy)-0.5;float keep=1;
-        if(span.x>0)keep=min(keep,(bound.x-a.x)/span.x);else if(span.x<0)keep=min(keep,(0.5-a.x)/span.x);
-        if(span.y>0)keep=min(keep,(bound.y-a.y)/span.y);else if(span.y<0)keep=min(keep,(0.5-a.y)/span.y);
-        b=lerp(a,b,saturate(keep));
-        uint steps=uint(l.ssr.z);float jitter=0.5;
-        // A crossing whose refined point lies far behind the depth it passed (the
-        // ray went behind a foreground object, not into it) is no hit: the march
-        // continues until the ray comes out in front again and can meet what lies
-        // beyond. Stopping there left hard-edged holes, every reflection a nearer
-        // pillar or arch shadows on screen.
-        float previous=0;bool hit=false,behind=false;float3 at=a;
-        for(uint i=1;i<=steps && !hit;i++){
-            float t=(float(i)-1+jitter)/float(steps);float3 q=lerp(a,b,t);
-            if(any(q.xy<0)||any(q.xy>=float2(f.extent.xy)))break;
-            float scene=pixel(f.extra.x,int2(q.xy)).x;
-            // Reversed-Z: the ray is behind the surface when its depth is smaller.
-            if(scene>0 && q.z<scene){
-                if(behind)continue;
-                float lo=previous,hi=t;
-                for(uint k=0;k<5;k++){float m=(lo+hi)*0.5;float3 c=lerp(a,b,m);float s=pixel(f.extra.x,int2(c.xy)).x;if(c.z<s)hi=m;else lo=m;}
-                at=lerp(a,b,hi);float s=pixel(f.extra.x,int2(at.xy)).x;
-                // Reject hits behind thick geometry: compare world distances.
-                float3 surface=worldAtDepth(f,floor(at.xy)+0.5,s),ray=worldAtDepth(f,at.xy,at.z);
-                hit=length(surface-ray)<max(0.1,length(surface-f.camera.xyz)*0.02);
-                behind=!hit;
-            }else{behind=false;previous=t;}
-        }
+        // The ray's screen segment (look-screen.slangh screenSegment: clipped in front of
+        // the near plane, where a segment reaching behind the camera has no linear
+        // projection, then at the screen's edge), traversed through the Hi-Z pyramid: a
+        // few dozen steps reach any length exactly, where a linear march skipped thin
+        // geometry between its samples. A crossing far behind the depth it passed (the
+        // ray went behind a foreground object, not into it) is no hit: the traversal
+        // crawls on behind it until the ray comes out in front again and can meet what
+        // lies beyond (no hard-edged holes behind every nearer pillar or arch).
+        float3 a,b;float reach=screenSegment(f,world.xyz+n*0.01,r,l.ssr.y,a,b);
+        float s=hizTrace(f,l,a,b-a,uint(l.ssr.z),uint(l.screenParams[0].y),0.02);
+        bool hit=s>=0;float3 at=hit?lerp(a,b,s):a;
         if(hit){
             // Last frame's colour at the hit, reprojected.
             float3 hitWorld=worldAtDepth(f,floor(at.xy)+0.5,gbufferDepth(f,int2(at.xy)));

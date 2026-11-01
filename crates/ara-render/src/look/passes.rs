@@ -51,6 +51,14 @@ pub(crate) enum LookPass {
     /// Reflection colour pyramid level (1..4) from the previous history.
     SsrPyramid(u32),
     SsrTrace,
+    /// Hi-Z pyramid level (1..) of the frame's depth (`look::screen_gi`).
+    Hiz(u32),
+    /// The screen probes' trace and filter (`look::screen_gi`).
+    ScreenProbes,
+    /// The half-resolution screen probe gather lighting reads.
+    ScreenGather,
+    /// Level (1..) of this frame's promoted-emission pyramid (`look::screen_gi`).
+    EmissionPyramid(u32),
     /// Measures the ambient light at each reflection capture against its bake
     /// (`look::captures`): `masks` marks bakes that landed since the last one (low
     /// half) and baselines it clears (high half); `copy` first copies the changed
@@ -225,7 +233,8 @@ impl LookGpu {
 
     /// Screen-space reflections before lighting: a colour pyramid of the previous
     /// resolved frame (`history`; none on the first frame) and the half-resolution
-    /// trace. `reads` must cover depth, normals, world positions and the frame.
+    /// trace. The pyramid also runs for screen probe GI alone (its hits shade from it).
+    /// `reads` must cover depth, normals, world positions and the frame.
     pub(crate) fn ssr_passes(
         &self,
         graph: &mut Graph,
@@ -233,9 +242,12 @@ impl LookGpu {
         history: Option<ResourceId>,
         reads: &[(ResourceId, Access)],
     ) -> Vec<(PassId, LookPass)> {
-        let (Some(_), Some(history)) = (self.quality.reflections, history) else {
+        let Some(history) = history else {
             return Vec::new();
         };
+        if self.quality.reflections.is_none() && !self.frame_screen {
+            return Vec::new();
+        }
         let mut passes = Vec::new();
         for level in 1..=SSR_LEVELS {
             const NAMES: [&str; SSR_LEVELS as usize] = [
@@ -260,10 +272,17 @@ impl LookGpu {
             );
             passes.push((id, LookPass::SsrPyramid(level)));
         }
+        if self.frame_hiz {
+            passes.extend(self.hiz_passes(graph, ids, reads));
+        }
+        if self.quality.reflections.is_none() {
+            return passes;
+        }
         let id = graph.pass(
             "SSR.Trace",
             Queue::Graphics,
             [
+                (ids.image(super::gpu::HIZ), Access::ShaderRead),
                 (history, Access::ShaderRead),
                 (ids.state, Access::ShaderRead),
                 (ids.image(SSR_PYRAMID), Access::ShaderRead),
@@ -372,6 +391,9 @@ impl LookGpu {
         }
         if reflected {
             reads.push((ids.image(SSR_TRACE), Access::ShaderRead));
+        }
+        if self.frame_screen {
+            reads.extend(self.screen_gi_reads(ids));
         }
         reads
     }
@@ -604,6 +626,14 @@ impl LookGpu {
                 groups(size.map(|v| (v >> level).max(1))),
             ),
             LookPass::SsrTrace => (p.ssr_trace, 0, groups(size.map(|v| v.div_ceil(2)))),
+            LookPass::Hiz(level) => (p.hiz, level, groups(size.map(|v| v.div_ceil(1 << level)))),
+            LookPass::ScreenProbes => (p.screen_probes, 0, self.screen_probe_groups()),
+            LookPass::EmissionPyramid(level) => (
+                p.emission_pyramid,
+                level,
+                groups(size.map(|v| (v >> level).max(1))),
+            ),
+            LookPass::ScreenGather => (p.screen_gather, 0, groups(size.map(|v| v.div_ceil(2)))),
             // One thread per capture and axis (look::captures::MAX_CAPTURES x 6).
             LookPass::CaptureRefit { masks, .. } => (p.capture_refit, masks, [1, 1, 1]),
             LookPass::CaptureTiles => (

@@ -27,8 +27,9 @@ use std::{
 };
 
 /// Emitted radiance (mean luminance, cd/m2) above which a material lights the
-/// scene directly; dimmer glow stays in the probe volume.
-const EMITTER_RADIANCE: f32 = 5.;
+/// scene directly; dimmer glow stays in the probe volume. Shared with the renderer,
+/// whose screen probes then skip that emission.
+use ara_render::look::EMITTER_RADIANCE;
 /// Flux (lumens) below which a lobe is too dim to be a light.
 const MIN_FLUX: f32 = 1.;
 /// Illuminance (lux) at which a light's influence ends.

@@ -19,6 +19,7 @@ pub(crate) mod ltc;
 pub(crate) mod passes;
 pub mod placement;
 pub(crate) mod refract;
+pub(crate) mod screen_gi;
 pub(crate) mod translucent;
 pub mod volumetric;
 pub(crate) mod vsm;
@@ -30,6 +31,12 @@ pub use lens::{
 pub use volumetric::{
     FogVolume, FogVolumeShape, MAX_FOG_VOLUMES, VolumetricFog, VolumetricFogQuality,
 };
+
+/// Mean emitted luminance (cd/m2) above which hosts promote a material's emission to
+/// emitter lights (`Quality::emitter_lights`; ara-runtime-render's emitters): that
+/// light then reaches the scene directly, so screen probe GI drops such emission
+/// where its rays hit it, and probe bakes zero it.
+pub const EMITTER_RADIANCE: f32 = 5.;
 
 /// Per-preset raster budgets (`Renderer::set_quality`); independent of the
 /// authored look. The default is the M1 configuration.
@@ -104,6 +111,25 @@ pub struct Quality {
     /// fog's volumetric distance, temporally accumulated. `None` keeps the coarse
     /// 4 km fog grid alone (still shadowed, at 40-pixel columns).
     pub volumetric_fog: Option<VolumetricFogQuality>,
+    /// Screen probe GI (`look::screen_gi`; read by the High/Epic lighting PSOs,
+    /// `high_tier`): probes on the visible surfaces trace fixed directions through a
+    /// Hi-Z pyramid of the frame's depth, shade hits from last frame's colour and
+    /// continue misses into the probe volume, so diffuse and rough specular indirect
+    /// light come from what the screen shows (multi-bounce, emissive surfaces, near
+    /// occlusion). `None` keeps the probe volume's lighting alone.
+    pub screen_gi: Option<ScreenGi>,
+}
+
+/// Screen probe GI budgets (`Quality::screen_gi`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScreenGi {
+    /// Render pixels per probe tile side (8, 16 or 32): one probe of 64 rays per tile.
+    pub tile: u32,
+    /// Hi-Z traversal steps per ray (8 to 128); rays that run out fall back to the
+    /// probe volume.
+    pub steps: u32,
+    /// Longest screen trace in metres; what lies further comes from the probe volume.
+    pub distance: f32,
 }
 
 /// Hybrid ray-query budgets (`Quality::ray_queries`).
@@ -154,6 +180,7 @@ impl Default for Quality {
             motion_blur: None,
             ray_queries: None,
             volumetric_fog: None,
+            screen_gi: None,
         }
     }
 }
@@ -332,7 +359,13 @@ impl Quality {
                         && r.distance.is_finite()
                         && r.distance > 0.
                 })
-                && self.volumetric_fog.is_none_or(|v| v.valid()),
+                && self.volumetric_fog.is_none_or(|v| v.valid())
+                && self.screen_gi.is_none_or(|s| {
+                    matches!(s.tile, 8 | 16 | 32)
+                        && (8..=128).contains(&s.steps)
+                        && s.distance.is_finite()
+                        && s.distance > 0.
+                }),
             "Invalid raster quality"
         );
         Ok(())

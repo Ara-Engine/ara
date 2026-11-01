@@ -24,6 +24,8 @@ pub(crate) const VOLUMETRIC: u32 = 256;
 /// Shader flag: fog is volumetric (`Fog::volumetric`, or no height fog): shadowed sun, local
 /// lights, emission and the extinction scale.
 pub(crate) const FOG_SHADOWED: u32 = 512;
+/// Shader flag: this frame gathered screen probe GI (`look::screen_gi`).
+pub(crate) const SCREEN_GI: u32 = 1024;
 /// Exposure adaptation step; the renderer has no wall clock.
 pub(crate) const FRAME_SECONDS: f32 = 1. / 60.;
 
@@ -163,6 +165,13 @@ pub(crate) struct LookFrame {
     /// Params are reserved.
     pub light_params: [[f32; 4]; 2],
     pub light_info: [[u32; 4]; 2],
+    /// Screen traces and screen probe GI (`look::screen_gi`, look-screen.slangh): params
+    /// `[0]` Hi-Z steps, levels, trace reach (m) and probe bias (render px); info `[0]`
+    /// Hi-Z and probe atlases, `[1]` probe records, probes per row and tile, `[2]` the
+    /// half-resolution gather (sampled, then storage), `[3]` the promoted-emission
+    /// pyramid (sampled, storage). Zero: none.
+    pub screen_params: [[f32; 4]; 2],
+    pub screen_info: [[u32; 4]; 4],
     /// Local fog volume records (`FogVolume::row`), read by offset: not part of the
     /// shader's `Look` struct (a variable index into it would spill to memory). Last,
     /// so the shader struct is a prefix of this one.
@@ -321,6 +330,8 @@ impl LookFrame {
             fog_volumes: [[[0.; 4]; 6]; super::MAX_FOG_VOLUMES],
             light_params: [[0.; 4]; 2],
             light_info: [[0; 4]; 2],
+            screen_params: [[0.; 4]; 2],
+            screen_info: [[0; 4]; 4],
         }
     }
 }
