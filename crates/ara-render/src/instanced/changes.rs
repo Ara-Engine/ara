@@ -1,5 +1,10 @@
 //! Publication-local indices for incremental native frame updates.
 
+/// Render-v3 event source and portable lab replay API. The legacy row lists stay independent.
+pub mod transport {
+    pub use crate::look::transport::changes::*;
+}
+
 /// Rows changed since the preceding native update. Geometry, material and
 /// instance layout must still match the published scene; structural edits replace
 /// the scene. Producers retain these vectors and clear them between frames.

@@ -9,7 +9,7 @@ mod material;
 mod tests;
 mod textures;
 mod validate;
-pub use changes::{CasterChanges, Changes, FrameWork};
+pub use changes::{CasterChanges, Changes, FrameWork, transport};
 pub(crate) use geometry_gpu::preparation::storage_limit as geometry_storage_limit;
 pub(crate) use geometry_gpu::preparation::{GeometryPreparation, GeometrySeed};
 pub use geometry_gpu::{GeometryGpu, GeometryUpload, LodRange, PreparedPose};
