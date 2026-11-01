@@ -36,12 +36,16 @@ void fogMain(uint3 tid:SV_DispatchThreadID){
         source+=f.fogLight.rgb*profile;
         uint4 head=buffers[f.scene.x].Load<uint4>(0);
         for(uint i=0;i<(volumetric?head.w:0);i++){
-            // local-lights.slangh: one sample of the light's area (an ideal point's
-            // centre), so beams near rects, discs, spheres and tubes and their soft
-            // shadows are exact; scaled by the light's volumetric intensity.
+            // local-lights.slangh: samples of the light's area (four for rects, discs,
+            // spheres and tubes; an ideal point's centre), so beams near area lights and
+            // their soft shadows are exact; scaled by the light's volumetric intensity.
             LocalLight light=localLight(f,head.z+i*LIGHT_BYTES);if(light.params.w<=0)continue;
-            LocalSample s=sampleLocalLight(light,at,rng);
-            if(s.distance>0&&any(s.value>0)&&!occluded(f,at,s.direction,s.distance,rng))source+=density*albedo*s.value*(light.params.w*phaseM(dot(d,s.direction),g));
+            uint samples=localArea(light)?4:1;float3 scattered=0;
+            for(uint k=0;k<samples;k++){
+                LocalSample s=sampleLocalLight(light,at,rng);
+                if(s.distance>0&&any(s.value>0)&&!occluded(f,at,s.direction,s.distance,rng))scattered+=s.value*phaseM(dot(d,s.direction),g);
+            }
+            source+=density*albedo*scattered*(light.params.w/float(samples));
         }
         float3 segment=exp(-e*ds);integral+=trans*source*(1-segment)/max(e,float3(1e-9));trans*=segment;
         store(f,FROXELS,uint2(z*128+tid.x,tid.y),float4(integral,1));
