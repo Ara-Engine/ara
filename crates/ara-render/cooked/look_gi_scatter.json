@@ -1,0 +1,32 @@
+{
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee",
+  "stages": [
+    {
+      "dxil": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/look_gi_scatter/giScatterMain.dxil",
+      "dxil_hash": "ea527c454bf2b5f0b4ac54bf5877cf9440b20340104a8aa56341253bd8f0cca8",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/look_gi_scatter/giScatterMain.metallib",
+        "metallib_hash": "5cf80c91e435e41929f0cc2f8dde0f812148ae1751ffa2f8f030e23d4843c217",
+        "reflection": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/look_gi_scatter/giScatterMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "giScatterMain",
+      "spirv": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/look_gi_scatter/giScatterMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "a09ed8d895ff00f8edfcb795b12a27edbffc21060eceefe4434852ed18488a75",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

@@ -1,0 +1,55 @@
+{
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee",
+  "stages": [
+    {
+      "dxil": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/forward/forwardFragment.dxil",
+      "dxil_hash": "46cd474658f6ea0921362e154ec64b9915bb2b68432dc4fa0d37e6f0179a73cb",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/forward/forwardFragment.metallib",
+        "metallib_hash": "6e680d642d57adcc713553f5b0c0d85bf68d114dceda78da73397f80e271ea47",
+        "reflection": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/forward/forwardFragment.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "forwardFragment",
+      "spirv": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/forward/forwardFragment.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "ef745159b1c80ad66172f1e692d0b790a78a620dc3c314b62fc78c05eddc1fe1",
+      "stage": "fragment"
+    },
+    {
+      "dxil": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/forward/geometryVertex.dxil",
+      "dxil_hash": "7fd65695b8a61660e687f234337743b8cf9244693765856309160489aa85e7a9",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/forward/geometryVertex.metallib",
+        "metallib_hash": "e09c5ec37ed8a43f0eb93c9d730fec77f0671b11c304f5987f75712d1d0a6ad4",
+        "reflection": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/forward/geometryVertex.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "geometryVertex",
+      "spirv": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/forward/geometryVertex.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "e7666723011000bd5db1d0c533f657ff10a8c636caf0510b757bd3bd2ff88143",
+      "stage": "vertex"
+    }
+  ],
+  "state": {
+    "blend": true,
+    "color_formats": [
+      97,
+      100,
+      43,
+      77,
+      37,
+      122
+    ],
+    "depth_format": 126,
+    "depth_test": true,
+    "depth_write": false,
+    "vertex_stride": 48
+  },
+  "version": 1
+}
