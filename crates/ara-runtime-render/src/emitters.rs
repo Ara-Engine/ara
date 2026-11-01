@@ -5,19 +5,23 @@
 //! fixture (a bulb's socket or a lamp's shade absorbs the rest) and the lobe it
 //! leaves in: a flat panel's hemisphere, a capped bulb's downward cone, a bare
 //! bulb's sphere. Each lobe becomes a local light carrying its flux, a spot or a
-//! point. Emission is two-sided, as in the path tracer, so an open sheet (a
-//! single-quad panel) also emits from its back faces, while a closed surface's
-//! inward emission stays trapped. Neighbouring lights cluster on a world grid that
-//! coarsens only until they fit the preset's budget. Probes keep only the bounce
-//! (the GI bake zeroes [`is_emitter`] materials' emission). The search runs off
-//! the render thread: [`Job::new`] copies what it needs and [`Job::run`] traces.
+//! point. A large flat face that emits evenly and escapes its fixture (a ceiling or
+//! wall panel, a round downlight's diffuser) becomes one rect or disc area light of
+//! its luminance instead ([`Panel`]): LTC shading, soft shadows, its true size.
+//! Emission is two-sided, as in the path tracer, so an open sheet (a single-quad
+//! panel) also emits from its back faces, while a closed surface's inward emission
+//! stays trapped. Panels take the preset's budget first, brightest first;
+//! neighbouring patch lights cluster on a world grid that coarsens only until they
+//! fit the rest. Probes keep only the bounce (the GI bake zeroes [`is_emitter`]
+//! materials' emission). The search runs off the render thread: [`Job::new`] copies
+//! what it needs and [`Job::run`] traces.
 use crate::gi_cpu::{Mesh, Shading};
 use anyhow::{Context, Result};
 use ara_render::{
     instanced::{
         Geometry, Lod, Material, NO_TEXTURE, Scene, TextureSlot, TextureTransform, Vertex,
     },
-    scene::{EMISSIVE_DECODE_SRGB, Light},
+    scene::{EMISSIVE_DECODE_SRGB, LIGHT_DISC, LIGHT_RECT, Light},
 };
 use glam30::{Mat3, Mat4, Vec2, Vec3};
 use std::{
@@ -44,6 +48,21 @@ const MAP_SIDE: u32 = 128;
 const FLAT: f32 = 0.7;
 /// Escape rays per patch side.
 const RAYS: usize = 256;
+/// Least area (m2, model space) of a flat emitting face that becomes an area light.
+const PANEL_AREA: f32 = 0.01;
+/// Share of a panel's rect (or disc) its triangles must fill.
+const PANEL_FILL: f32 = 0.97;
+/// Largest relative deviation of a triangle's radiance from the face's mean: rect
+/// and disc lights emit uniformly (no source textures yet).
+const PANEL_EVEN: f32 = 0.2;
+/// Share of a face's emission that must escape its own mesh: a recessed or shaded
+/// face is a fixture, whose patch lights carry what escapes.
+const PANEL_ESCAPE: f32 = 0.9;
+/// Distance (m) an area light sits in front of its face, so its shadow faces do not
+/// start on the face's own geometry.
+const PANEL_OFFSET: f32 = 0.01;
+/// Most triangles a geometry's face search visits; larger emitters stay patches.
+const PANEL_TRIANGLES: usize = 4096;
 
 fn luminance(c: Vec3) -> f32 {
     c.dot(Vec3::new(0.2126, 0.7152, 0.0722))
@@ -111,6 +130,142 @@ struct Patch {
     lobes: Vec<Lobe>,
 }
 
+/// A flat face of evenly emitting triangles filling a rectangle or a disc, which
+/// lights the scene as one area light of its luminance (model space).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Panel {
+    /// The face's centre.
+    centre: Vec3,
+    /// Unit normal of the emitting side.
+    normal: Vec3,
+    /// Unit width axis in the face.
+    tangent: Vec3,
+    /// Half width and half height (a disc: its radius twice).
+    half: Vec2,
+    disc: bool,
+    /// Emitted radiance (cd/m2 per channel).
+    radiance: Vec3,
+}
+
+/// The faces of `triangles` (one geometry's emitting triangles; `open` when they form
+/// an open sheet emitting from both sides) that are panels, and the triangles left
+/// over. A face is a set of coplanar triangles of one facing; it is a panel when it
+/// spans at least [`PANEL_AREA`], fills [`PANEL_FILL`] of its tightest rectangle or of
+/// a disc, emits within [`PANEL_EVEN`] of its mean and lets [`PANEL_ESCAPE`] of its
+/// emission out of `mesh` on each side it emits from.
+fn panels(
+    triangles: Vec<Emitting>,
+    open: bool,
+    mesh: &Mesh,
+    reach: f32,
+) -> (Vec<Panel>, Vec<Emitting>) {
+    if triangles.len() > PANEL_TRIANGLES {
+        return (Vec::new(), triangles);
+    }
+    // Coplanar groups: same facing, within a millimetre of one plane.
+    let mut faces: Vec<(Vec3, f32, Vec<Emitting>)> = Vec::new();
+    for t in triangles {
+        let offset = t.normal.dot(t.a);
+        match faces
+            .iter_mut()
+            .find(|(n, d, _)| n.dot(t.normal) > 0.9995 && (d - offset).abs() < 1e-3)
+        {
+            Some((_, _, members)) => members.push(t),
+            None => faces.push((t.normal, offset, vec![t])),
+        }
+    }
+    let sides: &[f32] = if open { &[1., -1.] } else { &[1.] };
+    let (mut found, mut rest) = (Vec::new(), Vec::new());
+    for (normal, _, members) in faces {
+        let area: f32 = members
+            .iter()
+            .map(|t| t.e1.cross(t.e2).length() * 0.5)
+            .sum();
+        let panel = (area >= PANEL_AREA)
+            .then(|| face_panel(&members, normal, area))
+            .flatten()
+            .filter(|_| {
+                sides
+                    .iter()
+                    .all(|&side| escape(mesh, &members, side, reach).0 >= PANEL_ESCAPE)
+            });
+        match panel {
+            Some(panel) => {
+                found.push(panel);
+                if open {
+                    found.push(Panel {
+                        normal: -panel.normal,
+                        tangent: -panel.tangent,
+                        ..panel
+                    });
+                }
+            }
+            None => rest.extend(members),
+        }
+    }
+    (found, rest)
+}
+
+/// The rect or disc coplanar `members` (facing `normal`, total `area`) fill, with
+/// their mean radiance; `None` when they emit unevenly or fill neither.
+fn face_panel(members: &[Emitting], normal: Vec3, area: f32) -> Option<Panel> {
+    let radiance = members.iter().map(|t| t.emission).sum::<Vec3>() / area;
+    let mean = luminance(radiance);
+    let even = members.iter().all(|t| {
+        let own = luminance(t.emission) / (t.e1.cross(t.e2).length() * 0.5).max(1e-12);
+        (own - mean).abs() <= PANEL_EVEN * mean
+    });
+    if !even || mean <= 0. {
+        return None;
+    }
+    let corners: Vec<Vec3> = members
+        .iter()
+        .flat_map(|t| [t.a, t.a + t.e1, t.a + t.e2])
+        .collect();
+    // The tightest rectangle over the face's edge directions.
+    let (mut best, mut best_area) = (None, f32::INFINITY);
+    for t in members.iter().take(64) {
+        for edge in [t.e1, t.e2, t.e2 - t.e1] {
+            let tangent = (edge - normal * normal.dot(edge)).normalize_or_zero();
+            if tangent == Vec3::ZERO {
+                continue;
+            }
+            let bitangent = normal.cross(tangent);
+            let (mut lo, mut hi) = (Vec2::splat(f32::INFINITY), Vec2::splat(f32::NEG_INFINITY));
+            for c in &corners {
+                let p = Vec2::new(c.dot(tangent), c.dot(bitangent));
+                (lo, hi) = (lo.min(p), hi.max(p));
+            }
+            let size = hi - lo;
+            if size.x * size.y < best_area {
+                best_area = size.x * size.y;
+                best = Some((tangent, bitangent, lo, hi));
+            }
+        }
+    }
+    let (tangent, bitangent, lo, hi) = best?;
+    let middle = (lo + hi) * 0.5;
+    let centre = normal * members[0].a.dot(normal) + tangent * middle.x + bitangent * middle.y;
+    let half = (hi - lo) * 0.5;
+    let panel = |half: Vec2, disc: bool| Panel {
+        centre,
+        normal,
+        tangent,
+        half,
+        disc,
+        radiance,
+    };
+    if area >= PANEL_FILL * best_area {
+        return Some(panel(half, false));
+    }
+    // A disc: a square bound it fills as a circle does (a polygon a little less).
+    let ellipse = PI * half.x * half.y;
+    let round = (half.x - half.y).abs() <= 0.05 * half.x.max(half.y)
+        && area >= PANEL_FILL * ellipse
+        && area <= 1.01 * ellipse;
+    round.then(|| panel(Vec2::splat((area / PI).sqrt()), true))
+}
+
 /// A deterministic cosine-weighted direction about `normal` (sample `k` of `n`).
 fn cosine(normal: Vec3, k: usize, n: usize) -> Vec3 {
     let u = (k as f32 + 0.5) / n as f32;
@@ -153,15 +308,22 @@ fn escape(mesh: &Mesh, triangles: &[Emitting], side: f32, reach: f32) -> (f32, V
     (fraction, direction / escaped.max(1) as f32)
 }
 
-/// The emitting patches of `geometry` (finest LOD) under `material`; `mesh` is
-/// the geometry's, for the escape rays.
-fn patches(geometry: &Geometry, material: &Material, map: Option<&Map>, mesh: &Mesh) -> Vec<Patch> {
+/// What one emissive geometry gives off: its panels and the patches of the rest.
+#[derive(Clone, Default)]
+struct Surfaces {
+    panels: Vec<Panel>,
+    patches: Vec<Patch>,
+}
+
+/// The emitting panels and patches of `geometry` (finest LOD) under `material`;
+/// `mesh` is the geometry's, for the escape rays.
+fn surfaces(geometry: &Geometry, material: &Material, map: Option<&Map>, mesh: &Mesh) -> Surfaces {
     let Some(lod) = geometry.lods.first() else {
-        return Vec::new();
+        return Surfaces::default();
     };
     let factor = Vec3::from_slice(&material.pbr.emissive_roughness[..3]);
     let transform = &material.extras.uv[TextureSlot::Emissive as usize];
-    let mut cells: BTreeMap<[i32; 3], Vec<Emitting>> = BTreeMap::new();
+    let mut emitting = Vec::new();
     for tri in lod.indices.as_chunks::<3>().0 {
         let Some([a, b, c]) = tri
             .iter()
@@ -201,30 +363,37 @@ fn patches(geometry: &Geometry, material: &Material, map: Option<&Map>, mesh: &M
         if normal.dot(shading) < 0. {
             normal = -normal;
         }
-        let centroid = (pa + pb + pc) / 3.;
-        cells
-            .entry((centroid / CELL).floor().as_ivec3().to_array())
-            .or_default()
-            .push(Emitting {
-                a: pa,
-                e1,
-                e2,
-                normal,
-                emission: radiance * area,
-            });
+        emitting.push(Emitting {
+            a: pa,
+            e1,
+            e2,
+            normal,
+            emission: radiance * area,
+        });
     }
-    if cells.is_empty() {
-        return Vec::new();
+    if emitting.is_empty() {
+        return Surfaces::default();
     }
     // Openness is the whole surface's: a thin box's faces may fall in different
     // cells, each flat, yet its inward emission is trapped.
-    let all = cells.values().flatten();
-    let weight: f32 = all.clone().map(|t| luminance(t.emission)).sum();
-    let normal: Vec3 = all.map(|t| t.normal * luminance(t.emission)).sum();
+    let weight: f32 = emitting.iter().map(|t| luminance(t.emission)).sum();
+    let normal: Vec3 = emitting
+        .iter()
+        .map(|t| t.normal * luminance(t.emission))
+        .sum();
     let open = normal.length() > FLAT * weight;
     let (lo, hi) = mesh.bounds();
     let reach = (hi - lo).length().max(1e-3) * 2.;
-    cells
+    let (panels, rest) = panels(emitting, open, mesh, reach);
+    let mut cells: BTreeMap<[i32; 3], Vec<Emitting>> = BTreeMap::new();
+    for t in rest {
+        let centroid = t.a + (t.e1 + t.e2) / 3.;
+        cells
+            .entry((centroid / CELL).floor().as_ivec3().to_array())
+            .or_default()
+            .push(t);
+    }
+    let patches = cells
         .into_values()
         .map(|triangles| {
             let emission: Vec3 = triangles.iter().map(|t| t.emission).sum();
@@ -256,13 +425,14 @@ fn patches(geometry: &Geometry, material: &Material, map: Option<&Map>, mesh: &M
                 lobes,
             }
         })
-        .collect()
+        .collect();
+    Surfaces { panels, patches }
 }
 
-/// One emitting instance: its model-space patches.
+/// One emitting instance: its model-space panels and patches.
 struct Emitter {
     instance: usize,
-    patches: Arc<[Patch]>,
+    surfaces: Arc<Surfaces>,
     /// The transform its current lights were placed with.
     placed: Option<Mat4>,
 }
@@ -366,28 +536,30 @@ impl Job {
         self.instances.is_empty()
     }
 
-    /// Traces every source's patches (on a worker thread).
+    /// Traces every source's panels and patches (on a worker thread).
     pub(crate) fn run(self) -> Emitters {
         let started = std::time::Instant::now();
         let mut meshes: BTreeMap<usize, Mesh> = BTreeMap::new();
-        let patches: Vec<Arc<[Patch]>> = self
+        let surfaces: Vec<Arc<Surfaces>> = self
             .sources
             .iter()
             .map(|s| {
                 let mesh = meshes
                     .entry(s.geometry)
                     .or_insert_with(|| Mesh::of(&s.copy, 0));
-                patches(&s.copy, &s.material, s.map.as_ref(), mesh).into()
+                Arc::new(surfaces(&s.copy, &s.material, s.map.as_ref(), mesh))
             })
             .collect();
         let emitters = Emitters {
             emitters: self
                 .instances
                 .into_iter()
-                .filter(|&(_, source)| !patches[source].is_empty())
+                .filter(|&(_, source)| {
+                    !surfaces[source].patches.is_empty() || !surfaces[source].panels.is_empty()
+                })
                 .map(|(instance, source)| Emitter {
                     instance,
-                    patches: patches[source].clone(),
+                    surfaces: surfaces[source].clone(),
                     placed: None,
                 })
                 .collect(),
@@ -529,12 +701,20 @@ impl Emitters {
 
     /// Total escaping flux in lumens (unscaled instances), for logs.
     pub(crate) fn lumens(&self) -> f32 {
-        self.emitters
+        let patches: f32 = self
+            .emitters
             .iter()
-            .flat_map(|e| e.patches.iter())
+            .flat_map(|e| e.surfaces.patches.iter())
             .flat_map(|p| &p.lobes)
             .map(|l| luminance(l.emission) * PI)
-            .sum()
+            .sum();
+        let panels: f32 = self
+            .emitters
+            .iter()
+            .flat_map(|e| e.surfaces.panels.iter())
+            .map(|p| luminance(p.radiance) * PI * p.area())
+            .sum();
+        patches + panels
     }
 
     /// Lights for the emitters at `scene`'s current transforms, at most `budget`;
@@ -553,7 +733,19 @@ impl Emitters {
         moved.then(|| self.lights(budget))
     }
 
+    /// Panels' area lights first (brightest first), then the patch lights clustered
+    /// into what remains of `budget`.
     fn lights(&self, budget: usize) -> Vec<Light> {
+        let mut areas: Vec<Light> = self
+            .emitters
+            .iter()
+            .filter_map(|e| Some((e, e.placed?)))
+            .flat_map(|(e, world)| e.surfaces.panels.iter().map(move |p| p.light(world)))
+            .filter(|l| l.color_lumens[3] >= MIN_FLUX * 4.)
+            .collect();
+        areas.sort_by(|a, b| b.color_lumens[3].total_cmp(&a.color_lumens[3]));
+        areas.truncate(budget);
+        let budget = budget - areas.len();
         let mut parts = Vec::new();
         for e in &self.emitters {
             let Some(world) = e.placed else {
@@ -562,7 +754,7 @@ impl Emitters {
             let linear = Mat3::from_mat4(world);
             let scale = linear.determinant().abs().powf(2. / 3.);
             let normals = linear.inverse().transpose();
-            for p in e.patches.iter() {
+            for p in e.surfaces.patches.iter() {
                 for lobe in &p.lobes {
                     let flux = lobe.emission * PI * scale;
                     if luminance(flux) < MIN_FLUX {
@@ -582,9 +774,58 @@ impl Emitters {
         loop {
             let lights = cluster(&parts, cell);
             if lights.len() <= budget || cell > 1e4 {
-                return lights.into_iter().take(budget).map(Part::light).collect();
+                areas.extend(lights.into_iter().take(budget).map(Part::light));
+                return areas;
             }
             cell *= 2.;
+        }
+    }
+}
+
+impl Panel {
+    /// Emitting area (m2, model space).
+    fn area(&self) -> f32 {
+        if self.disc {
+            PI * self.half.x * self.half.y
+        } else {
+            4. * self.half.x * self.half.y
+        }
+    }
+
+    /// The panel's rect or disc light under the instance transform `world`:
+    /// [`PANEL_OFFSET`] in front of the face, its luminance times its (scaled) area
+    /// as the intensity along its normal (the record's point-equivalent lumens are
+    /// 4 pi times that), unshadowed light kept out of fog as other emitter lights.
+    fn light(&self, world: Mat4) -> Light {
+        let linear = Mat3::from_mat4(world);
+        let normal = (linear.inverse().transpose() * self.normal).normalize_or(self.normal);
+        let width = linear * self.tangent;
+        let tangent = (width - normal * normal.dot(width)).normalize_or(self.tangent);
+        let height = linear * self.normal.cross(self.tangent);
+        let half = Vec2::new(self.half.x * width.length(), self.half.y * height.length());
+        let (kind, radius, area) = if self.disc {
+            let radius = (half.x * half.y).sqrt();
+            (LIGHT_DISC, radius, PI * radius * radius)
+        } else {
+            (LIGHT_RECT, 0., 4. * half.x * half.y)
+        };
+        let lum = luminance(self.radiance).max(1e-6);
+        let tint = self.radiance / lum;
+        let lumens = 4. * PI * lum * area;
+        let range = (lumens / (4. * PI * CUTOFF_LUX)).sqrt().clamp(1., 80.);
+        let centre = world.transform_point3(self.centre) + normal * PANEL_OFFSET;
+        Light {
+            position_range: [centre.x, centre.y, centre.z, range],
+            color_lumens: [tint.x, tint.y, tint.z, lumens],
+            direction_outer: [normal.x, normal.y, normal.z, 0.],
+            parameters: [kind, 0., radius, 0.],
+            tangent_length: [tangent.x, tangent.y, tangent.z, 0.],
+            rect: if self.disc {
+                [0.; 4]
+            } else {
+                [half.x, half.y, 0., 0.]
+            },
+            ..Light::ZERO
         }
     }
 }
@@ -780,10 +1021,16 @@ mod tests {
         assert_eq!(cluster(&panels, 10.).len(), 2);
     }
 
+    /// The point a light sits at, rounded to a millimetre.
+    fn at(light: &Light) -> [f32; 3] {
+        let p = light.position_range;
+        [p[0], p[1], p[2]].map(|v| (v * 1000.).round() / 1000.)
+    }
+
     #[test]
     fn emitter_lights_follow_their_instances_and_recompute_only_on_motion() {
-        // A 1 m2 open ceiling panel at 3 m (inside one patch cell), emitting
-        // 100 cd/m2 from both faces.
+        // A 1 m2 open ceiling panel at 3 m, emitting 100 cd/m2 from both faces: a
+        // rect light each way, a centimetre off the face.
         let quad = [-0.125, -0.125, 0.875, 0.875, 3., 0.];
         let mut scene = scene(&[quad], 100., NO_TEXTURE);
         let mut emitters = Emitters::new(&scene, &[BRIGHT], |_, _, _| None);
@@ -791,18 +1038,82 @@ mod tests {
         let [down, up] = lights.as_slice() else {
             panic!("one open panel, two lights: {}", lights.len());
         };
-        assert_eq!(down.position_range[..3], [0.375, 3., 0.375]);
-        assert!(down.direction_outer[1] < -0.999, "a downward spot");
+        assert_eq!(at(down), [0.375, 2.99, 0.375]);
+        assert_eq!(down.parameters[0], LIGHT_RECT);
+        assert!(down.direction_outer[1] < -0.999, "a downward rect");
         assert!(up.direction_outer[1] > 0.999, "and an upward one");
-        assert!(down.direction_outer[3].abs() < 0.2, "about a hemisphere");
-        // Each face emits pi x radiance x area.
+        assert!((down.rect[0] - 0.5).abs() < 1e-4 && (down.rect[1] - 0.5).abs() < 1e-4);
+        // Its luminance over its area: 4 pi x 100 cd/m2 x 1 m2 point-equivalent lumens,
+        // pi x radiance x area of flux.
+        assert!((down.color_lumens[3] - 400. * PI).abs() < 0.5);
         assert!((flux(down) - 100. * PI).abs() < 0.5);
-        assert!((flux(up) - 100. * PI).abs() < 0.5);
         assert!(emitters.update(&scene, 8).is_none(), "nothing moved");
         scene.instances[0].world = Mat4::from_translation(Vec3::new(2., 0., 0.));
         let moved = emitters.update(&scene, 8).expect("the panel moved");
-        assert_eq!(moved[0].position_range[..3], [2.375, 3., 0.375]);
+        assert_eq!(at(&moved[0]), [2.375, 2.99, 0.375]);
         assert!(emitters.update(&scene, 1).is_some(), "a new budget");
+        assert_eq!(emitters.update(&scene, 1).map_or(1, |l| l.len()), 1);
+    }
+
+    #[test]
+    fn a_round_diffuser_is_a_disc_and_uneven_emission_stays_patches() {
+        // A 32-gon of radius 0.4 m facing down at 2.5 m.
+        let mut scene = scene(&[], 100., NO_TEXTURE);
+        let geometry = &mut scene.geometry[0];
+        let vertex = |x: f32, z: f32, u: f32| Vertex {
+            position: [x, 2.5, z],
+            normal: [0., -1., 0.],
+            uv: [u, 0.5],
+            tangent: [1., 0., 0., 1.],
+            uv1: [0.; 2],
+            terrain_weights: 0,
+            color: u32::MAX,
+        };
+        geometry.vertices.push(vertex(0., 0., 0.));
+        for k in 0..32 {
+            let (s, c) = (k as f32 / 32. * 2. * PI).sin_cos();
+            geometry.vertices.push(vertex(0.4 * c, 0.4 * s, 0.));
+        }
+        for k in 0..32u32 {
+            geometry.lods[0]
+                .indices
+                .extend([0, 1 + k, 1 + (k + 1) % 32]);
+        }
+        let mut emitters = Emitters::new(&scene, &[BRIGHT], |_, _, _| None);
+        let lights = emitters.update(&scene, 8).expect("placed");
+        assert!(
+            lights.iter().all(|l| l.parameters[0] == LIGHT_DISC),
+            "{}",
+            lights.len()
+        );
+        let down = lights
+            .iter()
+            .find(|l| l.direction_outer[1] < -0.999)
+            .expect("down");
+        assert!(
+            (down.parameters[2] - 0.4).abs() < 0.01,
+            "{}",
+            down.parameters[2]
+        );
+
+        // The same quad lit by a map that is dark on one half: no even face.
+        let scene = scene_with_quad_on_two_texels();
+        let map: Map = ([2, 1], vec![[0.2; 4], [1.; 4]]);
+        let mut emitters = Emitters::new(&scene, &[BRIGHT], |_, _, _| Some(map.clone()));
+        let lights = emitters.update(&scene, 8).expect("placed");
+        assert!(
+            lights.iter().all(|l| l.parameters[0] < LIGHT_RECT),
+            "patch lights"
+        );
+    }
+
+    /// A 1 m2 quad whose uv spans both texels of a two-texel map.
+    fn scene_with_quad_on_two_texels() -> Scene {
+        let mut scene = scene(&[[0., 0., 1., 1., 3., 0.]], 100., 7);
+        for v in &mut scene.geometry[0].vertices {
+            v.uv = [v.position[0] * 0.999, 0.5];
+        }
+        scene
     }
 
     #[test]
@@ -821,7 +1132,7 @@ mod tests {
         let lights = emitters.update(&scene, 8).expect("placed");
         assert_eq!(lights.len(), 2, "the small quad's two faces");
         assert!((flux(&lights[0]) - 100. * PI * 0.25).abs() < 0.2);
-        assert_eq!(lights[0].position_range[..3], [3.25, 3., 3.25]);
+        assert_eq!(at(&lights[0]), [3.25, 2.99, 3.25]);
     }
 
     #[test]
@@ -884,7 +1195,8 @@ mod tests {
         geometry.lods[0].indices.extend([4, 6, 5, 4, 7, 6]);
         let mut emitters = Emitters::new(&scene, &[BRIGHT], |_, _, _| None);
         let lights = emitters.update(&scene, 8).expect("placed");
-        assert_eq!(lights.len(), 2, "one spot per face, none mirrored");
+        assert_eq!(lights.len(), 2, "one rect light per face, none mirrored");
+        assert!(lights.iter().all(|l| l.parameters[0] == LIGHT_RECT));
         assert!(lights.iter().any(|l| l.direction_outer[1] < -0.999));
         assert!(lights.iter().any(|l| l.direction_outer[1] > 0.999));
         let face = 100. * PI * 0.36;

@@ -1,7 +1,9 @@
 //! Cached local-light shadows ([`LocalShadows`]): one D32 atlas of square face
 //! tiles. Each frame the brightest lights in view hold faces: a point light, or
 //! a spot wider than 120 degrees, a cube of six 90-degree faces; a narrower spot
-//! one face over its cone. A face is redrawn only when its light changed or
+//! one face over its cone; a rect or disc light one 120-degree face along its normal
+//! (one-sided: a cube's side faces saw the wall a panel hangs on, behind its plane,
+//! and soft-shadow kernels took it for a blocker of grazing receivers). A face is redrawn only when its light changed or
 //! changed casters entered its frustum, at most `redraws` faces a frame, and a
 //! light shades unshadowed until all its faces are drawn; moved casters in front
 //! of a light patch only the texels they reach (`LocalDraw::patch`, beyond the
@@ -28,6 +30,8 @@ const NEAR: f32 = 0.05;
 const MARGIN: f32 = 1.08;
 /// Narrowest spot cone (outer cosine) shadowed by one face rather than a cube.
 const SINGLE_FACE: f32 = 0.5;
+/// The cone (outer cosine, 60 degrees) one face shadows a rect or disc light over.
+const AREA_FACE: f32 = 0.5;
 /// Most face patches a frame draws; more wait for the next frame.
 pub(crate) const PATCHES: usize = 4;
 /// Most tiles a budget may hold (16 lights x 6 faces).
@@ -51,12 +55,17 @@ fn key(light: &Light) -> Key {
 
 /// The face view-projections of `light` (reversed-Z, near 5 cm, far at its
 /// range): six cube faces in +X, -X, +Y, -Y, +Z, -Z order, or one for a narrow
-/// spot. Shading picks a cube face by the major axis of the light-to-point vector.
+/// spot or a rect or disc light (points outside it stay unshadowed). Shading picks a cube face by the major axis of the light-to-point vector.
 pub(crate) fn faces(light: &Light) -> Vec<Mat4> {
     let position = Vec3::from_slice(&light.position_range[..3]);
     let far = light.position_range[3].max(NEAR * 2.);
     let projection = |fov: f32| Mat4::perspective_rh(fov.min(170f32.to_radians()), 1., far, NEAR);
-    let outer = light.direction_outer[3];
+    let area = (light.parameters[0] % crate::scene::LIGHT_SHAPED) >= crate::scene::LIGHT_RECT;
+    let outer = if area {
+        AREA_FACE
+    } else {
+        light.direction_outer[3]
+    };
     if light.parameters[0] > 0.5 && outer >= SINGLE_FACE {
         let direction = Vec3::from_slice(&light.direction_outer[..3]).normalize_or(Vec3::NEG_Y);
         let up = if direction.y.abs() > 0.99 {
