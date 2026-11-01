@@ -252,9 +252,15 @@ fn run(
             };
             let capture = renderer.capture_completed(&request)?;
             if case.target_lpp.is_some() {
-                let (lpp, coverage) = coverage::lpp(&f, &capture, size)?;
-                row.lpp = Some(lpp);
-                row.receiver_coverage = Some(coverage);
+                let coverage = coverage::lpp(&f, &capture, size)?;
+                row.lpp = (coverage.unresolved_pixels == 0).then_some(coverage.lpp_lower);
+                row.receiver_coverage = Some(coverage.receiver_fraction);
+                row.evidence.insert("lpp_lower".into(), coverage.lpp_lower);
+                row.evidence.insert("lpp_upper".into(), coverage.lpp_upper);
+                row.evidence.insert(
+                    "lpp_unresolved_edge_pixels".into(),
+                    coverage.unresolved_pixels as f64,
+                );
             }
             let (_, radiance) = renderer.lab_radiance()?;
             let capture_path = output.join(format!("frame-{:04}.png", frame.frame));

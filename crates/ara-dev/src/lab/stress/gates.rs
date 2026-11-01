@@ -86,6 +86,12 @@ fn complete_max(run: &RunResult, metric: impl Fn(&FrameResult) -> Option<f64>) -
     let values: Option<Vec<_>> = run.frames.iter().map(metric).collect();
     distribution(values?).map(|d| d.max)
 }
+fn complete_min(run: &RunResult, metric: impl Fn(&FrameResult) -> Option<f64>) -> Option<f64> {
+    let values: Option<Vec<_>> = run.frames.iter().map(metric).collect();
+    let values = values?;
+    distribution(values.iter().copied())?;
+    values.into_iter().reduce(f64::min)
+}
 fn stage(run: &RunResult, name: &str) -> Option<Distribution> {
     if !run.timing_valid {
         return None;
@@ -223,10 +229,15 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
                 limit,
                 Some(limit),
             );
-            let lpp = complete_max(b, |f| f.lpp);
+            let lpp_upper = complete_max(b, |f| {
+                f.lpp.or_else(|| f.evidence.get("lpp_upper").copied())
+            });
+            let lpp_lower = complete_min(b, |f| {
+                f.lpp.or_else(|| f.evidence.get("lpp_lower").copied())
+            });
             if b.case.target_lpp.is_some_and(|v| v > 3.) {
-                lower(&mut lines, "dense_LPP", lpp, 26.);
-                upper(&mut lines, "dense_LPP_upper", lpp, 28., Some(28.));
+                lower(&mut lines, "dense_LPP", lpp_lower, 26.);
+                upper(&mut lines, "dense_LPP_upper", lpp_upper, 28., Some(28.));
                 upper(
                     &mut lines,
                     "omitted_direct_energy_fraction",
@@ -242,8 +253,14 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
                     Some(0.02),
                 );
             } else {
-                upper(&mut lines, "lights_per_covered_pixel", lpp, 3., Some(3.));
-                lower(&mut lines, "nonempty_LPP_workload", lpp, 2.);
+                upper(
+                    &mut lines,
+                    "lights_per_covered_pixel",
+                    lpp_upper,
+                    3.,
+                    Some(3.),
+                );
+                lower(&mut lines, "nonempty_LPP_workload", lpp_lower, 2.);
             }
             upper(
                 &mut lines,
@@ -494,13 +511,17 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
                 lower(
                     &mut lines,
                     "combined_dense_LPP",
-                    complete_max(b, |f| f.lpp),
+                    complete_min(b, |f| {
+                        f.lpp.or_else(|| f.evidence.get("lpp_lower").copied())
+                    }),
                     26.,
                 );
                 lower(
                     &mut lines,
                     "receiver_coverage_relative_to_G1",
-                    evidence(b, "receiver_coverage_relative_to_g1"),
+                    complete_min(b, |f| {
+                        f.evidence.get("receiver_coverage_relative_to_g1").copied()
+                    }),
                     1.,
                 );
                 required(

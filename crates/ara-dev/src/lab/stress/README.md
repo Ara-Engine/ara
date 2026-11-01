@@ -51,6 +51,10 @@ by SHA-256, so a later source commit cannot silently relabel an existing binary.
 The authored range sweep scales power by range squared; dense cases raise EV100
 by log2(LPP/2.4) to keep the receiver in the measurable exposure range. Both runs
 and references use the identical radiometric white recorded in the receipt.
+Receiver coverage uses the actual captured entity-ID domain. Rare raster edge
+pixels whose analytic centre ray misses stay in that domain: `lpp_lower` and
+`lpp_upper` bound their contribution, `lpp_unresolved_edge_pixels` counts them,
+and scalar `lpp` stays null. Gates use the conservative bound on every frame.
 
 ## Worker and instrumentation contract
 

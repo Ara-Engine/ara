@@ -6,7 +6,14 @@ use ara_render::capture::Capture;
 use glam::{Mat4, Vec3, Vec4};
 use std::collections::BTreeMap;
 
-pub fn lpp(f: &Fixture, capture: &Capture, size: [u32; 2]) -> Result<(f64, f64)> {
+pub struct Coverage {
+    pub lpp_lower: f64,
+    pub lpp_upper: f64,
+    pub receiver_fraction: f64,
+    pub unresolved_pixels: u64,
+}
+
+pub fn lpp(f: &Fixture, capture: &Capture, size: [u32; 2]) -> Result<Coverage> {
     let camera = f.camera.resolve(size)?;
     let inverse = (camera.projection * camera.view).inverse();
     let objects: BTreeMap<_, _> = f
@@ -30,12 +37,15 @@ pub fn lpp(f: &Fixture, capture: &Capture, size: [u32; 2]) -> Result<(f64, f64)>
     }
     let mut covered = 0u64;
     let mut count = 0u64;
+    let mut unresolved = 0u64;
     for y in 0..size[1] {
         for x in 0..size[0] {
             let Some(entity) = capture.entity_at(x, y) else {
                 continue;
             };
+            covered += 1;
             let Some(world) = objects.get(&entity) else {
+                unresolved += 1;
                 continue;
             };
             let ndc = Vec3::new(
@@ -48,11 +58,13 @@ pub fn lpp(f: &Fixture, capture: &Capture, size: [u32; 2]) -> Result<(f64, f64)>
             let b = inverse * Vec4::new(ndc.x, ndc.y, 0.5, 1.);
             let direction = (b.truncate() / b.w - origin).normalize();
             let Some(hit) = hit_box(*world, origin, direction) else {
+                // Raster edge rules can cover a pixel whose analytical centre
+                // ray misses. Keep it in the domain and bound its unknown LPP.
+                unresolved += 1;
                 continue;
             };
             let p = origin + direction * hit;
             let k = key(p);
-            covered += 1;
             for z in -1..=1 {
                 for y in -1..=1 {
                     for x in -1..=1 {
@@ -71,14 +83,25 @@ pub fn lpp(f: &Fixture, capture: &Capture, size: [u32; 2]) -> Result<(f64, f64)>
             }
         }
     }
-    Ok((
+    let active = f
+        .scene
+        .lights
+        .iter()
+        .filter(|l| l.color_lumens[3] > 0.)
+        .count() as u64;
+    let divide = |n: u64| {
         if covered == 0 {
             0.
         } else {
-            count as f64 / covered as f64
-        },
-        covered as f64 / (f64::from(size[0]) * f64::from(size[1])),
-    ))
+            n as f64 / covered as f64
+        }
+    };
+    Ok(Coverage {
+        lpp_lower: divide(count),
+        lpp_upper: divide(count + unresolved * active),
+        receiver_fraction: covered as f64 / (f64::from(size[0]) * f64::from(size[1])),
+        unresolved_pixels: unresolved,
+    })
 }
 fn hit_box(inverse: Mat4, origin: Vec3, direction: Vec3) -> Option<f32> {
     let origin = inverse.transform_point3(origin);
