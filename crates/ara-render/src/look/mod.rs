@@ -15,6 +15,7 @@ pub mod gi;
 pub(crate) mod gpu;
 pub(crate) mod horizon;
 mod lens;
+pub(crate) mod lights;
 pub(crate) mod local;
 pub(crate) mod ltc;
 pub(crate) mod moments;
