@@ -68,7 +68,7 @@ float3 environment(Frame f,float3 d){
 struct Material {float4 colour;float4 emissiveRoughness;float4 surface;uint4 textures;uint4 flags;};
 struct LegacyVertex {float3 position;float3 normal;float2 uv;float4 tangent;};
 struct Vertex {float3 position;float3 normal;float2 uv;float4 tangent;float2 uv1;uint weights;uint reserved;};
-struct Surface {float3 position;float3 previousPosition;float3 normal;float3 geometricNormal;float3 albedo;float3 emissive;float roughness;float metal;float alpha;float specular;float ao;float coat;float coatRoughness;float3 sheen;float sheenRoughness;float transmission;uint sheenLut;uint id;uint material;};
+struct Surface {float3 position;float3 previousPosition;float3 normal;float3 geometricNormal;float3 albedo;float3 emissive;float roughness;float metal;float alpha;float specular;float ao;float coat;float coatRoughness;float3 sheen;float sheenRoughness;float transmission;uint sheenLut;uint id;uint material;float ior;float3 absorption;bool thin;};
 #include "native_geometry.slangh"
 uint4 mesh(Frame f,uint id){return buffers[f.scene.x].Load<uint4>((nativeScene(f)?64:32)+id*16);}
 Material material(Frame f,uint id){uint address=buffers[f.scene.x].Load(4);[branch]if(nativeScene(f))return buffers[NonUniformResourceIndex(address)].Load<Material>(id*320);return buffers[f.scene.x].Load<Material>(address+id*80);}
@@ -136,6 +136,7 @@ Surface surface(Frame f,uint id,uint primitive,float2 bary){
 #else
     s.coat=0;s.coatRoughness=0.15;s.sheen=0;s.sheenRoughness=0.5;s.transmission=0;
 #endif
+    s.ior=1.5;s.absorption=0;s.thin=true;
     s.emissive=max(mat.emissiveRoughness.rgb*tex(mat.textures.w,uv).rgb,0);s.id=id;s.material=m.w;return s;
 }
 struct Hit {float distance;uint id;uint primitive;float2 bary;bool front;};
@@ -144,16 +145,17 @@ bool traceImpl(Frame f,float3 origin,float3 direction,float maximum,inout uint r
     if((buffers[f.scene.x].Load(0)&0x7fffffff)==0)return false;
 #ifndef RASTER
     RayDesc ray;ray.Origin=origin;ray.Direction=direction;ray.TMin=0.001;ray.TMax=maximum;
-    // Internal instance masks partition opaque (1) and alpha-tested (2) geometry,
-    // and their twins that cast no shadow (4, 8), which shadow rays skip. The
-    // opaque traversal stays in hardware even in a forest or a masked interior.
+    // Internal instance masks partition opaque (1), alpha-tested (2) and transmissive
+    // (16) geometry, and their twins that cast no shadow (4, 8, 32), which shadow rays
+    // skip (glass attenuates them instead: shadowTransmittance). The opaque traversal
+    // stays in hardware even in a forest or a masked interior.
     uint terminate=shadow?RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH:0;
     RayQuery<RAY_FLAG_NONE> opaque;opaque.TraceRayInline(acceleration[f.scene.y],RAY_FLAG_FORCE_OPAQUE|terminate,shadow?1:5,ray);
     while(opaque.Proceed()){}
     bool found=opaque.CommittedStatus()==COMMITTED_TRIANGLE_HIT;
     if(found){hit.distance=opaque.CommittedRayT();hit.id=opaque.CommittedInstanceID();hit.primitive=opaque.CommittedPrimitiveIndex();hit.bary=opaque.CommittedTriangleBarycentrics();hit.front=opaque.CommittedTriangleFrontFace();if(shadow)return true;}
     if(buffers[f.scene.x].Load(16)==0){
-        ray.TMax=hit.distance;RayQuery<RAY_FLAG_NONE> masked;masked.TraceRayInline(acceleration[f.scene.y],RAY_FLAG_FORCE_NON_OPAQUE|terminate,shadow?2:10,ray);
+        ray.TMax=hit.distance;RayQuery<RAY_FLAG_NONE> masked;masked.TraceRayInline(acceleration[f.scene.y],RAY_FLAG_FORCE_NON_OPAQUE|terminate,shadow?2:58,ray);
         while(masked.Proceed()){if(masked.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE && accept(f,masked.CandidateInstanceID(),masked.CandidatePrimitiveIndex(),masked.CandidateTriangleBarycentrics(),rng))masked.CommitNonOpaqueTriangleHit();}
         if(masked.CommittedStatus()==COMMITTED_TRIANGLE_HIT){hit.distance=masked.CommittedRayT();hit.id=masked.CommittedInstanceID();hit.primitive=masked.CommittedPrimitiveIndex();hit.bary=masked.CommittedTriangleBarycentrics();hit.front=masked.CommittedTriangleFrontFace();found=true;}
     }return found;
@@ -168,6 +170,49 @@ bool traceImpl(Frame f,float3 origin,float3 direction,float maximum,inout uint r
 }
 bool trace(Frame f,float3 origin,float3 direction,float maximum,inout uint rng,out Hit hit){return traceImpl(f,origin,direction,maximum,rng,false,hit);}
 bool occluded(Frame f,float3 origin,float3 direction,float maximum,inout uint rng){Hit hit;return traceImpl(f,origin,direction,maximum,rng,true,hit);}
+// Unpolarised Fresnel reflectance of a dielectric interface at incident cosine `c`,
+// `eta` the IOR beyond it over the IOR before it; one past the critical angle.
+float fresnelDielectric(float c,float eta){
+    c=saturate(c);float s2=(1-c*c)/(eta*eta);if(s2>=1)return 1;float t=sqrt(1-s2);
+    float rs=(c-eta*t)/(c+eta*t),rp=(eta*c-t)/(eta*c+t);return 0.5*(rs*rs+rp*rp);
+}
+// The share of light a transmissive surface passes straight along `direction`: its
+// transmissive layer, tinted by the base colour, less what the interface reflects
+// (the outside's Fresnel at either side: a straight ray leaves a volume at the angle
+// it entered). Raster translucent sun maps take the same (ara-render's
+// look-translucent.slangh glassTransmittance).
+float3 glassTransmittance(Surface s,float3 direction){
+    return s.albedo*s.transmission*(1-fresnelDielectric(abs(dot(s.geometricNormal,direction)),s.ior)*s.specular);
+}
+// What reaches `origin` along a shadow ray: zero past opaque or alpha-tested geometry,
+// else the product of every transmissive surface's glassTransmittance within
+// `maximum`, with Beer-Lambert absorption over each stretch a volume's medium covers
+// (from where the ray entered it, or its origin, to where it leaves). Rays pass glass
+// unbent (no caustics, as Unreal's path tracer without approximate caustics): BSDF
+// paths through glass never count light hits, so lights behind glass are lit once.
+// `crossed`: whether any glass attenuated the ray.
+float3 shadowTransmittance(Frame f,float3 origin,float3 direction,float maximum,inout uint rng,out bool crossed){
+    crossed=false;if(occluded(f,origin,direction,maximum,rng))return 0;
+#ifndef RASTER
+    if(!nativeScene(f) || buffers[f.scene.x].Load(60)==0)return 1;
+    float3 through=1;float entered=0,start=0.001;
+    for(uint i=0;i<8;i++){
+        RayDesc ray;ray.Origin=origin;ray.Direction=direction;ray.TMin=start;ray.TMax=maximum;
+        RayQuery<RAY_FLAG_NONE> q;q.TraceRayInline(acceleration[f.scene.y],RAY_FLAG_FORCE_NON_OPAQUE,16,ray);
+        while(q.Proceed()){if(q.CandidateType()==CANDIDATE_NON_OPAQUE_TRIANGLE && accept(f,q.CandidateInstanceID(),q.CandidatePrimitiveIndex(),q.CandidateTriangleBarycentrics(),rng))q.CommitNonOpaqueTriangleHit();}
+        if(q.CommittedStatus()!=COMMITTED_TRIANGLE_HIT)break;
+        float t=q.CommittedRayT();Surface s=surface(f,q.CommittedInstanceID(),q.CommittedPrimitiveIndex(),q.CommittedTriangleBarycentrics());
+        crossed=true;through*=glassTransmittance(s,direction);
+        if(!s.thin && dot(s.geometricNormal,direction)>0)through*=exp(-s.absorption*(t-entered));
+        entered=t;start=t+0.0005;
+        if(max(max(through.x,through.y),through.z)<1e-5)return 0;
+    }
+    return through;
+#else
+    return 1;
+#endif
+}
+float3 shadowTransmittance(Frame f,float3 origin,float3 direction,float maximum,inout uint rng){bool crossed;return shadowTransmittance(f,origin,direction,maximum,rng,crossed);}
 // Offset on the geometric side used by the outgoing ray, never along a perturbed normal.
 float3 rayOrigin(Surface s,float3 outgoing){return s.position+s.geometricNormal*(dot(outgoing,s.geometricNormal)>=0?0.001:-0.001);}
 float smith(float cosine,float a2){return 2*cosine/max(cosine+sqrt(a2+(1-a2)*cosine*cosine),1e-6);}
@@ -190,15 +235,47 @@ float sheenAlbedo(Surface s,float cosine){
     float2 uv=(float2(saturate(cosine),saturate((s.sheenRoughness-0.1)/0.9))*31+0.5)/32;
     return textures[NonUniformResourceIndex(s.sheenLut)].SampleLevel(samplers[2],uv,0).r;
 }
-float3 evaluate(Surface s,float3 v,float3 l,out float pdf){
+// The IOR ratio (beyond over before) a ray towards -v meets at a transmissive
+// surface: entering through the outside (the geometric normal names it; thin walls
+// are always entered) or leaving the medium.
+float glassEta(Surface s,float3 v){return s.thin || dot(s.geometricNormal,v)>=0?s.ior:1/s.ior;}
+// The transmissive dielectric layer's reflection (glTF KHR_materials_transmission
+// with KHR_materials_ior): GGX with the interface's exact Fresnel, times N.L, and
+// the PDF sampleGlass proposes `l` with.
+float3 glassReflection(Surface s,float3 v,float3 l,out float pdf){
+    float nv=max(dot(s.normal,v),1e-5),nl=dot(s.normal,l);pdf=0;if(nl<=0)return 0;
+    float3 h=normalize(v+l);float nh=max(dot(s.normal,h),0.),a2=pow(s.roughness,4);
+    float d=a2/(PI*pow(nh*nh*(a2-1)+1,2)),F=fresnelDielectric(dot(v,h),glassEta(s,v))*s.specular;
+    pdf=F*d*smith(nv,a2)/(4*nv);return F*d*smith(nv,a2)*smith(nl,a2)/(4*nv);
+}
+// Samples the transmissive layer (Walter et al. 2007 over visible normals): reflects
+// with the microfacet's Fresnel, else refracts, taking the base colour once per
+// interface. Volumes refract into and out of their medium; thin walls leave parallel
+// to where they entered (a flat far side), deviated by the rough entry interface only.
+// `weight`: the sample's throughput (G1 of the outgoing direction), zero for samples
+// leaving on the wrong side; `transmitted`: whether it crossed the surface.
+float3 sampleGlass(Surface s,float3 v,inout uint rng,out float3 weight,out bool transmitted){
+    float eta=glassEta(s,v),a2=pow(s.roughness,4);float3 h=visibleGgx(s,v,rng);
+    float F=fresnelDielectric(dot(v,h),eta)*s.specular;float3 l;transmitted=random(rng)>=F;
+    if(!transmitted)l=reflect(-v,h);
+    else{
+        l=refract(-v,h,1/eta);
+        if(s.thin && dot(l,l)>0)l=refract(l,s.normal,s.ior);
+        if(dot(l,l)<1e-8){weight=0;return -v;}l=normalize(l);
+    }
+    float nl=dot(s.normal,l);
+    weight=(transmitted?nl<0:nl>0)?smith(abs(nl),a2)*(transmitted?s.albedo:float3(1)):float3(0);
+    return l;
+}
+// The opaque layers: diffuse, specular, sheen and coat (transmission excluded).
+float3 evaluateOpaque(Surface s,float3 v,float3 l,out float pdf){
     float nv=max(dot(s.normal,v),1e-5),nl=max(dot(s.normal,l),0.);float3 h=normalize(v+l);float nh=max(dot(s.normal,h),0.),vh=max(dot(v,h),1e-5);
     float a=s.roughness*s.roughness,a2=a*a;float d=a2/(PI*pow(nh*nh*(a2-1)+1,2));
     float g=2*nv/(nv+sqrt(a2+(1-a2)*nv*nv))*2*nl/max(nl+sqrt(a2+(1-a2)*nl*nl),1e-6);
     float3 F=fresnel(vh,lerp(float3(0.04*s.specular),s.albedo,s.metal));float mixture=lerp(0.5,1.,s.metal);
-    float diffusePdf=abs(dot(s.normal,l))/PI*(dot(s.normal,l)<0?s.transmission:1-s.transmission);
+    float diffusePdf=nl/PI;
     pdf=lerp(diffusePdf,d*smith(nv,a2)/(4*nv)*float(nl>0),mixture);
-    float3 result=((1-F)*(1-s.metal)*s.albedo/PI*(1-s.transmission)+d*g*F/max(4*nv*nl,1e-6))*nl;
-    if(dot(s.normal,l)<0)result=(1-F)*(1-s.metal)*s.albedo/PI*s.transmission*abs(dot(s.normal,l));
+    float3 result=((1-F)*(1-s.metal)*s.albedo/PI+d*g*F/max(4*nv*nl,1e-6))*nl;
     if(max(max(s.sheen.x,s.sheen.y),s.sheen.z)>0 && nl>0){float aSheen=s.sheenRoughness*s.sheenRoughness;float ds=(2+1/aSheen)*pow(max(0,1-nh*nh),0.5/aSheen)/(2*PI);float vis=1/((1+sheenLambda(nv,aSheen)+sheenLambda(nl,aSheen))*max(4*nv*nl,1e-6));
         float scaling=1-max(max(s.sheen.x,s.sheen.y),s.sheen.z)*max(sheenAlbedo(s,nv),sheenAlbedo(s,nl));
         result=result*scaling+s.sheen*ds*vis*nl;}
@@ -208,13 +285,30 @@ float3 evaluate(Surface s,float3 v,float3 l,out float pdf){
     // (probe terminals here, the primary surface's at remodulation), never direct.
     return result;
 }
+// The BSDF times N.L towards `l` and the PDF sampleBrdfPdf proposes it with. A share
+// `transmission` of the material is the transmissive layer (glassReflection, and
+// refraction, which only sampling reaches: light arrives through glass along shadow
+// rays, shadowTransmittance), the rest the opaque layers.
+float3 evaluate(Surface s,float3 v,float3 l,out float pdf){
+    float3 result=evaluateOpaque(s,v,l,pdf);
+    if(s.transmission>0){float glassPdf;float3 glass=glassReflection(s,v,l,glassPdf);result=lerp(result,glass,s.transmission);pdf=lerp(pdf,glassPdf,s.transmission);}
+    return result;
+}
+// One BSDF sample. `pdf` is what evaluate gives the direction (for light-hit MIS),
+// zero for samples that crossed a transmissive surface: lights behind glass are only
+// reached by shadow rays, so those paths never count a light hit.
 float3 sampleBrdfPdf(Surface s,float3 v,inout uint rng,out float3 weight,out float pdf){
-    float3 l;float choice=random(rng);bool specular=choice<lerp(0.5,1.,s.metal);if(specular){
+    float3 l;
+    if(s.transmission>0 && random(rng)<s.transmission){
+        bool transmitted;l=sampleGlass(s,v,rng,weight,transmitted);pdf=0;
+        if(!transmitted && any(weight>0)){float3 value=evaluate(s,v,l,pdf);weight=value/max(pdf,1e-8);}
+        return l;
+    }
+    float choice=random(rng);bool specular=choice<lerp(0.5,1.,s.metal);if(specular){
         l=reflect(-v,visibleGgx(s,v,rng));
-    }else l=cosineDirection(random(rng)<s.transmission?-s.normal:s.normal,rng);
+    }else l=cosineDirection(s.normal,rng);
     if(s.coat>0 && random(rng)<s.coat*0.25){Surface coat=s;coat.roughness=s.coatRoughness;l=reflect(-v,visibleGgx(coat,v,rng));specular=true;}
-    // GGX samples below the reflecting hemisphere are null events. They cannot
-    // become diffuse transmission samples: their proposal is absent from that PDF.
+    // GGX samples below the reflecting hemisphere are null events.
     if(specular && dot(s.normal,l)<=0){weight=0;pdf=0;return l;}
     weight=evaluate(s,v,l,pdf)/max(pdf,1e-8);return l;
 }

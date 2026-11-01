@@ -40,6 +40,14 @@ float3 nativeNormal(Frame f,NativeMaterial m,Vertex a,Vertex b,Vertex c,float3 w
     t=normalize(t);float3 sampled=nativeMap(f,m,1,a,b,c,w,true).xyz;
     return normalize(t*sampled.x+cross(normal,t)*handedness*sampled.y+normal*sampled.z);
 }
+// A transmissive material's KHR_materials_ior/volume words (factors.zw, packed by
+// ara_render::instanced::Volume::pack; ara-render's look-refract.slangh refractVolume
+// decodes the same): the IOR, whether it is thin-walled (zero thickness) and the
+// medium's absorption coefficients per metre.
+void nativeVolume(uint2 words,inout Surface s){
+    uint code=words.x>>16;s.ior=code==0?1.5:1+float(code-1)/32767.;s.thin=(words.x&0xffff)==0;
+    s.absorption=float3(words.y&511,(words.y>>9)&511,(words.y>>18)&511)*exp2(float(words.y>>27)-24.);
+}
 Surface nativeShade(Frame f,uint materialId,Vertex a,Vertex b,Vertex c,float3 w){
     NativeMaterial m=nativeMaterial(f,materialId);Material p=m.pbr;Surface s=(Surface)0;
     s.position=a.position*w.x+b.position*w.y+c.position*w.z;s.previousPosition=s.position;
@@ -53,7 +61,9 @@ Surface nativeShade(Frame f,uint materialId,Vertex a,Vertex b,Vertex c,float3 w)
     s.metal=saturate(p.surface.x*mr.b);s.roughness=clamp(p.emissiveRoughness.w*mr.g,0.045,1);
     s.emissive=max(p.emissiveRoughness.rgb*nativeMap(f,m,3,a,b,c,w,true).rgb,0);
     s.ao=lerp(1,nativeMap(f,m,4,a,b,c,w,true).r,m.factors.x);
-    s.transmission=saturate(m.factors.y*nativeMap(f,m,5,a,b,c,w,true).r);
+    // Transmission replaces the dielectric layer's diffuse lobe: metals keep none.
+    s.transmission=saturate(m.factors.y*nativeMap(f,m,5,a,b,c,w,true).r)*(1-s.metal);
+    nativeVolume(uint2(asuint(m.factors.z),asuint(m.factors.w)),s);
     bool detail=p.flags.w==0x41524132;s.specular=detail?p.surface.z*mr.a:1;s.sheenLut=f.display.z;
     s.coat=detail?float(p.flags.y&255)/255.:0;s.coatRoughness=max(0.045,float((p.flags.y>>8)&255)/255.);
     s.sheen=detail?float3(p.flags.z&255,(p.flags.z>>8)&255,(p.flags.z>>16)&255)/255.:float3(0);

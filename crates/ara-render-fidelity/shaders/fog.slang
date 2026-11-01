@@ -28,7 +28,8 @@ void fogMain(uint3 tid:SV_DispatchThreadID){
         float3 sr=0;float sm=0;float3 e=density*f.fogLight.w;
         if(physical)e+=extinction(height,f.look.w,sr,sm);
         float3 sunlight=physical?solarIrradiance(f,at):f.sunLux.rgb;
-        float visibility=any(sunlight>0) && (!volumetric||!occluded(f,at,f.sunDirection.xyz,10000,rng))?1:0;
+        // Glass passes sun shafts on, tinted (shadowTransmittance).
+        float3 visibility=!any(sunlight>0)?float3(0):volumetric?shadowTransmittance(f,at,f.sunDirection.xyz,10000,rng):float3(1);
         float cosine=dot(d,f.sunDirection.xyz);
         float3 source=sunlight*visibility*(sr*phaseR(cosine)+sm*phaseM(cosine,0.8)+density*albedo*phaseM(cosine,g));
         if(physical)source+=(sr+sm+density*albedo)*multiScattering(f,height,f.sunDirection.y)*f.sunLux.rgb;
@@ -43,7 +44,7 @@ void fogMain(uint3 tid:SV_DispatchThreadID){
             uint samples=localArea(light)?4:1;float3 scattered=0;
             for(uint k=0;k<samples;k++){
                 LocalSample s=sampleLocalLight(light,at,rng);
-                if(s.distance>0&&any(s.value>0)&&!occluded(f,at,s.direction,s.distance,rng))scattered+=s.value*phaseM(dot(d,s.direction),g);
+                if(s.distance>0&&any(s.value>0))scattered+=s.value*phaseM(dot(d,s.direction),g)*shadowTransmittance(f,at,s.direction,s.distance,rng);
             }
             source+=density*albedo*scattered*(light.params.w/float(samples));
         }

@@ -36,7 +36,9 @@ float3 gather(Frame f,Surface s,float3 direction,inout uint rng){
     float3 result=0,throughput=1;
     for(uint bounce=0;bounce<((f.transport.z>>1)&15);bounce++){
         Hit hit;if(!trace(f,rayOrigin(s,direction),direction,200,rng,hit)){result+=throughput*environment(f,direction);break;}
-        Surface r=surface(f,hit.id,hit.primitive,hit.bary);if(dot(r.normal,-direction)<0)r.normal=-r.normal;
+        Surface r=surface(f,hit.id,hit.primitive,hit.bary);
+        if(r.transmission>0 && !r.thin && dot(r.geometricNormal,direction)>0)throughput*=exp(-r.absorption*hit.distance);
+        if(dot(r.normal,-direction)<0)r.normal=-r.normal;
         result+=throughput*(direct(f,r,-direction,rng));
         if(bounce+1==((f.transport.z>>1)&15)){result+=throughput*indirect(f,r,-direction,f.probes.y);break;}
         float3 weight;direction=sampleBrdf(r,-direction,rng,weight);
@@ -96,14 +98,23 @@ void referenceMain(uint3 tid:SV_DispatchThreadID){
     for(uint sample=0;sample<f.transport.y;sample++){
         uint rng=hash((p.y*f.sizes.x+p.x)*747796405u+(f.transport.w+sample)*2891336453u);float2 jitter=float2(random(rng),random(rng));
         float3 origin=f.camera.xyz,direction=cameraRay(f,float2(p)+jitter),throughput=1;Surface last;float pdf=0;
+        // `seen`: the camera sees this vertex directly or through glass only, so its
+        // emission counts (emitters elsewhere are light samples, direct()).
+        bool seen=true;
         for(uint bounce=0;bounce<f.transport.z;bounce++){
             Hit hit;bool found=trace(f,origin,direction,10000,rng,hit);
             // Area lights this BSDF-sampled ray sees before its hit (local-lights.slangh),
-            // MIS-weighted against the light samples direct() takes; camera rays see none.
+            // MIS-weighted against the light samples direct() takes; camera rays see none,
+            // nor do rays that crossed glass (pdf zero: shadow rays carry that light).
             if(bounce>0)result+=throughput*localHits(f,last,origin,direction,found?hit.distance:10000,pdf);
             if(!found){result+=throughput*environment(f,direction);break;}
-            Surface s=surface(f,hit.id,hit.primitive,hit.bary);if(dot(s.normal,-direction)<0)s.normal=-s.normal;
-            float3 lighting=(bounce==0?s.emissive:float3(0))+direct(f,s,-direction,rng,bounce+1<f.transport.z);result+=throughput*lighting;float3 weight;direction=sampleBrdfPdf(s,-direction,rng,weight,pdf);throughput*=weight;last=s;
+            Surface s=surface(f,hit.id,hit.primitive,hit.bary);
+            // Leaving a volume (the ray runs along its outward normal): its medium absorbed
+            // over the stretch since the last vertex (Beer-Lambert, KHR_materials_volume).
+            if(s.transmission>0 && !s.thin && dot(s.geometricNormal,direction)>0)throughput*=exp(-s.absorption*hit.distance);
+            if(dot(s.normal,-direction)<0)s.normal=-s.normal;
+            float3 lighting=(seen?s.emissive:float3(0))+direct(f,s,-direction,rng,bounce+1<f.transport.z);result+=throughput*lighting;float3 weight;direction=sampleBrdfPdf(s,-direction,rng,weight,pdf);throughput*=weight;last=s;
+            seen=seen && s.transmission>0 && pdf==0 && dot(direction,s.normal)<0;
             if(any(!isfinite(throughput)) || max(max(throughput.x,throughput.y),throughput.z)<1e-8)break;
             if(bounce>=3){float survive=clamp(max(max(throughput.x,throughput.y),throughput.z),0.05,0.95);if(random(rng)>survive)break;throughput/=survive;}
             origin=rayOrigin(s,direction);
