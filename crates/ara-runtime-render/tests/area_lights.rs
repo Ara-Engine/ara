@@ -219,5 +219,8 @@ fn a_disc_seen_edge_on_lights_no_line_in_its_plane() {
         .filter(|&i| rows[i] > rows[i + 12] + 0.02 * peak)
         .map(|i| (i, rows[i], rows[i + 12]))
         .collect();
-    assert!(spikes.is_empty(), "rows outshine those below them: {spikes:?}");
+    assert!(
+        spikes.is_empty(),
+        "rows outshine those below them: {spikes:?}"
+    );
 }
