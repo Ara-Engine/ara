@@ -350,6 +350,28 @@ fn a_spot_beam_scattered_per_pixel_casts_its_blocker_shaft() -> Result<()> {
         again.image.as_raw() == pixel.image.as_raw(),
         "per-pixel fog captures repeat exactly"
     );
+    // Half resolution (the default) re-integrates the cone's edges and apex at full
+    // resolution: across the beam it matches a full-resolution capture, with no
+    // two-pixel steps.
+    let mut quality = spot_quality(16);
+    if let Some(fog) = &mut quality.volumetric_fog {
+        fog.light_scale = 1;
+    }
+    renderer.set_quality(quality)?;
+    let full = capture(&mut renderer, "spot-full")?;
+    let worst = (380..480)
+        .flat_map(|x| (90..300).map(move |y| (x, y)))
+        .map(|(x, y)| {
+            let (a, b) = (pixel.image.get_pixel(x, y).0, full.image.get_pixel(x, y).0);
+            (0..3).map(|c| a[c].abs_diff(b[c])).max().unwrap_or(0)
+        })
+        .max()
+        .unwrap_or(0);
+    eprintln!("spot: half against full resolution, worst {worst}/255 across the beam");
+    ensure!(
+        worst <= 3,
+        "half resolution keeps the beam's edges crisp: worst {worst}/255 against full"
+    );
     renderer.gpu().assert_clean()?;
     Ok(())
 }

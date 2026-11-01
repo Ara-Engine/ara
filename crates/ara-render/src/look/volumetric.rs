@@ -18,9 +18,13 @@
 //! range, cone or barn doors, by equiangular sampling (Kulla and Fajardo 2012) on fixed
 //! angular bins, with shadows filtered over each sample's stretch and the froxels'
 //! transmittance: noise-free and deterministic, with no history. It runs at the render
-//! size over `VolumetricFogQuality::light_scale` (half: upsampled by depth), and applyFog
-//! adds it. With `light_samples` zero (or without the near volume, as on Low) local
-//! lights scatter in the froxels as before.
+//! size over `VolumetricFogQuality::light_scale`. At half resolution `Fog.Lights.Resolve`
+//! makes the render-size image applyFog adds: even pixels take their own texel, the rest
+//! blend their neighbours by depth, and pixels whose same-surface neighbours disagree (a
+//! beam's edge, a spot's apex) or share no surface (thin occluders) go to an edge list
+//! (`FogEdges`) that `Fog.Lights.Edges` integrates at full resolution through an indirect
+//! dispatch, so hard edges stay crisp at 1:1. With `light_samples` zero (or without the
+//! near volume, as on Low) local lights scatter in the froxels as before.
 //!
 //! Slices sit on an exponential view-depth distribution and are tiled in 2D atlases
 //! (the GPU layer has no 3D images): `columns` slices per atlas row. Between-slice
@@ -95,7 +99,8 @@ pub struct VolumetricFogQuality {
     /// Depth slices up to the volumetric distance (16 to 128).
     pub slices: u32,
     /// Render pixels per side of a texel of the per-pixel local-light scattering
-    /// (`Fog.Lights`): 1 at full resolution, 2 at half (upsampled by depth).
+    /// (`Fog.Lights`): 1 at full resolution, 2 at half (resolved by depth, its edges
+    /// integrated again at full resolution).
     pub light_scale: u32,
     /// Angular bins across the half circle a ray subtends at a local light (2 to 32):
     /// one equiangular sample each, so a ray passing right by a light takes this many
@@ -370,7 +375,9 @@ impl LookGpu {
             gpu.retire(Resource::Buffer(old.buffer))?;
         }
         if layout.lights.is_some_and(|l| l.scale > 1) {
-            let capacity = (self.render[0] * self.render[1]).div_ceil(EDGE_SHARE).max(64);
+            let capacity = (self.render[0] * self.render[1])
+                .div_ceil(EDGE_SHARE)
+                .max(64);
             let buffer = gpu.create_buffer(
                 u64::from(EDGE_HEADER + 4 * capacity),
                 vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::INDIRECT_BUFFER,
@@ -676,7 +683,10 @@ impl LookGpu {
             reads.push((ids.image(VOLUME_LIGHT), Access::ShaderRead));
         }
         if let Some(lights) = self.frame_fog_lights() {
-            reads.push((ids.image(Self::fog_lights_image(lights)), Access::ShaderRead));
+            reads.push((
+                ids.image(Self::fog_lights_image(lights)),
+                Access::ShaderRead,
+            ));
         }
         reads
     }
