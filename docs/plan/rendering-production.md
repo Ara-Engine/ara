@@ -42,29 +42,43 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   Hi-Z pyramid; hits from last frame's colour (minus promoted emission, capped at what a diffuse
   surface of the hit's albedo sends, as the bitmask AO's bounce), misses from the probe volume;
   3x3 tent gather; rough lobes by the view's true GGX lobe. Deterministic, no history.
-  Measured (High, EV-locked, 1280x720, mean |log ratio| of region luminance vs the path-traced
-  reference, `D:AraScratchgi`, before -> after): Polar 0.525 (old SSR) / 0.554 (Hi-Z SSR) ->
-  0.468 (ceiling metal 0.57 -> 0.63, side floors 0.42/0.48 -> 0.49/0.50; glossy floor centre
-  0.55 -> 0.52 as Hi-Z SSR now hits the too-dark ceiling); sky-lit courtyard 0.049 -> 0.052
-  (metal shed 1.40 -> 1.31); sunlit room 0.253 -> 0.382 (ceiling 1.41 -> 3.7); room with an
-  emissive panel 0.127 -> 0.302 (whole frame 1.13 -> 1.45, ceiling 1.27 -> 2.71; 3.10 before the
-  hit cap). Both rooms regress on their rough-metal ceiling: with captures off the old path
-  shows the same overshoot (3.35x), so it is the probe volume's, which High's darker captures
-  had masked. Cost at
-  2560x1440 High: ScreenGI.Probes 0.69 ms + Gather 0.28 ms (+0.94 ms frame); stability equal
-  (0.2% vs 0.1% blocks). Findings: (1) the probe volume overshoots light entering through
-  openings: sky through a window lands 3.4x too bright on a room's back wall even with
-  single-bounce relight, and the volume's rough specular is 3.35x on a metal ceiling (the main
-  open error; screen probe misses inherit it); a thicker ceiling and a smaller sun-test lift
-  change little, so it is not slab leakage; check per-texel solid angles in the octahedral
-  convolution and the sky-fraction texels next. (2) Reflection captures as the miss fallback are
-  too dark (Polar ceiling 0.64 -> 0.33; a black capture in the test room): rejected. (3) Emissive
-  fixtures promoted to emitter lights (spot clusters) make a hotspot under a panel that GI then
-  bounces (panel room 2.85x): promote large panels to rect lights (Area lights item). (4) Polar's
-  ceiling gratings read opaque where the reference sees sky through them (cutout transparency,
-  not GI; the "ceil metal R" region is 89% direct). Open: the probe-volume overshoot, adaptive
-  extra probes where the 3x3 gather finds none, Epic's quality (tile 8 cost 3.4 ms), an
-  in-engine region tool, Medium screen GI.
+  First pass (display-space regions): Polar 0.554 -> 0.468, both test rooms regressed on their
+  rough-metal ceilings because the probe volume overshot (3.35x with captures off).
+  Probe volume fixed (2026-11-01, 7173bc4a4, 691539c7e, b887d3175, 2dd96a549): measured on
+  minimal rooms (`D:AraScratchgi2`: sky-lit box, rotated, closed, thick-walled, furnace,
+  sensor spheres), every overshoot had a separate cause: (1) 8x8 moments blurred over a cos^12
+  lobe mixed a wall with the open space past its edge, so Chebyshev passed points behind thin
+  walls (a closed room glowed along every edge): now 16x16 per-texel moments from the bake's
+  sub-rays, per-tap visibility, rays clamped at twice the spacing; (2) relighting rebuilt each
+  texel's hit at its hits' mean plane, which floated outside the room (window texels seeing the
+  ground beyond) or in a sunbeam (a block and the wall behind): now a real sub-ray hit; (3) the
+  octahedral convolution weighed texels equally though axis texels cover half the mean solid
+  angle; (4) shading's cascade pick treats points outside its map as lit, which relit every
+  hit behind the camera: now the first cascade that maps the hit; (5) misses recorded at the
+  bake's 200 m ray range hid every point on a coarse landform lattice (open ground lost its sky
+  light), now at the moment limit, with visibility tested 5% of the spacing off the surface;
+  (6) a 0.5 m fine lattice (was capped at 1.5 m). Furnace tests stay within 1-5%.
+  Ten scenes, High, EV-locked, linear region radiance (PBR Neutral inverted), mean |ln ratio|,
+  base 4df69e86b -> now, screen GI off (on): Polar 0.266 -> 0.332 (0.182 -> 0.199); emissive
+  panel room 0.083 -> 0.112 (0.263 -> 0.290); sunlit room 0.306 -> 0.380 (0.443 -> 0.391); sky
+  room 0.256 -> 0.242 (0.378 -> 0.143); courtyard 0.035 -> 0.035; sky-lit box 0.598 -> 0.081
+  (0.559 -> 0.127); glazed room 0.371 -> 0.108; unglazed 0.347 -> 0.086; open ground under a
+  sky atmosphere, sun 10 deg 0.274 -> 0.062, sun 2 deg 1.276 -> 0.090. Mean 0.381 -> 0.153 (off),
+  0.410 -> 0.164 (on), so screen GI stays off by default (D32).
+  Cost at 2560x1440 (one frame, unguarded, busy PC): GI.Relight + GI.Gather Polar High 0.31 ->
+  0.37 ms, sunlit room High 0.21 -> 0.31 ms, Polar Epic 0.45 -> 0.48 ms (16x16 visibility taps,
+  solid angles, the cascade search). `--stability 48`: Polar High 0.8% of 16x16 blocks flicker
+  (0.7-0.9% before), the sunlit room 0%, Polar Epic 39% -> 1.3%.
+  Open: (a) Polar's probe-only floors and back room went darker (left floor 0.62 -> 0.38);
+  screen GI recovers most of it. (b) The sunlit room: blotchy back wall (one sun test per 22
+  degree texel point-samples a small bright patch; four plane-projected samples overshot) and
+  its rough-metal ceiling (captures 0.35x, probes 2.9x, screen probes 2.5x). (c) Screen GI:
+  mottling where few of a probe's 64 rays see a window, overshoot on rough-metal ceilings
+  (pyramid hits blur bright neighbours in; two levels sharper helped the panel room 0.29 ->
+  0.21 but mottled more), worse than probes on open ground. (d) High's copper block reads
+  black with screen GI off (black reflection capture). (e) Emissive panels as rect lights
+  (Area lights item). Also open: adaptive extra probes where the 3x3 gather finds none,
+  Epic's quality (tile 8 cost 3.4 ms), an in-engine region tool, Medium screen GI.
   Original item: Bounce energy that matches the path
   tracer: screen-space GI over the probe field, a per-probe radiance cache with sky and
   emissive, multi-bounce, metals; temporal stability with no noise (D27). Measured against
@@ -103,8 +117,7 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   the path tracer's sky within 0.003-0.008 stops of raster. Cost at 1440p (4070 SUPER,
   busy PC): 0.072 ms per frame (base 0.037), sky light recapture 0.150 ms on a sun change
   (0.130), LUT rebuild 0.020 ms (0.049); `--example sky_timings`.
-  Open: probe GI gives an open ground plane almost no sky light (base too; ground = sun
-  alone, x0.3-0.9 vs UE); the second atmosphere light lights no surfaces while the sun is up;
+  Open ground under probe GI now matches the sky light (GI item, b887d3175); open: the second atmosphere light lights no surfaces while the sun is up;
   the reference traces camera rays to 10 km only (no aerial perspective on farther
   geometry) and its rough-ground sun specular at low sun is weaker than raster/UE; height
   fog contribution is implemented but not measured against UE; Unreal's holdout and
@@ -128,7 +141,8 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   over the reference at equal EV, before -> after: solid slab 0.17 -> 0.97, top of a ball
   lens 0.54 -> 1.06 (raster) / 0.93 (hybrid), bottle 1.40 -> 0.78, glass shadows 2.2x ->
   0.94-1.10 (High), three stacked panes 1.47 -> 1.00, sphere behind a pane 0.65 -> 0.94,
-  bounce in a glazed room 2.7-3.0x -> 1.9-2.1x (the unglazed room's GI bias is 1.7-2.0x).
+  bounce in a glazed room 2.7-3.0x -> 1.9-2.1x (the unglazed room's GI bias is 1.7-2.0x), then
+  1.0-1.2x once the probe volume stopped leaking (GI item: glazed 0.108, unglazed 0.086).
   Open: Low/Medium cast no glass
   shadows; the ray-traced fidelity renderer (editor/Play with the ray-tracing opt-in) still
   shows glass dark and noisy; local-light shadows ignore glass; dispersion

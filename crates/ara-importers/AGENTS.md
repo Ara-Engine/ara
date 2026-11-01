@@ -58,6 +58,9 @@ sum/sqrt/division order. Preserve bits, alpha, Y-flip and cancellation; small,
 Power-of-two color mips specialize the original four unit-weight samples, keeping
 their accumulation order and alpha cutoff. NPOT/one-axis/data/normal/HDR mips keep
 the area filter; do not generate levels independently from LOD0 or reorder sums.
+Alpha-coverage mips (`TextureSettings::alpha_coverage`, masked base colours) remap
+partial alpha both ways about the cutoff, 0 and 1 fixed, ties split by a 4x4 dither, so
+each level passes the full-size share: thin cards stay solid, grate holes stay open.
 No other filesystem, clocks,
 unseeded RNG or environment reads. Dependency discovery is also pure and runs in
 the worker: even discovering FBX dependencies must never run in the editor.
