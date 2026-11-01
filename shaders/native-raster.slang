@@ -169,6 +169,16 @@ float4 sampleMap(NativeMaterial m,uint slot,Varying v){
 // Unit `v`, or `fallback` for zero-length or non-finite input (degenerate skinned or
 // UV-less tangent frames would otherwise turn shading into NaN/inf fireflies).
 float3 safeNormalize(float3 v,float3 fallback){float l=dot(v,v);return l>1e-12 && l<1e30?v*rsqrt(l):fallback;}
+// A masked material's alpha for its cutout test: the base map at the level of its
+// footprint's minor axis, one isotropic sample. Anisotropic filtering averages
+// along the major axis, so at a grazing view a grate's holes (a ceiling grating seen
+// down a corridor) average shut, where the path tracer, sampling one point, sees
+// through them. Colour keeps the filtered sample.
+float cutoutAlpha(NativeMaterial m,Varying v){
+    uint id=m.pbr.textures[0];if(id==0xffffffff)return m.pbr.color.a;
+    float2 uv=coordinates(m.uv[0],v),dx=ddx(uv)*footprint,dy=ddy(uv)*footprint,minor=dot(dx,dx)<dot(dy,dy)?dx:dy;
+    return ntSampleGrad(root.sample,id,uv,minor,minor).a*m.pbr.color.a;
+}
 Surface surfaceMaterial(NativeMaterial m,Varying v){
     Surface s;float4 base=sampleMap(m,0,v)*m.pbr.color;
     s.albedo=max(0,base.rgb);s.alpha=base.a;
@@ -351,7 +361,7 @@ Surface surface<let SIDES:int,let PAINT:int>(Varying v,float4 color){
         s=(m.pbr.flags.y&VERTEX_PAINT_LAYERS)!=0?paintSurface(m,v,color):surfaceMaterial(m,v);
         if((m.pbr.flags.y&VERTEX_COLOR_TINT)!=0){s.albedo*=color.rgb;s.alpha*=color.a;}
     }else s=m.slots.z>0?terrainSurface<SIDES>(m,v):surfaceMaterial(m,v);
-    if(m.pbr.flags.x==1 && s.alpha<m.pbr.surface.w)discard;
+    if(m.pbr.flags.x==1 && (PAINT==0 && m.slots.z==0?cutoutAlpha(m,v):s.alpha)<m.pbr.surface.w)discard;
     float3 du=ddx(s.normal),dv=ddy(s.normal);float kernel=min(2*0.15915494*(dot(du,du)+dot(dv,dv)),0.18);
     s.roughness=sqrt(sqrt(saturate(pow(s.roughness,4)+kernel)));return s;
 }

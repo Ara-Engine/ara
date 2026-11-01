@@ -193,7 +193,7 @@ fn coverage_preserving_mips_keep_masked_texels_solid_at_a_distance() {
         "plain averages lose coverage"
     );
     let mut kept = level.clone();
-    preserve_coverage(&mut kept, 0.5, share);
+    preserve_coverage(&mut kept, 16, 0.5, share);
     assert!(
         (coverage(&kept, 0.5) - share).abs() <= 1. / 256.,
         "{}",
@@ -203,28 +203,41 @@ fn coverage_preserving_mips_keep_masked_texels_solid_at_a_distance() {
 }
 
 #[test]
-fn coverage_preserving_mips_never_thin_a_solid_level() {
-    // Solid with one-texel holes: averaging closes them, so the level covers more
-    // than the full-size image. Its alpha stays as filtered, never squeezed onto the
-    // cutoff where compression error would punch new holes.
+fn coverage_preserving_mips_reopen_a_grate_and_keep_solid_texels() {
+    // Left half solid, right half a one-texel checkerboard grate (a ceiling grating):
+    // plain averages close the grate (0.5 everywhere passes 0.333), so the level
+    // covers more than the full-size image. Half the grate's texels reopen, spread by
+    // the dither, and solid texels keep alpha 1.
     let pixels: Vec<[f32; 4]> = (0..16 * 16)
-        .map(|i| {
-            [
-                1.,
-                1.,
-                1.,
-                if i % 4 == 0 && (i / 16) % 4 == 0 {
-                    0.
-                } else {
-                    0.95
-                },
-            ]
+        .map(|i: usize| {
+            let (x, y) = (i % 16, i / 16);
+            let solid = x < 8 || (x + y) % 2 == 0;
+            [0.5, 0.5, 0.5, if solid { 1. } else { 0. }]
         })
         .collect();
-    let share = coverage(&pixels, 0.5);
+    let share = coverage(&pixels, 0.333);
     let level = downsample(&pixels, 16, 16, 8, 8, TextureUsage::Color);
-    assert!(coverage(&level, 0.5) > share);
+    assert_eq!(
+        coverage(&level, 0.333),
+        1.,
+        "plain averages close the grate"
+    );
     let mut kept = level.clone();
-    preserve_coverage(&mut kept, 0.5, share);
-    assert_eq!(kept, level);
+    preserve_coverage(&mut kept, 8, 0.333, share);
+    assert!(
+        (coverage(&kept, 0.333) - share).abs() <= 1. / 64.,
+        "{}",
+        coverage(&kept, 0.333)
+    );
+    for (i, (a, b)) in kept.iter().zip(&level).enumerate() {
+        assert_eq!(a[..3], b[..3]);
+        if b[3] == 1. {
+            assert_eq!(a[3], 1., "solid texel {i} moved");
+        }
+    }
+    // The reopened texels spread over the grate's rows, not one block.
+    let open_rows = (0..8)
+        .filter(|y| (4..8).any(|x| kept[y * 8 + x][3] < 0.333))
+        .count();
+    assert!(open_rows >= 6, "{open_rows} rows reopened");
 }

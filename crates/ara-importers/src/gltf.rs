@@ -17,7 +17,7 @@ impl Importer for GltfImporter {
         "ara.gltf"
     }
     fn version(&self) -> &str {
-        "7-gltf14-meshopt070-ispc050-texture-presets-tiled-f32text-arag1-khr-opacity-deep-lods-prefix-alpha-coverage"
+        "7-gltf14-meshopt070-ispc050-texture-presets-tiled-f32text-arag1-khr-opacity-deep-lods-prefix-alpha-coverage2"
     }
     fn register_settings(&self, db: &mut ara_schema::SchemaDb) {
         db.register::<MeshSettings>();

@@ -531,7 +531,7 @@ fn generate_mips(
         if let Some((cutoff, share)) = coverage
             && !mips.is_empty()
         {
-            mips::preserve_coverage(&mut pixels, cutoff, share);
+            mips::preserve_coverage(&mut pixels, w as usize, cutoff, share);
         }
         mips.push((w, h, pixels));
         let Some(next) = next else { break };
