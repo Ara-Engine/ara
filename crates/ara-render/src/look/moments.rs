@@ -76,53 +76,72 @@ impl Pyramid {
         })
     }
 
-    /// Plans tile `index` (texel origin `origin` in the mirrored map, `depth_origin` in
-    /// the depth image `depth`, sampled) if it was drawn this frame (`drawn`), or was
-    /// never built and its map holds depth from earlier frames (`held`; an undrawn map
-    /// has nothing to read).
-    #[allow(clippy::too_many_arguments)]
-    fn plan(
-        &mut self,
-        index: usize,
-        drawn: bool,
-        held: bool,
-        depth: u32,
-        origin: [u32; 2],
-        depth_origin: [u32; 2],
-        builds: &mut Vec<MomentBuild>,
-    ) -> bool {
-        let Some(built) = self.built.get_mut(index) else {
-            return false;
-        };
-        if !drawn && (*built || !held) {
-            return false;
-        }
-        *built = true;
-        let pack = |[x, y]: [u32; 2]| x | y << 16;
-        let size = level_zero(self.mirror);
-        for level in 0..levels(self.tile) {
-            let side = self.tile >> (level + 1);
-            builds.push(MomentBuild {
-                level,
-                words: [
-                    depth,
-                    self.storage,
-                    level,
-                    pack(origin),
-                    self.tile,
-                    pack(depth_origin),
-                    pack(size),
-                    0,
-                ],
-                groups: [side.div_ceil(8), side.div_ceil(8), 1],
-            });
-        }
-        true
+    /// Plans `tile` (`plan_tile`).
+    fn plan(&mut self, tile: TileSource, builds: &mut Vec<MomentBuild>) -> bool {
+        plan_tile(
+            &mut self.built,
+            [self.tile, self.storage],
+            self.mirror,
+            tile,
+            builds,
+        )
     }
 
     fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
         Ok(gpu.retire(Resource::Image(self.image))?)
     }
+}
+
+/// One map tile this frame: its index among the pyramid's tiles, whether it was drawn
+/// this frame or held depth before it, its depth image (sampled) and its texel origins
+/// in the mirrored map and in that image.
+#[derive(Clone, Copy)]
+struct TileSource {
+    index: usize,
+    drawn: bool,
+    held: bool,
+    depth: u32,
+    origin: [u32; 2],
+    depth_origin: [u32; 2],
+}
+
+/// Appends every level of `tile` (pyramid tile side and storage index `pyramid`,
+/// mirroring a `mirror`-texel map) when it was drawn this frame, or was never built
+/// (`built`) and its map held depth (an undrawn map has nothing to read). Returns
+/// whether it planned any.
+fn plan_tile(
+    built: &mut [bool],
+    [side, storage]: [u32; 2],
+    mirror: [u32; 2],
+    tile: TileSource,
+    builds: &mut Vec<MomentBuild>,
+) -> bool {
+    let Some(done) = built.get_mut(tile.index) else {
+        return false;
+    };
+    if !tile.drawn && (*done || !tile.held) {
+        return false;
+    }
+    *done = true;
+    let pack = |[x, y]: [u32; 2]| x | y << 16;
+    for level in 0..levels(side) {
+        let texels = side >> (level + 1);
+        builds.push(MomentBuild {
+            level,
+            words: [
+                tile.depth,
+                storage,
+                level,
+                pack(tile.origin),
+                side,
+                pack(tile.depth_origin),
+                pack(level_zero(mirror)),
+                0,
+            ],
+            groups: [texels.div_ceil(8), texels.div_ceil(8), 1],
+        });
+    }
+    true
 }
 
 /// Level-0 texels of a pyramid mirroring a `mirror`-texel map.
@@ -138,16 +157,12 @@ pub(crate) struct MomentBuild {
     pub groups: [u32; 3],
 }
 
-/// This frame's pyramid builds and which pyramids and depth maps they touch.
+/// This frame's pyramid builds and the tiles they read, per map kind (local,
+/// cascades, far; a cascade's index is its map's).
 #[derive(Default)]
 pub(crate) struct MomentPlan {
     pub builds: Vec<MomentBuild>,
-    /// Pyramids written: local, cascades, far.
-    pub written: [bool; 3],
-    /// Cascade maps read.
-    pub cascades: Vec<usize>,
-    pub far: bool,
-    pub local: bool,
+    pub reads: [Vec<usize>; 3],
 }
 
 impl MomentPlan {
@@ -165,17 +180,22 @@ pub(crate) struct ShadowMoments {
     pub far: Option<Pyramid>,
 }
 
-/// What this frame's maps hold, for `ShadowMoments::plan`: per map kind its mirrored
-/// size and tile side, its depth images (sampled), which tiles were drawn this frame
-/// and which held depth before it.
+/// One map kind this frame, for `ShadowMoments::plan`: the map (atlas) the pyramid
+/// mirrors, its tile side, its depth images (sampled: one shared by every tile, or one
+/// per tile), the tiles drawn this frame and whether each image held depth before it.
+pub(crate) struct MapDrawn<'a> {
+    pub mirror: [u32; 2],
+    pub tile: u32,
+    pub depths: &'a [u32],
+    pub drawn: &'a [usize],
+    pub held: &'a [bool],
+}
+
+/// The local atlas, cascades and far map this frame.
 pub(crate) struct MapsDrawn<'a> {
-    /// Local atlas texels, tile side, atlas (sampled), drawn faces, whether the atlas
-    /// held depth.
-    pub local: Option<([u32; 2], u32, u32, &'a [usize], bool)>,
-    /// Cascade side, maps (sampled), drawn cascades, which held depth.
-    pub cascades: Option<(u32, &'a [u32], &'a [usize], &'a [bool])>,
-    /// Far map side, map (sampled), whether it was drawn, whether it held depth.
-    pub far: Option<(u32, u32, bool, bool)>,
+    pub local: Option<MapDrawn<'a>>,
+    pub cascades: Option<MapDrawn<'a>>,
+    pub far: Option<MapDrawn<'a>>,
 }
 
 impl ShadowMoments {
@@ -183,14 +203,15 @@ impl ShadowMoments {
     /// pyramid, a gone one frees its own) and plans this frame's builds.
     pub(crate) fn plan(&mut self, gpu: &mut GpuDevice, maps: &MapsDrawn) -> Result<MomentPlan> {
         let mut plan = MomentPlan::default();
-        let local = maps.local.map(|(atlas, tile, ..)| (atlas, tile));
-        let cascades = maps.cascades.map(|(side, ..)| ([side * 2; 2], side));
-        let far = maps.far.map(|(side, ..)| ([side; 2], side));
-        for (slot, want) in [
-            (&mut self.local, local),
-            (&mut self.cascades, cascades),
-            (&mut self.far, far),
-        ] {
+        for (kind, (slot, map)) in [
+            (&mut self.local, &maps.local),
+            (&mut self.cascades, &maps.cascades),
+            (&mut self.far, &maps.far),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let want = map.as_ref().map(|m| (m.mirror, m.tile));
             if slot.as_ref().map(|p| (p.mirror, p.tile)) != want {
                 if let Some(old) = slot.take() {
                     old.destroy(gpu)?;
@@ -199,33 +220,33 @@ impl ShadowMoments {
                     *slot = Some(Pyramid::new(gpu, mirror, tile)?);
                 }
             }
-        }
-        if let (Some(p), Some((atlas, tile, depth, drawn, held))) = (&mut self.local, maps.local) {
-            let row = atlas[0] / tile;
-            for face in 0..p.built.len() {
-                let origin = [face as u32 % row * tile, face as u32 / row * tile];
-                let now = drawn.contains(&face);
-                if p.plan(face, now, held, depth, origin, origin, &mut plan.builds) {
-                    plan.written[0] = true;
-                    plan.local = true;
+            let (Some(pyramid), Some(map)) = (slot, map) else {
+                continue;
+            };
+            // One shared image holds every tile at its own origin; per-tile images
+            // hold theirs at the origin.
+            let shared = map.depths.len() == 1;
+            let row = map.mirror[0] / map.tile;
+            let tiles = if shared {
+                pyramid.built.len()
+            } else {
+                map.depths.len()
+            };
+            for index in 0..tiles {
+                let i = index as u32;
+                let origin = [i % row * map.tile, i / row * map.tile];
+                let source = TileSource {
+                    index,
+                    drawn: map.drawn.contains(&index),
+                    held: map.held[if shared { 0 } else { index }],
+                    depth: map.depths[if shared { 0 } else { index }],
+                    origin,
+                    depth_origin: if shared { origin } else { [0, 0] },
+                };
+                if pyramid.plan(source, &mut plan.builds) {
+                    plan.reads[kind].push(index);
                 }
             }
-        }
-        if let (Some(p), Some((side, depths, drawn, held))) = (&mut self.cascades, maps.cascades) {
-            for (c, &depth) in depths.iter().enumerate().take(4) {
-                let origin = [(c as u32 & 1) * side, (c as u32 >> 1) * side];
-                let (now, held) = (drawn.contains(&c), held.get(c).copied().unwrap_or(false));
-                if p.plan(c, now, held, depth, origin, [0, 0], &mut plan.builds) {
-                    plan.written[1] = true;
-                    plan.cascades.push(c);
-                }
-            }
-        }
-        if let (Some(p), Some((_, depth, drawn, held))) = (&mut self.far, maps.far)
-            && p.plan(0, drawn, held, depth, [0, 0], [0, 0], &mut plan.builds)
-        {
-            plan.written[2] = true;
-            plan.far = true;
         }
         Ok(plan)
     }
@@ -264,6 +285,48 @@ mod tests {
         assert_eq!(levels(512), 7);
         assert_eq!(levels(2048), 9);
         assert_eq!(levels(8), 1, "one level of four texels");
+    }
+
+    #[test]
+    fn tiles_build_when_drawn_or_first_held() {
+        let mut built = vec![false; 2];
+        let mut builds = Vec::new();
+        let tile = |index, drawn, held| TileSource {
+            index,
+            drawn,
+            held,
+            depth: 7,
+            origin: [256, 0],
+            depth_origin: [256, 0],
+        };
+        let mut plan = |source, builds: &mut Vec<MomentBuild>| {
+            plan_tile(&mut built, [256, 9], [512, 256], source, builds)
+        };
+        assert!(
+            !plan(tile(0, false, false), &mut builds),
+            "an undrawn map has nothing to read"
+        );
+        assert!(
+            plan(tile(0, false, true), &mut builds),
+            "held depth builds once"
+        );
+        assert!(
+            !plan(tile(0, false, true), &mut builds),
+            "then only when drawn"
+        );
+        assert!(plan(tile(0, true, true), &mut builds));
+        assert!(
+            !plan(tile(5, true, true), &mut builds),
+            "past the pyramid's tiles"
+        );
+        assert_eq!(builds.len(), 2 * levels(256) as usize);
+        // Level 0: 128 texels a side, the tile origin packed, level-0 size 256 x 128.
+        assert_eq!(
+            builds[0].words,
+            [7, 9, 0, 256, 256, 256, 256 | 128 << 16, 0]
+        );
+        assert_eq!(builds[0].groups, [16, 16, 1]);
+        assert_eq!(builds[5].groups, [1, 1, 1], "four texels: one group");
     }
 
     #[test]

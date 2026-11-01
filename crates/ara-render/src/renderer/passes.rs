@@ -333,41 +333,46 @@ impl Renderer {
         }
         // Moment pyramids (look::moments) of the maps drawn this frame.
         let moment_plan = {
+            use crate::look::moments::{MapDrawn, MapsDrawn};
+            let defined = |state: State| state.access != Access::Undefined;
             let faces: Vec<usize> = local_draws.iter().map(|(draw, _)| draw.face).collect();
-            let drawn: Vec<usize> = cascade_draw.iter().map(|draw| draw.cascade).collect();
-            let defined = |state: crate::graph::State| state.access != Access::Undefined;
-            let held: Vec<bool> = self
+            let cascades_drawn: Vec<usize> = cascade_draw.iter().map(|draw| draw.cascade).collect();
+            let far_drawn: Vec<usize> = far_draw.iter().map(|_| 0).collect();
+            let local_held = [self.look.local.as_ref().is_some_and(|l| defined(l.state))];
+            let far_held = [self.look.far.as_ref().is_some_and(|f| defined(f.state))];
+            let cascades_held: Vec<bool> = self
                 .look
                 .cascades
                 .as_ref()
                 .map_or_else(Vec::new, |c| c.states.iter().map(|&s| defined(s)).collect());
-            let maps = crate::look::moments::MapsDrawn {
+            let local_depth: Vec<u32> = self.look.local.iter().map(|l| l.sampled).collect();
+            let far_depth: Vec<u32> = self.look.far.iter().map(|f| f.sampled).collect();
+            let maps = MapsDrawn {
                 local: self
                     .look
                     .local
                     .as_ref()
                     .filter(|_| self.native.is_some())
-                    .map(|l| {
-                        (
-                            l.size,
-                            l.settings.resolution,
-                            l.sampled,
-                            &faces[..],
-                            defined(l.state),
-                        )
+                    .map(|l| MapDrawn {
+                        mirror: l.size,
+                        tile: l.settings.resolution,
+                        depths: &local_depth,
+                        drawn: &faces,
+                        held: &local_held,
                     }),
-                cascades: self
-                    .look
-                    .cascades
-                    .as_ref()
-                    .map(|c| (c.resolution, &c.sampled[..], &drawn[..], &held[..])),
-                far: self.look.far.as_ref().map(|f| {
-                    (
-                        f.settings.resolution,
-                        f.sampled,
-                        far_draw.is_some(),
-                        defined(f.state),
-                    )
+                cascades: self.look.cascades.as_ref().map(|c| MapDrawn {
+                    mirror: [c.resolution * 2; 2],
+                    tile: c.resolution,
+                    depths: &c.sampled,
+                    drawn: &cascades_drawn,
+                    held: &cascades_held,
+                }),
+                far: self.look.far.as_ref().map(|f| MapDrawn {
+                    mirror: [f.settings.resolution; 2],
+                    tile: f.settings.resolution,
+                    depths: &far_depth,
+                    drawn: &far_drawn,
+                    held: &far_held,
                 }),
             };
             self.look.moments.plan(&mut self.gpu, &maps)?
@@ -902,8 +907,11 @@ impl Renderer {
         let moment_targets: Vec<_> = look
             .moments
             .iter()
-            .zip(moment_plan.written)
-            .filter_map(|(id, written)| id.filter(|_| written).map(|id| (id, Access::Storage)))
+            .zip(&moment_plan.reads)
+            .filter_map(|(id, reads)| {
+                id.filter(|_| !reads.is_empty())
+                    .map(|id| (id, Access::Storage))
+            })
             .collect();
         for level in 0..moment_plan.levels() {
             const NAMES: [&str; crate::look::moments::MAX_LEVELS as usize] = [
@@ -919,20 +927,20 @@ impl Renderer {
             ];
             let mut uses = moment_targets.clone();
             if level == 0 {
-                let depth = moment_plan
-                    .cascades
+                let [local, cascades, far] = &moment_plan.reads;
+                let depth = cascades
                     .iter()
                     .map(|&c| look.cascades[c])
-                    .chain(look.far.filter(|_| moment_plan.far))
-                    .chain(look.local.filter(|_| moment_plan.local));
+                    .chain(look.far.filter(|_| !far.is_empty()))
+                    .chain(look.local.filter(|_| !local.is_empty()));
                 uses.extend(depth.map(|id| (id, Access::ShaderRead)));
             }
             let pass = graph.pass(NAMES[level as usize], Queue::Graphics, uses);
             declare(pass, Recipe::Moments(level));
         }
-        for ((id, pyramid), written) in look.moments.iter().zip(pyramids).zip(moment_plan.written) {
+        for ((id, pyramid), reads) in look.moments.iter().zip(pyramids).zip(&moment_plan.reads) {
             if let (Some(id), Some(pyramid)) = (id, pyramid)
-                && (written || pyramid.state.access != Access::Undefined)
+                && (!reads.is_empty() || pyramid.state.access != Access::Undefined)
             {
                 cascade_reads.push((*id, Access::ShaderRead));
             }
