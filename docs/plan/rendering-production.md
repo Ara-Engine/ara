@@ -176,6 +176,52 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   0038e824f): reflection captures follow the probe volume's slow multi-bounce convergence through
   their refit ratio (0.2% after 300 frames; 16 initial bounces 13.6%), hidden while captures
   reflected black.
+  Reflections pass (2026-11-01, branch t3/459259f4, scratch `D:AraScratchgi4` with sheets and tables):
+  (1) Polar's smeared floor was not roughness: its corridor strip is 0.125 (alpha 0.016), and a copy
+  of Polar with every metal at roughness 0.05 still smeared. `SSR.Resolve` averaged its neighbours'
+  colours over the lobe's footprint on top of the trace's own cone filter, blurring every glossy
+  reflection twice; it now keeps the hit's own colour (tent-filtered with its four same-surface
+  neighbours) and spreads only confidence, the trace's pyramid level spans at least its five taps'
+  spacing (a rough floor streaked a sphere instead of printing five copies of it), and the
+  full-resolution upsample weighs normals (no stair-stepped strip edges) (0dd2d6068). What Polar's
+  floor still lacks is different content, not blur: the reference reflects the ceiling skylights where
+  Ara's capture traces meet the corridor's overhead frames, and Ara's door ring reads lit grey where
+  the reference's is near black. (2) The `--stability` flicker while captures bake was not the refit
+  ratio (frozen at one: 16.6%, unchanged) but the bake frames themselves: each face rendered through
+  the full frame and relit the shared probe volume with the capture camera's cascades and no virtual
+  shadow pages, so probes alternated between two sun estimates. Bake frames now only read the volume
+  (`GiGpu::frozen`), and a capture's first bake fades in over 48 relights (at once for bakes of every
+  step, restores and unseen frames) (ff0fa1a0a, 0a7410c95). Polar Epic `--without screen-reflections
+  --stability 30` at 1080p: 17.4% -> 0.2% of blocks; Epic 1.1%, High 1.0%. (3) Rough-metal ceilings:
+  the path tracer's GGX was single scattering while the raster compensates multiple scattering as
+  Cycles' Principled v2 does; a roughness-0.7 metal seen at grazing angles lost up to half its
+  reflection in the reference. `ara-pathtrace` now takes the same Kulla-Conty scale and fits
+  (30ded3353), and every table below is against the new references (old ones kept as `*-ref0.png`):
+  the sunlit room's ceiling moves from 1.18x to 0.67x (1.04x with screen GI), the sky room's from 1.31x
+  to 0.93x (1.11x). With screen GI off the sunlit room's ceiling now reads low (0.67x): open. (4) The panel room's floor strip: SSR hits now drop
+  emission promoted to emitter lights, as captures and screen probes do (b05b9dc61): 0.99x -> 0.92x off,
+  1.09x -> 1.02x on. The reference shows no reflection of the panel in the strip at all, where Ara's
+  rect-light specular draws one: open (the path tracer reaches emissive meshes only through light
+  samples). (5) Not reworked: the SSR-to-probe step under the shapes scene's lamp pools. (6) Screen GI
+  on open ground is not the rough lobe: reflections are about 1% of a roughness-1 ground's radiance; the
+  +7-9% is diffuse. No 4x4 irradiance texel faces the probe normal, so pixels interpolate tilted ones
+  whose below-horizon share takes the sky's mean. Filling it with the probe surface's own radiance or
+  with nothing brings open ground 0.162 -> 0.143-0.151 but costs the sunlit room 0.079 -> 0.097;
+  reverted. Solid-angle weights in the rough lobe: no change. (7) The energy-conserving bounce albedo
+  ((1 - F) diffuse) measured again against the new references: sunlit room 0.142 -> 0.208, sky room
+  0.124 -> 0.142, panel 0.120 -> 0.136, box 0.126 -> 0.103; reverted. (8) Near-field interpolation:
+  not reworked. Ten scenes, High, base b50a7656a -> now, mean |ln ratio| against the multiple-
+  scattering references, screen GI off (on): Polar 0.214 -> 0.192 (0.258 -> 0.240); panel room 0.132
+  -> 0.123 (0.116 -> 0.095); sunlit room 0.155 -> 0.142 (0.080); sky room 0.124 (0.130); courtyard
+  0.014 (0.015); sky-lit box 0.126 (0.137); glazed 0.049 -> 0.052 (0.053); unglazed 0.057 -> 0.060
+  (0.055); open ground 10 deg 0.060 (0.091), 2 deg 0.086 (0.159). Mean 0.102 -> 0.098 off, 0.109 ->
+  0.106 on (against the old references 0.098 -> 0.095, 0.127 -> 0.124). Cost at 2560x1440 High,
+  median of 5 (`ara-dev gpu`, valid): Polar SSR.Trace 0.349 -> 0.358 ms, SSR.Resolve 0.115 -> 0.125
+  ms, DeferredLighting 0.788 -> 0.799 ms; sunlit room +0.03 ms in all.
+  Open: Polar's floor content (skylights the capture traces miss; the door ring's brightness) and its
+  left floor (0.55x off); screen GI's tilted irradiance texels; the bounce albedo; probes' radiance near
+  sunlit patches seen from rough-metal ceilings; the panel reflection the reference lacks; the shapes
+  scene's SSR-to-probe step; near-field interpolation.
   Earlier open items: (a) Polar's probe-only floors and back room went darker (left floor 0.62 -> 0.38);
   screen GI recovers most of it. (b) The sunlit room: its rough-metal ceiling (captures
   0.35x, probes 2.9x, screen probes 2.5x); one sun test per 22 degree texel point-samples a
@@ -300,7 +346,9 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   pyramid, crawls on behind thin foreground), then captures and probes; rough lobes past 0.25-0.4
   hand over to screen probes (D32). SSR.Trace 0.60 ms at 2560x1440 High. SSR.Resolve (04becdb8b)
   spreads each pixel's hit confidence over its GGX footprint, so rough floors fade between traced
-  and fallback reflections instead of outlining what the mirror rays reach (0.116 ms Polar High;
+  and fallback reflections instead of outlining what the mirror rays reach; its colour stays the hit's
+  own cone (0dd2d6068: averaging it again blurred every glossy reflection twice), and hits drop
+  emission promoted to emitter lights (b05b9dc61) (0.116 ms Polar High;
   a faint step stays visible at 3x contrast where SSR and the probe fallback differ: on the
   area-light shapes floor SSR reads within 7% of the path tracer, the probe fallback 1.10-1.24x
   under the lamp pools, so the step is the probes' reflected radiance of the lamp-lit wall, open). Open: per-pixel cone

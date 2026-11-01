@@ -77,6 +77,8 @@ Use run.ps1 there for process-local Vulkan implicit-layer isolation.
 
 ## Contracts
 Linear HDR, right-handed Y-up metres; camera depth is positive view distance.
+The opaque GGX lobe is energy-compensated for multiple scattering (`ggxMultipleScale`, Kulla-Conty as Cycles'
+Principled v2 and the raster's `specularLobes`, the same fits); keep the two in step.
 Glass (transmission + ior/volume) is a GGX dielectric (`sampleGlass`, `glassReflection`),
 absorbing over each stretch inside a volume; transmissive instances take TLAS masks
 16/32 (non-opaque traversal). Shadow rays pass glass by `glassTransmittance` (shared with
