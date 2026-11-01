@@ -1241,6 +1241,7 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
     ara_render::RenderDebug {
         ambient_occlusion: debug.ambient_occlusion,
         shadows: debug.shadows,
+        soft_shadows: debug.soft_shadows,
         volumetric_fog: debug.volumetric_fog,
         temporal_jitter: debug.temporal_jitter,
         full_resolution: debug.full_resolution,
@@ -1279,6 +1280,7 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
                 D::VertexColorAlpha => V::VertexColorAlpha,
                 D::DecalCoverage => V::DecalCoverage,
                 D::LightComplexity => V::LightComplexity,
+                D::ShadowPenumbra => V::ShadowPenumbra,
             }
         },
     }

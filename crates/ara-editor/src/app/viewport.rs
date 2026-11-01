@@ -1118,6 +1118,7 @@ fn view_mode(name: &str) -> ViewMode {
         "vertexColorAlpha" => ViewMode::VertexColorAlpha,
         "decalCoverage" => ViewMode::DecalCoverage,
         "lightComplexity" => ViewMode::LightComplexity,
+        "shadowPenumbra" => ViewMode::ShadowPenumbra,
         _ => ViewMode::Lit,
     }
 }

@@ -14,6 +14,10 @@ pub struct RenderDebug {
     /// Sun and local-light shadows (default true).
     #[ara(default = true)]
     pub shadows: bool,
+    /// Soft shadows (default true): penumbrae sized by each light's shape; off, every
+    /// light shadows as a point (the narrowest filter).
+    #[ara(default = true)]
+    pub soft_shadows: bool,
     /// The detailed (froxel) volumetric fog near the camera (default true); off, fog
     /// keeps only its coarse far grid, as on Low.
     #[ara(default = true)]
@@ -105,6 +109,11 @@ pub enum DebugView {
     /// reaching the surface counts one, an area light three, a shadowed one one more.
     #[serde(alias = "light_complexity")]
     LightComplexity,
+    /// Soft-shadow penumbra half-widths of the sun and shadowed local lights, on the
+    /// overdraw heat legend as sqrt(width / 1 cm): 1 cm blue to 2.56 m red; grey
+    /// where no blocker is near.
+    #[serde(alias = "shadow_penumbra")]
+    ShadowPenumbra,
 }
 
 /// The path-traced reference's budget ([`RenderDebug::reference`]).
@@ -150,6 +159,7 @@ impl Default for RenderDebug {
         Self {
             ambient_occlusion: true,
             shadows: true,
+            soft_shadows: true,
             volumetric_fog: true,
             temporal_jitter: true,
             full_resolution: false,
