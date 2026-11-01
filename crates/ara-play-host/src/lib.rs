@@ -295,9 +295,9 @@ impl PlayService {
         if let Err(refusal) = ara_companion::verify(&self.config.pool.executable) {
             return Err(vec![
                 Diagnostic::error(codes::STALE_COMPANION, refusal.to_string()).with_fix(
-                    "Rebuild the companion",
+                    refusal.fix(),
                     FixAction::Cli {
-                        args: vec![format!("({})", refusal.fix())],
+                        args: refusal.fix().split(' ').map(String::from).collect(),
                     },
                 ),
             ]);

@@ -72,12 +72,12 @@ impl fmt::Display for Refusal {
         match &self.reason {
             Reason::Missing => write!(
                 f,
-                "ARA7308: `{exe}` is not built, but `ara` runs it beside itself. Build it: {}",
+                "`{exe}` is not built, but `ara` runs it beside itself. Build it: {}",
                 self.fix()
             ),
             Reason::Stale { newer } => write!(
                 f,
-                "ARA7308: `{exe}` is older than its sources (`{}` changed after it was built), \
+                "`{exe}` is older than its sources (`{}` changed after it was built), \
                  so it would run this tree's cooked shaders and importers against old code. \
                  Rebuild it: {} (or all companions together: \
                  cargo build -p ara -p ara-player -p ara-import-worker)",

@@ -165,6 +165,9 @@ impl Assets {
     /// Registers every sidecar under `root` and requests imports in the background.
     /// `worker` is the import worker executable (`ara-import-worker`).
     pub fn new(root: &Path, worker: &Path) -> Result<Self, String> {
+        // A stale or missing worker must fail loudly here: later errors from it (the
+        // version query below falls back to "older worker") leave models as placeholders.
+        ara_companion::verify(worker).map_err(|refusal| format!("ARA7308: {refusal}"))?;
         let mut schema = ara_schema::SchemaDb::new();
         ara_doc::register(&mut schema);
         ara_asset::register_schema(&mut schema);
