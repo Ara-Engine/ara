@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c",
+  "key": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545",
   "stages": [
     {
-      "dxil": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/reservoir_spatial_atmosphere/reservoirSpatialAtmosphere.dxil",
-      "dxil_hash": "126228cc7d80f308d0a8476656ea6345d5119290f32f208ff71a20b6c45f2572",
+      "dxil": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/reservoir_spatial_atmosphere/reservoirSpatialAtmosphere.dxil",
+      "dxil_hash": "f757a70ab2064dd12fb3fd91f0d0c81a9cde8321e5a66b8370e8ee624aa37122",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/reservoir_spatial_atmosphere/reservoirSpatialAtmosphere.metallib",
-        "metallib_hash": "1e0c297b967fdeacc7f83edca70e0c208c0de0a763621e2d5b61d946d15287a6",
-        "reflection": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/reservoir_spatial_atmosphere/reservoirSpatialAtmosphere.metal.json",
+        "metallib": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/reservoir_spatial_atmosphere/reservoirSpatialAtmosphere.metallib",
+        "metallib_hash": "e58f84aabe47d367d28f98898ab5762e44cadb12a4a89198ad81b77604c91b89",
+        "reflection": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/reservoir_spatial_atmosphere/reservoirSpatialAtmosphere.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "reservoirSpatialAtmosphere",
-      "spirv": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/reservoir_spatial_atmosphere/reservoirSpatialAtmosphere.spv",
+      "spirv": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/reservoir_spatial_atmosphere/reservoirSpatialAtmosphere.spv",
       "spirv_entry": "main",
-      "spirv_hash": "3a84d09c1fd1fb94060de42968012be10b0731f4c140ec1981462bc03b70feb7",
+      "spirv_hash": "85b272543b6e137b9250e4fe1420440e1aae870b28aba37b26d0e8a4715ce19e",
       "stage": "compute"
     }
   ],

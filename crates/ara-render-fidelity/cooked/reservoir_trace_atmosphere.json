@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c",
+  "key": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545",
   "stages": [
     {
-      "dxil": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/reservoir_trace_atmosphere/reservoirTraceAtmosphere.dxil",
-      "dxil_hash": "80e4b435abe724c2db06d6786d5f91b0116ff01c05720f9ca98b92ac547417b5",
+      "dxil": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/reservoir_trace_atmosphere/reservoirTraceAtmosphere.dxil",
+      "dxil_hash": "3fe6c3134dc838323b770363f508eb1ef0a3583c5b9b6384b968bd400aaaac10",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/reservoir_trace_atmosphere/reservoirTraceAtmosphere.metallib",
-        "metallib_hash": "b87335f239c36ddd002301a95101a121aa92b9605b7866f519e79c3ebc43eb83",
-        "reflection": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/reservoir_trace_atmosphere/reservoirTraceAtmosphere.metal.json",
+        "metallib": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/reservoir_trace_atmosphere/reservoirTraceAtmosphere.metallib",
+        "metallib_hash": "e895c993869ba05b150a7c19d6676b08898de671c5ceb05adba572869a184bea",
+        "reflection": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/reservoir_trace_atmosphere/reservoirTraceAtmosphere.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "reservoirTraceAtmosphere",
-      "spirv": "091f336f2d0bcbc4640066977ad1b542ced03e2f40f917da045876c0fe97eb5c/reservoir_trace_atmosphere/reservoirTraceAtmosphere.spv",
+      "spirv": "03d02448df54c9d5dd45f62a4fe9ffc662c18856fd4fb54e599e85216d860545/reservoir_trace_atmosphere/reservoirTraceAtmosphere.spv",
       "spirv_entry": "main",
-      "spirv_hash": "de3605e828aac36dd8d3e4b6191f0d3b6ed51cfed4caa007cd199102b1e3acd7",
+      "spirv_hash": "1f66319c0597ef927b69d12c58cd4de837added4bc7b70a91492696649948489",
       "stage": "compute"
     }
   ],
