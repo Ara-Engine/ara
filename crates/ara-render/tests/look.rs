@@ -111,10 +111,19 @@ fn a_seeded_exposure_adapts_from_the_seed() -> Result<()> {
 }
 
 /// A 2x2x2 lattice whose probes all see a grey (albedo 0.5) surface 1 m away
-/// emitting `emission` (f16 bits: 0x6000 is 512); bounces through the volume
+/// emitting `emission` (grey; 512 in the tests); bounces through the volume
 /// approach twice that. Distance moments at the limit (packed all ones, look::gi::
 /// pack_moments) reach every shaded point.
-fn emissive_surfaces(emission: u32) -> ProbeSurfaces {
+fn emissive_surfaces(emission: f32) -> ProbeSurfaces {
+    // Grey as RGB9E5 (ProbeSurfaces::texels): nine-bit mantissas under a shared exponent.
+    let rgb9e5 = |v: f32| {
+        if v <= 0. {
+            return 0;
+        }
+        let exponent = v.log2().floor() as i32 + 16;
+        let m = ((v / 2f32.powi(exponent - 24) + 0.5).floor() as u32).min(511);
+        m | m << 9 | m << 18 | (exponent as u32) << 27
+    };
     let probes = 8;
     let mut statics = vec![[f32::from_bits(u32::MAX); 4]; probes * STATIC_VECTORS];
     for p in 0..probes {
@@ -122,14 +131,15 @@ fn emissive_surfaces(emission: u32) -> ProbeSurfaces {
         statics[p * STATIC_VECTORS + 65] = [0.; 4];
     }
     // Packed per ProbeSurfaces::texels: albedo 128 grey, no sky; the octahedral
-    // centre normal; the emission and a hit distance of 1 (0x3c00).
+    // centre normal; the emission, every sub-ray on the relit plane and a hit
+    // distance of 1 (f16 0x3c00).
     let texel = [
         0x0080_8080,
         // Normal (0.5, 0.5) as UNORM10 pairs, sub-ray 0, parallax 1 m
         // (look::gi::log_distance).
         0x5508_0200,
-        emission | emission << 16,
-        emission | 0x3c00 << 16,
+        rgb9e5(emission),
+        0xffff | 0x3c00 << 16,
     ];
     ProbeSurfaces {
         layout: ara_render::look::gi::ProbeLayout::single(ara_render::look::gi::ProbeLattice {
@@ -169,9 +179,9 @@ fn gi_renderer(name: &str) -> Result<(Renderer, CaptureRequest)> {
 fn a_capture_converges_probe_gi_within_its_settle_frames() -> Result<()> {
     let (mut renderer, mut request) = gi_renderer("gi-converge")?;
     request.settle_frames = 64;
-    renderer.set_probe_surfaces(Some(&emissive_surfaces(0)))?;
+    renderer.set_probe_surfaces(Some(&emissive_surfaces(0.)))?;
     let dark = mean(&renderer.capture(&request)?.image);
-    renderer.set_probe_surfaces(Some(&emissive_surfaces(0x6000)))?;
+    renderer.set_probe_surfaces(Some(&emissive_surfaces(512.)))?;
     let settled = mean(&renderer.capture(&request)?.image);
     request.settle_frames = 8;
     let converged = mean(&renderer.capture(&request)?.image);
@@ -200,7 +210,7 @@ fn a_new_volume_fades_into_live_frames_converged() -> Result<()> {
         Ok(mean(&renderer.capture_completed(&request)?.image))
     };
     let sky = live(&mut renderer, 8)?;
-    renderer.set_probe_surfaces(Some(&emissive_surfaces(0x6000)))?;
+    renderer.set_probe_surfaces(Some(&emissive_surfaces(512.)))?;
     let arriving = live(&mut renderer, 1)?;
     let converging = live(&mut renderer, 6)?;
     // Eight probes at a one-probe budget need 64 frames for eight bounces,
@@ -227,7 +237,7 @@ fn a_new_volume_fades_into_live_frames_converged() -> Result<()> {
 #[test]
 fn record_ranges_apply_as_the_whole_update() -> Result<()> {
     let (mut renderer, request) = gi_renderer("gi-ranges")?;
-    let update = ProbeUpdate::new(&emissive_surfaces(0x6000), None)?;
+    let update = ProbeUpdate::new(&emissive_surfaces(512.), None)?;
     renderer.update_probe_surfaces(&update)?;
     let whole = mean(&renderer.capture(&request)?.image);
     renderer.set_probe_surfaces(None)?;

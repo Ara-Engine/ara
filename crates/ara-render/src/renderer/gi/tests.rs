@@ -503,7 +503,14 @@ fn a_budgeted_relight_copies_only_the_last_window_forward_and_keeps_both_atlases
     // Every texel now sees an emitter (no sky, black albedo): each probe relights
     // to pi times its radiance once its window comes round, two probes a frame.
     let emissive = [2., 1., 0.5];
-    let texel = [0, 0, 0x3c00_4000, 0x3c00_3800];
+    // Emissive (2, 1, 0.5) as RGB9E5 (exponent 17: steps of 1/128); every sub-ray on
+    // the relit plane, a hit distance of 1 (f16 0x3c00).
+    let texel = [
+        0,
+        0,
+        256 | 128 << 9 | 64 << 18 | 17 << 27,
+        0xffff | 0x3c00 << 16,
+    ];
     let update = ProbeUpdate::new(
         &ProbeSurfaces {
             layout: layout(),
