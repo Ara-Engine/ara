@@ -15,6 +15,7 @@ mod virtual_geometry;
 pub use fbx::FbxImporter;
 pub use gltf::GltfImporter;
 pub use mesh::{MeshSettings, Vertex, cook_mesh};
+pub use mesh::{PatchCache, load_patch_charts};
 pub use texture::{
     TextureImporter, TextureSettings, TextureUsage, cook_texture, cook_texture_with_preset,
 };

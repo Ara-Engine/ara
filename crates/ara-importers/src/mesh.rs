@@ -4,7 +4,10 @@ use ara_asset_format::{Builder, Kind, Mesh, Meshlet, QuantizedVertex, SkinExtra}
 use bytemuck::{Pod, Zeroable};
 mod bvh;
 mod lods;
+pub(crate) mod patch_service;
 mod patches;
+pub use patch_service::load_patch_charts;
+pub use patches::PatchCache;
 
 /// Off: current fresh-project ABBA shows no clear win after faster texture prep.
 pub(crate) const PARALLEL_GEOMETRY: bool = false;
