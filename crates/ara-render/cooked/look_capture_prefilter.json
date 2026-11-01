@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "4d24547b2baaffd9b87e598ad3b5ab4f7cdfb6ccde046a843e862d4f2bd7d2cd",
+  "key": "fed97778708939f002337995eace53f227ae1f19b994378d6937ce8c75fcb51d",
   "stages": [
     {
-      "dxil": "4d24547b2baaffd9b87e598ad3b5ab4f7cdfb6ccde046a843e862d4f2bd7d2cd/look_capture_prefilter/capturePrefilterMain.dxil",
-      "dxil_hash": "451a3be8ef53f8a3b845c5301677b414e91df417b75454c33bafd3025421f470",
+      "dxil": "fed97778708939f002337995eace53f227ae1f19b994378d6937ce8c75fcb51d/look_capture_prefilter/capturePrefilterMain.dxil",
+      "dxil_hash": "4dd5ab727b8b315bff99bfb0ae151e733290bf0593816133dfdb43aa91ead263",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "4d24547b2baaffd9b87e598ad3b5ab4f7cdfb6ccde046a843e862d4f2bd7d2cd/look_capture_prefilter/capturePrefilterMain.metallib",
-        "metallib_hash": "2e39845ae5634efebb2523a2423ecf062aeb4bc1d15e24721a6e20cf33a24b81",
-        "reflection": "4d24547b2baaffd9b87e598ad3b5ab4f7cdfb6ccde046a843e862d4f2bd7d2cd/look_capture_prefilter/capturePrefilterMain.metal.json",
+        "metallib": "fed97778708939f002337995eace53f227ae1f19b994378d6937ce8c75fcb51d/look_capture_prefilter/capturePrefilterMain.metallib",
+        "metallib_hash": "878081375e35bdb235d7620c12b42faa774a7cb2dd2361698c7faf82e9858cc9",
+        "reflection": "fed97778708939f002337995eace53f227ae1f19b994378d6937ce8c75fcb51d/look_capture_prefilter/capturePrefilterMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "capturePrefilterMain",
-      "spirv": "4d24547b2baaffd9b87e598ad3b5ab4f7cdfb6ccde046a843e862d4f2bd7d2cd/look_capture_prefilter/capturePrefilterMain.spv",
+      "spirv": "fed97778708939f002337995eace53f227ae1f19b994378d6937ce8c75fcb51d/look_capture_prefilter/capturePrefilterMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "80c64f71ccabbfbec203f6054ff468f4cfb4fe2618d5f00d330fda5e0a81232c",
+      "spirv_hash": "bb67ee6b1869f87870eb78386ed230c4272b9de9b440bb7b968970794b64001d",
       "stage": "compute"
     }
   ],

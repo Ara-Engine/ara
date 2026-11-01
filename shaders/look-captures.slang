@@ -107,7 +107,8 @@ void capturePrefilterMain(uint3 tid:SV_DispatchThreadID){
         }
         result=sum/max(weight,1e-4);
     }
-    captureAtlas()[uint2(root.sample,captureLevelY(n0,k))+tid.xy]=float4(result,seen);
+    // tid.y already spans every level's rows of the column.
+    captureAtlas()[uint2(root.sample,0)+tid.xy]=float4(result,seen);
 }
 // Relights each capture against its bake: the ambient irradiance at its capture
 // point (the mean over the six axes of what `ibl` would use: probe GI where the

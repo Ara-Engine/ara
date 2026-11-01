@@ -74,10 +74,10 @@ device and per-view upload state; no simulation, window or process code.
   nearby probes (`gi_cpu::affected`), which `Renderer::update_probe_surfaces` blends in. `tests/gi_edits.rs` checks a moved block's old spot against a fresh view.
   Emissive surfaces (`emitters.rs`, above 5 cd/m2) light the scene directly. A
   worker thread samples each emitter's triangles through its emissive map into
-  0.75 m patches and casts rays against its own mesh: the flux escaping the
-  fixture (shades, sockets) and its lobe become spot or point lights (two-sided
-  only for open sheets, as in the path tracer), clustered until they fit
-  `Quality::emitter_lights`. They follow their instances, ride after the scene's
+  0.75 m patches and casts rays against its own mesh: escaping flux (shades, sockets)
+  and its lobe become spot or point lights (two-sided only for open sheets). Flat even
+  faces (0.01 m2+, a filled rect or disc, escaping the mesh) become rect/disc area lights
+  first (`Panel`); patches cluster into the rest of `Quality::emitter_lights`. They follow their instances, ride after the scene's
   own lights and stay out of fog. Probe bakes zero those materials' emission; the
   threshold is `ara_render::look::EMITTER_RADIANCE`, which screen probe GI also skips.
   `stats().gpu: Option<GpuFrameCosts>` splits native scene updates, compressed

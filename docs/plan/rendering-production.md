@@ -25,8 +25,17 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   spheres) in deferred, forward, ray hits, probe relight and fog; IES import (`ara.ies`) with
   profiles in raster and the path tracer; reference samples every shape with MIS hits; PCSS
   local shadows; light complexity view; editor gizmos and Create entries. Open: rect source
-  textures; promoting large emissive surfaces to rect/disc lights; Unreal converter rect export.
-- [ ] **Emissive surfaces light the scene.** Emissive meshes feed probe GI (hit radiance)
+  textures; Unreal converter rect export. Emissive panels become rect/disc lights (2026-11-01,
+  ebc298f74; next item).
+- [~] **Emissive surfaces light the scene.** Done (ebc298f74): the emitter search
+  (ara-runtime-render `emitters.rs`) turns flat, evenly emitting faces of 0.01 m2 or more that fill
+  a rectangle or disc and escape their own mesh into one rect or disc light of their luminance, a
+  centimetre off the face (LTC, soft shadows, true size); fixtures and uneven faces keep clustered
+  spot/point lights. Rect and disc lights shadow through one 120-degree face along their normal (a
+  cube's side faces saw the wall behind a panel and drew polygonal patches on grazing receivers);
+  penumbra table unchanged. The panel room's four hotspots are gone. Open: rect source textures
+  (uneven panels), the panel room's back wall still 1.56x (probe GI, below).
+  Original item: Emissive meshes feed probe GI (hit radiance)
   and screen-space GI; large or bright emitters can be promoted to area lights for direct
   light and shadows (Lumen's emissive lighting; Unreal's "Emissive Light Source").
 - [x] **Soft shadows (sun and every local light).** Branch t3/9c7b8618 (2026-11-01).
@@ -91,7 +100,39 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   0.37 ms, sunlit room High 0.21 -> 0.31 ms, Polar Epic 0.45 -> 0.48 ms (16x16 visibility taps,
   solid angles, the cascade search). `--stability 48`: Polar High 0.8% of 16x16 blocks flicker
   (0.7-0.9% before), the sunlit room 0%, Polar Epic 39% -> 1.3%.
-  Open: (a) Polar's probe-only floors and back room went darker (left floor 0.62 -> 0.38);
+  Artifact pass (2026-11-01, branch t3/478a28ed, scratch `D:\AraScratch\gileft`): (1) the
+  area-light scene's floor rectangle was SSR's hit region on a rough floor: one mirror ray's
+  binary hit/miss printed the mirrored wall's outline wherever the probe fallback disagreed by a
+  few percent (captures played no part). `SSR.Resolve` (04becdb8b) spreads each half-resolution
+  pixel's confidence and colour over its lobe's footprint as seen through the mirror (GGX median:
+  4 t alpha in the plane of incidence, N.V of that across, t bounded by the view distance, same
+  surface and normal only): 0.116 ms Polar High at 2560x1440. (2) The IES wall's smudge was probe
+  GI: each 22-degree probe texel was relit at one sub-ray hit, so probes point-sampled the profile's
+  spokes. Relight now lights each texel's hit plane over its footprint (a0b08334c): local lights at
+  4x4 points for profiles and hard spot cones, 2x2 otherwise, every shadow once as PCF over the
+  footprint disc on the moment pyramid; the sun keeps VSM pages first (cascades alone read the
+  glass rooms 15% dark, unexplained). GI.Relight Polar High 0.217 -> 0.294 ms (1280x720). (5)
+  Reflection captures reflected black on everything rougher than a mirror since their first
+  commit: `capturePrefilterMain` wrote level k at captureLevelY(k) + tid.y, an offset counted twice
+  (0038e824f). The copper block is copper (36.0 vs 32.9 reference display level). (4) That bug is
+  why Polar's probe-only floors went dark once the probes stopped overshooting: their reflections
+  came from black captures. Left floor 0.38 -> 0.69, Polar off 0.332 -> 0.225, on 0.191.
+  Ten scenes after the pass, off (on): Polar 0.225 (0.191); panel room 0.251 (0.226); sunlit room
+  0.311 (0.345); sky room 0.113 (0.170); courtyard 0.033 (0.037); sky-lit box 0.131 (0.139); glazed
+  0.129 (0.103); unglazed 0.092 (0.076); open ground 10 deg 0.061 (0.092), 2 deg 0.087 (0.160). Mean
+  0.143 off (0.127 before), 0.154 on: working captures now reflect rooms whose probe GI overshoots.
+  (6) Rough-metal ceilings: every source overshoots (sunlit room probes 3.0x, captures 1.95x, base
+  only 1.09x because captures were black). With one bounce (no probe feedback) the sunlit room's
+  left floor already reads 1.05x and the rest 0.07-0.4x: the first bounce off the sunlit red wall
+  onto the floor at its foot is about 2x strong (probes a few tenths of a metre out see the patch
+  at better angles), multi-bounce feedback amplifies it, and the metal ceiling mirrors it. Footprint
+  sun tests changed nothing there. Open: probe irradiance near bright sunlit walls. (7) Screen GI
+  stays off (D32): worse than probes on open ground (+7-9%; part rough specular, whose GGX levels
+  renormalise a grazing lobe's below-horizon share to the rest's mean; part diffuse), the sky room,
+  the box and the sunlit room. Tried and reverted: misses from the fallback's irradiance (open
+  ground better, sky room 0.17 -> 0.22: missed rays point at the window) and cone-filtered misses
+  (no change).
+  Earlier open items: (a) Polar's probe-only floors and back room went darker (left floor 0.62 -> 0.38);
   screen GI recovers most of it. (b) The sunlit room: its rough-metal ceiling (captures
   0.35x, probes 2.9x, screen probes 2.5x); one sun test per 22 degree texel point-samples a
   small bright patch. (c) Screen GI:
@@ -201,7 +242,10 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   far side by a sphere fit (hybrid traces it); glass in screen-space reflections.
 - [~] **Screen-space reflections.** Hi-Z traced (look-screen.slangh `hizTrace`: closest-depth
   pyramid, crawls on behind thin foreground), then captures and probes; rough lobes past 0.25-0.4
-  hand over to screen probes (D32). SSR.Trace 0.60 ms at 2560x1440 High. Open: per-pixel cone
+  hand over to screen probes (D32). SSR.Trace 0.60 ms at 2560x1440 High. SSR.Resolve (04becdb8b)
+  spreads each pixel's hit confidence over its GGX footprint, so rough floors fade between traced
+  and fallback reflections instead of outlining what the mirror rays reach (0.116 ms Polar High;
+  a faint step stays visible at 3x contrast where SSR and the probe fallback differ). Open: per-pixel cone
   footprints from the Hi-Z cell, measured before/after cost at equal settings.
   Original item: Hi-Z traced SSR (min-depth pyramid), stochastic rough
   lobes with a deterministic, noise-free resolve, then captures and probes.
