@@ -1252,6 +1252,8 @@ fn render_debug(debug: ara_play::RenderDebug) -> ara_render::RenderDebug {
         },
         screen_reflections: debug.screen_reflections,
         reflection_captures: debug.reflection_captures,
+        // No protocol switch yet; `ARA_PLANAR_REFLECTIONS=0` turns them off (presets).
+        planar_reflections: true,
         global_illumination: debug.global_illumination,
         screen_gi: debug.screen_gi,
         reference: debug.reference.map(|r| ara_render::ReferenceTrace {
@@ -1353,6 +1355,7 @@ mod cli_tests {
                 reflections: ara_render::ReflectionView::Sources,
                 screen_reflections: false,
                 reflection_captures: false,
+                planar_reflections: true,
                 global_illumination: false,
                 screen_gi: false,
                 reference: Some(ara_render::ReferenceTrace {

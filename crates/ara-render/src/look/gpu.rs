@@ -150,6 +150,9 @@ pub(crate) struct Pipelines {
     pub screen_probes: Pipeline,
     pub screen_gather: Pipeline,
     pub emission_pyramid: Pipeline,
+    /// Planar reflections (`look::planar`): the mirror view into the atlas, its levels.
+    pub planar_copy: Pipeline,
+    pub planar_mip: Pipeline,
     /// Reflection capture bake (face projection, scratch mips, GGX prefilter) and
     /// the per-frame relight (`look::captures`, look-captures.slang).
     pub capture_face: Pipeline,
@@ -363,6 +366,8 @@ impl LookGpu {
             screen_probes: load("look_screen_probes")?,
             screen_gather: load("look_screen_gather")?,
             emission_pyramid: load("look_emission_pyramid")?,
+            planar_copy: load("look_planar_copy")?,
+            planar_mip: load("look_planar_mip")?,
             capture_face: load("look_capture_face")?,
             capture_mip: load("look_capture_mip")?,
             capture_prefilter: load("look_capture_prefilter")?,

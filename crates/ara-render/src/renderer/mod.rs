@@ -144,6 +144,10 @@ pub struct Renderer {
     frame_number: u32,
     /// A fixed sample offset for every frame (`set_jitter_override`).
     jitter_override: Option<[f32; 2]>,
+    /// The mirror plane's height (metres) while a planar reflection's mirror view
+    /// renders (`views::planar`): its native draws keep only what lies above the
+    /// plane, and its frame copies the lit scene into the reflection atlas.
+    mirror_plane: Option<f32>,
     /// Effects a debug view turned off (`set_debug`).
     debug: RenderDebug,
     /// The quality last requested (`set_quality`), before `debug` removes effects.

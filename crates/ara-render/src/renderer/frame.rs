@@ -29,7 +29,9 @@ pub(super) struct Frame {
     pub sizes: [u32; 4],
     /// xy this frame's sample offset from render pixel centres in render pixels
     /// (+y down; zero without jitter), z the texture-footprint scale
-    /// (render / display width: a negative mip bias when upscaled), w unused.
+    /// (render / display width: a negative mip bias when upscaled), w the clip height
+    /// native draws keep only what lies above (`Renderer::mirror_plane` plus
+    /// `look::planar::LIFT`; -1e30: none).
     pub upscale: [f32; 4],
 }
 /// Halton sample count for a render/display pixel ratio. View schedulers use
@@ -159,10 +161,18 @@ impl Renderer {
                 },
             ],
             sizes: [self.render[0], self.render[1], self.size[0], self.size[1]],
-            upscale: [offset.x, offset.y, render[0] / display[0], 0.],
+            upscale: [
+                offset.x,
+                offset.y,
+                render[0] / display[0],
+                self.mirror_plane
+                    .map_or(NO_CLIP, |plane| plane + crate::look::planar::LIFT),
+            ],
         }
     }
 }
+/// The clip height of frames that clip nothing (raster.slangh `frameClip`).
+const NO_CLIP: f32 = -1e30;
 fn halton(mut index: u32, base: u32) -> f32 {
     let mut result = 0.;
     let mut f = 1.;

@@ -4,6 +4,7 @@ use anyhow::Context;
 use std::sync::{Arc, Weak, mpsc};
 mod asynchronous;
 mod captures;
+mod planar;
 mod preparation;
 mod state;
 #[cfg(test)]
@@ -95,6 +96,11 @@ pub(super) struct Views {
     capture_landed: Vec<crate::look::captures::CaptureImage>,
     /// Explicit captures to read back again (`Renderer::reread_reflection_capture`).
     capture_rereads: Vec<u64>,
+    /// Planar reflections of primary frames (`look::planar`): histograms, plane
+    /// selection and the atlas; `None` while the quality has none (`planar.rs`).
+    pub(super) planar: Option<crate::look::planar::Planar>,
+    /// The camera planar reflections render their mirror view through.
+    planar_view: Option<ViewState>,
 }
 impl Default for Views {
     fn default() -> Self {
@@ -110,6 +116,8 @@ impl Default for Views {
             preparing: None,
             captures: Default::default(),
             capture_view: None,
+            planar: None,
+            planar_view: None,
             capture_images: Default::default(),
             capture_readbacks: Vec::new(),
             capture_landed: Vec::new(),

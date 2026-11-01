@@ -73,6 +73,9 @@ enum Recipe {
     Refract(u32),
     /// Blended casters' depth and film opacity from the sun (`look::translucent`).
     TranslucentSun,
+    /// A planar reflection's mirror view into the atlas (0) or one filtered level
+    /// (1..`look::planar::LEVELS`).
+    Planar(u32),
     /// Ownership/synchronization only.
     Empty,
 }
@@ -129,6 +132,9 @@ impl Renderer {
             "Exposure must be a finite positive multiplier"
         );
         let camera = camera_spec.resolve(self.size)?;
+        // Planar reflections (look::planar): the chosen floor's mirror view renders
+        // before this frame reads it; this frame counts the next choice's candidates.
+        let planar = self.prepare_planar(&camera, deterministic || capture, mode)?;
         let output_history = if self.targets.history == Some(HISTORY0) {
             HISTORY1
         } else {
@@ -587,6 +593,22 @@ impl Renderer {
             ];
             look_frame.ssr_images = self.look.ssr_indices();
             look_frame.ssr_resolve = self.look.ssr_resolve_indices();
+            if let (Some(frame), Some(state), Some(settings)) = (
+                &planar,
+                &self.views.planar,
+                self.look.quality.planar_reflections,
+            ) {
+                look_frame.planar_params[1] = settings.max_roughness;
+                if let Some(i) = frame.request {
+                    look_frame.planar_info[1] = state.histogram(i).1;
+                }
+                if let (Some((vp, plane)), Some(atlas)) = (frame.mirror, &state.atlas) {
+                    look_frame.planar_vp = vp.to_cols_array_2d();
+                    look_frame.planar_params[0] = plane;
+                    look_frame.planar_info[0] = atlas.sampled;
+                    [look_frame.planar_info[2], look_frame.planar_info[3]] = atlas.base;
+                }
+            }
         }
         // Screen probe GI shades its hits from the reflection pyramid.
         if self.look.frame_screen {
@@ -1056,10 +1078,35 @@ impl Renderer {
         let mut ssr_reads = ao_reads.clone();
         ssr_reads.push((ids[MATERIAL], Access::ShaderRead));
         let history = self.targets.history.map(|h| ids[h]);
-        let ssr = self.look.ssr_passes(&mut graph, &look, history, &ssr_reads);
+        // Planar reflections: the trace reads the mirror atlas and counts into this
+        // frame's height histogram, read back once the frame completes.
+        let mut planar_trace = Vec::new();
+        let mut planar_histogram = None;
+        if let (Some(frame), Some(state)) = (&planar, &self.views.planar) {
+            if let (Some(_), Some(atlas)) = (frame.mirror, &state.atlas) {
+                let id = graph.import(Resource::Image(atlas.image), atlas.state);
+                planar_trace.push((id, Access::ShaderRead));
+            }
+            if let Some(i) = frame.request {
+                let id = graph.import(Resource::Buffer(state.histogram(i).0), host_write);
+                planar_trace.push((id, Access::Storage));
+                planar_histogram = Some(id);
+            }
+        }
+        let ssr = self
+            .look
+            .ssr_passes(&mut graph, &look, history, &ssr_reads, &planar_trace);
         let pyramid = !ssr.is_empty();
         for (id, pass) in ssr {
             declare(id, Recipe::Look(pass));
+        }
+        if let Some(histogram) = planar_histogram {
+            let readback = graph.pass(
+                "Planar.Requests",
+                Queue::Graphics,
+                [(histogram, Access::HostRead)],
+            );
+            declare(readback, Recipe::Empty);
         }
         // After the reflection pyramid: the High/Epic bitmask bounces last frame's colour.
         // Materials mark cutouts, which occlude nothing.
@@ -1292,6 +1339,54 @@ impl Renderer {
             declare(count, Recipe::Overdraw);
             shaded.push(count);
         }
+        // A planar reflection's mirror view (views/planar.rs) copies its lit scene into
+        // the reflection atlas and filters its levels here, while the G-buffer emission
+        // the copy reads is still defined.
+        let planar_atlas = match (
+            self.mirror_plane,
+            self.views.planar.as_ref().and_then(|p| p.atlas.as_ref()),
+        ) {
+            (Some(_), Some(atlas)) => {
+                let atlas = graph.import(Resource::Image(atlas.image), atlas.state);
+                let sky = [crate::look::gpu::TRANSMITTANCE, crate::look::gpu::SKY_VIEW]
+                    .into_iter()
+                    .filter(|_| self.look.look.sky.is_some())
+                    .map(|i| (look.image(i), Access::ShaderRead));
+                let copy = graph.pass(
+                    "Planar.Copy",
+                    Queue::Graphics,
+                    [
+                        (ids[HDR], Access::ShaderRead),
+                        (ids[DEPTH], Access::ShaderRead),
+                        (ids[EMISSIVE], Access::ShaderRead),
+                        (look.frame, Access::ShaderRead),
+                        (atlas, Access::Storage),
+                    ]
+                    .into_iter()
+                    .chain(sky)
+                    .chain(graphics.iter().copied()),
+                );
+                declare(copy, Recipe::Planar(0));
+                const NAMES: [&str; crate::look::planar::LEVELS as usize] = [
+                    "Planar.Mip1",
+                    "Planar.Mip2",
+                    "Planar.Mip3",
+                    "Planar.Mip4",
+                    "Planar.Mip5",
+                    "Planar.Mip6",
+                ];
+                for (level, name) in (1..).zip(NAMES) {
+                    let mip = graph.pass(
+                        name,
+                        Queue::Graphics,
+                        [(atlas, Access::Storage), (look.frame, Access::ShaderRead)],
+                    );
+                    declare(mip, Recipe::Planar(level));
+                }
+                Some(atlas)
+            }
+            _ => None,
+        };
         // Deferred post leaves the lit scene in HDR for external composites (`finish`).
         // Captures always produce their own output, never a deferred frame.
         let deferred = self.look.deferred && mode.lit() && !capture;
@@ -2038,6 +2133,36 @@ impl Renderer {
                         self.rays
                             .record(&mut recorder, ray_pass, self.frame_index, self.render)
                     }
+                    Recipe::Planar(level) => {
+                        let planar = self.views.planar.as_ref().and_then(|p| p.atlas.as_ref());
+                        if let (Some(atlas), Some(plane)) = (planar, self.mirror_plane) {
+                            let base = atlas.base;
+                            let (pipeline, size) = if level == 0 {
+                                (self.look.pipelines.planar_copy, base)
+                            } else {
+                                let (size, _) = crate::look::planar::level(base, level);
+                                (self.look.pipelines.planar_mip, size)
+                            };
+                            recorder.push(Command::Pipeline(pipeline));
+                            recorder.push(Command::Constants(RootConstants {
+                                words: [
+                                    self.frame_index,
+                                    self.targets.sampled[HDR],
+                                    atlas.storage,
+                                    level,
+                                    plane.to_bits(),
+                                    base[0],
+                                    base[1],
+                                    0,
+                                ],
+                            }));
+                            recorder.push(Command::Dispatch([
+                                size[0].div_ceil(8),
+                                size[1].div_ceil(8),
+                                1,
+                            ]));
+                        }
+                    }
                     Recipe::Empty => {}
                 }
                 recorder.barriers(pass.after.iter().copied());
@@ -2061,6 +2186,12 @@ impl Renderer {
             self.targets.states[i] = compiled.final_states[id.0];
         }
         self.look.finish(&look, &compiled.final_states);
+        if let (Some(id), Some(atlas)) = (
+            planar_atlas,
+            self.views.planar.as_mut().and_then(|p| p.atlas.as_mut()),
+        ) {
+            atlas.state = compiled.final_states[id.0];
+        }
         self.rays.finish(&compiled.final_states);
         if let Some(chain) = &tsr_ids {
             self.tsr.complete(chain, &compiled.final_states);
@@ -2096,6 +2227,9 @@ impl Renderer {
         }
         if let (Some(vsm), Some(point)) = (&mut self.look.vsm, graphics_point) {
             vsm.submitted(&vsm_draws, vsm_request, point);
+        }
+        if let (Some(state), Some(point)) = (&mut self.views.planar, graphics_point) {
+            state.submitted(planar.as_ref().and_then(|p| p.request), point);
         }
         if let Some(cascades) = &mut self.look.cascades {
             for (&draw, patch) in cascade_draw.iter().zip(&cascade_patches) {

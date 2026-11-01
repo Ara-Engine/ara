@@ -15,6 +15,7 @@
 #include "look.slangh"
 #include "look-captures.slangh"
 #include "look-screen.slangh"
+#include "look-planar.slangh"
 // Root word 2: pass (0 pyramid level 1 from the history, 1..5 levels 2..SSR_LEVELS).
 [shader("compute")][numthreads(8,8,1)]
 void ssrPyramidMain(uint3 tid:SV_DispatchThreadID){
@@ -68,6 +69,36 @@ float4 ssrFootprint(Frame f,float3 world,float3 n,float3 v,float3 r,float t,floa
     u*=min(1,cap/max(length(u),1e-4));w*=min(1,cap/max(length(w),1e-4));
     return float4(u,w);
 }
+// The reflection at `world` on the mirror plane (look-planar.slangh; unit normal `n`,
+// view `v` from the camera, mirror direction `r`, perceptual `roughness`), rgb and a
+// confidence; `travelled` how far the ray went. The flat mirror's texel tells how far
+// its ray travelled (t); the surface's own mirror direction (a normal map tilts it)
+// meets x = world + r t, whose mirror-view texel it reads, filtered over the GGX lobe
+// as the screen trace filters its hits: the narrow width picks the level, five taps
+// along the plane of incidence stretch it. The mirror view is unjittered and half
+// resolution: lobes narrower than its texel read level 0 bilinearly.
+float4 ssrPlanar(Frame f,Look l,float3 world,float3 n,float3 v,float3 r,float roughness,out float travelled){
+    float3 flat=planarProject(l,world);
+    float t=planarLevel(l,0,flat.xy).a;travelled=t;
+    // Open sky: far enough that the projection sees a direction, near enough for floats.
+    float3 hitWorld=world+r*min(t,1000);
+    float3 at=r.y>0.01?planarProject(l,hitWorld):flat;
+    if(at.z<=0)at=flat;
+    float alpha=roughness*roughness,spread=min(t,1000)*alpha;
+    float3 inPlane=n-r*dot(n,r);
+    inPlane=dot(inPlane,inPlane)>1e-6?normalize(inPlane):normalize(cross(r,abs(r.y)<0.99?float3(0,1,0):float3(1,0,0)));
+    float3 across=cross(r,inPlane);float facing=max(saturate(-dot(n,v)),0.05);
+    float2 base=float2(l.planarInfo.zw),centre=at.xy*base;
+    float wide=2*length(planarProject(l,hitWorld+across*spread*facing).xy*base-centre);
+    float2 along=planarProject(l,hitWorld+inPlane*spread).xy*base-centre;
+    along*=min(1,base.y*0.25/max(length(along),1e-3));
+    float level=clamp(log2(max(max(wide,length(along)*0.5),1)),0,PLANAR_LEVELS);along/=base;
+    float3 colour=0;float total=0;
+    for(int k=-2;k<=2;k++){float w=exp(-float(k*k)*0.5);colour+=planarRadiance(l,at.xy+along*(float(k)*0.5),level)*w;total+=w;}
+    float2 edge=min(at.xy,1-at.xy)*16;
+    float fade=saturate(min(edge.x,edge.y))*(1-saturate((roughness/l.ssr.x-0.8)/0.2));
+    return float4(colour/total,fade);
+}
 // rgb reflected radiance, a confidence (negative: mostly from the captures); half
 // resolution (the full-resolution pixel 2p). The footprint image gets the pixel's
 // reflection footprint (ssrFootprint; zero where nothing is traced).
@@ -78,8 +109,24 @@ void ssrTraceMain(uint3 tid:SV_DispatchThreadID){
     // Hybrid frames' traced reflections own surfaces well below their cut
     // (look-rt.slang rtFilterMain): no march there (rtInfo[1].w bit 0, look-rt.slangh).
     bool traced=(l.rtInfo[1].w&1)!=0 && roughness<0.8*l.rtParams[0].x;float4 footprint=0;
+    // Floor detection (look/planar.rs Selector): every fourth pixel each way that faces
+    // up, lies below the camera and is smooth enough, counted by its depth below the
+    // camera (look-planar.slangh histogram).
+    if(l.planarInfo.y!=0 && covered && all((tid.xy&3)==0) && roughness<l.planarParams.y){
+        float below=(f.camera.y-world.y)/PLANAR_BIN;
+        if(below>=0 && below<float(PLANAR_BINS) && normalize(gbufferNormal(f,p)).y>0.98){
+            uint bin=uint(below);
+            buffers[NonUniformResourceIndex(l.planarInfo.y)].InterlockedAdd(bin*4,1u);
+            buffers[NonUniformResourceIndex(l.planarInfo.y)].InterlockedAdd((PLANAR_BINS+bin)*4,uint(frac(below)*256));
+        }
+    }
     if(covered && roughness<l.ssr.x && !traced){
         float3 n=normalize(gbufferNormal(f,p)),v=normalize(world.xyz-f.camera.xyz),r=reflect(v,n);
+        // The mirror plane's pixels read its mirror view (look-planar.slangh), which saw
+        // what they reflect from below the floor, off screen and behind foreground alike.
+        float reach=l.ssr.y,travelled;
+        if(planarSurface(f,l,world.xyz,n))result=ssrPlanar(f,l,world.xyz,n,v,r,roughness,travelled);
+        else{
         // The ray's screen segment (look-screen.slangh screenSegment: clipped in front of
         // the near plane, where a segment reaching behind the camera has no linear
         // projection, then at the screen's edge), traversed through the Hi-Z pyramid: a
@@ -88,11 +135,11 @@ void ssrTraceMain(uint3 tid:SV_DispatchThreadID){
         // ray went behind a foreground object, not into it) is no hit: the traversal
         // crawls on behind it until the ray comes out in front again and can meet what
         // lies beyond (no hard-edged holes behind every nearer pillar or arch).
-        float3 a,b;float reach=screenSegment(f,world.xyz+n*0.01,r,l.ssr.y,a,b);
+        float3 a,b;reach=screenSegment(f,world.xyz+n*0.01,r,l.ssr.y,a,b);
         float s=hizTrace(f,l,a,b-a,uint(l.ssr.z),uint(l.screenParams[0].y),0.02);
         bool hit=s>=0;float3 at=hit?lerp(a,b,s):a;
         // A miss travelled to where its segment leaves the screen (or its reach).
-        float travelled=length(worldAtDepth(f,b.xy,b.z)-world.xyz);
+        travelled=length(worldAtDepth(f,b.xy,b.z)-world.xyz);
         if(hit){
             // Last frame's colour at the hit, reprojected.
             float3 hitWorld=worldAtDepth(f,floor(at.xy)+0.5,gbufferDepth(f,int2(at.xy)));travelled=length(hitWorld-world.xyz);
@@ -133,7 +180,7 @@ void ssrTraceMain(uint3 tid:SV_DispatchThreadID){
                 result=float4(colour,fade);
             }
         }
-
+        }
         // Whatever the screen leaves open, the captures trace on.
         if(result.a<0.999&&l.captureInfo[1].z!=0){
             float4 captured=ssrCaptures(l,world.xyz,n,r,roughness,reach)*(1-saturate((roughness/l.ssr.x-0.8)/0.2));

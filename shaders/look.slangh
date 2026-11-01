@@ -94,6 +94,11 @@ struct Look {
     // (sampled), z footprints, w resolved reflections (storage); ssrImages.y reads the latter.
     uint4 ssrResolve;
     uint4 fogLightsResolve;  // half resolution: x the pass's target (sampled), y the render-size scatter (storage)
+    // Planar reflections (look/planar.rs; look-planar.slangh): the mirror view of the
+    // floor plane the height histogram picked, rendered this frame from below it.
+    float4x4 planarVp;       // the mirror view's view-projection (unjittered)
+    float4 planarParams;     // x mirror plane height (m), y floor detection's roughest surface
+    uint4 planarInfo;        // x mirror atlas (sampled; 0 none), y height histogram (storage; 0 none), zw level-0 texels
 };
 static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64,LOOK_REFLECTION_SOURCES=128,LOOK_VOLUMETRIC=256,LOOK_FOG_SHADOWED=512,LOOK_SCREEN_GI=1024;
 // Automatic exposure's extra compensation (stops) at metered scene EV100 `ev`:

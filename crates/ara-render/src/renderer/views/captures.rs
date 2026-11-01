@@ -45,7 +45,6 @@ impl Renderer {
         if let Err(error) = self.bake_captures(sync) {
             eprintln!("ara-render: reflection captures are off after a failed bake: {error:#}");
             self.views.captures.fail();
-            self.views.captures.baking = false;
         }
     }
 
@@ -390,9 +389,11 @@ impl Renderer {
         result
     }
 
-    /// Runs `draw` with the capture camera's state swapped in, as secondary views
-    /// do, sharing the probe GI; the primary's jitter override and captures stay out.
-    fn with_capture_view(
+    /// Runs `draw` with a secondary camera's state swapped in (capture faces, the
+    /// planar mirror view), as secondary views do, reading the shared probe GI without
+    /// relighting it; the primary's jitter override stays out, and `quality` applies to
+    /// the swapped-in view alone (the primary's requested quality is kept).
+    pub(super) fn with_capture_view(
         &mut self,
         state: &mut ViewState,
         quality: crate::look::Quality,
@@ -413,16 +414,17 @@ impl Renderer {
         self.look.probe_staging = std::mem::take(&mut staging);
         self.look.probe_writes = std::mem::take(&mut writes);
         self.secondary_active = true;
-        self.views.captures.baking = true;
         let jitter = self.jitter_override.take();
         let result = (|| {
-            if self.look.quality != quality {
-                self.set_quality(quality)?;
+            if self.look.quality != self.debug.apply(quality) {
+                let requested = self.requested_quality;
+                let applied = self.set_quality(quality);
+                self.requested_quality = requested;
+                applied?;
             }
             draw(self)
         })();
         self.jitter_override = jitter;
-        self.views.captures.baking = false;
         self.secondary_active = false;
         gi = self.look.gi.take();
         staging = std::mem::take(&mut self.look.probe_staging);

@@ -40,9 +40,15 @@ struct Frame {
     // two: render in the scene passes' record, display in the resolve/post record.
     uint4 sizes;
     // xy this frame's sample offset from render pixel centres in render pixels (+y
-    // down; zero without jitter), z texture footprint scale (render / display), w unused.
+    // down; zero without jitter), z texture footprint scale (render / display), w the
+    // clip height: native draws keep only what lies above it (a planar reflection's
+    // mirror view, look/planar.rs; frameClip), -1e30 in every other view.
     float4 upscale;
 };
+// Signed distance of `world` above the frame's clip height (Frame.upscale.w): native
+// vertex stages write it as SV_ClipDistance0, so a planar reflection's mirror view,
+// whose camera sits below the floor, does not see the floor and what lies under it.
+float frameClip(Frame f,float3 world){return world.y-f.upscale.w;}
 // Shaded surface. `ao` is material ambient occlusion (opaque G-buffer albedo.a).
 // `transmission` (0..1, resolved factor times map) is the share of diffuse light
 // passing through a forward (transparent) surface instead of scattering; opaque

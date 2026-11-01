@@ -106,6 +106,7 @@ impl Renderer {
             previous_vp: Mat4::IDENTITY,
             frame_number: 0,
             jitter_override: None,
+            mirror_plane: None,
             debug: super::RenderDebug::default(),
             requested_quality: None,
             artifacts: artifacts.to_path_buf(),

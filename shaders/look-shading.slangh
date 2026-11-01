@@ -6,6 +6,7 @@
 #include "look-captures.slangh"
 #include "look-translucent.slangh"
 #include "look-shadow.slangh"
+#include "look-planar.slangh"
 // Cascaded sun shadows (renderer/frame.rs): f.look.y texels per cascade side, f.look.z
 // active cascades, far distances in f.splits.
 uint cascadeIndex(Frame f,float3 world){float d=dot(world-f.camera.xyz,f.forward.xyz);return d<f.splits.x?0:d<f.splits.y?1:d<f.splits.z?2:3;}
@@ -386,11 +387,13 @@ float3 ibl(Frame f,Look l,Surface s,Lobes o,float3 world,float3 v,int2 p,bool ga
     }
     if(view==1)return specular*o.albedo;
     if(view==2){
-        // Screen green, capture trace blue, screen probes yellow, box-projected
-        // captures cyan, probes orange, sky magenta; surfaces too rough to trace are dimmed.
+        // Screen green, planar mirror view white, capture trace blue, screen probes
+        // yellow, box-projected captures cyan, probes orange, sky magenta; surfaces too
+        // rough to trace are dimmed.
         float screen=r.a*(1-captured),traced=r.a*captured,rest=1-r.a,screenProbes=rest*spSpec,left=rest-screenProbes;
         float box=left*boxed,probes=left*(1-boxed)*coverage,sky=left-box-probes;
-        float3 c=screen*float3(0.1,0.85,0.1)+traced*float3(0.15,0.35,1)+screenProbes*float3(1,0.9,0.1)+box*float3(0,0.8,0.8)+probes*float3(1,0.45,0)+sky*float3(0.9,0.15,0.8);
+        float planar=gathered&&planarSurface(f,l,world,s.normal)?screen:0;screen-=planar;
+        float3 c=screen*float3(0.1,0.85,0.1)+planar*float3(0.95,0.95,0.95)+traced*float3(0.15,0.35,1)+screenProbes*float3(1,0.9,0.1)+box*float3(0,0.8,0.8)+probes*float3(1,0.45,0)+sky*float3(0.9,0.15,0.8);
         float shade=0.55+0.45*saturate(dot(s.normal,v));
         return c*shade*(s.roughness<l.ssr.x||(l.flags.y&LOOK_REFLECTIONS)==0?1:0.25)/max(hdrExposure(f,l),1e-6);
     }

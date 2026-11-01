@@ -1,0 +1,47 @@
+#pragma once
+// Planar reflections (look/planar.rs): the reflection trace (look-ssr.slang) reads
+// the mirror view of the dominant glossy floor on that floor's pixels, so a floor
+// reflects what stands above it as seen from the floor itself, including what the
+// camera cannot see (skylights behind hanging pipes, the underside of a table) and
+// what lies off screen. Include after look.slangh.
+// Look rows (zero: none):
+//   planarVp: the mirror view's view-projection (its camera mirrored below the plane)
+//   planarParams: x the plane's height (m), y floor detection's roughest surface
+//   planarInfo: x mirror atlas (sampled), y this frame's height histogram (storage),
+//     zw level-0 texels
+// The atlas holds level 0 at the origin and levels 1..PLANAR_LEVELS side by side to its
+// right, each half the last: rgb absolute radiance, a the distance the reflected ray
+// travelled from the plane to what it met (PLANAR_SKY for open sky; level 0's own,
+// coarser levels the nearest of their footprint).
+static const uint PLANAR_LEVELS=6;
+// Height histogram (floor detection): PLANAR_BINS counts of sampled glossy, upward
+// pixels by depth below the camera in PLANAR_BIN steps, then as many sums of each
+// sample's offset within its bin in 1/256 bins (look/planar.rs Selector).
+static const uint PLANAR_BINS=4096;
+static const float PLANAR_BIN=0.01,PLANAR_SKY=60000;
+uint2 planarSize(uint2 base,uint k){return max(base>>k,uint2(1));}
+uint2 planarOrigin(uint2 base,uint k){
+    if(k==0)return 0;uint x=base.x;for(uint j=1;j<k;j++)x+=max(base.x>>j,1u);return uint2(x,0);
+}
+// Whether the surface at `world` (unit normal `n`) lies on the mirror plane: within a
+// centimetre (and a thousandth of its view distance) of it, facing up. Its reflection
+// is the mirror view's.
+bool planarSurface(Frame f,Look l,float3 world,float3 n){
+    if(l.planarInfo.x==0||n.y<0.9)return false;
+    return abs(world.y-l.planarParams.x)<0.01+0.001*length(world-f.camera.xyz);
+}
+// Clip-space x, y and w of `world` in the mirror view, as atlas level-0 uv and w.
+float3 planarProject(Look l,float3 world){
+    float4 c=mul(l.planarVp,float4(world,1));
+    return float3(c.x/c.w*0.5+0.5,0.5-c.y/c.w*0.5,c.w);
+}
+// Bilinear level `k` of the atlas at level uv `uv` (clamped inside the level).
+float4 planarLevel(Look l,uint k,float2 uv){
+    uint2 base=l.planarInfo.zw;float2 size=float2(planarSize(base,k)),atlas=float2(2*base.x,base.y);
+    return textures[NonUniformResourceIndex(l.planarInfo.x)].SampleLevel(samplers[2],(float2(planarOrigin(base,k))+clamp(uv*size,0.5,size-0.5))/atlas,0);
+}
+// Radiance at a fractional level (0..PLANAR_LEVELS).
+float3 planarRadiance(Look l,float2 uv,float level){
+    level=clamp(level,0,PLANAR_LEVELS);uint lo=uint(level);
+    return lerp(planarLevel(l,lo,uv).rgb,planarLevel(l,min(lo+1,PLANAR_LEVELS),uv).rgb,frac(level));
+}

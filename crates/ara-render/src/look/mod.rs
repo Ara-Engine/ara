@@ -19,6 +19,7 @@ pub(crate) mod local;
 pub(crate) mod ltc;
 pub(crate) mod moments;
 pub(crate) mod passes;
+pub(crate) mod planar;
 pub mod placement;
 pub(crate) mod refract;
 pub(crate) mod screen_gi;
@@ -120,6 +121,21 @@ pub struct Quality {
     /// light come from what the screen shows (multi-bounce, emissive surfaces, near
     /// occlusion). `None` keeps the probe volume's lighting alone.
     pub screen_gi: Option<ScreenGi>,
+    /// Planar reflections (`look::planar`; needs `reflections` and native content): the
+    /// dominant glossy floor in view reflects a mirror view rendered each frame from
+    /// below it, so it shows what stands above it as the floor sees it (off screen,
+    /// behind foreground) instead of what the screen trace finds. `None` keeps the
+    /// screen trace and captures there.
+    pub planar_reflections: Option<PlanarReflections>,
+}
+
+/// Planar reflection budgets (`Quality::planar_reflections`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PlanarReflections {
+    /// The mirror view's size per axis as a share of the render size (0.25 to 1).
+    pub scale: f32,
+    /// Floors at most this rough (perceptual) count when choosing the mirror plane.
+    pub max_roughness: f32,
 }
 
 /// Screen probe GI budgets (`Quality::screen_gi`).
@@ -183,6 +199,7 @@ impl Default for Quality {
             ray_queries: None,
             volumetric_fog: None,
             screen_gi: None,
+            planar_reflections: None,
         }
     }
 }
@@ -332,6 +349,11 @@ impl Quality {
                         && r.distance.is_finite()
                         && r.distance > 0.
                         && (4..=128).contains(&r.steps)
+                })
+                && self.planar_reflections.is_none_or(|p| {
+                    (0.25..=1.0).contains(&p.scale)
+                        && p.max_roughness > 0.
+                        && p.max_roughness <= 1.
                 })
                 && self.ambient_occlusion.is_none_or(|a| {
                     a.radius.is_finite()

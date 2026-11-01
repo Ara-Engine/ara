@@ -10,7 +10,7 @@ use anyhow::{Result, bail};
 use ara_gpu::GpuDevice;
 use ara_render::look::{
     AmbientOcclusion, DepthOfFieldQuality, FarShadows, LocalShadows, MotionBlurQuality, Quality,
-    RayQueries, ReflectionCaptures, Reflections, ScreenGi, Shadows, VirtualShadows,
+    PlanarReflections, RayQueries, ReflectionCaptures, Reflections, ScreenGi, Shadows, VirtualShadows,
     VolumetricFogQuality,
 };
 
@@ -431,6 +431,7 @@ impl QualityPreset {
                 // The coarse fog grid alone (still shadowed).
                 volumetric_fog: None,
                 screen_gi: None,
+                planar_reflections: None,
             },
             Self::Medium => Quality {
                 shadows: shadows(3, 1024, 100., (1024, 1000.)),
@@ -458,6 +459,7 @@ impl QualityPreset {
                 ray_queries: None,
                 volumetric_fog: volumetric(16, 48, 2, 12),
                 screen_gi: None,
+                planar_reflections: None,
             },
             Self::High => Quality {
                 shadows: shadows(4, 2048, 150., (2048, 1500.)),
@@ -495,6 +497,7 @@ impl QualityPreset {
                 // from the path tracer than probe GI alone (rough lobes at grazing views,
                 // rough-metal ceilings). Tuned settings: SCREEN_GI_HIGH.
                 screen_gi: None,
+                planar_reflections: planar_reflections(),
             },
             Self::Epic => Quality {
                 shadows: shadows(4, 2048, 250., (2048, 2000.)),
@@ -527,6 +530,7 @@ impl QualityPreset {
                 volumetric_fog: volumetric(8, 96, 2, 24),
                 // Off by default, as on High; tuned settings: SCREEN_GI_EPIC.
                 screen_gi: None,
+                planar_reflections: planar_reflections(),
             },
         }
     }
@@ -545,6 +549,18 @@ pub struct Plan {
     /// ([`verified_ray_tracing`]), so the path is raster; hosts report ARA6008 so
     /// the declined opt-in is never silent.
     pub rt_fallback: bool,
+}
+
+/// High/Epic planar reflections: the dominant glossy floor in view reflects a
+/// half-resolution mirror view (`look::planar`; `ARA_PLANAR_REFLECTIONS=0` turns them
+/// off, for A/B captures).
+fn planar_reflections() -> Option<PlanarReflections> {
+    std::env::var_os("ARA_PLANAR_REFLECTIONS")
+        .is_none_or(|v| v != "0")
+        .then_some(PlanarReflections {
+            scale: 0.5,
+            max_roughness: 0.4,
+        })
 }
 
 /// High/Epic local reflection captures (512-texel tiles, `captures` at most). Authored

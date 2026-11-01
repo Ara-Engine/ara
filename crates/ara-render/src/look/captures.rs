@@ -627,8 +627,6 @@ pub(crate) struct Captures {
     copy: bool,
     cooldown: u32,
     waited: u32,
-    /// Bake frames are rendering (a capture view is swapped in).
-    pub baking: bool,
     /// A bake failed: captures stay off until new specs arrive.
     failed: bool,
     /// The specs changed since the last plan built records from them.

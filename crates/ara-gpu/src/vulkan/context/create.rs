@@ -248,7 +248,9 @@ impl Gpu {
                     && core_supported.shader_sampled_image_array_dynamic_indexing != 0
                     && core_supported.shader_storage_image_array_dynamic_indexing != 0
                     && core_supported.shader_storage_image_extended_formats != 0
-                    && core_supported.independent_blend != 0,
+                    && core_supported.independent_blend != 0
+                    // Native vertex stages write SV_ClipDistance0 (planar reflection views).
+                    && core_supported.shader_clip_distance != 0,
                 "Missing required bindless/raster/sync features"
             );
             let priorities = [1.0, 0.5];
@@ -295,7 +297,8 @@ impl Gpu {
                 .shader_sampled_image_array_dynamic_indexing(true)
                 .shader_storage_image_array_dynamic_indexing(true)
                 .shader_storage_image_extended_formats(true)
-                .independent_blend(true);
+                .independent_blend(true)
+                .shader_clip_distance(true);
             let mut device_info = vk::DeviceCreateInfo::default()
                 .enabled_extension_names(&device_extensions)
                 .enabled_features(&core)

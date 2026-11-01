@@ -188,6 +188,13 @@ pub(crate) struct LookFrame {
     /// Half-resolution frames: x the pass's target (sampled), y the render-size scatter
     /// the resolve writes (storage).
     pub fog_lights_resolve: [u32; 4],
+    /// Planar reflections (`look::planar`, look-planar.slangh): the mirror view's
+    /// view-projection (unjittered), params x the mirror plane's height (m), y floor
+    /// detection's roughest surface; info x the mirror atlas (sampled), y this frame's
+    /// height histogram (storage), zw level-0 texels. Zero: none.
+    pub planar_vp: [[f32; 4]; 4],
+    pub planar_params: [f32; 4],
+    pub planar_info: [u32; 4],
     /// Local fog volume records (`FogVolume::row`), read by offset: not part of the
     /// shader's `Look` struct (a variable index into it would spill to memory). Last,
     /// so the shader struct is a prefix of this one.
@@ -367,6 +374,9 @@ impl LookFrame {
             fog_lights_info: [0; 4],
             ssr_resolve: [0; 4],
             fog_lights_resolve: [0; 4],
+            planar_vp: [[0.; 4]; 4],
+            planar_params: [0.; 4],
+            planar_info: [0; 4],
         }
     }
 }

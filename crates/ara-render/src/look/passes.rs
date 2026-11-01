@@ -250,13 +250,15 @@ impl LookGpu {
     /// Screen-space reflections before lighting: a colour pyramid of the previous
     /// resolved frame (`history`; none on the first frame) and the half-resolution
     /// trace. The pyramid also runs for screen probe GI alone (its hits shade from it).
-    /// `reads` must cover depth, normals, world positions and the frame.
+    /// `reads` must cover depth, normals, world positions and the frame; `trace` adds
+    /// the trace's own uses (planar reflections' atlas and height histogram).
     pub(crate) fn ssr_passes(
         &self,
         graph: &mut Graph,
         ids: &LookIds,
         history: Option<ResourceId>,
         reads: &[(ResourceId, Access)],
+        trace: &[(ResourceId, Access)],
     ) -> Vec<(PassId, LookPass)> {
         let Some(history) = history else {
             return Vec::new();
@@ -307,7 +309,8 @@ impl LookGpu {
                 (ids.frame, Access::ShaderRead),
             ]
             .into_iter()
-            .chain(reads.iter().copied()),
+            .chain(reads.iter().copied())
+            .chain(trace.iter().copied()),
         );
         passes.push((id, LookPass::SsrTrace));
         let id = graph.pass(

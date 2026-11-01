@@ -20,6 +20,8 @@ struct Varying {
     float4 previousClip:TEXCOORD7;
     nointerpolation uint material:TEXCOORD8;
     nointerpolation uint id:TEXCOORD9;
+    // Planar reflection views keep only what lies above their mirror plane (frameClip).
+    float clipDistance:SV_ClipDistance0;
 };
 // Forward draws' varyings (nativeForwardVertex): the scene's, and this frame's HDR
 // exposure (hdrExposure), loaded per vertex rather than per fragment. Only the
@@ -67,6 +69,7 @@ Varying nativeVertex(uint vertex,uint instance,bool shadow,bool indexed,out floa
     float4x4 previousVp=buffers[NonUniformResourceIndex(root.material)].Load<float4x4>(64);
     o.currentClip=mul(vp,world);o.previousClip=mul(previousVp,mul(i.previous,float4(p.position,1)));
     color=unpackColor(i.meta.z!=0?buffers[NonUniformResourceIndex(i.meta.y>>1)].Load((i.meta.z-1+index)*4):v.color);
+    o.clipDistance=shadow?1:frameClip(f,world.xyz);
     o.material=i.meta.x;o.id=draw.x+1;return o;
 }
 // The vertex shader of entries that read no vertex colour.

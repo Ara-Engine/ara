@@ -31,6 +31,9 @@ pub struct RenderDebug {
     pub screen_reflections: bool,
     /// Reflection captures (authored and automatic); off, probes and sky reflect.
     pub reflection_captures: bool,
+    /// Planar reflections (`Quality::planar_reflections`, High/Epic): off, the floor
+    /// they mirror reflects the screen trace and captures again.
+    pub planar_reflections: bool,
     /// Probe global illumination (bounce light and probe reflections); off, the sky
     /// lights everything, as with no probe volume. The probes keep updating (the
     /// frame record's shading weight is zero), so switching back is instant.
@@ -87,7 +90,7 @@ pub enum ReflectionView {
     /// Only the reflected (indirect specular) light, exposed like the lit image.
     Reflections,
     /// Each pixel coloured by the share of its reflection each source resolved:
-    /// on-screen trace green, capture trace blue, screen probes yellow, box-projected
+    /// on-screen trace green, planar mirror view white, capture trace blue, screen probes yellow, box-projected
     /// captures cyan, probes orange, sky magenta; surfaces too rough to trace dimmed.
     Sources,
 }
@@ -104,6 +107,7 @@ impl Default for RenderDebug {
             reflections: ReflectionView::Lit,
             screen_reflections: true,
             reflection_captures: true,
+            planar_reflections: true,
             global_illumination: true,
             screen_gi: true,
             reference: None,
@@ -134,6 +138,9 @@ impl RenderDebug {
         }
         if !self.reflection_captures {
             quality.reflection_captures = None;
+        }
+        if !self.planar_reflections {
+            quality.planar_reflections = None;
         }
         if !self.screen_gi {
             quality.screen_gi = None;
