@@ -101,7 +101,30 @@ fn trace_timing() -> Result<()> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(500);
     let only = std::env::var("ARA_TRACE_SETS").ok();
-    let (world, world_ms) = soup(&dir.join("vertices_a.bin"))?;
+    let (mut world, world_ms) = soup(&dir.join("vertices_a.bin"))?;
+    // A/B control: tinybvh's own tree for the world (the R4-1 build), same kernel.
+    if std::env::var_os("ARA_TRACE_LAB_TREE").is_some() {
+        let words = |f: &str| -> Result<Vec<[u32; 4]>> {
+            let b = std::fs::read(dir.join(f))?;
+            Ok(b.as_chunks::<16>()
+                .0
+                .iter()
+                .map(|c| {
+                    std::array::from_fn(|k| {
+                        u32::from_le_bytes([c[k * 4], c[k * 4 + 1], c[k * 4 + 2], c[k * 4 + 3]])
+                    })
+                })
+                .collect())
+        };
+        let mut blas = (*world.blas).clone();
+        blas.nodes = words("nodes_a.bin")?;
+        blas.triangles = words("tris_a.bin")?;
+        world = TraceMesh {
+            blas: Arc::new(blas),
+            uvs: None,
+        };
+        eprintln!("world BLAS replaced by tinybvh's nodes_a/tris_a");
+    }
     let (asset, asset_ms) = soup(&dir.join("vertices_asset.bin"))?;
     let (crate_mesh, _) = soup(&dir.join("vertices_crate.bin"))?;
     let s = world.blas.stats;
@@ -202,20 +225,35 @@ fn trace_timing() -> Result<()> {
         }
         // Timing.
         let mut times = Vec::with_capacity(reps);
+        let mut exp_times = Vec::new();
         for k in 0..reps + 10 {
-            let ms = h.dispatch(
-                h.bench,
-                trace.record(),
-                ray_index,
-                (out, out_index),
-                n,
-                0,
-                0xff,
-                false,
-            )?;
+            let (bench, exp) = (h.bench, h.exp);
+            let mut run = |pipeline| {
+                h.dispatch(
+                    pipeline,
+                    trace.record(),
+                    ray_index,
+                    (out, out_index),
+                    n,
+                    0,
+                    0xff,
+                    false,
+                )
+            };
+            let ms = run(bench)?;
+            let exp = exp.map(&mut run).transpose()?;
             if k >= 10 {
                 times.push(ms);
+                exp_times.extend(exp);
             }
+        }
+        if !exp_times.is_empty() {
+            exp_times.sort_by(f64::total_cmp);
+            eprintln!(
+                "{name:7} exp p50 {:.3} ms  p99 {:.3} ms",
+                percentile(&exp_times, 50),
+                percentile(&exp_times, 99)
+            );
         }
         times.sort_by(f64::total_cmp);
         let (p50, p99) = (percentile(&times, 50), percentile(&times, 99));

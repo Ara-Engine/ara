@@ -22,6 +22,8 @@ pub(super) struct Harness {
     pub gpu: GpuDevice,
     pub test: Pipeline,
     pub bench: Pipeline,
+    /// An experimental bench variant (`trace_bench_exp`) when `ARA_TRACE_AB` is set.
+    pub exp: Option<Pipeline>,
 }
 
 impl Harness {
@@ -38,7 +40,16 @@ impl Harness {
             Ok(gpu.create_pipeline(&cooked, &artifacts)?)
         };
         let (test, bench) = (load("trace_test")?, load("trace_bench")?);
-        Ok(Self { gpu, test, bench })
+        let exp = match std::env::var_os("ARA_TRACE_AB") {
+            Some(_) => Some(load("trace_bench_exp")?),
+            None => None,
+        };
+        Ok(Self {
+            gpu,
+            test,
+            bench,
+            exp,
+        })
     }
 
     /// Device-local rays (origin, tMin, direction, tMax per ray) and their heap index.

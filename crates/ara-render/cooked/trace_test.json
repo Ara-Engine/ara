@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "221e4e12cedd20422addfd8a85add131574d2e265dc4b9eaecd5953aa4279e34",
+  "key": "a897ee92af079df8d1347075f53418e9ffb3850e54020b0387f0bb61bdeaf37d",
   "stages": [
     {
-      "dxil": "221e4e12cedd20422addfd8a85add131574d2e265dc4b9eaecd5953aa4279e34/trace_test/traceTestMain.dxil",
-      "dxil_hash": "7feab3e63a886f0334af680d6458d7458d9a2af9f966823f129eac854570bc62",
+      "dxil": "4c244085c12c6826cc7be139b31edfa589dcd08da1f40a8afa582de773befc37/trace_test/traceTestMain.dxil",
+      "dxil_hash": "9168a3d7f8238c1c5c025ba641478e6a248a0ff7da94a5e77c8f581d4e178b65",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "221e4e12cedd20422addfd8a85add131574d2e265dc4b9eaecd5953aa4279e34/trace_test/traceTestMain.metallib",
-        "metallib_hash": "1e14c1397fb79c5e41f03df0031897ec9ebac9056fe6abd5706b3a552db21659",
-        "reflection": "221e4e12cedd20422addfd8a85add131574d2e265dc4b9eaecd5953aa4279e34/trace_test/traceTestMain.metal.json",
+        "metallib": "4c244085c12c6826cc7be139b31edfa589dcd08da1f40a8afa582de773befc37/trace_test/traceTestMain.metallib",
+        "metallib_hash": "a1ecf78e9bc108e8f2ffa9bb6781170695494389d48a78317360ed6bbdd4891c",
+        "reflection": "4c244085c12c6826cc7be139b31edfa589dcd08da1f40a8afa582de773befc37/trace_test/traceTestMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "traceTestMain",
-      "spirv": "221e4e12cedd20422addfd8a85add131574d2e265dc4b9eaecd5953aa4279e34/trace_test/traceTestMain.spv",
+      "spirv": "4c244085c12c6826cc7be139b31edfa589dcd08da1f40a8afa582de773befc37/trace_test/traceTestMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "94b17318ac88ca4421bb4afad421d9c739a47896d2d36349a6f2ac1a5496f230",
+      "spirv_hash": "a55fbe3ca5d41b8c076cb8679ecbe0cdfcc546d9c71f0752145e92375b8e95de",
       "stage": "compute"
     }
   ],

@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 mod bench;
 mod gpu;
+mod showcase;
 
 /// Deterministic xorshift generator.
 pub(super) struct Rng(u64);
