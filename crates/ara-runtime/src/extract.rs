@@ -71,6 +71,40 @@ pub struct Draw {
     pub paint: Option<Arc<[u32]>>,
 }
 
+/// How a directional light meets the sky atmosphere (its `Light` atmosphere fields).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AtmosphereLightView {
+    /// Linear multiplier on the light's disc luminance.
+    pub disc_scale: [f32; 3],
+    /// Tint the light per surface by the air above it (else one global transmittance).
+    pub per_pixel_transmittance: bool,
+}
+impl AtmosphereLightView {
+    fn of(light: &Light) -> Self {
+        Self {
+            disc_scale: light
+                .atmosphere_sun_disk_color_scale
+                .map(|c| if c.is_finite() { c.max(0.) } else { 0. }),
+            per_pixel_transmittance: light.per_pixel_atmosphere_transmittance,
+        }
+    }
+}
+
+/// A directional light in world space (`RenderFrame::other_atmosphere_light`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DirectionalView {
+    /// World direction toward the light.
+    pub direction: [f32; 3],
+    /// Linear illuminance above the atmosphere, in lux.
+    pub lux: [f32; 3],
+    /// Angular radius of its disc in radians (half its `sourceAngle`).
+    pub radius: f32,
+    /// Its atmosphere controls; `None` when it is not an atmosphere light.
+    pub atmosphere: Option<AtmosphereLightView>,
+    /// Its volumetric scattering intensity (`Light::volumetric_scattering`).
+    pub volumetric: f32,
+}
+
 /// A local light in world space (points, spots, rects and discs).
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct LightView {
@@ -252,6 +286,17 @@ pub struct RenderFrame {
     pub sun_volumetric: Option<f32>,
     /// The directional light's angular radius in radians (half its `sourceAngle`).
     pub sun_radius: Option<f32>,
+    /// How the sun meets the sky atmosphere; `None` when it is not an atmosphere light
+    /// (`Light::atmosphere_sun_light` off).
+    pub sun_atmosphere: Option<AtmosphereLightView>,
+    /// Which atmosphere light the sun is (`Light::atmosphere_sun_light_index`): the sun
+    /// slot is the one shadowed directional light, and holds the second atmosphere light
+    /// (a moon) when it is the only directional light, or while the first is below the
+    /// horizon and it is above.
+    pub sun_atmosphere_index: u32,
+    /// The other atmosphere light (index `1 - sun_atmosphere_index`): it lights the
+    /// sky, the aerial perspective and the sky light, not surfaces directly.
+    pub other_atmosphere_light: Option<DirectionalView>,
     /// Local lights in stable order.
     pub lights: Vec<LightView>,
     /// Authored reflection probes in stable order (renderers place their own
@@ -287,6 +332,9 @@ impl RenderFrame {
         self.sun = None;
         self.sun_volumetric = None;
         self.sun_radius = None;
+        self.sun_atmosphere = None;
+        self.sun_atmosphere_index = 0;
+        self.other_atmosphere_light = None;
         self.lights.clear();
         self.reflection_probes.clear();
         self.draws.clear();
@@ -576,7 +624,37 @@ impl RenderFrame {
             }
         }
         self.camera = camera.map(|(_, c)| c);
+        self.assign_sun_slot();
         self.paints.retain_seen();
+    }
+
+    /// Puts the second atmosphere light in the sun slot when no other directional
+    /// light exists, or swaps it with the sun while the sun is below the horizon and it
+    /// is above (a night lit by the moon, with the moon's shadows).
+    fn assign_sun_slot(&mut self) {
+        let Some(second) = self.other_atmosphere_light.take() else {
+            return;
+        };
+        let sun = self.sun.map(|(direction, lux)| DirectionalView {
+            direction,
+            lux,
+            radius: self.sun_radius.unwrap_or(0.),
+            atmosphere: self.sun_atmosphere,
+            volumetric: self.sun_volumetric.unwrap_or(1.),
+        });
+        let swap = sun.is_none_or(|s| {
+            s.atmosphere.is_some() && s.direction[1] < 0. && second.direction[1] > 0.
+        });
+        if !swap {
+            self.other_atmosphere_light = Some(second);
+            return;
+        }
+        self.sun = Some((second.direction, second.lux));
+        self.sun_radius = Some(second.radius);
+        self.sun_atmosphere = second.atmosphere;
+        self.sun_volumetric = Some(second.volumetric);
+        self.sun_atmosphere_index = 1;
+        self.other_atmosphere_light = sun;
     }
 
     fn light(
@@ -587,8 +665,25 @@ impl RenderFrame {
     ) {
         let [r, g, b, _] = light.color.0;
         match light.kind {
+            // The second atmosphere light (`assign_sun_slot` may make it the sun).
+            LightKind::Directional
+                if light.atmosphere_sun_light && light.atmosphere_sun_light_index == 1 =>
+            {
+                if self.other_atmosphere_light.is_none() {
+                    self.other_atmosphere_light = Some(DirectionalView {
+                        direction: (pose.rotation * Vec3::Z).normalize().to_array(),
+                        lux: [r, g, b].map(|c| c * light.intensity),
+                        radius: light.source_angle.max(0.).to_radians() * 0.5,
+                        atmosphere: Some(AtmosphereLightView::of(light)),
+                        volumetric: light.volumetric_scattering,
+                    });
+                }
+            }
             LightKind::Directional => {
                 if self.sun.is_none() {
+                    self.sun_atmosphere = light
+                        .atmosphere_sun_light
+                        .then(|| AtmosphereLightView::of(light));
                     self.sun_radius = Some(light.source_angle.max(0.).to_radians() * 0.5);
                     // Shines along local -Z; the renderer wants the direction toward it.
                     let toward = (pose.rotation * Vec3::Z).normalize();

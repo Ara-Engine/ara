@@ -77,14 +77,17 @@ void fogInjectMain(uint3 tid:SV_DispatchThreadID,uint3 group:SV_GroupID,uint ind
     float3 d;float3 p=froxelWorld(f,l,float3(tid)+jitter,d);
     FogMedium m=fogMedium(f,l,p);
     bool physical=physicalSky(l);
-    float height=max(p.y-l.atmosphere.x,0);float3 sr=0;float sm=0;float e=m.extinction;
-    // Clear air's extinction is near grey over the near field (under 1% at 100 m).
-    if(physical)e+=dot(extinction(height,l.look.w,sr,sm),float3(0.2126,0.7152,0.0722));
+    float e=m.extinction;
     float3 sun=f.sunDirection.xyz;float cosine=dot(d,sun),g=l.fog.w;
     float lit=1;
     if(shadowed){float3 unused;lit=0.5*(fogVisibility(f,l,p)+fogVisibility(f,l,froxelWorld(f,l,float3(tid)+frac(jitter+0.5),unused)));}
-    float3 source=sunAt(f,l,p)*lit*(sr*phaseR(cosine)+sm*phaseM(cosine,0.8)+m.scattering*(phaseM(cosine,g)*l.volumetricEmissive.w));
-    if(physical)source+=(sr+sm)*multiScattering(l,height,sun.y)*l.sunLux.rgb;
+    float3 source=sunAt(f,l,p)*lit*m.scattering*(phaseM(cosine,g)*l.volumetricEmissive.w);
+    if(physical){
+        // The atmosphere's aerial perspective past its start depth (atmosphereAerial);
+        // clear air's extinction is near grey over the near field (under 1% at 100 m).
+        AtmosphereSegment air=atmosphereAerialPoint(l.sky,l.sampled0.x,l.sampled0.y,f.camera.xyz,d,p,length(p-f.camera.xyz)>l.sky.tent.w?1:0);
+        e+=dot(air.extinction,float3(0.2126,0.7152,0.0722));source+=air.sun*lit*cloudShadow(f,l,p)+air.source;
+    }
     if(any(m.scattering>0)){
         // Ambient light from its coarse grid (fogAmbientMain), at the jittered point.
         float3 cell=(float3(tid)+jitter)/float3(4,4,2);

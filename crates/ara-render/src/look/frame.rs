@@ -163,6 +163,10 @@ pub(crate) struct LookFrame {
     /// Params are reserved.
     pub light_params: [[f32; 4]; 2],
     pub light_info: [[u32; 4]; 2],
+    /// The sky atmosphere (`look::atmosphere::record`; `AtmosphereModel` in
+    /// shaders/atmosphere-model.slangh): planet, media, art direction and both
+    /// atmosphere lights. Meaningful with `PHYSICAL_SKY` only.
+    pub sky: super::atmosphere::Record,
     /// Local fog volume records (`FogVolume::row`), read by offset: not part of the
     /// shader's `Look` struct (a variable index into it would spill to memory). Last,
     /// so the shader struct is a prefix of this one.
@@ -173,6 +177,8 @@ pub(crate) struct LookFrame {
 pub(crate) struct FrameInputs {
     /// Top-of-atmosphere sun illuminance in lux.
     pub sun_lux: Vec3,
+    /// World direction toward the sun (`Renderer::set_sun`).
+    pub sun_direction: Vec3,
     /// The sun's angular radius in radians, over the sky's default.
     pub sun_radius: Option<f32>,
     /// Manual linear exposure multiplier; used unless the look meters automatically.
@@ -224,12 +230,7 @@ impl LookFrame {
                 let [r, g, b] = f.tint;
                 [r, g, b, f.anisotropy]
             }),
-            look: [
-                g.contrast,
-                g.vignette,
-                fog.map_or(0., |f| f.base),
-                sky.aerosols,
-            ],
+            look: [g.contrast, g.vignette, fog.map_or(0., |f| f.base), 0.],
             grading: [r, gr, b, g.saturation],
             exposure: [
                 if automatic.is_some() {
@@ -321,6 +322,24 @@ impl LookFrame {
             fog_volumes: [[[0.; 4]; 6]; super::MAX_FOG_VOLUMES],
             light_params: [[0.; 4]; 2],
             light_info: [[0; 4]; 2],
+            sky: look
+                .sky
+                .map_or([[0.; 4]; super::atmosphere::RECORD_ROWS], |s| {
+                    let radius = inputs.sun_radius.unwrap_or(s.sun_radius);
+                    let sun = s.sun.map(|settings| super::atmosphere::AtmosphereLight {
+                        direction: inputs.sun_direction,
+                        lux: inputs.sun_lux,
+                        radius,
+                        settings,
+                    });
+                    super::atmosphere::record(
+                        &s.atmosphere,
+                        s.sea_level,
+                        sun,
+                        s.sun_is_second,
+                        s.other_light,
+                    )
+                }),
         }
     }
 }

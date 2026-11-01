@@ -52,6 +52,9 @@ pub(crate) const LUT_SIZE: u32 = 32;
 /// The exposure state (four floats), then the metering histogram's 256 counts
 /// (look-post.slang exposureMain).
 pub(crate) const STATE_BYTES: usize = 16 + 256 * 4;
+/// Logarithmic slices of the coarse fog grid (look.slangh `FOG_SLICES`): the first 32
+/// reach 4 km, the rest carry the aerial perspective to 111 km.
+pub(crate) const FOG_SLICES: u32 = 46;
 
 /// Fixed LUT extents; the half-resolution effects and reflection pyramid follow
 /// the render size, the bloom atlases the display size.
@@ -60,7 +63,7 @@ fn extent(image: usize, render: [u32; 2], display: [u32; 2]) -> [u32; 2] {
         TRANSMITTANCE => [256, 64],
         MULTISCATTER => [32, 32],
         SKY_VIEW => [192, 108],
-        FROXELS => [4096, 36],
+        FROXELS => [FOG_SLICES * 128, 36],
         SKY_IRRADIANCE => [32, 16],
         SKY_PREFILTER => [256, 640],
         AO_TRACE | AO_DENOISED | GI_DIFFUSE | GI_SPECULAR | SSR_TRACE => {
@@ -119,12 +122,13 @@ pub(crate) struct Pipelines {
     pub refract: Pipeline,
 }
 
-/// What the sky LUTs (`aerosols`) and the sky IBL (sun and sky) were computed for.
+/// What the sky LUTs (`luts`: the atmosphere's media) and the sky IBL (the sun and
+/// the whole sky) were computed for.
 #[derive(Clone, Copy, PartialEq)]
 pub(crate) struct SkyKey {
-    pub aerosols: f32,
+    pub luts: [u32; 22],
     pub sun: [f32; 6],
-    pub clouds: [f32; 2],
+    pub sky: super::Sky,
 }
 
 pub(crate) struct LookGpu {

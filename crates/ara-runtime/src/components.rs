@@ -245,6 +245,25 @@ pub struct Light {
     /// edges and broader highlights (Unreal's Light Source Angle; 0.5357 is the Sun).
     #[ara(default = 0.5357, unit = Degrees, range(min = 0, max = 20), editor(show_if(field = "kind", one_of = ["directional"])))]
     pub source_angle: f32,
+    /// Whether a directional light lights the sky atmosphere: scatters in it (the sky's
+    /// colour), draws its disc and is tinted by the air on the way to surfaces
+    /// (Unreal's Atmosphere Sun Light).
+    #[ara(default = true, editor(show_if(field = "kind", one_of = ["directional"])))]
+    pub atmosphere_sun_light: bool,
+    /// Which of the two atmosphere lights this is: 0 the sun (it casts the shadows),
+    /// 1 a second light such as a moon, which lights the sky, the aerial perspective
+    /// and the sky light but not surfaces directly (Unreal's Atmosphere Sun Light Index).
+    #[ara(range(min = 0, max = 1), editor(show_if(field = "kind", one_of = ["directional"])))]
+    pub atmosphere_sun_light_index: u32,
+    /// Multiplies the luminance of the light's disc in the sky (linear; Unreal's
+    /// Atmosphere Sun Disk Color Scale); black hides the disc.
+    #[ara(default = [1, 1, 1], range(min = 0), editor(color, hdr, show_if(field = "kind", one_of = ["directional"])))]
+    pub atmosphere_sun_disk_color_scale: [f32; 3],
+    /// Tint the light on each surface by the air above that surface, with the planet's
+    /// shadow at sunset (Unreal's Per Pixel Atmosphere Transmittance); off, one
+    /// transmittance 500 m above the ground applies everywhere, as Unreal's default.
+    #[ara(editor(show_if(field = "kind", one_of = ["directional"])))]
+    pub per_pixel_atmosphere_transmittance: bool,
 }
 impl Default for Light {
     fn default() -> Self {
@@ -266,6 +285,10 @@ impl Default for Light {
             profile: None,
             profile_intensity: false,
             source_angle: 0.5357,
+            atmosphere_sun_light: true,
+            atmosphere_sun_light_index: 0,
+            atmosphere_sun_disk_color_scale: [1.0; 3],
+            per_pixel_atmosphere_transmittance: false,
         }
     }
 }

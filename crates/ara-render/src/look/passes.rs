@@ -89,7 +89,8 @@ impl LookGpu {
         self.record_scatter(recorder, LookPass::GiClear);
     }
     /// Declares the sky passes and probe GI relight. LUTs are rebuilt when the
-    /// aerosols change, the sky IBL when the sun or sky changes, the sky view per frame.
+    /// atmosphere's media change, the sky IBL (a real-time sky light recapture) when
+    /// the sun or anything else in the sky changes, the sky view per frame.
     /// `shared` is the frame's conservative bindless reachability.
     pub(crate) fn sky_passes(
         &mut self,
@@ -113,11 +114,11 @@ impl LookGpu {
         };
         if let Some(sky) = self.look.sky {
             let key = SkyKey {
-                aerosols: sky.aerosols,
+                luts: sky.atmosphere.lut_key(),
                 sun,
-                clouds: [sky.cloud_coverage, sky.cloud_height],
+                sky,
             };
-            if self.sky.is_none_or(|k| k.aerosols != key.aerosols) {
+            if self.sky.is_none_or(|k| k.luts != key.luts) {
                 add(
                     graph,
                     "Sky.Transmittance",
@@ -547,7 +548,7 @@ impl LookGpu {
             LookPass::SkyView => (p.sky_view, 0, groups([192, 108])),
             LookPass::SkyIrradiance => (p.sky_irradiance, 0, groups([32, 16])),
             LookPass::SkyPrefilter => (p.sky_prefilter, 0, groups([256, 640])),
-            // One group of 32 slices per column (look-sky.slang fogMain).
+            // One group of FOG_SLICES slices per column (look-sky.slang fogMain).
             LookPass::Fog => (p.fog, 0, [64, 36, 1]),
             LookPass::FogAmbient => (p.fog_ambient, 0, self.volumetric_dispatch(pass)),
             LookPass::FogInject => (p.fog_inject, 0, self.volumetric_dispatch(pass)),

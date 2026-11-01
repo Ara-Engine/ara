@@ -1,7 +1,9 @@
-//! Earth atmosphere and local participating-medium controls, in metres.
+//! The physical sky atmosphere and local participating-medium controls, in metres.
 use anyhow::{Result, ensure};
+use ara_render::look::atmosphere::{Atmosphere as Model, AtmosphereLight, LightAtmosphere};
 
-/// Hillaire-style low-dimensional LUT atmosphere plus exponential height fog.
+/// The shared LUT sky atmosphere (`ara_render::look::atmosphere`, the same model and
+/// shader as the raster look) plus exponential height fog.
 /// Disabled views retain their extracted environment. With `physical_sky` the sky
 /// LUT also replaces the environment map for transport and display; without it the
 /// environment map stays the sky and only the height fog (lit by the sun, local
@@ -22,8 +24,14 @@ pub struct Atmosphere {
     pub cloud_height: f32,
     /// Use the physical sky as the environment; false keeps the extracted environment map.
     pub physical_sky: bool,
-    /// Aerosol (Mie) density relative to clear Earth air.
-    pub aerosols: f32,
+    /// The planet and its atmosphere (Unreal's SkyAtmosphere in SI units).
+    pub model: Model,
+    /// How the sun meets the atmosphere; `None` keeps it out of the sky.
+    pub sun: Option<LightAtmosphere>,
+    /// The sun is the second atmosphere light (index 1, a moon in the sun slot).
+    pub sun_is_second: bool,
+    /// The other atmosphere light: sky, aerial perspective, sky light and disc only.
+    pub other_light: Option<AtmosphereLight>,
     /// World altitude where the fog has its full `fog_extinction`, in metres.
     pub fog_base: f32,
     /// Linear fog scattering colour, from zero to one per channel.
@@ -50,7 +58,10 @@ impl Default for Atmosphere {
             cloud_coverage: 0.42,
             cloud_height: 2200.,
             physical_sky: true,
-            aerosols: 1.,
+            model: Model::EARTH,
+            sun: Some(LightAtmosphere::default()),
+            sun_is_second: false,
+            other_light: None,
             fog_base: 0.,
             fog_tint: [1.; 3],
             fog_anisotropy: 0.3,
@@ -73,7 +84,6 @@ impl Atmosphere {
                 && self.cloud_height >= 500.
                 && (0.0..=1.0).contains(&self.fog_albedo)
                 && (0.0..=1.0).contains(&self.cloud_coverage)
-                && (0.0..=20.0).contains(&self.aerosols)
                 && self.fog_base.is_finite()
                 && self.fog_tint.iter().all(|c| (0.0..=1.0).contains(c))
                 && (0.0..=0.9).contains(&self.fog_anisotropy)
@@ -82,6 +92,20 @@ impl Atmosphere {
                 && (0.1..=10.0).contains(&self.fog_extinction_scale),
             "Invalid atmosphere"
         );
-        Ok(())
+        self.model.validate()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// Both renderers cook the same atmosphere: the copy in this shader root is
+    /// byte-identical to ara-render's (`shaders/atmosphere-model.slangh`).
+    #[test]
+    fn the_atmosphere_shader_is_the_raster_copy() {
+        assert_eq!(
+            include_str!("../shaders/atmosphere-model.slangh"),
+            ara_render::look::atmosphere::shader_source(),
+            "copy shaders/atmosphere-model.slangh into crates/ara-render-fidelity/shaders/"
+        );
     }
 }

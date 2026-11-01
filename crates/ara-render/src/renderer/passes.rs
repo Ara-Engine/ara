@@ -419,6 +419,7 @@ impl Renderer {
             &self.look.effective(),
             &FrameInputs {
                 sun_lux: self.content.sun_lux,
+                sun_direction: self.content.sun_direction,
                 sun_radius: self.look.sun_radius,
                 exposure,
                 reset,

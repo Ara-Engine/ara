@@ -121,7 +121,7 @@ impl Targets {
         let allocation = (|| -> Result<()> {
             for i in 0..28 {
                 let size = if (TRANSMITTANCE..28).contains(&i) {
-                    [[256, 64], [32, 32], [192, 108], [4096, 36]][i - TRANSMITTANCE]
+                    [[256, 64], [32, 32], [192, 108], [46 * 128, 36]][i - TRANSMITTANCE]
                 } else if (UPSCALED..=DISPLAY_HISTORY0 + 1).contains(&i) {
                     display
                 } else {

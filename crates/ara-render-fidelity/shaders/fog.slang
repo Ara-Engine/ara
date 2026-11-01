@@ -13,7 +13,11 @@ float3 environmentAmbient(Frame f){
 // Height fog uses its own base altitude (look.z), tint and anisotropy (fog row), and on
 // volumetric fog (weather.z) its emission and extinction scale (fogLight), ray-traced
 // sun shadows and local lights by their volumetric intensity (parameters.w), as the
-// raster renderer's fog; clear-air Rayleigh/Mie scattering joins it under the physical sky.
+// raster renderer's fog. Under the physical sky the atmosphere's aerial perspective
+// joins it (atmosphereAerial, both atmosphere lights, light 0's single scattering
+// shadowed), and the height fog's sun and sky light scale by the height fog
+// contribution past the volumetric distance (weather.w; everywhere without volumetric
+// fog), as the raster coarse grid behind its near volume.
 [shader("compute")][numthreads(8,8,1)]
 void fogMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();if(any(tid.xy>=uint2(64,36)))return;float2 uv=(float2(tid.xy)+0.5)/float2(64,36);
@@ -21,18 +25,24 @@ void fogMain(uint3 tid:SV_DispatchThreadID){
     uint rng=hash(tid.x+tid.y*64);bool physical=(f.display.w&2)!=0;
     float3 albedo=f.atmosphere.w*f.fog.rgb;float g=f.fog.w;
     float3 ambient=physical?float3(0):environmentAmbient(f);bool volumetric=f.weather.z>0.5;
-    for(uint z=0;z<32;z++){
-        float end=2*(exp2(log2(2001.)*float(z+1)/32)-1),ds=end-previous;
+    AtmosphereModel a=atmosphereModel();uint transmittance=ri(f,TRANSMITTANCE),ms=ri(f,MULTISCATTER);
+    for(uint z=0;z<FROXEL_SLICES;z++){
+        float start=previous,end=froxelEnd(z),ds=end-previous;
         float3 at=f.camera.xyz+d*(previous+ds*0.5);previous=end;
-        float height=max(at.y-f.atmosphere.x,0);float profile=exp(-max(at.y-f.look.z,0)/f.atmosphere.z),density=f.atmosphere.y*profile;
-        float3 sr=0;float sm=0;float3 e=density*f.fogLight.w;
-        if(physical)e+=extinction(height,f.look.w,sr,sm);
+        float profile=exp(-max(at.y-f.look.z,0)/f.atmosphere.z),density=f.atmosphere.y*profile;
+        float3 e=density*f.fogLight.w;
         float3 sunlight=physical?solarIrradiance(f,at):f.sunLux.rgb;
         float visibility=any(sunlight>0) && (!volumetric||!occluded(f,at,f.sunDirection.xyz,10000,rng))?1:0;
         float cosine=dot(d,f.sunDirection.xyz);
-        float3 source=sunlight*visibility*(sr*phaseR(cosine)+sm*phaseM(cosine,0.8)+density*albedo*phaseM(cosine,g));
-        if(physical)source+=(sr+sm+density*albedo)*multiScattering(f,height,f.sunDirection.y)*f.sunLux.rgb;
-        else source+=density*albedo*ambient;
+        float fogLight=physical && (!volumetric || start>=f.weather.w)?a.skyFactor.w:1;
+        float3 source=sunlight*visibility*density*albedo*phaseM(cosine,g)*fogLight;
+        if(physical){
+            AtmosphereSegment air=atmosphereAerial(a,transmittance,ms,f.camera.xyz,d,start,end,at);
+            // The height fog's ambient: the multiple scattering a fog particle sees.
+            float3 p=atmospherePosition(a,f.camera.xyz,at);float r=length(p);
+            source+=air.sun*visibility*cloudShadow(f,at)+air.source+density*albedo*fogLight*(a.light0Lux.rgb*atmosphereMultiScatter(a,ms,r,dot(p/r,a.light0Direction.xyz))+a.light1Lux.rgb*atmosphereMultiScatter(a,ms,r,dot(p/r,a.light1Direction.xyz)));
+            e+=air.extinction;
+        }else source+=density*albedo*ambient;
         source+=f.fogLight.rgb*profile;
         uint4 head=buffers[f.scene.x].Load<uint4>(0);
         for(uint i=0;i<(volumetric?head.w:0);i++){
