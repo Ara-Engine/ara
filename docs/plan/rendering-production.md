@@ -186,6 +186,12 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   adaptation rate the Unreal speeds map to and decide the editor policy (finish adaptation
   quickly at rest). Standalone games still upscale (unchanged cost).
 
+- [ ] **Capture exposure defaults.** A scene with no post-process volume captures at the
+  legacy manual exposure 0.0015 (EV 9.1, daylight), so lamp-lit scenes come out ~4.5 stops
+  dark unless `--ev100` is passed, and the capture JSON reports `"exposure": 0.0015` even
+  under `--ev100`. Report the exposure actually applied, and default captures without a
+  volume to the same metering the editor and Play use.
+
 - [ ] **Cooker determinism.** An incremental re-cook of unchanged sources rewrote Metal
   metadata (`ResourceCount` 31 to 224 on fullscreenVertex) relative to the fresh cohort cook.
 
