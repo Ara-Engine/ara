@@ -375,6 +375,7 @@ impl Renderer {
             converge_progress: 0,
             capture_convergence: false,
             unseen: self.look.unseen,
+            frozen: false,
             relit_once: false,
             received: 0,
             weight: 0.,
