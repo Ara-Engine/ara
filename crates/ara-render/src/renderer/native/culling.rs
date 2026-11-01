@@ -180,6 +180,7 @@ impl Culling {
     ) {
         let transparent = batches::is_transparent(value);
         let refract = batches::is_refractive(value);
+        let bends = batches::bends_rays(value);
         let translucent = batches::is_translucent(value);
         for &g in &groups.material_groups[material] {
             if groups.groups[g].transparent != transparent
@@ -190,8 +191,9 @@ impl Culling {
                 self.group(g);
                 self.transparent_dirty = true;
             }
-            if groups.groups[g].refract != refract {
+            if groups.groups[g].refract != refract || groups.groups[g].bends != bends {
                 groups.groups[g].refract = refract;
+                groups.groups[g].bends = bends;
                 self.transparent_dirty = true;
             }
             let two_pass = batches::is_two_pass(value, groups.groups[g].planar);
@@ -410,10 +412,7 @@ impl Culling {
         let first = 5 * self.selected.len();
         self.refract.clear();
         self.two_pass.clear();
-        self.refract_rect = None;
-        self.refract_layers.clear();
-        // Screen rect of the transparent draws since the last copy.
-        let mut drawn: Option<[f32; 4]> = None;
+        let mut layering = Layering::default();
         let matrix = camera.projection * camera.view;
         for (n, &(_, i, g)) in self.transparent.iter().enumerate() {
             let lod = self.selected[i].expect("visible transparent instance has a selected LOD");
@@ -428,19 +427,11 @@ impl Culling {
             let refract = groups.groups[g].refract;
             self.refract.push(refract);
             self.two_pass.push(groups.groups[g].two_pass);
-            let screen = projected_rect(matrix, bounds[i]);
-            if refract {
-                let rect = widened(screen);
-                if drawn.is_some_and(|d| overlaps(d, rect))
-                    && self.refract_layers.len() + 1 < REFRACT_LAYERS
-                {
-                    self.refract_layers.push(n);
-                    drawn = None;
-                }
-                self.refract_rect = Some(self.refract_rect.map_or(rect, |r| union(r, rect)));
-            }
-            drawn = Some(drawn.map_or(screen, |d| union(d, screen)));
+            let kind = refract.then_some(groups.groups[g].bends);
+            layering.draw(n, kind, projected_rect(matrix, bounds[i]));
         }
+        self.refract_rect = layering.rect;
+        self.refract_layers = layering.layers;
         let count = self.transparent.len();
         if count > 0 {
             gpu.upload_queued_range(
@@ -458,6 +449,39 @@ impl Culling {
 /// plus the first): later overlapping glass reads the last copy.
 pub(super) const REFRACT_LAYERS: usize = 4;
 
+/// Splits the sorted transparent draws into `look::refract` layers as they are
+/// listed (`draw`): a refractive draw starts a new layer where what it shows of
+/// the scene behind it (its footprint, and half its size around it where it bends
+/// rays) overlaps transparent draws made since the last copy.
+#[derive(Default)]
+struct Layering {
+    /// Draws before which the scene is copied again (`Culling::refract_layers`).
+    layers: Vec<usize>,
+    /// The union of the refractive draws' sampled rects (`Culling::refract_rect`).
+    rect: Option<[f32; 4]>,
+    /// Screen rect of the transparent draws since the last copy.
+    drawn: Option<[f32; 4]>,
+}
+
+impl Layering {
+    /// Draw `n` with normalised screen rect `screen`; `refract`: `None` for a
+    /// blended draw, else whether it bends rays (`batches::bends_rays`).
+    fn draw(&mut self, n: usize, refract: Option<bool>, screen: [f32; 4]) {
+        if let Some(bends) = refract {
+            let shows = widened(screen, if bends { 0.5 } else { 0. });
+            if self.drawn.is_some_and(|d| overlaps(d, shows))
+                && self.layers.len() + 1 < REFRACT_LAYERS
+            {
+                self.layers.push(n);
+                self.drawn = None;
+            }
+            let rect = widened(screen, 1.);
+            self.rect = Some(self.rect.map_or(rect, |r| union(r, rect)));
+        }
+        self.drawn = Some(self.drawn.map_or(screen, |d| union(d, screen)));
+    }
+}
+
 fn union(a: [f32; 4], b: [f32; 4]) -> [f32; 4] {
     [
         a[0].min(b[0]),
@@ -471,15 +495,15 @@ fn overlaps(a: [f32; 4], b: [f32; 4]) -> bool {
     a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3]
 }
 
-/// The normalised screen rect a refractive instance's rays may sample (`screen`,
-/// its projected bounds): widened by its own size on every side, clamped to the
-/// screen.
-fn widened(screen: [f32; 4]) -> [f32; 4] {
+/// Screen rect `screen` (a refractive instance's projected bounds) widened by
+/// `share` of its own size on every side, clamped to the screen: by one, the rect
+/// its rays may sample.
+fn widened(screen: [f32; 4], share: f32) -> [f32; 4] {
     let (lo, hi) = (
         glam::Vec2::new(screen[0], screen[1]),
         glam::Vec2::new(screen[2], screen[3]),
     );
-    let size = hi - lo;
+    let size = (hi - lo) * share;
     let (lo, hi) = (
         (lo - size).max(glam::Vec2::ZERO),
         (hi + size).min(glam::Vec2::ONE),
@@ -539,6 +563,32 @@ fn visible(planes: &[Vec4; 6], bounds: [Vec3; 2]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn glass_over_transparent_draws_starts_a_layer() {
+        // Back to front: a film, a pane beside it, a pane over both, then a sphere
+        // (bends rays) whose surroundings reach the last pane.
+        let mut l = Layering::default();
+        l.draw(0, None, [0.1, 0.1, 0.3, 0.3]);
+        l.draw(1, Some(false), [0.5, 0.1, 0.7, 0.3]);
+        l.draw(2, Some(false), [0.2, 0.2, 0.6, 0.4]);
+        l.draw(3, Some(true), [0.65, 0.45, 0.8, 0.6]);
+        assert_eq!(l.layers, [2, 3]);
+        let rect = l.rect.expect("refractive draws");
+        for (a, b) in rect.iter().zip([0., 0., 1., 0.75]) {
+            assert!((a - b).abs() < 1e-5, "{rect:?}");
+        }
+        // Thin glass beside earlier draws needs no copy; at most four copies.
+        let mut l = Layering::default();
+        l.draw(0, Some(false), [0.1, 0.1, 0.2, 0.2]);
+        l.draw(1, Some(false), [0.3, 0.1, 0.4, 0.2]);
+        assert!(l.layers.is_empty());
+        for n in 2..10 {
+            l.draw(n, Some(false), [0.1, 0.1, 0.4, 0.2]);
+        }
+        assert_eq!(l.layers.len(), REFRACT_LAYERS - 1);
+    }
+
     #[test]
     fn local_shadow_perspective_culls_all_six_planes_including_near() {
         let pose = Mat4::from_rotation_translation(

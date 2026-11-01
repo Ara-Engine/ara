@@ -35,6 +35,12 @@ pub(super) fn is_refractive(material: &crate::instanced::Material) -> bool {
     material.extras.transmission_factor > 0.
 }
 
+/// Transmissive volumes (KHR_materials_volume thickness) bend rays sideways; thin
+/// walls pass them straight on, sampling the scene within their own footprint.
+pub(super) fn bends_rays(material: &crate::instanced::Material) -> bool {
+    is_refractive(material) && crate::instanced::Volume::unpack(material.extras.volume).1 > 0.
+}
+
 /// Whether an opaque or masked draw of `material` reads vertex colours and so needs
 /// the vertex-colour PSO variants (`NativePipelines::gbuffer_paint`): paint layers
 /// always do; a tint only where the colours are not all white (`colored`: the
@@ -69,6 +75,8 @@ pub(super) struct Group {
     pub transparent: bool,
     /// A transmissive group (`is_refractive`), drawn by the refractive forward PSOs.
     pub refract: bool,
+    /// A transmissive volume (`bends_rays`): its rays leave its own footprint.
+    pub bends: bool,
     /// A blended group (`is_translucent`), drawn into the translucent sun map.
     pub translucent: bool,
     /// Its instances block light (`Instance::casts_shadows`); every shadow pass and
@@ -161,6 +169,7 @@ impl Groups {
                     instances,
                     transparent: is_transparent(&scene.materials[material]),
                     refract: is_refractive(&scene.materials[material]),
+                    bends: bends_rays(&scene.materials[material]),
                     translucent: is_translucent(&scene.materials[material]),
                     casts,
                     planar: is_planar(scene.geometry[geometry].bounds),
