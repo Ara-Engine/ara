@@ -95,7 +95,7 @@ pub struct Patch {
 pub struct Charts {
     /// Settings used for this chart set.
     pub settings: Settings,
-    /// Cell-lexicographic order, then material and first source fragment.
+    /// Cell-lexicographic order, then material, normal hemisphere and first source fragment.
     pub patches: Box<[Patch]>,
     /// Patch-contiguous surface coverage.
     pub fragments: Box<[Fragment]>,

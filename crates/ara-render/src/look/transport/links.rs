@@ -51,6 +51,7 @@ impl PartialOrd for GeometryKey {
     }
 }
 
+/// A3's motion/appearance revision of an A1-identified primitive.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct GeometryStamp {
     pub key: GeometryKey,
@@ -113,6 +114,7 @@ pub(crate) enum LinkError {
 /// One receiver's neutral link sample. Ordinals are arbitrary stable caller labels,
 /// not globally shared direction indices. Different receivers can use different sets.
 pub(crate) struct Candidate {
+    /// Determines this receiver's row order; label values are not stored/uploaded.
     pub ordinal: u32,
     /// `[0, patches.len())` addresses patches; the remaining IDs address externals.
     pub source: u32,

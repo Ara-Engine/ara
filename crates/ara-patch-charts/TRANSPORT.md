@@ -68,6 +68,8 @@ Sibling `solve.rs`/`media.rs` can import them directly; no `mod.rs` re-export is
    remaining indices refer to `ExternalSource` entries. Caller-defined ordinals
    allow either global or per-patch direction schemes. `Candidate::traced` accepts
    any `VisibilityQuery` implementation, including a CPU `trace()` adapter.
+   Ordinal labels determine row order only; the graph retains source/weight/path,
+   not a direction ID. A solver needing a separate direction-label table owns it.
 4. Store visibility RGB even when zero. Include every relied-on geometry stamp
    (opaque blockers, alpha/transmission layers, etc.). The pool rejects conflicting
    generations for one primitive in a build. Endpoint stamps/positions are owned by
