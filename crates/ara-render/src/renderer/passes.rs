@@ -356,6 +356,7 @@ impl Renderer {
                     .map(|l| MapDrawn {
                         mirror: l.size,
                         tile: l.settings.resolution,
+                        shared: true,
                         depths: &local_depth,
                         drawn: &faces,
                         held: &local_held,
@@ -363,6 +364,7 @@ impl Renderer {
                 cascades: self.look.cascades.as_ref().map(|c| MapDrawn {
                     mirror: [c.resolution * 2; 2],
                     tile: c.resolution,
+                    shared: false,
                     depths: &c.sampled,
                     drawn: &cascades_drawn,
                     held: &cascades_held,
@@ -370,6 +372,7 @@ impl Renderer {
                 far: self.look.far.as_ref().map(|f| MapDrawn {
                     mirror: [f.settings.resolution; 2],
                     tile: f.settings.resolution,
+                    shared: true,
                     depths: &far_depth,
                     drawn: &far_drawn,
                     held: &far_held,

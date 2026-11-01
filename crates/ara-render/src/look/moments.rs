@@ -181,11 +181,13 @@ pub(crate) struct ShadowMoments {
 }
 
 /// One map kind this frame, for `ShadowMoments::plan`: the map (atlas) the pyramid
-/// mirrors, its tile side, its depth images (sampled: one shared by every tile, or one
-/// per tile), the tiles drawn this frame and whether each image held depth before it.
+/// mirrors, its tile side, its depth images (sampled: one per tile, or with `shared` one
+/// atlas holding every tile at its own origin), the tiles drawn this frame and whether
+/// each image held depth before it.
 pub(crate) struct MapDrawn<'a> {
     pub mirror: [u32; 2],
     pub tile: u32,
+    pub shared: bool,
     pub depths: &'a [u32],
     pub drawn: &'a [usize],
     pub held: &'a [bool],
@@ -223,9 +225,9 @@ impl ShadowMoments {
             let (Some(pyramid), Some(map)) = (slot, map) else {
                 continue;
             };
-            // One shared image holds every tile at its own origin; per-tile images
-            // hold theirs at the origin.
-            let shared = map.depths.len() == 1;
+            // A shared image holds every tile at its own origin; per-tile images hold
+            // theirs at the origin.
+            let shared = map.shared;
             let row = map.mirror[0] / map.tile;
             let tiles = if shared {
                 pyramid.built.len()
@@ -267,6 +269,14 @@ impl ShadowMoments {
             self.cascades.as_mut(),
             self.far.as_mut(),
         ]
+    }
+
+    /// Frees every pyramid (a camera's look going away).
+    pub(crate) fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
+        for pyramid in [self.local, self.cascades, self.far].into_iter().flatten() {
+            pyramid.destroy(gpu)?;
+        }
+        Ok(())
     }
 
     /// Sampled indices for the look record (`shadowInfo[1]` xyz); zero for none.

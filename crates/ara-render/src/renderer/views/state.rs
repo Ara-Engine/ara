@@ -205,6 +205,7 @@ impl ViewState {
         if let Some(vsm) = self.look.vsm {
             vsm.destroy(gpu)?;
         }
+        self.look.moments.destroy(gpu)?;
         self.tsr.destroy(gpu)?;
         if let Some(refract) = self.look.refract {
             refract.destroy(gpu)?;
