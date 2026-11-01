@@ -2,7 +2,8 @@
 
 Schemas and ECS types of the built-in engine components: `Transform` (position in m,
 rotation as XYZ Euler degrees, scale), with replication policy; `render`: the
-authorable look (`SkyAtmosphere`, `HeightFog` with its volumetric settings, `LocalFogVolume`,
+authorable look (`SkyAtmosphere`: Unreal's SkyAtmosphere value for value, km and 1/km, version 2
+migrating v1 `aerosols` into the Mie scales; `HeightFog` with its volumetric settings, `LocalFogVolume`,
 gathered with the volumes as `SceneLook`)
 and the project's `RenderSettings { quality, ray_tracing }` (`ara.project.json` →
 `rendering`); and `post`: post-process volumes.

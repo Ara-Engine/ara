@@ -6,6 +6,7 @@
 //! Hosts map the scene's authored look onto [`Look`] and call
 //! [`crate::Renderer::set_look`] at a frame boundary. The defaults reproduce the
 //! M1 baseline: manual exposure, the ACES fit, no bloom, no sky and no fog.
+pub mod atmosphere;
 pub mod captures;
 pub(crate) mod cascades;
 pub(crate) mod far;
@@ -479,13 +480,26 @@ impl Default for Grading {
     }
 }
 
-/// Earth-like physical sky (Rayleigh, Mie and ozone over a spherical planet).
+/// Physical sky atmosphere (`atmosphere::Atmosphere`: Unreal's SkyAtmosphere in SI
+/// units) lit by the sun and an optional second atmosphere light, with a planar cloud
+/// layer.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Sky {
-    /// World-space altitude of sea level, in metres.
+    /// World-space altitude of the planet's surface (sea level), in metres.
     pub sea_level: f32,
-    /// Aerosol (Mie) density relative to clear Earth air, from zero to twenty.
-    pub aerosols: f32,
+    /// The planet and its atmosphere's media and art direction.
+    pub atmosphere: atmosphere::Atmosphere,
+    /// How the sun (`Renderer::set_sun`, the shadowed directional light) meets the
+    /// atmosphere; `None` keeps it out: no sky scattering, disc or transmittance
+    /// (Unreal's atmosphere sun light off).
+    pub sun: Option<atmosphere::LightAtmosphere>,
+    /// The sun is the second atmosphere light (Unreal's atmosphere light index 1): a
+    /// moon lighting the scene while the first is below the horizon.
+    pub sun_is_second: bool,
+    /// The other atmosphere light (a moon, a second sun, or the set sun at night): it
+    /// scatters in the sky and the aerial perspective, draws its disc and lights the
+    /// sky's image-based lighting. It does not light surfaces directly.
+    pub other_light: Option<atmosphere::AtmosphereLight>,
     /// Angular radius of the sun disk in radians.
     pub sun_radius: f32,
     /// Planar cloud cover from zero (clear) to one; clouds also shade the sun.
@@ -497,7 +511,10 @@ impl Default for Sky {
     fn default() -> Self {
         Self {
             sea_level: 0.,
-            aerosols: 1.,
+            atmosphere: atmosphere::Atmosphere::EARTH,
+            sun: Some(atmosphere::LightAtmosphere::default()),
+            sun_is_second: false,
+            other_light: None,
             sun_radius: 0.00465,
             cloud_coverage: 0.,
             cloud_height: 2200.,
@@ -577,9 +594,15 @@ impl Look {
             );
         }
         if let Some(s) = self.sky {
+            s.atmosphere.validate()?;
             anyhow::ensure!(
                 s.sea_level.is_finite()
-                    && (0.0..=20.0).contains(&s.aerosols)
+                    && s.other_light.is_none_or(|l| {
+                        l.direction.is_finite()
+                            && l.direction.length_squared() > 1e-8
+                            && l.lux.is_finite()
+                            && (0.0..=0.2).contains(&l.radius)
+                    })
                     && (0.0..=0.2).contains(&s.sun_radius)
                     && (0.0..=1.0).contains(&s.cloud_coverage)
                     && s.cloud_height.is_finite(),

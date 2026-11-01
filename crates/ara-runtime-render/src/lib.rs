@@ -957,12 +957,18 @@ pub fn environment_locked(
 
 /// The frame's authored look as seen from `eye` (an editor's Scene view camera):
 /// post-process volumes blend by that position; the sky light comes from the
-/// frame's `Environment`. Every view resolves its look here, so none misses a term.
+/// frame's `Environment`, the atmosphere lights from its directional lights. Every
+/// view resolves its look here, so none misses a term.
 pub fn environment_at(
     frame: &RenderFrame,
     eye: glam30::Vec3,
 ) -> ara_render_fidelity::environment::FrameEnvironment {
-    ara_render_fidelity::environment::FrameEnvironment {
+    use ara_render::look::atmosphere::{AtmosphereLight, LightAtmosphere};
+    let settings = |a: ara_runtime::extract::AtmosphereLightView| LightAtmosphere {
+        disc_scale: a.disc_scale,
+        per_pixel_transmittance: a.per_pixel_transmittance,
+    };
+    let mut environment = ara_render_fidelity::environment::FrameEnvironment {
         sky_light: frame.environment.sky_light,
         sun_scattering: frame.sun_volumetric.unwrap_or(1.),
         ..ara_render_fidelity::environment::FrameEnvironment::resolve(
@@ -970,7 +976,20 @@ pub fn environment_at(
             eye,
             frame.environment.exposure,
         )
-    }
+    };
+    environment.set_atmosphere_lights(
+        frame.sun.and(frame.sun_atmosphere).map(settings),
+        frame.sun_atmosphere_index == 1,
+        frame.other_atmosphere_light.and_then(|o| {
+            Some(AtmosphereLight {
+                direction: glam30::Vec3::from_array(o.direction),
+                lux: glam30::Vec3::from_array(o.lux),
+                radius: o.radius.clamp(0., 0.2),
+                settings: settings(o.atmosphere?),
+            })
+        }),
+    );
+    environment
 }
 
 /// Hands the raster renderer `frame`'s local fog volumes (priority, then distance to

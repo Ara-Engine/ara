@@ -13,7 +13,8 @@ use crate::{
     settings::PostSettings,
 };
 use anyhow::Result;
-use ara_components::render::{ExposureMode, SceneLook, ToneMapping};
+use ara_components::render::{ExposureMode, SceneLook, SkyAtmosphere, ToneMapping};
+use ara_render::look::atmosphere::{Atmosphere as SkyModel, AtmosphereLight, LightAtmosphere};
 use glam::Vec3;
 
 /// Fidelity atmosphere and post controls derived from a scene look. Lens and
@@ -80,7 +81,7 @@ impl FrameEnvironment {
                 };
                 if let Some(s) = sky {
                     a.sea_level = s.sea_level;
-                    a.aerosols = s.aerosols.clamp(0., 20.);
+                    a.model = sky_model(&s);
                     a.cloud_coverage = s.cloud_coverage.clamp(0., 1.);
                     a.cloud_height = s.cloud_height.max(500.);
                 }
@@ -219,24 +220,47 @@ impl FrameEnvironment {
     }
 
     /// Sun illuminance reaching the ground: `lux` attenuated by the physical sky's
-    /// transmittance along `direction` (toward the sun), or `lux` unchanged without
-    /// one. Use it for lighting that does not trace the atmosphere (particles).
+    /// transmittance along `direction` (toward the sun) as surfaces receive it (the
+    /// global transmittance, or at the ground with the planet's shadow when the sun is
+    /// per-pixel), or `lux` unchanged without an atmosphere sun. Use it for lighting
+    /// that does not trace the atmosphere (particles).
     pub fn ground_sun(&self, direction: Vec3, lux: Vec3) -> Vec3 {
-        let Some(a) = self.atmosphere.filter(|a| a.physical_sky) else {
+        let Some((a, sun)) = self
+            .atmosphere
+            .filter(|a| a.physical_sky)
+            .and_then(|a| Some((a, a.sun?)))
+        else {
             return lux;
         };
-        let p = Vec3::new(0., PLANET + 2., 0.);
         let d = direction.normalize_or(Vec3::Y);
-        let (extent, ground) = atmosphere_length(p, d);
-        if ground {
+        if !sun.per_pixel_transmittance {
+            return lux * a.model.ground_transmittance(d);
+        }
+        let r = a.model.bottom_radius;
+        let horizon = -(1. - (r / (r + 1.)).powi(2)).max(0.).sqrt();
+        let elevation =
+            d.y.max(a.model.transmittance_min_light_elevation.to_radians().sin());
+        if elevation < horizon {
             return Vec3::ZERO;
         }
-        let mut optical = Vec3::ZERO;
-        for i in 0..64 {
-            let at = p + d * (extent * (i as f32 + 0.5) / 64.);
-            optical += extinction(at.length() - PLANET, a.aerosols).2 * (extent / 64.);
+        lux * a.model.transmittance(0., d)
+    }
+
+    /// Sets the atmosphere lights from the frame's lights: how the sun meets the
+    /// atmosphere (`None`: it is not an atmosphere light), whether the sun is the
+    /// second atmosphere light (index 1, a moon in the shadowed sun slot), and the other
+    /// atmosphere light.
+    pub fn set_atmosphere_lights(
+        &mut self,
+        sun: Option<LightAtmosphere>,
+        sun_is_second: bool,
+        other: Option<AtmosphereLight>,
+    ) {
+        if let Some(a) = &mut self.atmosphere {
+            a.sun = sun;
+            a.sun_is_second = sun_is_second && sun.is_some();
+            a.other_light = other;
         }
-        lux * (-optical).exp()
     }
 
     /// The same look for the raster renderer (`ara_render::Renderer::set_look`):
@@ -286,7 +310,10 @@ impl FrameEnvironment {
             sun_scattering: self.sun_scattering,
             sky: self.atmosphere.filter(|a| a.physical_sky).map(|a| Sky {
                 sea_level: a.sea_level,
-                aerosols: a.aerosols,
+                atmosphere: a.model,
+                sun: a.sun,
+                sun_is_second: a.sun_is_second,
+                other_light: a.other_light,
                 cloud_coverage: a.cloud_coverage,
                 cloud_height: a.cloud_height,
                 ..Sky::default()
@@ -413,37 +440,44 @@ pub fn ev100_from_exposure(exposure: f32) -> f32 {
     (1. / (1.2 * exposure.max(1e-12))).log2().clamp(-24., 32.)
 }
 
-const PLANET: f32 = 6_360_000.;
-const TOP: f32 = 6_460_000.;
-
-/// Matches `extinction` in atmosphere.slangh.
-fn extinction(height: f32, aerosols: f32) -> (Vec3, f32, Vec3) {
-    let h = height.max(0.);
-    let rayleigh = Vec3::new(5.802e-6, 13.558e-6, 33.1e-6) * (-h / 8000.).exp();
-    let mie = 3.996e-6 * (-h / 1200.).exp() * aerosols;
-    let ozone = (1. - (h - 25000.).abs() / 15000.).max(0.);
-    (
-        rayleigh,
-        mie,
-        rayleigh + Vec3::splat(mie / 0.9) + Vec3::new(0.650e-6, 1.881e-6, 0.085e-6) * ozone,
-    )
-}
-
-fn sphere_exit(p: Vec3, d: Vec3, radius: f32) -> f32 {
-    let b = p.dot(d);
-    let q = b * b - p.dot(p) + radius * radius;
-    if q < 0. { 0. } else { (-b + q.sqrt()).max(0.) }
-}
-
-/// Distance to the top of the atmosphere or the ground, and whether it hits ground.
-fn atmosphere_length(p: Vec3, d: Vec3) -> (f32, bool) {
-    let top = sphere_exit(p, d, TOP);
-    let b = p.dot(d);
-    let q = b * b - p.dot(p) + PLANET * PLANET;
-    if q > 0. && -b - q.sqrt() > 0. {
-        ((-b - q.sqrt()).min(top), true)
-    } else {
-        (top, false)
+/// The renderers' atmosphere for an authored `SkyAtmosphere`: Unreal's parameters one
+/// to one (kilometres to metres, per-kilometre coefficients times their colours to
+/// per metre), clamped into the component's ranges.
+pub fn sky_model(s: &SkyAtmosphere) -> SkyModel {
+    let finite = |v: f32, or: f32| if v.is_finite() { v } else { or };
+    let colour = |c: [f32; 3]| c.map(|x| finite(x, 0.).max(0.));
+    let coefficient =
+        |scale: f32, c: [f32; 3]| colour(c).map(|x| x * finite(scale, 0.).max(0.) * 1e-3);
+    let km = |v: f32, lo: f32, hi: f32| finite(v, lo).clamp(lo, hi) * 1000.;
+    SkyModel {
+        bottom_radius: km(s.bottom_radius, 0.1, 10000.),
+        height: km(s.atmosphere_height, 0.1, 10000.),
+        ground_albedo: colour(s.ground_albedo).map(|x| x.min(1.)),
+        multi_scattering: finite(s.multi_scattering, 1.).clamp(0., 100.),
+        trace_sample_count_scale: finite(s.trace_sample_count_scale, 1.).clamp(0.25, 8.),
+        rayleigh_scattering: coefficient(s.rayleigh_scattering_scale, s.rayleigh_scattering),
+        rayleigh_scale_height: km(s.rayleigh_exponential_distribution, 0.001, 1000.),
+        mie_scattering: coefficient(s.mie_scattering_scale, s.mie_scattering),
+        mie_absorption: coefficient(s.mie_absorption_scale, s.mie_absorption),
+        mie_anisotropy: finite(s.mie_anisotropy, 0.8).clamp(0., 0.999),
+        mie_scale_height: km(s.mie_exponential_distribution, 0.001, 1000.),
+        absorption: coefficient(s.absorption_scale, s.absorption),
+        absorption_tip_altitude: finite(s.absorption_tip_altitude, 25.) * 1000.,
+        absorption_tip_value: finite(s.absorption_tip_value, 1.).max(0.),
+        absorption_width: km(s.absorption_width, 0., 1000.),
+        sky_luminance_factor: colour(s.sky_luminance_factor),
+        sky_and_aerial_perspective_luminance_factor: colour(
+            s.sky_and_aerial_perspective_luminance_factor,
+        ),
+        aerial_perspective_view_distance_scale: finite(
+            s.aerial_perspective_view_distance_scale,
+            1.,
+        )
+        .clamp(0., 1000.),
+        aerial_perspective_start_depth: km(s.aerial_perspective_start_depth, 0., 10000.),
+        height_fog_contribution: finite(s.height_fog_contribution, 1.).clamp(0., 16.),
+        transmittance_min_light_elevation: finite(s.transmittance_min_light_elevation_angle, -90.)
+            .clamp(-90., 90.),
     }
 }
 
@@ -478,7 +512,8 @@ mod tests {
     fn components_map_onto_view_controls() {
         let look = SceneLook {
             sky: Some(SkyAtmosphere {
-                aerosols: 3.,
+                mie_scattering_scale: 0.012,
+                bottom_radius: 3390.,
                 ..Default::default()
             }),
             fog: Some(HeightFog {
@@ -504,7 +539,18 @@ mod tests {
         };
         let env = FrameEnvironment::resolve(&look, Vec3::ZERO, 1.);
         let a = env.atmosphere.unwrap();
-        assert!(a.physical_sky && a.aerosols == 3. && a.fog_extinction == 0.01 && a.fog_base == 4.);
+        assert!(a.physical_sky && a.fog_extinction == 0.01 && a.fog_base == 4.);
+        // Unreal's units map one to one: kilometres to metres, 1/km x colour to 1/m.
+        assert_eq!(a.model.bottom_radius, 3_390_000.);
+        assert!((a.model.mie_scattering[0] - 12e-6).abs() < 1e-12);
+        assert_eq!(
+            a.model,
+            SkyModel {
+                bottom_radius: 3_390_000.,
+                mie_scattering: [12e-6; 3],
+                ..sky_model(&SkyAtmosphere::default())
+            }
+        );
         a.validate().unwrap();
         let post = env.post(PostSettings::default());
         assert_eq!(
@@ -523,10 +569,41 @@ mod tests {
     }
 
     #[test]
+    fn default_component_is_unreal_earth() {
+        let model = sky_model(&SkyAtmosphere::default());
+        let earth = SkyModel::EARTH;
+        let close = |a: &[f32], b: &[f32]| {
+            a.iter()
+                .zip(b)
+                .all(|(x, y)| (x - y).abs() <= 1e-4 * y.abs().max(1e-9))
+        };
+        assert!(
+            close(&model.rayleigh_scattering, &earth.rayleigh_scattering),
+            "{model:?}"
+        );
+        assert!(close(&model.absorption, &earth.absorption));
+        assert!(close(&model.mie_scattering, &earth.mie_scattering));
+        assert!(close(&model.mie_absorption, &earth.mie_absorption));
+        assert_eq!(
+            (
+                model.bottom_radius,
+                model.height,
+                model.aerial_perspective_start_depth
+            ),
+            (
+                earth.bottom_radius,
+                earth.height,
+                earth.aerial_perspective_start_depth
+            )
+        );
+        model.validate().unwrap();
+    }
+
+    #[test]
     fn raster_look_matches_the_fidelity_mapping() {
         let look = SceneLook {
             sky: Some(SkyAtmosphere {
-                aerosols: 3.,
+                multi_scattering: 0.5,
                 ..Default::default()
             }),
             fog: Some(HeightFog {
@@ -540,7 +617,7 @@ mod tests {
         let env = FrameEnvironment::resolve(&look, Vec3::ZERO, 1.);
         let raster = env.raster();
         raster.validate().unwrap();
-        assert_eq!(raster.sky.map(|s| s.aerosols), Some(3.));
+        assert_eq!(raster.sky.map(|s| s.atmosphere.multi_scattering), Some(0.5));
         assert_eq!(raster.fog.map(|f| f.extinction), Some(0.01));
         assert_eq!(raster.auto_exposure.is_some(), env.ev100.is_none());
         let legacy = FrameEnvironment::resolve(&SceneLook::default(), Vec3::ZERO, 0.0015);

@@ -67,7 +67,32 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   Original item: Froxel volumetric fog (Unreal's volumetric fog):
   height and local fog volumes, sun with shadows (shafts), local lights with shadows,
   emissive fog, temporal reprojection, per-light volumetric scattering intensity.
-- [ ] **Atmosphere parity.** Hillaire sky atmosphere (transmittance, multi-scattering,
+- [~] **Atmosphere parity.** Done (branch t3/190a390b): `SkyAtmosphere` v2 takes every
+  Unreal SkyAtmosphere parameter in Unreal's units and defaults (planet, Rayleigh, Mie,
+  ozone tent, multi-scattering, trace sample scale, luminance factors, aerial perspective
+  distance scale and start depth, height fog contribution, minimum light elevation; v1
+  `aerosols` migrates into the Mie scales); `Light` gains Unreal's atmosphere sun light,
+  index, disc colour scale and per-pixel transmittance. One model and shader
+  (`look::atmosphere`, `shaders/atmosphere-model.slangh`, a checked copy in the fidelity
+  root) drives raster, hybrid and the path-traced reference: Bruneton transmittance with an
+  analytic planet shadow, Unreal's default two-ray multi-scattering, a horizon-packed sky
+  view, two atmosphere lights (a moon above a set sun takes the shadowed sun slot), discs,
+  aerial perspective to 111 km (46 coarse slices), Unreal's global light transmittance
+  (15 samples at 500 m) or per-pixel, sky light recapture on any sun/sky change.
+  `ue_to_ara.js` maps it one to one. Measured against UE 5.7 MRQ (manual exposure, tone
+  curve off) on Earth and Mars-like skies at sun 90/30/10/2/-2 degrees plus a moonlit
+  night, 22 shots: sky bands 0.003-0.042 stops mean, chroma d <= 0.005; ground under the
+  sky light 0.01-0.09 stops; aerial perspective (black boxes at 4 and 15 km) within 0-15%;
+  the path tracer's sky within 0.003-0.008 stops of raster. Cost at 1440p (4070 SUPER,
+  busy PC): 0.072 ms per frame (base 0.037), sky light recapture 0.150 ms on a sun change
+  (0.130), LUT rebuild 0.020 ms (0.049); `--example sky_timings`.
+  Open: probe GI gives an open ground plane almost no sky light (base too; ground = sun
+  alone, x0.3-0.9 vs UE); the second atmosphere light lights no surfaces while the sun is up;
+  the reference traces camera rays to 10 km only (no aerial perspective on farther
+  geometry) and its rough-ground sun specular at low sun is weaker than raster/UE; height
+  fog contribution is implemented but not measured against UE; Unreal's holdout and
+  render-in-main-pass flags; cameras above the atmosphere (the sky view clamps to its top).
+  Original item: Hillaire sky atmosphere (transmittance, multi-scattering,
   sky view, aerial perspective LUTs) matching Unreal's SkyAtmosphere component values.
 
 ## Surfaces

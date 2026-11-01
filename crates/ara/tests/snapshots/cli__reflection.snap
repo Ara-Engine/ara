@@ -4539,6 +4539,70 @@ expression: out
               }
             }
           }
+        },
+        "atmosphereSunLight": {
+          "type": "bool",
+          "doc": "Whether a directional light lights the sky atmosphere: scatters in it (the sky's colour), draws its disc and is tinted by the air on the way to surfaces (Unreal's Atmosphere Sun Light).",
+          "default": true,
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "directional"
+                ]
+              }
+            }
+          }
+        },
+        "atmosphereSunLightIndex": {
+          "type": "u32",
+          "doc": "Which of the two atmosphere lights this is: 0 the sun (it casts the shadows), 1 a second light such as a moon, which lights the sky, the aerial perspective and the sky light but not surfaces directly (Unreal's Atmosphere Sun Light Index).",
+          "default": 0,
+          "range": [0, 1],
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "directional"
+                ]
+              }
+            }
+          }
+        },
+        "atmosphereSunDiskColorScale": {
+          "type": "vec3",
+          "doc": "Multiplies the luminance of the light's disc in the sky (linear; Unreal's Atmosphere Sun Disk Color Scale); black hides the disc.",
+          "default": [1, 1, 1],
+          "range": [0, null],
+          "editor": {
+            "color": true,
+            "hdr": true,
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "directional"
+                ]
+              }
+            }
+          }
+        },
+        "perPixelAtmosphereTransmittance": {
+          "type": "bool",
+          "doc": "Tint the light on each surface by the air above that surface, with the planet's shadow at sunset (Unreal's Per Pixel Atmosphere Transmittance); off, one transmittance 500 m above the ground applies everywhere, as Unreal's default.",
+          "default": false,
+          "editor": {
+            "showIf": {
+              "field": "kind",
+              "when": {
+                "oneOf": [
+                  "directional"
+                ]
+              }
+            }
+          }
         }
       }
     },
@@ -7683,21 +7747,197 @@ expression: out
     },
     "SkyAtmosphere": {
       "kind": "component",
-      "doc": "A physical sky and aerial perspective lit by the scene's directional light. The sun's elevation sets the time of day; without this component the scene uses its `Environment` gradient. The first entity in ID order wins.",
+      "doc": "A physical sky and aerial perspective (Unreal's SkyAtmosphere, value for value: the same parameters, units and defaults). Lit by the directional lights marked as atmosphere lights (the sun, and a second light such as a moon); the sun's elevation sets the time of day. Without this component the scene uses its `Environment` gradient. The first entity in ID order wins. Distances are in kilometres and coefficients per kilometre, as in Unreal; colours are linear.",
       "module": "render",
+      "version": 2,
       "fields": {
         "seaLevel": {
           "type": "f32",
-          "doc": "World altitude of the planet surface (sea level); the sky and fog measure height from here.",
+          "doc": "World altitude of the planet's surface (sea level); the sky and fog measure height from here (Unreal's planet top at the absolute world origin or at the component).",
           "default": 0,
           "unit": "m",
           "examples": [0]
         },
-        "aerosols": {
+        "bottomRadius": {
           "type": "f32",
-          "doc": "Aerosol (haze, dust) density relative to clear Earth air. Raise it for dusty or humid skies: a whiter horizon, a wider sun glow and stronger aerial perspective.",
+          "doc": "Radius from the planet's centre to the ground (Unreal's Ground Radius).",
+          "default": 6360,
+          "unit": "km",
+          "range": [0.1, 10000]
+        },
+        "groundAlbedo": {
+          "type": "vec3",
+          "doc": "Colour of the ground lighting the atmosphere from below through multiple scattering, and of the planet seen below the horizon (linear; Unreal's sRGB 170 grey).",
+          "default": [0.401978, 0.401978, 0.401978],
+          "range": [0, 1],
+          "editor": {
+            "color": true
+          }
+        },
+        "atmosphereHeight": {
+          "type": "f32",
+          "doc": "Thickness of the atmosphere above the ground.",
+          "default": 60,
+          "unit": "km",
+          "range": [0.1, 10000]
+        },
+        "multiScattering": {
+          "type": "f32",
+          "doc": "How much light scatters more than once: 0 is single scattering only (a darker, more saturated sky), 1 physical.",
           "default": 1,
+          "range": [0, 100]
+        },
+        "traceSampleCountScale": {
+          "type": "f32",
+          "doc": "Scales the number of samples the sky's ray marches take: more removes banding in thick or tall atmospheres at a higher LUT cost.",
+          "default": 1,
+          "range": [0.25, 8]
+        },
+        "rayleighScatteringScale": {
+          "type": "f32",
+          "doc": "Rayleigh (air molecule) scattering at the ground, per kilometre, times `rayleighScattering`: the blue of the sky.",
+          "default": 0.0331,
+          "range": [0, 2]
+        },
+        "rayleighScattering": {
+          "type": "vec3",
+          "doc": "Rayleigh scattering colour (linear), times `rayleighScatteringScale`.",
+          "default": [0.175287, 0.409607, 1],
+          "range": [0, null],
+          "editor": {
+            "color": true
+          }
+        },
+        "rayleighExponentialDistribution": {
+          "type": "f32",
+          "doc": "Altitude over which Rayleigh density falls by a factor of e.",
+          "default": 8,
+          "unit": "km",
+          "range": [0.001, 20]
+        },
+        "mieScatteringScale": {
+          "type": "f32",
+          "doc": "Mie (aerosol: haze, dust, pollution) scattering at the ground, per kilometre, times `mieScattering`: a whiter horizon and a wider glow around the sun.",
+          "default": 0.003996,
+          "range": [0, 5]
+        },
+        "mieScattering": {
+          "type": "vec3",
+          "doc": "Mie scattering colour (linear), times `mieScatteringScale`.",
+          "default": [1, 1, 1],
+          "range": [0, null],
+          "editor": {
+            "color": true
+          }
+        },
+        "mieAbsorptionScale": {
+          "type": "f32",
+          "doc": "Mie absorption at the ground, per kilometre, times `mieAbsorption`: darker, browner haze.",
+          "default": 0.000444,
+          "range": [0, 5]
+        },
+        "mieAbsorption": {
+          "type": "vec3",
+          "doc": "Mie absorption colour (linear), times `mieAbsorptionScale`.",
+          "default": [1, 1, 1],
+          "range": [0, null],
+          "editor": {
+            "color": true
+          }
+        },
+        "mieAnisotropy": {
+          "type": "f32",
+          "doc": "How strongly aerosols scatter forward: 0 evenly in all directions, towards 1 a tight bright halo around the sun.",
+          "default": 0.8,
+          "range": [0, 0.999]
+        },
+        "mieExponentialDistribution": {
+          "type": "f32",
+          "doc": "Altitude over which Mie density falls by a factor of e.",
+          "default": 1.2,
+          "unit": "km",
+          "range": [0.001, 10]
+        },
+        "absorptionScale": {
+          "type": "f32",
+          "doc": "Absorption of a layer such as ozone, per kilometre at its peak, times `absorption`: deepens the twilight blue (Unreal's Absorption Scale).",
+          "default": 0.001881,
+          "range": [0, 0.2]
+        },
+        "absorption": {
+          "type": "vec3",
+          "doc": "Absorption colour (linear), times `absorptionScale`.",
+          "default": [0.345561, 1, 0.045189],
+          "range": [0, null],
+          "editor": {
+            "color": true
+          }
+        },
+        "absorptionTipAltitude": {
+          "type": "f32",
+          "doc": "Altitude of the absorbing layer's peak (Unreal's tent distribution tip altitude).",
+          "default": 25,
+          "unit": "km",
+          "range": [0, 60]
+        },
+        "absorptionTipValue": {
+          "type": "f32",
+          "doc": "Density at the absorbing layer's peak (Unreal's tent tip value).",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "absorptionWidth": {
+          "type": "f32",
+          "doc": "Altitude over which the layer's density falls from its peak to zero, above and below it (Unreal's tent width); 0 removes the layer.",
+          "default": 15,
+          "unit": "km",
           "range": [0, 20]
+        },
+        "skyLuminanceFactor": {
+          "type": "vec3",
+          "doc": "Multiplies the luminance of the sky itself (and so the sky light it casts), not the aerial perspective (linear).",
+          "default": [1, 1, 1],
+          "range": [0, null],
+          "editor": {
+            "color": true,
+            "hdr": true
+          }
+        },
+        "skyAndAerialPerspectiveLuminanceFactor": {
+          "type": "vec3",
+          "doc": "Multiplies the luminance of the sky and of the aerial perspective (linear).",
+          "default": [1, 1, 1],
+          "range": [0, null],
+          "editor": {
+            "color": true,
+            "hdr": true
+          }
+        },
+        "aerialPerspectiveViewDistanceScale": {
+          "type": "f32",
+          "doc": "Makes the aerial perspective look thicker by scaling distances from the camera to surfaces (not to the sky).",
+          "default": 1,
+          "range": [0, 3]
+        },
+        "heightFogContribution": {
+          "type": "f32",
+          "doc": "Scales the sun and sky light the height fog scatters beyond the volumetric fog (Unreal's sky atmosphere contribution to exponential height fog).",
+          "default": 1,
+          "range": [0, 1]
+        },
+        "transmittanceMinLightElevationAngle": {
+          "type": "f32",
+          "doc": "The lowest sun elevation used for the sunlight on surfaces: keeps a setting sun lighting and shadowing the scene. -90 is physical. The sky is unaffected.",
+          "default": -90,
+          "unit": "deg",
+          "range": [-90, 90]
+        },
+        "aerialPerspectiveStartDepth": {
+          "type": "f32",
+          "doc": "Distance from the camera where the aerial perspective starts.",
+          "default": 0.1,
+          "unit": "km",
+          "range": [0.001, 10]
         },
         "cloudCoverage": {
           "type": "f32",

@@ -50,7 +50,8 @@ impl FidelityView {
         Ok(())
     }
     /// Enable physical sky illumination) and frustum fog, or restore the extracted
-    /// environment. Changing atmospheric composition resets temporal transport.
+    /// environment. Changing atmospheric composition resets temporal transport; the
+    /// atmosphere lights alone (a moving moon) update without, as a moving sun does.
     pub fn set_atmosphere(
         &mut self,
         atmosphere: Option<crate::atmosphere::Atmosphere>,
@@ -58,11 +59,19 @@ impl FidelityView {
         if let Some(a) = atmosphere {
             a.validate()?;
         }
-        if self.atmosphere != atmosphere {
-            self.atmosphere = atmosphere;
+        let composition = |a: Option<crate::atmosphere::Atmosphere>| {
+            a.map(|a| crate::atmosphere::Atmosphere {
+                sun: None,
+                sun_is_second: false,
+                other_light: None,
+                ..a
+            })
+        };
+        if composition(self.atmosphere) != composition(atmosphere) {
             self.atmosphere_dirty = true;
             self.history = false;
         }
+        self.atmosphere = atmosphere;
         Ok(())
     }
     /// Extra mip bias in stops, in addition to log2(render/display) for TAAU.
