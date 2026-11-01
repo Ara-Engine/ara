@@ -3,6 +3,10 @@ use super::*;
 use crate::material::Source;
 use ara_runtime::{components::Environment, extract::Geometry, model::ModelVertex};
 
+#[cfg(test)]
+#[path = "changes.rs"]
+mod change_feed_tests;
+
 /// Whether the live frame fits the currently prepared content generation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameChange {
@@ -104,6 +108,15 @@ impl Prepared {
     /// these without rescanning static foliage, geometry or material blocks.
     pub fn changes(&self) -> &render::Changes {
         &self.changes
+    }
+    /// Fill missing render-v3 metadata after `update_frame` and before GPU upload.
+    /// RenderFrame currently carries no PhysicsBody awake state, stable light IDs or optical
+    /// portals. Hosts must supply actual body classes (Jolt BodyState::active plus MotionType),
+    /// stable light IDs and portal openness here when available; do not infer sleep from a pose.
+    /// Declared wind bounds are world-space absolute amplitudes. Skin displacement is filled
+    /// automatically. The renderer retains body/wind metadata until scene replacement.
+    pub fn transport_hints_mut(&mut self) -> &mut render::transport::TransportHints {
+        &mut self.changes.transport
     }
     /// Reserves independent root material slots and skin scratch at a content
     /// boundary, before GPU upload. Static capture snapshots retain material sharing.
@@ -254,7 +267,7 @@ impl Prepared {
                             anyhow::bail!("procedural geometry cannot own a skin palette")
                         }
                     };
-                    update_skin(
+                    let displacement = update_skin(
                         &mut self.scene.geometry[instance.geometry],
                         vertices,
                         palette,
@@ -263,6 +276,10 @@ impl Prepared {
                     link.palette.copy_from_slice(palette);
                     skins += 1;
                     self.changes.geometries.push(instance.geometry);
+                    self.changes
+                        .transport
+                        .deformations
+                        .push((instance.geometry, displacement));
                 }
             }
         }
@@ -303,6 +320,17 @@ impl Prepared {
             }
         }
         if frame.lights != bindings.lights {
+            for (row, (old, new)) in bindings
+                .lights
+                .iter()
+                .zip(&frame.lights)
+                .take(self.scene.lights.len())
+                .enumerate()
+            {
+                if old.profile != new.profile {
+                    self.changes.transport.reshaped_lights.push(row);
+                }
+            }
             self.scene.lights = super::super::lights(frame);
             bindings.lights.clear();
             bindings.lights.extend_from_slice(&frame.lights);
@@ -319,13 +347,17 @@ fn update_skin(
     source: &[ModelVertex],
     palette: &[glam::Mat4],
     scratch: &mut Vec<ara_render::scene::Vertex>,
-) {
+) -> f32 {
     crate::geometry::transform(source, glam::Mat4::IDENTITY, Some(palette), scratch);
     let mut bounds = [
         glam30::Vec3::splat(f32::INFINITY),
         glam30::Vec3::splat(f32::NEG_INFINITY),
     ];
+    let mut displacement_squared = 0.0f32;
     for (vertex, posed) in geometry.vertices.iter_mut().zip(scratch) {
+        let old = glam30::Vec3::from_array(vertex.position);
+        let current = glam30::Vec3::from_array(posed.position);
+        displacement_squared = displacement_squared.max(old.distance_squared(current));
         vertex.position = posed.position;
         vertex.normal = posed.normal;
         vertex.tangent = posed.tangent;
@@ -335,4 +367,9 @@ fn update_skin(
     }
     geometry.bounds = bounds;
     geometry.revision = geometry.revision.wrapping_add(1);
+    if displacement_squared == 0. {
+        0.
+    } else {
+        displacement_squared.sqrt().next_up()
+    }
 }

@@ -175,6 +175,9 @@ impl From<&crate::instanced::Material> for MaterialState {
 /// Native light bits; integer table offsets remain integers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LightState(pub [u32; 28]);
+// Changing a native ABI requires a deliberate replay version/encoding decision.
+const _: () = assert!(std::mem::size_of::<crate::instanced::Material>() == 320);
+const _: () = assert!(std::mem::size_of::<crate::scene::Light>() == 112);
 impl From<&crate::scene::Light> for LightState {
     fn from(value: &crate::scene::Light) -> Self {
         let words: &[u32] = bytemuck::cast_slice(std::slice::from_ref(value));
@@ -260,6 +263,17 @@ pub struct TransportChanges {
     pub sun: Option<SunChange>,
 }
 impl TransportChanges {
+    /// Copy a frame into retained storage. Derived `Clone::clone_from` would replace all vectors.
+    pub fn copy_from(&mut self, source: &Self) {
+        self.frame = source.frame;
+        self.reset = source.reset;
+        self.instances.clone_from(&source.instances);
+        self.geometries.clone_from(&source.geometries);
+        self.materials.clone_from(&source.materials);
+        self.lights.clone_from(&source.lights);
+        self.portals.clone_from(&source.portals);
+        self.sun = source.sun;
+    }
     /// Clear events, retaining capacity.
     pub fn clear(&mut self, frame: u64) {
         self.frame = frame;

@@ -74,6 +74,8 @@ pub(super) struct Native {
     groups: Groups,
     culling: Culling,
     changes: updates::Updates,
+    /// Opt-in render-v3 event source; absent for today's A/B path.
+    transport: Option<crate::instanced::transport::NativeChangeFeed>,
     pipelines: pipelines::NativePipelines,
     upload: TextureStats,
     material_dirty: bool,
@@ -244,7 +246,19 @@ impl Renderer {
             }
             return Err(error);
         }
-        let old = self.native.replace(next);
+        let mut old = self.native.replace(next);
+        // Capture follows successful publication, retaining stamps across replaced row layouts.
+        let transport_result =
+            if let Some(mut feed) = old.as_mut().and_then(|old| old.transport.take()) {
+                let result = feed.replace(scene);
+                self.native
+                    .as_mut()
+                    .expect("native content was just published")
+                    .transport = Some(feed);
+                result
+            } else {
+                Ok(())
+            };
         self.entity_epoch = self.entity_epoch.wrapping_add(1);
         let previous_content = content.map(|content| std::mem::replace(&mut self.content, content));
         self.content.base_hash = base_hash;
@@ -257,6 +271,7 @@ impl Renderer {
         if let Some(old) = old {
             old.destroy(&mut self.gpu)?;
         }
+        transport_result?;
         Ok(())
     }
 
@@ -299,6 +314,9 @@ impl Renderer {
             .native
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Native raster content required"))?;
+        if let Some(feed) = &native.transport {
+            feed.validate(scene, changes)?;
+        }
         native.update(&mut self.gpu, scene, changes)?;
         if bytemuck::cast_slice::<_, u8>(&self.content.lights)
             != bytemuck::cast_slice::<_, u8>(&scene.lights)
@@ -322,7 +340,94 @@ impl Renderer {
             self.set_sun(scene.sun_direction, scene.sun_lux)?;
         }
         self.content.revision += 1;
+        if let Some(feed) = self
+            .native
+            .as_mut()
+            .and_then(|native| native.transport.as_mut())
+        {
+            feed.update(scene, changes)?;
+        }
         Ok(())
+    }
+
+    /// Enable render-v3 event capture from the currently published native scene. This produces
+    /// a full reset snapshot at `frame`; it changes no GPU bytes or rendering defaults.
+    pub fn enable_native_change_feed(&mut self, scene: &NativeScene, frame: u64) -> Result<()> {
+        let native = self
+            .native
+            .as_mut()
+            .context("Native raster content required")?;
+        ensure!(
+            native.rows.len() == scene.instances.len()
+                && native.geometry_revisions.len() == scene.geometry.len()
+                && native.material_data.len() == scene.materials.len(),
+            "change feed must start from published content"
+        );
+        native.transport = Some(crate::instanced::transport::NativeChangeFeed::new(
+            scene, frame,
+        )?);
+        Ok(())
+    }
+
+    /// Disable event capture and release its CPU storage; the legacy renderer is unchanged.
+    pub fn disable_native_change_feed(&mut self) {
+        if let Some(native) = &mut self.native {
+            native.transport = None;
+        }
+    }
+
+    /// Group all uploads for one render frame, including idle frames. Call before any updates;
+    /// consume `native_transport_changes` afterwards. Frame numbers must strictly increase.
+    pub fn begin_native_change_frame(&mut self, frame: u64) -> Result<()> {
+        self.native
+            .as_mut()
+            .and_then(|native| native.transport.as_mut())
+            .context("Enable native change feed first")?
+            .begin_frame(frame)
+    }
+
+    /// Seal and borrow the ordered change stream; repeated reads preserve it until the next frame.
+    /// Without explicit begin calls, the first upload after sealing starts the next frame.
+    pub fn native_transport_changes(
+        &mut self,
+    ) -> Option<&crate::instanced::transport::TransportChanges> {
+        self.native
+            .as_mut()?
+            .transport
+            .as_mut()
+            .map(|feed| feed.finish())
+    }
+
+    /// Narrow A1 lookup: publication-local instance ID -> transform, bounds and generation.
+    pub fn native_transport_instance(
+        &self,
+        id: u64,
+    ) -> Option<crate::instanced::transport::Stamped<crate::instanced::transport::InstanceState>>
+    {
+        self.native.as_ref()?.transport.as_ref()?.instance(id)
+    }
+
+    /// Current render-v3 cache stamps for every identity domain, absent while capture is disabled.
+    pub fn native_transport_state(&self) -> Option<&crate::instanced::transport::ChangeFeed> {
+        self.native
+            .as_ref()?
+            .transport
+            .as_ref()
+            .map(|feed| feed.state())
+    }
+
+    /// Replay exact events into cache-facing renderer state. The first frame must be a reset.
+    /// Subsequent native uploads can restore scene payloads without resynthesizing feed events.
+    /// Disable/re-enable the feed to resume live capture.
+    pub fn replay_native_transport_frame(
+        &mut self,
+        frame: &crate::instanced::transport::TransportChanges,
+    ) -> Result<()> {
+        self.native
+            .as_mut()
+            .and_then(|native| native.transport.as_mut())
+            .context("Enable native change feed first")?
+            .apply_replay(frame)
     }
 
     /// Dirty caster bounds from the most recently prepared native frame. New
@@ -942,6 +1047,7 @@ impl Native {
                 .collect(),
             culling,
             changes: updates::Updates::new(scene.instances.len()),
+            transport: None,
             pipelines,
             upload,
             material_dirty: true,

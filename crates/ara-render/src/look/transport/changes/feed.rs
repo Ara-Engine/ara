@@ -37,19 +37,24 @@ impl<T: Copy + PartialEq> Store<T> {
         current: Option<T>,
         flags: u32,
         force: bool,
+        next_index: usize,
     ) -> Result<Option<(Change<T>, Option<usize>)>> {
-        let previous = self.get(id).map(|s| s.value);
+        let slot = match self.0.entry(id) {
+            std::collections::btree_map::Entry::Occupied(entry) => entry.into_mut(),
+            std::collections::btree_map::Entry::Vacant(_) if current.is_none() => return Ok(None),
+            std::collections::btree_map::Entry::Vacant(entry) => entry.insert(Slot {
+                generation: 0,
+                value: None,
+                event: None,
+            }),
+        };
+        let previous = slot.value;
         if previous == current && !force {
             return Ok(None);
         }
         if previous.is_none() && current.is_none() {
             return Ok(None);
         }
-        let slot = self.0.entry(id).or_insert(Slot {
-            generation: 0,
-            value: None,
-            event: None,
-        });
         let generation = slot
             .generation
             .checked_add(1)
@@ -66,16 +71,9 @@ impl<T: Copy + PartialEq> Store<T> {
         };
         slot.value = current;
         slot.generation = generation;
-        Ok(Some((
-            change,
-            slot.event.filter(|(f, _)| *f == frame).map(|(_, i)| i),
-        )))
-    }
-    fn mark(&mut self, frame: u64, id: u64, index: usize) {
-        self.0
-            .get_mut(&id)
-            .expect("a changed identity has a slot")
-            .event = Some((frame, index));
+        let index = slot.event.filter(|(f, _)| *f == frame).map(|(_, i)| i);
+        slot.event = Some((frame, index.unwrap_or(next_index)));
+        Ok(Some((change, index)))
     }
     fn update(
         &mut self,
@@ -85,11 +83,10 @@ impl<T: Copy + PartialEq> Store<T> {
         value: Option<T>,
         flags: u32,
     ) -> Result<()> {
-        if let Some((change, index)) = self.change(frame, id, value, flags, false)? {
+        if let Some((change, index)) = self.change(frame, id, value, flags, false, out.len())? {
             if let Some(i) = index {
                 merge(&mut out[i], change);
             } else {
-                self.mark(frame, id, out.len());
                 out.push(change);
             }
         }
@@ -105,6 +102,10 @@ impl<T: Copy + PartialEq> Store<T> {
             );
         } else {
             ensure!(change.previous.is_none(), "reset records must start absent");
+            ensure!(
+                change.generation > self.generation(change.id),
+                "reset would regress a replay generation"
+            );
         }
         Ok(())
     }
@@ -255,10 +256,14 @@ impl ChangeFeed {
             motion.swept.valid() && motion.displacement.is_finite(),
             "instance motion bounds overflow"
         );
-        if let Some((change, index)) =
-            self.instances
-                .change(self.out.frame, id, Some(current), causes, causes != 0)?
-        {
+        if let Some((change, index)) = self.instances.change(
+            self.out.frame,
+            id,
+            Some(current),
+            causes,
+            causes != 0,
+            self.out.instances.len(),
+        )? {
             self.instance_event(change, index, motion);
         }
         Ok(())
@@ -275,8 +280,6 @@ impl ChangeFeed {
             first.swept = first.swept.union(motion.swept);
             first.displacement += motion.displacement;
         } else {
-            self.instances
-                .mark(self.out.frame, change.id, self.out.instances.len());
             self.out.instances.push(InstanceChange {
                 change,
                 swept: motion.swept,
@@ -292,9 +295,14 @@ impl ChangeFeed {
                 swept: old.value.world_bounds(),
                 displacement: 0.,
             };
-            if let Some((change, index)) =
-                self.instances.change(self.out.frame, id, None, 0, false)?
-            {
+            if let Some((change, index)) = self.instances.change(
+                self.out.frame,
+                id,
+                None,
+                0,
+                false,
+                self.out.instances.len(),
+            )? {
                 self.instance_event(change, index, motion);
             }
         }
@@ -360,6 +368,29 @@ impl ChangeFeed {
         self.lights
             .update(self.out.frame, &mut self.out.lights, id, value, causes)
     }
+
+    /// A profile/emission-mask payload changed behind unchanged native light-table offsets.
+    /// Call after submitting the light's current record; missing/removed lights are a no-op.
+    pub fn invalidate_light_shape(&mut self, id: u64) -> Result<()> {
+        self.writable()?;
+        if let Some(value) = self.light(id)
+            && let Some((change, index)) = self.lights.change(
+                self.out.frame,
+                id,
+                Some(value.value),
+                flags::SHAPE,
+                true,
+                self.out.lights.len(),
+            )?
+        {
+            if let Some(i) = index {
+                merge(&mut self.out.lights[i], change);
+            } else {
+                self.out.lights.push(change);
+            }
+        }
+        Ok(())
+    }
     /// Submit portal openness or removal from the host's optical portal system.
     pub fn set_portal(&mut self, id: u64, value: Option<PortalState>) -> Result<()> {
         self.writable()?;
@@ -399,7 +430,10 @@ impl ChangeFeed {
                 causes |= flags::RECOLOURED | flags::INTENSITY;
             }
         }
-        if let Some((change, index)) = self.sun.change(self.out.frame, 0, value, causes, false)? {
+        if let Some((change, index)) =
+            self.sun
+                .change(self.out.frame, 0, value, causes, false, 0)?
+        {
             let elevation = value
                 .or(old)
                 .map_or(0., |s| s.direction.y.clamp(-1., 1.).asin());
@@ -413,7 +447,6 @@ impl ChangeFeed {
                 first.angular_delta += angle;
                 first.elevation = elevation;
             } else {
-                self.sun.mark(self.out.frame, 0, 0);
                 self.out.sun = Some(SunChange {
                     change,
                     angular_delta: angle,
@@ -490,7 +523,7 @@ impl ChangeFeed {
         if let Some(c) = &frame.sun {
             self.sun.replay(&c.change);
         }
-        self.out.clone_from(frame);
+        self.out.copy_from(frame);
         self.open = false;
         Ok(())
     }

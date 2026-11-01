@@ -1,9 +1,7 @@
 //! Publication-local indices for incremental native frame updates.
 
 /// Render-v3 event source and portable lab replay API. The legacy row lists stay independent.
-pub mod transport {
-    pub use crate::look::transport::changes::*;
-}
+pub mod transport;
 
 /// Rows changed since the preceding native update. Geometry, material and
 /// instance layout must still match the published scene; structural edits replace
@@ -21,6 +19,8 @@ pub struct Changes {
     pub paint: Vec<usize>,
     /// Whether any decal's transform or parameters changed (same count and order).
     pub decals: bool,
+    /// Additional render-v3 metadata. Legacy GPU row processing ignores this field.
+    pub transport: transport::TransportHints,
 }
 
 impl Changes {
@@ -31,6 +31,7 @@ impl Changes {
         self.geometries.clear();
         self.paint.clear();
         self.decals = false;
+        self.transport.clear();
     }
 }
 

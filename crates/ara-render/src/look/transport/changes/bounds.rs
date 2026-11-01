@@ -65,6 +65,8 @@ pub struct MotionBounds {
 /// The sphere sweep covers rotation interiors missed by endpoint AABB unions. Displacement is
 /// the maximum affine endpoint difference on old box corners plus transformed deformation and
 /// both wind amplitudes. It measures endpoint change, not distance travelled during a full turn.
+/// Deforming vertices follow their uploaded endpoint segments; nonlinear skin trajectories
+/// require a host-supplied bound covering that path or subdivided vertex revisions.
 pub fn motion_bounds(
     previous: super::InstanceState,
     current: super::InstanceState,

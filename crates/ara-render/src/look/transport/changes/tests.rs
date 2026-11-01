@@ -69,6 +69,57 @@ fn generations_survive_removal_reuse_and_publication_reset() -> anyhow::Result<(
     assert!(feed.finish().reset);
     Ok(())
 }
+
+#[test]
+fn all_cache_stamps_are_monotone_and_overflow_is_rejected() -> anyhow::Result<()> {
+    let mut feed = ChangeFeed::default();
+    populate(&mut feed, 0)?;
+    feed.finish();
+    feed.begin_frame(1)?;
+    feed.set_geometry(0, None)?;
+    feed.set_material(0, None)?;
+    feed.set_light(0, None)?;
+    feed.set_portal(5, None)?;
+    feed.set_sun(None)?;
+    let removed = feed.finish();
+    assert_eq!(removed.geometries[0].generation, 2);
+    assert_eq!(removed.materials[0].generation, 2);
+    assert_eq!(removed.lights[0].generation, 2);
+    assert_eq!(removed.portals[0].generation, 2);
+    assert_eq!(removed.sun.unwrap().change.generation, 2);
+    populate(&mut feed, 2)?;
+    feed.finish();
+    assert_eq!(feed.geometry(0).unwrap().generation, 3);
+    assert_eq!(feed.material(0).unwrap().generation, 3);
+    assert_eq!(feed.light(0).unwrap().generation, 3);
+    assert_eq!(feed.portal(5).unwrap().generation, 3);
+    assert_eq!(feed.sun().unwrap().generation, 3);
+    let mut snapshot = TransportChanges {
+        frame: 0,
+        reset: true,
+        ..Default::default()
+    };
+    snapshot.instances.push(InstanceChange {
+        change: Change {
+            id: 0,
+            previous_generation: 0,
+            generation: u64::MAX,
+            flags: flags::ADDED,
+            previous: None,
+            current: Some(instance()),
+        },
+        swept: instance().world_bounds(),
+        displacement: 0.,
+    });
+    let mut exhausted = ChangeFeed::default();
+    exhausted.apply_replay(&snapshot)?;
+    exhausted.begin_frame(1)?;
+    let mut next = instance();
+    next.world.w_axis.x = 1.;
+    assert!(exhausted.set_instance(0, next, 0., 0).is_err());
+    assert_eq!(exhausted.instance(0).unwrap().value, instance());
+    Ok(())
+}
 #[test]
 fn sleep_wake_and_motion_are_not_lost_when_coalesced() -> anyhow::Result<()> {
     let mut feed = ChangeFeed::default();
@@ -225,6 +276,35 @@ fn replay_round_trip_is_identical_including_cache_state() -> anyhow::Result<()> 
     assert_eq!(replay.instance(7), source.instance(7));
     assert_eq!(replay.geometry(0), source.geometry(0));
     assert_eq!(replay.light(0), source.light(0));
+    Ok(())
+}
+
+#[test]
+fn warmed_replay_and_recording_allocate_nothing() -> anyhow::Result<()> {
+    let mut source = ChangeFeed::default();
+    let mut writer = ReplayWriter::new(Vec::new())?;
+    for frame in 0..12 {
+        populate(&mut source, frame)?;
+        writer.write_frame(source.finish())?;
+    }
+    let bytes = writer.finish()?;
+    let mut reader = ReplayReader::new(bytes.as_slice(), 1 << 20)?;
+    let mut replay = ChangeFeed::default();
+    let mut out = TransportChanges::default();
+    let mut sink = ReplayWriter::new(std::io::sink())?;
+    for _ in 0..3 {
+        assert!(reader.read_frame(&mut out)?);
+        replay.apply_replay(&out)?;
+        sink.write_frame(&out)?;
+    }
+    ALLOCATIONS.with(|n| n.set(Some(0)));
+    for _ in 3..12 {
+        assert!(reader.read_frame(&mut out)?);
+        replay.apply_replay(&out)?;
+        sink.write_frame(&out)?;
+    }
+    let allocations = ALLOCATIONS.with(|n| n.replace(None).unwrap());
+    assert_eq!(allocations, 0);
     Ok(())
 }
 #[test]
