@@ -74,8 +74,8 @@ float4 giFootprintPoint(float3 origin,uint2 texel,uint k,uint n,uint mask,float3
 // octahedral `texel` of 8x8, solid angle `omega`, bake plane `mask`) takes each local
 // light's unshadowed light at a grid of points across the texel (giFootprintPoint: 4x4
 // for light profiles and hard-edged spot cones, whose patterns are sharp; 2x2 for the
-// rest, smooth across it); the sun's shadow at 4x4 such points, each over a quarter of
-// the footprint's disc (virtual shadow pages first, else giShadowFootprint), averaged
+// rest, smooth across it); the sun's shadow at 2x2 such points, each over half of the
+// footprint's disc (virtual shadow pages first, else giShadowFootprint), averaged
 // over the points on the texel's surface (the hit alone where none is); and with
 // LOOK_LOCAL_INDIRECT each local light's shadow once over the whole disc where it owns
 // a shadow map this frame (look::local; the rest stay unshadowed).
@@ -86,18 +86,19 @@ float3 giFootprintDirect(Frame f,Look l,float3 origin,uint2 texel,float omega,ui
     float radius=distance*sqrt(omega/PI)*rsqrt(max(facing,0.25));
     // Shadow tests sit eight shadow texels off the plane, so it does not shadow itself.
     float3 lifted=hit+normal*(8*shadowTexel(f,l,hit)),sun=f.sunDirection.xyz;
-    // The sun at a 4x4 grid of points across the footprint, each over a quarter of its
-    // disc: one test per texel (a virtual page is a point compare, and a disc's PCF on
-    // a coarse cascade level turns a sunlit patch edge all-or-nothing) aliased the
-    // light of a patch smaller than a few texels, so probe columns alternated between
-    // 0.6 and 1.8 times the light past a sunlit wall.
+    // The sun at a 2x2 grid of points across the footprint, each over half its disc:
+    // one test per texel (a virtual page is a point compare, and a disc's PCF on a
+    // coarse cascade level turns a sunlit patch edge all-or-nothing) aliased the light
+    // of a patch smaller than a few texels, so probe columns alternated between 0.6 and
+    // 1.8 times the light past a sunlit wall. A 4x4 grid measured no better and cost
+    // three times as much.
     // Glass and films between each point and the sun tint it (look-translucent.slangh).
     float3 sunSeen=0;float sunPoints=0;float3 lift=lifted-hit;
-    for(uint k=0;k<16;k++){
-        float4 q=giFootprintPoint(origin,texel,k,4,mask,hit,normal,along,distance);
-        if(q.w>0){float3 p=q.xyz+lift;sunSeen+=giSunVisibility(f,l,p,normal,radius*0.25,pages)*translucentSun(l,p);sunPoints+=1;}
+    for(uint k=0;k<4;k++){
+        float4 q=giFootprintPoint(origin,texel,k,2,mask,hit,normal,along,distance);
+        if(q.w>0){float3 p=q.xyz+lift;sunSeen+=giSunVisibility(f,l,p,normal,radius*0.5,pages)*translucentSun(l,p);sunPoints+=1;}
     }
-    if(sunPoints==0){sunSeen=giSunVisibility(f,l,lifted,normal,radius*0.25,pages)*translucentSun(l,lifted);sunPoints=1;}
+    if(sunPoints==0){sunSeen=giSunVisibility(f,l,lifted,normal,radius*0.5,pages)*translucentSun(l,lifted);sunPoints=1;}
     float3 light=sunAt(f,l,hit)*saturate(dot(normal,sun))*(sunSeen/sunPoints);
     for(uint i=0;i<f.extent.z;i++){
         // look-lights.slangh: each light's form factor over its area.
