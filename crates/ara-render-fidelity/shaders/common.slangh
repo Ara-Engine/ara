@@ -226,6 +226,30 @@ float3 visibleGgx(Surface s,float3 v,inout uint rng){
     float3 h=normalize(float3(a*nh.xy,max(nh.z,0)));return t*h.x+b*h.y+s.normal*h.z;
 }
 float3 fresnel(float cosine,float3 f0){return f0+(1-f0)*pow(1-saturate(cosine),5);}
+// Multiple scattering of the GGX lobe (Kulla and Conty 2017), as Cycles' Principled BSDF
+// v2 and the raster's specularLobes evaluate it (look-shading.slangh, the same fits):
+// single scattering times 1 + F_ms (1/E - 1) for the view direction. Without it a rough
+// lobe loses the energy its microfacets bounce between them (a white roughness-0.7
+// metal some 25%), and every rough-metal surface read darker than Cycles and the raster.
+// The energy single scattering loses towards a viewer with masking g = G1(v), 1/E - 1,
+// at alpha a: specularLoss's fit.
+float ggxLoss(float g,float a){
+    float4 p=float4(1,a,a*a,a*a*a);
+    float k=dot(p,float4(-26.992674,24.19879,23.560875,-17.80212));
+    k=k*g+dot(p,float4(80.678413,-102.840874,-0.156378,15.487353));
+    k=k*g+dot(p,float4(-93.803902,161.34404,-96.72551,34.476097));
+    k=k*g+dot(p,float4(52.955402,-118.814537,120.470482,-54.776974));
+    k=k*g+dot(p,float4(-14.62627,41.991596,-56.709965,28.578594));
+    k=k*g+dot(p,float4(1.845784,-6.130684,11.342569,-5.297616));
+    return max(k*g+dot(p,float4(-0.052449,0.206786,-0.347631,0.213451)),0);
+}
+// The scale 1 + F_ms (1/E - 1) for Fresnel f0, view cosine nv and perceptual roughness
+// (averageAlbedo's and multipleFresnel's fits).
+float3 ggxMultipleScale(float3 f0,float nv,float roughness){
+    float a=roughness*roughness,r=roughness,eavg=0.996096+r*(0.041679+r*(0.105196+r*(-1.868613+r*1.135544)));
+    float3 mean=f0+(1-f0)/21,fms=mean*eavg/(1-mean*(1-eavg));
+    return 1+fms*ggxLoss(smith(nv,a*a),a);
+}
 float sheenLambda(float c,float a){
     float k=pow(1-a,2),x=min(c,1-c);float aa=lerp(21.5473,25.3245,k),b=lerp(3.82987,3.32435,k),cc=lerp(0.19823,0.16801,k),d=lerp(-1.9776,-1.27393,k),e=lerp(-4.32054,-4.85967,k);
     float value=aa/(1+b*pow(max(x,1e-5),cc))+d*x+e;
@@ -275,7 +299,7 @@ float3 evaluateOpaque(Surface s,float3 v,float3 l,out float pdf){
     float3 F=fresnel(vh,lerp(float3(0.04*s.specular),s.albedo,s.metal));float mixture=lerp(0.5,1.,s.metal);
     float diffusePdf=nl/PI;
     pdf=lerp(diffusePdf,d*smith(nv,a2)/(4*nv)*float(nl>0),mixture);
-    float3 result=((1-F)*(1-s.metal)*s.albedo/PI+d*g*F/max(4*nv*nl,1e-6))*nl;
+    float3 result=((1-F)*(1-s.metal)*s.albedo/PI+d*g*F/max(4*nv*nl,1e-6)*ggxMultipleScale(lerp(float3(0.04*s.specular),s.albedo,s.metal),nv,s.roughness))*nl;
     if(max(max(s.sheen.x,s.sheen.y),s.sheen.z)>0 && nl>0){float aSheen=s.sheenRoughness*s.sheenRoughness;float ds=(2+1/aSheen)*pow(max(0,1-nh*nh),0.5/aSheen)/(2*PI);float vis=1/((1+sheenLambda(nv,aSheen)+sheenLambda(nl,aSheen))*max(4*nv*nl,1e-6));
         float scaling=1-max(max(s.sheen.x,s.sheen.y),s.sheen.z)*max(sheenAlbedo(s,nv),sheenAlbedo(s,nl));
         result=result*scaling+s.sheen*ds*vis*nl;}
