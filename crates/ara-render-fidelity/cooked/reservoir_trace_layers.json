@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6",
+  "key": "85ae85fcd62fdd268a139f953cc173deabeb1d106b2848959779bd101b5ea340",
   "stages": [
     {
-      "dxil": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/reservoir_trace_layers/reservoirTraceLayers.dxil",
-      "dxil_hash": "619aac16dcef8f008b9efea169703fd493ecf2890dc052bc3900bbd8a0b0304e",
+      "dxil": "85ae85fcd62fdd268a139f953cc173deabeb1d106b2848959779bd101b5ea340/reservoir_trace_layers/reservoirTraceLayers.dxil",
+      "dxil_hash": "03c47e29446a40dd99915594a0d1f3ba6e431e42f708ff83f60c582bc1959413",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/reservoir_trace_layers/reservoirTraceLayers.metallib",
-        "metallib_hash": "3a824c200c95d51408924011a4c1af2b085874fed88fc45351a15fe3640eaa7d",
-        "reflection": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/reservoir_trace_layers/reservoirTraceLayers.metal.json",
+        "metallib": "85ae85fcd62fdd268a139f953cc173deabeb1d106b2848959779bd101b5ea340/reservoir_trace_layers/reservoirTraceLayers.metallib",
+        "metallib_hash": "f292bf9111bc87489ed800ee4307de41838a52ae4e067096ea2974a343ee0e12",
+        "reflection": "85ae85fcd62fdd268a139f953cc173deabeb1d106b2848959779bd101b5ea340/reservoir_trace_layers/reservoirTraceLayers.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "reservoirTraceLayers",
-      "spirv": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/reservoir_trace_layers/reservoirTraceLayers.spv",
+      "spirv": "85ae85fcd62fdd268a139f953cc173deabeb1d106b2848959779bd101b5ea340/reservoir_trace_layers/reservoirTraceLayers.spv",
       "spirv_entry": "main",
-      "spirv_hash": "6a24086563c710886281b89196618365a5362646ea018ddc8907eb3f58caccf5",
+      "spirv_hash": "163d920462f07c0c78ca2efb603a28ff6a358301d77ef3d98f7ebebf4f4e70c6",
       "stage": "compute"
     }
   ],

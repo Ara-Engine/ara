@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6",
+  "key": "85ae85fcd62fdd268a139f953cc173deabeb1d106b2848959779bd101b5ea340",
   "stages": [
     {
-      "dxil": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/reference/referenceMain.dxil",
-      "dxil_hash": "b0d45fbd4892afbba41793b795a28f19f22f8b83bc017463cc484d60dd3db1d8",
+      "dxil": "85ae85fcd62fdd268a139f953cc173deabeb1d106b2848959779bd101b5ea340/reference/referenceMain.dxil",
+      "dxil_hash": "83d39cefdd19449101f335898379d9424dd278ac1e8c7029b6cb27f8d2273e12",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/reference/referenceMain.metallib",
-        "metallib_hash": "82b2a52531014af37f33a77bb887e3823411cb7d60332e9e967e2a92e50b962d",
-        "reflection": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/reference/referenceMain.metal.json",
+        "metallib": "85ae85fcd62fdd268a139f953cc173deabeb1d106b2848959779bd101b5ea340/reference/referenceMain.metallib",
+        "metallib_hash": "526642f0f46d577a04771e2803ee0819aacf572a44827139e9577f69034dc746",
+        "reflection": "85ae85fcd62fdd268a139f953cc173deabeb1d106b2848959779bd101b5ea340/reference/referenceMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "referenceMain",
-      "spirv": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/reference/referenceMain.spv",
+      "spirv": "85ae85fcd62fdd268a139f953cc173deabeb1d106b2848959779bd101b5ea340/reference/referenceMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "b695b03d7222236087c37afe1bcb3b6284171d12bb3e8a80614ab165b8b51820",
+      "spirv_hash": "fa490741ba49c698c2b938bde3167c83be4d8e7aad60f646284d06cf2486840b",
       "stage": "compute"
     }
   ],
