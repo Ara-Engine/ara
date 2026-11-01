@@ -118,12 +118,18 @@ float giLatticeCoverage(GiLattice g,float3 p){
 void giLatticeLobes(Look l,GiLattice g,uint image,float3 position,float3 normal,float3 reflection,float3 v,float roughness,bool both,out float3 diffuse,out float3 specular,bool irradiance=true){
     float rough=saturate(roughness*roughness);
     float3 biased=position+normal*g.bias+v*(g.bias*0.33);float3 grid=(biased-g.origin)/g.spacing;
+    float lift=0.05*max(g.spacing.x,max(g.spacing.y,g.spacing.z));
     int3 base=clamp(int3(floor(grid)),int3(0),int3(g.counts)-2);float3 alpha=saturate(grid-base);diffuse=0;specular=0;float total=0,open=0;
     for(uint k=0;k<8;k++){
         uint3 d=uint3(k&1,(k>>1)&1,(k>>2)&1);uint3 p=uint3(base)+d;uint id=g.base+(p.z*g.counts.y+p.y)*g.counts.x+p.x;
         float4 meta=giMeta(l,id);if(meta.w<0.5)continue;
         float3 delta=biased-(g.origin+float3(p)*g.spacing)-meta.xyz;float distance=length(delta);float3 dir=delta/max(distance,1e-6);
-        float visibility=giVisibility(l,id,dir,distance,giMomentLimit(g));
+        // Visibility tests the point lifted off its surface by a share of the largest
+        // spacing: on a flat landform's lattice (far apart, a quarter metre high) every
+        // point lies at a grazing angle from probes just above the ground, in texels
+        // whose rays mostly hit the ground nearby, and would read as hidden.
+        float3 tested=delta+normal*lift;float far=length(tested);
+        float visibility=giVisibility(l,id,tested/max(far,1e-6),far,giMomentLimit(g));
         float3 trilinear=lerp(1-alpha,alpha,float3(d));float cell=trilinear.x*trilinear.y*trilinear.z;
         float facing=max(0.02,pow(saturate(dot(-dir,normal)*0.5+0.5),2));float unseen=facing<0.2?facing*facing*facing/0.04:facing;
         float weight=facing*visibility;if(weight<0.2)weight*=weight*weight/0.04;weight*=cell;
