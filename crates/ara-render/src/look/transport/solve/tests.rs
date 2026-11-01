@@ -1,0 +1,155 @@
+use super::*;
+use crate::look::transport::{
+    links::{Candidate, LinkStore, Visibility},
+    patches::{PatchRegistry, Placement},
+    reverse::ReverseLinks,
+};
+use anyhow::Result;
+use ara_patch_charts::{Mesh, Settings, Triangle, cache};
+use std::sync::Arc;
+
+pub(super) fn two_patches() -> Result<LinkStore> {
+    let mesh = Mesh {
+        positions: &[[0., 0., 0.], [0.5, 0., 0.], [0.5, 0.25, 0.], [0., 0.25, 0.]],
+        triangles: &[
+            Triangle {
+                vertices: [0, 1, 2],
+                material: 0,
+                albedo: [0.94; 3],
+            },
+            Triangle {
+                vertices: [0, 2, 3],
+                material: 0,
+                albedo: [0.94; 3],
+            },
+        ],
+    };
+    let prepared = cache::prepare(mesh, Settings::default(), None)?;
+    let mut registry = PatchRegistry::default();
+    registry
+        .publish(
+            1,
+            prepared.key,
+            Arc::new(prepared.charts),
+            0,
+            Placement::default(),
+        )
+        .unwrap();
+    let patches = Arc::new(registry.snapshot().unwrap());
+    assert_eq!(patches.len(), 2);
+    Ok(LinkStore::build(patches, vec![], 2, |receiver| {
+        Ok(vec![Candidate {
+            ordinal: 0,
+            source: 1 - receiver,
+            weight: 1.,
+            visibility: Visibility::clear(),
+            segment: None,
+        }])
+    })?)
+}
+
+#[test]
+fn event_solver_high_albedo_switch_off_matches_independent_exact_solution() -> Result<()> {
+    let links = two_patches()?;
+    let reverse = ReverseLinks::build(&links)?;
+    let mut solver = EventSolver::new(&links)?;
+    solver.set_forcing(0, Vec3::new(1., 0.3, 0.1))?;
+    let exact = solver.exact(&links, 1e-10)?;
+    let stats = solver.run(&links, &reverse, Budget::default())?;
+    assert!(stats.solution_bound <= 1e-5);
+    for (value, reference) in solver.radiance.iter().zip(&exact) {
+        assert!(magnitude(*value - *reference) < 3e-5);
+    }
+    solver.begin_frame(1)?;
+    solver.set_forcing(0, Vec3::ZERO)?;
+    solver.run(&links, &reverse, Budget::default())?;
+    assert!(solver.radiance.iter().all(|v| magnitude(*v) < 2e-5));
+    Ok(())
+}
+
+#[test]
+fn repeated_events_keep_old_debt_and_reverse_propagation_cannot_be_cut() -> Result<()> {
+    let links = two_patches()?;
+    let reverse = ReverseLinks::build(&links)?;
+    let mut solver = EventSolver::new(&links)?;
+    for frame in 0..300 {
+        solver.begin_frame(frame)?;
+        solver.set_forcing(0, Vec3::splat(if frame % 2 == 0 { 1. } else { 0.2 }))?;
+        let stats = solver.run(
+            &links,
+            &reverse,
+            Budget {
+                patch_passes: 1,
+                reverse_edges: 1,
+                solution_tolerance: 1e-8,
+            },
+        )?;
+        assert_eq!(stats.patch_passes, 1);
+        assert_eq!(stats.oldest_age, frame);
+        if frame >= 3 {
+            assert_eq!(stats.missed_deadlines, 1);
+        }
+    }
+    let before = solver.radiance.to_vec();
+    let stats = solver.run(
+        &links,
+        &reverse,
+        Budget {
+            reverse_edges: 0,
+            ..Budget::default()
+        },
+    )?;
+    assert_eq!(stats.patch_passes, 0);
+    assert_eq!(solver.radiance, before);
+    Ok(())
+}
+
+#[test]
+fn channel_support_memory_and_generation_validity_are_explicit() -> Result<()> {
+    use channels::{Channel, Channels, Domain};
+    let links = two_patches()?;
+    let reverse = ReverseLinks::build(&links)?;
+    assert!(Channels::support(&links, &reverse, &[0], 1).is_none());
+    assert_eq!(
+        Channels::support(&links, &reverse, &[0], 2),
+        Some(vec![0, 1])
+    );
+    let channel = || Channel {
+        light: 7,
+        shape_generation: 1,
+        support: vec![(Domain::Material(3), 10)],
+        values: vec![(0, Vec3::ONE), (1, Vec3::splat(0.5))],
+        forcing: vec![],
+        irradiance: vec![],
+        valid: true,
+        truncated: false,
+        error_bound: 1e-7,
+    };
+    assert!(!Channels::new(1).insert(channel(), Vec3::ONE)?);
+    let mut cache = Channels::new(4096);
+    assert!(cache.insert(channel(), Vec3::ONE)?);
+    cache.set_gain(7, Vec3::new(3., 2., 1.))?;
+    assert_eq!(cache.read(1).unwrap().0, Vec3::new(1.5, 1., 0.5));
+    cache.validate_generations(|_| Some(11));
+    assert!(cache.read(0).is_none());
+    Ok(())
+}
+
+#[test]
+fn direction_patterns_are_deterministic_normalized_and_distinct() {
+    let n = Vec3::new(0.3, 0.7, 0.2).normalize();
+    for scheme in [DirectionScheme::Global, DirectionScheme::PerPatch] {
+        let a = graph::directions(n, 8, 48, scheme);
+        let b = graph::directions(n, 8, 48, scheme);
+        assert_eq!(a, b);
+        assert!((a.iter().map(|v| v.1).sum::<f32>() - 1.).abs() < 1e-6);
+        assert!(
+            a.iter()
+                .all(|(d, w)| d.dot(n) > 0. && (d.length() - 1.).abs() < 1e-5 && *w > 0.)
+        );
+    }
+    assert_ne!(
+        graph::directions(n, 8, 48, DirectionScheme::Global),
+        graph::directions(n, 8, 48, DirectionScheme::PerPatch)
+    );
+}

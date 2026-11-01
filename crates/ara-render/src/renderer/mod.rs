@@ -159,6 +159,8 @@ pub struct Renderer {
     native_pipelines: native::pipelines::Pipelines,
     /// Hybrid ray queries over the native content (High/Epic on RT devices; D29).
     rays: rt::Rays,
+    /// Explicit opt-in patch readout; absent on every default renderer.
+    patch_transport: Option<crate::look::transport::solve::ReadoutGpu>,
     views: views::Views,
     secondary_active: bool,
     live: Option<live::Live>,
@@ -172,6 +174,58 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    /// Publish the opt-in patch bounce at a completed frame boundary. `None`
+    /// restores the existing probe/screen-GI path. Direct and specular controls
+    /// stay in the same renderer; transport never reads its screen colour.
+    pub fn set_patch_transport(
+        &mut self,
+        transport: Option<&crate::PatchTransport>,
+        scene: &crate::instanced::Scene,
+    ) -> Result<()> {
+        ensure!(
+            !self.gpu.deferring_completion(),
+            "publish patch transport at a completed frame boundary"
+        );
+        match (transport, &mut self.patch_transport) {
+            (Some(transport), Some(gpu)) => gpu.update(&mut self.gpu, transport, scene)?,
+            (Some(transport), None) => {
+                self.patch_transport = Some(crate::look::transport::solve::ReadoutGpu::new(
+                    &mut self.gpu,
+                    &self.artifacts,
+                    transport,
+                    scene,
+                )?);
+            }
+            (None, _) => {
+                if let Some(gpu) = self.patch_transport.take() {
+                    gpu.destroy(&mut self.gpu)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// GPU readout allocation, added to the host transport report for peak residency.
+    pub fn patch_transport_gpu_bytes(&self) -> usize {
+        self.patch_transport.as_ref().map_or(0, |p| p.bytes)
+    }
+
+    /// Lab-only publication of an independent current-geometry solution. This
+    /// does not mutate the capped solver's residual queue, debt or generations.
+    #[cfg(feature = "fidelity-lab")]
+    pub fn set_patch_transport_reference(
+        &mut self,
+        transport: &crate::PatchTransport,
+        scene: &crate::instanced::Scene,
+        values: &[[f32; 3]],
+    ) -> Result<()> {
+        self.set_patch_transport(Some(transport), scene)?;
+        self.patch_transport
+            .as_mut()
+            .expect("reference readout allocated")
+            .reference(&mut self.gpu, transport, scene, values)
+    }
+
     /// Read-only GPU diagnostics and native presentation integration.
     pub fn gpu(&self) -> &GpuDevice {
         &self.gpu

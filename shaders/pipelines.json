@@ -1608,5 +1608,53 @@
       "depth_write": false,
       "vertex_stride": 0
     }
+  },
+  "transport_diffuse": {
+    "entries": {
+      "fullscreenVertex": "vertex",
+      "transportDiffuseFragment": "fragment"
+    },
+    "source": "transport-readout.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        97
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "transport_gather": {
+    "entries": {
+      "transportGather": "compute"
+    },
+    "source": "transport-gather.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "transport_lighting": {
+    "entries": {
+      "fullscreenVertex": "vertex",
+      "transportLightingFragment": "fragment"
+    },
+    "source": "transport-readout.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [
+        97
+      ],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
   }
 }

@@ -1171,6 +1171,7 @@ impl Renderer {
             declare(tiles, Recipe::Look(LookPass::CaptureTiles));
             capture_reads = vec![(c.atlas, Access::ShaderRead), (c.frame, Access::ShaderRead)];
         }
+        let patch_read = self.patch_transport.as_mut().map(|p| p.import(&mut graph));
         let lighting = graph.pass(
             "DeferredLighting",
             Queue::Graphics,
@@ -1180,6 +1181,7 @@ impl Renderer {
                 (ids[MATERIAL], Access::ShaderRead),
                 (ids[EMISSIVE], Access::ShaderRead),
                 (ids[DEPTH], Access::ShaderRead),
+                (ids[ID], Access::ShaderRead),
                 (tile, Access::ShaderRead),
                 (ids[HDR], Access::Color),
             ]
@@ -1191,7 +1193,8 @@ impl Renderer {
             .chain(look_reads.iter().copied())
             .chain(capture_reads.iter().copied())
             .chain(translucent_reads.iter().copied())
-            .chain(self.rays.lighting_reads()),
+            .chain(self.rays.lighting_reads())
+            .chain(patch_read),
         );
         let gi_diffuse = mode == ViewMode::GiDiffuse;
         declare(lighting, Recipe::Lighting(gi_diffuse));
@@ -1825,6 +1828,13 @@ impl Renderer {
                         let high = self.look.quality.high_tier;
                         let reflections = self.debug.reflections != super::ReflectionView::Lit;
                         let lighting = match self.rays.lighting() {
+                            _ if self.patch_transport.is_some() && !reflections => {
+                                let patch = self
+                                    .patch_transport
+                                    .as_ref()
+                                    .expect("enabled patch readout");
+                                if gi_diffuse { patch.diffuse } else { patch.lit }
+                            }
                             _ if gi_diffuse && high => self.pipelines.lighting_high_gi,
                             _ if gi_diffuse => self.pipelines.lighting_gi,
                             _ if reflections && high => self.pipelines.lighting_high_refl,
@@ -1834,7 +1844,11 @@ impl Renderer {
                             None => self.pipelines.lighting,
                         };
                         recorder.push(Command::Pipeline(lighting));
-                        recorder.push(Command::Constants(root));
+                        let mut lighting_root = root;
+                        if let Some(patch) = &self.patch_transport {
+                            lighting_root.words[3] = patch.record;
+                        }
+                        recorder.push(Command::Constants(lighting_root));
                         recorder.push(Command::BeginRendering {
                             colors: vec![Attachment {
                                 image: self.targets.images[HDR],

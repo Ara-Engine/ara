@@ -116,6 +116,7 @@ impl Renderer {
             native: None,
             native_pipelines: Default::default(),
             rays: Default::default(),
+            patch_transport: None,
             views: views::Views::default(),
             secondary_active: false,
             live: None,

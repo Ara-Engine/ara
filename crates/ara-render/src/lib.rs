@@ -10,6 +10,9 @@ pub mod look;
 pub mod renderer;
 pub mod scene;
 mod tsr;
+pub use look::transport::solve::{
+    PatchTransport, TransportMedium, TransportOptions, TransportReport,
+};
 pub use renderer::{
     HdrExposure, NativeContent, NativeSeed, Outlines, ReferenceTrace, ReflectionView, RenderDebug,
     Renderer, ViewId, ViewOutput, ViewRequest, temporal_phases,
