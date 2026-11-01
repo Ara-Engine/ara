@@ -1,16 +1,26 @@
 //! Volumetric fog (Unreal's volumetric fog; Wronski 2014, Hillaire 2015): a near-field
-//! froxel volume in front of the coarse 4 km fog grid (`Fog.Froxels`, look-sky.slang).
+//! froxel volume in front of the coarse 4 km fog grid (`Fog.Froxels`, look-sky.slang),
+//! and local lights' scattering per pixel.
 //!
 //! Each frame `Fog.Inject` (look-volumetric.slang) evaluates every froxel at a jittered
 //! point (a Halton sequence over frames since the last history reset): the media
 //! (height fog, local fog volumes, emission) and their lighting (the sun through the
-//! cascades and far map, the tile's local lights with their shadows and per-light
-//! volumetric intensity, probe GI or sky ambient), and blends it into last frame's
+//! cascades and far map, probe GI or sky ambient), and blends it into last frame's
 //! volume reprojected through the unjittered previous view-projection. `Fog.Integrate`
 //! then accumulates in-scatter and transmittance front to back per column (Hillaire's
 //! energy-conserving segment integral). Shading composites the near volume up to the
-//! fog's volumetric distance and the coarse grid's segment behind it
-//! (look.slangh `applyFog`); the coarse grid then starts at that distance.
+//! fog's volumetric distance (a cubic B-spline across froxels, so shafts never step) and
+//! the coarse grid's segment behind it (look.slangh `applyFog`); the coarse grid then
+//! starts at that distance.
+//!
+//! Local lights skip both grids: `Fog.Lights` (look-fog-lights.slang) integrates each
+//! light of a pixel's tile along the pixel's own ray, clipped analytically to the light's
+//! range, cone or barn doors, by equiangular sampling (Kulla and Fajardo 2012) on fixed
+//! angular bins, with shadows filtered over each sample's stretch and the froxels'
+//! transmittance: noise-free and deterministic, with no history. It runs at the render
+//! size over `VolumetricFogQuality::light_scale` (half: upsampled by depth), and applyFog
+//! adds it. With `light_samples` zero (or without the near volume, as on Low) local
+//! lights scatter in the froxels as before.
 //!
 //! Slices sit on an exponential view-depth distribution and are tiled in 2D atlases
 //! (the GPU layer has no 3D images): `columns` slices per atlas row. Between-slice
@@ -19,7 +29,7 @@ use super::{
     frame::LookFrame,
     gpu::{
         FROXELS, LookGpu, LookIds, MULTISCATTER, SKY_IRRADIANCE, TRANSMITTANCE, VOLUME_A,
-        VOLUME_AMBIENT, VOLUME_B, VOLUME_LIGHT,
+        VOLUME_AMBIENT, VOLUME_B, VOLUME_LIGHT, VOLUME_SCATTER,
     },
     passes::LookPass,
 };
@@ -84,10 +94,31 @@ pub struct VolumetricFogQuality {
     pub tile: u32,
     /// Depth slices up to the volumetric distance (16 to 128).
     pub slices: u32,
+    /// Render pixels per side of a texel of the per-pixel local-light scattering
+    /// (`Fog.Lights`): 1 at full resolution, 2 at half (upsampled by depth).
+    pub light_scale: u32,
+    /// Angular bins across the half circle a ray subtends at a local light (2 to 32):
+    /// one equiangular sample each, so a ray passing right by a light takes this many
+    /// and distant ones fewer. Zero scatters local lights in the froxels instead.
+    pub light_samples: u32,
+}
+impl Default for VolumetricFogQuality {
+    /// 8-pixel froxels, 64 slices, local lights at half resolution in 16 bins.
+    fn default() -> Self {
+        Self {
+            tile: 8,
+            slices: 64,
+            light_scale: 2,
+            light_samples: 16,
+        }
+    }
 }
 impl VolumetricFogQuality {
     pub(crate) fn valid(&self) -> bool {
-        (4..=32).contains(&self.tile) && (16..=128).contains(&self.slices)
+        (4..=32).contains(&self.tile)
+            && (16..=128).contains(&self.slices)
+            && (1..=2).contains(&self.light_scale)
+            && (self.light_samples == 0 || (2..=32).contains(&self.light_samples))
     }
 }
 
@@ -199,6 +230,20 @@ pub(crate) struct Layout {
     pub ambient: [u32; 3],
     /// Its slices per atlas row.
     pub ambient_columns: u32,
+    /// The per-pixel local-light scatter (`Fog.Lights`); `None` scatters local lights
+    /// in the froxels.
+    pub lights: Option<Lights>,
+}
+
+/// The per-pixel local-light scatter's image and budget (`Layout::lights`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Lights {
+    /// Texels across and down: the render size over `scale`.
+    pub size: [u32; 2],
+    /// Render pixels per texel side.
+    pub scale: u32,
+    /// Angular bins per half circle (`VolumetricFogQuality::light_samples`).
+    pub samples: u32,
 }
 impl Layout {
     pub(crate) fn new(render: [u32; 2], quality: VolumetricFogQuality) -> Self {
@@ -211,6 +256,11 @@ impl Layout {
             columns: (ATLAS_LIMIT / x).clamp(1, quality.slices),
             ambient,
             ambient_columns: (ATLAS_LIMIT / ambient[0]).clamp(1, ambient[2]),
+            lights: (quality.light_samples > 0).then(|| Lights {
+                size: render.map(|v| v.div_ceil(quality.light_scale).max(1)),
+                scale: quality.light_scale,
+                samples: quality.light_samples,
+            }),
         }
     }
 
@@ -243,8 +293,8 @@ impl LookGpu {
     }
 
     /// Allocates (or reallocates, after a resize or budget change) the near volume's
-    /// injection history pair and its integrated atlas while the look and quality
-    /// ask for them. Never frees otherwise.
+    /// injection history pair, its integrated atlas and the per-pixel local-light
+    /// scatter while the look and quality ask for them. Never frees otherwise.
     pub(crate) fn ensure_volumetric(&mut self, gpu: &mut GpuDevice) -> Result<()> {
         let Some(quality) = self
             .quality
@@ -257,15 +307,24 @@ impl LookGpu {
         if self.volumetric == Some(layout) {
             return Ok(());
         }
-        for i in [VOLUME_A, VOLUME_B, VOLUME_LIGHT, VOLUME_AMBIENT] {
-            let [width, height] = if i == VOLUME_AMBIENT {
-                layout.ambient_atlas()
-            } else {
-                layout.atlas()
-            };
+        for i in [
+            VOLUME_A,
+            VOLUME_B,
+            VOLUME_LIGHT,
+            VOLUME_AMBIENT,
+            VOLUME_SCATTER,
+        ] {
             if let Some(old) = self.images[i].take() {
                 gpu.retire(Resource::Image(old))?;
             }
+            let [width, height] = match i {
+                VOLUME_AMBIENT => layout.ambient_atlas(),
+                VOLUME_SCATTER => match layout.lights {
+                    Some(lights) => lights.size,
+                    None => continue,
+                },
+                _ => layout.atlas(),
+            };
             let image = gpu.create_image(
                 width,
                 height,
@@ -303,6 +362,14 @@ impl LookGpu {
             self.volumetric_frames = 0;
         }
         self.volumetric_slot ^= 1;
+    }
+
+    /// This frame's per-pixel local-light scatter (`Fog.Lights`): on near volume frames
+    /// whose budget scatters local lights per pixel.
+    pub(crate) fn frame_fog_lights(&self) -> Option<Lights> {
+        self.volumetric
+            .filter(|_| self.frame_volumetric)
+            .and_then(|layout| layout.lights)
     }
 
     /// The images this frame injects into and reprojects from.
@@ -360,6 +427,15 @@ impl LookGpu {
         ];
         let [ax, ay, az] = layout.ambient;
         frame.volumetric_ambient = [ax, ay, az, layout.ambient_columns];
+        if let Some(lights) = layout.lights {
+            frame.fog_lights_params = [lights.samples as f32, 0., 0., 0.];
+            frame.fog_lights_info = [
+                self.sampled[VOLUME_SCATTER],
+                self.storage[VOLUME_SCATTER],
+                lights.scale,
+                lights.size[0],
+            ];
+        }
         self.volumetric_frames = n.saturating_add(1);
     }
 
@@ -407,14 +483,17 @@ impl LookGpu {
     }
 
     /// Declares `Fog.Ambient`, `Fog.Inject` and `Fog.Integrate` on near volume frames,
-    /// before lighting (injection culls local lights per froxel group itself).
-    /// `reads` must cover what the fog's lighting samples: the sun and local shadow
-    /// maps, the horizon, probe GI and the sky's irradiance.
+    /// then `Fog.Lights` where the budget scatters local lights per pixel, before
+    /// lighting. `reads` must cover what the fog's lighting samples: the sun and local
+    /// shadow maps, the horizon, probe GI and the sky's irradiance; `pixels` what the
+    /// per-pixel pass adds: the depth target and the tiled light lists (after
+    /// `TiledLightCull`), and the coarse grid (its transmittance) is read here.
     pub(crate) fn volumetric_passes(
         &self,
         graph: &mut Graph,
         ids: &LookIds,
         reads: &[(ResourceId, Access)],
+        pixels: &[(ResourceId, Access)],
     ) -> Vec<(PassId, LookPass)> {
         if !self.frame_volumetric {
             return Vec::new();
@@ -456,15 +535,32 @@ impl LookGpu {
             .into_iter()
             .chain(reads.iter().copied()),
         );
-        vec![
+        let mut passes = vec![
             (ambient, LookPass::FogAmbient),
             (inject, LookPass::FogInject),
             (integrate, LookPass::FogIntegrate),
-        ]
+        ];
+        if self.frame_fog_lights().is_some() {
+            let lights = graph.pass(
+                "Fog.Lights",
+                Queue::Graphics,
+                [
+                    (ids.image(VOLUME_LIGHT), Access::ShaderRead),
+                    (ids.image(FROXELS), Access::ShaderRead),
+                    (ids.image(VOLUME_SCATTER), Access::Storage),
+                    (ids.frame, Access::ShaderRead),
+                ]
+                .into_iter()
+                .chain(pixels.iter().copied())
+                .chain(reads.iter().copied()),
+            );
+            passes.push((lights, LookPass::FogLights));
+        }
+        passes
     }
 
-    /// The fog images shading samples: the coarse grid, and the near volume on
-    /// frames that render it.
+    /// The fog images shading samples: the coarse grid, and the near volume and the
+    /// per-pixel local-light scatter on frames that render them.
     pub(crate) fn fog_reads(&self, ids: &LookIds) -> Vec<(ResourceId, Access)> {
         let mut reads = Vec::new();
         if self.fogged() {
@@ -473,11 +569,15 @@ impl LookGpu {
         if self.frame_volumetric {
             reads.push((ids.image(VOLUME_LIGHT), Access::ShaderRead));
         }
+        if self.frame_fog_lights().is_some() {
+            reads.push((ids.image(VOLUME_SCATTER), Access::ShaderRead));
+        }
         reads
     }
 
-    /// Dispatch size of a near volume pass: one thread per ambient cell or froxel
-    /// (injection), or per column (integration), 8x8 per group.
+    /// Dispatch size of a near volume pass: one thread per ambient cell, froxel
+    /// (injection) or local-light scatter texel, or per column (integration), 8x8 per
+    /// group.
     pub(crate) fn volumetric_dispatch(&self, pass: LookPass) -> [u32; 3] {
         let Some(layout) = self.volumetric else {
             return [0; 3];
@@ -485,6 +585,10 @@ impl LookGpu {
         let [x, y, z] = match pass {
             LookPass::FogAmbient => layout.ambient,
             LookPass::FogInject => layout.grid,
+            LookPass::FogLights => match layout.lights {
+                Some(Lights { size: [x, y], .. }) => [x, y, 1],
+                None => [0; 3],
+            },
             _ => [layout.grid[0], layout.grid[1], 1],
         };
         [x.div_ceil(8), y.div_ceil(8), z]
@@ -516,7 +620,14 @@ mod tests {
             ([1707, 960], 12, 64),
             ([640, 360], 16, 48),
         ] {
-            let layout = Layout::new(render, VolumetricFogQuality { tile, slices });
+            let layout = Layout::new(
+                render,
+                VolumetricFogQuality {
+                    tile,
+                    slices,
+                    ..VolumetricFogQuality::default()
+                },
+            );
             let [w, h] = layout.atlas();
             assert!(w <= ATLAS_LIMIT && h <= ATLAS_LIMIT, "{render:?} {w}x{h}");
             // Every slice has a tile, and the grid covers the render size.

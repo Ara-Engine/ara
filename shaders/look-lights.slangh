@@ -58,12 +58,14 @@ float lightProfile(Look l,uint offset,Light light,LightShape shape,float3 fromLi
 // Luminous intensity (cd, tinted) `light` sends towards `p` as seen from its centre,
 // windowed by its range: points and spheres in every direction, spots in their cone,
 // rects and discs as Lambertian emitters in front of them (a rect through its barn
-// doors). Fog in-scattering and other far-field consumers read it.
-float3 lightIntensity(Frame f,Look l,Light light,uint index,float3 p){
+// doors). Fog in-scattering and other far-field consumers read it. `shape`: the light's
+// shape row (zero when it has none: lightShaped), loaded once by callers that evaluate
+// one light at many points.
+float3 lightIntensityShaped(Look l,Light light,LightShape shape,float3 p){
     float3 delta=p-light.positionRange.xyz;float d=length(delta);if(d>=light.positionRange.w)return 0;
     float3 fromLight=delta/max(d,1e-6);float scale=light.colorLumens.w/(4*PI)*lightFade(light,d)*lightCone(light,fromLight);
-    uint kind=lightKind(light);LightShape shape=(LightShape)0;
-    if(lightShaped(light)){shape=loadLightShape(f.lighting.w,index);scale*=lightProfile(l,shape.tables.x,light,shape,fromLight);}
+    uint kind=lightKind(light);
+    if(lightShaped(light))scale*=lightProfile(l,shape.tables.x,light,shape,fromLight);
     if(kind>=LIGHT_RECT){
         float3 n=light.directionOuter.xyz;float z=dot(delta,n);if(z<=0)return 0;
         scale*=z/max(d,1e-6);
@@ -74,6 +76,10 @@ float3 lightIntensity(Frame f,Look l,Light light,uint index,float3 p){
         }
     }
     return light.colorLumens.rgb*scale;
+}
+// lightIntensityShaped for light `index`, loading its shape row.
+float3 lightIntensity(Frame f,Look l,Light light,uint index,float3 p){
+    return lightIntensityShaped(l,light,lightShaped(light)?loadLightShape(f.lighting.w,index):(LightShape)0,p);
 }
 
 // LTC table lookups: 64x64 entries over [0,1]^2, sampled at texel centres.

@@ -54,7 +54,8 @@ void skyPrefilterMain(uint3 tid:SV_DispatchThreadID){
 // composes the two exactly (applyFog). Volumetric fog's sun is shadowed by the
 // cascades and far map (each segment the lit share of four points, so shafts move
 // smoothly with the camera instead of a whole slice flipping lit or dark at once), and
-// local lights scatter in it; quadrature is deterministic (no noise). Height fog and
+// local lights scatter in it unless they scatter per pixel (fogLightsOn); quadrature is
+// deterministic (no noise). Height fog and
 // fog volumes come from fogMedium; under the physical sky the atmosphere's aerial
 // perspective joins them (atmosphereAerial: both atmosphere lights, multiple scattering,
 // from the start depth, stretched by the view distance scale; only light 0's single
@@ -66,7 +67,8 @@ void fogMain(uint3 group:SV_GroupID,uint z:SV_GroupIndex){
     Frame f=frame();Look l=look(f);
     float2 uv=(float2(group.xy)+0.5)/float2(64,36);float3 d=viewRay(f,uv*float2(f.extent.xy));
     bool physical=physicalSky(l),shadowed=(l.flags.y&LOOK_FOG_SHADOWED)!=0;float g=l.fog.w;float3 sun=f.sunDirection.xyz;
-    uint lights=shadowed?f.extent.z:0;float cosine=dot(d,sun);
+    // Local lights scatter per pixel when the near volume runs (look-fog-lights.slang).
+    uint lights=shadowed&&!fogLightsOn(l)?f.extent.z:0;float cosine=dot(d,sun);
     float begin=(l.flags.y&LOOK_VOLUMETRIC)!=0?l.volumetric.x/max(dot(d,f.forward.xyz),0.05):0;
     // Threads past the last slice only join the barrier.
     uint slice=min(z,FOG_SLICES-1);

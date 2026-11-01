@@ -1,4 +1,5 @@
 #include "common.slangh"
+#include "medium.slangh"
 [shader("compute")][numthreads(8,8,1)]
 void primaryMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();uint2 p=tid.xy;if(any(p>=f.sizes.xy))return;uint rng=hash(p.y*f.sizes.x+p.x+f.control.w*7919);
@@ -107,7 +108,21 @@ void referenceMain(uint3 tid:SV_DispatchThreadID){
             // MIS-weighted against the light samples direct() takes; camera rays see none,
             // nor do rays that crossed glass (pdf zero: shadow rays carry that light).
             if(bounce>0)result+=throughput*localHits(f,last,origin,direction,found?hit.distance:10000,pdf);
-            if(!found){result+=throughput*environment(f,direction);break;}
+            // The fog and atmosphere the camera sees along this stretch (medium.slangh):
+            // to the surface, or over the sky as raster fogBackground lays it.
+            bool physical=(f.display.w&2)!=0;
+            if(seen){
+                float3 light,through;mediumSegment(f,origin,direction,found?hit.distance:physical?(f.weather.z>0.5?f.weather.w:0):MEDIUM_SKY,found&&physical,rng,light,through);
+                result+=throughput*light;throughput*=through;
+            }
+            if(!found){
+                float3 sky=environment(f,direction);
+#ifdef SKY_ATMOSPHERE
+                // The sun's disc where the camera sees the sky (post draws it otherwise).
+                if(seen&&physical)sky=atmosphereEnvironment(f,direction,true);
+#endif
+                result+=throughput*sky;break;
+            }
             Surface s=surface(f,hit.id,hit.primitive,hit.bary);
             // Leaving a volume (the ray runs along its outward normal): its medium absorbed
             // over the stretch since the last vertex (Beer-Lambert, KHR_materials_volume).

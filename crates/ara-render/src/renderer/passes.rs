@@ -1120,7 +1120,12 @@ impl Renderer {
         // The near fog volume (look::volumetric) before lighting samples it.
         let mut fog_reads = sky_shared.clone();
         fog_reads.extend(self.look.fog_light_reads(&look));
-        for (id, pass) in self.look.volumetric_passes(&mut graph, &look, &fog_reads) {
+        // Its per-pixel local-light scatter follows the light lists and reads depth.
+        let fog_pixels = [(tile, Access::ShaderRead), (ids[DEPTH], Access::ShaderRead)];
+        for (id, pass) in self
+            .look
+            .volumetric_passes(&mut graph, &look, &fog_reads, &fog_pixels)
+        {
             declare(id, Recipe::Look(pass));
         }
         let reflected = self.look.quality.reflections.is_some() && self.targets.history.is_some();

@@ -61,7 +61,7 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
   Same-queue passes share a submission; cross-queue edges and deferred helper boundaries retain GPU waits/timestamps. Synchronous `render`/`render_view` remain available.
 - `look::Look` (`Renderer::set_look`): D27 raster look after the G-buffer: physical sky (`look::atmosphere`: Unreal SkyAtmosphere parameters in SI units, two atmosphere lights, the GPU record and `shaders/atmosphere-model.slangh`, shared with ara-render-fidelity) LUTs and their IBL,
   fog and aerial perspective (a coarse 64x36x46 grid, 32 slices to 4 km and 14 more to 111 km, `Fog.Froxels`; the volumetric near volume, `look::volumetric`: per-preset
-  froxels to `VolumetricFog::distance`, ambient/inject/integrate passes, reprojected history, `set_fog_volumes`), histogram or manual exposure (snaps to its meter on a reset and while new GI arrives;
+  froxels to `VolumetricFog::distance`, ambient/inject/integrate passes, reprojected history, B-spline composite, `set_fog_volumes`; local lights per pixel in `Fog.Lights`, look-fog-lights.slang: equiangular, analytically clipped, deterministic, half-res depth-aware upsample, `VolumetricFogQuality::light_samples` 0 puts them back in the froxels), histogram or manual exposure (snaps to its meter on a reset and while new GI arrives;
   `exposure`/`seed_exposure` carry a converged exposure across views; `exposure_settled` reads whether it reached its meter), bloom, grading and the display curve,
   plus volume lens effects (`look::lens`): display lift/gamma/gain and chromatic aberration in the post pass,
   half-res gather DoF before TAA (TAA reads `DOF_COMPOSITE`), McGuire motion blur as the `look_post_motion`

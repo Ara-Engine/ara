@@ -394,8 +394,16 @@ impl QualityPreset {
             })
         };
         // The near froxel volume of volumetric fog: render pixels per froxel and slices
-        // (Unreal's grid pixel size and grid size Z).
-        let volumetric = |tile, slices| Some(VolumetricFogQuality { tile, slices });
+        // (Unreal's grid pixel size and grid size Z), then the per-pixel local-light
+        // scatter's render pixels per texel side and equiangular samples per light.
+        let volumetric = |tile, slices, light_scale, light_samples| {
+            Some(VolumetricFogQuality {
+                tile,
+                slices,
+                light_scale,
+                light_samples,
+            })
+        };
         match self {
             // LOD error and the cull size are in render pixels (about two
             // display pixels each at Low's scale).
@@ -448,7 +456,7 @@ impl QualityPreset {
                 depth_of_field: dof(20, 0.015),
                 motion_blur: motion(8, 24.),
                 ray_queries: None,
-                volumetric_fog: volumetric(16, 48),
+                volumetric_fog: volumetric(16, 48, 2, 12),
                 screen_gi: None,
             },
             Self::High => Quality {
@@ -482,7 +490,7 @@ impl QualityPreset {
                 depth_of_field: dof(32, 0.02),
                 motion_blur: motion(12, 32.),
                 ray_queries: rays(0.3, 0.6, 1500.),
-                volumetric_fog: volumetric(12, 64),
+                volumetric_fog: volumetric(12, 64, 2, 16),
                 // Off by default until the probe volume stops over-lighting interiors
                 // through openings (D32's open error): enabled, test rooms regress against
                 // the path tracer. Tuned settings: SCREEN_GI_HIGH.
@@ -516,7 +524,7 @@ impl QualityPreset {
                 depth_of_field: dof(48, 0.025),
                 motion_blur: motion(16, 32.),
                 ray_queries: rays(0.5, 0.8, 2000.),
-                volumetric_fog: volumetric(8, 96),
+                volumetric_fog: volumetric(8, 96, 2, 24),
                 // Off by default, as on High; tuned settings: SCREEN_GI_EPIC.
                 screen_gi: None,
             },

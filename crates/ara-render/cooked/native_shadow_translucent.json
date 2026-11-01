@@ -1,36 +1,36 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee",
+  "key": "4d24547b2baaffd9b87e598ad3b5ab4f7cdfb6ccde046a843e862d4f2bd7d2cd",
   "stages": [
     {
-      "dxil": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/native_shadow_translucent/nativeShadowTranslucentFragment.dxil",
+      "dxil": "4d24547b2baaffd9b87e598ad3b5ab4f7cdfb6ccde046a843e862d4f2bd7d2cd/native_shadow_translucent/nativeShadowTranslucentFragment.dxil",
       "dxil_hash": "d99753607f1e4264ec90f3b4874dc65bc36a4169ea607e26553348c3c5c80316",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/native_shadow_translucent/nativeShadowTranslucentFragment.metallib",
+        "metallib": "4d24547b2baaffd9b87e598ad3b5ab4f7cdfb6ccde046a843e862d4f2bd7d2cd/native_shadow_translucent/nativeShadowTranslucentFragment.metallib",
         "metallib_hash": "e29535c507cf783596bee508027ab91cfabf833af52839b6d070ca2a5fa0e48a",
-        "reflection": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/native_shadow_translucent/nativeShadowTranslucentFragment.metal.json",
+        "reflection": "4d24547b2baaffd9b87e598ad3b5ab4f7cdfb6ccde046a843e862d4f2bd7d2cd/native_shadow_translucent/nativeShadowTranslucentFragment.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "nativeShadowTranslucentFragment",
-      "spirv": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/native_shadow_translucent/nativeShadowTranslucentFragment.spv",
+      "spirv": "4d24547b2baaffd9b87e598ad3b5ab4f7cdfb6ccde046a843e862d4f2bd7d2cd/native_shadow_translucent/nativeShadowTranslucentFragment.spv",
       "spirv_entry": "main",
       "spirv_hash": "73dd35b656f10d195a7d1faffc74c71003f395e5e7f84f30b58098ac132bda03",
       "stage": "fragment"
     },
     {
-      "dxil": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/native_shadow_translucent/nativeShadowVertex.dxil",
+      "dxil": "4d24547b2baaffd9b87e598ad3b5ab4f7cdfb6ccde046a843e862d4f2bd7d2cd/native_shadow_translucent/nativeShadowVertex.dxil",
       "dxil_hash": "2de5a3e3a676081fc99e7e09ce93b861ca4a5276ab8aea7eb79b210fbd6a4427",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/native_shadow_translucent/nativeShadowVertex.metallib",
+        "metallib": "4d24547b2baaffd9b87e598ad3b5ab4f7cdfb6ccde046a843e862d4f2bd7d2cd/native_shadow_translucent/nativeShadowVertex.metallib",
         "metallib_hash": "55eb796dbeaaf42fe0429494fcc4210b3ea73dd92c243cc9d56c1e87011b97aa",
-        "reflection": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/native_shadow_translucent/nativeShadowVertex.metal.json",
+        "reflection": "4d24547b2baaffd9b87e598ad3b5ab4f7cdfb6ccde046a843e862d4f2bd7d2cd/native_shadow_translucent/nativeShadowVertex.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "nativeShadowVertex",
-      "spirv": "e5c2050fc62517f283422b3422d70df5500287d5d83935f508ce345fb623f1ee/native_shadow_translucent/nativeShadowVertex.spv",
+      "spirv": "4d24547b2baaffd9b87e598ad3b5ab4f7cdfb6ccde046a843e862d4f2bd7d2cd/native_shadow_translucent/nativeShadowVertex.spv",
       "spirv_entry": "main",
       "spirv_hash": "5e0812ef174a820921e324e7de52e589ac10d8ee75ede67d0166ff2f0d4f29ba",
       "stage": "vertex"

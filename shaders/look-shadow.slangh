@@ -250,23 +250,59 @@ float shadowReach(ShadowMap s,float3 world,float3 normal,float3 toLight,ShadowLi
     float2 found=shadowBlockers(s,r,shadowSearchLevel(s,window),window,extent);
     return found.x>1e-4?shadowPenumbra(s,r,extent,found.y)*r.texel:0;
 }
-// Soft visibility for a fog sample (no surface) of footprint radius `footprint` (m):
-// one blocker estimate over the widest cone, then the penumbra's kernel (at least the
-// footprint) at one level, each from the 2x2 texels nearest the sample (three gathers
-// each: froxels are many, and their history integrates); -1 outside the tile.
-float shadowFog(Look l,ShadowMap s,float3 world,float3 toLight,ShadowLight light,float footprint){
+// Blockers at pyramid `level` (>= 0) under a bilinear tent one level texel wide about the
+// receiver (a fog sample: no surface): x the four nearest texels' blocked shares from
+// their means and variances alone (shadowBlocked's Chebyshev split; no farthest-depth
+// test, so partly covered texels fade rather than switch), weighted bilinearly; y the
+// blockers' mean stored depth (the receiver's without any). The 2x2 window always covers
+// the tent, so both are continuous as the sample moves.
+float2 shadowTent(ShadowMap s,ShadowReceiver r,int level){
+    float size=float(1u<<uint(level+1)),side=s.res/size;float2 x=(r.c+0.5)/size-0.5,base=floor(x),t=x-base;
+    float2 at=clamp(base+1,1,side-1),uv=(shadowLevelOrigin(s.msize,level)+s.mlo/size+at)/float2(s.msize.x*1.5,s.msize.y);
+    float4 mu=textures[NonUniformResourceIndex(s.moments)].GatherRed(samplers[2],uv),v=textures[NonUniformResourceIndex(s.moments)].GatherGreen(samplers[2],uv);
+    float4 ox,oy;shadowOffsets(r,at,size,ox,oy);
+    // Gather order: x bottom-left, y bottom-right, z top-right, w top-left.
+    float4 w=float4((1-t.x)*t.y,t.x*t.y,t.x*(1-t.y),(1-t.x)*(1-t.y));float hidden=0,depth=0;
+    [unroll]for(uint k=0;k<4;k++){
+        float2 b=shadowBlocked(r,float2(component(ox,k),component(oy,k)),size,component(mu,k),component(v,k),0);
+        hidden+=component(w,k)*b.x;depth+=component(w,k)*b.x*b.y;
+    }
+    return float2(saturate(hidden),hidden>1e-6?depth/hidden:r.d);
+}
+// shadowTent over a half-width of `h` tile texels: at the level whose texels match it,
+// blended with the next across the middle of each octave, so a growing width never steps.
+float2 shadowTentWide(ShadowMap s,ShadowReceiver r,float h){
+    int top=max(shadowTop(s),0);float lambda=clamp(log2(max(h,1))-1,0.,float(top));int level=int(floor(lambda));
+    float blend=level<top?smoothstep(0.25,0.75,lambda-float(level)):0;float2 v=0;
+    [loop]for(uint k=blend>=1?1u:0u;k<(blend>0?2u:1u);k++)v+=(k==0?1-blend:blend)*shadowTent(s,r,level+int(k));
+    return v;
+}
+// Soft visibility for a fog sample (no surface) of footprint radius `footprint` (m);
+// -1 outside the tile. Froxels (`smooth` false; many, and their history integrates):
+// one blocker estimate over the light's widest cone, then the penumbra's kernel (at least
+// the footprint) at one level, each from the 2x2 texels nearest the sample (three
+// gathers each). Per-pixel fog (`smooth`; no history to hide a jump): the same through
+// shadowTentWide, the estimate's penumbra fading in with the share it finds blocked, so
+// visibility stays continuous as the sample, its footprint and its blockers move (maps
+// without a moment pyramid keep the froxel path).
+float shadowFog(Look l,ShadowMap s,float3 world,float3 toLight,ShadowLight light,float footprint,bool smooth=false){
     ShadowReceiver r=shadowReceiver(s,world,0,toLight);if(!r.inside)return -1;
     float extent=max(length(light.a),length(light.b)),h=footprint/r.texel;
-    if((l.shadowInfo[1].w&SHADOW_HARD)==0&&(s.far>0?extent>0:light.tangent>0)){
-        r.scale=shadowScales(s,r,light.tangent);
-        float wide=clamp(s.far>0?extent*4/r.texel:s.res*light.tangent,1,s.res*0.25);
+    bool soft=(l.shadowInfo[1].w&SHADOW_HARD)==0&&(s.far>0?extent>0:light.tangent>0);
+    if(soft)r.scale=shadowScales(s,r,light.tangent);
+    float wide=soft?clamp(s.far>0?extent*4/r.texel:s.res*light.tangent,1,s.res*0.25):0;
+    if(smooth&&shadowTop(s)>=0){
+        if(soft){float2 found=shadowTentWide(s,r,max(wide,h));h=max(h,shadowPenumbra(s,r,extent,found.y)*saturate(4*found.x));}
+        return 1-shadowTentWide(s,r,max(h,0.75)).x;
+    }
+    if(soft){
         float window=max(wide,h);
         float2 found=shadowBlockers(s,r,min(int(ceil(log2(max(window,1))))-1,shadowTop(s)),window,extent,1);
         if(found.x<=1e-4)return 1;
         h=max(h,shadowPenumbra(s,r,extent,found.y));
     }
-    h=max(h,0.75);int level=clamp(int(round(log2(h)-1)),-1,shadowTop(s));
-    return shadowKernel(s,r,light,level,float2(h,0),float2(0,h),true,true,1);
+    h=max(h,0.75);
+    return shadowKernel(s,r,light,clamp(int(round(log2(h)-1)),-1,shadowTop(s)),float2(h,0),float2(0,h),true,true,1);
 }
 
 // The tiles of the sun maps and the local atlas (look.cascadeMaps, farInfo,

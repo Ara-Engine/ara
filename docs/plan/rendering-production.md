@@ -111,11 +111,40 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   (probe GI or sky) on a 4x4x2 grid, injection with Halton jitter, reprojected history and
   per-group light culling, Hillaire integration; `LocalFogVolume`; emissive fog, extinction
   scale, `Light.volumetricScattering`; coarse grid parallelised (0.32 -> 0.09 ms);
-  `--without volumetric-fog` and editor toggles. Polar 1440p fog GPU time: Low 0.09,
-  Medium 0.16, High 0.23, Epic 0.67 ms (unguarded, busy PC). Open: the reference's fog is
-  itself a coarse froxel grid (no shafts; needs a per-pixel path-traced medium), local fog
-  volumes in the fidelity renderer, froxel leaking through thin occluders at grazing
-  angles (as Unreal), virtual shadow pages for fog, a fog buffer view. Polar's authored
+  `--without volumetric-fog` and editor toggles.
+  Per-pixel local lights (d56248fc4, reference f08e4f920, cook f9647dc43): beams were
+  froxel-blocky (stair-stepped cone edges, a blocky crown at a spot's apex, stepped corners
+  under a rect's barn doors) and the path-traced reference's own fog was a 64x36 grid.
+  `Fog.Lights` (look-fog-lights.slang) integrates each local light of a pixel's tile along
+  the pixel's ray: analytic clip to range sphere, outer cone, front half-space and barn
+  doors; equiangular sampling (Kulla and Fajardo 2012) on fixed angular bins (cost follows
+  the angle a light fills; continuous across pixels); shadows through a continuous
+  bilinear tent of the moment pyramid at each sample's footprint (shadowFog `smooth`);
+  froxel transmittance; area lights' exact near field in fog (luminance x solid angle of
+  the visible part). Deterministic midpoints, no jitter, no history. Half resolution with
+  depth-aware upsampling; 24/16/12 bins (Epic/High/Medium); groups cull their tile's lights
+  by frustum and farthest depth. The near volume composites through a cubic B-spline across
+  froxels (no Mach-band steps on sun shafts and volume edges). The reference traces the
+  same fog model per pixel (ara-render-fidelity `shaders/medium.slangh`: strata with sun
+  shadow rays, one traced ambient ray, one equiangular sample per light with an area sample
+  and shadow ray). Fog beams scene vs the per-pixel reference (EV100 2): the cube's shaft
+  darkens the fog under it (luminance against the scene without the cube) by 7.2% in the
+  reference, 6.3% at Epic and 5.8% at High (0% in the old reference, which could not
+  resolve it); a rect's flat near-field slab and its barn-door edges match. Stability (`--stability 30`, Epic): fog beams worst 16x16 block
+  2.99 -> 0.26, 0% flicker; Polar unchanged (1.8 -> 1.9% of blocks, elsewhere).
+  Cost, 1920x1080, RTX 4070 SUPER, median of 5 captures under `ara-dev gpu` (GPU guard
+  valid; CPU guard relaxed for another agent's busy core), all fog passes before -> after,
+  of which Fog.Lights: fog beams Epic 0.88 -> 1.03 (0.29), High 0.35 -> 0.57 (0.24), Medium
+  0.20 -> 0.39 (0.21); Polar (54 spots) Epic 1.02 -> 1.34 (0.50), High 0.47 -> 0.73 (0.37),
+  Medium 0.31 -> 0.55 (0.34) ms; deferred lighting about +0.1 ms (B-spline taps; that pass
+  is bimodal, 1.16 or 1.62 ms for the same base frame). Polar's coarse grid 0.16 -> 0.08 ms.
+  Open: local fog volumes in the fidelity renderer; froxel leaking through thin occluders at
+  grazing angles (as Unreal); virtual shadow pages for fog; a fog buffer view; the reference
+  ignores light-path extinction to local lights and the sun's in-scatter (as raster) and
+  lays height fog over the physical sky only to the volumetric distance (as raster);
+  faint horizontal bands in fog ambient from probe GI's trilinear lattice (pre-existing, ~2x
+  contrast to see); a sawtooth at the foot of the back wall under the rect light in the fog
+  beams scene is surface soft-shadow shading (pre-existing, fog off too). Polar's authored
   density (0.00025/m) shows faint shafts; check the UE FogDensity conversion.
   Original item: Froxel volumetric fog (Unreal's volumetric fog):
   height and local fog volumes, sun with shadows (shafts), local lights with shadows,
