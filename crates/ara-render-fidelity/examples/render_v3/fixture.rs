@@ -458,9 +458,12 @@ pub fn apply(f: &mut Fixture, case: &Case, frame: &FrameScript) {
             );
         }
     }
-    if frame.cold_residency && case.recipe == "combined" {
+    if frame.cold_residency {
         let slot = f.scene.geometry.len();
-        f.scene.geometry.push(cube(108));
+        // Both cuts must publish a mesh absent from the warm content generation.
+        f.scene
+            .geometry
+            .push(cube(if case.triangles == 108 { 1000 } else { 108 }));
         for i in 0..24 {
             add(
                 &mut f.scene,

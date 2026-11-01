@@ -204,6 +204,7 @@ mod tests {
             "body-sleep-wake",
             "door-opening",
             "repeated-invalidation",
+            "camera-cold-cut",
             "combined-stress",
         ] {
             let case = suite.cases.iter().find(|c| c.id == id).unwrap();
@@ -215,8 +216,19 @@ mod tests {
             let mut saw_sleep = false;
             let mut saw_wake = false;
             for frame in case.script(60) {
+                let before_keys: Vec<_> = actual.scene.geometry.iter().map(|g| g.key).collect();
                 fixture::apply(&mut expected, case, &frame);
                 let events = replay.apply(frame.frame, &mut actual.scene).unwrap();
+                if frame.cold_residency {
+                    assert!(
+                        actual
+                            .scene
+                            .geometry
+                            .iter()
+                            .any(|g| !before_keys.contains(&g.key)),
+                        "cold cut must publish new geometry"
+                    );
+                }
                 saw_sleep |= events
                     .instances
                     .iter()
