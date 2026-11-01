@@ -30,7 +30,7 @@ use glam::Vec3;
 
 /// Version of the build algorithms and the encoded layout. Part of every side-car
 /// key: bump it whenever a change alters the bytes a mesh builds to.
-pub const BUILDER_VERSION: u32 = 1;
+pub const BUILDER_VERSION: u32 = 2;
 
 /// Traversal stack entries `shaders/trace.slangh` reserves per BLAS (`TRACE_STACK`).
 /// Every BLAS this crate builds needs at most this many ([`BlasStats::max_stack`]):

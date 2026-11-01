@@ -38,8 +38,11 @@ pub(crate) const MAX_LEAF: u32 = 3;
 /// Deepest binary leaf, in edges from the root. Three binary levels per wide level
 /// (the depth-bounded collapse) keep the wide tree within [`crate::TRACE_STACK`].
 pub(crate) const MAX_DEPTH: u32 = 3 * (crate::TRACE_STACK + 1);
-/// Nodes this small sweep their sorted fragments exactly instead of binning.
+/// Nodes this small sweep their sorted fragments exactly and skip spatial splits.
 const EXACT_PRIMS: usize = 8;
+/// Nodes up to this size take exact object sweeps (as Bonsai's mini-trees do)
+/// instead of binned ones; spatial splits stay binned.
+const FULL_SWEEP: usize = 512;
 const C_TRAV: f32 = 1.0;
 const C_INT: f32 = 1.0;
 
@@ -220,7 +223,12 @@ impl Builder<'_> {
         let split = if !fits(count - 1) {
             None
         } else if count as usize <= EXACT_PRIMS {
-            self.exact(&node, must)
+            let limit = if must {
+                f32::INFINITY
+            } else {
+                count as f32 * C_INT
+            };
+            self.exact(&node, limit).map(|e| e.1)
         } else {
             self.binned(&node, task, must)
         };
@@ -278,23 +286,20 @@ impl Builder<'_> {
         ))
     }
 
-    /// Exact SAH object split over the sorted centroids of a small node.
-    fn exact(&self, node: &Node, must: bool) -> Option<Split> {
+    /// Exact SAH object split over the sorted centroids: the best split cheaper
+    /// than `limit` as (cost, split, left box, right box).
+    fn exact(&self, node: &Node, limit: f32) -> Option<(f32, Split, Aabb, Aabb)> {
         let n = node.count as usize;
         let r_area = 1.0 / node.bounds.half_area().max(f32::MIN_POSITIVE);
-        let mut best = if must {
-            f32::INFINITY
-        } else {
-            n as f32 * C_INT
-        };
-        let mut found = None;
+        let mut best: Option<(f32, usize, usize, Aabb, Aabb)> = None;
+        let mut orders: [Vec<u32>; 3] = Default::default();
         let extent = node.bounds.max - node.bounds.min;
+        let mut right = vec![Aabb::EMPTY; n];
         for axis in 0..3 {
             if extent[axis] <= self.min_dim[axis] {
                 continue;
             }
             let order = self.sorted(node, axis);
-            let mut right = vec![Aabb::EMPTY; n];
             let mut acc = Aabb::EMPTY;
             for k in (1..n).rev() {
                 acc = acc.union(self.frags[order[k] as usize].bounds);
@@ -310,13 +315,15 @@ impl Builder<'_> {
                     right[k].half_area(),
                     (n - k) as u32,
                 );
-                if c < best {
-                    best = c;
-                    found = Some((order.clone(), k));
+                if c < best.map_or(limit, |b| b.0) {
+                    best = Some((c, axis, k, left, right[k]));
                 }
             }
+            orders[axis] = order;
         }
-        found.map(|(order, k)| Split::Ordered { order, k })
+        let (c, axis, k, l, r) = best?;
+        let order = std::mem::take(&mut orders[axis]);
+        Some((c, Split::Ordered { order, k }, l, r))
     }
 
     /// The node's fragments sorted by centroid along `axis` (ties by fragment).
@@ -332,8 +339,19 @@ impl Builder<'_> {
         order
     }
 
-    /// Best binned object split, then the best spatial split if it beats it.
+    /// Best object split (an exact sweep up to [`FULL_SWEEP`] references, binned
+    /// above), then the best spatial split if it beats it.
     fn binned(&self, node: &Node, task: Task, must: bool) -> Option<Split> {
+        if node.count as usize <= FULL_SWEEP {
+            let no_split = node.count as f32 * C_INT;
+            let limit = if must { f32::INFINITY } else { no_split };
+            let (cost, split, l, r) = match self.exact(node, limit) {
+                Some((c, s, l, r)) => (c, Some(s), Some(l), Some(r)),
+                None => (limit, None, None, None),
+            };
+            let boxes = l.zip(r);
+            return self.spatial(node, task, cost, no_split, boxes, split);
+        }
         let bins = self.settings.bins as usize;
         let bounds = node.bounds;
         let extent = bounds.max - bounds.min;
@@ -371,14 +389,33 @@ impl Builder<'_> {
                 },
             );
         }
-        let mut split = best.map(|(axis, pos, _, _, left, right)| Split::Object {
+        let split = best.map(|(axis, pos, _, _, left, right)| Split::Object {
             axis,
             pos,
             left,
             right,
         });
+        let boxes = best.map(|(_, _, l, r, _, _)| (l, r));
+        self.spatial(node, task, best_cost, no_split, boxes, split)
+    }
+
+    /// The best spatial split if it beats `split` (cost `best_cost`, child boxes
+    /// `boxes`) by 1.5%; tried where the object split's children overlap or no
+    /// object split helps.
+    fn spatial(
+        &self,
+        node: &Node,
+        task: Task,
+        best_cost: f32,
+        no_split: f32,
+        boxes: Option<(Aabb, Aabb)>,
+        mut split: Option<Split>,
+    ) -> Option<Split> {
+        let bins = self.settings.bins as usize;
+        let extent = node.bounds.max - node.bounds.min;
+        let r_area = 1.0 / node.bounds.half_area().max(f32::MIN_POSITIVE);
         let budget = task.end - task.start;
-        let overlap = best.map_or(0.0, |(_, _, l, r, _, _)| {
+        let overlap = boxes.map_or(0.0, |(l, r)| {
             let i = Aabb {
                 min: l.min.max(r.min),
                 max: l.max.min(r.max),

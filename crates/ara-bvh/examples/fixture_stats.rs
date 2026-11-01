@@ -2,7 +2,9 @@
 //! independent references: `cargo run --release -p ara-bvh --example fixture_stats --
 //! <r4-1 dir> [set]` (set `a` by default: `vertices_<set>.bin` is three f32x4 per
 //! triangle, `rays_<set>.bin` two f32x4 per ray, `refs_<set>.bin` (t, prim) for
-//! 4,096 sampled rays). Prints build time, sizes and mismatches.
+//! 4,096 sampled rays). Prints build time, sizes and mismatches, then a tree quality
+//! proxy: single-threaded CPU traversal time over every ray for this build and for
+//! tinybvh's own tree of the set (`nodes_<set>.bin`, `tris_<set>.bin`).
 use ara_bvh::{Blas, Mesh, Ray, RayFlags};
 use glam::Vec3;
 use std::time::Instant;
@@ -84,4 +86,51 @@ fn main() {
     println!(
         "4096 reference rays: {mismatch} hit/miss mismatches, {dist} distance failures, max |dt| {max_dt}"
     );
+    // Tree quality proxy: CPU traversal time over every ray, ours vs tinybvh's tree.
+    let all: Vec<Ray> = rays
+        .as_chunks::<8>()
+        .0
+        .iter()
+        .map(|r| Ray {
+            origin: Vec3::new(r[0], r[1], r[2]),
+            direction: Vec3::new(r[4], r[5], r[6]),
+            t_min: 0.0,
+            t_max: 1e30,
+        })
+        .collect();
+    let time = |b: &Blas| {
+        let start = Instant::now();
+        let hits = all
+            .iter()
+            .filter(|r| b.intersect(r, RayFlags::NONE).is_some())
+            .count();
+        (start.elapsed().as_secs_f64() * 1000.0, hits)
+    };
+    let (ours, hits) = time(&blas);
+    let words = |f: &str| -> Option<Vec<[u32; 4]>> {
+        let b = std::fs::read(dir.join(f)).ok()?;
+        Some(
+            b.as_chunks::<16>()
+                .0
+                .iter()
+                .map(|c| std::array::from_fn(|k| u32::from_le_bytes([c[k * 4], c[k * 4 + 1], c[k * 4 + 2], c[k * 4 + 3]])))
+                .collect(),
+        )
+    };
+    match (words(&format!("nodes_{set}.bin")), words(&format!("tris_{set}.bin"))) {
+        (Some(nodes), Some(triangles)) => {
+            let lab = Blas {
+                nodes,
+                triangles,
+                ..blas.clone()
+            };
+            let (theirs, lab_hits) = time(&lab);
+            println!(
+                "CPU traversal of {} rays: ours {ours:.1} ms ({hits} hits), tinybvh tree {theirs:.1} ms ({lab_hits} hits), ratio {:.3}",
+                all.len(),
+                ours / theirs
+            );
+        }
+        _ => println!("CPU traversal of {} rays: {ours:.1} ms ({hits} hits)", all.len()),
+    }
 }
