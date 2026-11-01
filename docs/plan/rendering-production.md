@@ -11,7 +11,10 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
 
 ## Lighting
 
-- [ ] **Area lights.** Rect, disc, sphere and tube lights (`LightKind`), LTC specular and
+- [x] **Area lights.** Merged ab19eac38 (rect/disc/sphere/tube, LTC, IES, soft local shadows,
+  path-traced shapes, fog through look-lights.slangh). Open: penumbrae capped at 4 texels (wide
+  soft shadows need filterable shadow maps), area-light soft shadows in fog, rect source
+  texture, emissive surfaces promoted to area lights. Original item: Rect, disc, sphere and tube lights (`LightKind`), LTC specular and
   diffuse (Heitz 2016), barn doors for rects, optional light texture (rect), IES / light
   profiles for point and spot ("shaped lights"), source radius/length softening, their
   shadows (local faces, contact-hardened by source size), GI relight and fog. Unreal:
@@ -86,11 +89,9 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
 
 ## Tools
 
-- [~] **ara-render GPU test hang.** Since the decal/paint GPU tests joined (305aa08fb) and fog
-  (8bca7b715), `cargo test -p ara-render --lib` hangs in ~20-50% of runs at 8-16 test threads (0/5
-  at 4; every test passes alone). One thread sits in NtGdiDdDDIGetDeviceState inside the NVIDIA
-  driver, the rest wait behind it (D:AraScratchhangstacks.txt). The gate (1-2 threads) is
-  unaffected. Root-cause fix in progress with the area-lights merge.
+- [x] **ara-render GPU test hang.** NVIDIA's vkDestroyDevice deadlocks while another device in
+  the process holds a queue waiting on the host; test gates now go through
+  `ara_gpu::vulkan::QueueGate` (56c1d9df1, merged ab19eac38): 20/20 runs at 16 threads.
 
 - [~] **Editor views: no noise, full quality, correct sizing.** Done (merge b1fb2bfd0): Game
   frames never drawn small or stretched (cover the panel until the new size arrives), whole
