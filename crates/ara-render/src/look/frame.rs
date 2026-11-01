@@ -176,6 +176,9 @@ pub(crate) struct LookFrame {
     /// pyramid (sampled, storage). Zero: none.
     pub screen_params: [[f32; 4]; 2],
     pub screen_info: [[u32; 4]; 4],
+    /// The reflection resolve (look-ssr.slang `ssrResolveMain`): the trace and its
+    /// footprints (sampled), footprints and resolved reflections (storage).
+    pub ssr_resolve: [u32; 4],
     /// Local fog volume records (`FogVolume::row`), read by offset: not part of the
     /// shader's `Look` struct (a variable index into it would spill to memory). Last,
     /// so the shader struct is a prefix of this one.
@@ -351,6 +354,7 @@ impl LookFrame {
                 }),
             screen_params: [[0.; 4]; 2],
             screen_info: [[0; 4]; 4],
+            ssr_resolve: [0; 4],
         }
     }
 }

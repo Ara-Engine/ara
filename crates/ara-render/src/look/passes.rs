@@ -5,7 +5,7 @@ use super::gi::DISPATCH_PROBES;
 use super::gpu::{
     AO_DENOISED, AO_TRACE, BLOOM_DOWN, BLOOM_UP, DOF_COMPOSITE, DOF_GATHERED, DOF_PREPARED,
     GI_DIFFUSE, GI_SPECULAR, LookGpu, LookIds, MOTION_NEIGHBOURS, MOTION_TILES, MULTISCATTER,
-    SKY_IRRADIANCE, SKY_PREFILTER, SKY_VIEW, SSR_PYRAMID, SSR_TRACE, SkyKey, TRANSMITTANCE,
+    SKY_IRRADIANCE, SKY_PREFILTER, SKY_VIEW, SSR_FOOTPRINT, SSR_PYRAMID, SSR_RESOLVED, SSR_TRACE, SkyKey, TRANSMITTANCE,
 };
 use crate::graph::{Graph, PassId, ResourceId};
 
@@ -51,6 +51,8 @@ pub(crate) enum LookPass {
     /// Reflection colour pyramid level (1..4) from the previous history.
     SsrPyramid(u32),
     SsrTrace,
+    /// Spreads the trace's confidence over each reflection's footprint.
+    SsrResolve,
     /// Hi-Z pyramid level (1..) of the frame's depth (`look::screen_gi`).
     Hiz(u32),
     /// The screen probes' trace and filter (`look::screen_gi`).
@@ -288,12 +290,26 @@ impl LookGpu {
                 (ids.state, Access::ShaderRead),
                 (ids.image(SSR_PYRAMID), Access::ShaderRead),
                 (ids.image(SSR_TRACE), Access::Storage),
+                (ids.image(SSR_FOOTPRINT), Access::Storage),
                 (ids.frame, Access::ShaderRead),
             ]
             .into_iter()
             .chain(reads.iter().copied()),
         );
         passes.push((id, LookPass::SsrTrace));
+        let id = graph.pass(
+            "SSR.Resolve",
+            Queue::Graphics,
+            [
+                (ids.image(SSR_TRACE), Access::ShaderRead),
+                (ids.image(SSR_FOOTPRINT), Access::ShaderRead),
+                (ids.image(SSR_RESOLVED), Access::Storage),
+                (ids.frame, Access::ShaderRead),
+            ]
+            .into_iter()
+            .chain(reads.iter().copied()),
+        );
+        passes.push((id, LookPass::SsrResolve));
         passes
     }
 
@@ -391,7 +407,7 @@ impl LookGpu {
             reads.push((ids.image(AO_DENOISED), Access::ShaderRead));
         }
         if reflected {
-            reads.push((ids.image(SSR_TRACE), Access::ShaderRead));
+            reads.push((ids.image(SSR_RESOLVED), Access::ShaderRead));
         }
         if self.frame_screen {
             reads.extend(self.screen_gi_reads(ids));
@@ -627,6 +643,7 @@ impl LookGpu {
                 groups(size.map(|v| (v >> level).max(1))),
             ),
             LookPass::SsrTrace => (p.ssr_trace, 0, groups(size.map(|v| v.div_ceil(2)))),
+            LookPass::SsrResolve => (p.ssr_resolve, 0, groups(size.map(|v| v.div_ceil(2)))),
             LookPass::Hiz(level) => (p.hiz, level, groups(size.map(|v| v.div_ceil(1 << level)))),
             LookPass::ScreenProbes => (p.screen_probes, 0, self.screen_probe_groups()),
             LookPass::EmissionPyramid(level) => (

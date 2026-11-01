@@ -86,6 +86,9 @@ struct Look {
     AtmosphereModel sky;
     // Screen traces and screen probe GI (look/screen_gi.rs; rows in look-screen.slangh).
     float4 screenParams[2];  uint4 screenInfo[4];
+    // The reflection resolve (look-ssr.slang ssrResolveMain): x trace, y footprints
+    // (sampled), z footprints, w resolved reflections (storage); ssrImages.y reads the latter.
+    uint4 ssrResolve;
 };
 static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64,LOOK_REFLECTION_SOURCES=128,LOOK_VOLUMETRIC=256,LOOK_FOG_SHADOWED=512,LOOK_SCREEN_GI=1024;
 // Automatic exposure's extra compensation (stops) at metered scene EV100 `ev`:
