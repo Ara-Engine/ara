@@ -192,9 +192,22 @@ fn newer_source(dir: &Path, built: SystemTime) -> Option<PathBuf> {
         .or_else(|| newer_in(&dir.join("src"), &newer))
 }
 
+/// Test-only modules (`tests.rs`, `*_tests.rs`, a `tests`/`*_tests` directory) are never
+/// compiled into the executable, so Cargo does not rebuild it when they change; counting
+/// them would leave the companion "stale" with no rebuild that clears it.
+fn is_test_only(path: &Path) -> bool {
+    let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+        return false;
+    };
+    stem == "tests" || stem.ends_with("_tests")
+}
+
 fn newer_in(dir: &Path, newer: &dyn Fn(&Path) -> bool) -> Option<PathBuf> {
     for entry in std::fs::read_dir(dir).ok()?.flatten() {
         let path = entry.path();
+        if is_test_only(&path) {
+            continue;
+        }
         if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
             if let Some(found) = newer_in(&path, newer) {
                 return Some(found);

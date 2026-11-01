@@ -135,3 +135,19 @@ fn only_companions_beside_ara_are_checked() {
     assert_eq!(verify(Path::new("target/debug/ara-editor")), Ok(()));
     assert_eq!(verify(Path::new("elsewhere/ara-player")), Ok(()));
 }
+
+#[test]
+fn test_only_modules_do_not_make_a_companion_stale() {
+    let (root, built) = tree();
+    for file in [
+        "src/tests.rs",
+        "src/quality_tests/row.rs",
+        "src/post_tests.rs",
+    ] {
+        let path = root.path().join("crates/ara-render").join(file);
+        fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+        fs::write(&path, "").expect("file");
+        touch(&path, built + Duration::from_secs(5));
+    }
+    assert_eq!(assess(root.path(), "ara-player", Some(built)), None);
+}
