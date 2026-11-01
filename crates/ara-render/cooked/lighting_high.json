@@ -1,0 +1,50 @@
+{
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5",
+  "stages": [
+    {
+      "dxil": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high/fullscreenVertex.dxil",
+      "dxil_hash": "ff35b220dc2593313e4fa107adf9b40eb716f17d0162d3e1bc9f9ed58af2cac2",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high/fullscreenVertex.metallib",
+        "metallib_hash": "c94e00253d5f524d4f97f23279100614057f73416cf05d87a5e74bdcfadce57a",
+        "reflection": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high/fullscreenVertex.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "fullscreenVertex",
+      "spirv": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high/fullscreenVertex.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "eb7b0d82a0a495581c8b587bea13d84dadcd40956fe60b35e880bb401481af49",
+      "stage": "vertex"
+    },
+    {
+      "dxil": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high/lightingHighFragment.dxil",
+      "dxil_hash": "2f6f2b68b04e9bbd5de65c2da2f8c0464059a5b059d78e549d3bb08f0e435510",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high/lightingHighFragment.metallib",
+        "metallib_hash": "70b2fa921466b77d784f3d63f14b503abfad19231e20020da571ce0d92de60f8",
+        "reflection": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high/lightingHighFragment.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "lightingHighFragment",
+      "spirv": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high/lightingHighFragment.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "8fb3323c68bf1c115f2193d689af218b4523f513d74173c629790db6c36073cc",
+      "stage": "fragment"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [
+      97
+    ],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

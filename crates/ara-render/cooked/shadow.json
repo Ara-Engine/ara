@@ -1,0 +1,48 @@
+{
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5",
+  "stages": [
+    {
+      "dxil": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/shadow/shadowFragment.dxil",
+      "dxil_hash": "1ae5211134b0c58e25dc08e144fea7911a7f63a307daf3d50c006e74e69a21fc",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/shadow/shadowFragment.metallib",
+        "metallib_hash": "6b192b80c7147c9e9b7bbb6c294d95fd758980122eae659be9f63a629dfbd631",
+        "reflection": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/shadow/shadowFragment.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "shadowFragment",
+      "spirv": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/shadow/shadowFragment.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "dc96ae1b0e785000ec3715b966c105701c5add353e53c5f8c9c47316eb2b4d0b",
+      "stage": "fragment"
+    },
+    {
+      "dxil": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/shadow/shadowVertex.dxil",
+      "dxil_hash": "ccb32a4616c14de26df4afdc291fedd21eeb379feef12f4c5138eee5acd635a1",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/shadow/shadowVertex.metallib",
+        "metallib_hash": "1efb5a1cbf3721b88c325c038fc376d11279047444fe585ee7a2889236b4560c",
+        "reflection": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/shadow/shadowVertex.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "shadowVertex",
+      "spirv": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/shadow/shadowVertex.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "3f5c8dd3b682db159c7d3429a0759626b47c6acbb8b758346f6fa7508d7b5437",
+      "stage": "vertex"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": 126,
+    "depth_test": true,
+    "depth_write": true,
+    "vertex_stride": 48
+  },
+  "version": 1
+}

@@ -1,0 +1,32 @@
+{
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5",
+  "stages": [
+    {
+      "dxil": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.dxil",
+      "dxil_hash": "cc16ced876cb540df58dc9a20a12dccb7738358c1213e42774a56194f6705e37",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.metallib",
+        "metallib_hash": "f20512b5f7718fb587ea52032466f9ac7759146d9fa731de08c98853d87a909b",
+        "reflection": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "aoBitmaskDenoiseMain",
+      "spirv": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/look_ao_bitmask_denoise/aoBitmaskDenoiseMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "96fdca720e53f2df60ac8e57541b272a9e9351e50f491eeff59c7c527864a4f7",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

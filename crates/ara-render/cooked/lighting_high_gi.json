@@ -1,0 +1,50 @@
+{
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5",
+  "stages": [
+    {
+      "dxil": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high_gi/fullscreenVertex.dxil",
+      "dxil_hash": "ff35b220dc2593313e4fa107adf9b40eb716f17d0162d3e1bc9f9ed58af2cac2",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high_gi/fullscreenVertex.metallib",
+        "metallib_hash": "c94e00253d5f524d4f97f23279100614057f73416cf05d87a5e74bdcfadce57a",
+        "reflection": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high_gi/fullscreenVertex.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "fullscreenVertex",
+      "spirv": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high_gi/fullscreenVertex.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "eb7b0d82a0a495581c8b587bea13d84dadcd40956fe60b35e880bb401481af49",
+      "stage": "vertex"
+    },
+    {
+      "dxil": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high_gi/lightingHighGiFragment.dxil",
+      "dxil_hash": "862b665a2fc224dadc42f96a3f2d9fc81820a4831453c3186b77b77bff7aac3a",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high_gi/lightingHighGiFragment.metallib",
+        "metallib_hash": "bb2e7614ed5b80337914ee731f689bb9719ab28732074269e151eb246c399345",
+        "reflection": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high_gi/lightingHighGiFragment.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "lightingHighGiFragment",
+      "spirv": "398d737eebe690ad23345701d470ffea1f5367641fd6394668562243b7080ed5/lighting_high_gi/lightingHighGiFragment.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "53baa21ae48ed9804a5d09a0180f2e8fb4f1875a880a318743686024f634ba78",
+      "stage": "fragment"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [
+      97
+    ],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}
