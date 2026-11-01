@@ -103,8 +103,8 @@ void ssrTraceMain(uint3 tid:SV_DispatchThreadID){
                 // the plane of incidence fully, across it only by N.V, so a floor seen at
                 // a grazing angle reflects sharp side to side and streaks towards the
                 // viewer. The narrow width in pixels picks the pyramid level (level k
-                // texels span 2^k pixels); five taps along the projected long axis
-                // stretch it. Lobes wider than the pyramid read its coarsest level:
+                // texels span 2^k pixels, at least the taps' spacing); five taps along the
+                // projected long axis stretch it. Lobes wider than the pyramid read its coarsest level:
                 // still the hit's own surroundings, which the probe radiance only
                 // approximates.
                 float alpha=roughness*roughness,spread=length(hitWorld-world.xyz)*alpha;
@@ -114,8 +114,11 @@ void ssrTraceMain(uint3 tid:SV_DispatchThreadID){
                 float2 centre=ssrProject(f,hitWorld).xy;
                 float wide=2*length(ssrProject(f,hitWorld+across*spread*facing).xy-centre);
                 float2 along=ssrProject(f,hitWorld+inPlane*spread).xy-centre;
-                along*=min(1,f.extent.y*0.25/max(length(along),1e-3))/float2(f.extent.xy);
-                float level=clamp(log2(max(wide,1)),0,SSR_LEVELS);
+                along*=min(1,f.extent.y*0.25/max(length(along),1e-3));
+                // The taps lie half the long axis apart: a level whose texels span less
+                // would print five sharp copies of the hit (a sphere's reflection
+                // ghosted down a rough floor) instead of streaking it.
+                float level=clamp(log2(max(max(wide,length(along)*0.5),1)),0,SSR_LEVELS);along/=float2(f.extent.xy);
                 float3 colour=0;float total=0;
                 for(int k=-2;k<=2;k++){float w=exp(-float(k*k)*0.5);colour+=ssrPyramid(f,l,uv+along*(float(k)*0.5),level)*w;total+=w;}
                 colour/=total;
@@ -145,9 +148,13 @@ static const uint SSR_RESOLVE_TAPS=24;
 // Half resolution, after the trace: each pixel's confidence becomes its mean over the
 // pixel's own footprint (ssrFootprint), tent-weighted, counting only taps on its own
 // surface (within 2% of the view distance of its tangent plane, normals within some 18
-// degrees: a curved mirror's footprint is not a plane's), and its colour the
-// confidence-weighted mean of theirs: hits at a silhouette, whose cones straddle it,
-// would otherwise outline it. Lobes narrower than a pixel pass through unchanged.
+// degrees: a curved mirror's footprint is not a plane's). Its colour stays its own
+// hit's (with its direct neighbours'), which the trace already filtered over the lobe's cone (ssrTraceMain's pyramid
+// footprint): averaging the neighbours' cones again blurred every glossy reflection
+// twice (a mirror floor smeared like a rough one). Only where its own ray found little
+// (a miss beside a hit, the fringe at a silhouette) does the confidence-weighted mean of
+// the footprint's hits fill in, so the hit/miss edge fades over the lobe's width
+// instead of printing it. Lobes narrower than a pixel pass through unchanged.
 [shader("compute")][numthreads(8,8,1)]
 void ssrResolveMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);int2 half=int2((f.extent.xy+1)/2),p=int2(tid.xy);if(any(p>=half))return;
@@ -167,6 +174,16 @@ void ssrResolveMain(uint3 tid:SV_DispatchThreadID){
         float w=1-radius;float4 t=pixel(l.ssrResolve.x,q);float c=abs(t.a);
         confidence+=c*w;captured+=(t.a<0?c:0)*w;colour+=t.rgb*c*w;weights+=w;
     }
-    float a=confidence/weights;
-    images[NonUniformResourceIndex(l.ssrResolve.w)][p]=float4(colour/max(confidence,1e-5),captured*2>confidence?-a:a);
+    // The own hit's colour, tent-filtered with its four neighbours on the same surface
+    // (a full-resolution pixel or two): no half-resolution blocks where on-screen hits
+    // meet capture traces.
+    float ownWeight=abs(own.a)*2;float3 near=own.rgb*ownWeight;
+    for(uint k=0;k<4;k++){
+        int2 q=clamp(p+int2(k==0?1:k==1?-1:0,k==2?1:k==3?-1:0),int2(0),half-1);
+        float3 at=gbufferWorld(f,q*2,covered);
+        if(!covered||abs(dot(at-world,n))>tolerance||dot(gbufferNormal(f,q*2),n)<0.95)continue;
+        float4 t=pixel(l.ssrResolve.x,q);near+=t.rgb*abs(t.a);ownWeight+=abs(t.a);
+    }
+    float a=confidence/weights;float3 c=lerp(colour/max(confidence,1e-5),near/max(ownWeight,1e-5),saturate(abs(own.a)*4));
+    images[NonUniformResourceIndex(l.ssrResolve.w)][p]=float4(c,captured*2>confidence?-a:a);
 }

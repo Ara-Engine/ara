@@ -253,14 +253,17 @@ float4 rtReflection(Look l,int2 p){return pixel(l.rtInfo[1].z,p);}
 // Traced reflection (look-ssr.slang: on screen, then through the captures) at
 // full-resolution pixel `p`: rgb radiance, a confidence (zero without a hit), and in
 // `captured` the share of it the captures resolved. Upsampled from half resolution
-// with depth-similar weights.
+// with depth- and normal-similar weights: where a floor strip meets the grating beside
+// it at the same depth, each keeps its own reflection (no stair-stepped half-resolution
+// edge).
 float4 screenReflection(Frame f,Look l,int2 p,out float captured){
     captured=0;
     if((l.flags.y&LOOK_REFLECTIONS)==0)return 0;
     int2 half=int2((f.extent.xy+1)/2);float2 h=(float2(p)+0.5)*0.5-0.5;int2 b=int2(floor(h));float2 t=h-float2(b);
-    float depth=pixel(f.extra.x,p).x;float4 sum=0,nearest=0;float total=0,best=1e30,fromCaptures=0,nearestCaptured=0;
+    float depth=pixel(f.extra.x,p).x;float3 n=gbufferNormal(f,p);float4 sum=0,nearest=0;float total=0,best=1e30,fromCaptures=0,nearestCaptured=0;
     for(uint k=0;k<4;k++){
-        int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float d=pixel(f.extra.x,q*2).x;float dz=abs(d/max(depth,1e-7)-1);
+        int2 o=int2(k&1,k>>1),q=clamp(b+o,int2(0),half-1);float d=pixel(f.extra.x,q*2).x;
+        float bend=1-saturate(dot(gbufferNormal(f,q*2),n)),dz=abs(d/max(depth,1e-7)-1)+bend;
         float w=(o.x==1?t.x:1-t.x)*(o.y==1?t.y:1-t.y)*exp(-dz*40);float4 r=pixel(l.ssrImages.y,q);
         // A negative confidence marks a result mostly from the captures.
         float c=r.a<0?1:0;r.a=abs(r.a);
