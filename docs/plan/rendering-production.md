@@ -61,7 +61,7 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   3x3 tent gather; rough lobes by the view's true GGX lobe. Deterministic, no history.
   First pass (display-space regions): Polar 0.554 -> 0.468, both test rooms regressed on their
   rough-metal ceilings because the probe volume overshot (3.35x with captures off).
-  Probe volume fixed (2026-11-01, 7173bc4a4, 691539c7e, b887d3175, 2dd96a549): measured on
+  Probe volume fixed (2026-11-01, 7173bc4a4, b887d3175, 2dd96a549, a9f78a7e1): measured on
   minimal rooms (`D:AraScratchgi2`: sky-lit box, rotated, closed, thick-walled, furnace,
   sensor spheres), every overshoot had a separate cause: (1) 8x8 moments blurred over a cos^12
   lobe mixed a wall with the open space past its edge, so Chebyshev passed points behind thin
@@ -74,22 +74,27 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   hit behind the camera: now the first cascade that maps the hit; (5) misses recorded at the
   bake's 200 m ray range hid every point on a coarse landform lattice (open ground lost its sky
   light), now at the moment limit, with visibility tested 5% of the spacing off the surface;
-  (6) a 0.5 m fine lattice (was capped at 1.5 m). Furnace tests stay within 1-5%.
+  (6) the backface weight came from the biased point, so probes nearer a wall than the bias
+  turned away from the points in front of them: a grid of dark dots on lamp-lit walls (now
+  from the true point, as DDGI). A 0.5 m fine lattice was tried and reverted (fc3604c72): once
+  the relight was fixed it only helped the synthetic boxes, and its probes beside walls
+  point-sampled sharp lamp (IES) patterns into blotches. Furnace tests stay within 1-5%.
   Ten scenes, High, EV-locked, linear region radiance (PBR Neutral inverted), mean |ln ratio|,
-  base 4df69e86b -> now, screen GI off (on): Polar 0.266 -> 0.332 (0.182 -> 0.199); emissive
-  panel room 0.083 -> 0.112 (0.263 -> 0.290); sunlit room 0.306 -> 0.380 (0.443 -> 0.391); sky
-  room 0.256 -> 0.242 (0.378 -> 0.143); courtyard 0.035 -> 0.035; sky-lit box 0.598 -> 0.081
-  (0.559 -> 0.127); glazed room 0.371 -> 0.108; unglazed 0.347 -> 0.086; open ground under a
-  sky atmosphere, sun 10 deg 0.274 -> 0.062, sun 2 deg 1.276 -> 0.090. Mean 0.381 -> 0.153 (off),
-  0.410 -> 0.164 (on), so screen GI stays off by default (D32).
+  base 4df69e86b -> now, screen GI off (on): Polar 0.266 -> 0.332 (0.182 -> 0.196); emissive
+  panel room 0.084 -> 0.113 (0.263 -> 0.178); sunlit room 0.306 -> 0.228 (0.443 -> 0.343); sky
+  room 0.256 -> 0.164 (0.378 -> 0.167); courtyard 0.035 -> 0.034; sky-lit box 0.598 -> 0.095
+  (0.559 -> 0.139); glazed room 0.371 -> 0.092; unglazed 0.347 -> 0.067; open ground under a
+  sky atmosphere, sun 10 deg 0.274 -> 0.061, sun 2 deg 1.276 -> 0.087. Mean 0.381 -> 0.127
+  (off), 0.410 -> 0.149 (on), so screen GI stays off by default (D32). Area-light shapes scene
+  0.160 -> 0.107, its dot grid and the IES scene's blotches gone.
   Cost at 2560x1440 (one frame, unguarded, busy PC): GI.Relight + GI.Gather Polar High 0.31 ->
   0.37 ms, sunlit room High 0.21 -> 0.31 ms, Polar Epic 0.45 -> 0.48 ms (16x16 visibility taps,
   solid angles, the cascade search). `--stability 48`: Polar High 0.8% of 16x16 blocks flicker
   (0.7-0.9% before), the sunlit room 0%, Polar Epic 39% -> 1.3%.
   Open: (a) Polar's probe-only floors and back room went darker (left floor 0.62 -> 0.38);
-  screen GI recovers most of it. (b) The sunlit room: blotchy back wall (one sun test per 22
-  degree texel point-samples a small bright patch; four plane-projected samples overshot) and
-  its rough-metal ceiling (captures 0.35x, probes 2.9x, screen probes 2.5x). (c) Screen GI:
+  screen GI recovers most of it. (b) The sunlit room: its rough-metal ceiling (captures
+  0.35x, probes 2.9x, screen probes 2.5x); one sun test per 22 degree texel point-samples a
+  small bright patch. (c) Screen GI:
   mottling where few of a probe's 64 rays see a window, overshoot on rough-metal ceilings
   (pyramid hits blur bright neighbours in; two levels sharper helped the panel room 0.29 ->
   0.21 but mottled more), worse than probes on open ground. (d) High's copper block reads
