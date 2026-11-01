@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed",
+  "key": "a6d6453b2d41db44cff8354ecb387edf2c482972691e43020b3a212973d176ad",
   "stages": [
     {
-      "dxil": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/look_ao_bitmask/aoBitmaskMain.dxil",
+      "dxil": "a6d6453b2d41db44cff8354ecb387edf2c482972691e43020b3a212973d176ad/look_ao_bitmask/aoBitmaskMain.dxil",
       "dxil_hash": "02055b8ecd4dc101ec5413bae854209cafb000e92d9d122594c0a388829b29cf",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/look_ao_bitmask/aoBitmaskMain.metallib",
+        "metallib": "a6d6453b2d41db44cff8354ecb387edf2c482972691e43020b3a212973d176ad/look_ao_bitmask/aoBitmaskMain.metallib",
         "metallib_hash": "df2e529eb222dd8c089f0b2d71c7ff94682b250e9440e60ee55e73da9648fe94",
-        "reflection": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/look_ao_bitmask/aoBitmaskMain.metal.json",
+        "reflection": "a6d6453b2d41db44cff8354ecb387edf2c482972691e43020b3a212973d176ad/look_ao_bitmask/aoBitmaskMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "aoBitmaskMain",
-      "spirv": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/look_ao_bitmask/aoBitmaskMain.spv",
+      "spirv": "a6d6453b2d41db44cff8354ecb387edf2c482972691e43020b3a212973d176ad/look_ao_bitmask/aoBitmaskMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "d80045271d1d740c4e4557e626553f9ddda25c44067aacfdcf5584ef308b6d2b",
       "stage": "compute"

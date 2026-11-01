@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed",
+  "key": "a6d6453b2d41db44cff8354ecb387edf2c482972691e43020b3a212973d176ad",
   "stages": [
     {
-      "dxil": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/look_fog/fogMain.dxil",
-      "dxil_hash": "f4317783382241daf6c4831feef5ded55a7bb165d25c29b1c1c23b2275cd0230",
+      "dxil": "a6d6453b2d41db44cff8354ecb387edf2c482972691e43020b3a212973d176ad/look_fog/fogMain.dxil",
+      "dxil_hash": "fdc156228f1f993aa7450185ae8598c337419cda6c4a1355dba8deffc7ce128d",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/look_fog/fogMain.metallib",
-        "metallib_hash": "bdfb16de9d33beb2bc3a247eb20395b19633dd88159b8aab756cbd1e331cf8f5",
-        "reflection": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/look_fog/fogMain.metal.json",
+        "metallib": "a6d6453b2d41db44cff8354ecb387edf2c482972691e43020b3a212973d176ad/look_fog/fogMain.metallib",
+        "metallib_hash": "7ecc1b4f265306475e2d112f86c53674a1cbe4a4d88fcd33581f563f26f769dd",
+        "reflection": "a6d6453b2d41db44cff8354ecb387edf2c482972691e43020b3a212973d176ad/look_fog/fogMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "fogMain",
-      "spirv": "77a8acf88660a9490f68397934d9c24c48c50b5fc68bb75c7ed01f99409e4aed/look_fog/fogMain.spv",
+      "spirv": "a6d6453b2d41db44cff8354ecb387edf2c482972691e43020b3a212973d176ad/look_fog/fogMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "f976309af37a1166390a0c37baa01f99f1feb92fed91a42231d2319b5d4f1e56",
+      "spirv_hash": "047543d05e242287762123ef027332345d6bf7cb6695cbde6a044da40c74c0ea",
       "stage": "compute"
     }
   ],
