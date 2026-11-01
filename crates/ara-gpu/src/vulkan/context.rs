@@ -403,15 +403,19 @@ impl Drop for Gpu {
 
 impl Drop for NativeDevice {
     fn drop(&mut self) {
-        // SAFETY: Every recording/allocation owner and its workers have gone;
-        // their queues completed before their pools and resources were released.
-        unsafe {
-            let _ = self.device.device_wait_idle();
-            self.device.destroy_device(None);
-            self.debug
-                .destroy_debug_utils_messenger(self.messenger, None);
-            self.instance.destroy_instance(None);
-        }
+        // Never while another device in the process holds a queue on the host
+        // (queue_gate::without_held_queues: a driver deadlock).
+        super::queue_gate::without_held_queues(|| {
+            // SAFETY: Every recording/allocation owner and its workers have gone;
+            // their queues completed before their pools and resources were released.
+            unsafe {
+                let _ = self.device.device_wait_idle();
+                self.device.destroy_device(None);
+                self.debug
+                    .destroy_debug_utils_messenger(self.messenger, None);
+                self.instance.destroy_instance(None);
+            }
+        });
     }
 }
 

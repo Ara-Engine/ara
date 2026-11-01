@@ -137,14 +137,14 @@ and an empty implicit-layer directory to its process and restores the environmen
 by `ara-sdl3-src`; there is no SDL setup script, native directory or runtime DLL requirement.
 
 Per-crate gates: `cargo check -p ara-render`, `cargo test -p ara-render`, `cargo clippy -p ara-render --all-targets -- -D warnings`, `cargo fmt -p ara-render -- --check`.
+GPU tests hold a queue busy only through `ara_gpu::vulkan::QueueGate` (`live/tests.rs` `block_queue`), and must open it before dropping any device: device teardown waits until no gate is held. NVIDIA's Windows driver spins in `vkDestroyDevice` under its process-wide lock while another device's queue waits on the host, and the gate owner's next driver call then blocks forever (once 20-50% of parallel `--lib` runs; reproduced on `ara-gpu` alone; idle device and clean validation, with or without third-party layers).
 GPU goldens require this device/driver baseline with tolerance 1-SSIM <= 0.005.
 They also check repeated deterministic captures, all 14 visible entities/picking, and odd-resolution bounds framing. Update only deliberately with process-local
 `ARA_UPDATE_GOLDENS=1 cargo test -p ara-render --test golden` (PowerShell: set the
 environment variable before the command). Normal checks never update goldens.
 
 `run.ps1 -Mode Capture` writes every debug view, marks, JSON and render IDs.
-`run.ps1 -Mode Window` opens the same renderer through SDL; `--resize-test` on the windowed example exercises resize. `--frames=N` bounds its lifetime; Esc closes.
-`cargo run -p ara-render --example timings` records 120 warm pass samples.
+`run.ps1 -Mode Window` opens the same renderer through SDL; `--resize-test` on the windowed example exercises resize. `--frames=N` bounds its lifetime; Esc closes. `cargo run -p ara-render --example timings` records 120 warm pass samples.
 
 The glTF importer is example-only; production import belongs to the asset pipeline. Example media are CC0; source/licence notices accompany assets.
 M3 owns material AST/fidelity, animation velocities, streaming/aliasing and richer lighting. Metal's native implementation is the cfg-gated ara-gpu stub.
