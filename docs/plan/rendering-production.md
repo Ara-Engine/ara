@@ -179,6 +179,18 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   0.20 -> 0.39 (0.21); Polar (54 spots) Epic 1.02 -> 1.34 (0.50), High 0.47 -> 0.73 (0.37),
   Medium 0.31 -> 0.55 (0.34) ms; deferred lighting about +0.1 ms (B-spline taps; that pass
   is bimodal, 1.16 or 1.62 ms for the same base frame). Polar's coarse grid 0.16 -> 0.08 ms.
+  Crisp edges at 1:1 (5d811c7f1, d7970282a, cook 4b5816fb2): half resolution stepped hard
+  edges in 2-pixel blocks (a rect's barn-door diagonal, the spot's apex and cone edges).
+  `Fog.Lights.Resolve` now writes the render-size image the composite reads: even pixels
+  take their own texel, the rest blend neighbours by depth; pixels whose same-surface
+  texels differ by more than 10% in luminance (above a floor near black), or that share no
+  surface with any (thin occluders), go to an edge list that `Fog.Lights.Edges`
+  integrates at full resolution by an indirect dispatch (each pixel's angular bins over
+  eight lanes, summed in lane order). Refined: about 0.6% of pixels (fog beams Epic), 0.4%
+  (Medium), 0.5% (Polar Epic). The spot beam test compares half against full resolution
+  across the beam: worst 2/255 (197/255 without the edge pass). Extra cost (same guarded
+  method): resolve 0.046-0.048 ms plus edges 0.037-0.040 ms (fog beams) and 0.084-0.095 ms
+  (Polar) at Epic/High/Medium; lighting no longer upsamples (about -0.02 to -0.04 ms).
   Open: local fog volumes in the fidelity renderer; froxel leaking through thin occluders at
   grazing angles (as Unreal); virtual shadow pages for fog; a fog buffer view; the reference
   ignores light-path extinction to local lights and the sun's in-scatter (as raster) and
