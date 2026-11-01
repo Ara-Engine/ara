@@ -35,8 +35,8 @@ pub enum QualityPreset {
     Epic,
 }
 
-/// Screen probe GI tuned for High (D32), switched on once the probe volume's interior
-/// overshoot is fixed.
+/// Screen probe GI tuned for High (D32); off by default until it matches probe GI alone
+/// on every test scene.
 pub const SCREEN_GI_HIGH: ScreenGi = ScreenGi {
     tile: 16,
     steps: 32,
@@ -491,9 +491,9 @@ impl QualityPreset {
                 motion_blur: motion(12, 32.),
                 ray_queries: rays(0.3, 0.6, 1500.),
                 volumetric_fog: volumetric(12, 64, 2, 16),
-                // Off by default until the probe volume stops over-lighting interiors
-                // through openings (D32's open error): enabled, test rooms regress against
-                // the path tracer. Tuned settings: SCREEN_GI_HIGH.
+                // Off by default (D32): enabled, six of the ten test scenes read further
+                // from the path tracer than probe GI alone (rough lobes at grazing views,
+                // rough-metal ceilings). Tuned settings: SCREEN_GI_HIGH.
                 screen_gi: None,
             },
             Self::Epic => Quality {

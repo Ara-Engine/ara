@@ -79,7 +79,7 @@ device and per-view upload state; no simulation, window or process code.
   faces (0.01 m2+, a filled rect or disc, escaping the mesh) become rect/disc area lights
   first (`Panel`); patches cluster into the rest of `Quality::emitter_lights`. They follow their instances, ride after the scene's
   own lights and stay out of fog. Probe bakes zero those materials' emission; the
-  threshold is `ara_render::look::EMITTER_RADIANCE`, which screen probe GI also skips.
+  threshold is `ara_render::look::EMITTER_RADIANCE`, which screen probe GI and capture faces also skip.
   `stats().gpu: Option<GpuFrameCosts>` splits native scene updates, compressed
   texture uploads, VFX simulation/draw, raster/fidelity passes and publication.
   Residency counters accompany that same frame, including native Low. The legacy

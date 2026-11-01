@@ -81,7 +81,9 @@ Glass (transmission + ior/volume) is a GGX dielectric (`sampleGlass`, `glassRefl
 absorbing over each stretch inside a volume; transmissive instances take TLAS masks
 16/32 (non-opaque traversal). Shadow rays pass glass by `glassTransmittance` (shared with
 ara-render's `look-glass.slangh`); BSDF paths through glass count no light hits.
-Probe-surface bakes (`PROBE_SURFACES`) pass glass by its straight transmittance.
+Probe-surface bakes (`PROBE_SURFACES`) pass glass by its straight transmittance. Texels
+record emissive as RGB9E5 and a mask of the sub-rays on the relit hit's plane, exactly as
+`ara-runtime-render`'s `gi_cpu` (surface version 14).
 Motion is current-to-previous UV, without jitter; previous depth/normal/ID reject
 history. Light edits retain geometric history, use responsive radiance weights,
 and update more probes with 16 rays each inside the same per-frame ray budget.

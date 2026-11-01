@@ -132,6 +132,50 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   the box and the sunlit room. Tried and reverted: misses from the fallback's irradiance (open
   ground better, sky room 0.17 -> 0.22: missed rays point at the window) and cone-filtered misses
   (no change).
+  Accuracy pass (2026-11-01, branch t3/fix-probe-gi-overshoot, scratch `D:AraScratchgi3`):
+  isolation rooms (the sunlit room with every other surface black or white and no sky; up-facing
+  sensor cards; a mirror sphere; a top-down floor view against `--reference --bounces 2` and a CPU
+  model of the room, `gi3/sim`) split the overshoot into three causes. (1) Relighting tested the
+  sun once per 22-degree texel (a virtual page is a point compare; the cascade path's one disc PCF
+  turns a patch edge all-or-nothing), so a sunlit patch a few texels wide aliased: probe columns
+  alternated 0.6x and 1.8x on the floor past the sunlit wall. The sun now averages 2x2 footprint
+  points, half a disc each (4x4 measured no better at three times the cost), glass tint per point
+  (9c5d4391d, f83fb431c). The hit plane continues past its surface (a floor's beyond the walls, a
+  wall's across its window), so the bake records which of a texel's 16 sub-rays lie on the relit
+  plane (16-bit mask; emissive moves to RGB9E5; surface version 14) and footprints use those only.
+  (2) A texel's albedo averages all its hits but its direct light was the relit plane's for all
+  of them: a texel across a sunlit patch's edge credited the ceiling beside it, in shadow, with
+  the patch's sun. One bounce in a white isolation room read 1.6-1.8x on the walls and floor, and
+  compounding over bounces 2.4x. Off-plane hits now take the lesser of the texel's direct light
+  and that of the neighbouring texel they lie towards (e43db8027); the neighbour's alone read
+  Polar right but doubled the white room (a 22-degree neighbour footprint is not its edge strip).
+  (3) Reflection capture faces kept the glow of emissive panels promoted to rect lights, which
+  already reach every specular lobe: the panel room's metal ceiling 2.05x, back wall 1.45x (the
+  task's open back wall item); faces now drop emission above the emitter threshold (883a542ba).
+  Near-field interpolation is real but secondary: with exact probe values, the 0.29 m probe layer
+  reads 1.2-2.3x within 0.6 m of a lit wall (CPU model). A per-probe log-irradiance gradient from
+  the radiance cache's hits reprojected half a cell either side matched the model's slopes but
+  made a hot spot and a general +5-15% in the shader; parked (`gi3/parked`). An energy-conserving
+  bounce albedo ((1 - F) diffuse plus specular, as the path tracer) improved the sunlit room 0.142
+  -> 0.109 and the box 0.131 -> 0.107 but darkened both glass rooms 8% (mean 0.101 -> 0.108);
+  reverted, so the glass rooms hide another missing ~8%. Ten scenes, High, base 111eef61b ->
+  now, screen GI off (on): Polar 0.224 -> 0.214 (0.191 -> 0.257); panel room 0.251 -> 0.135
+  (0.228 -> 0.154); sunlit room 0.311 -> 0.098 (0.345 -> 0.157); sky room 0.113 (0.170);
+  courtyard 0.033 (0.037); sky-lit box 0.131 (0.139); glazed 0.130 -> 0.049 (0.103 -> 0.053);
+  unglazed 0.093 -> 0.054 (0.076 -> 0.054); open ground 10 deg 0.061 (0.092), 2 deg 0.087 (0.160).
+  Mean 0.143 -> 0.098 off, 0.154 -> 0.127 on. Cost at 2560x1440 High (median of 5, `ara-dev gpu`,
+  CPU guard tripped by idle desktop apps only): GI.Relight Polar 0.29 -> 0.40 ms, sunlit room 0.12
+  -> 0.17 ms; GI.Gather unchanged (0.11 ms). Polar Epic flicker (`--stability 30`, 1080p): the tip
+  read 7.6% of blocks (1.0% before a0b08334c's single-disc footprint sun), now 1.5%; High 0.3%,
+  sunlit room 0%. Glass rooms on cascades alone read 11% dark (the last pass measured 15%) in both rooms, glazed or
+  not: not the lift (a cascade-sized lift reads darker), not the kernel (0.75 texel the same); the
+  maps themselves, camera-fitted cascades for hits around and behind the view, which pages cover.
+  Open: Polar with screen GI (0.257; left floor 0.5x, 58% of it reflection), the near-field
+  interpolation (gradient parked), rough-metal ceilings (sky room 1.31x, box 1.11x, panel 1.46x),
+  `--without screen-reflections` flicker on Polar Epic 17% at 30 frames (tip 30.9%, 2.0% before
+  0038e824f): reflection captures follow the probe volume's slow multi-bounce convergence through
+  their refit ratio (0.2% after 300 frames; 16 initial bounces 13.6%), hidden while captures
+  reflected black.
   Earlier open items: (a) Polar's probe-only floors and back room went darker (left floor 0.62 -> 0.38);
   screen GI recovers most of it. (b) The sunlit room: its rough-metal ceiling (captures
   0.35x, probes 2.9x, screen probes 2.5x); one sun test per 22 degree texel point-samples a
@@ -257,7 +301,9 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   hand over to screen probes (D32). SSR.Trace 0.60 ms at 2560x1440 High. SSR.Resolve (04becdb8b)
   spreads each pixel's hit confidence over its GGX footprint, so rough floors fade between traced
   and fallback reflections instead of outlining what the mirror rays reach (0.116 ms Polar High;
-  a faint step stays visible at 3x contrast where SSR and the probe fallback differ). Open: per-pixel cone
+  a faint step stays visible at 3x contrast where SSR and the probe fallback differ: on the
+  area-light shapes floor SSR reads within 7% of the path tracer, the probe fallback 1.10-1.24x
+  under the lamp pools, so the step is the probes' reflected radiance of the lamp-lit wall, open). Open: per-pixel cone
   footprints from the Hi-Z cell, measured before/after cost at equal settings.
   Original item: Hi-Z traced SSR (min-depth pyramid), stochastic rough
   lobes with a deterministic, noise-free resolve, then captures and probes.
@@ -300,7 +346,9 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   `ara-player` binary, and building only `-p ara` leaves an older player that loads the
   tree's new cooked shaders against its old data (an old CPU probe bake drew star patterns
   over every wall). Refuse a player built from different sources, as `ara-dev` already
-  does for the editor's companion.
+  does for the editor's companion. Likewise a missing `ara-import-worker` (build `-p ara -p
+  ara-player -p ara-import-worker`): imported models then render as placeholders without a
+  diagnostic (the glass rooms' windows went dark purple and blocked the sun).
 
 - [ ] **Cooker determinism.** An incremental re-cook of unchanged sources rewrote Metal
   metadata (`ResourceCount` 31 to 224 on fullscreenVertex) relative to the fresh cohort cook.
