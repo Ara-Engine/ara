@@ -100,8 +100,9 @@ frame, and costs from the uncapped frame with the same index. Invalid timing or
 unmatched replay identity cannot produce a charged result.
 
 The default worker is today's native raster High, with hardware RT disabled for the
-control. Its uncapped mode removes exposed local/VSM redraw quotas but cannot remove
-all internal limits. It explicitly reports `uncapped_supported: false`. Raw GPU pass
+control. Its uncapped mode raises local redraws to all allocated faces and VSM
+redraws to the API's validated 256-page maximum; VSM and other internal limits remain.
+It explicitly reports `uncapped_supported: false`. Raw GPU pass
 times are useful A/B control observations, not certified uncapped-demand numbers.
 Today's renderer has no transport debt or exact error counters: they remain n/a.
 Startup probe surfaces are acquired offline with the existing fidelity baker and

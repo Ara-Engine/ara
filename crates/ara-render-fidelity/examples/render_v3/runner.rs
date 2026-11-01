@@ -109,19 +109,7 @@ fn run(
         &[],
         output.join("gpu-cache"),
     )?;
-    let mut quality = QualityPreset::High.raster_quality();
-    quality.ray_queries = None;
-    // Remove existing page work quotas where the control exposes them. Other
-    // admission/transport limits remain, so this is explicitly not a true replay.
-    if mode == RunKind::Uncapped {
-        if let Some(ref mut v) = quality.virtual_shadows {
-            v.budget = v.pages;
-        }
-        if let Some(ref mut l) = quality.local_shadows {
-            l.redraws = l.lights * 6;
-        }
-    }
-    renderer.set_quality(quality)?;
+    renderer.set_quality(control_quality(mode))?;
     let mut look = *renderer.look();
     look.auto_exposure = None;
     look.bloom = 0.;
@@ -137,7 +125,7 @@ fn run(
     let mut result=RunResult {version:VERSION,case:case.clone(),run:mode,renderer:"today-native-raster-high-startup-probes-no-frame-hardware-rt".into(),
         device:renderer.gpu().info().name.clone(),revision:revision(),size,fps:60,uncapped_supported:false,caps_applied:mode==RunKind::Capped,
         timing_valid:std::env::var("ARA_RENDER_V3_TIMING_VALID").is_ok_and(|v|v=="1"),reference_samples:samples,reference_bounces:8,reference_converged:false,reference_white:1./f64::from(exposure),
-        notes:vec!["Control uncapped mode removes exposed page redraw quotas only; stage demand, hidden caps, debt and deadlines remain n/a.".into(),
+        notes:vec!["Control uncapped mode raises VSM redraws to the API's 256-page maximum and local redraws to all allocated faces. VSM and other hidden limits remain; this is not true uncapped demand. Stage demand, debt and deadlines remain n/a.".into(),
             "Startup probe surfaces are acquired offline with the existing fidelity baker, then relit by today's raster renderer. The runtime host's asynchronous CPU surface reacquisition is not connected: geometry/material changes retain their startup surfaces. This is a renderer-core control, not a complete Play-host/G3 control; no discovery/repair timing or correctness is claimed.".into(),
             "Finite-budget undenoised ara-pathtrace references are not certified exact solutions. Exact max-error gate stays n/a until convergence evidence is supplied.".into(),
             "gpu_frame_ms spans the update and render submissions, including GPU gaps. Pass sums and CPU update/render wall time are separate; CPU critical-path attribution is unavailable.".into(),
@@ -371,6 +359,44 @@ fn reference(
     let data = reference.radiance(gpu)?;
     reference.destroy(gpu)?;
     Ok((image, data))
+}
+
+/// Maximize the existing API's work allowances without changing allocation or quality.
+fn control_quality(mode: RunKind) -> ara_render::look::Quality {
+    let mut quality = QualityPreset::High.raster_quality();
+    quality.ray_queries = None;
+    if mode == RunKind::Uncapped {
+        if let Some(ref mut v) = quality.virtual_shadows {
+            // Quality::validate limits this dispatch to 256 pages even if the
+            // atlas owns more. Keep uncapped_supported=false for this control.
+            v.budget = v.pages.min(256);
+        }
+        if let Some(ref mut l) = quality.local_shadows {
+            l.redraws = l.lights * 6;
+        }
+    }
+    quality
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn both_control_modes_obey_the_renderers_dispatch_limits() {
+        for mode in [RunKind::Uncapped, RunKind::Capped] {
+            let quality = control_quality(mode);
+            quality.validate().unwrap();
+            assert!(quality.ray_queries.is_none());
+            assert_eq!(
+                quality.virtual_shadows.unwrap().pages,
+                QualityPreset::High
+                    .raster_quality()
+                    .virtual_shadows
+                    .unwrap()
+                    .pages
+            );
+        }
+    }
 }
 
 /// The same optional startup acquisition used by the runtime, outside replay timing.
