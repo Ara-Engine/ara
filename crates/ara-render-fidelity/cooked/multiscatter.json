@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6",
+  "key": "db2f022aa9cf5d329b4b7065b6169f02e38b65efea168c6413363e3be2bed3a0",
   "stages": [
     {
-      "dxil": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/multiscatter/multiScatterMain.dxil",
-      "dxil_hash": "ac8188bf51aaeb10298362ee9f5cf10512db6c50de93c75276bc8ca3c433cc97",
+      "dxil": "db2f022aa9cf5d329b4b7065b6169f02e38b65efea168c6413363e3be2bed3a0/multiscatter/multiScatterMain.dxil",
+      "dxil_hash": "d390e2cbf328ef3eeea650a7e339fdf184003e1481d4a2aa7bd5a77306867c4c",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/multiscatter/multiScatterMain.metallib",
-        "metallib_hash": "059558f8d937f59072f471d075f117ab9c831133c118339227f3832e6eb2202e",
-        "reflection": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/multiscatter/multiScatterMain.metal.json",
+        "metallib": "db2f022aa9cf5d329b4b7065b6169f02e38b65efea168c6413363e3be2bed3a0/multiscatter/multiScatterMain.metallib",
+        "metallib_hash": "a99f336fc03b344be23f847a716ba391dcc49733540dbcef3c2d2d214c5e486a",
+        "reflection": "db2f022aa9cf5d329b4b7065b6169f02e38b65efea168c6413363e3be2bed3a0/multiscatter/multiScatterMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "multiScatterMain",
-      "spirv": "a2eb6274a0278ad5b6799b3b286a3d1ba78c3b44ce55976a00602945194a90d6/multiscatter/multiScatterMain.spv",
+      "spirv": "db2f022aa9cf5d329b4b7065b6169f02e38b65efea168c6413363e3be2bed3a0/multiscatter/multiScatterMain.spv",
       "spirv_entry": "main",
-      "spirv_hash": "16c22ac117da341c872ec16346a7a9c3060e20a16cda120b42602603c205918a",
+      "spirv_hash": "def22993aa03896349eec7b5aaccd3fede9cbdf2259a5afacaf2d3af5d94e196",
       "stage": "compute"
     }
   ],
