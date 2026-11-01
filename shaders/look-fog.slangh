@@ -71,23 +71,12 @@ float3 fogAmbient(Frame f,Look l,float3 p){
     if(coverage<0.99)sky*=horizonSky(l,p);
     return lerp(sky,probes,coverage)/(2*PI);
 }
-// Visibility of `world` from shadowed local light `index` for fog: localShadow's face
-// and tile lookup with one bilinear compare and no normal offset (media have no surface).
-float fogLocalShadow(Look l,uint index,float3 world,float3 light){
-    if(l.localShadows.y==0)return 1;
-    uint2 entry=buffers[NonUniformResourceIndex(l.localShadows.x)].Load2(index*8);if(entry.y==0)return 1;
-    float3 d=world-light,a=abs(d);
-    uint face=entry.y==1?0:(a.x>=a.y&&a.x>=a.z?(d.x>0?0:1):a.y>=a.z?(d.y>0?2:3):(d.z>0?4:5));
-    uint at=LOCAL_RECORDS+(entry.x+face)*80;
-    float4x4 m=buffers[NonUniformResourceIndex(l.localShadows.x)].Load<float4x4>(at);
-    float4 tile=asfloat(buffers[NonUniformResourceIndex(l.localShadows.x)].Load4(at+64));
-    float2 atlas=float2(l.localShadows.zw);float res=tile.z*atlas.x;
-    float4 h=mul(m,float4(world,1));if(h.w<=0)return 1;
-    float3 q=h.xyz/h.w;float2 uv=float2(q.x*0.5+0.5,0.5-q.y*0.5);
-    if(any(uv<0)||any(uv>1)||q.z<=0||q.z>1)return 1;
-    float2 lo=tile.xy*atlas,position=lo+uv*res-0.5,base=floor(position),t=position-base;
-    float4 lit=step(textures[NonUniformResourceIndex(l.localShadows.y)].GatherRed(samplers[2],(clamp(base,lo,lo+res-2)+1)/atlas),q.z*1.002);
-    return lerp(lerp(lit.w,lit.z,t.x),lerp(lit.x,lit.y,t.x),t.y);
+// Visibility of `p` from shadowed local light `index` (`light`) for fog: look-shadow.slangh
+// shadowFog in its face (media have no surface), the source's penumbra or `footprint`
+// (m) wide, whichever is wider.
+float fogLocalShadow(Frame f,Look l,Light light,uint index,float3 p,float footprint){
+    ShadowMap s;if(!shadowLocal(l,index,p,light.positionRange.xyz,light.positionRange.w,s))return 1;
+    float v=shadowFog(l,s,p,normalize(light.positionRange.xyz-p),localShadowLight(f,light,index,p),footprint);return v<0?1:v;
 }
 // Squared distance inside which a source's near field softens for fog, which sees it
 // from its centre: the radius of a disc of its emitting area (a sphere's or disc's
@@ -106,14 +95,15 @@ float fogNearField(Frame f,Light light,uint index){
 // intensity towards `p` (look-lights.slangh lightIntensity: falloff, a spot's cone, a
 // rect's or disc's one-sided cosine, barn doors and light profile), its shadow where
 // the fog samples local shadows (LOOK_LOCAL_INDIRECT), and its volumetric scattering
-// intensity (parameters.w; zero keeps it out of fog).
-float3 fogLocalLight(Frame f,Look l,Light light,uint index,float3 p,float3 d,float g){
+// intensity (parameters.w; zero keeps it out of fog). `footprint`: the sample's radius (m),
+// the shadow's narrowest filter.
+float3 fogLocalLight(Frame f,Look l,Light light,uint index,float3 p,float3 d,float g,float footprint=0){
     if(light.parameters.w<=0)return 0;
     float3 intensity=lightIntensity(f,l,light,index,p);
     if(all(intensity<=0))return 0;
     float3 delta=light.positionRange.xyz-p;float d2=dot(delta,delta);
     float3 toLight=delta*rsqrt(max(d2,1e-12));
-    float shadow=(l.flags.y&LOOK_LOCAL_INDIRECT)!=0?fogLocalShadow(l,index,p,light.positionRange.xyz):1;
+    float shadow=(l.flags.y&LOOK_LOCAL_INDIRECT)!=0?fogLocalShadow(f,l,light,index,p,footprint):1;
     return intensity*(light.parameters.w/max(d2,fogNearField(f,light,index)))*shadow*phaseM(dot(d,toLight),g);
 }
 // Length-weighted share of a homogeneous segment's source that leaves it (Hillaire's

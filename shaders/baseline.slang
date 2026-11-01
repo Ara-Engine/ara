@@ -219,6 +219,25 @@ float lightComplexity(Frame g,int2 r){
     }
     return cost;
 }
+// The penumbra view (ViewMode::ShadowPenumbra): the widest soft-shadow kernel at render
+// pixel `r`'s opaque surface (half-width; the sun's and every shadowed local light's in
+// its tile, look-shadow.slangh) on the overdraw legend, as sqrt(width / 1 cm): 1 cm blue,
+// 4 cm green, 16 cm yellow, 64 cm orange, 2.56 m red; grey where no blocker is near;
+// shaded by the darkest of their visibilities.
+float3 shadowPenumbraView(Frame f,Frame g,int2 r){
+    bool covered;float3 w=gbufferWorld(g,r,covered);if(!covered)return 0;
+    Look l=look(g);float3 n=gbufferNormal(g,r);float widest=0,lit=1;
+    if(dot(n,f.sunDirection.xyz)>0){bool mapped;float p;lit=mapVisibility(f,l,w,n,mapped,p);widest=p;}
+    uint tilesX=(g.extent.x+15)/16;uint tile=(uint(r.y)/16*tilesX+uint(r.x)/16)*TILE_STRIDE;
+    uint count=buffers[NonUniformResourceIndex(g.lighting.z)].Load(tile*4);
+    for(uint i=0;i<count;i++){
+        uint index=buffers[NonUniformResourceIndex(g.lighting.z)].Load((tile+1+i)*4);Light light=loadLight(g.lighting.w,index);
+        if(all(lightIntensity(g,l,light,index,w)<=0))continue;
+        float p,v=localShadowShape(l,index,w,n,light.positionRange.xyz,light.positionRange.w,localShadowLight(g,light,index,w),p);
+        widest=max(widest,p);lit=min(lit,v);
+    }
+    return (widest>0?overdrawHeat(sqrt(max(widest/0.01,1))):float3(0.5,0.5,0.5))*(0.2+0.8*lit);
+}
 [shader("compute")]
 [numthreads(8,8,1)]
 void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.extent.xy))return;int2 p=int2(t.xy);float3 color=pixel(root.materials,p).rgb;
@@ -240,6 +259,7 @@ void tonemapMain(uint3 t:SV_DispatchThreadID){Frame f=frame();if(any(t.xy>=f.ext
     // overdraw: root word 1 is the render-size fragment count (`Overdraw.Count`).
     else if(f.temporal.z==10)color=overdrawHeat(pixel(root.materials,r).x);
     else if(f.temporal.z==17)color=overdrawHeat(lightComplexity(g,r));
+    else if(f.temporal.z==18)color=shadowPenumbraView(f,g,r);
     images[NonUniformResourceIndex(f.post.w)][p]=float4(srgb(saturate(color)),1);
 }
 // Editor selection outlines (renderer/outline.rs) over the display output. The mask

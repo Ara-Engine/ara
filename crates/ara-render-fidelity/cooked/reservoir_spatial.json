@@ -1,0 +1,32 @@
+{
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "5d0ebade8c9aa9b181657403aa8192ddac0f098a7e4117a6783cfbd48570f77e",
+  "stages": [
+    {
+      "dxil": "5d0ebade8c9aa9b181657403aa8192ddac0f098a7e4117a6783cfbd48570f77e/reservoir_spatial/reservoirSpatial.dxil",
+      "dxil_hash": "af20b4605c76d6c9ce4a79d67f0aff24e4d271ff1bedd2ce7656f26b251eaacf",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "5d0ebade8c9aa9b181657403aa8192ddac0f098a7e4117a6783cfbd48570f77e/reservoir_spatial/reservoirSpatial.metallib",
+        "metallib_hash": "f34493c84a430df839e5ae2cf5c5700bcfa58a67ffdaebe4ccfa45e1a7d6f479",
+        "reflection": "5d0ebade8c9aa9b181657403aa8192ddac0f098a7e4117a6783cfbd48570f77e/reservoir_spatial/reservoirSpatial.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "reservoirSpatial",
+      "spirv": "5d0ebade8c9aa9b181657403aa8192ddac0f098a7e4117a6783cfbd48570f77e/reservoir_spatial/reservoirSpatial.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "198168c4d5c9372901d1aa3d292e26e0614a8eacadffa50465c0b38d2cc36292",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

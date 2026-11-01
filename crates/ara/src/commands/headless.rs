@@ -64,7 +64,7 @@ pub struct CaptureArgs {
     #[arg(long)]
     marks: Option<u32>,
     /// Turn a rendering effect off to see what it contributes (repeatable).
-    #[arg(long, value_parser = ["ambient-occlusion", "shadows", "temporal-jitter",
+    #[arg(long, value_parser = ["ambient-occlusion", "shadows", "soft-shadows", "temporal-jitter",
         "screen-reflections", "reflection-captures", "global-illumination", "screen-gi", "volumetric-fog"])]
     without: Vec<String>,
     /// Render at display resolution instead of the preset's upscaled scale.
@@ -91,8 +91,8 @@ pub struct CaptureArgs {
     /// Debug view to capture instead of the lit image: albedo, normals, depth,
     /// roughness-metal, entity-ids, shadow-cascades, wireframe, lit-wireframe,
     /// gi-diffuse, overdraw, vertex-color (and -red/-green/-blue/-alpha),
-    /// decal-coverage or light-complexity.
-    #[arg(long, value_parser = ["lit", "albedo", "normals", "depth", "roughness-metal", "entity-ids", "shadow-cascades", "wireframe", "lit-wireframe", "gi-diffuse", "overdraw", "vertex-color", "vertex-color-red", "vertex-color-green", "vertex-color-blue", "vertex-color-alpha", "decal-coverage", "light-complexity"])]
+    /// decal-coverage, light-complexity or shadow-penumbra.
+    #[arg(long, value_parser = ["lit", "albedo", "normals", "depth", "roughness-metal", "entity-ids", "shadow-cascades", "wireframe", "lit-wireframe", "gi-diffuse", "overdraw", "vertex-color", "vertex-color-red", "vertex-color-green", "vertex-color-blue", "vertex-color-alpha", "decal-coverage", "light-complexity", "shadow-penumbra"])]
     view: Option<String>,
     /// Measure flicker: settle this many live frames, then report how much they change.
     #[arg(long)]
@@ -160,6 +160,7 @@ fn render_debug(
     json!({
         "ambientOcclusion": on("ambient-occlusion"),
         "shadows": on("shadows"),
+        "softShadows": on("soft-shadows"),
         "volumetricFog": on("volumetric-fog"),
         "temporalJitter": on("temporal-jitter"),
         "screenReflections": on("screen-reflections"),

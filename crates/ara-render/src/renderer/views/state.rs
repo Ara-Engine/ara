@@ -205,6 +205,7 @@ impl ViewState {
         if let Some(vsm) = self.look.vsm {
             vsm.destroy(gpu)?;
         }
+        self.look.moments.destroy(gpu)?;
         self.tsr.destroy(gpu)?;
         if let Some(refract) = self.look.refract {
             refract.destroy(gpu)?;
@@ -283,6 +284,7 @@ fn fork_look(
         local: None,
         horizon: None,
         vsm: None,
+        moments: crate::look::moments::ShadowMoments::default(),
         probe_staging: Vec::new(),
         probe_writes: Vec::new(),
         refract: None,

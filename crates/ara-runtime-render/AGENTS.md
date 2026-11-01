@@ -147,4 +147,4 @@ GPU tests need the Vulkan SDK layers: `source .sn/env.sh` (bash) or
 `RUST_TEST_THREADS=1 cargo test -p ara-runtime-render`: `tests/headless.rs` renders
 the demo scene, walks the Fox, checks streaming updates, a live light edit and that
 validation (including synchronization validation) stays clean. Captures land in
-`.sn/runtime-render/`. `cargo clippy -p ara-runtime-render --all-targets -- -D warnings`.
+`.sn/runtime-render/`. `tests/soft_shadows.rs`: penumbra widths vs the path tracer (`--ignored`: every light kind at Medium and High); `examples/shadow_costs.rs`: shadow GPU cost per preset. `cargo clippy -p ara-runtime-render --all-targets -- -D warnings`.

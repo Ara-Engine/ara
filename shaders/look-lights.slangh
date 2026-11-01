@@ -130,12 +130,18 @@ float ltcEllipse(Look l,float3x3 m,float3 c,float3 u,float3 w){
     float x0=dot(u1,c)/z,y0=dot(u2,c)/z,a=z*z/(e1*e1),b=z*z/(e2*e2);
     // The cone (x - x0 z)^2 a + (y - y0 z)^2 b = z^2 as x^T Q x = 0 in (u1, u2, u3).
     float q00=a,q11=b,q22=a*x0*x0+b*y0*y0-1,q02=-a*x0,q12=-b*y0;
-    // Q's eigenvalues (Smith 1961); det Q = -a b gives the negative one without cancellation.
+    // Q's eigenvalues: the largest from Smith's (1961) trigonometric solution. The other two
+    // are the roots of the deflated quadratic, with product det Q / eMax = -a b / eMax
+    // (det Q = -a b) and sum (S2 - product) / eMax from the principal minors S2: no
+    // subtraction of nearly equal terms, which left a near edge-on ellipse (a light seen
+    // along its plane, eMid ~ 1e-4 of eMax) with eMid and so the form factor wrong by
+    // several times, in a speckled line along the plane.
     float qm=(q00+q11+q22)/3,p=sqrt(((q00-qm)*(q00-qm)+(q11-qm)*(q11-qm)+(q22-qm)*(q22-qm)+2*(q02*q02+q12*q12))/6);
     float b00=(q00-qm)/p,b11=(q11-qm)/p,b22=(q22-qm)/p,b02=q02/p,b12=q12/p;
     float phi=acos(clamp((b00*(b11*b22-b12*b12)-b11*b02*b02)*0.5,-1.,1.))/3;
-    float eMax=qm+2*p*cos(phi),eMid=3*qm-eMax-(qm+2*p*cos(phi+2.0943951)),eNeg=-a*b/(eMax*eMid);
-    float form=-eNeg*rsqrt(max((eMax-eNeg)*(eMid-eNeg),1e-30));
+    float eMax=qm+2*p*cos(phi),pair=-a*b/eMax,minors=a*b*(1+x0*x0+y0*y0)-(a+b),sum=(minors-pair)/eMax;
+    float eMid=0.5*(sum+sqrt(sum*sum-4*pair)),eNeg=pair/eMid;
+    float form=saturate(-eNeg*rsqrt(max((eMax-eNeg)*(eMid-eNeg),1e-30)));
     float3 axis=normalize(u1*(a*x0/(a-eNeg))+u2*(b*y0/(b-eNeg))+u3);
     return ltcCap(l,axis*form);
 }

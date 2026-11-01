@@ -32,9 +32,9 @@ const SCENE: &str = r#"{
   }
 }"#;
 
-fn runtime() -> Runtime {
+fn runtime(source: &str) -> Runtime {
     let schema = ara_runtime::schema(&[]).unwrap();
-    let doc = ara_doc::read(SCENE, "levels/area.scene", &schema, None)
+    let doc = ara_doc::read(source, "levels/area.scene", &schema, None)
         .doc
         .unwrap();
     let scene = doc.id.clone();
@@ -51,22 +51,26 @@ fn runtime() -> Runtime {
     .unwrap()
 }
 
-/// Mean linear luminance (undoing sRGB) of `image` over the fractional box `[x0, y0, x1, y1]`.
+/// Linear luminance (undoing sRGB) of a pixel.
+fn linear_luminance(p: &image::Rgba<u8>) -> f32 {
+    let linear = |c: u8| {
+        let c = f32::from(c) / 255.;
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * linear(p[0]) + 0.7152 * linear(p[1]) + 0.0722 * linear(p[2])
+}
+
+/// Mean linear luminance of `image` over the fractional box `[x0, y0, x1, y1]`.
 fn mean(image: &image::RgbaImage, [x0, y0, x1, y1]: [f32; 4]) -> f32 {
     let (w, h) = (image.width() as f32, image.height() as f32);
     let (mut sum, mut count) = (0f32, 0f32);
     for y in (y0 * h) as u32..(y1 * h) as u32 {
         for x in (x0 * w) as u32..(x1 * w) as u32 {
-            let p = image.get_pixel(x, y);
-            let linear = |c: u8| {
-                let c = f32::from(c) / 255.;
-                if c <= 0.04045 {
-                    c / 12.92
-                } else {
-                    ((c + 0.055) / 1.055).powf(2.4)
-                }
-            };
-            sum += 0.2126 * linear(p[0]) + 0.7152 * linear(p[1]) + 0.0722 * linear(p[2]);
+            sum += linear_luminance(image.get_pixel(x, y));
             count += 1.;
         }
     }
@@ -76,7 +80,7 @@ fn mean(image: &image::RgbaImage, [x0, y0, x1, y1]: [f32; 4]) -> f32 {
 #[test]
 fn rect_light_matches_the_path_traced_reference() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/area-lights");
-    let mut rt = runtime();
+    let mut rt = runtime(SCENE);
     let mut frame = RenderFrame::default();
     rt.extract(&mut frame);
     let size = [480, 270];
@@ -144,4 +148,79 @@ fn rect_light_matches_the_path_traced_reference() {
         }
     }
     assert!(failures.is_empty(), "raster vs reference: {failures:?}");
+}
+
+/// A wall seen close up and head-on (a 6 degree view, 0.4 mm per row), lit by a disc
+/// light whose plane crosses it at the middle row, from 4 m to the side: the wall
+/// above the plane sees the disc's back (nothing) and below it an edge-on ellipse whose
+/// light grows smoothly from zero with the distance below the plane.
+const EDGE_ON: &str = r#"{
+  "$schema": "ara://schema/scene/1",
+  "id": "sc_edgeontest1",
+  "records": {
+    "e_camera": {"name": "Camera", "order": "a0", "Camera": {"fov": 6},
+      "Transform": {"position": [2.5, 2.2, -1.4]}},
+    "e_env": {"name": "Environment", "order": "a1",
+      "Environment": {"sky": [0, 0, 0, 1], "horizon": [0, 0, 0, 1], "ground": [0, 0, 0, 1], "intensity": 0}},
+    "e_wall": {"name": "Wall", "order": "a2",
+      "MeshRenderer": {"shape": "box", "size": [16, 4, 0.2], "color": [0.6, 0.6, 0.6, 1], "roughness": 0.7},
+      "Transform": {"position": [0, 2, -2.5]}},
+    "e_disc": {"name": "Disc light", "order": "a3",
+      "Light": {"kind": "disc", "intensity": 600000, "range": 12, "sourceRadius": 0.35},
+      "Transform": {"position": [-1.5, 2.2, -1.5], "rotation": [-90, 0, 0]}}
+  }
+}"#;
+
+/// Mean linear luminance of every row of `image`.
+fn row_means(image: &image::RgbaImage) -> Vec<f32> {
+    image
+        .rows()
+        .map(|row| row.map(linear_luminance).sum::<f32>() / image.width() as f32)
+        .collect()
+}
+
+/// Regression: a light seen along its plane used to light a speckled line there. The
+/// ellipse's eigenvalues (look-lights.slangh ltcEllipse) were found by subtracting
+/// nearly equal terms, so a near edge-on source (the smaller one about 1e-4 of the
+/// larger) got form factors several times too large on alternate rows. The true light
+/// below the plane only grows, row after row, so no row may outshine those below it.
+#[test]
+fn a_disc_seen_edge_on_lights_no_line_in_its_plane() {
+    let mut rt = runtime(EDGE_ON);
+    let mut frame = RenderFrame::default();
+    rt.extract(&mut frame);
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/area-lights");
+    let size = [240, 270];
+    let mut presenter = Presenter::new(size, Vec::new(), root.join("gpu-edge"));
+    presenter.set_quality(ara_runtime_render::QualityChoice::Preset(
+        ara_runtime_render::QualityPreset::High,
+    ));
+    presenter.set_debug(RenderDebug {
+        exposure: Some(6.),
+        global_illumination: false,
+        screen_gi: false,
+        ambient_occlusion: false,
+        screen_reflections: false,
+        reflection_captures: false,
+        temporal_jitter: false,
+        full_resolution: true,
+        ..RenderDebug::default()
+    });
+    let capture = presenter
+        .capture(&frame, size, ViewMode::Lit, None, 8)
+        .unwrap();
+    capture.write(&root.join("edge-on.png")).unwrap();
+    let rows = row_means(&capture.image);
+    let peak = rows.iter().copied().fold(0., f32::max);
+    assert!(peak > 1e-3, "the wall below the plane is lit ({peak})");
+    // Row i against the row 12 below it (5 mm): the true ramp rises about 0.4% per row
+    // at the plane, so a margin of 2% of the peak catches a spike without false alarms.
+    let spikes: Vec<_> = (0..rows.len() - 12)
+        .filter(|&i| rows[i] > rows[i + 12] + 0.02 * peak)
+        .map(|i| (i, rows[i], rows[i + 12]))
+        .collect();
+    assert!(
+        spikes.is_empty(),
+        "rows outshine those below them: {spikes:?}"
+    );
 }

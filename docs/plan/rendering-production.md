@@ -12,9 +12,9 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
 ## Lighting
 
 - [x] **Area lights.** Merged ab19eac38 (rect/disc/sphere/tube, LTC, IES, soft local shadows,
-  path-traced shapes, fog through look-lights.slangh). Open: penumbrae capped at 4 texels (wide
-  soft shadows need filterable shadow maps), area-light soft shadows in fog, rect source
-  texture, emissive surfaces promoted to area lights. Original item: Rect, disc, sphere and tube lights (`LightKind`), LTC specular and
+  path-traced shapes, fog through look-lights.slangh). Wide penumbrae, area-light soft
+  shadows in fog and the self-shadow terminator: done with soft shadows (below). Open: rect
+  source texture, emissive surfaces promoted to area lights. Original item: Rect, disc, sphere and tube lights (`LightKind`), LTC specular and
   diffuse (Heitz 2016), barn doors for rects, optional light texture (rect), IES / light
   profiles for point and spot ("shaped lights"), source radius/length softening, their
   shadows (local faces, contact-hardened by source size), GI relight and fog. Unreal:
@@ -24,18 +24,35 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   (`examples/ltc_fit.rs`, exact per-edge horizon clipping, ellipse form factor for discs and
   spheres) in deferred, forward, ray hits, probe relight and fog; IES import (`ara.ies`) with
   profiles in raster and the path tracer; reference samples every shape with MIS hits; PCSS
-  local shadows; light complexity view; editor gizmos and Create entries. Open: penumbrae
-  wider than 4 shadow texels (big rects stay hard-edged; needs filterable shadow mips) and the
-  hard self-shadow terminator of centre-point shadow maps; rect source textures; promoting
-  large emissive surfaces to rect/disc lights; Unreal converter rect export.
+  local shadows; light complexity view; editor gizmos and Create entries. Open: rect source
+  textures; promoting large emissive surfaces to rect/disc lights; Unreal converter rect export.
 - [ ] **Emissive surfaces light the scene.** Emissive meshes feed probe GI (hit radiance)
   and screen-space GI; large or bright emitters can be promoted to area lights for direct
   light and shadows (Lumen's emissive lighting; Unreal's "Emissive Light Source").
-- [ ] **Soft sun shadows.** Source-angle penumbrae on cascades and the far map (PCSS
-  blocker search, the VSM path already contact-hardens), matching the light's angular
-  diameter (`Light.sourceAngle`, Unreal's `LightSourceAngle`). `sourceAngle` is authored and
-  feeds `Look.sunLux.w` (VSM PCSS) and the path tracer's sun cone (2026-11-01); cascades
-  and the far map are open.
+- [x] **Soft shadows (sun and every local light).** Branch t3/9c7b8618 (2026-11-01).
+  Every shadow map (local atlas, cascades, far map) gets a moment pyramid (`look::moments`:
+  RGBA32F mean, centred variance and farthest depth, packed levels, rebuilt per drawn tile);
+  `shaders/look-shadow.slangh` looks up any of them: the receiver's tangent plane in map
+  space (texels block only above it and nearer the light: no acne, no self-shadowing at any
+  width, no normal offset; curved receivers keep the LTC horizon as their terminator), a
+  blocker search over the source's widest cone (each texel counted only inside its own
+  cone, weighted by map proximity), and per-texel kernels of the source's projected shape
+  (rect, disc, sphere, tube; the sun disc from `sourceAngle`) summed over the 4x4 texels
+  of the level the penumbra spans, blended across levels: penumbrae of any width, sharp at
+  contact. Cascades and far map on Low/Medium; VSM keeps its PCSS and blends to the sun
+  maps past its 4-texel tent, so presets agree. Fog (froxels and the coarse grid) filters
+  the penumbra or the froxel, whichever is wider. `ViewMode::ShadowPenumbra`,
+  `--without soft-shadows`. Measured (ara-runtime-render `tests/soft_shadows.rs`, 10-90%
+  width vs the path tracer, Medium/High): rect +3/+3%, low rect +4/+3%, disc +7/+7%, sphere
+  +4/+4%, sun 0.54 deg +5/+3%, sun 10 deg +6/+5%, tall blocker +4/+3%. Cost
+  (`examples/shadow_costs.rs`, 2560x1440, frame p50 before -> after): sun only Low 0.53 ->
+  0.64, Medium 0.92 -> 1.05, High 1.66 -> 1.96, Epic 2.76 -> 2.90 ms; four shadowed area
+  lights covering the view Low 0.62 -> 0.84, Medium 1.20 -> 1.91, High 2.22 -> 3.13, Epic
+  3.45 -> 4.86 ms. Stability (`ara capture --stability 48`): no change with
+  `--without soft-shadows` on the shapes, fog-beam and Polar scenes. Open: area-light cost
+  (a screen-space shadow mask pass, half-rate wide penumbrae); round blockers resting on their receiver keep a lighter umbra than the path
+  tracer (their lower half is hidden from the light's centre: slope extrapolation as
+  Unreal's SMRT); kernels cross cube-face edges clamped; pyramids add ~200 MB at Epic.
 - [~] **Global illumination ("Lumen alternative").** Screen probe GI (D32, `look::screen_gi`,
   High/Epic, `--without screen-gi`, editor View > Rendering Debug > Screen GI, yellow in
   `--reflections sources`): 16 px probes on the G-buffer trace 64 fixed directions through a
@@ -182,6 +199,12 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   D:\AraScratch\presentation\evidence\final2\scene\scene-quality.json): check the
   adaptation rate the Unreal speeds map to and decide the editor policy (finish adaptation
   quickly at rest). Standalone games still upscale (unchanged cost).
+
+- [ ] **Capture exposure defaults.** A scene with no post-process volume captures at the
+  legacy manual exposure 0.0015 (EV 9.1, daylight), so lamp-lit scenes come out ~4.5 stops
+  dark unless `--ev100` is passed, and the capture JSON reports `"exposure": 0.0015` even
+  under `--ev100`. Report the exposure actually applied, and default captures without a
+  volume to the same metering the editor and Play use.
 
 - [ ] **Cooker determinism.** An incremental re-cook of unchanged sources rewrote Metal
   metadata (`ResourceCount` 31 to 224 on fullscreenVertex) relative to the fresh cohort cook.
