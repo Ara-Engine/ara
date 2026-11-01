@@ -75,6 +75,13 @@ fn lower(lines: &mut Vec<Line>, metric: &str, value: Option<f64>, pass: f64) {
 fn required(lines: &mut Vec<Line>, metric: &str, met: bool) {
     upper(lines, metric, met.then_some(0.), 0., None);
 }
+fn reference_verdict(lines: &mut [Line], converged: bool) {
+    if !converged {
+        for line in lines {
+            line.verdict = Verdict::Unavailable;
+        }
+    }
+}
 fn complete_max(run: &RunResult, metric: impl Fn(&FrameResult) -> Option<f64>) -> Option<f64> {
     let values: Option<Vec<_>> = run.frames.iter().map(metric).collect();
     distribution(values?).map(|d| d.max)
@@ -101,22 +108,30 @@ fn evidence(run: &RunResult, name: &str) -> Option<f64> {
     complete_max(run, |f| f.evidence.get(name).copied())
 }
 
-fn common_quality(lines: &mut Vec<Line>, run: &RunResult, flip_limit: f64, kill: Option<f64>) {
+fn common_quality(
+    lines: &mut Vec<Line>,
+    run: &RunResult,
+    flip_limit: Option<f64>,
+    kill: Option<f64>,
+) {
+    let first = lines.len();
     let measured_flip = run
         .frames
         .iter()
         .filter_map(|f| f.quality.region_flip.values().copied().reduce(f64::max))
         .reduce(f64::max);
-    upper(
-        lines,
-        "worst_region_flip",
-        complete_max(run, |f| {
-            f.quality.region_flip.values().copied().reduce(f64::max)
-        })
-        .or(measured_flip.filter(|v| *v > flip_limit)),
-        flip_limit,
-        kill,
-    );
+    if let Some(flip_limit) = flip_limit {
+        upper(
+            lines,
+            "worst_region_flip",
+            complete_max(run, |f| {
+                f.quality.region_flip.values().copied().reduce(f64::max)
+            })
+            .or(measured_flip.filter(|v| *v > flip_limit)),
+            flip_limit,
+            kill,
+        );
+    }
     let measured_temporal = run
         .frames
         .iter()
@@ -141,6 +156,9 @@ fn common_quality(lines: &mut Vec<Line>, run: &RunResult, flip_limit: f64, kill:
             Some(0.005),
         );
     }
+    // Finite-reference noise can manufacture a temporal or image miss. Preserve
+    // observations, but neither pass nor kill quality without convergence evidence.
+    reference_verdict(&mut lines[first..], run.reference_converged);
     required(
         lines,
         "reference_convergence_certified",
@@ -278,7 +296,7 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
                     Some(1.),
                 );
             }
-            common_quality(&mut lines, b, 0.02, Some(0.02));
+            common_quality(&mut lines, b, None, None);
         }
         2 => {
             for name in ["sun_pages", "dynamic_pages"] {
@@ -311,7 +329,7 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
                     Some(0.5),
                 );
             }
-            common_quality(&mut lines, b, 0.02, Some(0.02));
+            common_quality(&mut lines, b, Some(0.02), Some(0.02));
             upper(
                 &mut lines,
                 "missing_shadow_features_ge_2px",
@@ -350,6 +368,7 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
                 cap,
                 Some(cap),
             );
+            let quality_start = lines.len();
             // Keep per-frame F vs F+1 limits; never average away a transient miss.
             for f in &b.frames {
                 let limit = if f.frame == b.case.event_frame {
@@ -372,6 +391,7 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
                 0.005,
                 Some(0.005),
             );
+            reference_verdict(&mut lines[quality_start..], b.reference_converged);
             for name in ["link_repair", "event_solve"] {
                 upper(
                     &mut lines,
@@ -406,16 +426,18 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
                 "current_geometry_receiver_transport",
                 evidence(b, "current_geometry_transport") == Some(1.),
             );
-            common_quality(&mut lines, b, 1., None);
+            common_quality(&mut lines, b, None, None);
         }
         4 => {
-            common_quality(&mut lines, b, 0.02, Some(0.05));
+            let kill = matches!(b.case.recipe.as_str(), "overlap" | "hand" | "stained_glass")
+                .then_some(0.05);
+            common_quality(&mut lines, b, Some(0.02), kill);
             upper(
                 &mut lines,
                 "penumbra_relative_error",
                 complete_max(b, |f| f.quality.penumbra_relative_error),
                 0.1,
-                Some(0.25),
+                None,
             );
             required(
                 &mut lines,
@@ -488,7 +510,7 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
                 );
             }
             memory(&mut lines, b, is_4070);
-            common_quality(&mut lines, b, 0.02, Some(0.02));
+            common_quality(&mut lines, b, Some(0.02), Some(0.02));
         }
         6 => {
             if b.case.recipe == "polar" {
@@ -498,7 +520,7 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
                     evidence(b, "real_polar_asset") == Some(1.),
                 );
             }
-            common_quality(&mut lines, b, 0.02, Some(0.02));
+            common_quality(&mut lines, b, Some(0.02), Some(0.02));
             required(
                 &mut lines,
                 "secondary_hit_visibility_scored",
@@ -598,5 +620,16 @@ mod tests {
         let mut l = Vec::new();
         upper(&mut l, "strict kill", Some(3.), 1., Some(3.));
         assert_eq!(l[0].verdict, Verdict::Between);
+    }
+    #[test]
+    fn finite_reference_noise_cannot_pass_or_kill() {
+        let mut lines = Vec::new();
+        upper(&mut lines, "FLIP", Some(0.2), 0.02, Some(0.05));
+        upper(&mut lines, "temporal", Some(0.001), 0.005, Some(0.005));
+        reference_verdict(&mut lines, false);
+        assert_eq!(lines[0].observed, Some(0.2));
+        assert!(lines.iter().all(|l| l.verdict == Verdict::Unavailable));
+        upper(&mut lines, "average_ms", Some(4.), 1., Some(1.));
+        assert_eq!(combine(lines.iter().map(|l| l.verdict)), Verdict::Kill);
     }
 }

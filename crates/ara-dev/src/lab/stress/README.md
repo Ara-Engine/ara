@@ -105,9 +105,11 @@ discovery/repair correctness or cost is inferred from it. Offline acquisition us
 hardware RT before measurement; scored raster frames never use hardware RT.
 The control table reports the measured GPU span across update/render submissions,
 including submission gaps. Repeated pass labels are summed instead of overwritten.
-Finite references remain `reference_converged: false`; no exact-solution pass is
-claimed from a finite noisy reference. A stage can already produce an observed kill
-while another required field is unavailable. A complete gate needs both GPU targets.
+Finite references remain `reference_converged: false`; image and temporal numbers
+remain observations, not pass/kill decisions, until convergence is established.
+A measured cost can still kill while quality evidence is unavailable. A complete
+gate needs both GPU targets. G1 uses its E3/excess lines (no invented absolute FLIP
+line); G4's 0.05 kill applies to overlap, hand and stained glass, as specified.
 
 Polar loads the actual exported model and existing cooked compressed textures from
 `ARA_LAB_POLAR` (default `D:/AraScratch/AraPolar`) and a pinned cache action selected
