@@ -122,6 +122,12 @@ void ssrTraceMain(uint3 tid:SV_DispatchThreadID){
                 float3 colour=0;float total=0;
                 for(int k=-2;k<=2;k++){float w=exp(-float(k*k)*0.5);colour+=ssrPyramid(f,l,uv+along*(float(k)*0.5),level)*w;total+=w;}
                 colour/=total;
+                // Emission the host promoted to emitter lights (brighter than
+                // screenParams[1].x) already reaches this surface's specular as a light:
+                // reflect what surrounds the emitter, not its glow again (as captures and
+                // screen probes drop it).
+                float3 emitted=gbufferEmissive(f,int2(at.xy));
+                if(luminance(emitted)>l.screenParams[1].x)colour=max(colour-emitted,0);
                 float2 edge=min(uv,1-uv)*8;
                 float fade=saturate(min(edge.x,edge.y))*(1-saturate((roughness/l.ssr.x-0.8)/0.2));
                 result=float4(colour,fade);
