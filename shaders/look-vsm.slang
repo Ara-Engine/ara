@@ -194,10 +194,11 @@ void vsmProjectMain(uint3 tid:SV_DispatchThreadID){
         float3 world=worldAtDepth(f,float2(p)+0.5,depth);float texel;visible=vsmSoftVisibility(f,l,world,normal,tent,texel);
         // Penumbrae past the tent's reach (VSM_SOFT_TEXELS) come from the sun maps,
         // whose search and filter have no width limit (look-shadow.slangh): blended in
-        // from three texels at the page level to six.
+        // from three texels at the page level to six. Their search first, alone; their
+        // filter only where it is that wide.
         if(visible>=0){
-            bool mapped;float wide,v=mapVisibility(f,l,world,normal,mapped,wide);
-            if(mapped)visible=lerp(visible,v,saturate((wide/max(texel,1e-6)-(VSM_SOFT_TEXELS-1))/3));
+            float blend=saturate((mapReach(f,l,world,normal)/max(texel,1e-6)-(VSM_SOFT_TEXELS-1))/3);
+            [branch]if(blend>0){bool mapped;float wide,v=mapVisibility(f,l,world,normal,mapped,wide);if(mapped)visible=lerp(visible,v,blend);}
         }
         // Sun through blended casters (look-translucent.slangh); -1 stays unresolved.
         if(visible>0)visible*=translucentSun(l,world);

@@ -57,6 +57,13 @@ float mapVisibility(Frame f,Look l,float3 world,float3 normal,out bool mapped,ou
     }
     return v;
 }
+// The sun's penumbra half-width (m) at `world` from the cascade holding it, else the
+// far map (look-shadow.slangh shadowReach: the blocker search alone); zero where no
+// blocker is near or no map holds it.
+float mapReach(Frame f,Look l,float3 world,float3 normal){
+    uint c=cascadeIndex(f,world);bool cascade=c<f.look.z;if(!cascade&&l.farInfo.z==0)return 0;
+    return max(shadowReach(cascade?shadowCascade(f,l,c):shadowFar(l),world,normal,f.sunDirection.xyz,shadowSun(l.sunLux.w)),0);
+}
 // Sun visibility at `world`: `pages` where the virtual shadow map resolved it
 // (look-vsm.slangh: vsmMask, vsmVisibility), else the sun maps; at every distance the
 // horizon of distant landforms (look-horizon.slangh), so far terrain stays shadowed
