@@ -283,6 +283,7 @@ fn fork_look(
         local: None,
         horizon: None,
         vsm: None,
+        moments: crate::look::moments::ShadowMoments::default(),
         probe_staging: Vec::new(),
         probe_writes: Vec::new(),
         refract: None,

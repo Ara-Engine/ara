@@ -16,6 +16,7 @@ pub(crate) mod horizon;
 mod lens;
 pub(crate) mod local;
 pub(crate) mod ltc;
+pub(crate) mod moments;
 pub(crate) mod passes;
 pub mod placement;
 pub(crate) mod refract;

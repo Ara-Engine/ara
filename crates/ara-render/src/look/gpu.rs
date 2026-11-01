@@ -115,6 +115,8 @@ pub(crate) struct Pipelines {
     pub vsm_mark: Pipeline,
     pub vsm_project: Pipeline,
     pub gi_relight_vsm: Pipeline,
+    /// Shadow moment pyramid levels (`look::moments`).
+    pub shadow_moments: Pipeline,
     /// The refraction copy and its blurred levels (`look::refract`).
     pub refract: Pipeline,
 }
@@ -197,6 +199,8 @@ pub(crate) struct LookGpu {
     pub horizon: Option<super::horizon::Horizon>,
     /// Virtual shadow maps for the sun (`Quality::virtual_shadows`).
     pub vsm: Option<super::vsm::VirtualShadowMap>,
+    /// Moment pyramids of the local atlas, cascades and far map (`look::moments`).
+    pub moments: super::moments::ShadowMoments,
     /// Idle host staging for probe records, reused.
     pub probe_staging: Vec<super::gi::ProbeStaging>,
     /// Probe records uploaded for the next frame's `GI.Scatter`: staging, count,
@@ -237,6 +241,8 @@ pub(crate) struct LookIds {
     pub probe_writes: Vec<ResourceId>,
     /// The local-shadow atlas.
     pub local: Option<ResourceId>,
+    /// The shadow moment pyramids: local, cascades, far (`look::moments`).
+    pub moments: [Option<ResourceId>; 3],
     /// The horizon's capture, sun and sky visibility (`look::horizon`).
     pub horizon: Option<[ResourceId; 3]>,
     /// The virtual shadow atlas (`look::vsm`).
@@ -301,6 +307,7 @@ impl LookGpu {
             horizon_sky: load("look_horizon_sky")?,
             vsm_mark: load("look_vsm_mark")?,
             vsm_project: load("look_vsm_project")?,
+            shadow_moments: load("look_shadow_moments")?,
             gi_relight_vsm: load("look_gi_relight_vsm")?,
             refract: load("look_refract")?,
         };
@@ -367,6 +374,7 @@ impl LookGpu {
             local: None,
             horizon: None,
             vsm: None,
+            moments: super::moments::ShadowMoments::default(),
             probe_staging: Vec::new(),
             probe_writes: Vec::new(),
             refract: None,
@@ -655,6 +663,10 @@ impl LookGpu {
                 .local
                 .as_ref()
                 .map(|local| graph.import(Resource::Image(local.atlas), local.state)),
+            moments: self
+                .moments
+                .pyramids()
+                .map(|p| p.map(|p| graph.import(Resource::Image(p.image), p.state))),
             vsm: self
                 .vsm
                 .as_ref()
@@ -726,6 +738,11 @@ impl LookGpu {
         }
         if let (Some(vsm), Some(id)) = (&mut self.vsm, ids.vsm) {
             vsm.atlas_state = final_states[id.0];
+        }
+        for (pyramid, id) in self.moments.pyramids_mut().into_iter().zip(ids.moments) {
+            if let (Some(pyramid), Some(id)) = (pyramid, id) {
+                pyramid.state = final_states[id.0];
+            }
         }
         if let (Some(horizon), Some(ids)) = (&mut self.horizon, ids.horizon) {
             for (state, id) in horizon.states.iter_mut().zip(ids) {

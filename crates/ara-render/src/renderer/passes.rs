@@ -28,6 +28,9 @@ enum Recipe {
     HorizonCapture(usize),
     /// This frame's virtual shadow pages (`look::vsm`).
     VsmPages,
+    /// One level of the shadow moment pyramids of this frame's drawn maps
+    /// (`look::moments`).
+    Moments(u32),
     /// The G-buffer fill; `true`: the vertex-colour views (`ViewMode::vertex_color`).
     GBuffer(bool),
     /// Deferred decals blended into the G-buffer (`native/decals.rs`); `true`: the
@@ -328,6 +331,47 @@ impl Renderer {
             self.look.local = Some(local);
             result?;
         }
+        // Moment pyramids (look::moments) of the maps drawn this frame.
+        let moment_plan = {
+            let faces: Vec<usize> = local_draws.iter().map(|(draw, _)| draw.face).collect();
+            let drawn: Vec<usize> = cascade_draw.iter().map(|draw| draw.cascade).collect();
+            let defined = |state: crate::graph::State| state.access != Access::Undefined;
+            let held: Vec<bool> = self
+                .look
+                .cascades
+                .as_ref()
+                .map_or_else(Vec::new, |c| c.states.iter().map(|&s| defined(s)).collect());
+            let maps = crate::look::moments::MapsDrawn {
+                local: self
+                    .look
+                    .local
+                    .as_ref()
+                    .filter(|_| self.native.is_some())
+                    .map(|l| {
+                        (
+                            l.size,
+                            l.settings.resolution,
+                            l.sampled,
+                            &faces[..],
+                            defined(l.state),
+                        )
+                    }),
+                cascades: self
+                    .look
+                    .cascades
+                    .as_ref()
+                    .map(|c| (c.resolution, &c.sampled[..], &drawn[..], &held[..])),
+                far: self.look.far.as_ref().map(|f| {
+                    (
+                        f.settings.resolution,
+                        f.sampled,
+                        far_draw.is_some(),
+                        defined(f.state),
+                    )
+                }),
+            };
+            self.look.moments.plan(&mut self.gpu, &maps)?
+        };
         // Heightfield horizon (look::horizon): the capture once per content, culled
         // into the last shadow slot; the sun visibility when the sun moves, the sky
         // visibility once per capture. All of it lands only with a completed frame.
@@ -547,6 +591,18 @@ impl Renderer {
             look_frame.ao_images = self.look.ao_indices();
             self.look.ambient_rows(&mut look_frame);
         }
+        // Soft shadows (look-shadow.slangh): the pyramids, and points only without them.
+        let [local_moments, cascade_moments, far_moments] = self.look.moments.indices();
+        look_frame.shadow_info[1] = [
+            if look_frame.local_shadows[1] != 0 {
+                local_moments
+            } else {
+                0
+            },
+            cascade_moments,
+            far_moments,
+            u32::from(!self.debug.soft_shadows),
+        ];
         self.look.volumetric_rows(&mut look_frame);
         let contribution = self.look.look.grading.lut_contribution;
         if self.look.lut_size > 0 && contribution > 0. {
@@ -840,6 +896,47 @@ impl Renderer {
             declare(pass, Recipe::TranslucentSun);
             shadow_passes.push(pass);
         }
+        // The pyramids of this frame's drawn maps, level by level, then every pass that
+        // reads the maps reads them (once they hold a tile).
+        let pyramids = self.look.moments.pyramids();
+        let moment_targets: Vec<_> = look
+            .moments
+            .iter()
+            .zip(moment_plan.written)
+            .filter_map(|(id, written)| id.filter(|_| written).map(|id| (id, Access::Storage)))
+            .collect();
+        for level in 0..moment_plan.levels() {
+            const NAMES: [&str; crate::look::moments::MAX_LEVELS as usize] = [
+                "ShadowMoments.0",
+                "ShadowMoments.1",
+                "ShadowMoments.2",
+                "ShadowMoments.3",
+                "ShadowMoments.4",
+                "ShadowMoments.5",
+                "ShadowMoments.6",
+                "ShadowMoments.7",
+                "ShadowMoments.8",
+            ];
+            let mut uses = moment_targets.clone();
+            if level == 0 {
+                let depth = moment_plan
+                    .cascades
+                    .iter()
+                    .map(|&c| look.cascades[c])
+                    .chain(look.far.filter(|_| moment_plan.far))
+                    .chain(look.local.filter(|_| moment_plan.local));
+                uses.extend(depth.map(|id| (id, Access::ShaderRead)));
+            }
+            let pass = graph.pass(NAMES[level as usize], Queue::Graphics, uses);
+            declare(pass, Recipe::Moments(level));
+        }
+        for ((id, pyramid), written) in look.moments.iter().zip(pyramids).zip(moment_plan.written) {
+            if let (Some(id), Some(pyramid)) = (id, pyramid)
+                && (written || pyramid.state.access != Access::Undefined)
+            {
+                cascade_reads.push((*id, Access::ShaderRead));
+            }
+        }
         let translucent_reads: Vec<_> = translucent
             .into_iter()
             .flatten()
@@ -918,6 +1015,9 @@ impl Renderer {
                 ]
                 .into_iter()
                 .chain(vsm_sampled.then_some((atlas, Access::ShaderRead)))
+                // Wide penumbrae come from the sun maps and their pyramids.
+                .chain(cascade_reads.iter().copied().filter(|(id, _)| *id != atlas))
+                .chain(far_read)
                 .chain(translucent_reads.iter().copied())
                 .chain(graphics.iter().copied()),
             );
@@ -1555,6 +1655,13 @@ impl Renderer {
                             native.record_page(&mut recorder, constants, vsm.page_rows_index, i);
                         }
                         recorder.push(Command::EndRendering);
+                    }
+                    Recipe::Moments(level) => {
+                        recorder.push(Command::Pipeline(self.look.pipelines.shadow_moments));
+                        for build in moment_plan.builds.iter().filter(|b| b.level == level) {
+                            recorder.push(Command::Constants(RootConstants { words: build.words }));
+                            recorder.push(Command::Dispatch(build.groups));
+                        }
                     }
                     Recipe::LocalShadow => {
                         let local = self

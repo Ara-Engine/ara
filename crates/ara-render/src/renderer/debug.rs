@@ -12,6 +12,10 @@ pub struct RenderDebug {
     /// Sun shadows (cascades, far map, virtual shadow maps, terrain horizon) and
     /// local-light shadows.
     pub shadows: bool,
+    /// Soft shadows (`shaders/look-shadow.slangh`): penumbrae sized by the light's
+    /// shape; off, every light shadows as a point (the narrowest filter), to see
+    /// what the penumbrae add.
+    pub soft_shadows: bool,
     /// The near froxel volume of volumetric fog (`Quality::volumetric_fog`): off, fog
     /// falls back to the coarse 4 km grid alone, as on Low.
     pub volumetric_fog: bool,
@@ -90,6 +94,7 @@ impl Default for RenderDebug {
         Self {
             ambient_occlusion: true,
             shadows: true,
+            soft_shadows: true,
             volumetric_fog: true,
             temporal_jitter: true,
             full_resolution: false,
