@@ -1,0 +1,32 @@
+{
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0",
+  "stages": [
+    {
+      "dxil": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0/look_multiscatter/multiScatterMain.dxil",
+      "dxil_hash": "11533570aa0e09a5615c0ed5b2dd114e0864ef5da8b058d4a228cdc0bc5a2682",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0/look_multiscatter/multiScatterMain.metallib",
+        "metallib_hash": "90805b6b6f6d33b40afce41509320212e3ebb162ed10f836548be3c263dae12c",
+        "reflection": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0/look_multiscatter/multiScatterMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "multiScatterMain",
+      "spirv": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0/look_multiscatter/multiScatterMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "dddc0bb56297f7270c9ebe97df60759b487a761ee42c7674f4d0e8cf20fa8c27",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

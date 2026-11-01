@@ -1,0 +1,32 @@
+{
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0",
+  "stages": [
+    {
+      "dxil": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0/look_horizon_sky/horizonSkyMain.dxil",
+      "dxil_hash": "c7fa3be686ff3068e60bc0691ec3d7a245aca49c99ff23ddcabe322d9f8a7923",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0/look_horizon_sky/horizonSkyMain.metallib",
+        "metallib_hash": "f6783f780a00048b38fbce8ac7eef711c283e39db4beee9c8840089741d7712f",
+        "reflection": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0/look_horizon_sky/horizonSkyMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "horizonSkyMain",
+      "spirv": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0/look_horizon_sky/horizonSkyMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "dfa0c668f5609a86c8fca3e11d0276e39996d488a67ac914da89812d30d0fb53",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}

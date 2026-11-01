@@ -1,0 +1,32 @@
+{
+  "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
+  "compiler": "2026.17-25-gc7954ebd1",
+  "key": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0",
+  "stages": [
+    {
+      "dxil": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0/look_sky_view/skyViewMain.dxil",
+      "dxil_hash": "b782d80de93ec7a618efca20dbfc4af5d1638f952d349b802bc199262cd93882",
+      "metal": {
+        "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
+        "metallib": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0/look_sky_view/skyViewMain.metallib",
+        "metallib_hash": "5cdeb68e10f9325993dfdb4b7bc9dfb16fcf499731e37af971976ffb37c18468",
+        "reflection": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0/look_sky_view/skyViewMain.metal.json",
+        "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
+      },
+      "source_entry": "skyViewMain",
+      "spirv": "dd9b835255d73cd710c46d9ca8e15f690929e2a64f0d0b549c3df549e6bc42a0/look_sky_view/skyViewMain.spv",
+      "spirv_entry": "main",
+      "spirv_hash": "843964d43bad3c22c2afd5d408ef3f7b8b666b77ddbaf09fbd575bcb1365c1d6",
+      "stage": "compute"
+    }
+  ],
+  "state": {
+    "blend": false,
+    "color_formats": [],
+    "depth_format": null,
+    "depth_test": false,
+    "depth_write": false,
+    "vertex_stride": 0
+  },
+  "version": 1
+}
