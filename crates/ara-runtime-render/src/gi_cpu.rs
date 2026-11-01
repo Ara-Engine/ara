@@ -1210,7 +1210,10 @@ fn rgb9e5(c: Vec3) -> u32 {
 /// light over these sub-rays only (look-gi.slang giFootprintPoint): the plane goes on
 /// where the texel sees other surfaces (a floor's beyond the room's walls, a wall's
 /// across its window), and those points could be sunlit where the texel sees none.
-fn plane_mask(hits: &[Option<(Vec3, Hit)>; 16], (ray, distance, normal): (usize, f32, Vec3)) -> u32 {
+fn plane_mask(
+    hits: &[Option<(Vec3, Hit)>; 16],
+    (ray, distance, normal): (usize, f32, Vec3),
+) -> u32 {
     let Some((dir, _)) = hits[ray] else {
         return 1 << ray;
     };
@@ -1715,12 +1718,23 @@ mod tests {
         // RGB9E5: the brightest channel keeps nine bits; zero stays zero.
         let decode = |v: u32| {
             let scale = 2f32.powi((v >> 27) as i32 - 24);
-            Vec3::new((v & 511) as f32, (v >> 9 & 511) as f32, (v >> 18 & 511) as f32) * scale
+            Vec3::new(
+                (v & 511) as f32,
+                (v >> 9 & 511) as f32,
+                (v >> 18 & 511) as f32,
+            ) * scale
         };
         assert_eq!(rgb9e5(Vec3::ZERO) & 0x7ff_ffff, 0);
-        for c in [Vec3::new(4., 2., 0.5), Vec3::new(60., 45., 25.), Vec3::splat(1e-3)] {
+        for c in [
+            Vec3::new(4., 2., 0.5),
+            Vec3::new(60., 45., 25.),
+            Vec3::splat(1e-3),
+        ] {
             let back = decode(rgb9e5(c));
-            assert!((back - c).abs().max_element() <= c.max_element() / 256., "{c} {back}");
+            assert!(
+                (back - c).abs().max_element() <= c.max_element() / 256.,
+                "{c} {back}"
+            );
         }
         assert_eq!(half_bits(1e9), 0x7bff);
     }
@@ -1769,7 +1783,11 @@ mod tests {
         // Each texel's plane mask holds its relit sub-ray; texels that see a wall alone
         // hold all sixteen, those across a corner only the relit wall's share.
         let full = texels.iter().filter(|t| t[3] & 0xffff == 0xffff).count();
-        assert!(texels.iter().all(|t| t[3] & (1 << ((t[1] >> 20) & 15)) != 0));
+        assert!(
+            texels
+                .iter()
+                .all(|t| t[3] & (1 << ((t[1] >> 20) & 15)) != 0)
+        );
         assert!(full > 0 && full < SURFACE_TEXELS, "{full}");
     }
 }
