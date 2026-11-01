@@ -175,6 +175,104 @@
       "vertex_stride": 0
     }
   },
+  "lights_bin": {
+    "entries": {
+      "lightsBinMain": "compute"
+    },
+    "source": "lights-v2.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "lights_build": {
+    "entries": {
+      "lightsBuildMain": "compute"
+    },
+    "source": "lights-v2.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "lights_exact": {
+    "entries": {
+      "lightsExactMain": "compute"
+    },
+    "source": "lights-v2.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "lights_prep": {
+    "entries": {
+      "lightsPrepMain": "compute"
+    },
+    "source": "lights-v2.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "lights_primary": {
+    "entries": {
+      "lightsPrimaryMain": "compute"
+    },
+    "source": "lights-v2.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "lights_select": {
+    "entries": {
+      "lightsSelectMain": "compute"
+    },
+    "source": "lights-v2.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "lights_shade": {
+    "entries": {
+      "lightsShadeMain": "compute"
+    },
+    "source": "lights-v2.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_ao_bitmask": {
     "entries": {
       "aoBitmaskMain": "compute"
