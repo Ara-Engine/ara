@@ -20,7 +20,10 @@ No authoritative gameplay or authoring state lives here.
 - `Settings`, `FrameInput`, `UpscalerInput`: validated temporal/physical contracts.
 - `ProbeVolume`, `BakedProbes`: automatic DDGI volume (`automatic_within` sizes one to a probe count) and offline fallback data.
 - `scene::GpuScene`: stable instance IDs, masked ray-query material inputs, AS cache.
-- `Reference`: high-sample, undenoised reference transport, shared shader semantics.
+- `Reference`: high-sample, undenoised reference transport, shared shader semantics. Fog and
+  atmosphere are traced per pixel on camera-visible segments (`shaders/medium.slangh`: jittered
+  strata with sun shadow rays, one ambient ray, one equiangular sample per local light), not
+  composited from the 64x36 froxel grid; post and the froxel pass skip reference frames.
 - `FeatureInputs`, `ImageInput`: completed HDR/depth/probes for external features.
 - `feature_inputs`, `post_process`: compose feature HDR before the shared post stack.
 - `set_reservoir_sampling`: explicit RT DI/path reuse and split low-light histories.
