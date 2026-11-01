@@ -95,34 +95,52 @@ impl LookGpu {
         Ok(())
     }
 
-    /// Declares the copy and its blurred levels after deferred lighting: `hdr` and
-    /// `depth` are read, the atlas written. Returns the atlas the forward pass
-    /// reads, with the passes and their levels to record.
+    /// Imports this frame's atlas, which the forward passes read.
+    pub(crate) fn refract_atlas(&self, graph: &mut Graph) -> Option<ResourceId> {
+        let r = self.refract.as_ref()?;
+        Some(graph.import(Resource::Image(r.image), r.state))
+    }
+
+    /// Declares one copy of the lit scene and its blurred levels into `atlas`: after
+    /// deferred lighting (layer 0), or after the forward draws of the layers before
+    /// (`layer` > 0: glass behind glass, culling's `refract_layers`). `hdr` and
+    /// `depth` are read, the atlas written. Returns the passes and their levels to
+    /// record.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn refract_passes(
         &self,
         graph: &mut Graph,
+        atlas: ResourceId,
+        layer: usize,
         look_frame: ResourceId,
         hdr: ResourceId,
         depth: ResourceId,
         reads: &[(ResourceId, Access)],
-    ) -> Option<(ResourceId, Vec<(PassId, u32)>)> {
-        let r = self.refract.as_ref()?;
-        let atlas = graph.import(Resource::Image(r.image), r.state);
-        const NAMES: [&str; LEVELS as usize + 1] = [
-            "Refract.Copy",
-            "Refract.Down1",
-            "Refract.Down2",
-            "Refract.Down3",
-            "Refract.Down4",
+    ) -> Vec<(PassId, u32)> {
+        const NAMES: [[&str; LEVELS as usize + 1]; 2] = [
+            [
+                "Refract.Copy",
+                "Refract.Down1",
+                "Refract.Down2",
+                "Refract.Down3",
+                "Refract.Down4",
+            ],
+            [
+                "Refract.Layer.Copy",
+                "Refract.Layer.Down1",
+                "Refract.Layer.Down2",
+                "Refract.Layer.Down3",
+                "Refract.Layer.Down4",
+            ],
         ];
-        let passes = r
-            .fresh
+        let fresh = self.refract.as_ref().is_some_and(|r| r.fresh) && layer == 0;
+        fresh
             .then_some(CLEAR)
             .into_iter()
             .chain(0..=LEVELS)
             .map(|level| {
                 let id = graph.pass(
-                    NAMES
+                    NAMES[layer.min(1)]
                         .get(level as usize)
                         .copied()
                         .unwrap_or("Refract.Clear"),
@@ -138,8 +156,7 @@ impl LookGpu {
                 );
                 (id, level)
             })
-            .collect();
-        Some((atlas, passes))
+            .collect()
     }
 
     /// Records level `level` over render-pixel rect `rect`: 0 copies the lit scene

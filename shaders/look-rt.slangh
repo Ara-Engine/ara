@@ -8,6 +8,7 @@
 // native_sample.slangh. A pipeline that includes this header uses binding 4 (ray
 // queries): create it only on RT devices (DeviceInfo::ray_tracing).
 #pragma once
+#include "look-glass.slangh"
 BIND(4) RaytracingAccelerationStructure acceleration[16] : register(t0,space4);
 // Look record rows (look/frame.rs rt_params, rt_info; written by renderer::rt):
 // rtParams[0]: x reflection roughness cut, y longest ray (m), z ray-cone spread per
@@ -232,7 +233,8 @@ float3 rtShadeHit(Frame f,Look l,Surface s,float3 position,float3 geometric,floa
         // The ray below sees every caster within its reach (rtParams[0].y).
         float lit=horizonSun(l,position,l.rtParams[0].y>=HORIZON_NEAR);
         float bias=l.rtParams[1].x+l.rtParams[1].y*length(position-f.camera.xyz);
-        if(lit>0 && !rtOccluded(f,l,position+geometric*bias,sun,l.rtParams[0].y))c+=brdf(s,v,sun,o)*sunAt(f,l,position)*lit;
+        // Glass and films between the hit and the sun: the translucent sun map.
+        if(lit>0 && !rtOccluded(f,l,position+geometric*bias,sun,l.rtParams[0].y))c+=brdf(s,v,sun,o)*sunAt(f,l,position)*lit*translucentSun(l,position);
     }
     uint count=min(f.extent.z,RT_HIT_LIGHTS);AreaPixel area=(AreaPixel)0;
     for(uint i=0;i<count;i++){
@@ -241,6 +243,25 @@ float3 rtShadeHit(Frame f,Look l,Surface s,float3 position,float3 geometric,floa
         if(any(e>0))c+=e*localShadow(l,i,position,s.normal,light.positionRange.xyz,size,light.positionRange.w);
     }
     return c;
+}
+// Whether a hit's material is see-through: a blended film or transmissive (glass).
+bool rtSeeThrough(RtMaterial m){return m.pbr.flags.x==2 || m.factors.y>0;}
+// A see-through surface met along `d` (rtSeeThrough): its own light towards the ray
+// (rtShadeHit; glass reflects with its IOR's F0 where it transmits, as
+// look-refract.slangh refractSurface, films their lit colour over their coverage),
+// and in `through` the share of what lies behind it that passes, straight on
+// (glassTransmittance: no bending, as the path tracer's shadow rays). Leaving a
+// volume (its outward normal along the ray), the medium absorbed over `inside`
+// metres, the stretch since the ray's previous hit.
+float3 rtSeeThroughHit(Frame f,Look l,RtHit hit,float3 d,float width,float inside,out float3 through){
+    RtTriangle t=rtHitTriangle(l,hit);RtMaterial m=rtMaterial(l,t.material);
+    float3 outward=t.a.normal*t.w.x+t.b.normal*t.w.y+t.c.normal*t.w.z;
+    float3 position,geometric;Surface s=rtSurface(l,hit,d,width,position,geometric);
+    float ior=glassIor(asuint(m.factors.z)),f0=pow((ior-1)/(ior+1),2),coverage=m.pbr.flags.x==2?saturate(s.alpha):1;
+    through=glassTransmittance(coverage,s.transmission,s.albedo,ior,dot(geometric,d));
+    if((asuint(m.factors.z)&0xffff)!=0 && dot(outward,d)>0)through*=exp(-glassAbsorption(asuint(m.factors.w))*inside*coverage*s.transmission);
+    Surface r=s;r.albedo=lerp(s.albedo,float3(f0,f0,f0),s.transmission);r.metal=lerp(s.metal,1.,s.transmission);r.transmission=0;
+    return rtShadeHit(f,l,r,position,geometric,-d)*coverage;
 }
 // The prefiltered sky/environment (ibl's five-level strip) at `level` 0..4.
 float3 rtPrefiltered(Frame f,Look l,float2 uv,float level){

@@ -39,9 +39,13 @@ enum Recipe {
     /// Blended and transmissive draws; `lit` through the native lit PSO, which
     /// leaves the G-buffer alone (only the debug views read it afterwards). Without
     /// `draws` (the gi_diffuse view, opaque surfaces only) the pass draws nothing.
+    /// `range`: the native transparent draws of this layer (`look::refract` copies
+    /// the lit scene again between layers); `last` also draws legacy content.
     Forward {
         lit: bool,
         draws: bool,
+        range: [usize; 2],
+        last: bool,
     },
     Taa,
     /// One Ara TSR dispatch (`crate::tsr`), declared instead of `Taa` when selected.
@@ -595,8 +599,8 @@ impl Renderer {
         if let Some(rect) = refract_rect {
             self.look.refraction(&mut self.gpu, &mut look_frame, rect)?;
         }
-        // Blended casters' sun shadows (look::translucent) on High/Epic, whose shading
-        // and virtual page projection alone compile the lookup.
+        // Blended and transmissive casters' coloured sun shadows (look::translucent)
+        // on High/Epic, whose shading alone compiles the lookup.
         // Only casters within the cascades' reach shadow anything they show.
         let translucent_casters = self
             .native_translucent_casters(camera.position, self.look.quality.shadows.distance)
@@ -1066,15 +1070,19 @@ impl Renderer {
         );
         let gi_diffuse = mode == ViewMode::GiDiffuse;
         declare(lighting, Recipe::Lighting(gi_diffuse));
-        let refract_atlas = refract_rect.and_then(|_| {
-            let (atlas, passes) = self
-                .look
-                .refract_passes(&mut graph, look.frame, ids[HDR], ids[DEPTH], &graphics)?;
-            for (id, level) in passes {
-                declare(id, Recipe::Refract(level));
-            }
-            Some(atlas)
-        });
+        let refract_atlas = refract_rect.and_then(|_| self.look.refract_atlas(&mut graph));
+        // The forward draws, split where glass overlaps transparent draws behind it
+        // (each later layer reads a fresh copy holding the layers before it).
+        let forward_draws = self.native.as_ref().map_or(0, |n| n.forward_draws());
+        let splits = match (refract_atlas, self.native.as_ref()) {
+            (Some(_), Some(native)) => native.refraction_layers(),
+            _ => &[],
+        };
+        let layers: Vec<[usize; 2]> = std::iter::once(0)
+            .chain(splits.iter().copied())
+            .zip(splits.iter().copied().chain(std::iter::once(forward_draws)))
+            .map(|(start, end)| [start, end])
+            .collect();
         // Lit native frames blend colour, ids and motion only, so the G-buffer's
         // last use (and its discard) is lighting; the debug views (and the
         // baseline PSO) also blend into the G-buffer they display.
@@ -1083,37 +1091,52 @@ impl Renderer {
             .then_some([ALBEDO, NORMAL, MATERIAL, EMISSIVE].map(|t| (ids[t], Access::Color)))
             .into_iter()
             .flatten();
-        let forward = graph.pass(
-            "ForwardTransparency",
-            Queue::Graphics,
-            [
-                (ids[HDR], Access::Color),
-                (ids[DEPTH], Access::Depth),
-                (ids[ID], Access::Color),
-                (tile, Access::ShaderRead),
-            ]
-            .into_iter()
-            .chain(forward_gbuffer)
-            .chain(cascade_reads.iter().copied())
-            .chain(far_read)
-            .chain(local_read)
-            .chain(look_reads.iter().copied())
-            .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color)))
-            .chain(capture_reads.iter().copied())
-            .chain(refract_atlas.map(|atlas| (atlas, Access::ShaderRead)))
-            .chain(translucent_reads.iter().copied())
-            // Hybrid frames' TLAS, for forward variants that trace (look-rt.slangh).
-            .chain(self.rays.tlas_read()),
-        );
-        declare(
-            forward,
-            Recipe::Forward {
-                lit: forward_lit,
-                draws: !gi_diffuse && mode.vertex_color().is_none(),
-            },
-        );
+        let forward_uses: Vec<_> = [
+            (ids[HDR], Access::Color),
+            (ids[DEPTH], Access::Depth),
+            (ids[ID], Access::Color),
+            (tile, Access::ShaderRead),
+        ]
+        .into_iter()
+        .chain(forward_gbuffer)
+        .chain(cascade_reads.iter().copied())
+        .chain(far_read)
+        .chain(local_read)
+        .chain(look_reads.iter().copied())
+        .chain(self.native.as_ref().map(|_| (ids[MOTION], Access::Color)))
+        .chain(capture_reads.iter().copied())
+        .chain(refract_atlas.map(|atlas| (atlas, Access::ShaderRead)))
+        .chain(translucent_reads.iter().copied())
+        // Hybrid frames' TLAS, for forward variants that trace (look-rt.slangh).
+        .chain(self.rays.tlas_read())
+        .collect();
         let mut shaded = shadow_passes;
-        shaded.extend([gbuffer, lighting, forward]);
+        shaded.extend([gbuffer, lighting]);
+        for (layer, &range) in layers.iter().enumerate() {
+            if let Some(atlas) = refract_atlas {
+                for (id, level) in self.look.refract_passes(
+                    &mut graph, atlas, layer, look.frame, ids[HDR], ids[DEPTH], &graphics,
+                ) {
+                    declare(id, Recipe::Refract(level));
+                }
+            }
+            let name = if layer == 0 {
+                "ForwardTransparency"
+            } else {
+                "ForwardTransparency.Layer"
+            };
+            let forward = graph.pass(name, Queue::Graphics, forward_uses.iter().copied());
+            declare(
+                forward,
+                Recipe::Forward {
+                    lit: forward_lit,
+                    draws: !gi_diffuse && mode.vertex_color().is_none(),
+                    range,
+                    last: layer + 1 == layers.len(),
+                },
+            );
+            shaded.push(forward);
+        }
         if self.look.frame_wire {
             // Depth-tested against the frame's own depth, without writing it.
             let wire = graph.pass(
@@ -1691,7 +1714,12 @@ impl Renderer {
                         recorder.push(Command::Fullscreen);
                         recorder.push(Command::EndRendering);
                     }
-                    Recipe::Forward { lit, draws } => {
+                    Recipe::Forward {
+                        lit,
+                        draws,
+                        range,
+                        last,
+                    } => {
                         recorder.push(Command::Pipeline(self.pipelines.forward));
                         // Attachment order matches the PSOs' targets: colour, id,
                         // then the G-buffer (unless lit), then motion (native).
@@ -1725,6 +1753,7 @@ impl Renderer {
                                 lit,
                                 self.look.quality.high_tier,
                                 self.rays.refract(),
+                                range[0]..range[1],
                             );
                         }
                         let mut transparent = self
@@ -1732,7 +1761,9 @@ impl Renderer {
                             .meshes
                             .iter()
                             .enumerate()
-                            .filter(|(_, m)| draws && self.native.is_none() && m.transparent)
+                            .filter(|(_, m)| {
+                                draws && last && self.native.is_none() && m.transparent
+                            })
                             .collect::<Vec<_>>();
                         transparent.sort_by(|(_, a), (_, b)| {
                             b.centre
@@ -1834,7 +1865,8 @@ impl Renderer {
                         let mut constants = root;
                         constants.words[0] = map.frame_index;
                         constants.words[4] = 0;
-                        // Nearest film depth, then every film's opacity over a clear of one.
+                        // Nearest caster depth, then every face's optical depth over a
+                        // clear of zero.
                         for (transmittance, colors, depth) in [
                             (false, Vec::new(), Some(map.depth)),
                             (true, vec![map.transmittance], None),
@@ -1844,7 +1876,7 @@ impl Renderer {
                                     .into_iter()
                                     .map(|image| Attachment {
                                         image,
-                                        clear: Some([1.; 4]),
+                                        clear: Some([0.; 4]),
                                     })
                                     .collect(),
                                 depth: depth.map(|image| Attachment {

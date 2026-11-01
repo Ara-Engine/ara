@@ -1,6 +1,8 @@
 // One-time probe surface acquisition for raster GI (ara_render::look::gi). Ray
 // queries run only here, at bake time; the raster renderer relights the caches.
 #define MATERIAL_LAYERS 1
+// nativeAccept lets probe rays through glass by its transmittance.
+#define PROBE_SURFACES 1
 #include "common.slangh"
 static const float RANGE=200;
 groupshared uint backs[64];
@@ -55,7 +57,9 @@ void probeSurfacesMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
             bool front=dot(s.geometricNormal,dir)<0 || s.transmission>0;
             // Diffuse plus the specular lobe's directional albedo at the hit's roughness
             // from 60 degrees (gi_cpu::bounce_albedo): metals bounce light rather than absorb it.
-            if(front){if(dot(s.normal,-dir)<0)s.normal=-s.normal;albedo+=bounceAlbedo(s.albedo,s.metal,s.roughness);emissive+=s.emissive;normal+=s.normal;}
+            // Glass that stopped the ray bounces its reflection only (its transmitted
+            // share went on to the surfaces behind it, nativeAccept).
+            if(front){if(dot(s.normal,-dir)<0)s.normal=-s.normal;albedo+=bounceAlbedo(s.albedo*(1-s.transmission),s.metal,s.roughness);emissive+=s.emissive;normal+=s.normal;}
             else normal-=dir;
         }
         moment1+=t;moment2+=t*t;

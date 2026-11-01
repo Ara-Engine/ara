@@ -82,7 +82,7 @@ float3 risDirect(Frame f,Surface s,float3 v,inout uint rng,bool primary=false){
         if(w>0 && random(rng)*sum<w){selected=c;target=t;}
     }
     if(target<=0)return 0;
-    float visibility=occluded(f,rayOrigin(s,selected.direction),selected.direction,selected.distance,rng)?0:1;
+    float3 visibility=shadowTransmittance(f,rayOrigin(s,selected.direction),selected.direction,selected.distance,rng);
     return selected.value*(sum/(candidates*target))*visibility;
 }
 float3 directSun(Frame f,Surface s,float3 v,inout uint rng){
@@ -90,7 +90,8 @@ float3 directSun(Frame f,Surface s,float3 v,inout uint rng){
 #ifdef SKY_ATMOSPHERE
     [branch]if((f.display.w&2)!=0)sunlight=solarIrradiance(f,s.position);
 #endif
-    return any(sunlight>0) && (dot(s.normal,l)>0 || s.transmission>0) && !occluded(f,rayOrigin(s,l),l,10000,rng)?evaluate(s,v,l,pdf)*sunlight:float3(0);
+    // Light behind a surface reaches it only through glass, along shadow rays.
+    return any(sunlight>0) && dot(s.normal,l)>0?evaluate(s,v,l,pdf)*sunlight*shadowTransmittance(f,rayOrigin(s,l),l,10000,rng):float3(0);
 }
 // `mis`: the caller adds what BSDF-sampled rays see on area lights (localHits), so
 // each light sample takes its power-heuristic share (the exact estimator only).
@@ -102,10 +103,14 @@ float3 directLocal(Frame f,Surface s,float3 v,inout uint rng,bool primary=false,
     for(uint i=0;i<count;i++){
         LocalSample sample=sampleLocal(f,s,v,localLight(f,buffers[f.scene.x].Load(8)+i*LIGHT_BYTES),rng);
         if(all(sample.value<=0))continue;
-        if((dot(s.normal,sample.direction)>0 || s.transmission>0) && !occluded(f,rayOrigin(s,sample.direction),sample.direction,sample.distance,rng)){
+        if(dot(s.normal,sample.direction)<=0)continue;
+        bool crossed;float3 through=shadowTransmittance(f,rayOrigin(s,sample.direction),sample.direction,sample.distance,rng,crossed);
+        if(any(through>0)){
+            // BSDF rays never count lights behind glass (sampleBrdfPdf): the light
+            // sample takes all of what crosses it.
             float w=1;
-            if(mis && sample.pdf>0){float bsdfPdf;evaluate(s,v,sample.direction,bsdfPdf);w=sample.pdf*sample.pdf/max(sample.pdf*sample.pdf+bsdfPdf*bsdfPdf,1e-30);}
-            sum+=sample.value*w;
+            if(mis && sample.pdf>0 && !crossed){float bsdfPdf;evaluate(s,v,sample.direction,bsdfPdf);w=sample.pdf*sample.pdf/max(sample.pdf*sample.pdf+bsdfPdf*bsdfPdf,1e-30);}
+            sum+=sample.value*w*through;
         }
     }return sum;
 }

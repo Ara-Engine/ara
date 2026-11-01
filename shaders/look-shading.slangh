@@ -485,12 +485,12 @@ float3 ibl(Frame f,Look l,Surface s,float3 world,float3 v,int2 p,bool gathered,b
 float3 shade(Frame f,Look l,Surface s,float3 world,int2 p,bool gathered,bool high=false,bool rays=false) {
     float3 v=normalize(f.camera.xyz-world);Lobes o=specularLobes(s,v);float3 result=s.emissive+ibl(f,l,s,o,world,v,p,gathered,high,rays);
     // The sun lights front faces only (brdf ends in N.L): back faces skip its shadows.
-    // The High tier passes the sun through blended casters (look-translucent.slangh);
-    // virtual pages already hold it where they resolved this pixel.
+    // The High tier passes the sun through blended films and glass (coloured,
+    // look-translucent.slangh).
     if(dot(s.normal,f.sunDirection.xyz)>0){
         float pages=gathered?vsmMask(l,p):-1,lit=visibility(f,l,world,s.normal,pages);
-        if(high && pages<0 && lit>0)lit*=translucentSun(l,world);
-        result+=brdf(s,v,f.sunDirection.xyz,o)*sunAt(f,l,world)*lit;
+        float3 through=high && lit>0?translucentSun(l,world):float3(1,1,1);
+        result+=brdf(s,v,f.sunDirection.xyz,o)*sunAt(f,l,world)*lit*through;
     }
     uint tilesX=(f.extent.x+15)/16;uint tile=(uint(p.y)/16*tilesX+uint(p.x)/16)*TILE_STRIDE;
     uint count=buffers[NonUniformResourceIndex(f.lighting.z)].Load(tile*4);AreaPixel area=(AreaPixel)0;

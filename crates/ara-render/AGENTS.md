@@ -19,9 +19,9 @@ Owns the M1 baseline renderer and agent visual feedback. Gameplay state stays in
 - `Scene`, `Mesh`, `Material`, `Light`, `CameraSpec`: extracted world data and camera pose/bounds requests. Materials use bindless texture indices.
 - `instanced::Scene`: native model-space content contract for shared geometry,
   current/previous instance transforms, deforming revisions, 64-byte UV0/UV1 (+ linear RGBA8 `Vertex::color`; `Geometry::vertex_colors` declares non-white, validated; per-instance paint `Instance::paint` lives in one host buffer range per instance, addressed by row meta.y bits 1../meta.z, streamed by `Changes::paint`; adding/removing paint regroups)
-  vertices and 320-byte materials with six map transforms, AO, transmission (+ IOR/volume packed by `instanced::Volume`:
-  refractive forward PSOs over `look::refract`'s copy of the lit scene; blended films draw back then front faces and cast
-  `look::translucent` sun shadows on High/Epic) and terrain layer IDs. Texture IDs address the residency table; u32::MAX is neutral.
+  vertices and 320-byte materials with six map transforms, AO, transmission (+ IOR/volume by `instanced::Volume`; one glass model in all renderers, `look-glass.slangh`:
+  refractive PSOs over `look::refract`'s copies, re-copied where glass overlaps transparent draws behind it (`culling::Layering`); films draw back then front faces; both
+  cast coloured `look::translucent` sun shadows (optical depth) on High/Epic) and terrain layer IDs. u32::MAX textures are neutral.
   Validate only at content publication; do not hash/traverse static vertices
   when moving instances. Culling bounds handle mirrored/nonuniform transforms. `Instance::casts_shadows` false skips every shadow pass and shadow ray (`RAY_*_SHADOWLESS` masks) but still draws, reflects and bounces light.
 - `Renderer::new_native` consumes this scene and an owned `instanced::Textures`

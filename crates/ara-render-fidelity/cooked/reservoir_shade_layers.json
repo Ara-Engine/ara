@@ -1,22 +1,22 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "db2f022aa9cf5d329b4b7065b6169f02e38b65efea168c6413363e3be2bed3a0",
+  "key": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903",
   "stages": [
     {
-      "dxil": "db2f022aa9cf5d329b4b7065b6169f02e38b65efea168c6413363e3be2bed3a0/reservoir_shade_layers/reservoirShadeLayers.dxil",
-      "dxil_hash": "7fc00ac4776f1d0a892c739d9234c51903ba10f172fa6bd432712c08bf39d2db",
+      "dxil": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903/reservoir_shade_layers/reservoirShadeLayers.dxil",
+      "dxil_hash": "8b1b26a0317330cdaa8cccb30ad7868d211a4c798e5ce5feac55c2901afc65c4",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "db2f022aa9cf5d329b4b7065b6169f02e38b65efea168c6413363e3be2bed3a0/reservoir_shade_layers/reservoirShadeLayers.metallib",
-        "metallib_hash": "b970184735f59d0b6fecf5c701e2202f422650236e9c2817e6ee2ed7cf002c98",
-        "reflection": "db2f022aa9cf5d329b4b7065b6169f02e38b65efea168c6413363e3be2bed3a0/reservoir_shade_layers/reservoirShadeLayers.metal.json",
+        "metallib": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903/reservoir_shade_layers/reservoirShadeLayers.metallib",
+        "metallib_hash": "a392845adc944786884b74f9901d675a7e6991a2fbfaee6b55e3f3a58d167166",
+        "reflection": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903/reservoir_shade_layers/reservoirShadeLayers.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "reservoirShadeLayers",
-      "spirv": "db2f022aa9cf5d329b4b7065b6169f02e38b65efea168c6413363e3be2bed3a0/reservoir_shade_layers/reservoirShadeLayers.spv",
+      "spirv": "536f73b9ea7aaefb41b7a2e57043ed401e8b2bd06b78715db6246c9fb858e903/reservoir_shade_layers/reservoirShadeLayers.spv",
       "spirv_entry": "main",
-      "spirv_hash": "8c809269b1e83fc6fd42c145d1636dcabf0c3545db51348a5c3c946cfcbed63a",
+      "spirv_hash": "32ade007f54a17cc31ce9199f9ccd7176750f02fbc35c2e8096698459d368f8f",
       "stage": "compute"
     }
   ],

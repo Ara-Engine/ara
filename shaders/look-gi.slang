@@ -64,7 +64,8 @@ void giRelight(uint3 group,uint lane,bool pages){
     float3 dir=octDecode((float2(lane%8,lane/8)+0.5)/8),origin=giProbePosition(l,id)+meta.xyz,light=0;
     if(sky<1){
         float3 hit=origin+dir*distance,sun=f.sunDirection.xyz,lifted=hit+normal*(8*shadowTexel(f,l,hit));
-        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*visibility(f,l,lifted,normal,pages?vsmVisibility(f,l,lifted,normal,true):-1)+localIrradiance(f,l,hit,normal);
+        // Glass and films between the hit and the sun tint it (look-translucent.slangh).
+        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*visibility(f,l,lifted,normal,pages?vsmVisibility(f,l,lifted,normal,true):-1)*translucentSun(l,lifted)+localIrradiance(f,l,hit,normal);
         // Last frame's probes close the loop: multiple bounces converge over frames.
         irradiance+=giIrradiance(l,read,hit,normal);
         light=(1-sky)*(emissive+albedo/PI*irradiance);

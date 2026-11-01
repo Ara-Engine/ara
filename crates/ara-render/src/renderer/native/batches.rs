@@ -6,9 +6,10 @@ pub(super) fn is_transparent(material: &crate::instanced::Material) -> bool {
     material.pbr.flags[0] == 2 || is_refractive(material)
 }
 
-/// Blended (alpha-film) materials cast translucent sun shadows (`look::translucent`).
+/// Blended (alpha-film) and transmissive materials cast coloured sun shadows
+/// through the translucent sun map (`look::translucent`), not opaque ones.
 pub(super) fn is_translucent(material: &crate::instanced::Material) -> bool {
-    material.pbr.flags[0] == 2
+    material.pbr.flags[0] == 2 || is_refractive(material)
 }
 
 /// Blended double-sided volumes (`Group::planar` false) draw their back faces, then
@@ -32,6 +33,12 @@ pub(super) fn is_planar([lo, hi]: [Vec3; 2]) -> bool {
 /// (`NativePipelines::refract`), over a copy of the lit opaque scene.
 pub(super) fn is_refractive(material: &crate::instanced::Material) -> bool {
     material.extras.transmission_factor > 0.
+}
+
+/// Transmissive volumes (KHR_materials_volume thickness) bend rays sideways; thin
+/// walls pass them straight on, sampling the scene within their own footprint.
+pub(super) fn bends_rays(material: &crate::instanced::Material) -> bool {
+    is_refractive(material) && crate::instanced::Volume::unpack(material.extras.volume).1 > 0.
 }
 
 /// Whether an opaque or masked draw of `material` reads vertex colours and so needs
@@ -68,6 +75,8 @@ pub(super) struct Group {
     pub transparent: bool,
     /// A transmissive group (`is_refractive`), drawn by the refractive forward PSOs.
     pub refract: bool,
+    /// A transmissive volume (`bends_rays`): its rays leave its own footprint.
+    pub bends: bool,
     /// A blended group (`is_translucent`), drawn into the translucent sun map.
     pub translucent: bool,
     /// Its instances block light (`Instance::casts_shadows`); every shadow pass and
@@ -160,6 +169,7 @@ impl Groups {
                     instances,
                     transparent: is_transparent(&scene.materials[material]),
                     refract: is_refractive(&scene.materials[material]),
+                    bends: bends_rays(&scene.materials[material]),
                     translucent: is_translucent(&scene.materials[material]),
                     casts,
                     planar: is_planar(scene.geometry[geometry].bounds),

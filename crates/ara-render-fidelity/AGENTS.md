@@ -74,6 +74,11 @@ Use run.ps1 there for process-local Vulkan implicit-layer isolation.
 
 ## Contracts
 Linear HDR, right-handed Y-up metres; camera depth is positive view distance.
+Glass (transmission + ior/volume) is a GGX dielectric (`sampleGlass`, `glassReflection`),
+absorbing over each stretch inside a volume; transmissive instances take TLAS masks
+16/32 (non-opaque traversal). Shadow rays pass glass by `glassTransmittance` (shared with
+ara-render's `look-glass.slangh`); BSDF paths through glass count no light hits.
+Probe-surface bakes (`PROBE_SURFACES`) pass glass by its straight transmittance.
 Motion is current-to-previous UV, without jitter; previous depth/normal/ID reject
 history. Light edits retain geometric history, use responsive radiance weights,
 and update more probes with 16 rays each inside the same per-frame ray budget.

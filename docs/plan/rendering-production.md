@@ -114,9 +114,26 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
 
 ## Surfaces
 
-- [ ] **Consistent glass.** One transmission model across raster, hybrid and path tracer:
+- [~] **Consistent glass.** One transmission model across raster, hybrid and path tracer:
   thin and solid glass, roughness, tint by thickness, shadows by transmittance, reflections
-  of and through glass, sorting.
+  of and through glass, sorting. Done (2026-11-01, branch t3/production-glass-transparency): the path tracer's
+  transmission was diffuse (glass a white sheet, opaque to the sun); it is now a GGX
+  dielectric (thin and volume, Beer-Lambert absorption) whose shadow rays take glass's
+  straight transmittance (`look-glass.slangh` `glassTransmittance`, shared with raster);
+  raster/hybrid glass casts coloured, stacked sun shadows (optical-depth translucent map,
+  High/Epic), re-copies the scene where glass overlaps transparent draws behind it, refracts
+  solid slabs and hollow shells (bottles) correctly, marches close or sky-backed glass, and
+  shows in hybrid mirrors; probe GI bakes see through glass. Test scenes:
+  `D:\AraScratch\glass` (objects, stacked panes, sunlit room, fog, mirror). Region means
+  over the reference at equal EV, before -> after: solid slab 0.17 -> 0.97, top of a ball
+  lens 0.54 -> 1.06 (raster) / 0.93 (hybrid), bottle 1.40 -> 0.78, glass shadows 2.2x ->
+  0.94-1.10 (High), three stacked panes 1.47 -> 1.00, sphere behind a pane 0.65 -> 0.94,
+  bounce in a glazed room 2.7-3.0x -> 1.9-2.1x (the unglazed room's GI bias is 1.7-2.0x).
+  Open: Low/Medium cast no glass
+  shadows; the ray-traced fidelity renderer (editor/Play with the ray-tracing opt-in) still
+  shows glass dark and noisy; local-light shadows ignore glass; dispersion
+  (KHR_materials_dispersion needs a material word); raster ball lenses approximate the
+  far side by a sphere fit (hybrid traces it); glass in screen-space reflections.
 - [~] **Screen-space reflections.** Hi-Z traced (look-screen.slangh `hizTrace`: closest-depth
   pyramid, crawls on behind thin foreground), then captures and probes; rough lobes past 0.25-0.4
   hand over to screen probes (D32). SSR.Trace 0.60 ms at 2560x1440 High. Open: per-pixel cone
