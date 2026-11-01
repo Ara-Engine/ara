@@ -56,11 +56,16 @@ pub(crate) const SCREEN_EMISSION: usize = 29;
 /// in-scattered light and its mean view depth, RGBA16F at the render size over
 /// `VolumetricFogQuality::light_scale`.
 pub(crate) const VOLUME_SCATTER: usize = 30;
+/// Each traced reflection's GGX footprint as seen through its mirror (half-resolution
+/// pixels: two semi-axes), and the resolved reflections lighting reads: the trace's
+/// confidence spread over each pixel's footprint (look-ssr.slang `ssrResolveMain`).
+pub(crate) const SSR_FOOTPRINT: usize = 31;
+pub(crate) const SSR_RESOLVED: usize = 32;
 /// The scatter at the render size the composite reads on half-resolution frames: the
 /// half-resolution one resolved, its disagreeing pixels integrated at full resolution
-/// (look-fog-lights.slang `fogLightsResolveMain`).
-pub(crate) const VOLUME_SCATTER_FULL: usize = 31;
-const IMAGES: usize = 32;
+/// (look-fog-lights.slang `fogLightsResolveMain`, `fogLightsEdgesMain`).
+pub(crate) const VOLUME_SCATTER_FULL: usize = 33;
+const IMAGES: usize = 34;
 /// Depth of a visibility-bitmask sample (`LookGpu::bitmask_ao`) behind its front, as
 /// a share of the AO radius: thinner foreground hides less of what lies behind it.
 /// 0.4 treated branches, rails and posts as 40 cm slabs: ground under a sky-lit tree
@@ -93,8 +98,8 @@ fn extent(image: usize, render: [u32; 2], display: [u32; 2], tile: u32) -> [u32;
             [x * w, y * h]
         }
         SCREEN_PROBE_RECORDS => super::screen_gi::grid(render, tile),
-        AO_TRACE | AO_DENOISED | GI_DIFFUSE | GI_SPECULAR | SSR_TRACE | SCREEN_DIFFUSE
-        | SCREEN_SPECULAR => render.map(|v| v.div_ceil(2)),
+        AO_TRACE | AO_DENOISED | GI_DIFFUSE | GI_SPECULAR | SSR_TRACE | SSR_FOOTPRINT
+        | SSR_RESOLVED | SCREEN_DIFFUSE | SCREEN_SPECULAR => render.map(|v| v.div_ceil(2)),
         SSR_PYRAMID | SCREEN_EMISSION => [render[0], (render[1] / 2).max(1)],
         VSM_MASK | DOF_COMPOSITE => render,
         DOF_PREPARED | DOF_GATHERED => render.map(|v| v.div_ceil(2)),
@@ -138,6 +143,8 @@ pub(crate) struct Pipelines {
     pub gi_gather: Pipeline,
     pub ssr_pyramid: Pipeline,
     pub ssr_trace: Pipeline,
+    /// Spreads traced reflections' confidence over their lobes (`SSR_RESOLVED`).
+    pub ssr_resolve: Pipeline,
     /// Screen probe GI (`look::screen_gi`): Hi-Z levels, the probe trace, the gather.
     pub hiz: Pipeline,
     pub screen_probes: Pipeline,
@@ -351,6 +358,7 @@ impl LookGpu {
             gi_gather: load("look_gi_gather")?,
             ssr_pyramid: load("look_ssr_pyramid")?,
             ssr_trace: load("look_ssr_trace")?,
+            ssr_resolve: load("look_ssr_resolve")?,
             hiz: load("look_hiz")?,
             screen_probes: load("look_screen_probes")?,
             screen_gather: load("look_screen_gather")?,
@@ -495,6 +503,8 @@ impl LookGpu {
             SCREEN_SPECULAR,
             SCREEN_EMISSION,
             VOLUME_SCATTER,
+            SSR_FOOTPRINT,
+            SSR_RESOLVED,
             VOLUME_SCATTER_FULL,
         ] {
             if let Some(old) = self.images[i].take() {
@@ -554,6 +564,9 @@ impl LookGpu {
             screen,
             // The per-pixel fog lights follow the near volume (`ensure_volumetric`).
             false,
+            self.quality.reflections.is_some(),
+            self.quality.reflections.is_some(),
+            // The per-pixel fog lights' resolve follows the near volume.
             false,
         ];
         for (i, needed) in needed.into_iter().enumerate() {
@@ -618,13 +631,25 @@ impl LookGpu {
         frame.shadow_info[0] = [u32::from(bounce), 0, 0, 0];
     }
 
-    /// Reflection rows: pyramid and trace (sampled), then (storage).
+    /// Reflection rows: pyramid and resolved reflections (sampled), then pyramid and
+    /// trace (storage).
     pub(crate) fn ssr_indices(&self) -> [u32; 4] {
         [
             self.sampled[SSR_PYRAMID],
-            self.sampled[SSR_TRACE],
+            self.sampled[SSR_RESOLVED],
             self.storage[SSR_PYRAMID],
             self.storage[SSR_TRACE],
+        ]
+    }
+
+    /// Reflection resolve rows: trace and footprints (sampled), then footprints and
+    /// resolved reflections (storage).
+    pub(crate) fn ssr_resolve_indices(&self) -> [u32; 4] {
+        [
+            self.sampled[SSR_TRACE],
+            self.sampled[SSR_FOOTPRINT],
+            self.storage[SSR_FOOTPRINT],
+            self.storage[SSR_RESOLVED],
         ]
     }
 

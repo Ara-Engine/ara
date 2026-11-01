@@ -586,6 +586,7 @@ impl Renderer {
                 ssr.intensity,
             ];
             look_frame.ssr_images = self.look.ssr_indices();
+            look_frame.ssr_resolve = self.look.ssr_resolve_indices();
         }
         // Screen probe GI shades its hits from the reflection pyramid.
         if self.look.frame_screen {
@@ -1320,7 +1321,7 @@ impl Renderer {
                 opaque: refract_atlas
                     .and(refract_rect)
                     .map(|rect| (look_frame.refract_info[0][0], rect)),
-                reflections: reflected.then(|| self.look.sampled[crate::look::gpu::SSR_TRACE]),
+                reflections: reflected.then(|| self.look.sampled[crate::look::gpu::SSR_RESOLVED]),
             })?;
         } else if !self.secondary_active {
             self.tsr.invalidate();
@@ -1374,7 +1375,7 @@ impl Renderer {
                 let signals = refract_atlas
                     .into_iter()
                     .chain(dof.then_some(ids[HDR]))
-                    .chain(reflected.then(|| look.image(crate::look::gpu::SSR_TRACE)))
+                    .chain(reflected.then(|| look.image(crate::look::gpu::SSR_RESOLVED)))
                     .collect();
                 let io = crate::tsr::Io {
                     colour: if dof {
@@ -2258,7 +2259,7 @@ impl Renderer {
                     let signals = dof
                         .then_some(input)
                         .into_iter()
-                        .chain(reflected.then(|| look.image(crate::look::gpu::SSR_TRACE)))
+                        .chain(reflected.then(|| look.image(crate::look::gpu::SSR_RESOLVED)))
                         .chain(reactive.map(|(id, _)| id))
                         .collect();
                     let io = crate::tsr::Io {

@@ -777,6 +777,20 @@
       "vertex_stride": 0
     }
   },
+  "look_ssr_resolve": {
+    "entries": {
+      "ssrResolveMain": "compute"
+    },
+    "source": "look-ssr.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "look_ssr_trace": {
     "entries": {
       "ssrTraceMain": "compute"

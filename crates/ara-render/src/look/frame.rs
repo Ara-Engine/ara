@@ -182,6 +182,9 @@ pub(crate) struct LookFrame {
     /// texel side (zero: local lights scatter in the froxels).
     pub fog_lights_params: [f32; 4],
     pub fog_lights_info: [u32; 4],
+    /// The reflection resolve (look-ssr.slang `ssrResolveMain`): the trace and its
+    /// footprints (sampled), footprints and resolved reflections (storage).
+    pub ssr_resolve: [u32; 4],
     /// Half-resolution frames: x the pass's target (sampled), y the render-size scatter
     /// the resolve writes (storage).
     pub fog_lights_resolve: [u32; 4],
@@ -362,6 +365,7 @@ impl LookFrame {
             screen_info: [[0; 4]; 4],
             fog_lights_params: [0.; 4],
             fog_lights_info: [0; 4],
+            ssr_resolve: [0; 4],
             fog_lights_resolve: [0; 4],
         }
     }

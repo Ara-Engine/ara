@@ -90,6 +90,9 @@ struct Look {
     // composited by applyFog (fogLightsAt). Zero rows: local lights scatter in the froxels.
     float4 fogLightsParams;  // x angular bins per half circle (one equiangular sample each)
     uint4 fogLightsInfo;     // x render-size scatter the composite reads (sampled), y the pass's target (storage), z render pixels per texel side (0: off)
+    // The reflection resolve (look-ssr.slang ssrResolveMain): x trace, y footprints
+    // (sampled), z footprints, w resolved reflections (storage); ssrImages.y reads the latter.
+    uint4 ssrResolve;
     uint4 fogLightsResolve;  // half resolution: x the pass's target (sampled), y the render-size scatter (storage)
 };
 static const uint LOOK_PHYSICAL_SKY=1,LOOK_FOG=2,LOOK_RESET=4,LOOK_AMBIENT_OCCLUSION=8,LOOK_REFLECTIONS=16,LOOK_SNAP=32,LOOK_LOCAL_INDIRECT=64,LOOK_REFLECTION_SOURCES=128,LOOK_VOLUMETRIC=256,LOOK_FOG_SHADOWED=512,LOOK_SCREEN_GI=1024;

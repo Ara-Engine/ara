@@ -2,18 +2,6 @@
 #include "raster.slangh"
 #include "look.slangh"
 #include "look-shading.slangh"
-// Local-light irradiance on a surface facing `n`; with LOOK_LOCAL_INDIRECT, shadowed
-// by the lights that own a local shadow map this frame (look::local; the rest stay
-// unshadowed).
-float3 localIrradiance(Frame f,Look l,float3 p,float3 n){
-    float3 sum=0;
-    for(uint i=0;i<f.extent.z;i++){
-        // look-lights.slangh: each light's form factor over its area.
-        Light light=loadLight(f.lighting.w,i);float3 e=lightIrradiance(f,l,light,i,p,n);
-        if(any(e>0) && (l.flags.y&LOOK_LOCAL_INDIRECT)!=0)e*=localShadow(l,i,p,n,light.positionRange.xyz);
-        sum+=e;
-    }return sum;
-}
 groupshared float3 radiance[64];
 groupshared float4 directions[64];
 groupshared float3 tile[36];
@@ -36,32 +24,86 @@ float shadowTexel(Frame f,Look l,float3 world){
     if(l.vsm.y!=0)return vsmStep(l,vsmLevel(f,l,world,vsmLight(l,world)))/VSM_PAGE;
     uint c=min(cascadeIndex(f,world),max(f.look.z,1u)-1);return 2/(length(frameShadow(c)[0].xyz)*float(f.look.y));
 }
-// Sun visibility at a probe cache hit. Shading picks a cascade by view depth, and a
-// point outside its map counts as lit: right for pixels, which lie in the view, but
-// probe hits surround the camera, and behind or beside it every one would be sunlit.
-// Hits take the first cascade whose map holds them (its shadow test, unchanged), else
-// the far map; virtual shadow pages first where resident (`pages`).
-float giSunVisibility(Frame f,Look l,float3 world,float3 normal,bool pages){
-    float v=pages?vsmVisibility(f,l,world,normal,true):-1;bool mapped=v>=0;
-    ShadowLight sun=shadowSun(l.sunLux.w);uint maps=min(f.look.z,4u);
-    // Cascades in order, then the far map (k == 4); look-shadow.slangh shadowSoft is -1
-    // outside a map.
+// Visibility over a disc of `radius` metres around `world` (unit `normal`, `toLight`
+// towards the light) in tile `s`: plain PCF over the receiver's tangent plane at the
+// moment pyramid level the disc spans (look-shadow.slangh shadowKernel, fixed), the
+// mean light a probe texel's footprint receives in one lookup; -1 outside the tile.
+float giShadowFootprint(ShadowMap s,float3 world,float3 normal,float3 toLight,float radius){
+    ShadowReceiver r=shadowReceiver(s,world,normal,toLight);if(!r.inside)return -1;
+    float h=max(radius/r.texel,0.75);int level=clamp(int(round(log2(h)-1)),-1,shadowTop(s));
+    return shadowKernel(s,r,shadowSun(0),level,float2(h,0),float2(0,h),true,true);
+}
+// Sun visibility at a probe texel's hit: virtual shadow pages first where resident
+// (`pages`, a literal per entry point), else over the texel's footprint (`radius`
+// metres around the hit). Shading picks a cascade by view depth, and a point outside
+// its map counts as lit: right for pixels, which lie in the view, but probe hits
+// surround the camera, and behind or beside it every one would be sunlit. Hits take
+// the first cascade whose map holds them, else the far map.
+float giSunVisibility(Frame f,Look l,float3 world,float3 normal,float radius,bool pages){
+    float v=pages?vsmVisibility(f,l,world,normal,true):-1;bool mapped=v>=0;if(!mapped)v=1;uint maps=min(f.look.z,4u);
+    // Cascades in order, then the far map (k == 4).
     [loop]for(uint k=0;k<5&&!mapped;k++){
         if(k<4&&k>=maps)continue;
         if(k==4&&l.farInfo.z==0)break;
-        float penumbra,s=shadowSoft(l,k<4?shadowCascade(f,l,k):shadowFar(l),world,normal,f.sunDirection.xyz,sun,penumbra);
+        float s=giShadowFootprint(k<4?shadowCascade(f,l,k):shadowFar(l),world,normal,f.sunDirection.xyz,radius);
         if(s>=0){v=s;mapped=true;}
     }
-    if(!mapped)v=1;
     return v>0?min(v,horizonSun(l,world,mapped)):0;
+}
+// Where the direction `k` of an n x n grid across probe texel `texel` (octahedral, of
+// 8x8) meets the hit plane through `hit` (normal `normal`, `along` its signed distance
+// from the probe at `origin`, `distance` the hit's): the hit itself where that
+// direction meets the plane edge-on, or far off the hit's distance (the texel
+// straddles an edge).
+float3 giFootprintPoint(float3 origin,uint2 texel,uint k,uint n,float3 hit,float3 normal,float along,float distance){
+    float3 d=octDecode((float2(texel)+(float2(k%n,k/n)+0.5)/float(n))/8);
+    float cosine=dot(d,normal);float t=cosine<-0.05?along/cosine:-1;
+    return t>0.5*distance&&t<2*distance?origin+d*t:hit;
+}
+// The direct light (sun and local lights) a probe texel's hit receives, averaged over
+// the texel's footprint: one point stood for the whole texel (some 22 degrees), so a
+// probe point-sampled sharp lighting (a light profile's spokes, a sunlit patch smaller
+// than the texel) and neighbouring probes disagreed: blotches, and bright patches
+// over-weighted. The hit plane (point `hit`, normal `normal`, seen from `origin`;
+// octahedral `texel` of 8x8, solid angle `omega`) takes each local light's unshadowed
+// light at a grid of points across the texel (giFootprintPoint: 4x4 for light profiles
+// and hard-edged spot cones, whose patterns are sharp; 2x2 for the rest, smooth across
+// it), and
+// every shadow once over the footprint's disc (giShadowFootprint): the sun's (where no
+// virtual shadow page holds the hit), and with
+// LOOK_LOCAL_INDIRECT each local light's that owns a shadow map this frame
+// (look::local; the rest stay unshadowed).
+float3 giFootprintDirect(Frame f,Look l,float3 origin,uint2 texel,float omega,float3 hit,float3 normal,bool pages){
+    float3 toward=hit-origin;float along=dot(toward,normal),distance=length(toward);
+    float facing=abs(along)/max(distance,1e-4);
+    // The footprint's disc: the texel's cone at the hit, widened by the plane's slant.
+    float radius=distance*sqrt(omega/PI)*rsqrt(max(facing,0.25));
+    // Shadow tests sit eight shadow texels off the plane, so it does not shadow itself.
+    float3 lifted=hit+normal*(8*shadowTexel(f,l,hit)),sun=f.sunDirection.xyz;
+    float3 light=sunAt(f,l,hit)*saturate(dot(normal,sun))*giSunVisibility(f,l,lifted,normal,radius,pages)*translucentSun(l,lifted);
+    for(uint i=0;i<f.extent.z;i++){
+        // look-lights.slangh: each light's form factor over its area.
+        Light source=loadLight(f.lighting.w,i);
+        float3 delta=source.positionRange.xyz-hit;float reach=source.positionRange.w+radius;
+        if(dot(delta,delta)>=reach*reach)continue;
+        bool sharp=uint(source.parameters.x+0.5)>=LIGHT_SHAPED||(lightKind(source)==LIGHT_SPOT&&source.parameters.y-source.directionOuter.w<0.05);
+        uint n=sharp?4:2;float3 e=0;
+        for(uint k=0;k<n*n;k++)e+=lightIrradiance(f,l,source,i,giFootprintPoint(origin,texel,k,n,hit,normal,along,distance),normal);
+        ShadowMap s;
+        if(any(e>0)&&(l.flags.y&LOOK_LOCAL_INDIRECT)!=0&&shadowLocal(l,i,hit,source.positionRange.xyz,source.positionRange.w,s)){
+            float v=giShadowFootprint(s,lifted,normal,normalize(delta),radius);
+            if(v>=0)e*=v;
+        }
+        light+=e/float(n*n);
+    }
+    return light;
 }
 // One workgroup per relit probe, one lane per cache texel: this frame's window
 // (giUpdate.xy), then last frame's (giCounts.yz). The atlas written now held every
 // probe two frames ago, so only last frame's window is stale in it: those groups copy
-// it forward, skipping probes this frame relights. Inactive probes stay black. `pages`
-// (a literal per entry point) shadows hits with virtual shadow pages first. A texel's
-// hit stands for its whole footprint: its sun test sits eight shadow texels off it
-// along its normal, so the surface does not shadow itself.
+// it forward, skipping probes this frame relights. Inactive probes stay black. A
+// texel's hit plane is relit across its footprint (giFootprintDirect); `pages` (a
+// literal per entry point) tests the sun against virtual shadow pages first.
 void giRelight(uint3 group,uint lane,bool pages){
     Frame f=frame();Look l=look(f);uint cursor=l.giUpdate.x,window=l.giUpdate.y,read=l.giImages.x;
     if(group.x>=window){
@@ -84,9 +126,9 @@ void giRelight(uint3 group,uint lane,bool pages){
     if(sky<1){
         // The texel's relit hit is one of its sixteen bake sub-rays (ProbeSurfaces::texels).
         uint ray=(t.y>>20)&15;float3 toward=octDecode((float2(lane%8,lane/8)+(float2(ray%4,ray/4)+0.5)/4)/8);
-        float3 hit=origin+toward*distance,sun=f.sunDirection.xyz,lifted=hit+normal*(8*shadowTexel(f,l,hit));
+        float3 hit=origin+toward*distance;
         // Glass and films between the hit and the sun tint it (look-translucent.slangh).
-        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*giSunVisibility(f,l,lifted,normal,pages)*translucentSun(l,lifted)+localIrradiance(f,l,hit,normal);
+        float3 irradiance=giFootprintDirect(f,l,origin,uint2(lane%8,lane/8),octSolidAngle(uint2(lane%8,lane/8),8),hit,normal,pages);
         // Last frame's probes close the loop: multiple bounces converge over frames.
         irradiance+=giIrradiance(l,read,hit,normal);
         light=(1-sky)*(emissive+albedo/PI*irradiance);
