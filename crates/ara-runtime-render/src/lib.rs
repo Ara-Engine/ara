@@ -291,6 +291,18 @@ impl Presenter {
         self.renderer.as_mut()
     }
 
+    /// The linear exposure multiplier `frame` was last rendered with: the adapted
+    /// multiplier under automatic metering (read between completed frames, so call it
+    /// after a capture), else the manual or `--ev100`-locked value. `None` before the
+    /// first metered frame.
+    pub fn applied_exposure(&self, frame: &RenderFrame) -> Option<f32> {
+        let look = self.frame_look(frame);
+        match look.ev100 {
+            Some(_) => Some(look.manual_exposure(frame.environment.exposure)),
+            None => self.renderer.as_ref()?.exposure().ok().flatten(),
+        }
+    }
+
     /// Final GPU-composited window image, in CopySource state.
     pub fn output(&self) -> Option<ara_gpu::Image> {
         self.published

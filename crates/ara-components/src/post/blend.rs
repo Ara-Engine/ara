@@ -271,6 +271,21 @@ fn pick<T: Copy>(value: &mut T, target: Option<T>) {
 }
 
 impl SceneLook {
+    /// Gives a scene without any post-process volume one global volume with no
+    /// overrides, so it renders with the volume defaults (automatic metering) like a
+    /// scene that placed one, instead of the legacy manual `Environment.exposure`.
+    /// Captures do this by default; a scene that has volumes is left alone.
+    pub fn meter_without_volumes(&mut self) {
+        if self.volumes.is_empty() {
+            self.volumes.push(PostVolume {
+                volume: PostProcessVolume::default(),
+                translation: [0.; 3],
+                rotation: [0., 0., 0., 1.],
+                scale: [1.; 3],
+            });
+        }
+    }
+
     /// Post-processing for a camera at `camera` (a world position in metres): `None`
     /// when the scene has no post-process volume (renderers keep their legacy
     /// exposure), otherwise the defaults with every volume that has weight there
