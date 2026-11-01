@@ -7,6 +7,11 @@ publish.workspace = true
 
 [dependencies]
 bytemuck = { workspace = true, features = ["derive"] }
+sha2.workspace = true
+
+[dev-dependencies]
+gltf = { workspace = true, features = ["utils", "names", "import"] }
+glam.workspace = true
 
 [lints]
 workspace = true
