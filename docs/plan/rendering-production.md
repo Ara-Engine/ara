@@ -211,6 +211,12 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
   under `--ev100`. Report the exposure actually applied, and default captures without a
   volume to the same metering the editor and Play use.
 
+- [ ] **Stale player under `ara capture`.** `ara capture` renders through the sibling
+  `ara-player` binary, and building only `-p ara` leaves an older player that loads the
+  tree's new cooked shaders against its old data (an old CPU probe bake drew star patterns
+  over every wall). Refuse a player built from different sources, as `ara-dev` already
+  does for the editor's companion.
+
 - [ ] **Cooker determinism.** An incremental re-cook of unchanged sources rewrote Metal
   metadata (`ResourceCount` 31 to 224 on fullscreenVertex) relative to the fresh cohort cook.
 
