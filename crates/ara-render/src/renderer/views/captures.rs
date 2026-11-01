@@ -406,6 +406,10 @@ impl Renderer {
         let mut writes = std::mem::take(&mut self.look.probe_writes);
         state.swap(self);
         self.look.gi = gi.take();
+        // The bake reads the view's volume as it is (GiGpu::frozen).
+        if let Some(gi) = &mut self.look.gi {
+            gi.frozen = true;
+        }
         self.look.probe_staging = std::mem::take(&mut staging);
         self.look.probe_writes = std::mem::take(&mut writes);
         self.secondary_active = true;
@@ -424,6 +428,9 @@ impl Renderer {
         staging = std::mem::take(&mut self.look.probe_staging);
         writes = std::mem::take(&mut self.look.probe_writes);
         state.swap(self);
+        if let Some(gi) = &mut gi {
+            gi.frozen = false;
+        }
         self.look.gi = gi;
         self.look.probe_staging = staging;
         self.look.probe_writes = writes;

@@ -16,6 +16,7 @@
 // Shading reads them only in the High/Epic tier's PSOs (`ibl`'s `high`).
 static const uint CAPTURE_LEVELS=5,CAPTURE_RECORD=128,CAPTURE_SLOT=160,CAPTURE_MAX=16;
 static const uint CAPTURE_TILES=CAPTURE_MAX*CAPTURE_SLOT,CAPTURE_TILE_CAPACITY=512*512;
+static const float CAPTURE_FADE_FRAMES=48;
 // Debug modes: every surface a mirror of the captures alone; captures under no SSR;
 // no parallax (each capture an infinitely distant environment from its capture point).
 static const uint CAPTURE_DEBUG_MIRROR=1,CAPTURE_DEBUG_ONLY=2,CAPTURE_DEBUG_INFINITE=4;
@@ -37,7 +38,10 @@ struct CaptureShade{
 };
 CaptureCull captureCull(Look l,uint i){return buffers[NonUniformResourceIndex(l.captureInfo[0].w)].Load<CaptureCull>(i*CAPTURE_SLOT);}
 CaptureShade captureShade(Look l,uint i){return buffers[NonUniformResourceIndex(l.captureInfo[0].w)].Load<CaptureShade>(i*CAPTURE_SLOT+64);}
-// Relight ratio times the capture's multiplier; w is zero until a bake lands.
+// Relight ratio times the capture's multiplier; w is zero until a bake lands, then
+// rises to one over CAPTURE_FADE_FRAMES (relight frames): a capture appearing fades in
+// over the probe reflections instead of popping (live views publish captures one by
+// one over hundreds of frames).
 float4 captureRatio(Look l,uint i){return buffers[NonUniformResourceIndex(l.captureInfo[0].w)].Load<float4>(i*CAPTURE_SLOT+CAPTURE_RECORD);}
 // Influence weight of capture `c` at `world` (0 outside, 1 a blend distance inside),
 // before smoothing; `local` is `world` in the capture's frame.

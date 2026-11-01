@@ -617,6 +617,11 @@ pub(crate) struct Captures {
     rebaseline: u32,
     /// Records whose baseline the next relight clears (a new atlas, a moved capture).
     reset: u32,
+    /// Records whose bake the next relight shows at once instead of fading it in over
+    /// the probe reflections (a bake of every due step at once, or a restored image).
+    instant: u32,
+    /// The last plan baked every due step at once (captures, deterministic frames).
+    sync: bool,
     /// Records changed since the frame buffer's copy: the next relight copies them
     /// (`copy_records`).
     copy: bool,
@@ -719,6 +724,7 @@ impl Captures {
         settled: Settled,
         sync: bool,
     ) -> Result<Vec<Work>> {
+        self.sync = sync;
         let Some(quality) = quality else {
             return Ok(Vec::new());
         };
@@ -880,6 +886,9 @@ impl Captures {
             self.ready[capture] = true;
             self.bakes[capture] += 1;
             self.rebaseline |= 1 << capture;
+            if self.sync {
+                self.instant |= 1 << capture;
+            }
         }
         if !self.pending.contains(&true) {
             // A round done: the next bounce bakes every automatic capture again,
@@ -983,6 +992,7 @@ impl Captures {
         if let Some(ready) = self.ready.get_mut(capture) {
             *ready = true;
             self.rebaseline |= 1 << capture;
+            self.instant |= 1 << capture;
         }
     }
 
@@ -1058,6 +1068,11 @@ impl Captures {
         (self.rebaseline & 0xffff) | (self.reset & 0xffff) << 16
     }
 
+    /// The relight's root word 4: records whose new bake shows at once (bit per record).
+    pub(crate) fn instant_mask(&self) -> u32 {
+        self.instant
+    }
+
     /// Whether this frame's relight first copies the records into the frame buffer
     /// (they changed since its last copy; the copies persist).
     pub(crate) fn copy_records(&self) -> bool {
@@ -1086,6 +1101,7 @@ impl Captures {
             gpu.frame_access = final_states[ids.frame.0].access;
             self.rebaseline = 0;
             self.reset = 0;
+            self.instant = 0;
             self.copy = false;
         }
     }

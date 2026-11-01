@@ -301,6 +301,12 @@ pub(crate) struct GiGpu {
     /// range in one frame, as captures do, and a converged volume shows at once
     /// instead of fading in.
     pub unseen: bool,
+    /// Frames only read the volume: a reflection capture's faces
+    /// (`Renderer::with_capture_view`) declare no relight and do not advance it. Their
+    /// camera's cascades, without the view's virtual shadow pages, relit probes with
+    /// another sun than the view's frames did, so the volume wobbled while captures
+    /// baked (Polar Epic: a fifth of the frame flickered for some 300 frames).
+    pub frozen: bool,
     pub relit_once: bool,
     /// Records of probes `deferred..` (the coarsest lattice) written since the
     /// volume was created; it stays out of shading until they have all landed and

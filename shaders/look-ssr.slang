@@ -44,7 +44,7 @@ float4 ssrCaptures(Look l,float3 world,float3 n,float3 r,float roughness,float r
         // Start two of the capture's texels off the surface, past its own distance noise.
         float3 o=world+n*(0.02+length(world-d.origin.xyz)*7.2/float(d.tile.z));
         float t=captureTrace(l,d,o,r,reach);
-        if(t>-1.5)return float4(captureTraced(l,d,ratio,o,r,t,reach,roughness),1);
+        if(t>-1.5)return float4(captureTraced(l,d,ratio,o,r,t,reach,roughness),ratio.w);
     }
     return 0;
 }

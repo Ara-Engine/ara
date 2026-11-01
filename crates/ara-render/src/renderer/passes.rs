@@ -1147,7 +1147,15 @@ impl Renderer {
                 self.views.captures.refit_masks(),
                 self.views.captures.copy_records(),
             );
-            declare(refit, Recipe::Look(LookPass::CaptureRefit { masks, copy }));
+            let instant = self.views.captures.instant_mask();
+            declare(
+                refit,
+                Recipe::Look(LookPass::CaptureRefit {
+                    masks,
+                    copy,
+                    instant,
+                }),
+            );
             // Each 16x16 tile's captures, from the G-buffer depth.
             let tiles = graph.pass(
                 "Captures.Tiles",
@@ -2099,7 +2107,9 @@ impl Renderer {
                 cascades.drawn(draw, frame.shadows[draw.cascade]);
             }
         }
-        if let Some(gi) = &mut self.look.gi {
+        if let Some(gi) = &mut self.look.gi
+            && !gi.frozen
+        {
             gi.advance(self.look.quality.gi_budget);
         }
         self.probe_writes_scattered()?;

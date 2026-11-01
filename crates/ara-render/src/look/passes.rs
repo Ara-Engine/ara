@@ -75,6 +75,8 @@ pub(crate) enum LookPass {
     CaptureRefit {
         masks: u32,
         copy: bool,
+        /// Records whose new bake shows at once (`Captures::instant_mask`).
+        instant: u32,
     },
     /// Lists the captures each 16x16 render tile can need (`look::captures`).
     CaptureTiles,
@@ -212,7 +214,11 @@ impl LookGpu {
                 );
                 passes.push((id, LookPass::GiScatter(n as u32)));
             }
-            if self.gi.as_ref().is_some_and(|g| g.clearing_in_slices()) {
+            if self
+                .gi
+                .as_ref()
+                .is_some_and(|g| g.clearing_in_slices() || g.frozen)
+            {
                 return passes;
             }
             let id = graph.pass(
@@ -713,8 +719,14 @@ impl LookGpu {
             LookPass::VsmProject => (p.vsm_project, 0, groups(size)),
             LookPass::GiClear | LookPass::GiScatter(_) => return,
         };
-        // Root word 3: the relight's record copy.
+        // Root words 3 and 4: the relight's record copy, and the captures that show at
+        // once instead of fading in (every one in unseen frames).
         let copy = matches!(pass, LookPass::CaptureRefit { copy: true, .. });
+        let instant = match pass {
+            LookPass::CaptureRefit { .. } if self.unseen => u32::MAX,
+            LookPass::CaptureRefit { instant, .. } => instant,
+            _ => 0,
+        };
         recorder.push(Command::Pipeline(pipeline));
         recorder.push(Command::Constants(RootConstants {
             words: [
@@ -722,7 +734,7 @@ impl LookGpu {
                 input,
                 argument,
                 u32::from(copy),
-                0,
+                instant,
                 0,
                 0,
                 u32::from(exposed),

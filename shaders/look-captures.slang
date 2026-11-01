@@ -121,9 +121,11 @@ void capturePrefilterMain(uint3 tid:SV_DispatchThreadID){
 // baseline becomes this measurement; bit 16+i clears a baseline (a new atlas or a
 // moved capture). Root word 3 nonzero: the records changed (look/captures.rs
 // `copy_records`), so each capture's first thread copies its record from host
-// memory into the frame buffer first; the copies persist. Shading multiplies the
+// memory into the frame buffer first; the copies persist. Root word 4: bit i shows
+// capture i at once (a bake of every step at once, a restored image, unseen frames).
+// Shading multiplies the
 // capture by the current-to-baseline ratio times its multiplier (zero until a
-// baseline exists).
+// baseline exists), and weighs it by its fade-in (ratio w).
 groupshared float3 captureAxes[CAPTURE_MAX*6];
 [shader("compute")][numthreads(96,1,1)] // CAPTURE_MAX captures x 6 axes
 void captureRefitMain(uint3 tid:SV_DispatchThreadID){
@@ -147,11 +149,16 @@ void captureRefitMain(uint3 tid:SV_DispatchThreadID){
     current/=6;
     CaptureShade c=buffers[NonUniformResourceIndex(records)].Load<CaptureShade>(i*CAPTURE_RECORD+64);
     float4 baked=((root.material>>(16+i))&1)!=0?float4(0,0,0,0):buffers[NonUniformResourceIndex(target)].Load<float4>(slot+CAPTURE_RECORD+16);
-    if(((root.material>>i)&1)!=0)baked=float4(current,1);
+    // w: how far the capture has faded in since its first bake (CAPTURE_FADE_FRAMES);
+    // a rebake keeps it, so only a capture appearing over the probe fallback fades.
+    // Root word 4 shows it at once.
+    if(((root.material>>i)&1)!=0)baked=float4(current,baked.w>0?baked.w:1./CAPTURE_FADE_FRAMES);
+    else if(baked.w>0)baked.w=min(baked.w+1./CAPTURE_FADE_FRAMES,1);
+    if(((root.cascade>>i)&1)!=0&&baked.w>0)baked.w=1;
     buffers[NonUniformResourceIndex(target)].Store<float4>(slot+CAPTURE_RECORD+16,baked);
     // A channel near zero at both times keeps its ratio near one.
     float eps=max(luminance(baked.rgb),1e-6)*1e-3;
-    float4 ratio=baked.w>0?float4(clamp((current+eps)/(baked.rgb+eps),0.25,4)*c.extent.w,1):0;
+    float4 ratio=baked.w>0?float4(clamp((current+eps)/(baked.rgb+eps),0.25,4)*c.extent.w,baked.w):0;
     buffers[NonUniformResourceIndex(target)].Store<float4>(slot+CAPTURE_RECORD,ratio);
 }
 groupshared uint captureAny,captureFull;
