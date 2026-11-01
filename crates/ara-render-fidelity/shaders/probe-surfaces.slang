@@ -54,11 +54,11 @@ void probeSurfacesMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     // distance would otherwise dominate a texel that also sees a near wall).
     float3 albedo=0,emissive=0,normal=0,centroid=0;float4 moment1=0,moment2=0;uint geometry=0;
     float limit=2*max(f.spacing.x,max(f.spacing.y,f.spacing.z));
-    // The nearest front hit (distance, direction, normal).
-    float nearT=RANGE;float3 nearDir=0,nearNormal=0;
+    // Front hits' distances (-1: none) and normals, for the relit hit below.
+    float fronts[16];float3 normals[16];
     for(uint k=0;k<16;k++){
         float2 uv=(float2(lane%8,lane/8)+(float2(k%4,k/4)+0.5)/4)/8;float3 dir=octDecode(uv);
-        Hit h;float t=RANGE;
+        Hit h;float t=RANGE;fronts[k]=-1;normals[k]=0;
         if(trace(f,origin,dir,RANGE,rng,h)){
             Surface s=surface(f,h.id,h.primitive,h.bary);t=h.distance;geometry++;centroid+=dir*t;
             bool front=dot(s.geometricNormal,dir)<0 || s.transmission>0;
@@ -67,10 +67,12 @@ void probeSurfacesMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
             // Glass that stopped the ray bounces its reflection only (its transmitted
             // share went on to the surfaces behind it, nativeAccept).
             if(front){if(dot(s.normal,-dir)<0)s.normal=-s.normal;albedo+=bounceAlbedo(s.albedo*(1-s.transmission),s.metal,s.roughness);emissive+=s.emissive;normal+=s.normal;
-                if(t<nearT){nearT=t;nearDir=dir;nearNormal=s.normal;}}
+                fronts[k]=t;normals[k]=s.normal;}
             else normal-=dir;
         }
-        float m=min(t,limit);uint quadrant=(k%4)/2+(k/8)*2;
+        // A miss is open as far as the limit (rays stop at RANGE, which a coarse
+        // lattice's cells exceed).
+        float m=t<RANGE?min(t,limit):limit;uint quadrant=(k%4)/2+(k/8)*2;
         moment1[quadrant]+=m;moment2[quadrant]+=m*m;
     }
     float sky=1-geometry/16.;float g=max(float(geometry),1);
@@ -84,17 +86,21 @@ void probeSurfacesMain(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
     // Reflections take the probe's radiance at this distance (parallax), as seen;
     // eight bits of its base-2 log (ara_render::look::gi::log_distance).
     uint parallax=uint(clamp(round((log2(max(hitDistance,1e-6))+8)/24*255),0,255));
-    // A texel that sees two surfaces far apart (a window frame and the ground outside)
-    // would put that point between them, behind the nearer one: outside the room, where
-    // relighting would bring the outdoor light in. It moves onto the nearest surface's
-    // plane instead (gi_cpu BEHIND).
-    if(nearT<RANGE && dot(nearNormal,axis*hitDistance-nearDir*nearT)<-0.05){
-        float towards=dot(nearNormal,axis);
-        hitDistance=towards<-0.05?clamp(dot(nearNormal,nearDir*nearT)/towards,0,hitDistance):nearT;normal=nearNormal;
+    // Relighting uses a real hit (gi_cpu relit_hit): the front hit closest to the
+    // texel's centre (nearest first on ties), with its own normal. A point rebuilt from
+    // the mean would float between the surfaces of a texel that sees two (a window frame
+    // and the ground outside, a block and the wall behind), where relighting would find
+    // light no surface it sees receives.
+    uint ray=5;float best=1e9;
+    for(uint k=0;k<16;k++){
+        if(fronts[k]<0)continue;
+        float c=pow(float(k%4)-1.5,2)+pow(float(k/4)-1.5,2);
+        if(c<best||(c==best&&fronts[k]<fronts[ray])){best=c;ray=k;}
     }
+    if(best<1e9){hitDistance=fronts[ray];normal=normals[ray];}
     float2 n=octEncode(normal);
     uint4 packed=uint4(unorm8(albedo.r)|(unorm8(albedo.g)<<8)|(unorm8(albedo.b)<<16)|(unorm8(sky)<<24),
-        uint(round(n.x*4095))|(uint(round(n.y*4095))<<12)|(parallax<<24),
+        uint(round(n.x*1023))|(uint(round(n.y*1023))<<10)|(ray<<20)|(parallax<<24),
         halfBits(emissive.r)|(halfBits(emissive.g)<<16),
         halfBits(emissive.b)|(halfBits(hitDistance)<<16));
     buffers[NonUniformResourceIndex(root.pass)].Store<uint4>((id*64+lane)*16,packed);

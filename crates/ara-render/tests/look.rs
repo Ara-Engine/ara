@@ -125,8 +125,9 @@ fn emissive_surfaces(emission: u32) -> ProbeSurfaces {
     // centre normal; the emission and a hit distance of 1 (0x3c00).
     let texel = [
         0x0080_8080,
-        // Normal (0.5, 0.5) as UNORM12 pairs, parallax 1 m (look::gi::log_distance).
-        0x5580_0800,
+        // Normal (0.5, 0.5) as UNORM10 pairs, sub-ray 0, parallax 1 m
+        // (look::gi::log_distance).
+        0x5508_0200,
         emission | emission << 16,
         emission | 0x3c00 << 16,
     ];

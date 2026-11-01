@@ -72,13 +72,14 @@ pub struct ProbeSurfaces {
     /// The pool's lattices, finest first; probes numbered lattice after lattice.
     pub layout: ProbeLayout,
     /// [`SURFACE_TEXELS`] per probe, octahedral row-major. Packed per texel: x
-    /// diffuse albedo RGB8 and sky fraction 8 (low to high bits); y octahedral hit
-    /// normal as two UNORM12 and the hits' mean distance ([`log_distance`], what
-    /// reflections parallax-correct with); z emissive red and green as f16; w
-    /// emissive blue and the distance (metres, f16) relighting rebuilds its hit at:
-    /// the mean, unless that lies behind the nearest surface the texel sees, then on
-    /// that surface. Albedo, normal and emissive average the texel's geometry hits;
-    /// the sky fraction is the share of misses.
+    /// diffuse albedo RGB8 and sky fraction 8 (low to high bits); y the relit hit's
+    /// octahedral normal as two UNORM10, its bake sub-ray (4 bits: (k % 4, k / 4) of the
+    /// texel's 4x4) and the hits' mean distance ([`log_distance`], what reflections
+    /// parallax-correct with); z emissive red and green as f16; w emissive blue and the
+    /// relit hit's distance along its sub-ray (metres, f16). The relit hit is a real
+    /// one on the nearest surface the texel sees (ara-runtime-render `relit_hit`).
+    /// Albedo and emissive average the texel's geometry hits; the sky fraction is the
+    /// share of misses.
     pub texels: Vec<[u32; 4]>,
     /// [`STATIC_VECTORS`] per probe: [`MOMENT_VECTORS`] of 16x16 octahedral
     /// distance moments ([`pack_moments`]), then (relocation offset xyz, active

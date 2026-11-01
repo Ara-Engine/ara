@@ -899,15 +899,11 @@ const MARGIN: f32 = 6.;
 /// single lattice's.
 const FINER: f32 = 0.5;
 
-/// Metres behind the nearest surface a texel sees past which its rebuilt hit point
-/// counts as lying behind it (`probe`).
-const BEHIND: f32 = 0.05;
-
 /// Version of what a probe texel records (bump when the bake's shading changes,
 /// such as [`bounce_albedo`]; 5: probe rays pass glass by its transmittance; 7: 16x16
-/// distance moments, each ray clamped at the moment limit; 10: relit hits never lie
-/// behind the nearest surface a texel sees, the mean distance kept for parallax).
-const SURFACE_VERSION: u32 = 10;
+/// distance moments, each ray clamped at the moment limit, misses at it; 13: texels relight
+/// at a real hit, the most central one, the mean distance kept for parallax).
+const SURFACE_VERSION: u32 = 13;
 
 /// The lattice rule's identity, part of the probe cache's file names
 /// (`gi.rs`): any change to the constants above misses older bakes.
@@ -1195,6 +1191,31 @@ fn half_bits(v: f32) -> u32 {
     }
 }
 
+/// The real hit a cache texel is relit at (sub-ray index, distance, normal), as
+/// `probeSurfacesMain`: the front hit closest to the texel's centre (nearest first on
+/// ties), with its own normal. A point rebuilt from the hits' mean would float between
+/// the surfaces of a texel that sees two (a window frame and the ground outside, a
+/// block and the wall behind): outside the room, or in the air of a sunlit room, where
+/// relighting would find light no surface it sees receives. None without front hits.
+fn relit_hit(hits: &[Option<(Vec3, Hit)>; 16]) -> Option<(usize, f32, Vec3)> {
+    let centre = |k: usize| {
+        let (x, y) = ((k % 4) as f32 - 1.5, (k / 4) as f32 - 1.5);
+        x * x + y * y
+    };
+    hits.iter()
+        .enumerate()
+        .filter_map(|(k, hit)| {
+            hit.as_ref()
+                .filter(|(dir, h)| h.normal.dot(*dir) < 0.)
+                .map(|(_, h)| (k, h.distance, h.normal))
+        })
+        .min_by(|a, b| {
+            centre(a.0)
+                .total_cmp(&centre(b.0))
+                .then(a.1.total_cmp(&b.1))
+        })
+}
+
 /// One probe: relocation and classification, then the 8x8 cache texels (sixteen
 /// stratified rays each) and distance moments, exactly as `probeSurfacesMain`.
 fn probe(
@@ -1261,8 +1282,10 @@ fn probe(
                 / 8.;
             let dir = oct_decode(uv);
             let hit = tracer.trace(origin, dir, RANGE);
-            // Clamped per ray at the limit, as probeSurfacesMain.
-            let t = hit.as_ref().map_or(RANGE, |h| h.distance).min(limit);
+            // Clamped per ray at the limit, as probeSurfacesMain; a miss is open as far
+            // as the limit (rays stop at RANGE, which a coarse lattice's cells exceed:
+            // recorded there, every point past it would read as hidden).
+            let t = hit.as_ref().map_or(limit, |h| h.distance.min(limit));
             let quadrant = (k % 4) / 2 + (k / 8) * 2;
             moment1[quadrant] += t;
             moment2[quadrant] += t * t;
@@ -1272,65 +1295,43 @@ fn probe(
         let sky = 1. - geometry as f32 / 16.;
         let (mut albedo, mut emissive, mut normal, mut centroid) =
             (Vec3::ZERO, Vec3::ZERO, Vec3::ZERO, Vec3::ZERO);
-        // The nearest front hit: (distance, direction, normal).
-        let mut nearest: Option<(f32, Vec3, Vec3)> = None;
         for (dir, hit) in hits.iter().flatten() {
             centroid += *dir * hit.distance;
             if hit.normal.dot(*dir) < 0. {
                 albedo += hit.shading.albedo;
                 emissive += hit.shading.emissive;
                 normal += hit.normal;
-                if nearest.is_none_or(|(t, ..)| hit.distance < t) {
-                    nearest = Some((hit.distance, *dir, hit.normal));
-                }
             } else {
                 normal -= *dir;
             }
         }
         let g = geometry.max(1) as f32;
         let (albedo, emissive, centroid) = (albedo / g, emissive / g, centroid / g);
-        let mut normal = if normal.length_squared() > 0. {
+        let normal = if normal.length_squared() > 0. {
             normal.normalize()
         } else {
             -oct_decode((Vec2::new((lane % 8) as f32, (lane / 8) as f32) + 0.5) / 8.)
         };
-        // The centre ray's distance to the plane through the hits' centroid along their
-        // mean normal, as `probeSurfacesMain`: relighting rebuilds one hit per texel on
-        // the centre ray, and the hits' mean distance would land behind a surface seen at
-        // an angle (distance grows as 1/cos across the texel), shadowing itself.
+        // Reflections parallax-correct with the centre ray's distance to the plane
+        // through the hits' centroid along their mean normal (as probeSurfacesMain):
+        // the hits' mean distance would land behind a surface seen at an angle.
         let axis = oct_decode((Vec2::new((lane % 8) as f32, (lane / 8) as f32) + 0.5) / 8.);
         let facing = normal.dot(axis);
-        let mut mean = if facing < -0.05 {
+        let parallax = if facing < -0.05 {
             (normal.dot(centroid) / facing).clamp(0., RANGE)
         } else {
             centroid.length()
         };
-        // Reflections take the probe's radiance at this distance (parallax), as seen.
-        let parallax = mean;
-        // A texel that sees two surfaces far apart (a window frame and the ground
-        // outside) would put that point between them, behind the nearer one: outside
-        // the room, where relighting would bring the outdoor light in. It moves onto
-        // the nearest surface's plane instead (as probeSurfacesMain).
-        if let Some((t, dir, n)) = nearest {
-            let point = dir * t;
-            if n.dot(axis * mean - point) < -BEHIND {
-                let towards = n.dot(axis);
-                mean = if towards < -0.05 {
-                    (n.dot(point) / towards).clamp(0., mean)
-                } else {
-                    t
-                };
-                normal = n;
-            }
-        }
+        let (ray, distance, normal) = relit_hit(&hits).unwrap_or((5, parallax, normal));
         let n = oct_encode(normal);
         texels[lane] = [
             unorm8(albedo.x) | unorm8(albedo.y) << 8 | unorm8(albedo.z) << 16 | unorm8(sky) << 24,
-            (n.x * 4095.).round() as u32
-                | ((n.y * 4095.).round() as u32) << 12
+            (n.x * 1023.).round() as u32
+                | ((n.y * 1023.).round() as u32) << 10
+                | (ray as u32) << 20
                 | ara_render::look::gi::log_distance(parallax) << 24,
             half_bits(emissive.x) | half_bits(emissive.y) << 16,
-            half_bits(emissive.z) | half_bits(mean) << 16,
+            half_bits(emissive.z) | half_bits(distance) << 16,
         ];
         statics[lane] =
             std::array::from_fn(|q| pack_moments(moment1[q] / 4., moment2[q] / 4., limit));

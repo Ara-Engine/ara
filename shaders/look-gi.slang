@@ -36,6 +36,23 @@ float shadowTexel(Frame f,Look l,float3 world){
     if(l.vsm.y!=0)return vsmStep(l,vsmLevel(f,l,world,vsmLight(l,world)))/VSM_PAGE;
     uint c=min(cascadeIndex(f,world),max(f.look.z,1u)-1);return 2/(length(frameShadow(c)[0].xyz)*float(f.look.y));
 }
+// Sun visibility at a probe cache hit. Shading picks a cascade by view depth, and a
+// point outside its map counts as lit: right for pixels, which lie in the view, but
+// probe hits surround the camera, and behind or beside it every one would be sunlit.
+// Hits take the first cascade whose map holds them (its shadow test, unchanged), else
+// the far map; virtual shadow pages first where resident (`pages`).
+float giSunVisibility(Frame f,Look l,float3 world,float3 normal,bool pages){
+    float v=pages?vsmVisibility(f,l,world,normal,true):-1;bool mapped=v>=0;
+    if(!mapped){
+        uint count=f.look.z;
+        for(uint c=0;c<4&&c<count&&!mapped;c++){
+            float4 h=mul(frameShadow(c),float4(world,1));float3 q=h.xyz/h.w;
+            if(all(abs(q.xy)<0.98)&&q.z>0&&q.z<1){v=cascadeVisibility(f,l,c,world,normal);mapped=true;}
+        }
+        if(!mapped)v=farVisibility(l,world,normal,mapped);
+    }
+    return v>0?min(v,horizonSun(l,world,mapped)):0;
+}
 // One workgroup per relit probe, one lane per cache texel: this frame's window
 // (giUpdate.xy), then last frame's (giCounts.yz). The atlas written now held every
 // probe two frames ago, so only last frame's window is stale in it: those groups copy
@@ -59,13 +76,15 @@ void giRelight(uint3 group,uint lane,bool pages){
     }
     uint4 t=buffers[NonUniformResourceIndex(l.giBuffers.x)].Load<uint4>((id*64+lane)*16);
     float3 albedo=float3(t.x&255,(t.x>>8)&255,(t.x>>16)&255)/255.;float sky=float(t.x>>24)/255.;
-    float3 normal=octDecode(float2(t.y&4095,(t.y>>12)&4095)/4095.);
+    float3 normal=octDecode(float2(t.y&1023,(t.y>>10)&1023)/1023.);
     float3 emissive=float3(halfToFloat(t.z&65535),halfToFloat(t.z>>16),halfToFloat(t.w&65535));float distance=halfToFloat(t.w>>16);
     float3 dir=octDecode((float2(lane%8,lane/8)+0.5)/8),origin=giProbePosition(l,id)+meta.xyz,light=0;
     if(sky<1){
-        float3 hit=origin+dir*distance,sun=f.sunDirection.xyz,lifted=hit+normal*(8*shadowTexel(f,l,hit));
+        // The texel's relit hit is one of its sixteen bake sub-rays (ProbeSurfaces::texels).
+        uint ray=(t.y>>20)&15;float3 toward=octDecode((float2(lane%8,lane/8)+(float2(ray%4,ray/4)+0.5)/4)/8);
+        float3 hit=origin+toward*distance,sun=f.sunDirection.xyz,lifted=hit+normal*(8*shadowTexel(f,l,hit));
         // Glass and films between the hit and the sun tint it (look-translucent.slangh).
-        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*visibility(f,l,lifted,normal,pages?vsmVisibility(f,l,lifted,normal,true):-1)*translucentSun(l,lifted)+localIrradiance(f,l,hit,normal);
+        float3 irradiance=sunAt(f,l,hit)*saturate(dot(normal,sun))*giSunVisibility(f,l,lifted,normal,pages)*translucentSun(l,lifted)+localIrradiance(f,l,hit,normal);
         // Last frame's probes close the loop: multiple bounces converge over frames.
         irradiance+=giIrradiance(l,read,hit,normal);
         light=(1-sky)*(emissive+albedo/PI*irradiance);
