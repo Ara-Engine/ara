@@ -14,10 +14,13 @@ be isolated, and a `ara capture` switch where that helps diagnosis. Status: `[ ]
 Work stopped here for an engine overhaul. Everything below is open; the item sections
 hold the evidence and causes.
 
-- **Glossy floor reflections show the wrong content** (Polar's corridor floor): Ara
-  reflects overhead frames where the reference shows the ceiling skylights. Blur is fixed
-  (0dd2d6068); the cause is the fallback sources missing off-screen content (see
-  Reflections and the planar-reflection checkpoint).
+- **Glossy floor reflections show the wrong content** (Polar's corridor floor): the
+  reference's blue streaks are sky through narrow slots behind the pipe bundle. SSR's
+  thickness allowance (~20 cm at 10 m) calls those rays pipe hits, and eye-height captures
+  cannot see the slots either. Planar reflections for the dominant glossy floor are on
+  `t3/a12c4f62-planar-wip` (1737c32d2): compiled, never rendered, needs a recook,
+  capture, stability and timing (est. 0.8-1 ms at 1440p High). RT reflection misses seem
+  to return probe light instead of the sky (unverified).
 - **Screen probe GI ships off** (D32): it loses to probe-only GI on Polar, the sky room,
   the sky-lit box and open ground (diffuse excess there).
 - **Probe GI near-field:** floors within 0.6 m of a lit wall read 1.2-2.3x; a per-probe
