@@ -43,8 +43,8 @@ void lightsBuildMain(uint3 id:SV_DispatchThreadID){
     buffers[r.buffers.x].Store4(i*32+16,asuint(float4(intensity,lightsSourceRadius(light,shape),0,0)));
 }
 
-groupshared float3 prepLo[256],prepHi[256],prepN[256],prepOLo[256],prepOHi[256];
-groupshared float4 prepM[256];
+groupshared float3 prepLo[16],prepHi[16],prepN[16],prepOLo[16],prepOHi[16];
+groupshared float4 prepM[32];
 [shader("compute")]
 [numthreads(16,16,1)]
 void lightsPrepMain(uint3 g:SV_GroupID,uint3 t:SV_GroupThreadID,uint gi:SV_GroupIndex){
@@ -59,26 +59,30 @@ void lightsPrepMain(uint3 g:SV_GroupID,uint3 t:SV_GroupThreadID,uint gi:SV_Group
         lo=min(world,q);hi=max(world,q);olo=q;ohi=q;
         float2 m=gbufferMaterial(f,p);rough=m.x;albedo=max(max(gbufferAlbedo(f,p).r,gbufferAlbedo(f,p).g),gbufferAlbedo(f,p).b);
     }
-    prepLo[gi]=lo;prepHi[gi]=hi;prepOLo[gi]=olo;prepOHi[gi]=ohi;prepN[gi]=n;prepM[gi]=float4(covered?rough:1,albedo,covered?1:0,0);
+    // Wave reductions, then one lane per wave into groupshared memory (any wave size
+    // of at least 16 lanes).
+    uint wave=gi/WaveGetLaneCount(),waves=(256+WaveGetLaneCount()-1)/WaveGetLaneCount();
+    float3 wlo=WaveActiveMin(lo),whi=WaveActiveMax(hi),wolo=WaveActiveMin(olo),wohi=WaveActiveMax(ohi),wn=WaveActiveSum(n);
+    float wr=WaveActiveMin(covered?rough:1.),wa=WaveActiveMax(albedo),wc=WaveActiveSum(covered?1.:0.);
+    if(WaveIsFirstLane()){prepLo[wave]=wlo;prepHi[wave]=whi;prepOLo[wave]=wolo;prepOHi[wave]=wohi;prepN[wave]=wn;prepM[wave]=float4(wr,wa,wc,1);}
     GroupMemoryBarrierWithGroupSync();
-    [unroll]for(uint step=128;step>0;step>>=1){
-        if(gi<step){
-            prepLo[gi]=min(prepLo[gi],prepLo[gi+step]);prepHi[gi]=max(prepHi[gi],prepHi[gi+step]);
-            prepOLo[gi]=min(prepOLo[gi],prepOLo[gi+step]);prepOHi[gi]=max(prepOHi[gi],prepOHi[gi+step]);prepN[gi]+=prepN[gi+step];
-            float4 a=prepM[gi],b=prepM[gi+step];prepM[gi]=float4(min(a.x,b.x),max(a.y,b.y),a.z+b.z,0);
-        }
-        GroupMemoryBarrierWithGroupSync();
-    }
-    float3 axis=prepN[0];float al=length(axis);axis=al>1e-6?axis/al:float3(0,1,0);
-    GroupMemoryBarrierWithGroupSync();
-    // The cone: the widest angle any covered normal makes with the axis.
-    prepM[gi].w=covered?dot(n,axis):1;
-    GroupMemoryBarrierWithGroupSync();
-    [unroll]for(uint step2=128;step2>0;step2>>=1){
-        if(gi<step2)prepM[gi].w=min(prepM[gi].w,prepM[gi+step2].w);
-        GroupMemoryBarrierWithGroupSync();
-    }
     if(gi==0){
+        for(uint k=1;k<waves;k++){
+            prepLo[0]=min(prepLo[0],prepLo[k]);prepHi[0]=max(prepHi[0],prepHi[k]);prepOLo[0]=min(prepOLo[0],prepOLo[k]);
+            prepOHi[0]=max(prepOHi[0],prepOHi[k]);prepN[0]+=prepN[k];
+            float4 a=prepM[0],b=prepM[k];prepM[0]=float4(min(a.x,b.x),max(a.y,b.y),a.z+b.z,1);
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+    float3 axis=prepN[0];float al=length(axis);axis=al>1e-6?axis/al:float3(0,1,0);
+    // The cone: the widest angle any covered normal makes with the axis.
+    float wcos=WaveActiveMin(covered?dot(n,axis):1.);
+    GroupMemoryBarrierWithGroupSync();
+    if(WaveIsFirstLane())prepM[wave+16].x=wcos;
+    GroupMemoryBarrierWithGroupSync();
+    if(gi==0){
+        float cosMin=1;for(uint k=0;k<waves;k++)cosMin=min(cosMin,prepM[k+16].x);
+        prepM[0].w=cosMin;
         uint tile=g.x+g.y*r.counts.y;float4 m=prepM[0];
         // look-shading.slangh brdf's bound per unit illuminance (lightsBound).
         float rr=max(m.x,0.045),r6=rr*rr*rr*rr*rr*rr;
@@ -193,7 +197,8 @@ void lightsSelectMain(uint3 g:SV_GroupID,uint gi:SV_GroupIndex){
             if(keep){
                 entry=uint4(i,TRACE_NONE,TRACE_NONE,0);
                 float near=sqrt(near2);
-                if(shadowed){
+                if(shadowed&&(r.trace.w&LIGHTS_NOCLASSIFY)!=0)entry.x|=LIGHTS_PARTIAL|LIGHTS_ALL;
+                else if(shadowed){
                     uint spent=0;
                     uint3 c=lightsClassify(s,olo.xyz,ohi,sphere.xyz,lightsSampleRadius(light,shape,near),r.trace.z,spent);
                     entry.x|=c.x;entry.y=c.y;entry.z=c.z;
@@ -275,7 +280,7 @@ float3 lightsShadeOne(Frame f,Look l,LightsRecord r,TraceScene s,bool shadowed,S
     lit++;
     if(shadowed&&(entry.x&LIGHTS_PARTIAL)!=0){
         LightShape shape=lightShaped(light)?loadLightShape(f.lighting.w,index):(LightShape)0;
-        c*=lightsVisibility(s,origin,light,shape,entry,r.trace.y,r.trace.z,rays);
+        c*=lightsVisibility(s,origin,light,shape,entry,r.trace.y,r.trace.z,(r.trace.w&LIGHTS_NOMASK)==0,rays);
     }
     return c;
 }
@@ -293,6 +298,7 @@ void lightsShadeMain(uint3 g:SV_GroupID,uint3 t:SV_GroupThreadID){
     float3 origin=world+surface.normal*lightsBias(f,r,world);
     bool shadowed=r.trace.x!=TRACE_NONE&&(r.trace.w&LIGHTS_UNSHADOWED)==0;TraceScene s=traceScene(shadowed?r.trace.x:0);
     bool omit=(r.trace.w&LIGHTS_OMIT)!=0;float fraction=r.params.x;
+    lightsDebugOn=(r.trace.w&LIGHTS_DEBUG)!=0;
     float3 sum=0;float accumulated=0;uint rays=0,lit=0,omitted=0,considered=0;
     if(head.y==LIGHTS_FALLBACK){
         // Overflowed lists: every light of the coarse list (or scene), exact visibility.
@@ -313,7 +319,7 @@ void lightsShadeMain(uint3 g:SV_GroupID,uint3 t:SV_GroupThreadID){
         }
     }
     images[NonUniformResourceIndex(r.output.x)][p]=float4(sum,1);
-    if(stats)images[NonUniformResourceIndex(r.extra.y)][p]=float4(lit,rays,considered,omitted);
+    if(stats)images[NonUniformResourceIndex(r.extra.y)][p]=lightsDebugOn?float4(lightsDebug):float4(lit,rays,considered,omitted);
 }
 
 [shader("compute")]

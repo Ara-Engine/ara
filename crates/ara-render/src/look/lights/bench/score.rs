@@ -49,6 +49,10 @@ pub(crate) struct E3 {
     pub max_relative_excess: f64,
     /// Largest |test - control| / max(control, floor) (deficit included).
     pub max_relative_error: f64,
+    /// Where it was: frame, pixel x and y, test and control luminance.
+    pub worst_pixel: (u32, usize, usize, f64, f64),
+    /// Pixels whose luminance differs from the control by more than 1e-4 relative.
+    pub differing_pixels: u64,
     /// Largest per-frame sum |test - control| / sum control.
     pub radiance_l1_max: f64,
     #[serde(skip)]
@@ -90,7 +94,13 @@ impl E3 {
                 self.leak_pixels += 1;
             }
             self.max_relative_excess = self.max_relative_excess.max(excess);
-            self.max_relative_error = self.max_relative_error.max(excess.abs());
+            if excess.abs() > self.max_relative_error {
+                self.max_relative_error = excess.abs();
+                self.worst_pixel = (self.frames, i % width, i / width, lt[i], lc[i]);
+            }
+            if (lt[i] - lc[i]).abs() > 1e-4 * lc[i].max(floor) {
+                self.differing_pixels += 1;
+            }
             for k in 0..3 {
                 diff += f64::from((im.test[i * 4 + k] - im.control[i * 4 + k]).abs());
                 total += f64::from(im.control[i * 4 + k]);

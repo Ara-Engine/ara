@@ -53,6 +53,15 @@ pub(crate) struct Settings {
     pub bias_footprints: f32,
     /// Smallest ray-origin normal offset, metres.
     pub bias_min: f32,
+    /// Classify (tile, light) pairs against trace()'s instances (fully clear pairs trace
+    /// nothing); `false` traces every pair through the whole TLAS (the A/B of the lever).
+    pub classify: bool,
+    /// Resolve named instances' visibility with per-triangle sample masks; `false` traces
+    /// one segment per sample through them (the A/B of the masks).
+    pub masks: bool,
+    /// Bench diagnostics: per pixel, the first light whose sample masks disagree with
+    /// per-sample rays, over the stats image (`LIGHTS_DEBUG`).
+    pub debug_masks: bool,
 }
 
 impl Default for Settings {
@@ -62,6 +71,9 @@ impl Default for Settings {
             omission: None,
             bias_footprints: 1.5,
             bias_min: 1e-4,
+            classify: true,
+            masks: true,
+            debug_masks: false,
         }
     }
 }

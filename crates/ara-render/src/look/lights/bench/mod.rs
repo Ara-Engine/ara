@@ -121,6 +121,8 @@ struct Quality {
     lpp_screen: f64,
     /// Segments traced per covered pixel.
     rays_per_pixel: f64,
+    /// (Pixel, light) pairs per covered pixel whose visibility the sample masks resolved.
+    masked_pairs_per_pixel: f64,
     /// Largest per-pixel (control - test) / control luminance (omission's line).
     max_omitted_fraction: f64,
     /// Pixel-lights omitted per covered pixel.
@@ -165,6 +167,7 @@ pub(crate) fn quality(
     let (w, h) = (size[0] as usize, size[1] as usize);
     let mut e3 = score::E3::default();
     let (mut lit, mut rays, mut covered_px, mut omitted) = (0f64, 0f64, 0f64, 0f64);
+    let mut masked = 0f64;
     let mut max_omitted = 0f64;
     let mut stats = Vec::new();
     let dir = out_dir().join(&case.id);
@@ -215,7 +218,10 @@ pub(crate) fn quality(
         );
         for i in (0..w * h).filter(|&i| covered[i]) {
             lit += f64::from(counters[i * 4]);
-            rays += f64::from(counters[i * 4 + 1]);
+            // Rays plus 4096 per mask-resolved pair (lights-v2.slangh LIGHTS_MASKED).
+            let work = f64::from(counters[i * 4 + 1]);
+            masked += (work / 4096.).floor();
+            rays += work % 4096.;
             omitted += f64::from(counters[i * 4 + 3]);
             covered_px += 1.;
             let lum = |p: &[f32]| {
@@ -266,7 +272,13 @@ pub(crate) fn quality(
                 &dir.join(format!("rays{tag}-f{f:02}.png")),
                 size,
                 256.,
-                |i| counters[i * 4 + 1],
+                |i| counters[i * 4 + 1] % 4096.,
+            )?;
+            score::heat_png(
+                &dir.join(format!("masked{tag}-f{f:02}.png")),
+                size,
+                16.,
+                |i| (counters[i * 4 + 1] / 4096.).floor(),
             )?;
         }
     }
@@ -284,6 +296,7 @@ pub(crate) fn quality(
         lpp_covered: lit / covered_px.max(1.),
         lpp_screen: lit / (f64::from(frames) * (w * h) as f64),
         rays_per_pixel: rays / covered_px.max(1.),
+        masked_pairs_per_pixel: masked / covered_px.max(1.),
         max_omitted_fraction: max_omitted,
         omitted_per_pixel: omitted / covered_px.max(1.),
         stats,
@@ -298,6 +311,7 @@ pub(crate) fn timing(
     warm: u32,
     frames: u32,
     settings: Settings,
+    shadowed: bool,
 ) -> Result<serde_json::Value> {
     let layout = Layout::new(case);
     let mut bench = Bench::new(layout, size, entries(case, size))?;
@@ -310,7 +324,7 @@ pub(crate) fn timing(
             f % 300
         };
         bench.pose(frame)?;
-        let t = bench.run_v2(false, Blockers::On, settings)?;
+        let t = bench.run_timed(settings, shadowed)?;
         anyhow::ensure!(
             t.stats.clean(),
             "{} frame {f}: tiles fell back: {:?}",
@@ -342,6 +356,7 @@ pub(crate) fn timing(
     let [build, prep, select, shade, total, primary] = series.map(|s| Spread::of(&s));
     Ok(serde_json::json!({
         "case": case.id, "size": size, "samples": settings.samples, "omission": settings.omission,
+        "shadowed": shadowed, "classify": settings.classify,
         "frames": frames, "warm": warm,
         "build_ms": build, "prep_ms": prep, "select_ms": select, "shade_ms": shade, "total_ms": total,
         "bench_primary_ms": primary, "select_counters": first,
@@ -385,13 +400,44 @@ fn g1_timing() -> Result<()> {
     let size = size();
     let frames = env_or("ARA_LIGHTS_BENCH_FRAMES", 300);
     let mut all = Vec::new();
+    // Variants: `full` (V2 as built), `unshadowed` (shading alone), `noclassify`
+    // (every pair traced through the whole TLAS), `omit` (overload, dense cases).
+    let variants: Vec<String> = std::env::var("ARA_LIGHTS_BENCH_VARIANTS")
+        .unwrap_or_else(|_| "full,unshadowed,omit".into())
+        .split(',')
+        .map(|v| v.trim().to_owned())
+        .collect();
+    let has = |v: &str| variants.iter().any(|x| x == v);
     for case in selected() {
-        let mut s = settings();
-        all.push(timing(&case, size, 20, frames, s)?);
-        eprintln!("{}", all.last().map(|v| v.to_string()).unwrap_or_default());
-        if case.target_lpp > 10. {
-            s.omission = Some(0.01);
-            all.push(timing(&case, size, 20, frames, s)?);
+        let s = settings();
+        let dense = case.target_lpp > 10.;
+        let mut runs = Vec::new();
+        if has("full") {
+            runs.push((s, true));
+        }
+        if has("unshadowed") {
+            runs.push((s, false));
+        }
+        if has("noclassify") {
+            runs.push((
+                Settings {
+                    classify: false,
+                    ..s
+                },
+                true,
+            ));
+        }
+        if has("omit") && dense {
+            runs.push((
+                Settings {
+                    omission: Some(0.01),
+                    ..s
+                },
+                true,
+            ));
+        }
+        for (s, shadowed) in runs {
+            all.push(timing(&case, size, 20, frames, s, shadowed)?);
             eprintln!("{}", all.last().map(|v| v.to_string()).unwrap_or_default());
         }
     }

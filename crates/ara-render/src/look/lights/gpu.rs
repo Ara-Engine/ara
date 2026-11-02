@@ -20,6 +20,9 @@ pub(crate) const COARSE: u32 = 4;
 pub(crate) const FLAG_OMIT: u32 = 1;
 pub(crate) const FLAG_STATS: u32 = 2;
 pub(crate) const FLAG_UNSHADOWED: u32 = 4;
+pub(crate) const FLAG_NOCLASSIFY: u32 = 8;
+pub(crate) const FLAG_NOMASK: u32 = 16;
+pub(crate) const FLAG_DEBUG: u32 = 32;
 /// `TRACE_NONE`: no trace scene (every pair unshadowed).
 pub(crate) const NO_TRACE: u32 = u32::MAX;
 /// Stats words the passes count into (`LIGHTS_STAT_*`).
@@ -231,6 +234,15 @@ impl LightsGpu {
         }
         if inputs.stats.is_some() {
             flags |= FLAG_STATS;
+        }
+        if !s.classify {
+            flags |= FLAG_NOCLASSIFY;
+        }
+        if !s.masks {
+            flags |= FLAG_NOMASK;
+        }
+        if s.debug_masks {
+            flags |= FLAG_DEBUG;
         }
         if inputs.trace.is_none() {
             flags |= FLAG_UNSHADOWED;

@@ -150,6 +150,8 @@ pub(crate) struct Bench {
     pub exact: Target,
     /// Per-pixel counters (lit lights, rays, listed, omitted).
     pub counters: Target,
+    /// The production-format radiance output (RGBA16F) timing runs write.
+    pub half: Target,
     readback: Buffer,
     pub v2_gpu: LightsGpu,
     /// Frame-record camera position and view-projection.
@@ -241,6 +243,7 @@ impl Bench {
         let v2 = Target::new(&mut gpu, size, f32x4)?;
         let exact = Target::new(&mut gpu, size, f32x4)?;
         let counters = Target::new(&mut gpu, size, f32x4)?;
+        let half = Target::new(&mut gpu, size, vk::Format::R16G16B16A16_SFLOAT)?;
         let readback = gpu.create_readback_buffer(image_bytes(size))?;
         let v2_gpu = LightsGpu::new(
             &mut gpu,
@@ -274,6 +277,7 @@ impl Bench {
             v2,
             exact,
             counters,
+            half,
             readback,
             v2_gpu,
             camera: camera.position,
@@ -417,6 +421,26 @@ impl Bench {
         })
     }
 
+    /// A timing frame: the G-buffer, then V2 into the production-format RGBA16F
+    /// output, with visibility (`shadowed`) or without (shading cost alone).
+    pub(crate) fn run_timed(&mut self, settings: Settings, shadowed: bool) -> Result<Timing> {
+        let mut inputs = self.inputs(self.half.storage, false, Blockers::On, settings);
+        if !shadowed {
+            inputs.trace = None;
+        }
+        self.v2_gpu.prepare(&mut self.gpu, &inputs)?;
+        let mut c = self.gpu.begin(Queue::Graphics);
+        self.record_primary(&mut c);
+        c.barriers([self.half.to(Access::Storage)]);
+        self.v2_gpu.record(&mut c, self.frame_index, self.count);
+        self.v2_gpu.record_stats_copy(&mut c);
+        let passes = self.submit(c)?;
+        Ok(Timing {
+            passes,
+            stats: self.v2_gpu.stats(&self.gpu)?,
+        })
+    }
+
     /// Draws the posed frame's G-buffer and runs the exact control into `exact`.
     pub(crate) fn run_exact(
         &mut self,
@@ -457,6 +481,8 @@ impl Bench {
             Readback::Exact => self.exact,
             Readback::Counters => self.counters,
             Readback::Material => self.gbuffer.material,
+            Readback::Normal => self.gbuffer.normal,
+            Readback::Depth => self.gbuffer.depth,
         };
         let mut c = self.gpu.begin(Queue::Graphics);
         let back = target.state;
@@ -476,7 +502,11 @@ impl Bench {
         ]);
         self.submit(c)?;
         let bytes = self.gpu.read(self.readback)?;
-        Ok(if which == Readback::Material {
+        let pixels = self.size[0] as usize * self.size[1] as usize;
+        if which == Readback::Depth {
+            return Ok(bytemuck::cast_slice::<u8, f32>(&bytes[..pixels * 4]).to_vec());
+        }
+        Ok(if matches!(which, Readback::Material | Readback::Normal) {
             let pixels = self.size[0] as usize * self.size[1] as usize * 4;
             let halves: &[u16] = bytemuck::cast_slice(&bytes[..pixels * 2]);
             halves.iter().map(|&h| half_to_f32(h)).collect()
@@ -500,6 +530,7 @@ impl Bench {
             v2,
             exact,
             counters,
+            half,
             ..
         } = self;
         v2_gpu.destroy(&mut gpu)?;
@@ -515,6 +546,7 @@ impl Bench {
             v2,
             exact,
             counters,
+            half,
         ] {
             gpu.retire(Resource::Image(t.image))?;
         }
@@ -532,6 +564,10 @@ pub(crate) enum Readback {
     Counters,
     /// The G-buffer material image (roughness, metal, occluder, material slot).
     Material,
+    /// The G-buffer normal image (octahedral xy, RGBA16F widened).
+    Normal,
+    /// The G-buffer depth (reversed-Z, one float per pixel).
+    Depth,
 }
 
 /// The trace instance of a placed cube.
