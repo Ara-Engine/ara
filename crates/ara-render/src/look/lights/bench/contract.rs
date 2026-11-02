@@ -17,7 +17,7 @@
 //!   omitted energy, and region FLIP (V2 vs the control) on the case's reference frames.
 use super::harness::{Bench, Blockers, Readback};
 use super::scene::{self, Case, Layout};
-use super::{Settings, Spread, agreed, entries, out_dir, score};
+use super::{Settings, Spread, entries, out_dir, score};
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
@@ -251,10 +251,11 @@ fn region_flip(control: &[f32], test: &[f32], size: [u32; 2], ev100: f32) -> Res
     Ok(worst)
 }
 
-/// V2 and the exact control in one submission (`run_pair`), kept only when that
-/// submission's control equals the reproduced control (`agreed`); otherwise the pair is
-/// re-run (`discarded` counts them, at most four tries). Returns the timing, V2's image,
-/// its counters (with `stats`) and the control.
+/// V2 and the exact control in one submission (`run_pair`), kept only when the next
+/// submission reproduces both images bit for bit; otherwise the pair is re-run
+/// (`discarded` counts discarded submissions, at most six tries). Rare whole-submission
+/// deviations (root cause not isolated) reach either pass. Returns the timing, V2's
+/// image, its counters (with `stats`) and the control.
 #[allow(clippy::type_complexity)]
 fn consistent(
     bench: &mut Bench,
@@ -264,7 +265,9 @@ fn consistent(
     retries: &mut u32,
     discarded: &mut u32,
 ) -> Result<(super::Timing, Vec<f32>, Vec<f32>, Vec<f32>)> {
-    for _ in 0..4 {
+    let same = |a: &[f32], b: &[f32]| a.iter().zip(b).all(|(x, y)| x.to_bits() == y.to_bits());
+    let mut previous: Option<(Vec<f32>, Vec<f32>)> = None;
+    for _ in 0..6 {
         let t = bench.run_pair(stats, blockers, s)?;
         let test = bench.read(Readback::V2)?;
         let counters = if stats {
@@ -272,18 +275,17 @@ fn consistent(
         } else {
             Vec::new()
         };
-        let first = bench.read(Readback::Exact)?;
-        let control = agreed(bench, blockers, s, retries)?;
-        if first
-            .iter()
-            .zip(&control)
-            .all(|(a, b)| a.to_bits() == b.to_bits())
-        {
-            return Ok((t, test, counters, control));
+        let control = bench.read(Readback::Exact)?;
+        if let Some((v, c)) = &previous {
+            if same(v, &test) && same(c, &control) {
+                return Ok((t, test, counters, control));
+            }
+            *discarded += 1;
+            *retries += u32::from(!same(c, &control));
         }
-        *discarded += 1;
+        previous = Some((test, control));
     }
-    anyhow::bail!("no consistent V2 + control submission in four tries")
+    anyhow::bail!("no reproducible V2 + control submission in six tries")
 }
 
 /// The capped (quality) receipt of case `id`.
@@ -369,7 +371,7 @@ pub(crate) fn capped(id: &str, size: [u32; 2]) -> Result<Value> {
         };
         let ratio = |t: f64, c: f64, n: u64| (n > 0).then(|| if c > 0. { t / c } else { 1. });
         let cov = n_covered.max(1) as f64;
-        rows.push(json!({"frame": f, "stages": {}, "gpu_frame_ms": null, "cpu_critical_path_ms": null,
+        rows.push(json!({"frame": f, "stages": {"local_pages": local_pages()}, "gpu_frame_ms": null, "cpu_critical_path_ms": null,
             "submission_stall_ms": null, "host_update_render_ms": null,
             "lpp": lit / cov, "receiver_coverage": n_covered as f64 / (w * h) as f64,
             "quality": {"region_flip": {}, "region_flip_excess": flip, "max_solution_error_white": null,
@@ -393,7 +395,7 @@ pub(crate) fn capped(id: &str, size: [u32; 2]) -> Result<Value> {
         "B1 bench capped receipt: V2 and the exact finite-range control (every light, every pixel, every source sample, same shading and sample pattern) in one submission per frame, with and without blockers; E3 per frame against that control (leak > 3%, 16x16 tile pops > 2%, highlight and shadow retention; null where no qualifying pixels).".to_owned(),
         "The control shares V2's sample-mask segment test; the bench separately compares both with per-sample trace() rays and an f64 brute force (see B1-RESULT.md).".to_owned(),
         "region_flip_excess: worst 64x64 region FLIP of V2 against the exact control, on the case's reference frames only (other frames null); path-traced reference FLIP is reported separately for frame 0 of static cases.".to_owned(),
-        format!("The exact control pass is re-run until two runs agree bit for bit; {retries} extra control runs were needed. A V2 + control submission whose control differs from the reproduced control is discarded and re-run ({discarded} discarded): rare whole-submission deviations (root cause not isolated) otherwise reach V2 too."),
+        format!("Each frame keeps a V2 + control submission only when the next submission reproduces both bit for bit ({discarded} submissions discarded, {retries} of them with a differing control): rare whole-submission deviations (root cause not isolated) otherwise reach either pass."),
     ];
     let value = run_result(&t1, "capped", &device, size, false, true, notes, rows);
     write_run(id, "capped", &value)?;
