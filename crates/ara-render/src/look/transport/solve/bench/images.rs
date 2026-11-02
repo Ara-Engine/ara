@@ -16,7 +16,9 @@ fn request(f: &Fixture) -> CaptureRequest {
         mode: ViewMode::Lit,
         deterministic: true,
         exposure: f.exposure,
-        settle_frames: 1,
+        // Two identical deterministic draws initialize the post-exposure pair
+        // required by lab_radiance. Transport advances only once per scored frame.
+        settle_frames: 2,
         tick: 0,
         seed: 0,
         marks: None,
