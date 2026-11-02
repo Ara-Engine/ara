@@ -111,38 +111,75 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
             let guard_path = options
                 .output
                 .join(format!("timing-guard-{}.json", timing::unix_ms()?));
+            let previous_error = options.output.join("timing-error.json");
+            if previous_error.exists() {
+                fs::rename(
+                    previous_error,
+                    guard_path.with_extension("previous-error.json"),
+                )?;
+            }
             let start = Instant::now();
             let mut attempted = Vec::new();
             window::telemetry(&options.output.join("nvidia-before.log"))?;
-            let operation =
-                crate::gpu::locked_with(30, false, crate::gpu_guard::Policy::default(), || {
-                    for case in &selected {
-                        if start.elapsed() > Duration::from_secs(2400) {
-                            break;
+            fs::copy(
+                options.output.join("nvidia-before.log"),
+                guard_path.with_extension("nvidia-before.log"),
+            )?;
+            let operation = loop {
+                let operation = crate::gpu::locked_with(
+                    120,
+                    false,
+                    crate::gpu_guard::Policy::default(),
+                    || {
+                        for case in &selected {
+                            if start.elapsed() > Duration::from_secs(2400) {
+                                break;
+                            }
+                            let began = timing::unix_ms()?;
+                            execute(
+                                root,
+                                &options,
+                                runner,
+                                &cache,
+                                case,
+                                "uncapped",
+                                Some(Duration::from_secs(2500).saturating_sub(start.elapsed())),
+                            )?;
+                            let interval = crate::gpu_guard::Interval {
+                                start_unix_ms: began,
+                                end_unix_ms: timing::unix_ms()?,
+                            };
+                            write_json(
+                                &cache.join(&case.id).join("uncapped/timing-window.json"),
+                                &interval,
+                            )?;
+                            attempted.push((case.id.as_str(), interval));
                         }
-                        let began = timing::unix_ms()?;
-                        execute(
-                            root,
-                            &options,
-                            runner,
-                            &cache,
-                            case,
-                            "uncapped",
-                            Some(Duration::from_secs(2500).saturating_sub(start.elapsed())),
-                        )?;
-                        let interval = crate::gpu_guard::Interval {
-                            start_unix_ms: began,
-                            end_unix_ms: timing::unix_ms()?,
-                        };
-                        write_json(
-                            &cache.join(&case.id).join("uncapped/timing-window.json"),
-                            &interval,
-                        )?;
-                        attempted.push((case.id.as_str(), interval));
-                    }
-                    Ok(())
-                });
+                        Ok(())
+                    },
+                );
+                if !timing::retry_admission(&operation, attempted.len(), start.elapsed()) {
+                    break operation;
+                }
+                write_json(
+                    &options
+                        .output
+                        .join(format!("timing-admission-{}.json", timing::unix_ms()?)),
+                    &crate::gpu::last_reading(),
+                )?;
+                eprintln!(
+                    "timing admission is busy; retrying the unchanged guard after five seconds"
+                );
+                std::thread::sleep(Duration::from_secs(5));
+                if !timing::retry_admission(&operation, attempted.len(), start.elapsed()) {
+                    break operation;
+                }
+            };
             window::telemetry(&options.output.join("nvidia-after.log"))?;
+            fs::copy(
+                options.output.join("nvidia-after.log"),
+                guard_path.with_extension("nvidia-after.log"),
+            )?;
             drop(_window);
             let reading = crate::gpu::last_reading();
             write_json(&options.output.join("timing-guard.json"), &reading)?;

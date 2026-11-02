@@ -42,6 +42,12 @@ stays invalid without discarding unrelated clean cases. Missing CPU/GPU coverage
 sampler errors, gaps over the case or a non-default guard policy cannot certify it.
 The complete batch guard remains archived, including every rejected interval.
 Retries replay the whole selected case; no individual frame is trimmed from a run.
+Before any case starts, load-based refusals may begin another admission attempt
+during the first three minutes so in-flight builders can finish. Each refusal is
+archived. The GPU queue
+wait is bounded to two minutes, all waiting counts against the quiet lease, and
+there is no retry after case work begins or any guard-threshold relaxation.
+The per-window `nvidia-smi` logs share the immutable guard report's filename prefix.
 
 `--reference-samples 256` is a finite undenoised budget, not a convergence claim.
 Every still has a reference; motion cases sample pre-event, F, F+1 through F+4, and

@@ -1,7 +1,7 @@
 //! Classify whole worker intervals using the existing D26 guard's load policy.
 use crate::gpu_guard::{Interval, Policy, Report};
 use anyhow::{Context, Result};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Measurement metadata only; the deterministic replay never reads this clock.
 pub fn unix_ms() -> Result<u64> {
@@ -10,6 +10,14 @@ pub fn unix_ms() -> Result<u64> {
         .as_millis()
         .try_into()
         .context("measurement wall clock exceeds u64 milliseconds")
+}
+
+/// Let already-running builders finish before measurement. Never retry after any
+/// case started, after a non-load failure, or beyond the bounded admission period.
+pub fn retry_admission(result: &Result<()>, attempted: usize, elapsed: Duration) -> bool {
+    attempted == 0
+        && elapsed < Duration::from_secs(180)
+        && result.as_ref().is_err_and(crate::gpu_guard::is_invalid)
 }
 
 /// A clean case is independent of another case's contamination. Coverage includes
@@ -51,6 +59,20 @@ pub fn quiet(report: &Report, interval: Interval) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn admission_retries_only_load_refusals_before_work_and_within_its_budget() {
+        let busy = Err(crate::gpu_guard::invalid_error("background load".into()));
+        assert!(retry_admission(&busy, 0, Duration::from_secs(10)));
+        assert!(!retry_admission(&busy, 1, Duration::from_secs(10)));
+        assert!(!retry_admission(&busy, 0, Duration::from_secs(180)));
+        assert!(!retry_admission(&Ok(()), 0, Duration::ZERO));
+        assert!(!retry_admission(
+            &Err(anyhow::anyhow!("worker or queue failure")),
+            0,
+            Duration::ZERO
+        ));
+    }
 
     fn interval(start: u64, end: u64) -> Interval {
         Interval {
