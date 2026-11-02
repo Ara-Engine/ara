@@ -5,6 +5,7 @@ mod gltf_scene;
 mod images;
 mod memory;
 mod quiet;
+mod resume;
 use ara_render as fixture_api;
 
 use anyhow::{Context, Result, ensure};
@@ -18,7 +19,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct FrameScore {
     frame: u64,
     uncapped: ara_render::TransportReport,
@@ -33,7 +34,8 @@ struct FrameScore {
     capture_repeat_region_flip: Option<f64>,
     measured_transport_heap_live: isize,
     measured_transport_heap_peak: usize,
-    frame_wall_ms: f64,
+    #[serde(default)]
+    frame_wall_ms: Option<f64>,
 }
 
 fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<()> {
@@ -102,11 +104,16 @@ fn main() -> Result<()> {
     let frames: Option<u64> = option("--frames").map(|s| s.parse()).transpose()?;
     let quiet_lock = option("--quiet-lock").map(Path::new);
     let selected = option("--case").map(String::as_str);
+    let resume_source = option("--resume-from").map(Path::new);
     let images = args.iter().any(|a| a == "--images");
     let native_images = args.iter().any(|a| a == "--native-images");
     ensure!(
         !native_images || images,
         "--native-images requires --images"
+    );
+    ensure!(
+        resume_source.is_none() || (selected.is_some() && images),
+        "--resume-from requires one --case and --images"
     );
     let global = args.iter().any(|a| a == "--global");
     let cases = fixtures::cases();
@@ -118,6 +125,11 @@ fn main() -> Result<()> {
         quiet::wait(quiet_lock);
         let dir = out.join(case.name);
         std::fs::create_dir_all(&dir)?;
+        let retained = resume_source
+            .map(|source| {
+                resume::Prefix::load(source, &dir, case.name, frames.unwrap_or(case.frames))
+            })
+            .transpose()?;
         println!(
             "G3 START {} frames={} directions={}",
             case.name,
@@ -223,7 +235,12 @@ fn main() -> Result<()> {
                     mean += f64::from(e);
                 }
             }
-            let flip = if let Some(capture) = &mut capture {
+            let verify_image = retained
+                .as_ref()
+                .is_none_or(|prefix| prefix.capture(frame, case.event));
+            let flip = if let Some(capture) = &mut capture
+                && verify_image
+            {
                 quiet::wait(quiet_lock);
                 Some(capture.frame(
                     &fixture,
@@ -236,7 +253,7 @@ fn main() -> Result<()> {
             } else {
                 None
             };
-            scores.push(FrameScore {
+            let scored = FrameScore {
                 frame,
                 uncapped: demanded,
                 capped: protected,
@@ -250,8 +267,18 @@ fn main() -> Result<()> {
                 capture_repeat_region_flip: flip.as_ref().map(|s| s.repeat_region_flip),
                 measured_transport_heap_live: measured_live,
                 measured_transport_heap_peak: frame_peak,
-                frame_wall_ms: frame_started.elapsed().as_secs_f64() * 1000.,
-            });
+                frame_wall_ms: Some(frame_started.elapsed().as_secs_f64() * 1000.),
+            };
+            if let Some(prefix) = &retained {
+                prefix.verify(&scored, verify_image)?;
+            }
+            scores.push(
+                retained
+                    .as_ref()
+                    .and_then(|prefix| prefix.get(frame))
+                    .cloned()
+                    .unwrap_or(scored),
+            );
             if flip.as_ref().is_some_and(|s| !s.repeat_valid) {
                 println!(
                     "G3 INVALID capture repeat {} F{frame}; image attribution unsigned",
@@ -272,7 +299,7 @@ fn main() -> Result<()> {
                     last.capped.event_cpu_ms,
                     peak,
                     last.capped.oldest_debt,
-                    last.frame_wall_ms
+                    last.frame_wall_ms.unwrap_or_default()
                 );
                 std::io::stdout().flush()?;
                 write_json(&dir.join("frames.json"), &scores)?;
@@ -298,6 +325,7 @@ fn main() -> Result<()> {
         let value = serde_json::json!({"fixture":"B3 deterministic fallback; T1 catalogue read at f0e0e66fc70e287286fceed78dc76509b4de8821; T1 worker not merged",
             "case":case.name,"declared_frames":case.frames,"completed_frames":scores.len()+1,"scored_frames":scores.len(),"initial_publication_frame":0,"first_scored_frame":1,"triangles_per_body":case.triangles,
             "capture_backend":if native_images {"native_instances"} else {"expanded_raster"},
+            "resume":retained.as_ref().map(|prefix| prefix.receipt()),
             "bodies":case.bodies,"lights":case.lights,"cold":cold,"uncapped_cpu_average_ms":average,"uncapped_cpu_p99_ms":p99,
             "uncapped_cpu_max_ms":maximum,"capped_max_error_white":max_error,
             "peak_host_transport_bytes":scores.iter().map(|s|s.capped.resident_bytes).chain([cold.resident_bytes]).max(),

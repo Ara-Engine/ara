@@ -83,7 +83,7 @@ impl Default for TransportOptions {
 }
 
 /// Measured work and persistent debt. CPU ms are never labelled GPU timestamps.
-#[derive(Clone, Debug, Default, serde::Serialize)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct TransportReport {
     /// Complete host discovery/forcing/repair/solve wall time for this update.
     pub event_cpu_ms: f64,
