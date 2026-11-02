@@ -727,10 +727,30 @@ impl Renderer {
         else {
             return Ok(Vec::new());
         };
+        // The sun page service bounds rigid movers' displacement (today's map needs none).
+        let displacement: Vec<Option<f32>> = if vsm.service.is_some() {
+            let changes = &native.changes;
+            changes
+                .caster_rows
+                .iter()
+                .zip(&changes.caster_moved_from)
+                .map(|(&row, from)| {
+                    from.map(|old| {
+                        crate::look::vsm::sun::rigid_displacement(
+                            old,
+                            native.rows[row].world,
+                            native.bounds[row],
+                        )
+                    })
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
         let casters = crate::look::vsm::Casters {
             all: native.changes.caster_all,
             moved: &native.changes.caster_bounds,
-            displacement: &native.changes.caster_displacement,
+            displacement: &displacement,
             instances: &native.bounds,
         };
         // The sun page service learns per-page cost from the completed page passes.

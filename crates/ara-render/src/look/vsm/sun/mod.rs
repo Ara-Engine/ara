@@ -165,6 +165,8 @@ struct Record {
     receivers: Option<f32>,
     /// Frames of receiver feedback received (the box bound applies until 16).
     feedback: u32,
+    /// The last frame that fed it receiver feedback.
+    fed: u64,
     /// How far (ground metres) moved casters' shadows may have shifted in the page since
     /// its draw: the sum over frames of the largest shift of that frame (infinite where
     /// a change has no displacement bound).
@@ -294,6 +296,24 @@ struct Inputs<'a> {
     settle: bool,
 }
 
+/// The largest distance any point of world box `bounds` (at transform `new`) moved since
+/// transform `old`: `(new - old) new^-1` is affine, so its largest length over the box is
+/// at a corner. The dynamic layer's bound for a rigidly moved caster (the renderer keeps
+/// each moved row's pre-move transform; only service mode evaluates this).
+pub(crate) fn rigid_displacement(old: Mat4, new: Mat4, [lo, hi]: [Vec3; 2]) -> f32 {
+    let delta = (new - old) * new.inverse();
+    (0..8u32)
+        .map(|c| {
+            let p = Vec3::new(
+                if c & 1 == 0 { lo.x } else { hi.x },
+                if c & 2 == 0 { lo.y } else { hi.y },
+                if c & 4 == 0 { lo.z } else { hi.z },
+            );
+            (delta * p.extend(1.)).truncate().length()
+        })
+        .fold(0., f32::max)
+}
+
 /// Grid "rotation" handed to the native caster grid: world to (ground x, ground z,
 /// height), so its light-space rectangles are this frame's sheared rectangles.
 fn grid_matrix(k: Vec2, y_ref: f32) -> Mat4 {
@@ -311,6 +331,18 @@ fn page_rect(level: usize, xy: IVec2, texels: f32) -> (Vec2, Vec2) {
     let pad = texels * step / PAGE_SIZE as f32;
     let lo = xy.as_vec2() * step;
     (lo - pad, lo + Vec2::splat(step + pad))
+}
+
+/// Texel radius of a ring's window (shadow-pages.slang `SP_RING`).
+const RING_TEXELS: f32 = 3.5;
+
+/// Lowers `r`'s receiver height to `low`, counting at most one feedback frame per frame.
+fn feed(r: &mut Record, low: f32, frame: u64) {
+    r.receivers = Some(r.receivers.map_or(low, |v| v.min(low)));
+    if r.fed != frame {
+        r.fed = frame;
+        r.feedback += 1;
+    }
 }
 
 /// Inverse of the mark shader's receiver encoding: the height of a word's low half.
@@ -467,6 +499,7 @@ impl VirtualShadowMap {
             let (bits, receivers) = words.split_at(super::REQUEST_WORDS);
             let tag = s.tags[i];
             let mut keys = Vec::new();
+            let mut reported = Vec::new();
             super::requested_pages(bits, requested.camera, |level, xy| {
                 let key = key(SUN_PAGES, level, xy);
                 keys.push(key);
@@ -479,6 +512,7 @@ impl VirtualShadowMap {
                     drawn: None,
                     receivers: None,
                     feedback: 0,
+                    fed: 0,
                     moved: 0.,
                     shift: (0., 0),
                     demanded: frame,
@@ -486,10 +520,33 @@ impl VirtualShadowMap {
                 });
                 r.demanded = frame;
                 if let Some(low) = low {
-                    r.receivers = Some(r.receivers.map_or(low, |v| v.min(low)));
-                    r.feedback += 1;
+                    feed(r, low, frame);
+                    reported.push((level, xy, low));
                 }
             });
+            // Receiver words come from each pixel's own level; the ring pages two and four
+            // levels coarser read the same pixels (the ground grid nests 4x and 16x), so they
+            // take those heights over the dilated square their rings reach.
+            for &(level, xy, low) in &reported {
+                let (lo, hi) = page_rect(level, xy, 0.);
+                for coarse in [level + 2, level + 4] {
+                    if coarse >= super::LEVELS {
+                        continue;
+                    }
+                    let step = page_step(coarse);
+                    let pad = (RING_TEXELS + 1.) * step / PAGE_SIZE as f32;
+                    let a = ((lo - pad) / step).floor().as_ivec2();
+                    let b = ((hi + pad) / step).floor().as_ivec2();
+                    for y in a.y..=b.y {
+                        for x in a.x..=b.x {
+                            let k = key(SUN_PAGES, coarse, IVec2::new(x, y));
+                            if let Some(r) = s.records.get_mut(&k) {
+                                feed(r, low, frame);
+                            }
+                        }
+                    }
+                }
+            }
             for page in self.cache.request(keys)? {
                 self.assign_sun(gpu, s, page)?;
                 if let Some(r) = s.records.get_mut(&page.key) {
@@ -810,5 +867,42 @@ impl VirtualShadowMap {
             point: None,
         });
         Ok(Some(i))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rigid_displacement_bounds_every_point_and_is_exact_for_translation() {
+        let old = Mat4::from_translation(Vec3::new(1., 0., 2.)) * Mat4::from_rotation_y(0.3);
+        let new = Mat4::from_translation(Vec3::new(1.4, 0.2, 1.9))
+            * Mat4::from_rotation_y(0.5)
+            * Mat4::from_scale(Vec3::splat(1.0));
+        // The instance's world box at `new`: a unit cube's corners.
+        let corners = (0..8u32).map(|c| {
+            Vec3::new(
+                (c & 1) as f32 - 0.5,
+                ((c >> 1) & 1) as f32 - 0.5,
+                ((c >> 2) & 1) as f32 - 0.5,
+            )
+        });
+        let world: Vec<Vec3> = corners.clone().map(|q| new.transform_point3(q)).collect();
+        let bounds = world.iter().fold(
+            [Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)],
+            |[lo, hi], p| [lo.min(*p), hi.max(*p)],
+        );
+        let d = rigid_displacement(old, new, bounds);
+        for q in corners {
+            for s in [0.25_f32, 0.5, 1.] {
+                let q = q * s;
+                let moved = (new.transform_point3(q) - old.transform_point3(q)).length();
+                assert!(moved <= d + 1e-5, "{moved} > {d}");
+            }
+        }
+        let shift = Vec3::new(0.3, -0.1, 0.2);
+        let exact = rigid_displacement(new, Mat4::from_translation(shift) * new, bounds);
+        assert!((exact - shift.length()).abs() < 1e-5);
     }
 }

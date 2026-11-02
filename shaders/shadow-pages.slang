@@ -3,9 +3,10 @@
 // of 16 per frame, as look-vsm.slang) marks the pages its lookup reads: its level, and the
 // rings two and four levels coarser (two is also the fallback while its level's page
 // renders; four only where the page's blockers reach that far), each with the neighbours
-// its window reaches near a page edge, and lowers their lowest-receiver words to its
-// height (the invalidation bound's receiver term; look/vsm/sun unions them since a page
-// was first seen, so every pixel counts within 16 frames). Waves gather their distinct
+// its window reaches near a page edge, and lowers its own level's lowest-receiver words
+// to its height (the invalidation bound's receiver term; look/vsm/sun propagates them to
+// the containing coarser pages and unions them since a page was first seen, so every
+// pixel counts within 16 frames). Waves gather their distinct
 // pages and write each once. sunPagesProjectMain: each lit-facing pixel's source-shaped
 // sun visibility from the
 // pages (shadow-pages.slangh spRing: per-texel back-projection onto 256 fixed disc
@@ -40,14 +41,15 @@ void spMarkAll(Look l,SpMarks m,uint word){
         uint4 a=min(m.levels[0],m.levels[1]),b=min(m.levels[2],m.levels[3]),c=min(a,b);
         uint index=WaveActiveMin(min(min(c.x,c.y),min(c.z,c.w)));
         if(index==NO_MARK)break;
-        bool mine=any(m.levels[0]==index)||any(m.levels[1]==index)||any(m.levels[2]==index)||any(m.levels[3]==index);
-        uint best=WaveActiveMax(mine?word:0);
+        // Receiver words only for the pixels' own level (look/vsm/sun propagates them to
+        // the containing coarser pages): fewer atomics on the host-visible request buffer.
+        uint best=WaveActiveMax(any(m.levels[0]==index)?word:0);
         if(WaveIsFirstLane()){
             uint at=(index>>5)*4,bit=1u<<(index&31);
             if((buffers[NonUniformResourceIndex(base)].Load(at)&bit)==0)
                 buffers[NonUniformResourceIndex(base)].InterlockedOr(at,bit);
             uint r=(SP_BIT_WORDS+index)*4;
-            if(buffers[NonUniformResourceIndex(base)].Load(r)<best)
+            if(best!=0&&buffers[NonUniformResourceIndex(base)].Load(r)<best)
                 buffers[NonUniformResourceIndex(base)].InterlockedMax(r,best);
         }
         [unroll]for(uint i=0;i<4;i++)m.levels[i]=select(m.levels[i]==index,NO_MARK,m.levels[i]);
