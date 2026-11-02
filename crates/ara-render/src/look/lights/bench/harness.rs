@@ -161,6 +161,8 @@ pub(crate) struct Bench {
     pub vp: Mat4,
     /// How many lights the frame holds.
     count: u32,
+    /// Each box's last transform given to trace() (`pose`).
+    posed: Vec<Option<glam::Affine3A>>,
 }
 
 /// Bytes of one RGBA32F image.
@@ -175,20 +177,31 @@ impl Bench {
         let mut gpu =
             GpuDevice::new_raster(&[], root.join("../../target/ara-render/lights-bench"))?;
         let primary = load(&mut gpu, &artifacts(), "lights_primary")?;
-        let (positions, indices) = scene::cube();
-        let blas = ara_bvh::Blas::build(&ara_bvh::Mesh {
-            positions: &positions,
-            indices: &indices,
-            submeshes: &[],
-        })?;
-        let hash = blas.hash;
+        // T1's geometry: the floor a 12-triangle cube, the occluders 108-triangle cubes.
         let mut trace = TraceScene::default();
-        trace.add_mesh(TraceMesh {
-            blas: Arc::new(blas),
-            uvs: None,
-        });
+        let mut mesh = |grid: u32| -> Result<ara_bvh::MeshHash> {
+            let (positions, indices) = scene::cube_grid(grid);
+            let blas = ara_bvh::Blas::build(&ara_bvh::Mesh {
+                positions: &positions,
+                indices: &indices,
+                submeshes: &[],
+            })?;
+            let hash = blas.hash;
+            trace.add_mesh(TraceMesh {
+                blas: Arc::new(blas),
+                uvs: None,
+            });
+            Ok(hash)
+        };
+        let (floor_mesh, box_mesh) = (mesh(1)?, mesh(3)?);
         let first = layout.frame(0);
+        let boxes = first.boxes.len();
         for p in std::iter::once(layout.floor()).chain(first.boxes.iter().copied()) {
+            let hash = if p.mask == MASK_FLOOR {
+                floor_mesh
+            } else {
+                box_mesh
+            };
             trace.set_instance(p.id, instance(hash, p))?;
         }
         trace.commit();
@@ -298,6 +311,7 @@ impl Bench {
             camera: camera.position,
             vp,
             count: 0,
+            posed: vec![None; boxes],
         };
         bench.write_frame_record(camera.forward)?;
         Ok(bench)
@@ -330,8 +344,12 @@ impl Bench {
     /// upload. Call between completed submissions.
     pub(crate) fn pose(&mut self, frame: u32) -> Result<()> {
         let f = self.layout.frame(frame);
-        for b in &f.boxes {
-            self.trace.set_transform(b.id, b.world);
+        // Only moved boxes: an unchanged pose leaves the TLAS and its upload untouched.
+        for (b, last) in f.boxes.iter().zip(&mut self.posed) {
+            if *last != Some(b.world) {
+                self.trace.set_transform(b.id, b.world);
+                *last = Some(b.world);
+            }
         }
         self.trace.commit();
         self.trace_gpu.update(&mut self.gpu, &self.trace)?;

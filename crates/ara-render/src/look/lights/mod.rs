@@ -7,8 +7,9 @@
 //! - **build**: each light's sphere at its authored range (never shortened), source
 //!   radius and intensity; **bin**: each 64x64 coarse tile's lights, in light order;
 //! - **prep**: each 16x16 tile's receiver box (surface points and normal-offset ray
-//!   origins), normal cone and BRDF bound;
-//! - **select**: each tile's lights (range, facing, one-sided emitters), each pair
+//!   origins) and BRDF bound;
+//! - **select**: each tile's lights (range, one-sided emitters; no horizon cull, as
+//!   look::local's LTC area shading lights slightly past a source's horizon), each pair
 //!   classified against trace()'s instances with a conservative capsule over the
 //!   tile box and the light's sample sphere, walked through the TLAS and then the
 //!   BLAS down to triangle planes: clear pairs shade without rays, partial pairs name

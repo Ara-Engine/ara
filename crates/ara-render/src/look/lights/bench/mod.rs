@@ -15,6 +15,7 @@
 //! Environment: `ARA_LIGHTS_BENCH_CASES` (comma-separated ids, default all),
 //! `ARA_LIGHTS_BENCH_SIZE` (`2560x1440`), `ARA_LIGHTS_BENCH_FRAMES` (quality 60,
 //! timing 300), `ARA_LIGHTS_BENCH_SAMPLES` (16), `ARA_LIGHTS_BENCH_OUT`.
+mod contract;
 mod control;
 mod harness;
 pub(crate) mod scene;
@@ -50,6 +51,13 @@ fn out_dir() -> PathBuf {
         .unwrap_or_else(|_| {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/lights-bench")
         })
+}
+
+/// Whether `ARA_LIGHTS_BENCH_CASES` (comma-separated ids; unset: all) names `id`.
+fn wanted(id: &str) -> bool {
+    std::env::var("ARA_LIGHTS_BENCH_CASES")
+        .ok()
+        .is_none_or(|f| f.split(',').any(|c| c.trim() == id))
 }
 
 fn selected() -> Vec<Case> {

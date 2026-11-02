@@ -224,6 +224,18 @@ impl LightsGpu {
         })
     }
 
+    /// Bytes of V2's per-frame storage (light bounds, coarse lists, tile bounds and heads,
+    /// the entry pool, stats and record).
+    pub(crate) fn resident_bytes(&self) -> u64 {
+        let tiles = u64::from(self.tiles[0]) * u64::from(self.tiles[1]);
+        let coarse = u64::from(self.coarse[0]) * u64::from(self.coarse[1]);
+        u64::from(self.capacity.lights) * LIGHT_BYTES
+            + coarse * (u64::from(self.capacity.coarse_lights) + 1) * 4
+            + tiles * (TILE_BYTES + HEAD_BYTES)
+            + u64::from(self.capacity.entries) * ENTRY_BYTES
+            + (STAT_WORDS * 4 + std::mem::size_of::<Record>()) as u64
+    }
+
     /// Fine tiles per row and rows.
     pub(crate) fn tiles(&self) -> [u32; 2] {
         self.tiles

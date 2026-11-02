@@ -236,104 +236,164 @@ fn segment_hits(o: glam::DVec3, d: glam::DVec3, t_max: f64, tri: [glam::DVec3; 3
     u >= 0. && v >= 0. && u + v <= 1. && t > 0. && t < t_max
 }
 
-/// Arbiter for disagreements between the sample masks and per-sample rays: the first
-/// disagreeing pixel's light, its 16 samples re-tested in f64 against every cube.
+/// Arbiter for disagreements between the sample masks and per-sample trace() rays
+/// (`ARA_LIGHTS_PROBE`: case id and frame, default moving-200-lights,23): for the first
+/// pixels where V2 or the exact control recorded one (LIGHTS_DEBUG), the light's 16
+/// samples from the recorded origin, re-tested in f64 against every cube.
 #[test]
 #[ignore = "diagnostic"]
 fn masks_against_f64_brute_force() -> Result<()> {
-    let layout = Layout::new(&case(1., 2.4));
-    let frame0 = layout.frame(0);
+    let spec = std::env::var("ARA_LIGHTS_PROBE").unwrap_or_else(|_| "moving-200-lights,23".into());
+    let parts: Vec<&str> = spec.split(',').collect();
+    let case = scene::cases()
+        .into_iter()
+        .find(|c| c.id == parts[0])
+        .expect("case");
+    let frame: u32 = parts.get(1).map_or(Ok(0), |f| f.parse())?;
+    let size = [2560u32, 1440];
+    let layout = Layout::new(&case);
+    let posed = layout.frame(frame);
     let floor = layout.floor();
-    let mut bench = Bench::new(layout, SIZE, 1 << 16)?;
-    bench.pose(0)?;
+    let entries = size[0].div_ceil(16) * size[1].div_ceil(16) * 384;
+    let mut bench = Bench::new(layout, size, entries)?;
+    bench.pose(frame)?;
     let settings = Settings {
         debug_masks: true,
         ..Settings::default()
     };
-    bench.run_v2(true, Blockers::On, settings)?;
-    let debug = bench.read(Readback::Counters)?;
-    let depth = bench.read(Readback::Depth)?;
-    let normal = bench.read(Readback::Normal)?;
-    let (w, h) = (SIZE[0] as usize, SIZE[1] as usize);
-    let inverse = bench.vp.inverse().as_dmat4();
     let (positions, indices) = scene::cube();
+    let blas = ara_bvh::Blas::build(&ara_bvh::Mesh {
+        positions: &positions,
+        indices: &indices,
+        submeshes: &[],
+    })?;
     let cubes: Vec<glam::DAffine3> = std::iter::once(floor)
-        .chain(frame0.boxes.iter().copied())
+        .chain(posed.boxes.iter().copied())
         .map(|b| glam::DAffine3::from_mat4(glam::Mat4::from(b.world).as_dmat4()))
         .collect();
-    let mut shown = 0;
-    for i in (0..w * h).filter(|&i| debug[i * 4 + 3] > 0.5) {
-        let (x, y) = (i % w, i / w);
-        let light = frame0.lights[debug[i * 4] as usize];
-        let (mask, rays) = (debug[i * 4 + 1] as u32, debug[i * 4 + 2] as u32);
-        // The pixel's origin as the shader rebuilds it.
-        let ndc = glam::DVec4::new(
-            (x as f64 + 0.5) / w as f64 * 2. - 1.,
-            1. - (y as f64 + 0.5) / h as f64 * 2.,
-            f64::from(depth[i]),
-            1.,
-        );
-        let world = inverse * ndc;
-        let world = world.truncate() / world.w;
-        let oct =
-            glam::DVec2::new(f64::from(normal[i * 4]), f64::from(normal[i * 4 + 1])) * 2. - 1.;
-        let mut n = glam::DVec3::new(oct.x, oct.y, 1. - oct.x.abs() - oct.y.abs());
-        let t = (-n.z).max(0.);
-        n.x += if n.x >= 0. { -t } else { t };
-        n.y += if n.y >= 0. { -t } else { t };
-        let n = n.normalize();
-        let s = Settings::default();
-        let footprint = f64::from(scene::footprint(&bench.layout.camera, SIZE[1]));
-        let bias = f64::from(s.bias_min).max(
-            f64::from(s.bias_footprints) * footprint * (world - bench.camera.as_dvec3()).length(),
-        );
-        let o = world + n * bias;
-        // lightsFrame for a sphere.
-        let c = glam::DVec3::new(
-            light.position_range[0].into(),
-            light.position_range[1].into(),
-            light.position_range[2].into(),
-        );
-        let axis = (o - c).normalize();
-        let sg = if axis.z >= 0. { 1. } else { -1. };
-        let a = -1. / (sg + axis.z);
-        let b = axis.x * axis.y * a;
-        let u = glam::DVec3::new(1. + sg * axis.x * axis.x * a, sg * b, -sg * axis.x);
-        let v = glam::DVec3::new(b, sg + axis.y * axis.y * a, -axis.y);
-        let r = f64::from(light.parameters[2]);
-        let d = (o - c).length();
-        let radius = r * if d > r * 1.001 {
-            d / (d * d - r * r).sqrt()
+    for pass in ["v2", "exact"] {
+        let (origins, debug) = if pass == "v2" {
+            bench.run_v2(true, Blockers::On, settings)?;
+            (bench.read(Readback::V2)?, bench.read(Readback::Counters)?)
         } else {
-            1.
+            bench.run_exact(true, Blockers::On, settings)?;
+            (
+                bench.read(Readback::Exact)?,
+                bench.read(Readback::Counters)?,
+            )
         };
-        let mut brute = 0u32;
-        let mut hit_by = Vec::new();
-        for k in 0..16u32 {
-            let rk = ((k as f64 + 0.5) / 16.).sqrt();
-            let phi = k as f64 * 2.399_963_23;
-            let q = c + (u * phi.cos() + v * phi.sin()) * (radius * rk);
-            for (ci, cube) in cubes.iter().enumerate() {
-                for tri in indices.as_chunks::<3>().0 {
-                    let corners = [0, 1, 2].map(|j| {
-                        cube.transform_point3(
-                            glam::Vec3::from(positions[tri[j] as usize]).as_dvec3(),
-                        )
-                    });
-                    if segment_hits(o, q - o, 0.9999, corners) {
-                        brute |= 1 << k;
-                        hit_by.push((k, ci));
+        let n = (size[0] * size[1]) as usize;
+        let recorded: Vec<usize> = (0..n).filter(|&i| debug[i * 4 + 3] > 0.5).collect();
+        eprintln!(
+            "{pass}: {} pixels recorded a mask/ray disagreement",
+            recorded.len()
+        );
+        // The first six, and any within three pixels of `ARA_LIGHTS_PROBE_PIXEL` (x,y).
+        let near: Option<(usize, usize)> =
+            std::env::var("ARA_LIGHTS_PROBE_PIXEL").ok().and_then(|s| {
+                let (x, y) = s.split_once(',')?;
+                Some((x.parse().ok()?, y.parse().ok()?))
+            });
+        let w = size[0] as usize;
+        let chosen: Vec<usize> = recorded
+            .iter()
+            .copied()
+            .filter(|&i| {
+                near.is_some_and(|(x, y)| (i % w).abs_diff(x) <= 3 && (i / w).abs_diff(y) <= 3)
+            })
+            .chain(recorded.iter().copied().take(6))
+            .take(10)
+            .collect();
+        for &i in &chosen {
+            let packed = debug[i * 4] as u32;
+            let light = posed.lights[(packed & 0xfff) as usize];
+            let slot = (packed >> 12) as usize;
+            let tri = origins[i * 4 + 3] as u32;
+            let (masks, rays) = (debug[i * 4 + 1] as u32, debug[i * 4 + 2] as u32);
+            let o = glam::DVec3::new(
+                origins[i * 4].into(),
+                origins[i * 4 + 1].into(),
+                origins[i * 4 + 2].into(),
+            );
+            // lightsFrame for a sphere.
+            let c = glam::DVec3::new(
+                light.position_range[0].into(),
+                light.position_range[1].into(),
+                light.position_range[2].into(),
+            );
+            let axis = (o - c).normalize();
+            let sg = if axis.z >= 0. { 1. } else { -1. };
+            let a = -1. / (sg + axis.z);
+            let b = axis.x * axis.y * a;
+            let u = glam::DVec3::new(1. + sg * axis.x * axis.x * a, sg * b, -sg * axis.x);
+            let v = glam::DVec3::new(b, sg + axis.y * axis.y * a, -axis.y);
+            let r = f64::from(light.parameters[2]);
+            let d = (o - c).length();
+            let radius = r * if d > r * 1.001 {
+                d / (d * d - r * r).sqrt()
+            } else {
+                1.
+            };
+            let mut brute = 0u32;
+            let mut hit_by = Vec::new();
+            for k in 0..16u32 {
+                let rk = ((f64::from(k) + 0.5) / 16.).sqrt();
+                let phi = f64::from(k) * 2.399_963_23;
+                let q = c + (u * phi.cos() + v * phi.sin()) * (radius * rk);
+                for (ci, cube) in cubes.iter().enumerate() {
+                    for tri in indices.as_chunks::<3>().0 {
+                        let corners = [0, 1, 2].map(|j| {
+                            cube.transform_point3(
+                                glam::Vec3::from(positions[tri[j] as usize]).as_dvec3(),
+                            )
+                        });
+                        if segment_hits(o, q - o, 0.9999, corners) {
+                            brute |= 1 << k;
+                            hit_by.push((k, ci));
+                        }
                     }
                 }
             }
-        }
-        eprintln!(
-            "pixel {x} {y} light {}: masks {mask:016b} rays {rays:016b} f64 {brute:016b} (hits {hit_by:?})",
-            debug[i * 4]
-        );
-        shown += 1;
-        if shown >= 6 {
-            break;
+            hit_by.dedup();
+            // The culprit: the triangle the masks used for the first sample they block and
+            // the rays do not, its Baldwin-Weber rows in f64 on that instance's object ray.
+            let extra = masks & !rays;
+            if tri > 0 && extra != 0 {
+                let k = extra.trailing_zeros();
+                let rk = ((f64::from(k) + 0.5) / 16.).sqrt();
+                let phi = f64::from(k) * 2.399_963_23;
+                let q = c + (u * phi.cos() + v * phi.sin()) * (radius * rk);
+                let addr = (tri - 1) as usize;
+                let row = |w: usize| {
+                    let x = blas.triangles[addr + w];
+                    glam::DVec4::new(
+                        f64::from(f32::from_bits(x[0])),
+                        f64::from(f32::from_bits(x[1])),
+                        f64::from(f32::from_bits(x[2])),
+                        f64::from(f32::from_bits(x[3])),
+                    )
+                };
+                let (t0, t1, t2) = (row(0), row(1), row(2));
+                let inverse = cubes[slot].inverse();
+                let (oo, qo) = (inverse.transform_point3(o), inverse.transform_point3(q));
+                let dd = qo - oo;
+                let trans = t2.truncate().dot(dd);
+                let t = -(t2.truncate().dot(oo) + t2.w) / trans;
+                let p = oo + dd * t;
+                let (bu, bv) = (t0.truncate().dot(p) + t0.w, t1.truncate().dot(p) + t1.w);
+                eprintln!(
+                    "    culprit: sample {k} instance slot {slot} word {} (primitive {}, words {}): t {t:.6} u {bu:.6} v {bv:.6}",
+                    addr,
+                    blas.triangles[addr + 3][3],
+                    blas.triangles.len()
+                );
+            }
+            eprintln!(
+                "  {pass} pixel {} {} light {}: masks {masks:016b} rays {rays:016b} f64 {brute:016b} hits {hit_by:?}",
+                i % size[0] as usize,
+                i / size[0] as usize,
+                debug[i * 4]
+            );
         }
     }
     bench.destroy()?;
@@ -388,6 +448,26 @@ fn dynamic_mismatch_probe() -> Result<()> {
             })
             .count();
         eprintln!("{name}: {differing} differing; pixel {}", lum(&test[at..]));
+        let mut worst: Vec<(f64, usize)> = (0..n)
+            .map(|i| {
+                (
+                    (lum(&test[i * 4..]) - lum(&control[i * 4..]))
+                        / lum(&control[i * 4..]).max(1e-3),
+                    i,
+                )
+            })
+            .filter(|(e, _)| e.abs() > 1e-4)
+            .collect();
+        worst.sort_by(|a, b| b.0.abs().total_cmp(&a.0.abs()));
+        for (e, i) in worst.iter().take(5) {
+            eprintln!(
+                "  {name} pixel {} {}: v2 {} control {} ({e:+.5})",
+                i % size[0] as usize,
+                i / size[0] as usize,
+                lum(&test[i * 4..]),
+                lum(&control[i * 4..])
+            );
+        }
     }
     // The exact control with rays instead of masks.
     bench.run_exact(

@@ -295,6 +295,38 @@ pub(crate) fn cube() -> (Vec<[f32; 3]>, Vec<u32>) {
     (positions, indices)
 }
 
+/// T1's `cube(108)` (render_v3 geometry.rs): each face an `n` x `n` grid of quads (n = 3:
+/// 108 triangles), the same winding and surface as [`cube`]. The occluder boxes use it.
+pub(crate) fn cube_grid(n: u32) -> (Vec<[f32; 3]>, Vec<u32>) {
+    let mut positions = Vec::new();
+    let mut indices = Vec::new();
+    for face in 0..6 {
+        let (normal, u, v) = match face {
+            0 => (Vec3::X, -Vec3::Z, Vec3::Y),
+            1 => (-Vec3::X, Vec3::Z, Vec3::Y),
+            2 => (Vec3::Y, Vec3::X, -Vec3::Z),
+            3 => (-Vec3::Y, Vec3::X, Vec3::Z),
+            4 => (Vec3::Z, Vec3::X, Vec3::Y),
+            _ => (-Vec3::Z, -Vec3::X, Vec3::Y),
+        };
+        let start = positions.len() as u32;
+        for y in 0..=n {
+            for x in 0..=n {
+                let (s, t) = (x as f32 / n as f32, y as f32 / n as f32);
+                positions.push((normal * 0.5 + u * (s - 0.5) + v * (t - 0.5)).into());
+            }
+        }
+        for y in 0..n {
+            for x in 0..n {
+                let a = start + y * (n + 1) + x;
+                let (b, c) = (a + 1, a + n + 1);
+                indices.extend([a, b, c + 1, a, c + 1, c]);
+            }
+        }
+    }
+    (positions, indices)
+}
+
 /// The pixel footprint per metre of view distance for a vertical fov over `height`.
 pub(crate) fn footprint(camera: &CameraSpec, height: u32) -> f32 {
     match *camera {

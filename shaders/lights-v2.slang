@@ -7,10 +7,10 @@
 // - lightsBuildMain: each light's sphere (centre, authored range: never shortened),
 //   source radius and luminous intensity (the light grid's input).
 // - lightsPrepMain: each 16x16 tile's receivers: the box around their surface points
-//   and normal-offset ray origins, their normal cone and BRDF bound.
+//   and normal-offset ray origins and BRDF bound (bytes 32-47 unused).
 // - lightsBinMain: each 64x64 coarse tile's lights (sphere against the union of its
 //   tiles' boxes), in light order.
-// - lightsSelectMain: each tile's lights from its coarse list (range, facing, one-sided
+// - lightsSelectMain: each tile's lights from its coarse list (range, one-sided
 //   emitters), each classified against trace()'s instances: fully clear pairs shade
 //   without rays; partial pairs name the instances their segments may meet. With
 //   LIGHTS_OMIT, sorted by their energy bound with suffix sums (omission).
@@ -51,7 +51,7 @@ void lightsBuildMain(uint3 id:SV_DispatchThreadID){
     buffers[r.buffers.x].Store4(i*32+16,asuint(float4(intensity,lightsSourceRadius(light,shape),0,0)));
 }
 
-groupshared float3 prepLo[16],prepHi[16],prepN[16],prepOLo[16],prepOHi[16];
+groupshared float3 prepLo[16],prepHi[16],prepOLo[16],prepOHi[16];
 groupshared float4 prepM[32];
 [shader("compute")]
 [numthreads(16,16,1)]
@@ -59,7 +59,7 @@ void lightsPrepMain(uint3 g:SV_GroupID,uint3 t:SV_GroupThreadID,uint gi:SV_Group
     Frame f=frame();LightsRecord r=lightsRecord();
     int2 p=int2(g.xy*LIGHTS_TILE+t.xy);bool covered=false;float3 world=0,n=0;float rough=1,albedo=0;
     if(all(p<int2(f.extent.xy))){world=gbufferWorld(f,p,covered);}
-    // Receivers and their ray origins (range, facing and bounds use both; the
+    // Receivers and their ray origins (range and bounds use both; the
     // visibility hull only the origins, so a surface never occludes itself).
     float3 lo=1e30,hi=-1e30,olo=1e30,ohi=-1e30;
     if(covered){
@@ -71,35 +71,24 @@ void lightsPrepMain(uint3 g:SV_GroupID,uint3 t:SV_GroupThreadID,uint gi:SV_Group
     // Wave reductions, then one lane per wave into groupshared memory (any wave size
     // of at least 16 lanes).
     uint wave=gi/WaveGetLaneCount(),waves=(256+WaveGetLaneCount()-1)/WaveGetLaneCount();
-    float3 wlo=WaveActiveMin(lo),whi=WaveActiveMax(hi),wolo=WaveActiveMin(olo),wohi=WaveActiveMax(ohi),wn=WaveActiveSum(n);
+    float3 wlo=WaveActiveMin(lo),whi=WaveActiveMax(hi),wolo=WaveActiveMin(olo),wohi=WaveActiveMax(ohi);
     float wr=WaveActiveMin(covered?rough:1.),wa=WaveActiveMax(albedo),wc=WaveActiveSum(covered?1.:0.);
-    if(WaveIsFirstLane()){prepLo[wave]=wlo;prepHi[wave]=whi;prepOLo[wave]=wolo;prepOHi[wave]=wohi;prepN[wave]=wn;prepM[wave]=float4(wr,wa,wc,1);}
+    if(WaveIsFirstLane()){prepLo[wave]=wlo;prepHi[wave]=whi;prepOLo[wave]=wolo;prepOHi[wave]=wohi;prepM[wave]=float4(wr,wa,wc,1);}
     GroupMemoryBarrierWithGroupSync();
     if(gi==0){
         for(uint k=1;k<waves;k++){
             prepLo[0]=min(prepLo[0],prepLo[k]);prepHi[0]=max(prepHi[0],prepHi[k]);prepOLo[0]=min(prepOLo[0],prepOLo[k]);
-            prepOHi[0]=max(prepOHi[0],prepOHi[k]);prepN[0]+=prepN[k];
+            prepOHi[0]=max(prepOHi[0],prepOHi[k]);
             float4 a=prepM[0],b=prepM[k];prepM[0]=float4(min(a.x,b.x),max(a.y,b.y),a.z+b.z,1);
         }
     }
-    GroupMemoryBarrierWithGroupSync();
-    float3 axis=prepN[0];float al=length(axis);axis=al>1e-6?axis/al:float3(0,1,0);
-    // The cone: the widest angle any covered normal makes with the axis.
-    float wcos=WaveActiveMin(covered?dot(n,axis):1.);
-    GroupMemoryBarrierWithGroupSync();
-    if(WaveIsFirstLane())prepM[wave+16].x=wcos;
-    GroupMemoryBarrierWithGroupSync();
     if(gi==0){
-        float cosMin=1;for(uint k=0;k<waves;k++)cosMin=min(cosMin,prepM[k+16].x);
-        prepM[0].w=cosMin;
         uint tile=g.x+g.y*r.counts.y;float4 m=prepM[0];
         // look-shading.slangh brdf's bound per unit illuminance (lightsBound).
         float rr=max(m.x,0.045),r6=rr*rr*rr*rr*rr*rr;
         float brdfMax=m.y/PI+1.5/(PI*r6);
-        float cosine=al>1e-6?clamp(m.w,-1.,1.):-1.;float sine=cosine<=0?2.:sqrt(1-cosine*cosine);
         buffers[r.buffers.z].Store4(tile*80,asuint(float4(prepLo[0],m.z)));
         buffers[r.buffers.z].Store4(tile*80+16,asuint(float4(prepHi[0],m.x)));
-        buffers[r.buffers.z].Store4(tile*80+32,asuint(float4(axis,sine)));
         buffers[r.buffers.z].Store4(tile*80+48,asuint(float4(prepOLo[0],brdfMax)));
         buffers[r.buffers.z].Store4(tile*80+64,asuint(float4(prepOHi[0],0)));
     }
@@ -162,7 +151,7 @@ void lightsSelectMain(uint3 g:SV_GroupID,uint gi:SV_GroupIndex){
     Frame f=frame();LightsRecord r=lightsRecord();
     uint tile=g.x+g.y*r.counts.y;
     float4 a=asfloat(buffers[r.buffers.z].Load4(tile*80)),b=asfloat(buffers[r.buffers.z].Load4(tile*80+16));
-    float4 cone=asfloat(buffers[r.buffers.z].Load4(tile*80+32)),olo=asfloat(buffers[r.buffers.z].Load4(tile*80+48));
+    float4 olo=asfloat(buffers[r.buffers.z].Load4(tile*80+48));
     float3 ohi=asfloat(buffers[r.buffers.z].Load4(tile*80+64)).xyz;float brdfMax=olo.w;
     if(a.w<=0){if(gi==0)buffers[r.buffers.w].Store2(tile*8,uint2(0,0));return;}
     float3 lo=a.xyz,hi=b.xyz,centre=(lo+hi)*0.5,ext=(hi-lo)*0.5;
@@ -183,20 +172,15 @@ void lightsSelectMain(uint3 g:SV_GroupID,uint gi:SV_GroupIndex){
             float near2=lightsBoxDistance2(sphere.xyz,lo,hi);
             keep=sphere.w>0&&near2<sphere.w*sphere.w;
             float rs=info.y;
-            if(keep){
-                // Facing: some receiver normal n within angle t of the cone axis a sees
-                // the source. For a receiver p, n.(L - p) <= cos(phi) a.(L - p) +
-                // sin(phi) |L - p| with phi <= t, so with A the box's largest a.(L - p):
-                // A > 0 may face, else at most A cos(t) + sin(t) |L - p| (+ the source).
-                float3 toLight=sphere.xyz-centre;float reach=length(toLight)+length(ext);
-                float along=dot(cone.xyz,toLight)+dot(abs(cone.xyz),ext);
-                float sine=cone.w,cosine=sqrt(saturate(1-sine*sine));
-                keep=sine>=1||along>0||along*cosine+sine*reach+rs>0;
-            }
             Light light=(Light)0;LightShape shape=(LightShape)0;
             if(keep){
                 light=loadLight(f.lighting.w,i);
                 if(lightShaped(light))shape=loadLightShape(f.lighting.w,i);
+                // No facing cull: look::local's sphere and area shading (LTC, clipped in
+                // the transformed space) lights surfaces slightly past a source's geometric
+                // horizon, so a horizon test would drop light the exact control shades.
+            }
+            if(keep){
                 // One-sided emitters light only what lies in front of their plane.
                 if(lightKind(light)>=LIGHT_RECT){
                     float3 ln=light.directionOuter.xyz;
@@ -346,7 +330,8 @@ void lightsShadeMain(uint3 g:SV_GroupID,uint3 t:SV_GroupThreadID){
 #if LIGHTS_PART==2
     if(!fallback)sum+=images[NonUniformResourceIndex(r.output.x)][p].rgb;
 #endif
-    images[NonUniformResourceIndex(r.output.x)][p]=float4(sum,1);
+    // LIGHTS_DEBUG: the ray origin of the recorded disagreement replaces the radiance.
+    images[NonUniformResourceIndex(r.output.x)][p]=lightsDebugOn?float4(lightsDebugOrigin,float(lightsDebugTri)):float4(sum,1);
     if(stats)images[NonUniformResourceIndex(r.extra.y)][p]=lightsDebugOn?float4(lightsDebug):float4(lit,rays,considered,omitted);
 }
 
@@ -359,10 +344,10 @@ void lightsExactMain(uint3 id:SV_DispatchThreadID){
     Look l=look(f);Surface surface=lightsSurface(f,p);float3 v=normalize(f.camera.xyz-world);Lobes o=specularLobes(surface,v);AreaPixel area=(AreaPixel)0;
     float3 origin=world+surface.normal*lightsBias(f,r,world);
     bool shadowed=r.trace.x!=TRACE_NONE&&(r.trace.w&LIGHTS_UNSHADOWED)==0;TraceScene s=traceScene(shadowed?r.trace.x:0);
-    float3 sum=0;uint rays=0,lit=0;
+    float3 sum=0;uint rays=0,lit=0;lightsDebugOn=(r.trace.w&LIGHTS_DEBUG)!=0;
     for(uint i=0;i<r.counts.x;i++)sum+=lightsShadeOne(f,l,r,s,shadowed,surface,o,v,world,origin,uint4(i|LIGHTS_PARTIAL|LIGHTS_ALL,TRACE_NONE,TRACE_NONE,0),area,rays,lit);
-    images[NonUniformResourceIndex(r.output.x)][p]=float4(sum,1);
-    if(stats)images[NonUniformResourceIndex(r.extra.y)][p]=float4(lit,rays,r.counts.x,0);
+    images[NonUniformResourceIndex(r.output.x)][p]=lightsDebugOn?float4(lightsDebugOrigin,float(lightsDebugTri)):float4(sum,1);
+    if(stats)images[NonUniformResourceIndex(r.extra.y)][p]=lightsDebugOn?float4(lightsDebug):float4(lit,rays,r.counts.x,0);
 }
 
 // Bench primary visibility (look/lights/bench.rs; not a production pass): the camera

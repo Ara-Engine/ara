@@ -162,6 +162,22 @@ impl E3 {
         self.frames += 1;
     }
 
+    /// The running counts a per-frame receipt subtracts: leak pixels, pops, highlight
+    /// test / control / pixels, shadow test / control / pixels.
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn clone_counts(&self) -> (u64, u64, f64, f64, u64, f64, f64, u64) {
+        (
+            self.leak_pixels,
+            self.pops,
+            self.highlight_test,
+            self.highlight_control,
+            self.highlight_pixels,
+            self.shadow_test,
+            self.shadow_control,
+            self.shadow_pixels,
+        )
+    }
+
     /// Forgets the previous frame (the next frame starts a new pop sequence).
     pub(crate) fn reset_temporal(&mut self) {
         self.previous = None;
