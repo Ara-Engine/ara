@@ -113,6 +113,9 @@ fn counter(
 fn evidence(run: &RunResult, name: &str) -> Option<f64> {
     complete_max(run, |f| f.evidence.get(name).copied())
 }
+fn all_evidence(frames: &[FrameResult], name: &str) -> bool {
+    !frames.is_empty() && frames.iter().all(|f| f.evidence.get(name) == Some(&1.))
+}
 
 fn common_quality(
     lines: &mut Vec<Line>,
@@ -436,12 +439,12 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
             required(
                 &mut lines,
                 "global_and_per_patch_directions_compared",
-                evidence(b, "direction_comparison_complete") == Some(1.),
+                all_evidence(&b.frames, "direction_comparison_complete"),
             );
             required(
                 &mut lines,
                 "current_geometry_receiver_transport",
-                evidence(b, "current_geometry_transport") == Some(1.),
+                all_evidence(&b.frames, "current_geometry_transport"),
             );
             common_quality(&mut lines, b, None, None);
         }
@@ -459,12 +462,12 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
             required(
                 &mut lines,
                 "per_source_sample_occluder_combine",
-                evidence(b, "per_sample_combine") == Some(1.),
+                all_evidence(&b.frames, "per_sample_combine"),
             );
             required(
                 &mut lines,
                 "real_time_sample_counts",
-                evidence(b, "real_time_samples") == Some(1.),
+                all_evidence(&b.frames, "real_time_samples"),
             );
         }
         5 => {
@@ -504,7 +507,7 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
                 required(
                     &mut lines,
                     &format!("same_run_G{g}_quality_pass"),
-                    evidence(b, &format!("g{g}_quality_pass")) == Some(1.),
+                    all_evidence(&b.frames, &format!("g{g}_quality_pass")),
                 );
             }
             if b.case.recipe == "combined" {
@@ -527,7 +530,11 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
                 required(
                     &mut lines,
                     "cold_topology_publication_scored",
-                    evidence(b, "cold_publication_scored") == Some(1.),
+                    b.frames
+                        .iter()
+                        .find(|f| f.frame == b.case.event_frame)
+                        .and_then(|f| f.evidence.get("cold_publication_scored"))
+                        == Some(&1.),
                 );
             }
             memory(&mut lines, b, is_4070);
@@ -538,7 +545,7 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
                 required(
                     &mut lines,
                     "real_Polar_asset",
-                    evidence(b, "real_polar_asset") == Some(1.),
+                    all_evidence(&b.frames, "real_polar_asset"),
                 );
             }
             common_quality(&mut lines, b, Some(0.02), Some(0.02));
@@ -552,7 +559,7 @@ pub fn score(gate: u8, a: &RunResult, b: &RunResult) -> Result<CaseScore> {
             required(
                 &mut lines,
                 "coverage_beyond_glossy_mask_costed",
-                evidence(a, "beyond_mask_costed") == Some(1.),
+                all_evidence(&a.frames, "beyond_mask_costed"),
             );
         }
         _ => unreachable!(),
@@ -616,6 +623,24 @@ pub fn combine(values: impl IntoIterator<Item = Verdict>) -> Verdict {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn one_good_frame_cannot_certify_per_frame_quality() {
+        let frame: FrameResult = serde_json::from_value(serde_json::json!({
+            "frame":0,"stages":{},"quality":{"region_flip":{},"temporal_blocks":[]},
+            "evidence":{"g1_quality_pass":1.}
+        }))
+        .unwrap();
+        let mut frames = vec![frame.clone(), frame];
+        frames[1].frame = 1;
+        assert!(all_evidence(&frames, "g1_quality_pass"));
+        for value in [0., 2.] {
+            frames[1].evidence.insert("g1_quality_pass".into(), value);
+            assert!(!all_evidence(&frames, "g1_quality_pass"));
+        }
+        frames[1].evidence.clear();
+        assert!(!all_evidence(&frames, "g1_quality_pass"));
+        assert!(!all_evidence(&[], "g1_quality_pass"));
+    }
     #[test]
     fn average_debt_and_observed_peak_are_independent_gate_lines() {
         let mut lines = Vec::new();

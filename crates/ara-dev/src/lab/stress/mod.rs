@@ -4,6 +4,7 @@ mod catalog;
 mod contract;
 mod gates;
 mod report;
+mod timing;
 mod window;
 
 use anyhow::{Context, Result, ensure};
@@ -107,6 +108,9 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
         }
         if !options.quality_only {
             let _window = window::QuietWindow::acquire()?;
+            let guard_path = options
+                .output
+                .join(format!("timing-guard-{}.json", timing::unix_ms()?));
             let start = Instant::now();
             let mut attempted = Vec::new();
             window::telemetry(&options.output.join("nvidia-before.log"))?;
@@ -116,7 +120,7 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
                         if start.elapsed() > Duration::from_secs(2400) {
                             break;
                         }
-                        attempted.push(case.id.as_str());
+                        let began = timing::unix_ms()?;
                         execute(
                             root,
                             &options,
@@ -126,28 +130,64 @@ pub(crate) fn run(root: &Path, options: Options) -> Result<bool> {
                             "uncapped",
                             Some(Duration::from_secs(2500).saturating_sub(start.elapsed())),
                         )?;
+                        let interval = crate::gpu_guard::Interval {
+                            start_unix_ms: began,
+                            end_unix_ms: timing::unix_ms()?,
+                        };
+                        write_json(
+                            &cache.join(&case.id).join("uncapped/timing-window.json"),
+                            &interval,
+                        )?;
+                        attempted.push((case.id.as_str(), interval));
                     }
                     Ok(())
                 });
             window::telemetry(&options.output.join("nvidia-after.log"))?;
+            drop(_window);
             let reading = crate::gpu::last_reading();
             write_json(&options.output.join("timing-guard.json"), &reading)?;
+            write_json(&guard_path, &reading)?;
+            let guard = reading
+                .as_ref()
+                .and_then(|reading| reading.get("reading"))
+                .and_then(|reading| {
+                    serde_json::from_value::<crate::gpu_guard::Report>(reading.clone()).ok()
+                });
+            let classified =
+                operation.is_ok() || operation.as_ref().is_err_and(crate::gpu_guard::is_invalid);
             // Publication happens after the foreign-load guard closes; child output
             // cannot self-certify a timing window as uncontaminated.
-            for id in attempted {
+            let attempted_count = attempted.len();
+            let mut accepted = 0;
+            for (id, interval) in attempted {
                 let path = cache.join(id).join("uncapped/run.json");
                 if path.is_file() {
                     let mut run: RunResult = serde_json::from_slice(&fs::read(&path)?)?;
-                    run.timing_valid = operation.is_ok();
+                    run.timing_valid = classified
+                        && guard
+                            .as_ref()
+                            .is_some_and(|guard| timing::quiet(guard, interval));
+                    accepted += usize::from(run.timing_valid);
+                    run.notes.push(format!(
+                        "Timing validity uses the complete worker interval {}..{} UTC epoch ms against the closing guard {}; timing-window.json retains the proof. Batch-wide violations remain recorded.",
+                        interval.start_unix_ms, interval.end_unix_ms, guard_path.display()
+                    ));
+                    write_json(
+                        &cache.join(id).join("uncapped/timing-window.json"),
+                        &serde_json::json!({"interval":interval,"guard_report":guard_path,"accepted":run.timing_valid}),
+                    )?;
                     write_json(&path, &run)?;
                 }
             }
+            eprintln!("guarded timing: {accepted}/{attempted_count} attempted cases accepted");
             if let Err(error) = operation {
                 write_json(
                     &options.output.join("timing-error.json"),
                     &format!("{error:#}"),
                 )?;
-                eprintln!("timing unavailable: {error:#}");
+                eprintln!(
+                    "timing batch contains invalid evidence: {error:#}; see per-case timing_valid"
+                );
             }
         }
         if !options.timing_only {
@@ -180,7 +220,7 @@ fn execute(
     let out = cache.join(&case.id).join(kind);
     fs::create_dir_all(&out)?;
     // Preserve old receipts but never score one as this attempt after a failure.
-    for name in ["run.json", "error.json"] {
+    for name in ["run.json", "error.json", "timing-window.json"] {
         let path = out.join(name);
         if path.exists() {
             let stamp = std::time::SystemTime::now()
@@ -231,6 +271,13 @@ fn execute(
     };
     drop(child);
     if let Some(error) = error {
+        let receipt = out.join("run.json");
+        if receipt.exists() {
+            fs::rename(
+                receipt,
+                out.join(format!("failed-{}-run.json", timing::unix_ms()?)),
+            )?;
+        }
         write_json(&out.join("error.json"), &error)?;
         eprintln!("{} {kind}: {error}", case.id);
     } else {

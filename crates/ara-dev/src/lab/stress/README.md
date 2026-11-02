@@ -36,6 +36,12 @@ It enforces a 20-minute gap between T1 windows. `--quality-only` performs captur
 and references without taking a quiet window; it respects someone else's window.
 Worker timeouts terminate only the owned process tree. Old receipts are retained
 as `previous-*`; a failed attempt cannot reuse an earlier run as its new result.
+The closing load guard classifies each complete worker interval, retained in
+`timing-window.json`, using the same overlap policy as D26. A contaminated case
+stays invalid without discarding unrelated clean cases. Missing CPU/GPU coverage,
+sampler errors, gaps over the case or a non-default guard policy cannot certify it.
+The complete batch guard remains archived, including every rejected interval.
+Retries replay the whole selected case; no individual frame is trimmed from a run.
 
 `--reference-samples 256` is a finite undenoised budget, not a convergence claim.
 Every still has a reference; motion cases sample pre-event, F, F+1 through F+4, and
@@ -95,6 +101,8 @@ contact displacement, missing >=2 px shadow features, and secondary-view coverag
 `evidence` carries index bytes/link, links+reverse+index bytes, channel bytes,
 direction-comparison completion, current-geometry transport, per-source-sample
 combine, real-time sample-count declaration, and G5 constituent quality receipts.
+Boolean evidence must hold on every frame; cold-publication evidence is checked at
+the cut frame itself. A single successful frame cannot certify the whole replay.
 G5 requires a complete-frame GPU span, CPU critical-path time and submission stalls;
 summing pass timestamps never creates those measurements. G5's failed-workload
 allocation charges are attribution only and cannot produce a passing verdict.
