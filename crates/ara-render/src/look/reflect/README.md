@@ -42,6 +42,8 @@ the frame span before requesting the counters. GPU stages are `Reflect.Clear`,
 `Reflect.Mirror`, `Reflect.Rough`, `Reflect.Prefiltered`; ordered-glass raster work is in
 `ForwardTransparency`. Existing control passes still execute where the normal graph
 declares them, and their cost remains part of the complete candidate frame.
+Interface, exhaustion and ray counts are global across secondary passes. The lab leaves
+isolated `ordered_glass` demand null; its GPU time is inclusive `ForwardTransparency`.
 
 ## Checks and measurements
 
@@ -69,3 +71,19 @@ The optional `all-references` final argument evaluates every frame. Supplemental
 Showcase captures set `ARA_B4_SHOWCASE` to the pinned project and optionally
 `ARA_B4_SHOWCASE_SHOT` to an authored camera. They reuse the lab's fixed post settings,
 not the editor's bloom/filmic stack, and are kept separate from the three G6 cases.
+
+## G6 outcome (2026-11-02)
+
+Not promoted. The measured experiment uses cuts 0.10/0.70 and 16 fixed rough rays;
+it is not a production preset. At native 1440p, the 90-frame finite-reference worst
+region FLIP is 0.163374 (roughness), 0.183350 (Polar), and 0.090111 (ordered glass),
+against the unchanged 0.02 line. Increasing the first-frame reference to 4096 spp
+does not bring any case within the line and does not establish convergence.
+The supplied steady-view scripts do not certify dynamic D29 behavior. Large glass
+branch exhaustion and structured rough-lobe errors remain promotion blockers.
+
+The complete gate table, separate coverage/cost measurements, image audit, frozen
+worker identity and timing acceptance are in
+`D:/AraBuild/render-v3/gates/G6/B4-RESULT.md`. The measurement worker predates two
+reporting-only fixes: camera-specific supplemental archive names and leaving isolated
+glass demand null. Raw receipts are retained with both limitations documented.
