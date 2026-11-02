@@ -7,7 +7,9 @@ use crate::{
     look::transport::links::LinkStore,
 };
 use anyhow::Result;
-use ara_gpu::{Access, Buffer, Device, GpuDevice, Pipeline, Queue, Resource, vk};
+use ara_gpu::{
+    Access, Barrier, Buffer, Device, GpuDevice, Pipeline, Queue, Resource, commands::Command, vk,
+};
 use glam::Vec3;
 use std::{collections::BTreeMap, path::Path};
 
@@ -26,6 +28,66 @@ fn load(gpu: &mut GpuDevice, artifacts: &Path, name: &str) -> Result<Pipeline> {
     Ok(gpu.create_pipeline(&cooked, artifacts)?)
 }
 
+/// Read-mostly transport lives in device-local memory on discrete GPUs. Host
+/// coherent storage is only the short-lived upload, never the gather/readout path.
+fn device_buffer(gpu: &mut GpuDevice, bytes: &[u8]) -> Result<Buffer> {
+    let buffer = gpu.create_buffer(
+        bytes.len().max(16) as u64,
+        vk::BufferUsageFlags::STORAGE_BUFFER
+            | vk::BufferUsageFlags::TRANSFER_DST
+            | vk::BufferUsageFlags::TRANSFER_SRC,
+        false,
+    )?;
+    if let Err(error) = upload_device(gpu, buffer, bytes, Access::Undefined) {
+        gpu.retire(Resource::Buffer(buffer))?;
+        return Err(error);
+    }
+    Ok(buffer)
+}
+
+fn upload_device(gpu: &mut GpuDevice, buffer: Buffer, bytes: &[u8], before: Access) -> Result<()> {
+    let staging = gpu.create_buffer(
+        bytes.len().max(16) as u64,
+        vk::BufferUsageFlags::TRANSFER_SRC,
+        true,
+    )?;
+    let result = (|| {
+        gpu.upload(staging, bytes)?;
+        let mut commands = gpu.begin(Queue::Graphics);
+        commands.barriers([
+            Barrier {
+                resource: Resource::Buffer(staging),
+                before: Access::HostWrite,
+                after: Access::CopySource,
+                handoff: None,
+            },
+            Barrier {
+                resource: Resource::Buffer(buffer),
+                before,
+                after: Access::CopyDestination,
+                handoff: None,
+            },
+        ]);
+        commands.push(Command::CopyBuffer {
+            source: staging,
+            destination: buffer,
+            size: bytes.len() as u64,
+        });
+        commands.barriers([Barrier {
+            resource: Resource::Buffer(buffer),
+            before: Access::CopyDestination,
+            after: Access::ShaderRead,
+            handoff: None,
+        }]);
+        let point = gpu.submit(commands.finish(), &[])?;
+        gpu.resolve(point)?;
+        Ok(())
+    })();
+    gpu.retire(Resource::Buffer(staging))?;
+    gpu.collect()?;
+    result
+}
+
 impl ReadoutGpu {
     pub fn new(
         gpu: &mut GpuDevice,
@@ -34,12 +96,7 @@ impl ReadoutGpu {
         scene: &Scene,
     ) -> Result<Self> {
         let packed = readout_bytes(transport, scene, None);
-        let buffer = gpu.create_buffer(
-            packed.len() as u64,
-            vk::BufferUsageFlags::STORAGE_BUFFER,
-            true,
-        )?;
-        gpu.upload(buffer, &packed)?;
+        let buffer = device_buffer(gpu, &packed)?;
         let record = gpu.storage_buffer(buffer)?.index;
         let lit = load(gpu, artifacts, "transport_lighting")?;
         let diffuse = load(gpu, artifacts, "transport_diffuse")?;
@@ -49,7 +106,7 @@ impl ReadoutGpu {
             lit,
             diffuse,
             bytes: packed.len(),
-            access: Access::HostWrite,
+            access: Access::ShaderRead,
         })
     }
 
@@ -79,21 +136,16 @@ impl ReadoutGpu {
 
     fn upload(&mut self, gpu: &mut GpuDevice, packed: Vec<u8>) -> Result<()> {
         if packed.len() > self.bytes {
-            let replacement = gpu.create_buffer(
-                packed.len() as u64,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
-                true,
-            )?;
-            gpu.upload(replacement, &packed)?;
+            let replacement = device_buffer(gpu, &packed)?;
             let index = gpu.storage_buffer(replacement)?.index;
             gpu.retire(Resource::Buffer(self.buffer))?;
             self.buffer = replacement;
             self.record = index;
             self.bytes = packed.len();
         } else {
-            gpu.upload(self.buffer, &packed)?;
+            upload_device(gpu, self.buffer, &packed, self.access)?;
         }
-        self.access = Access::HostWrite;
+        self.access = Access::ShaderRead;
         Ok(())
     }
 

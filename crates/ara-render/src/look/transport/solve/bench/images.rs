@@ -1,5 +1,5 @@
 //! Native-resolution deterministic readout captures and independent path tracing.
-use super::{fixtures::Fixture, gltf_scene, write_json};
+use super::{fixtures::Fixture, gltf_scene, memory, write_json};
 use anyhow::Result;
 use ara_render::{
     PatchTransport, Renderer, TransportOptions,
@@ -138,17 +138,30 @@ pub fn ab(f: &Fixture, out: &Path, samples: u32) -> Result<()> {
     let (_, probe_hdr) = renderer.lab_radiance()?;
     probe.image.save(out.join("probe-gi.png"))?;
     write_json(&out.join("probe-gi.json"), &probe.metadata)?;
+    let probe_timing = steady(&mut renderer, &req)?;
     let mut reference = ara_pathtrace::Reference::new(&mut gpu, &world, SIZE, samples, 16, post)?;
-    reference.converge(&mut gpu, &f.camera)?;
+    let mut half = None;
+    let mut batches = 0;
+    loop {
+        let complete = reference.step(&mut gpu, &f.camera, false)?;
+        batches += 8;
+        if half.is_none() && batches >= samples / 2 {
+            half = Some(reference.radiance(&mut gpu)?);
+        }
+        if complete {
+            break;
+        }
+    }
     let reference_hdr = reference.radiance(&mut gpu)?;
     reference
         .capture(&mut gpu)?
         .save(out.join("pathtrace.png"))?;
     reference.destroy(&mut gpu)?;
+    let convergence = half.as_ref().map(|half| ratio(&reference_hdr, half));
     let mut metrics = serde_json::Map::new();
     metrics.insert(
         "probe_gi".into(),
-        serde_json::json!({"mean_abs_ln_region_ratio":ratio(&reference_hdr,&probe_hdr)}),
+        serde_json::json!({"mean_abs_ln_region_ratio":ratio(&reference_hdr,&probe_hdr),"steady_gpu":probe_timing}),
     );
     for global in [false, true] {
         let name = if global {
@@ -157,6 +170,7 @@ pub fn ab(f: &Fixture, out: &Path, samples: u32) -> Result<()> {
             "patch-per-patch"
         };
         println!("A/B building {name}");
+        let before = memory::begin();
         let transport = PatchTransport::new(
             &f.scene,
             &f.textures,
@@ -167,19 +181,58 @@ pub fn ab(f: &Fixture, out: &Path, samples: u32) -> Result<()> {
             },
             Some(&out.join("charts")),
         )?;
+        let (heap_live, heap_peak) = memory::end(before);
+        let publication = std::time::Instant::now();
         renderer.set_patch_transport(Some(&transport), &f.scene)?;
+        let publication_ms = publication.elapsed().as_secs_f64() * 1000.;
         let capture = renderer.capture(&req)?;
         let (_, hdr) = renderer.lab_radiance()?;
         capture.image.save(out.join(format!("{name}.png")))?;
         write_json(&out.join(format!("{name}.json")), &capture.metadata)?;
-        metrics.insert(name.into(),serde_json::json!({"mean_abs_ln_region_ratio":ratio(&reference_hdr,&hdr),"report":transport.report(),"gpu_readout_bytes":renderer.patch_transport_gpu_bytes()}));
+        let timing = steady(&mut renderer, &req)?;
+        metrics.insert(name.into(),serde_json::json!({"mean_abs_ln_region_ratio":ratio(&reference_hdr,&hdr),"report":transport.report(),"gpu_readout_bytes":renderer.patch_transport_gpu_bytes(),"measured_heap_live_bytes":heap_live,"measured_heap_peak_bytes":heap_peak,"publication_cpu_ms":publication_ms,"steady_gpu":timing}));
     }
     write_json(
         &out.join("metrics.json"),
-        &serde_json::json!({"size":SIZE,"samples":samples,"reference_converged":false,"reference_bounces":16,"region":"64x64 screen regions, mean Rec.709 luminance, floor 1e-6","source":"source glTF with stated common lighting; not cooked Polar project","metrics":metrics}),
+        &serde_json::json!({"size":SIZE,"samples":samples,"reference_converged":false,"half_vs_full_mean_abs_ln_region_ratio":convergence,"reference_bounces":16,"region":"64x64 screen regions, mean Rec.709 luminance, floor 1e-6","source":"source glTF basic PBR with common lighting; extension materials and cooked Polar authoring are not reproduced","metrics":metrics}),
     )
 }
 use std::collections::BTreeMap;
+fn steady(renderer: &mut Renderer, request: &CaptureRequest) -> Result<serde_json::Value> {
+    let mut request = request.clone();
+    request.settle_frames = 1;
+    let mut lighting = Vec::new();
+    let mut frames = Vec::new();
+    for frame in 0..180 {
+        let capture = renderer.capture(&request)?;
+        if frame < 30 {
+            continue;
+        }
+        let passes: Vec<_> = capture
+            .metadata
+            .timings
+            .iter()
+            .filter(|t| t.pass != "CaptureReadback")
+            .collect();
+        if let Some(pass) = passes.iter().find(|t| t.pass == "DeferredLighting") {
+            lighting.push(pass.milliseconds);
+        }
+        let start = passes
+            .iter()
+            .map(|t| t.start_ms)
+            .fold(f64::INFINITY, f64::min);
+        let end = passes.iter().map(|t| t.end_ms).fold(0., f64::max);
+        frames.push(end - start);
+    }
+    let quantiles = |mut samples: Vec<f64>| {
+        samples.sort_by(f64::total_cmp);
+        serde_json::json!({"samples":samples.len(),"p50_ms":samples.get(samples.len()/2),
+            "p99_ms":samples.get(samples.len()*99/100),"max_ms":samples.last()})
+    };
+    Ok(
+        serde_json::json!({"deferred_including_direct_and_specular":quantiles(lighting),"render_span_excluding_readback":quantiles(frames)}),
+    )
+}
 fn ratio(reference: &[[f32; 4]], candidate: &[[f32; 4]]) -> f64 {
     let mut total = 0.;
     let mut count = 0;

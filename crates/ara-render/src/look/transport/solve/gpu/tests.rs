@@ -25,27 +25,18 @@ impl GatherHarness {
         let pipeline = load(&mut gpu, &artifacts, "transport_gather")?;
         let active: Vec<_> = (0..links.tiles.len() as u32).collect();
         let data = gather_bytes(links, solver, &active, 1);
-        let record = gpu.create_buffer(
-            data.len() as u64,
-            vk::BufferUsageFlags::STORAGE_BUFFER,
-            true,
-        )?;
-        gpu.upload(record, &data)?;
+        let record = device_buffer(&mut gpu, &data)?;
         let record_index = gpu.storage_buffer(record)?.index;
         let bytes = (solver.radiance.len() * 12).max(16) as u64;
-        let usage = vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::TRANSFER_SRC;
         let values = [
-            gpu.create_buffer(bytes, usage, true)?,
-            gpu.create_buffer(bytes, usage, true)?,
+            device_buffer(&mut gpu, bytemuck::cast_slice(&solver.radiance))?,
+            device_buffer(&mut gpu, bytemuck::cast_slice(&solver.radiance))?,
         ];
         let indices = [
             gpu.storage_buffer(values[0])?.index,
             gpu.storage_buffer(values[1])?.index,
         ];
-        for buffer in values {
-            gpu.upload(buffer, bytemuck::cast_slice(&solver.radiance))?;
-        }
-        let readback = gpu.create_buffer(bytes, vk::BufferUsageFlags::TRANSFER_DST, true)?;
+        let readback = gpu.create_readback_buffer(bytes)?;
         Ok(Self {
             gpu,
             pipeline,
@@ -66,18 +57,14 @@ impl GatherHarness {
         commands.barriers([
             Barrier {
                 resource: Resource::Buffer(self.record),
-                before: if first {
-                    Access::HostWrite
-                } else {
-                    Access::ShaderRead
-                },
+                before: Access::ShaderRead,
                 after: Access::ShaderRead,
                 handoff: None,
             },
             Barrier {
                 resource: Resource::Buffer(self.values[self.slot]),
                 before: if first {
-                    Access::HostWrite
+                    Access::ShaderRead
                 } else {
                     Access::Storage
                 },
@@ -86,11 +73,7 @@ impl GatherHarness {
             },
             Barrier {
                 resource: Resource::Buffer(self.values[output]),
-                before: if first {
-                    Access::HostWrite
-                } else {
-                    Access::ShaderRead
-                },
+                before: Access::ShaderRead,
                 after: Access::Storage,
                 handoff: None,
             },
