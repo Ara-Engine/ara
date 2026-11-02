@@ -45,8 +45,7 @@ impl NativeMaterials<'_> {
                 distance: 0.,
                 front: true,
             };
-            let (base, emitted, transmission) = self.material(hit);
-            let metallic = self.scene.materials[instance.material].pbr.surface[0];
+            let (base, emitted, transmission, metallic) = self.material(hit);
             albedo += base.truncate() * (weight * (1. - metallic) * (1. - transmission));
             emission += emitted * weight;
             area += weight;
@@ -58,7 +57,7 @@ impl NativeMaterials<'_> {
         }
     }
 
-    pub(super) fn material(&self, hit: SurfaceHit) -> (Vec4, Vec3, f32) {
+    pub(super) fn material(&self, hit: SurfaceHit) -> (Vec4, Vec3, f32, f32) {
         let instance = &self.scene.instances[hit.id as usize];
         let geometry = &self.scene.geometry[instance.geometry];
         let triangle =
@@ -86,7 +85,8 @@ impl NativeMaterials<'_> {
             * sample(3, m.pbr.textures[3]).truncate();
         let transmission =
             m.extras.transmission_factor * sample(5, m.extras.transmission_texture).x;
-        (base, emission, transmission)
+        let metallic = m.pbr.surface[0] * sample(2, m.pbr.textures[2]).z;
+        (base, emission, transmission, metallic)
     }
 }
 impl Materials for NativeMaterials<'_> {
@@ -104,7 +104,7 @@ impl Materials for NativeMaterials<'_> {
             return Optical::Ignore;
         }
         let material = &self.scene.materials[instance.material];
-        let (base, _, transmission) = self.material(hit);
+        let (base, _, transmission, _) = self.material(hit);
         if material.pbr.flags[0] == 1 && base.w < material.pbr.surface[3] {
             return Optical::Ignore;
         }
@@ -213,45 +213,4 @@ pub(super) fn direct(
         incident += lamp(light, cpu, materials, position, normal);
     }
     incident
-}
-pub(super) fn light_gain(light: &crate::scene::Light) -> Vec3 {
-    Vec3::from_array([
-        light.color_lumens[0],
-        light.color_lumens[1],
-        light.color_lumens[2],
-    ]) * light.color_lumens[3]
-}
-pub(super) fn lamp(
-    light: &crate::scene::Light,
-    cpu: &CpuTrace<'_>,
-    materials: &NativeMaterials<'_>,
-    position: Vec3,
-    normal: Vec3,
-) -> Vec3 {
-    let centre = Vec3::new(
-        light.position_range[0],
-        light.position_range[1],
-        light.position_range[2],
-    );
-    let delta = centre - position;
-    let r = delta.length();
-    let range = light.position_range[3];
-    if r <= 1e-5 || r >= range {
-        return Vec3::ZERO;
-    }
-    let direction = delta / r;
-    let cosine = normal.dot(direction).max(0.);
-    if cosine == 0. {
-        return Vec3::ZERO;
-    }
-    let window = (1. - (r / range).powi(4)).max(0.).powi(2);
-    let color = Vec3::new(
-        light.color_lumens[0],
-        light.color_lumens[1],
-        light.color_lumens[2],
-    );
-    let flux = light.color_lumens[3] / (4. * std::f32::consts::PI);
-    color
-        * (flux * window * cosine / (r * r).max(0.01))
-        * visibility(cpu, materials, position, direction, (r - 1e-4).max(1e-4))
 }

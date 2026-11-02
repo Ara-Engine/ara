@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, path::Path};
 
 pub fn load(path: &Path) -> Result<Fixture> {
     let (doc, buffers, images) = gltf::import(path)?;
-    let textures = images
+    let source_images = images
         .into_iter()
         .map(|image| {
             use gltf::image::Format;
@@ -35,10 +35,13 @@ pub fn load(path: &Path) -> Result<Fixture> {
             Ok(scene::Texture {
                 size: [image.width, image.height],
                 rgba,
-                srgb: true,
+                srgb: false,
             })
         })
         .collect::<Result<Vec<_>>>()?;
+    // One source image may serve colour and scalar roles: preserve separate views.
+    let mut textures = Vec::new();
+    let mut views = BTreeMap::new();
     let mut materials = Vec::new();
     for m in doc.materials() {
         let p = m.pbr_metallic_roughness();
@@ -47,6 +50,7 @@ pub fn load(path: &Path) -> Result<Fixture> {
         let e = m.emissive_factor();
         material.pbr.emissive_roughness = [e[0], e[1], e[2], p.roughness_factor()];
         material.pbr.surface[0] = p.metallic_factor();
+        material.pbr.surface[1] = m.normal_texture().map_or(1., |t| t.scale());
         material.pbr.surface[3] = m.alpha_cutoff().unwrap_or(0.5);
         material.pbr.flags[0] = match m.alpha_mode() {
             gltf::material::AlphaMode::Opaque => 0,
@@ -57,13 +61,38 @@ pub fn load(path: &Path) -> Result<Fixture> {
             material.pbr.flags[1] |= scene::DOUBLE_SIDED;
         }
         for (slot, texture) in [
-            (0, p.base_color_texture().map(|t| t.texture())),
-            (1, m.normal_texture().map(|t| t.texture())),
-            (2, p.metallic_roughness_texture().map(|t| t.texture())),
-            (3, m.emissive_texture().map(|t| t.texture())),
+            (
+                0,
+                p.base_color_texture().map(|t| (t.texture(), t.tex_coord())),
+            ),
+            (1, m.normal_texture().map(|t| (t.texture(), t.tex_coord()))),
+            (
+                2,
+                p.metallic_roughness_texture()
+                    .map(|t| (t.texture(), t.tex_coord())),
+            ),
+            (
+                3,
+                m.emissive_texture().map(|t| (t.texture(), t.tex_coord())),
+            ),
         ] {
-            if let Some(t) = texture {
-                material.pbr.textures[slot] = t.source().index() as u32;
+            if let Some((t, uv)) = texture {
+                ensure!(
+                    uv == 0,
+                    "source A/B legacy reference needs UV0; import native UV transforms before comparison"
+                );
+                let key = (t.source().index(), slot == 0 || slot == 3);
+                let view = *views.entry(key).or_insert_with(|| {
+                    let image = &source_images[key.0];
+                    let id = textures.len() as u32;
+                    textures.push(scene::Texture {
+                        size: image.size,
+                        rgba: image.rgba.to_vec(),
+                        srgb: key.1,
+                    });
+                    id
+                });
+                material.pbr.textures[slot] = view;
             }
         }
         materials.push(material);
@@ -176,11 +205,14 @@ fn visit(
                         color: n::Vertex::WHITE,
                     })
                     .collect();
-                let indices = read
+                let indices: Vec<u32> = read
                     .read_indices()
                     .map(|v| v.into_u32().collect())
                     .unwrap_or_else(|| (0..positions.len() as u32).collect());
-                let key = Sha256::digest(bytemuck::cast_slice(&vertices)).into();
+                let mut hash = Sha256::new();
+                hash.update(bytemuck::cast_slice(&vertices));
+                hash.update(bytemuck::cast_slice(&indices));
+                let key = hash.finalize().into();
                 let slot = scene.geometry.len();
                 scene.geometry.push(n::Geometry {
                     key,
@@ -258,14 +290,16 @@ pub fn world(f: &Fixture) -> scene::Scene {
             let vertices = g
                 .vertices
                 .iter()
-                .map(|v| scene::Vertex {
-                    position: i.world.transform_point3(Vec3::from(v.position)).to_array(),
-                    normal: normal
-                        .transform_vector3(Vec3::from(v.normal))
-                        .normalize()
-                        .to_array(),
-                    uv: v.uv,
-                    tangent: v.tangent,
+                .map(|v| {
+                    let n = normal.transform_vector3(Vec3::from(v.normal)).normalize();
+                    let t = i.world.transform_vector3(Vec3::from_slice(&v.tangent[..3]));
+                    let t = (t - n * n.dot(t)).normalize_or_zero();
+                    scene::Vertex {
+                        position: i.world.transform_point3(Vec3::from(v.position)).to_array(),
+                        normal: n.to_array(),
+                        uv: v.uv,
+                        tangent: [t.x, t.y, t.z, v.tangent[3] * i.world.determinant().signum()],
+                    }
                 })
                 .collect();
             scene::Mesh {

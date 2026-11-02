@@ -85,6 +85,9 @@ impl MediaGrid {
                 && outgoing.cmpge(Vec3::ZERO).all(),
             "invalid media splat"
         );
+        if occupancy == 0. || extinction == 0. {
+            return Ok(());
+        }
         let lo = (min / EDGE).floor().as_ivec3();
         let hi = (max / EDGE).ceil().as_ivec3();
         for z in lo.z..hi.z {
@@ -94,7 +97,7 @@ impl MediaGrid {
                     let overlap =
                         (max.min(cell_min + Vec3::splat(EDGE)) - min.max(cell_min)).max(Vec3::ZERO);
                     let fraction = overlap.x * overlap.y * overlap.z / EDGE.powi(3);
-                    let sigma = extinction * fraction;
+                    let sigma = extinction * occupancy * fraction;
                     let cell = self.cells.entry([x, y, z]).or_default();
                     let total = cell.extinction + sigma;
                     if total > 0. {
@@ -256,6 +259,27 @@ mod tests {
         assert!(grid.march(a, b, 1).is_err());
         grid.begin_frame(2)?;
         assert_eq!(grid.march(a, b, 1)?.transmission, 1.);
+        Ok(())
+    }
+
+    #[test]
+    fn zero_and_fractional_occupancy_scale_extinction() -> Result<()> {
+        let mut grid = MediaGrid::default();
+        grid.begin_frame(1)?;
+        let end = Vec3::splat(0.25);
+        grid.splat(Vec3::ZERO, end, 0., 8., Vec3::ONE, Vec3::ONE)?;
+        assert_eq!(
+            grid.march(Vec3::ZERO, Vec3::new(0.25, 0., 0.), 8)?
+                .transmission,
+            1.
+        );
+        grid.splat(Vec3::ZERO, end, 0.5, 8., Vec3::ONE, Vec3::ONE)?;
+        let sample = grid.march(
+            Vec3::new(0., 0.125, 0.125),
+            Vec3::new(0.25, 0.125, 0.125),
+            8,
+        )?;
+        assert!((sample.transmission - (-1f32).exp()).abs() < 1e-6);
         Ok(())
     }
 

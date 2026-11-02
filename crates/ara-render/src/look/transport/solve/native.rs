@@ -4,7 +4,7 @@
 use super::{
     Budget, DirectionScheme, EventSolver, TraceGraph,
     graph::{self, BuildSettings, Materials, Optical, Query},
-    readout::{Readout, SurfaceMap},
+    readout::SurfaceMap,
     visibility::{CpuTrace, SurfaceHit},
 };
 use crate::{
@@ -28,7 +28,9 @@ use std::{collections::BTreeMap, path::Path, sync::Arc, time::Instant};
 mod channel_bake;
 mod material;
 mod receivers;
+mod source;
 use material::*;
+use source::{lamp, light_gain};
 
 /// A derived smoke or sub-patch volume snapshot. The host owns simulation state;
 /// transport rasterizes this snapshot into fixed 25 cm cells at the next update.
@@ -60,7 +62,7 @@ pub struct TransportOptions {
     pub patch_passes: usize,
     /// Maximum whole link repairs in an event frame.
     pub repair_links: usize,
-    /// Absolute linear-radiance stopping tolerance, certified for the patch system.
+    /// Absolute linear-radiance stopping tolerance for the patch system.
     pub tolerance: f32,
     /// Maximum resident per-light response data; zero disables optional channels.
     pub channel_bytes: usize,
@@ -91,12 +93,16 @@ pub struct TransportReport {
     pub oldest_debt: u64,
     /// Number of blocks already at/past the three-frame deadline.
     pub missed_deadlines: usize,
-    /// Conservative error bound for the currently published patch linear system.
+    /// Residual/norm estimate for the published patch system; excludes FP32 roundoff
+    /// and geometric quadrature error. G3 independently compares an FP64 solution.
     pub solution_bound: f32,
-    /// Current host transport residency, including charts, solver and readout.
+    /// Accounted host transport residency, including private acceleration structures.
+    /// Array capacities are exact; private map/node overhead is conservatively estimated.
     pub resident_bytes: usize,
     /// A2 forward + reverse + index, with actual sampled-ray overrides.
     pub link_bytes: usize,
+    /// Resident optional channel data on the host; GPU copies are charged separately.
+    pub channel_bytes: usize,
     /// Index bytes per link, including the original geometry witnesses.
     pub index_bytes_per_link: f64,
     /// Whether this frame required a cold topology publication outside repair packets.
@@ -120,7 +126,6 @@ pub struct PatchTransport {
     surfaces: SurfaceMap,
     charts: BTreeMap<u64, ChartInstance>,
     registry: PatchRegistry,
-    readout: Readout,
     media: MediaGrid,
     media_sources: Vec<TransportMedium>,
     pub(super) volume: IrradianceVolume,
@@ -147,6 +152,10 @@ impl PatchTransport {
         ensure!(
             options.directions > 0 && options.tolerance > 0. && options.tolerance.is_finite(),
             "invalid transport options"
+        );
+        ensure!(
+            scene.lights.iter().all(|l| l.tables[0] == 0),
+            "CPU transport forcing needs photometric table pixels before accepting profiled lights"
         );
         let mut trace = TraceScene::default();
         let mut meshes = Vec::with_capacity(scene.geometry.len());
@@ -336,7 +345,6 @@ impl PatchTransport {
             })
             .collect();
         let solver = EventSolver::new_albedo(&graph.links, albedo)?;
-        let readout = Readout::new(&graph.links.patches);
         let external_irradiance = vec![Vec3::ZERO; graph.links.patches.len()];
         let mut result = Self {
             channels: super::channels::Channels::new(options.channel_bytes / 2),
@@ -347,7 +355,6 @@ impl PatchTransport {
             surfaces,
             charts,
             registry,
-            readout,
             media,
             media_sources: Vec::new(),
             volume: IrradianceVolume::default(),
@@ -371,6 +378,11 @@ impl PatchTransport {
         )?;
         result.report.patch_passes = stats.patch_passes;
         result.report.solution_bound = stats.solution_bound;
+        // Awake bodies have readout at the first publication too. Their derived
+        // media/large-body response changes crossing links and external forcing.
+        if result.bodies.values().any(|b| !b.owns_links()) {
+            result.initialize_receivers(scene, textures)?;
+        }
         if options.channel_bytes > 0 {
             result.bake_channels(scene, textures)?;
         }
@@ -395,7 +407,7 @@ impl PatchTransport {
             ensure!(
                 lo.is_finite()
                     && hi.is_finite()
-                    && hi.cmpge(lo).all()
+                    && hi.cmpgt(lo).all()
                     && source.occupancy.is_finite()
                     && (0. ..=1.).contains(&source.occupancy)
                     && source.extinction.is_finite()
@@ -505,6 +517,11 @@ impl PatchTransport {
             }
         }
         let mut topology = events.reset || !events.geometries.is_empty();
+        if events.reset {
+            // Row IDs are scoped to this publication. A reset has no per-row
+            // tombstones for the old layout, so retain no body metadata from it.
+            self.bodies.clear();
+        }
         for event in &events.instances {
             let change = &event.change;
             let before = self.bodies.get(&change.id).copied().unwrap_or_default();
@@ -531,10 +548,14 @@ impl PatchTransport {
             replacement.set_media(&self.media_sources)?;
             replacement.frame = events.frame;
             replacement.solver.begin_frame(events.frame)?;
+            if !replacement.media_sources.is_empty() {
+                replacement.initialize_receivers(scene, textures)?;
+            }
             if let Some(origin) = old_origin {
                 replacement.solver.retain_debt(origin);
             }
             replacement.report.topology_publication = true;
+            replacement.account();
             replacement.report.resident_bytes += previous_bytes;
             replacement.report.event_cpu_ms = started.elapsed().as_secs_f64() * 1000.;
             *self = replacement;
@@ -557,6 +578,7 @@ impl PatchTransport {
                 event_cpu_ms: started.elapsed().as_secs_f64() * 1000.,
                 resident_bytes: self.report.resident_bytes,
                 link_bytes: self.report.link_bytes,
+                channel_bytes: self.report.channel_bytes,
                 index_bytes_per_link: self.report.index_bytes_per_link,
                 solution_bound: self.solver.solution_bound(),
                 ..TransportReport::default()
@@ -570,8 +592,35 @@ impl PatchTransport {
         for event in &events.instances {
             self.graph.changed(event.change.id);
             if let Some(current) = event.change.current {
-                self.trace
-                    .set_transform(event.change.id, Affine3A::from_mat4(current.world));
+                let mask = if !current.body.owns_links() && !current.is_large() {
+                    0
+                } else {
+                    255
+                };
+                let key = self
+                    .trace
+                    .instance_key(event.change.id)
+                    .ok_or_else(|| anyhow::anyhow!("changed trace instance is missing"))?;
+                let slot = self
+                    .trace
+                    .slot(key.slot)
+                    .expect("live trace key has a slot");
+                if slot.instance.mask != mask {
+                    let mesh = slot.instance.mesh;
+                    self.trace.set_instance(
+                        event.change.id,
+                        TraceInstance {
+                            mesh,
+                            world: Affine3A::from_mat4(current.world),
+                            mask,
+                            materials: vec![trace::NO_MATERIAL],
+                            user: event.change.id as u32,
+                        },
+                    )?;
+                } else {
+                    self.trace
+                        .set_transform(event.change.id, Affine3A::from_mat4(current.world));
+                }
             }
             if let Some(region) =
                 Region::new(event.swept.min.to_array(), event.swept.max.to_array())
@@ -735,21 +784,41 @@ impl PatchTransport {
         let memory = Memory::measure(&self.graph.links, &self.graph.reverse, &self.graph.index);
         self.report.link_bytes = memory.link_bytes();
         self.report.index_bytes_per_link = memory.index_bytes_per_link();
+        self.report.channel_bytes = self.channels.resident_bytes();
         self.report.resident_bytes = memory.resident_bytes()
             + self.graph.extra_bytes()
             + self.solver.resident_bytes()
             + self.channels.resident_bytes()
             + self.external_irradiance.capacity() * size_of::<Vec3>()
-            + self.readout.resident_bytes()
             + self.surfaces.resident_bytes()
             + self.media.resident_bytes()
             + self.media_sources.capacity() * size_of::<TransportMedium>()
             + self.volume.resident_bytes()
+            + self.trace_bytes()
+            // Registry/chart-instance/body maps: conservative per-entry allowance
+            // including allocator/node slack; chart payloads are counted below.
+            + self.charts.len() * 512
+            + (self.bodies.len() + self.body_sources.len() + self.body_radiance.len()) * 128
             + self
                 .charts
                 .values()
                 .map(|c| c.charts.resident_bytes())
                 .sum::<usize>();
+    }
+
+    fn trace_bytes(&self) -> usize {
+        self.trace
+            .blas_slots()
+            .map(|(_, mesh)| {
+                (mesh.blas.nodes.capacity() + mesh.blas.triangles.capacity()) * 16
+                    + mesh.blas.submeshes.capacity() * 4
+                    + mesh.uvs.as_ref().map_or(0, |uvs| uvs.capacity() * 48)
+                    + 512
+            })
+            .sum::<usize>()
+            + self.trace.tlas().nodes.capacity() * size_of::<ara_bvh::tlas::TlasNode>()
+            + self.trace.instance_slots().len() * 512
+            + self.trace.blas_slot_count() * 64
     }
 
     /// Incident diffuse irradiance for native readout. The patch solution stores

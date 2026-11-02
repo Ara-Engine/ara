@@ -1,4 +1,5 @@
 use super::*;
+use crate as fixture_api;
 use crate::look::transport::{
     links::{Candidate, LinkStore, Visibility},
     patches::{PatchRegistry, Placement},
@@ -7,6 +8,89 @@ use crate::look::transport::{
 use anyhow::Result;
 use ara_patch_charts::{Mesh, Settings, Triangle, cache};
 use std::sync::Arc;
+#[path = "bench/fixtures.rs"]
+mod fixtures;
+
+#[test]
+fn native_local_repair_matches_fresh_trace_through_move_sleep_and_wake() -> Result<()> {
+    use crate::instanced::{
+        Changes,
+        transport::{BodyClass, NativeChangeFeed},
+    };
+    use glam::Mat4;
+    let case = fixtures::Case {
+        name: "sleep-wake",
+        frames: 90,
+        event: 8,
+        bodies: 1,
+        triangles: 108,
+        lights: 1,
+    };
+    let mut f = fixtures::create(&case)?;
+    f.scene
+        .instances
+        .retain(|i| i.entity == 1 || i.entity == 100);
+    f.scene.instances[0].world =
+        Mat4::from_translation(Vec3::new(0., -0.1, 0.)) * Mat4::from_scale(Vec3::new(4., 0.2, 4.));
+    f.scene.instances[1].world =
+        Mat4::from_translation(Vec3::new(-1., 0.6, 0.)) * Mat4::from_scale(Vec3::splat(0.8));
+    f.scene.lights[0].position_range = [0., 3., 0., 8.];
+    f.bodies.clear();
+    f.bodies.insert(1, BodyClass::PhysicsActive);
+    let mut transport = PatchTransport::new(
+        &f.scene,
+        &[],
+        f.bodies.clone(),
+        TransportOptions::default(),
+        None,
+    )?;
+    let awake_count = transport.graph.links.patches.len();
+    assert!(
+        transport
+            .volume
+            .sample(Vec3::new(-1., 0.6, 0.), Vec3::Y)
+            .is_some()
+    );
+    let mut feed = NativeChangeFeed::new(&f.scene, 0)?;
+    let mut changes = Changes::default();
+    changes.transport.bodies.push((1, BodyClass::PhysicsActive));
+    feed.update(&f.scene, Some(&changes))?;
+    feed.finish();
+    for (frame, class) in [
+        (1, BodyClass::PhysicsActive),
+        (2, BodyClass::Sleeping),
+        (3, BodyClass::PhysicsActive),
+    ] {
+        f.scene.instances[1].world.w_axis.x = 0.5;
+        changes.instances = vec![1];
+        changes.transport.bodies = vec![(1, class)];
+        f.bodies.insert(1, class);
+        feed.begin_frame(frame)?;
+        feed.update(&f.scene, Some(&changes))?;
+        transport.advance(&f.scene, &[], feed.finish(), true)?;
+        let fresh = PatchTransport::new(
+            &f.scene,
+            &[],
+            f.bodies.clone(),
+            TransportOptions::default(),
+            None,
+        )?;
+        assert_eq!(
+            transport.graph.links.source, fresh.graph.links.source,
+            "frame {frame}"
+        );
+        assert_eq!(
+            transport.graph.links.transmission, fresh.graph.links.transmission,
+            "frame {frame}"
+        );
+        if class == BodyClass::Sleeping {
+            assert!(transport.graph.links.patches.len() > awake_count);
+        } else {
+            assert_eq!(transport.graph.links.patches.len(), awake_count);
+        }
+    }
+    Ok(())
+}
 
 pub(super) fn two_patches() -> Result<LinkStore> {
     let mesh = Mesh {

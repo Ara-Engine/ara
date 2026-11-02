@@ -135,41 +135,52 @@ fn readout_bytes(
     // Readout volume cells use entity zero and six 48-byte axis records. Surface
     // rows use the native instance ID and never interpolate with these cells.
     let volume_cells = transport.volume.records().count();
-    let records_offset = 16 + (cells.len() + volume_cells) * 32;
+    let table_size = ((cells.len() + volume_cells) * 2)
+        .max(1)
+        .next_power_of_two();
+    let records_offset = 16 + table_size * 32;
     let mut bytes = Vec::with_capacity(records_offset + patches.len() * 48);
     bytes.extend_from_slice(bytemuck::cast_slice(&[
-        (cells.len() + volume_cells) as u32,
+        (table_size - 1) as u32,
         records_offset as u32,
         patches.len() as u32,
         0,
     ]));
+    let mut table = vec![[0u32; 8]; table_size];
     let mut first = 0u32;
     for (cell, _) in transport.volume.records() {
-        bytes.extend_from_slice(bytemuck::cast_slice(&[
-            cell[0] as u32,
-            cell[1] as u32,
-            cell[2] as u32,
-            0,
-            first,
-            6,
-            0,
-            0,
-        ]));
+        insert_cell(
+            &mut table,
+            [
+                cell[0] as u32,
+                cell[1] as u32,
+                cell[2] as u32,
+                0,
+                first,
+                6,
+                0,
+                0,
+            ],
+        );
         first += 6;
     }
     for (&(instance, cell), indices) in &cells {
-        bytes.extend_from_slice(bytemuck::cast_slice(&[
-            cell[0] as u32,
-            cell[1] as u32,
-            cell[2] as u32,
-            instance,
-            first,
-            indices.len() as u32,
-            0,
-            0,
-        ]));
+        insert_cell(
+            &mut table,
+            [
+                cell[0] as u32,
+                cell[1] as u32,
+                cell[2] as u32,
+                instance,
+                first,
+                indices.len() as u32,
+                0,
+                0,
+            ],
+        );
         first += indices.len() as u32;
     }
+    bytes.extend_from_slice(bytemuck::cast_slice(&table));
     for (cell, lobes) in transport.volume.records() {
         for (axis, value) in lobes.iter().enumerate() {
             let pos = glam::IVec3::from_array(cell).as_vec3() * 0.25;
@@ -241,6 +252,24 @@ fn readout_bytes(
     }
     bytes.extend_from_slice(bytemuck::cast_slice(&channel_rows));
     bytes
+}
+
+fn cell_hash(key: [u32; 4]) -> u32 {
+    let mut h = key[3].wrapping_mul(0x9e3779b9)
+        ^ key[0].wrapping_mul(0x85ebca6b)
+        ^ key[1].wrapping_mul(0xc2b2ae35)
+        ^ key[2].wrapping_mul(0x27d4eb2f);
+    h ^= h >> 16;
+    h = h.wrapping_mul(0x7feb352d);
+    h ^ (h >> 15)
+}
+
+fn insert_cell(table: &mut [[u32; 8]], row: [u32; 8]) {
+    let mut slot = cell_hash(row[..4].try_into().expect("cell key")) as usize & (table.len() - 1);
+    while table[slot][5] != 0 {
+        slot = (slot + 1) & (table.len() - 1);
+    }
+    table[slot] = row;
 }
 
 /// Actual coalesced A2 buffers, not a synthetic differently packed stand-in.

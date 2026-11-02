@@ -1,6 +1,7 @@
 //! Error-ordered, patch-stratified residual propagation. The priority is an
-//! algebraic residual and the stopping certificate is ||r||inf/(1-||T||inf),
-//! not an estimated visual error. Images are scored against an independent solve.
+//! algebraic residual and the real-arithmetic estimate is ||r||inf/(1-||T||inf).
+//! FP32 roundoff and geometric error are not covered by that estimate. Images and
+//! frame radiance are scored against an independent FP64 solve.
 
 use super::{magnitude, valid_radiance};
 use crate::look::transport::{

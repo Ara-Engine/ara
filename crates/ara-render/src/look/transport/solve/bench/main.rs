@@ -3,6 +3,8 @@
 mod fixtures;
 mod gltf_scene;
 mod images;
+mod memory;
+use ara_render as fixture_api;
 
 use anyhow::{Context, Result, ensure};
 use ara_render::{
@@ -23,6 +25,8 @@ struct FrameScore {
     max_error_white: f32,
     mean_error_white: f32,
     region_flip_excess: Option<f64>,
+    measured_transport_heap_live: isize,
+    measured_transport_heap_peak: usize,
 }
 
 fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<()> {
@@ -88,6 +92,7 @@ fn main() -> Result<()> {
             },
             ..TransportOptions::default()
         };
+        let memory_before = memory::begin();
         let mut uncapped = PatchTransport::new(
             &fixture.scene,
             &fixture.textures,
@@ -99,6 +104,7 @@ fn main() -> Result<()> {
             options,
             Some(&out.join("cache")),
         )?;
+        let (mut measured_live, cold_peak) = memory::end(memory_before);
         let cold = uncapped.report().clone();
         let mut capped = PatchTransport::new(
             &fixture.scene,
@@ -129,14 +135,22 @@ fn main() -> Result<()> {
         };
         let mut scores = Vec::new();
         for frame in 1..frames.unwrap_or(case.frames) {
+            let layout = (fixture.scene.geometry.len(), fixture.scene.instances.len());
             let changes = fixtures::advance(&mut fixture, case, frame);
             feed.begin_frame(frame)?;
+            if layout != (fixture.scene.geometry.len(), fixture.scene.instances.len()) {
+                feed.replace(&fixture.scene)?;
+            }
             feed.update(&fixture.scene, Some(&changes))?;
             let events = feed.finish();
             replay.write_frame(events)?;
+            let memory_before = memory::begin();
             let demanded = uncapped
                 .advance(&fixture.scene, &fixture.textures, events, true)?
                 .clone();
+            let (delta, extra_peak) = memory::end(memory_before);
+            let frame_peak = measured_live.max(0) as usize + extra_peak;
+            measured_live += delta;
             let protected = capped
                 .advance(&fixture.scene, &fixture.textures, events, false)?
                 .clone();
@@ -174,6 +188,8 @@ fn main() -> Result<()> {
                 max_error_white: peak,
                 mean_error_white: (mean / (values.len().max(1) * 3) as f64) as f32,
                 region_flip_excess: flip,
+                measured_transport_heap_live: measured_live,
+                measured_transport_heap_peak: frame_peak,
             });
             if frame % 10 == 0 || frame == case.event || frame + 1 == frames.unwrap_or(case.frames)
             {
@@ -212,7 +228,9 @@ fn main() -> Result<()> {
             "case":case.name,"declared_frames":case.frames,"completed_frames":scores.len()+1,"triangles_per_body":case.triangles,
             "bodies":case.bodies,"lights":case.lights,"cold":cold,"uncapped_cpu_average_ms":average,"uncapped_cpu_p99_ms":p99,
             "uncapped_cpu_max_ms":maximum,"capped_max_error_white":max_error,
-            "peak_host_transport_bytes":scores.iter().map(|s|s.capped.resident_bytes).max(),
+            "peak_host_transport_bytes":scores.iter().map(|s|s.capped.resident_bytes).chain([cold.resident_bytes]).max(),
+            "measured_heap_peak_bytes":scores.iter().map(|s|s.measured_transport_heap_peak).chain([cold_peak]).max(),
+            "measured_heap_cold_peak_bytes":cold_peak,
             "max_debt_age":scores.iter().map(|s|s.capped.oldest_debt).max(),
             "max_region_flip_excess":scores.iter().filter_map(|s|s.region_flip_excess).reduce(f64::max),
             "reference":"Independent converged FP64 patch system; current-geometry pathtrace and mover/media quality require separate image evidence",

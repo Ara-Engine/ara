@@ -1,6 +1,52 @@
 //! Readout-only awake body volume and 25 cm media splats.
 use super::*;
 impl PatchTransport {
+    /// Cold publications acquire derived volume/media before any pixel can read it.
+    pub(super) fn initialize_receivers(
+        &mut self,
+        scene: &Scene,
+        textures: &[crate::scene::Texture],
+    ) -> Result<()> {
+        self.update_receivers(scene, textures)?;
+        self.graph.invalidate_all(self.frame);
+        let cpu = CpuTrace::new(&self.trace);
+        let materials = NativeMaterials {
+            scene,
+            textures,
+            bodies: &self.bodies,
+            generation: self.frame + 1,
+        };
+        let query = Query {
+            trace: &cpu,
+            surfaces: &self.surfaces,
+            materials: &materials,
+            media: &self.media,
+            bodies: &self.body_sources,
+            boundary: self.graph.links.patches.len() as u32,
+        };
+        self.graph
+            .repair(&query, &self.solver.errors(), usize::MAX, self.frame + 1)?;
+        self.refresh_forcing(scene, textures, None)?;
+        for patch in 0..self.graph.links.patches.len() as u32 {
+            self.solver
+                .refresh_row(&self.graph.links, patch, self.frame);
+        }
+        let rows: Vec<_> = (0..self.graph.links.patches.len() as u32).collect();
+        self.solver
+            .update_contraction_rows(&self.graph.links, &rows)?;
+        let stats = self.solver.run(
+            &self.graph.links,
+            &self.graph,
+            Budget {
+                patch_passes: usize::MAX,
+                reverse_edges: usize::MAX,
+                solution_tolerance: self.options.tolerance,
+            },
+        )?;
+        self.report.patch_passes += stats.patch_passes;
+        self.report.solution_bound = stats.solution_bound;
+        Ok(())
+    }
     pub(super) fn update_receivers(
         &mut self,
         scene: &Scene,
@@ -55,41 +101,43 @@ impl PatchTransport {
                         .into_iter()
                         .enumerate()
                         {
-                            let mut incoming =
-                                direct(scene, &cpu, &materials, position, normal, self.distance);
+                            // Pixels already evaluate direct lighting. The volume
+                            // contains only environment and reflected radiance.
+                            let mut incoming = Vec3::ZERO;
                             for (direction, weight) in graph::directions(
                                 normal,
                                 id,
                                 self.options.directions,
                                 DirectionScheme::PerPatch,
                             ) {
-                                let hit = cpu.closest(
-                                    Ray {
-                                        origin: position,
-                                        direction,
-                                        t_min: 1e-4,
-                                        t_max: self.distance,
-                                    },
-                                    |h| {
+                                let mut ray = Ray {
+                                    origin: position,
+                                    direction,
+                                    t_min: 1e-4,
+                                    t_max: self.distance,
+                                };
+                                let mut transmission = Vec3::ONE;
+                                let radiance = loop {
+                                    let hit = cpu.closest(ray, |h| {
                                         h.id != id
                                             && !matches!(materials.optical(h), Optical::Ignore)
-                                    },
-                                );
-                                let radiance = hit
-                                    .and_then(|h| {
-                                        self.surfaces.patch(h.id, h.primitive, h.barycentric)
-                                    })
-                                    .map_or_else(
-                                        || {
-                                            if hit.is_none() {
-                                                environment(scene, direction)
-                                            } else {
-                                                Vec3::ZERO
-                                            }
-                                        },
-                                        |p| self.solver.radiance[p as usize],
-                                    );
-                                incoming += radiance * (std::f32::consts::PI * weight);
+                                    });
+                                    let Some(hit) = hit else {
+                                        break environment(scene, direction);
+                                    };
+                                    if let Optical::Transmit(rgb) = materials.optical(hit) {
+                                        transmission *= rgb;
+                                        ray.t_min = f32::from_bits(hit.distance.to_bits() + 1);
+                                        continue;
+                                    }
+                                    break self
+                                        .surfaces
+                                        .patch(hit.id, hit.primitive, hit.barycentric)
+                                        .filter(|_| hit.front)
+                                        .map_or(Vec3::ZERO, |p| self.solver.radiance[p as usize]);
+                                };
+                                incoming +=
+                                    transmission * radiance * (std::f32::consts::PI * weight);
                             }
                             lobes[axis] = incoming;
                         }
@@ -117,7 +165,11 @@ impl PatchTransport {
                 Vec3::NEG_Z,
             ]
             .into_iter()
-            .filter_map(|n| self.volume.sample(centre, n))
+            .map(|n| {
+                let face = centre + n * ((bounds[1] - bounds[0]) * 0.5 + Vec3::splat(1e-4));
+                self.volume.sample(centre, n).unwrap_or(Vec3::ZERO)
+                    + direct(scene, &cpu, &materials, face, n, self.distance)
+            })
             .sum::<Vec3>()
                 / 6.;
             let outgoing = emission + albedo * irradiance / std::f32::consts::PI;

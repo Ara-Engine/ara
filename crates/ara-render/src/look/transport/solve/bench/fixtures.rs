@@ -1,9 +1,9 @@
 //! Deterministic fallback recipes with the T1 G3 event counts and durations.
-use anyhow::Result;
-use ara_render::{
+use super::fixture_api::{
     instanced::{self, transport::BodyClass},
     scene::{self, CameraSpec, Light},
 };
+use anyhow::Result;
 use glam::{Mat4, Vec3};
 use sha2::Digest;
 use std::collections::BTreeMap;
@@ -30,6 +30,7 @@ pub fn cases() -> Vec<Case> {
         ("switch-off", 90, 0, 108, 1),
         ("200-light", 308, 0, 108, 200),
         ("sealed-flicker", 90, 0, 108, 200),
+        ("sealed-20", 90, 0, 108, 20),
         ("open-flicker", 90, 0, 108, 200),
         ("repeated-invalidation", 308, 0, 108, 1),
         ("wall", 90, 0, 108, 1),
@@ -183,7 +184,7 @@ pub fn create(case: &Case) -> Result<Fixture> {
             Vec3::new(2., 3., 0.15),
         );
     }
-    if case.name == "sealed-flicker" {
+    if matches!(case.name, "sealed-flicker" | "sealed-20") {
         for i in 0..=20 {
             add(
                 &mut scene,
@@ -246,7 +247,7 @@ pub fn create(case: &Case) -> Result<Fixture> {
     }
     if matches!(
         case.name,
-        "switch-off" | "sealed-flicker" | "open-flicker" | "repeated-invalidation"
+        "switch-off" | "sealed-flicker" | "sealed-20" | "open-flicker" | "repeated-invalidation"
     ) {
         scene.sun_lux = Vec3::ZERO;
         scene.environment = vec![[0., 0., 0., 1.]];
@@ -288,6 +289,40 @@ pub fn advance(f: &mut Fixture, case: &Case, frame: u64) -> instanced::Changes {
         return changes;
     }
     let t = (frame - case.event) as f32 / 60.;
+    if frame == case.event && matches!(case.name, "wall" | "camera-cut") {
+        if case.name == "wall" {
+            f.scene.instances.retain(|i| i.entity != 10);
+        }
+        let slot = if case.name == "camera-cut" {
+            let slot = f.scene.geometry.len();
+            f.scene.geometry.push(cube(1000));
+            changes.geometries.push(slot);
+            slot
+        } else {
+            0
+        };
+        for i in 0..24 {
+            let row = f.scene.instances.len();
+            add(
+                &mut f.scene,
+                10_000 + i,
+                slot,
+                1,
+                Vec3::new((i % 6) as f32 * 0.35 - 0.9, (i / 6) as f32 * 0.6 + 0.3, 0.),
+                if case.name == "wall" {
+                    Vec3::new(0.3, 0.5, 0.15)
+                } else {
+                    Vec3::splat(0.25)
+                },
+            );
+            f.bodies.insert(row as u64, BodyClass::PhysicsActive);
+            changes
+                .transport
+                .bodies
+                .push((row, BodyClass::PhysicsActive));
+            changes.instances.push(row);
+        }
+    }
     for (row, instance) in f.scene.instances.iter_mut().enumerate() {
         instance.previous_world = instance.world;
         if instance.entity == 10 && case.name == "door" {
@@ -296,8 +331,14 @@ pub fn advance(f: &mut Fixture, case: &Case, frame: u64) -> instanced::Changes {
                 * Mat4::from_translation(Vec3::new(1., 1.5, 0.))
                 * Mat4::from_scale(Vec3::new(2., 3., 0.15));
         }
-        if instance.entity == 10 && case.name == "wall" {
-            instance.world.w_axis.x = 30.;
+        if instance.entity >= 10_000 {
+            let i = instance.entity - 10_000;
+            instance.world.w_axis = Vec3::new(
+                (i % 6) as f32 * 0.35 - 0.9 + t * (i as f32 * 0.1 - 1.),
+                (0.3 + (i / 6) as f32 * 0.6 - 4.9 * t * t).max(0.15),
+                t * 0.4,
+            )
+            .extend(1.);
         }
         if (100..100 + case.bodies as u64).contains(&instance.entity) {
             let sleeping = case.name == "sleep-wake" && (28..=55).contains(&frame);
@@ -328,7 +369,7 @@ pub fn advance(f: &mut Fixture, case: &Case, frame: u64) -> instanced::Changes {
         if case.name == "switch-off" {
             light.color_lumens[3] = 0.;
         }
-        if matches!(case.name, "sealed-flicker" | "open-flicker") {
+        if matches!(case.name, "sealed-flicker" | "sealed-20" | "open-flicker") {
             light.color_lumens[3] = if (frame + i as u64) % 7 < 3 {
                 11520.
             } else {
