@@ -237,6 +237,11 @@ fn run(
     for frame in 0..frames {
         fixture::apply(&mut f, case, frame);
         r.update_native(&f.scene)?;
+        if samples.contains(&frame) {
+            // Scored frames show the true-angle frame: the unjittered TAA would only blend
+            // last frames' shadows in (equally for every variant), never anti-alias.
+            r.reset_temporal_history();
+        }
         r.render(&f.camera, exposure)?;
         let ms = |label: &str| -> f64 {
             r.timings()
@@ -596,6 +601,11 @@ fn g4(spp: u32) -> Result<()> {
         save_png(&reference, &out.join(&case.id).join("reference.png"))?;
         for (c, variant, image) in candidates.iter().filter(|(c, _, _)| c.id == case.id) {
             let flip = score::flip_regions(&reference, image)?;
+            save_png(
+                &score::error_map(&flip.errors, reference.dimensions()),
+                &out.join(&case.id)
+                    .join(format!("flip-{}.png", variant.name())),
+            )?;
             let widths = score::penumbrae(&f, c, size, image, &reference);
             let line = format!(
                 "| {} | {} | {:.4} | {:.4} | {} | {} |\n",

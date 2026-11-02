@@ -144,7 +144,8 @@ void spRing(Look l,SpPage s,SpDisc disc,float y,float2 g,float bias,float hole,i
             // metres of ground (rows run towards -z).
             float2 t=float2(gq.x-1+int(k&1),gq.y-1+int(k>>1))-s.c;
             float2 du=float2(t.x,-t.y)*s.texel;
-            if(hole>0&&all(abs(du)<hole))continue;
+            // A finer ring covered texels wholly inside its window.
+            if(hole>0&&all(abs(du)+0.5*s.texel<=hole))continue;
             float height=k==0?h4.x:k==1?h4.y:k==2?h4.z:h4.w;
             // A neighbouring page's texel, moved into this page's frame (spTexel).
             du+=(height-spRef(l))*float2(k==0?dkx.x:k==1?dkx.y:k==2?dkx.z:dkx.w,k==0?dky.x:k==1?dky.y:k==2?dky.z:dky.w);
@@ -152,8 +153,12 @@ void spRing(Look l,SpPage s,SpDisc disc,float y,float2 g,float bias,float hole,i
             if(above<=0)continue;
             float hb=max(height-y,1e-4);
             float2 a=s.k+(du-0.5*s.texel)/hb,b=s.k+(du+0.5*s.texel)/hb;
-            float2 fa=(a-lo)/disc.cell-0.5,fb=(b-lo)/disc.cell-0.5;
-            int2 i0=int2(ceil(fa)),i1=int2(floor(fb));
+            // Cells whose centres the square covers; a square narrower than a cell (a tall
+            // blocker's fine texel) covers every cell it overlaps instead, or neighbouring
+            // texels' squares would leave cell centres between them (light-leak stripes).
+            float2 fa=(a-lo)/disc.cell,fb=(b-lo)/disc.cell;
+            bool2 narrow=(fb-fa)<1;
+            int2 i0=int2(select(narrow,floor(fa),ceil(fa-0.5))),i1=int2(select(narrow,ceil(fb)-1,floor(fb-0.5)));
             spCover(m0,m1,max(i0.x,0),min(i1.x,15),max(i0.y,0),min(i1.y,15));
         }
     }

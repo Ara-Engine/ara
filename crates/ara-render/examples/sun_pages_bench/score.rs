@@ -15,6 +15,16 @@ use image::RgbaImage;
 pub(crate) struct Flip {
     pub whole: f64,
     pub worst: f64,
+    /// Per-pixel error, row-major (for error maps).
+    pub errors: Vec<f32>,
+}
+
+/// A FLIP error map (white = 1) of `size`.
+pub(crate) fn error_map(errors: &[f32], size: (u32, u32)) -> RgbaImage {
+    RgbaImage::from_fn(size.0, size.1, |x, y| {
+        let v = (errors[(y * size.0 + x) as usize].clamp(0., 1.) * 255.) as u8;
+        image::Rgba([v, v, v, 255])
+    })
 }
 
 /// FLIP of `test` against `reference` (67 pixels per degree, the paper's viewing).
@@ -38,6 +48,7 @@ pub(crate) fn flip_regions(reference: &RgbaImage, test: &RgbaImage) -> Result<Fl
     Ok(Flip {
         whole: r.mean,
         worst,
+        errors: r.errors,
     })
 }
 
