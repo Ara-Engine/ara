@@ -106,6 +106,14 @@ fn run(
         &serde_json::json!({"version":VERSION,"case":case,"fps":60,"frames":script}),
     )?;
     let showcase = std::env::var_os("ARA_B4_SHOWCASE").is_some();
+    let reference_label = if showcase {
+        format!(
+            "showcase-{}",
+            std::env::var("ARA_B4_SHOWCASE_SHOT").unwrap_or_else(|_| "Shot_stage".into())
+        )
+    } else {
+        case.id.clone()
+    };
     let mut f = if showcase {
         super::showcase::load()?
     } else {
@@ -355,7 +363,10 @@ fn run(
             let archived = reference_root
                 .join("render-v3")
                 .join(&result.revision)
-                .join(format!("{}-{}x{}-{samples}spp", case.id, size[0], size[1]));
+                .join(format!(
+                    "{reference_label}-{}x{}-{samples}spp",
+                    size[0], size[1]
+                ));
             fs::create_dir_all(&archived)?;
             let name = format!("reference-{:04}.png", frame.frame);
             fs::copy(&ref_path, archived.join(name))?;
