@@ -115,19 +115,21 @@ SpDisc spDiscFrame(Frame f,Look l){
 }
 uint spCount(uint4 a,uint4 b){return countbits(a.x)+countbits(a.y)+countbits(a.z)+countbits(a.w)+countbits(b.x)+countbits(b.y)+countbits(b.z)+countbits(b.w);}
 
-// ORs into the mask the disc samples a solid texel column hides from the receiver: a ray
-// towards sample shear k' rises lambda over ground offset lambda (k' - apex) in the
-// page's frame (apex: the page's shear), so it passes under a texel whose ground box is
-// [b0, b1] (relative to the receiver) and whose surface stands `hb` above the receiver iff
-// lambda (k' - apex) lies in the box for some 0 < lambda <= hb. That set (a wedge from
-// the box outwards) is solved per disc row, testing sample centres. Adjacent columns'
-// wedges tile, so a steep surface (a pole's face at low sun, which steps up every texel)
-// hides every sample behind it; flat squares at each texel's height left gaps between.
-void spWedge(SpDisc d,float2 apex,float2 b0,float2 b1,float hb,inout uint4 m0,inout uint4 m1){
+// ORs into the mask the disc samples a texel slab hides from the receiver: a ray towards
+// sample shear k' rises lambda over ground offset lambda (k' - apex) in the page's frame
+// (apex: the page's shear), so it crosses a slab whose ground box is [b0, b1] (relative to
+// the receiver) and which spans heights [l0, hb] above the receiver iff lambda (k' - apex)
+// lies in the box for some lambda in [l0, hb]. Solved per disc row, testing sample
+// centres. A flat square at the surface height (l0 = hb) leaves gaps between the steps of
+// a steep surface (a pole's face at low sun rises t tan(alpha) per ground texel); a solid
+// column (l0 = 0) also blocks rays passing under a floating occluder's edge, turning the
+// inner half of its penumbra to umbra. spRing passes a slab just thick enough to close the
+// steps.
+void spWedge(SpDisc d,float2 apex,float2 b0,float2 b1,float l0,float hb,inout uint4 m0,inout uint4 m1){
     float2 lo=d.centre-d.half;
     [unroll]for(uint j=0;j<16;j++){
         float cy=lo.y+(float(j)+0.5)*d.cell.y-apex.y;
-        float la=1e-6,lb=hb;
+        float la=max(l0,1e-6),lb=hb;
         if(abs(cy)<1e-12){if(b0.y>0||b1.y<0)continue;}
         else{float t0=b0.y/cy,t1=b1.y/cy;la=max(la,min(t0,t1));lb=min(lb,max(t0,t1));}
         if(la>lb)continue;
@@ -145,10 +147,11 @@ void spWedge(SpDisc d,float2 apex,float2 b0,float2 b1,float hb,inout uint4 m0,in
 // One ring of blocker texels: 8x8 texels of page `s` around the receiver (ground `s.u`,
 // height `y`, receiver plane height gradient `g` per metre of ground, `bias` metres), each
 // texel above the plane back-projected onto the disc samples it hides from the receiver as
-// a solid column (spWedge). With `hole` > 0, texels wholly within `hole` metres (each
-// axis) of the receiver are skipped (a finer ring covered them).
+// a slab 1.5 t tan(alpha) thick under its surface (spWedge; tan(alpha) = 1 / |k_page|).
+// With `hole` > 0, texels wholly within `hole` metres (each axis) of the receiver are
+// skipped (a finer ring covered them).
 void spRing(Look l,SpPage s,SpDisc disc,float y,float2 g,float bias,float hole,inout uint4 m0,inout uint4 m1){
-    int2 r=int2(floor(s.c+0.5));
+    int2 r=int2(floor(s.c+0.5));float thick=1.5*s.texel/max(length(s.k),0.05);
     [loop]for(uint q=0;q<16;q++){
         int2 gq=r+int2(int(q&3)*2-3,int(q>>2)*2-3);
         float4 dkx,dky;float4 h4=spHeights(l,s,gq,dkx,dky);
@@ -164,7 +167,8 @@ void spRing(Look l,SpPage s,SpDisc disc,float y,float2 g,float bias,float hole,i
             du+=(height-spRef(l))*float2(k==0?dkx.x:k==1?dkx.y:k==2?dkx.z:dkx.w,k==0?dky.x:k==1?dky.y:k==2?dky.z:dky.w);
             float above=height-(y+dot(g,du))-bias;
             if(above<=0)continue;
-            spWedge(disc,s.k,du-0.5*s.texel,du+0.5*s.texel,max(height-y,1e-4),m0,m1);
+            float hb=max(height-y,1e-4);
+            spWedge(disc,s.k,du-0.5*s.texel,du+0.5*s.texel,hb-thick,hb,m0,m1);
         }
     }
 }
