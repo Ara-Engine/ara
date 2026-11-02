@@ -202,9 +202,9 @@ fn crossings(zs: &[f64], values: &[f64]) -> Option<[f64; 3]> {
     out.iter().all(|v| v.is_finite()).then_some(out)
 }
 
-/// Penumbrae of the contact case's plate shadow (the edge at z = +0.5 facing the camera,
-/// on two lines inside the shadow's length), test against reference; `None` for other
-/// recipes or unmeasurable (sub-pixel or occluded) edges.
+/// Penumbrae of the contact cases' plate shadow (the edge facing the camera, from the
+/// plate's z = +0.5 edge, on two lines inside the shadow's length), test against
+/// reference; `None` for other recipes or unmeasurable (sub-pixel or occluded) edges.
 pub(crate) fn penumbrae(
     f: &Fixture,
     case: &Case,
@@ -212,18 +212,29 @@ pub(crate) fn penumbrae(
     test: &RgbaImage,
     reference: &RgbaImage,
 ) -> Option<Penumbra> {
-    if case.recipe != "contact_sun" {
-        return None;
-    }
     let h = f64::from(case.contact_m);
-    let span = 0.02 + 0.03 * h;
+    // The edge's floor z, two lines across it and the profile's half-length.
+    let (edge, lines, span) = match case.recipe {
+        // The sun at azimuth 0 shifts the shadow along -x only.
+        "contact_sun" => (0.5, [-h - 0.4, -h + 0.4], 0.02 + 0.03 * h),
+        // The rect light at (-1, h + 4, 1) projects from its centre.
+        "contact_rect" => {
+            let s = (h + 4.) / 4.;
+            (
+                1. - 0.5 * s,
+                [-1. + 0.6 * s, -1. + 1.4 * s],
+                0.05 + 0.15 * h,
+            )
+        }
+        _ => return None,
+    };
     let mut out = Penumbra {
         width: [f64::NAN; 2],
         edge_px: [f64::NAN; 2],
     };
-    for (line, x) in [-h - 0.4, -h + 0.4].into_iter().enumerate() {
+    for (line, x) in lines.into_iter().enumerate() {
         let zs: Vec<f64> = (0..=400)
-            .map(|i| 0.5 - span + 2. * span * f64::from(i) / 400.)
+            .map(|i| edge - span + 2. * span * f64::from(i) / 400.)
             .collect();
         let profile = |image: &RgbaImage| -> Option<Vec<f64>> {
             zs.iter()

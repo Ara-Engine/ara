@@ -35,11 +35,18 @@ pub(super) struct Updates {
     skins: Indices,
     casters: Indices,
     unions: Vec<[Vec3; 2]>,
+    /// Per row: the rigid displacement bound (m) of this frame's transform changes;
+    /// `None` once a skin pose, material or paint change touched the caster.
+    displacement: Vec<Option<f32>>,
     header: Option<[Mat4; 2]>,
     all: bool,
     materials: usize,
     pub caster_all: bool,
     pub caster_bounds: Vec<[Vec3; 2]>,
+    /// `caster_bounds`' rows and displacement bounds, in the same order (the sun page
+    /// service's dynamic layer, look::vsm::sun; `None`: no bound).
+    pub caster_rows: Vec<usize>,
+    pub caster_displacement: Vec<Option<f32>>,
     pub work: FrameWork,
 }
 impl Updates {
@@ -66,21 +73,41 @@ impl Updates {
             skins: Indices::new(count),
             casters: Indices::new(count),
             unions: vec![[Vec3::ZERO; 2]; count],
+            displacement: vec![None; count],
             header: None,
             all: true,
             materials: 0,
             caster_all: true,
             caster_bounds: Vec::new(),
+            caster_rows: Vec::new(),
+            caster_displacement: Vec::new(),
             work: FrameWork::default(),
         }
     }
+    /// A caster changed in a way no displacement bounds (a pose, material or paint).
     fn caster(&mut self, index: usize, old: [Vec3; 2], new: [Vec3; 2]) {
+        self.union(index, old, new);
+        self.displacement[index] = None;
+    }
+    /// A caster moved rigidly, no point by more than `displacement` metres.
+    fn caster_moved(&mut self, index: usize, old: [Vec3; 2], new: [Vec3; 2], displacement: f32) {
+        let first = self.union(index, old, new);
+        self.displacement[index] = if first {
+            Some(displacement)
+        } else {
+            self.displacement[index].map(|d| d + displacement)
+        };
+    }
+    /// Joins `old` and `new` into the caster's union; whether it is new this frame.
+    fn union(&mut self, index: usize, old: [Vec3; 2], new: [Vec3; 2]) -> bool {
         let bounds = [old[0].min(new[0]), old[1].max(new[1])];
         if self.casters.insert(index) {
             self.unions[index] = bounds;
+            true
         } else {
             self.unions[index][0] = self.unions[index][0].min(bounds[0]);
             self.unions[index][1] = self.unions[index][1].max(bounds[1]);
+            false
         }
     }
 }
@@ -186,7 +213,7 @@ impl Native {
                 for n in 0..self.groups.geometry_instances[geometry].len() {
                     let i = self.groups.geometry_instances[geometry][n];
                     self.changes.skins.insert(i);
-                    self.update_bounds(i, scene);
+                    self.update_bounds(i, scene, None);
                 }
             }
         }
@@ -217,6 +244,7 @@ impl Native {
             if self.rows[i].world == scene.instances[i].world {
                 continue;
             }
+            let old = self.rows[i].world;
             self.rows[i] = row(
                 &scene.instances[i],
                 self.presented[i],
@@ -224,7 +252,7 @@ impl Native {
                 self.paint_offsets[i],
             );
             self.changes.rows.insert(i);
-            self.update_bounds(i, scene);
+            self.update_bounds(i, scene, Some(old));
         }
         for &i in &changes.paint {
             let paint = scene.instances[i]
@@ -264,10 +292,18 @@ impl Native {
         Ok(())
     }
 
-    fn update_bounds(&mut self, i: usize, scene: &NativeScene) {
+    /// `moved`: the row's previous transform when only its transform changed (a rigid
+    /// move, whose displacement bound the sun page service reads).
+    fn update_bounds(&mut self, i: usize, scene: &NativeScene, moved: Option<Mat4>) {
         let instance = &scene.instances[i];
         let next = instance.bounds(&scene.geometry[instance.geometry]);
-        self.changes.caster(i, self.bounds[i], next);
+        match moved {
+            Some(old) => {
+                let d = rigid_displacement(old, instance.world, next);
+                self.changes.caster_moved(i, self.bounds[i], next, d);
+            }
+            None => self.changes.caster(i, self.bounds[i], next),
+        }
         self.bounds[i] = next;
         self.culling.instance(&self.groups, i, instance.world, next);
         if self.groups.groups[self.groups.instance_group[i]].translucent {
@@ -329,8 +365,14 @@ impl Native {
         let budgets_changed = self.culling.configure(quality);
         self.changes.caster_all = self.changes.all || budgets_changed;
         self.changes.caster_bounds.clear();
+        self.changes.caster_rows.clear();
+        self.changes.caster_displacement.clear();
         for &i in &self.changes.casters.list {
             self.changes.caster_bounds.push(self.changes.unions[i]);
+            self.changes.caster_rows.push(i);
+            self.changes
+                .caster_displacement
+                .push(self.changes.displacement[i]);
         }
         self.culling.prepare(
             gpu,
@@ -379,4 +421,21 @@ impl Native {
     pub(in crate::renderer) fn ray_changes(&self) -> (&[usize], &[usize]) {
         (&self.changes.rows.list, &self.changes.skins.list)
     }
+}
+
+/// The largest distance any point of world box `bounds` (at transform `new`) moved
+/// since transform `old`: `(new - old) new^-1` is affine, so its largest length over
+/// the box is at a corner. The sun page service's dynamic-layer bound.
+fn rigid_displacement(old: Mat4, new: Mat4, [lo, hi]: [Vec3; 2]) -> f32 {
+    let delta = (new - old) * new.inverse();
+    (0..8u32)
+        .map(|c| {
+            let p = Vec3::new(
+                if c & 1 == 0 { lo.x } else { hi.x },
+                if c & 2 == 0 { lo.y } else { hi.y },
+                if c & 4 == 0 { lo.z } else { hi.z },
+            );
+            (delta * p.extend(1.)).truncate().length()
+        })
+        .fold(0., f32::max)
 }

@@ -727,7 +727,12 @@ impl Renderer {
         else {
             return Ok(Vec::new());
         };
-        let changes = (native.changes.caster_all, &native.changes.caster_bounds[..]);
+        let casters = crate::look::vsm::Casters {
+            all: native.changes.caster_all,
+            moved: &native.changes.caster_bounds,
+            displacement: &native.changes.caster_displacement,
+            instances: &native.bounds,
+        };
         // The sun page service learns per-page cost from the completed page passes.
         let pass_ms = ["VSM.Pages", "VSM.Pages.Dynamic"].map(|label| {
             self.last_timings
@@ -740,8 +745,7 @@ impl Renderer {
             &mut self.gpu,
             self.content.sun_direction,
             content,
-            changes,
-            &native.bounds,
+            casters,
             pass_ms,
             settle,
         )?;

@@ -22,6 +22,12 @@
 //! mapping over the content's light-axis extent for every level, so cached pages
 //! stay comparable as the camera moves.
 //!
+//! Any sun change re-keys every page here, so a moving sun redraws the whole map (the
+//! A/B control). The opt-in render-v3 sun page service ([`sun`],
+//! `Renderer::set_sun_pages`) keeps the same atlas, page table and request ring but
+//! keys pages to the ground grid, invalidates them by a conservative bound and brings
+//! its own mark and projection pipelines.
+//!
 //! [`Quality::virtual_shadows`]: super::Quality::virtual_shadows
 use crate::graph::State;
 use anyhow::{Context, Result};
@@ -181,6 +187,20 @@ const COLUMNS: u32 = 32;
 const ROWS_PER_PAGE: usize = 512;
 /// A moved caster touching more pages than this per level re-keys every page.
 const MOVED_PAGES: i32 = 16;
+
+/// A frame's caster changes for [`VirtualShadowMap::plan`].
+#[derive(Clone, Copy)]
+pub(crate) struct Casters<'a> {
+    /// New content: every page re-keys.
+    pub all: bool,
+    /// Moved or reshaped casters' old-and-new world boxes.
+    pub moved: &'a [[Vec3; 2]],
+    /// Per `moved` entry, the largest distance any of its points moved (rigid moves);
+    /// `None` where no bound is known (poses, materials, paint).
+    pub displacement: &'a [Option<f32>],
+    /// Every instance row's current world box.
+    pub instances: &'a [[Vec3; 2]],
+}
 
 /// What a request buffer holds marks for: the frame's camera in light space, the
 /// light space's revision then and the frame's submission (`None` until submitted).
@@ -402,23 +422,22 @@ impl VirtualShadowMap {
     /// (they redraw first), and returns up to the budget of dirty pages, coarser
     /// levels before finer. Cull them, then `drawn` those that fit.
     ///
-    /// The sun page service (`sun`) plans instead from the instance rows' world boxes
-    /// `instances` and the completed static/dynamic page passes' GPU ms `pass_ms`
-    /// (today's map ignores both).
-    #[allow(clippy::too_many_arguments)]
+    /// The sun page service (`sun`) plans instead from all of `casters` and the
+    /// completed static/dynamic page passes' GPU ms `pass_ms` (today's map reads only
+    /// `casters.all` and `casters.moved`, and ignores `pass_ms`).
     pub(crate) fn plan(
         &mut self,
         gpu: &mut GpuDevice,
         sun: Vec3,
         bounds: [Vec3; 2],
-        (all, moved): (bool, &[[Vec3; 2]]),
-        instances: &[[Vec3; 2]],
+        casters: Casters<'_>,
         pass_ms: [Option<f64>; 2],
         settle: bool,
     ) -> Result<Vec<PageDraw>> {
         if self.service.is_some() {
-            return self.plan_sun(gpu, sun, bounds, (all, moved), instances, pass_ms, settle);
+            return self.plan_sun(gpu, sun, bounds, casters, pass_ms, settle);
         }
+        let Casters { all, moved, .. } = casters;
         self.frame += 1;
         let fresh = LightSpace::new(sun, bounds);
         if all || !self.space.is_some_and(|s| s.holds(&fresh)) {

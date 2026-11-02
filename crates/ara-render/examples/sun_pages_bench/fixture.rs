@@ -5,7 +5,7 @@
 //! recipes (overlap, crate gap, hand, stained glass, rect orientation, contact rect,
 //! eight lights) shade through local lights, not sun pages, and are not built here.
 use ara_render::instanced::{Geometry, Instance, Lod, Material, Scene, Vertex};
-use ara_render::scene::CameraSpec;
+use ara_render::scene::{CameraSpec, Light};
 use glam::{Mat4, Quat, Vec3};
 
 /// One case of the catalogue (fields as `cases.v1.json`).
@@ -254,7 +254,74 @@ pub(crate) fn create(case: &Case) -> Fixture {
         Vec3::new(-6., 2., 0.),
         Vec3::new(0.2, 4., 10.),
     );
-    if case.recipe == "contact_sun" {
+    match case.recipe {
+        "overlap" => {
+            for (i, p) in [Vec3::new(-0.2, 0.6, 0.), Vec3::new(0.2, 1.4, -0.4)]
+                .into_iter()
+                .enumerate()
+            {
+                add(&mut scene, 10 + i as u64, 0, 1, p, Vec3::new(0.3, 0.8, 2.));
+            }
+        }
+        "crate_gap" => {
+            for i in 0..2 {
+                add(
+                    &mut scene,
+                    10 + i,
+                    0,
+                    1,
+                    Vec3::new(i as f32 * 1.02 - 0.51, 0.5, 0.),
+                    Vec3::ONE,
+                );
+            }
+        }
+        "hand" => {
+            add(
+                &mut scene,
+                10,
+                0,
+                1,
+                Vec3::new(0., 0.12, 0.),
+                Vec3::new(0.8, 0.15, 0.65),
+            );
+            for i in 0..5 {
+                add(
+                    &mut scene,
+                    11 + i,
+                    0,
+                    1,
+                    Vec3::new(i as f32 * 0.18 - 0.36, 0.13, -0.55),
+                    Vec3::new(0.12, 0.12, 0.65),
+                );
+            }
+        }
+        "stained_glass" => {
+            for (i, color) in [[0.9, 0.1, 0.1], [0.1, 0.9, 0.2], [0.1, 0.2, 0.9]]
+                .into_iter()
+                .enumerate()
+            {
+                let mut m = material(color, 0.03);
+                m.pbr.flags[0] = 2;
+                m.pbr.base_color[3] = 0.3;
+                m.extras.transmission_factor = 0.9;
+                scene.materials.push(m);
+                let slot = scene.materials.len() - 1;
+                add(
+                    &mut scene,
+                    10 + i as u64,
+                    0,
+                    slot,
+                    Vec3::new(i as f32 * 0.3 - 0.3, 0.7 + i as f32 * 0.4, 0.),
+                    Vec3::new(1.5, 0.03, 1.5),
+                );
+            }
+        }
+        _ => {}
+    }
+    if matches!(
+        case.recipe,
+        "contact_sun" | "contact_rect" | "rect_orientation"
+    ) {
         add(
             &mut scene,
             10,
@@ -276,6 +343,39 @@ pub(crate) fn create(case: &Case) -> Fixture {
             );
         }
     }
+    if case.recipe == "city" {
+        // A deterministic block field: 40 x 50 lots of 10 m, buildings 6-9 m wide and 4-30 m
+        // tall by a fixed hash, the street x in [0, 10) kept clear.
+        add(
+            &mut scene,
+            4,
+            0,
+            0,
+            Vec3::new(0., -0.1, 0.),
+            Vec3::new(800., 0.2, 800.),
+        );
+        let mut id = 20_000;
+        for gz in -10_i32..40 {
+            for gx in -20_i32..20 {
+                if gx == 0 {
+                    continue;
+                }
+                let hash = (gx.wrapping_mul(73_856_093) ^ gz.wrapping_mul(19_349_663)) as u32;
+                let height = 4. + (hash % 27) as f32;
+                let width = 6. + (hash / 27 % 4) as f32;
+                let centre = Vec3::new(gx as f32 * 10. + 5., height * 0.5, gz as f32 * 10. + 5.);
+                add(
+                    &mut scene,
+                    id,
+                    1,
+                    0,
+                    centre,
+                    Vec3::new(width, height, width),
+                );
+                id += 1;
+            }
+        }
+    }
     for i in 0..case.bodies {
         let wind = case.recipe == "wind";
         add(
@@ -291,7 +391,41 @@ pub(crate) fn create(case: &Case) -> Fixture {
             },
         );
     }
-    let camera = if case.gates.contains(&4) {
+    if matches!(
+        case.recipe,
+        "overlap" | "crate_gap" | "hand" | "stained_glass" | "rect_orientation" | "contact_rect"
+    ) {
+        scene.sun_lux = Vec3::ZERO;
+        scene.lights = vec![Light {
+            position_range: [-1., 4_f32.max(case.contact_m + 4.), 1., 8.],
+            color_lumens: [1., 1., 1., 10000.],
+            direction_outer: [0., -1., 0., -1.],
+            parameters: [2., 1., 0., 1.],
+            tangent_length: [
+                if case.recipe == "rect_orientation" {
+                    0.
+                } else {
+                    1.
+                },
+                0.,
+                if case.recipe == "rect_orientation" {
+                    1.
+                } else {
+                    0.
+                },
+                0.,
+            ],
+            rect: [0.6, 0.2, 0., 0.],
+            ..Light::ZERO
+        }];
+    }
+    let camera = if case.recipe == "city" {
+        CameraSpec::LookAt {
+            position: Vec3::new(5., 1.8, 2.),
+            target: Vec3::new(5., 4., 60.),
+            vertical_fov: 55_f32.to_radians(),
+        }
+    } else if case.gates.contains(&4) {
         CameraSpec::LookAt {
             position: Vec3::new(2.7, 3.0, 3.6) + Vec3::splat((case.contact_m - 0.3).max(0.)),
             target: Vec3::new(-case.contact_m * 0.5, 0.25, 0.),
@@ -398,7 +532,7 @@ pub(crate) fn legacy(f: &Fixture) -> ara_render::scene::Scene {
                 srgb: false,
             },
         ],
-        lights: Vec::new(),
+        lights: f.scene.lights.clone(),
         sun_direction: f.scene.sun_direction,
         sun_lux: f.scene.sun_lux,
         environment: f.scene.environment.clone(),

@@ -33,7 +33,9 @@ mod schedule;
 
 pub use schedule::Counters;
 
-use super::{LightSpace, PageDraw, Requested, VirtualShadowMap, key, page_step, table_index};
+use super::{
+    Casters, LightSpace, PageDraw, Requested, VirtualShadowMap, key, page_step, table_index,
+};
 use anyhow::{Context, Result, ensure};
 use ara_gpu::{Buffer, Device, GpuDevice, Pipeline, Resource};
 use ara_vsm::{PAGE_SIDE, PAGE_SIZE, PageKey, Projection};
@@ -56,7 +58,8 @@ pub struct SunPages {
     pub lag_line: f32,
     /// Edge-lag line of the near ring (0.5).
     pub near_lag_line: f32,
-    /// Clipmap levels whose radius is at most this many metres form the near ring.
+    /// Pages (any level) whose ground square comes within this many metres of the
+    /// camera's ground position form the near ring.
     pub near_radius: f32,
     /// A page becomes demand at this fraction of its line (0.5), so that two
     /// neighbouring pages at their trigger stay within the line together.
@@ -161,8 +164,12 @@ struct Record {
     receivers: Option<f32>,
     /// Frames of receiver feedback received (the box bound applies until 16).
     feedback: u32,
-    /// A moved caster's box touched the page since its draw.
-    touched: bool,
+    /// How far (ground metres) moved casters' shadows may have shifted in the page since
+    /// its draw: the sum over frames of the largest shift of that frame (infinite where
+    /// a change has no displacement bound).
+    moved: f32,
+    /// This frame's largest shift, and the frame it belongs to.
+    shift: (f32, u64),
     /// Last frame a pixel marked it.
     demanded: u64,
     /// First frame of its current demand (debt age).
@@ -190,6 +197,8 @@ pub(crate) struct Service {
     slots: Buffer,
     pub slots_index: u32,
     slots_mirror: Vec<[f32; 4]>,
+    /// The camera's ground position at the last armed frame (the near ring's centre).
+    camera: Vec2,
     /// Frame tag of each request slot's receiver words.
     pub tags: [u32; 3],
     tag: u32,
@@ -252,6 +261,7 @@ impl Service {
             slots,
             slots_index,
             slots_mirror: vec![[0.; 4]; pages as usize],
+            camera: Vec2::ZERO,
             tags: [0; 3],
             tag: 0,
         })
@@ -278,9 +288,7 @@ impl Service {
 struct Inputs<'a> {
     sun: Vec3,
     bounds: [Vec3; 2],
-    all: bool,
-    moved: &'a [[Vec3; 2]],
-    instances: &'a [[Vec3; 2]],
+    casters: Casters<'a>,
     pass_ms: [Option<f64>; 2],
     settle: bool,
 }
@@ -322,14 +330,12 @@ impl VirtualShadowMap {
     /// The service form of [`VirtualShadowMap::plan`]: `instances` are the native
     /// instance rows' world boxes, `pass_ms` the completed static and dynamic page
     /// passes' GPU milliseconds (the budgets learn per-page cost from them).
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn plan_sun(
         &mut self,
         gpu: &mut GpuDevice,
         sun: Vec3,
         bounds: [Vec3; 2],
-        (all, moved): (bool, &[[Vec3; 2]]),
-        instances: &[[Vec3; 2]],
+        casters: Casters<'_>,
         pass_ms: [Option<f64>; 2],
         settle: bool,
     ) -> Result<Vec<PageDraw>> {
@@ -339,9 +345,7 @@ impl VirtualShadowMap {
         let inputs = Inputs {
             sun,
             bounds,
-            all,
-            moved,
-            instances,
+            casters,
             pass_ms,
             settle,
         };
@@ -360,9 +364,13 @@ impl VirtualShadowMap {
         let Inputs {
             sun,
             bounds,
-            all,
-            moved,
-            instances,
+            casters:
+                Casters {
+                    all,
+                    moved,
+                    displacement,
+                    instances,
+                },
             pass_ms,
             settle,
         } = inputs;
@@ -470,7 +478,8 @@ impl VirtualShadowMap {
                     drawn: None,
                     receivers: None,
                     feedback: 0,
-                    touched: false,
+                    moved: 0.,
+                    shift: (0., 0),
                     demanded: frame,
                     since: None,
                 });
@@ -489,9 +498,21 @@ impl VirtualShadowMap {
                 }
             }
         }
-        // Moved casters: the resident pages their old-and-new boxes touch.
+        // Moved casters: the pages their old-and-new boxes touch, each by the caster's
+        // shadow shift (a point moving by d moves its ground position by at most
+        // d sqrt(1 + |k|^2)).
+        let shift_of =
+            |d: Option<f32>| d.map_or(f32::INFINITY, |d| d * (1. + k.length_squared()).sqrt());
+        let touch = |r: &mut Record, shift: f32| {
+            r.shift = if r.shift.1 == frame {
+                (r.shift.0.max(shift), frame)
+            } else {
+                (shift, frame)
+            };
+        };
         if !rekey {
-            for &b in moved {
+            for (i, &b) in moved.iter().enumerate() {
+                let shift = shift_of(displacement.get(i).copied().flatten());
                 let (lo, hi) = oblique::sheared_rect(b, k, y_ref);
                 for level in 0..super::LEVELS {
                     let step = page_step(level);
@@ -504,7 +525,7 @@ impl VirtualShadowMap {
                         let last = key(SUN_PAGES, level, IVec2::MAX);
                         for (_, r) in s.records.range_mut(first..=last) {
                             if r.xy.cmpge(a).all() && r.xy.cmple(c).all() {
-                                r.touched = true;
+                                touch(r, shift);
                             }
                         }
                         continue;
@@ -514,7 +535,7 @@ impl VirtualShadowMap {
                             if let Some(r) =
                                 s.records.get_mut(&key(SUN_PAGES, level, IVec2::new(x, y)))
                             {
-                                r.touched = true;
+                                touch(r, shift);
                             }
                         }
                     }
@@ -524,13 +545,17 @@ impl VirtualShadowMap {
         // This frame's demand.
         let mut demand: [Vec<Demand<PageKey>>; 2] = [Vec::new(), Vec::new()];
         for (&key, r) in &mut s.records {
+            // Every page accumulates its casters' shifts, read this frame or not.
+            let step = if r.shift.1 == frame { r.shift.0 } else { 0. };
+            r.moved += step;
             if frame.saturating_sub(r.demanded) > DEMAND_FRAMES {
                 r.since = None;
                 continue;
             }
             let level = r.level as usize;
             let texel = page_step(level) / PAGE_SIZE as f32;
-            let near = super::FIRST_RADIUS * (1u32 << level) as f32 <= s.settings.near_radius;
+            let (lo, hi) = page_rect(level, r.xy, 0.);
+            let near = (s.camera.clamp(lo, hi) - s.camera).length() <= s.settings.near_radius;
             let line = if near {
                 s.settings.near_lag_line
             } else {
@@ -551,10 +576,15 @@ impl VirtualShadowMap {
                     let lag =
                         heights.map_or(0., |h| h.lag_texels(y_ref, (k - drawn.k).length(), texel));
                     let rate = heights.map_or(0., |h| h.reach(y_ref) * rate_dk / texel);
-                    if r.touched {
-                        (Layer::Dynamic, false, f32::INFINITY, rate)
-                    } else if lag >= s.settings.trigger * line {
-                        (Layer::Static, false, lag, rate)
+                    let dynamic = r.moved / texel;
+                    let layer = if dynamic > 0. && dynamic >= lag {
+                        Layer::Dynamic
+                    } else {
+                        Layer::Static
+                    };
+                    let lag = lag + dynamic;
+                    if lag >= s.settings.trigger * line {
+                        (layer, false, lag, rate + step / texel)
                     } else {
                         r.since = None;
                         continue;
@@ -688,7 +718,7 @@ impl VirtualShadowMap {
                 }
                 if let Some(r) = s.records.get_mut(&draw.page.key) {
                     r.drawn = Some(Drawn { k, heights });
-                    r.touched = false;
+                    r.moved = 0.;
                     r.since = None;
                 }
             }
@@ -766,6 +796,7 @@ impl VirtualShadowMap {
         }
         let (tag, wrapped) = s.next_tag();
         s.tags[i] = tag;
+        s.camera = Vec2::new(camera.x, camera.z);
         if wrapped {
             for buffer in self.requests {
                 gpu.upload_queued(buffer, &vec![0; REQUEST_WORDS * 4])?;

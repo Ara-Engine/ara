@@ -1,11 +1,13 @@
 // Sun page service passes (look/vsm/sun; opt-in, today's look-vsm.slang is the control).
 // sunPagesMarkMain: one thread per 4x4 pixel block. The block's rotating sample pixel (one
-// of 16 per frame, as look-vsm.slang) marks the pages its lookup reads: its level and the
-// next (fallback), and the rings two and four levels coarser (four only where the page's
-// blockers reach that far), each with the neighbours its window reaches near a page edge,
-// and lowers their lowest-receiver words to its height (the invalidation bound's receiver
-// term; look/vsm/sun unions them since a page was first seen, so every pixel counts
-// within 16 frames). Waves gather their distinct pages and write each once. sunPagesProjectMain: each lit-facing pixel's source-shaped sun visibility from the
+// of 16 per frame, as look-vsm.slang) marks the pages its lookup reads: its level, and the
+// rings two and four levels coarser (two is also the fallback while its level's page
+// renders; four only where the page's blockers reach that far), each with the neighbours
+// its window reaches near a page edge, and lowers their lowest-receiver words to its
+// height (the invalidation bound's receiver term; look/vsm/sun unions them since a page
+// was first seen, so every pixel counts within 16 frames). Waves gather their distinct
+// pages and write each once. sunPagesProjectMain: each lit-facing pixel's source-shaped
+// sun visibility from the
 // pages (shadow-pages.slangh spRing: per-texel back-projection onto 256 fixed disc
 // samples, rings at the pixel's level and two and four coarser as the blockers' height
 // needs), -1 where no page is resident, into the mask lighting reads (vsmMask).
@@ -65,7 +67,6 @@ void sunPagesMarkMain(uint3 tid:SV_DispatchThreadID){
             uint level=spLevel(f,l,world,spGround(l,world,spShear(l)));
             float shift=shadowOffset(nl)*sqrt(saturate(1-nl*nl));
             m.levels[0]=spLevelMarks(l,world,level,shift+SP_RING+1);
-            m.levels[1]=spLevelMarks(l,world,level+1,shift*0.5+SP_RING*0.5+1);
             m.levels[2]=spLevelMarks(l,world,level+2,SP_RING+1);
             // The outer ring only where the level's page says its blockers reach past ring two.
             int slot=spSlot(l,level,int2(floor(spGround(l,world,spShear(l))/spStep(l,level))));

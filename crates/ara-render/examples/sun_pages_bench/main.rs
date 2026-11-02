@@ -379,6 +379,9 @@ fn quality() -> Result<()> {
     let mut temporal = String::from(
         "| case | run | D29 max 16x16 RMS (white) vs uncapped, frames F..F+4 |\n|---|---|---|\n",
     );
+    let mut absolute = String::from(
+        "| case | frame | uncapped FLIP worst / whole vs path-traced | capped | control |\n|---|---|---|---|---|\n",
+    );
     for case in selected(2) {
         let e = case.event_frame;
         let n = frames(&case);
@@ -458,10 +461,43 @@ fn quality() -> Result<()> {
                 variant.name()
             ));
         }
+        // The true-angle image against the path tracer at F+60 (sun and city cases).
+        let r = e + 60;
+        if matches!(case.recipe, "sun" | "city") && samples.contains(&r) {
+            let mut f = fixture::create(&case);
+            fixture::apply(&mut f, &case, r);
+            let mut gpu = GpuDevice::new(&[], out_dir().join("reference-cache"))?;
+            let reference = score::reference(&mut gpu, &f, size, reference_spp())?;
+            gpu.assert_clean()?;
+            drop(gpu);
+            save_png(
+                &reference,
+                &out.join(&case.id).join(format!("reference-{r:04}.png")),
+            )?;
+            let mut row = format!("| {} | {r} |", case.id);
+            for variant in [Variant::Uncapped, Variant::Capped, Variant::Control] {
+                let flip = score::flip_regions(&reference, &images[&(variant, r)])?;
+                row.push_str(&format!(" {:.4} / {:.4} |", flip.worst, flip.whole));
+            }
+            println!("{row}");
+            absolute.push_str(&row);
+            absolute.push('\n');
+        }
     }
     std::fs::create_dir_all(&out)?;
-    std::fs::write(out.join("summary.md"), format!("{summary}\n{temporal}"))?;
+    std::fs::write(
+        out.join("summary.md"),
+        format!("{summary}\n{temporal}\n{absolute}"),
+    )?;
     Ok(())
+}
+
+/// Samples per pixel of the G2 path-traced references (`ARA_SUN_BENCH_SPP`, 128).
+fn reference_spp() -> u32 {
+    std::env::var("ARA_SUN_BENCH_SPP")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(128)
 }
 
 fn g4(spp: u32) -> Result<()> {
@@ -472,7 +508,14 @@ fn g4(spp: u32) -> Result<()> {
     let mut candidates = Vec::new();
     for case in &cases {
         let last = frames(case) - 1;
-        for variant in [Variant::Uncapped, Variant::Control] {
+        // Rect-light cases do not use sun pages: today's control only.
+        let sun = matches!(case.recipe, "contact_sun" | "pole_sweep");
+        let variants: &[Variant] = if sun {
+            &[Variant::Uncapped, Variant::Control]
+        } else {
+            &[Variant::Control]
+        };
+        for &variant in variants {
             let (_, captures) = run(case, variant, size, &[last])?;
             let (_, image) = captures
                 .into_iter()
