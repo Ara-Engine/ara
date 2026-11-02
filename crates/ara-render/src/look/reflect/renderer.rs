@@ -35,7 +35,8 @@ impl Renderer {
     /// Enable the experimental native-resolution software reflection/glass path.
     /// `None` restores the default. Call at a completed frame boundary with the
     /// published scene. Subsequent native scene updates synchronize it automatically.
-    /// Requires native resolution; the opt-in path also bypasses temporal resolve.
+    /// The primary view requires native resolution and bypasses temporal resolve.
+    /// Secondary views and capture/planar bakes retain the control path.
     pub fn set_software_reflections(
         &mut self,
         settings: Option<SoftwareReflections>,

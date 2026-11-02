@@ -124,8 +124,9 @@ impl Renderer {
         ara_gpu::cpu_scope!("Raster.render_frame");
         // Software secondary transport is evaluated at native pixel centres and
         // presented without temporal accumulation, including the final resolve.
-        let deterministic = deterministic || self.software_reflections.is_some();
-        if self.software_reflections.is_some() {
+        // Capture/planar bakes retain the control path and its prefiltered data.
+        let software_reflections = self.software_reflections.is_some() && !self.secondary_active;
+        if software_reflections {
             ensure!(
                 self.render == self.size,
                 "software secondary transport requires native resolution"
@@ -146,7 +147,13 @@ impl Renderer {
         } else {
             HISTORY0
         };
-        let mut frame = self.frame_data(&camera, exposure, deterministic, mode, output_history);
+        let mut frame = self.frame_data(
+            &camera,
+            exposure,
+            deterministic || software_reflections,
+            mode,
+            output_history,
+        );
         if let Some(native) = &mut self.native {
             native.prepare(&mut self.gpu, &frame, &camera, &self.look.quality)?;
         }
@@ -179,7 +186,7 @@ impl Renderer {
             &self.artifacts,
             &self.shader_metadata.content_key,
         )?;
-        if let Some(ref mut reflections) = self.software_reflections {
+        if software_reflections && let Some(ref mut reflections) = self.software_reflections {
             ensure!(
                 self.look.quality.ray_queries.is_none() && self.patch_transport.is_none(),
                 "software secondary transport requires the probe GI control and no hardware ray queries"
@@ -619,8 +626,15 @@ impl Renderer {
             self.render,
             self.look.look.ssr.intensity,
         );
-        if let (Some(reflections), Some(native)) = (&self.software_reflections, &self.native) {
-            reflections.rows(&mut look_frame, native, camera.projection.y_axis.y, self.render);
+        if software_reflections
+            && let (Some(reflections), Some(native)) = (&self.software_reflections, &self.native)
+        {
+            reflections.rows(
+                &mut look_frame,
+                native,
+                camera.projection.y_axis.y,
+                self.render,
+            );
         }
         if let Some(ao) = self.look.quality.ambient_occlusion {
             look_frame.flags[1] |= crate::look::frame::AMBIENT_OCCLUSION;
@@ -1205,7 +1219,7 @@ impl Renderer {
             capture_reads = vec![(c.atlas, Access::ShaderRead), (c.frame, Access::ShaderRead)];
         }
         let patch_read = self.patch_transport.as_mut().map(|p| p.import(&mut graph));
-        if let Some(ref mut reflections) = self.software_reflections {
+        if software_reflections && let Some(ref mut reflections) = self.software_reflections {
             let mut reads = gather_reads.clone();
             reads.extend([ALBEDO, MATERIAL, EMISSIVE].map(|t| (ids[t], Access::ShaderRead)));
             reads.extend(self.look.lighting_reads(&look, false));
@@ -1240,6 +1254,7 @@ impl Renderer {
             .chain(
                 self.software_reflections
                     .as_ref()
+                    .filter(|_| software_reflections)
                     .and_then(|r| r.lighting_read()),
             )
             .chain(patch_read),
@@ -1285,7 +1300,12 @@ impl Renderer {
         .chain(translucent_reads.iter().copied())
         // Hybrid frames' TLAS, for forward variants that trace (look-rt.slangh).
         .chain(self.rays.tlas_read())
-        .chain(self.software_reflections.iter().flat_map(|r| r.reads()))
+        .chain(
+            self.software_reflections
+                .iter()
+                .filter(|_| software_reflections)
+                .flat_map(|r| r.reads()),
+        )
         .collect();
         let mut shaded = shadow_passes;
         shaded.extend([gbuffer, lighting]);
@@ -1354,7 +1374,7 @@ impl Renderer {
         // Secondary views (editor Game previews) keep TAAU: each TSR view holds eight
         // of the device's 64 bindless storage images.
         let tsr = self.tsr.upscaler == crate::tsr::Upscaler::Tsr
-            && self.software_reflections.is_none()
+            && !software_reflections
             && !self.secondary_active
             && camera.projection.z_axis.w != 0.;
         if tsr {
@@ -1890,7 +1910,7 @@ impl Renderer {
                             _ if gi_diffuse => self.pipelines.lighting_gi,
                             _ if reflections && high => self.pipelines.lighting_high_refl,
                             _ if reflections => self.pipelines.lighting_refl,
-                            _ if self.software_reflections.is_some() => self
+                            _ if software_reflections => self
                                 .software_reflections
                                 .as_ref()
                                 .expect("enabled software reflections")
@@ -1956,6 +1976,7 @@ impl Renderer {
                                 self.look.quality.high_tier,
                                 self.software_reflections
                                     .as_ref()
+                                    .filter(|_| software_reflections)
                                     .map(|r| r.glass())
                                     .or_else(|| self.rays.refract()),
                                 range[0]..range[1],
@@ -2140,7 +2161,7 @@ impl Renderer {
         }
         self.look.finish(&look, &compiled.final_states);
         self.rays.finish(&compiled.final_states);
-        if let Some(ref mut reflections) = self.software_reflections {
+        if software_reflections && let Some(ref mut reflections) = self.software_reflections {
             reflections.finish(&compiled.final_states);
         }
         if let Some(chain) = &tsr_ids {

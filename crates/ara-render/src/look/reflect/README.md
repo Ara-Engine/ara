@@ -4,8 +4,9 @@ Disabled unless a host calls `Renderer::set_software_reflections(Some(settings),
 `None` retires its resources and restores the default path. There is no preset/default
 cut: `SoftwareReflections` requires explicit mirror and rough cuts, ray count, distance
 and interface budget. Hardware secondary queries and patch readout must be disabled.
-The experimental frame requires native resolution and bypasses jitter, TSR and temporal
-accumulation in the final resolve. Default frames retain their existing behavior.
+The experimental primary frame requires native resolution and bypasses jitter, TSR and temporal
+accumulation in the final resolve. Secondary views, capture/planar bakes and default
+frames retain their existing behavior.
 
 `scene.rs` adapts native LOD 0 geometry and instances to A1's shared `TraceScene` and
 `TraceGpu`. Geometry changes use the content-addressed BLAS cache; transforms refit.
