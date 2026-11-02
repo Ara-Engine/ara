@@ -97,18 +97,25 @@ impl NativeMaterials<'_> {
 impl Materials for NativeMaterials<'_> {
     fn optical(&self, hit: SurfaceHit) -> Optical {
         let instance = &self.scene.instances[hit.id as usize];
-        let bounds = instance.bounds(&self.scene.geometry[instance.geometry]);
-        if !self
+        if self
             .bodies
             .get(&hit.id)
-            .copied()
-            .unwrap_or_default()
-            .owns_links()
-            && (bounds[1] - bounds[0]).max_element() < 0.5
+            .is_some_and(|body| !body.owns_links())
         {
-            return Optical::Ignore;
+            let bounds = instance.bounds(&self.scene.geometry[instance.geometry]);
+            if (bounds[1] - bounds[0]).max_element() < 0.5 {
+                return Optical::Ignore;
+            }
         }
         let material = &self.scene.materials[instance.material];
+        // Opaque visibility does not depend on UVs, emission, metallic or colour.
+        // Keep full per-hit sampling for cutouts and ordered transmission.
+        if material.pbr.flags[0] != 1
+            && material.pbr.flags[0] != 2
+            && material.extras.transmission_factor == 0.
+        {
+            return Optical::Surface;
+        }
         let (base, _, transmission, _) = self.material(hit);
         if material.pbr.flags[0] == 1 && base.w < material.pbr.surface[3] {
             return Optical::Ignore;

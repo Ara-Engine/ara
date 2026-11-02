@@ -466,22 +466,32 @@ impl TraceGraph {
         )
     }
 
-    pub fn extra_bytes(&self) -> usize {
-        self.media.capacity() * size_of::<Vec3>()
-            + self.generations.capacity() * 8
-            + self
-                .witnesses
-                .values()
-                .map(|w| w.capacity() * size_of::<GeometryStamp>() + 64)
-                .sum::<usize>()
-            + self.pending.len() * 64
-            + self.original_sources.len() * 64
-            + self.changed_instances.len() * 48
+    /// Repaired visibility witnesses remain part of the G3 index charge, even
+    /// though they supplement A2's immutable, interned original witnesses.
+    pub fn repaired_index_bytes(&self) -> usize {
+        self.witnesses
+            .values()
+            .map(|w| w.capacity() * size_of::<GeometryStamp>() + 64)
+            .sum::<usize>()
+    }
+
+    /// Sparse reverse redirects and original-source identities are link data.
+    pub fn repaired_reverse_bytes(&self) -> usize {
+        self.original_sources.len() * 64
             + self
                 .redirects
                 .values()
                 .map(|s| 64 + s.len() * 48)
                 .sum::<usize>()
+    }
+
+    pub fn extra_bytes(&self) -> usize {
+        self.media.capacity() * size_of::<Vec3>()
+            + self.generations.capacity() * 8
+            + self.repaired_index_bytes()
+            + self.repaired_reverse_bytes()
+            + self.pending.len() * 64
+            + self.changed_instances.len() * 48
     }
 }
 

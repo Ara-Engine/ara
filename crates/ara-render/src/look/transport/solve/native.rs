@@ -112,7 +112,7 @@ pub struct TransportReport {
     pub link_bytes: usize,
     /// Resident optional channel data on the host; GPU copies are charged separately.
     pub channel_bytes: usize,
-    /// Index bytes per link, including the original geometry witnesses.
+    /// Index bytes per link, including original and repaired geometry witnesses.
     pub index_bytes_per_link: f64,
     /// Whether this frame required a cold topology publication outside repair packets.
     pub topology_publication: bool,
@@ -816,8 +816,15 @@ impl PatchTransport {
 
     fn account(&mut self) {
         let memory = Memory::measure(&self.graph.links, &self.graph.reverse, &self.graph.index);
-        self.report.link_bytes = memory.link_bytes();
-        self.report.index_bytes_per_link = memory.index_bytes_per_link();
+        self.report.link_bytes = memory.link_bytes()
+            + self.graph.repaired_index_bytes()
+            + self.graph.repaired_reverse_bytes();
+        self.report.index_bytes_per_link = if self.graph.links.len() == 0 {
+            0.
+        } else {
+            (memory.index + self.graph.repaired_index_bytes()) as f64
+                / self.graph.links.len() as f64
+        };
         self.report.channel_bytes = self.channels.resident_bytes();
         self.report.resident_bytes = memory.resident_bytes()
             + self.graph.extra_bytes()
