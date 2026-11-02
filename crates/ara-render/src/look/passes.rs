@@ -689,9 +689,11 @@ impl LookGpu {
                 0,
                 [size[0].div_ceil(16), size[1].div_ceil(16), 1],
             ),
-            // With virtual shadow maps, hits compare against their pages first.
+            // With virtual shadow maps, hits compare against their pages first (today's
+            // pages only: the sun page service's sheared pages have no relight variant yet,
+            // so its relight reads the cascades).
             LookPass::GiRelight => (
-                if self.vsm.is_some() {
+                if self.vsm.as_ref().is_some_and(|v| v.service.is_none()) {
                     p.gi_relight_vsm
                 } else {
                     p.gi_relight
@@ -715,8 +717,23 @@ impl LookGpu {
                 0,
                 groups([self.horizon.as_ref().map_or(0, |h| h.sky_resolution()); 2]),
             ),
-            LookPass::VsmMark => (p.vsm_mark, 0, groups(size.map(|v| v.div_ceil(4)))),
-            LookPass::VsmProject => (p.vsm_project, 0, groups(size)),
+            // The sun page service (look::vsm::sun) brings its own mark and projection.
+            LookPass::VsmMark => (
+                self.vsm
+                    .as_ref()
+                    .and_then(|v| v.service_pipelines())
+                    .map_or(p.vsm_mark, |s| s.mark),
+                0,
+                groups(size.map(|v| v.div_ceil(4))),
+            ),
+            LookPass::VsmProject => (
+                self.vsm
+                    .as_ref()
+                    .and_then(|v| v.service_pipelines())
+                    .map_or(p.vsm_project, |s| s.project),
+                0,
+                groups(size),
+            ),
             LookPass::GiClear | LookPass::GiScatter(_) => return,
         };
         // Root words 3 and 4: the relight's record copy, and the captures that show at

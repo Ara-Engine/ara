@@ -26,8 +26,9 @@ enum Recipe {
     LocalShadow,
     /// The horizon's heightfield capture (`look::horizon`) from native pass `.0`.
     HorizonCapture(usize),
-    /// This frame's virtual shadow pages (`look::vsm`).
-    VsmPages,
+    /// This frame's virtual shadow pages (`look::vsm`) in `range` of its page draws (the
+    /// sun page service records its static and dynamic layers as two passes).
+    VsmPages([usize; 2]),
     /// One level of the shadow moment pyramids of this frame's drawn maps
     /// (`look::moments`).
     Moments(u32),
@@ -878,10 +879,21 @@ impl Renderer {
         // Virtual shadow pages draw with the other sun maps; the atlas joins the
         // sun-map reads once it holds a page.
         if let Some(atlas) = look.vsm.filter(|_| self.native.is_some()) {
-            if !vsm_draws.is_empty() {
-                let pass = graph.pass("VSM.Pages", Queue::Graphics, [(atlas, Access::Depth)]);
-                declare(pass, Recipe::VsmPages);
-                shadow_passes.push(pass);
+            let split = self
+                .look
+                .vsm
+                .as_ref()
+                .and_then(|v| v.service_layers())
+                .map_or(vsm_draws.len(), |[s, _]| s.min(vsm_draws.len()));
+            for (label, range) in [
+                ("VSM.Pages", [0, split]),
+                ("VSM.Pages.Dynamic", [split, vsm_draws.len()]),
+            ] {
+                if range[0] < range[1] {
+                    let pass = graph.pass(label, Queue::Graphics, [(atlas, Access::Depth)]);
+                    declare(pass, Recipe::VsmPages(range));
+                    shadow_passes.push(pass);
+                }
             }
             if vsm_sampled {
                 cascade_reads.push((atlas, Access::ShaderRead));
@@ -1690,7 +1702,7 @@ impl Renderer {
                         }
                         recorder.push(Command::EndRendering);
                     }
-                    Recipe::VsmPages => {
+                    Recipe::VsmPages(range) => {
                         let (vsm, native) = (
                             self.look
                                 .vsm
@@ -1711,7 +1723,8 @@ impl Renderer {
                         // Each page clears its square, then draws its casters through
                         // its light view (look::vsm PAGE_DRAWS + i).
                         let page = [ara_vsm::PAGE_SIZE; 2];
-                        for (i, draw) in vsm_draws.iter().enumerate() {
+                        for (i, draw) in vsm_draws.iter().enumerate().take(range[1]).skip(range[0])
+                        {
                             let origin = vsm.origin(draw.page.slot);
                             recorder.push(Command::Viewport { origin, size: page });
                             recorder.push(Command::ClearDepth {

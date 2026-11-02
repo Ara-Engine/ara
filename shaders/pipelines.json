@@ -1399,6 +1399,34 @@
       "vertex_stride": 48
     }
   },
+  "shadow_pages_mark": {
+    "entries": {
+      "sunPagesMarkMain": "compute"
+    },
+    "source": "shadow-pages.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
+  "shadow_pages_project": {
+    "entries": {
+      "sunPagesProjectMain": "compute"
+    },
+    "source": "shadow-pages.slang",
+    "state": {
+      "blend": false,
+      "color_formats": [],
+      "depth_format": null,
+      "depth_test": false,
+      "depth_write": false,
+      "vertex_stride": 0
+    }
+  },
   "taa": {
     "entries": {
       "taaMain": "compute"

@@ -1,0 +1,151 @@
+// Sun page service lookups (look/vsm/sun, render-v3 council 3.1/3.5; opt-in). Pages are
+// fixed squares of the ground grid: ground u = p.xz - (p.y - yref) k with the sun's shear
+// k = d.xz/d.y; texels hold the height (depth = vsmDepth.x*y + vsmDepth.y, reversed: the
+// GREATER test keeps the first surface along each sun ray) of the page's surfaces, drawn
+// under the shear of their draw time, which each slot's record keeps (vsmRequest.y:
+// float4 k.x, k.y, top height, 0). The page table and atlas are look-vsm.slangh's.
+// Look rows in service mode: vsmSpace column 0 = (k.x, k.y, yref, 0); vsmRequest.x the
+// request words (bits, then a receiver word per page-table entry), .w = 1 | tag << 16.
+// Include after look.slangh.
+static const uint SP_LEVELS=16,SP_SIDE=128,SP_PAGE=128;
+// Request words before the receiver words (one bit per level and toroidal page).
+static const uint SP_BIT_WORDS=SP_LEVELS*SP_SIDE*SP_SIDE/32;
+// Sun-disc samples: a 16x16 grid over the bounding box of the disc's image in shear space.
+static const uint SP_GRID=16;
+
+float4 spColumn0(Look l){return mul(l.vsmSpace,float4(1,0,0,0));}
+// The current shear and the grid's reference height.
+float2 spShear(Look l){return spColumn0(l).xy;}
+float spRef(Look l){return spColumn0(l).z;}
+// Ground coordinates of `p` under shear `k`.
+float2 spGround(Look l,float3 p,float2 k){return p.xz-(p.y-spRef(l))*k;}
+// Page width (m) of `level`.
+float spStep(Look l,uint level){return 2*l.vsmDepth.w*float(1u<<level)/SP_SIDE;}
+// Stored depth of height `y`, and back.
+float spDepth(Look l,float y){return l.vsmDepth.x*y+l.vsmDepth.y;}
+float spHeight(Look l,float d){return (d-l.vsmDepth.y)/l.vsmDepth.x;}
+// Page-table index of world page `page` at `level`.
+uint spIndex(uint level,int2 page){return (level*SP_SIDE+uint(page.y&127))*SP_SIDE+uint(page.x&127);}
+// The atlas slot of world page `page` at `level`; -1 where it is not resident.
+int spSlot(Look l,uint level,int2 page){
+    uint2 e=buffers[NonUniformResourceIndex(l.vsm.x)].Load2(spIndex(level,page)*8);
+    uint high=(uint(page.x>>7)&0xffffu)|((uint(page.y>>7)&0xffffu)<<16);
+    return e.x!=0&&e.y==high?int(e.x)-1:-1;
+}
+// A slot's record: the shear it was drawn under and its casters' top height.
+float4 spRecord(Look l,int slot){return asfloat(buffers[NonUniformResourceIndex(l.vsmRequest.y)].Load4(uint(slot)*16));}
+// The level of `world` (ground `u` under the current shear): the finest whose texels cover
+// the pixel's footprint (shifted by the level bias), coarse enough that its 128-page window
+// around the camera's ground position holds it with pages to spare.
+uint spLevel(Frame f,Look l,float3 world,float2 u){
+    float w=max(dot(world-f.camera.xyz,f.forward.xyz),1e-3);
+    float footprint=2*w/(length(f.vp[1].xyz)*float(f.extent.y));
+    float first=spStep(l,0),texel=first/SP_PAGE;
+    float2 reach=abs(u-f.camera.xz);
+    float level=max(log2(max(footprint/texel,1))+l.vsmDepth.z,log2(max(max(reach.x,reach.y)/(60*first),1)));
+    return uint(clamp(ceil(level),0,SP_LEVELS-1));
+}
+
+// One resident page as a receiver reads it: its level, world page, slot, the shear it was
+// drawn under, its top, texel width, and the receiver's texel position in it (texel i's
+// centre at i; rows from the page's +z edge).
+struct SpPage {uint level;int2 page;int slot;float2 k;float top;float texel;float2 c;float2 u;};
+// The page of `p` at `level`: found under the current shear, then read in its own frame;
+// where the page's own frame puts the receiver outside it, the page there (its own frame).
+// slot -1: not resident.
+SpPage spPage(Look l,uint level,float3 p){
+    SpPage s;s.level=level;float width=spStep(l,level);s.texel=width/SP_PAGE;
+    s.page=int2(floor(spGround(l,p,spShear(l))/width));
+    s.slot=spSlot(l,level,s.page);s.k=0;s.top=0;s.c=0;s.u=0;
+    [loop]for(uint hop=0;hop<2&&s.slot>=0;hop++){
+        float4 r=spRecord(l,s.slot);s.k=r.xy;s.top=r.z;s.u=spGround(l,p,s.k);
+        float2 local=s.u/width-float2(s.page);
+        int2 off=int2(floor(local));
+        if(all(off==0)||hop==1){s.c=float2(local.x,1-local.y)*SP_PAGE-0.5;break;}
+        s.page+=off;s.slot=spSlot(l,level,s.page);
+    }
+    return s;
+}
+// Height of page-local texel `t` of `s` (texels past its edge from the neighbouring page,
+// clamped into this one where that is not resident).
+float spTexel(Look l,SpPage s,int2 t){
+    int2 over=t>>7;int slot=s.slot;
+    if(any(over!=0)){int n=spSlot(l,s.level,s.page+int2(over.x,-over.y));if(n>=0){slot=n;t-=over*int(SP_PAGE);}else t=clamp(t,0,int(SP_PAGE)-1);}
+    uint u=uint(slot),cols=l.vsm.w;
+    return spHeight(l,textures[NonUniformResourceIndex(l.vsm.y)].Load(int3(int2(u%cols,u/cols)*int(SP_PAGE)+t,0)).r);
+}
+// Heights of the 2x2 texels around page-local boundary `g` (texels g-1 and g), in the order
+// (g-1,g-1), (g,g-1), (g-1,g), (g,g): one gather inside the page, texel loads across it.
+float4 spHeights(Look l,SpPage s,int2 g){
+    if(all(g>=1)&&all(g<=int(SP_PAGE)-1)){
+        uint u=uint(s.slot),cols=l.vsm.w;
+        float2 origin=float2(u%cols,u/cols)*SP_PAGE,atlas=float2(cols,l.vsmRequest.z)*SP_PAGE;
+        float4 d=textures[NonUniformResourceIndex(l.vsm.y)].GatherRed(samplers[2],(origin+float2(g))/atlas).wzxy;
+        return (d-l.vsmDepth.y)/l.vsmDepth.x;
+    }
+    return float4(spTexel(l,s,g-1),spTexel(l,s,g+int2(0,-1)),spTexel(l,s,g+int2(-1,0)),spTexel(l,s,g));
+}
+
+// The sun disc's samples in shear space (the same for every pixel of the frame): the disc's
+// image k_now + rho J o (|o| <= 1, J the shear's derivative across the disc) is an ellipse;
+// a 16x16 grid covers its bounding box; `valid` holds the cells whose centres lie inside
+// (row-major, 16 bits per row, two rows per word), `count` how many. `inv`: J^-1 / rho.
+struct SpDisc {float2 centre;float2 half;float2 cell;float2x2 inv;uint4 valid0;uint4 valid1;float count;};
+// Whether grid cell `c` (row c / 16, column c % 16) of `d` lies inside the disc.
+bool spInside(SpDisc d,uint c){float2 dk=(float2(c%16,c/16)+0.5)*d.cell-d.half;float2 o=mul(d.inv,dk);return dot(o,o)<=1;}
+// The frame's disc geometry; `valid` is filled per workgroup (shadow-pages.slang).
+SpDisc spDiscFrame(Frame f,Look l){
+    float3 d=normalize(f.sunDirection.xyz);float rho=tan(max(l.sunLux.w,1e-5));
+    float3 t1=normalize(abs(d.y)<0.99?cross(d,float3(0,1,0)):cross(d,float3(1,0,0))),t2=cross(d,t1);
+    // dk/dt for k = (d.x, d.z)/d.y.
+    float2 j1=float2(t1.x-d.x*t1.y/d.y,t1.z-d.z*t1.y/d.y)/d.y,j2=float2(t2.x-d.x*t2.y/d.y,t2.z-d.z*t2.y/d.y)/d.y;
+    SpDisc s;s.centre=float2(d.x,d.z)/d.y;s.half=rho*float2(length(float2(j1.x,j2.x)),length(float2(j1.y,j2.y)));
+    s.cell=2*s.half/SP_GRID;
+    // Inverse of J (columns j1, j2) to test cell centres against the unit disc.
+    float det=j1.x*j2.y-j2.x*j1.y;s.inv=float2x2(j2.y,-j2.x,-j1.y,j1.x)/(det*rho);
+    s.valid0=0;s.valid1=0;s.count=1;
+    return s;
+}
+// ORs the cells of rows j0..j1 and columns i0..i1 into the 256-bit mask (m0, m1), with
+// constant word indices only (a runtime-indexed local array spills to memory).
+void spCover(inout uint4 m0,inout uint4 m1,int i0,int i1,int j0,int j1){
+    if(i0>i1||j0>j1)return;
+    uint cols=(i1>=15?0xffffu:((1u<<uint(i1+1))-1u))&~((1u<<uint(i0))-1u);
+    uint rows=(j1>=15?0xffffu:((1u<<uint(j1+1))-1u))&~((1u<<uint(j0))-1u);
+    uint4 a=uint4(((rows>>0)&1)!=0?cols:0,((rows>>2)&1)!=0?cols:0,((rows>>4)&1)!=0?cols:0,((rows>>6)&1)!=0?cols:0)
+           |uint4(((rows>>1)&1)!=0?cols<<16:0,((rows>>3)&1)!=0?cols<<16:0,((rows>>5)&1)!=0?cols<<16:0,((rows>>7)&1)!=0?cols<<16:0);
+    uint4 b=uint4(((rows>>8)&1)!=0?cols:0,((rows>>10)&1)!=0?cols:0,((rows>>12)&1)!=0?cols:0,((rows>>14)&1)!=0?cols:0)
+           |uint4(((rows>>9)&1)!=0?cols<<16:0,((rows>>11)&1)!=0?cols<<16:0,((rows>>13)&1)!=0?cols<<16:0,((rows>>15)&1)!=0?cols<<16:0);
+    m0|=a;m1|=b;
+}
+uint spCount(uint4 a,uint4 b){return countbits(a.x)+countbits(a.y)+countbits(a.z)+countbits(a.w)+countbits(b.x)+countbits(b.y)+countbits(b.z)+countbits(b.w);}
+
+// One ring of blocker texels: 8x8 texels of page `s` around the receiver (ground `s.u`,
+// height `y`, receiver plane height gradient `g` per metre of ground, `bias` metres), each
+// texel above the plane back-projected onto the disc samples it hides from the receiver:
+// a horizontal square of width `texel` at its height `h` above the receiver hides the
+// samples whose ray reaches it there, the shear-space square (texel - u)/h + k_page. With
+// `hole` > 0, texels whose centres lie within `hole` metres (each axis) of the receiver are
+// skipped (a finer ring covered them).
+void spRing(Look l,SpPage s,SpDisc disc,float y,float2 g,float bias,float hole,inout uint4 m0,inout uint4 m1){
+    int2 r=int2(floor(s.c+0.5));float2 lo=disc.centre-disc.half;
+    [loop]for(uint q=0;q<16;q++){
+        int2 gq=r+int2(int(q&3)*2-3,int(q>>2)*2-3);
+        float4 h4=spHeights(l,s,gq);
+        [unroll]for(uint k=0;k<4;k++){
+            // Texel (gq.x-1+(k&1), gq.y-1+(k>>1)): its centre relative to the receiver, in
+            // metres of ground (rows run towards -z).
+            float2 t=float2(gq.x-1+int(k&1),gq.y-1+int(k>>1))-s.c;
+            float2 du=float2(t.x,-t.y)*s.texel;
+            if(hole>0&&all(abs(du)<hole))continue;
+            float height=k==0?h4.x:k==1?h4.y:k==2?h4.z:h4.w;
+            float above=height-(y+dot(g,du))-bias;
+            if(above<=0)continue;
+            float hb=max(height-y,1e-4);
+            float2 a=s.k+(du-0.5*s.texel)/hb,b=s.k+(du+0.5*s.texel)/hb;
+            float2 fa=(a-lo)/disc.cell-0.5,fb=(b-lo)/disc.cell-0.5;
+            int2 i0=int2(ceil(fa)),i1=int2(floor(fb));
+            spCover(m0,m1,max(i0.x,0),min(i1.x,15),max(i0.y,0),min(i1.y,15));
+        }
+    }
+}

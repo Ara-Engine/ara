@@ -728,11 +728,21 @@ impl Renderer {
             return Ok(Vec::new());
         };
         let changes = (native.changes.caster_all, &native.changes.caster_bounds[..]);
+        // The sun page service learns per-page cost from the completed page passes.
+        let pass_ms = ["VSM.Pages", "VSM.Pages.Dynamic"].map(|label| {
+            self.last_timings
+                .iter()
+                .filter(|t| t.pass == label)
+                .map(|t| t.milliseconds)
+                .reduce(|a, b| a + b)
+        });
         let mut draws = vsm.plan(
             &mut self.gpu,
             self.content.sun_direction,
             content,
             changes,
+            &native.bounds,
+            pass_ms,
             settle,
         )?;
         let rotation = vsm

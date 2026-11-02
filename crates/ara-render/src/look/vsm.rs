@@ -30,6 +30,8 @@ use ara_vsm::{DirtyPage, PAGE_SIDE, PAGE_SIZE, PageKey, Projection};
 use glam::{IVec2, Mat4, Vec2, Vec3};
 use std::collections::{BTreeSet, VecDeque};
 
+pub(crate) mod sun;
+
 /// Clipmap levels: level `l` covers a radius of `2^l` metres around the camera.
 pub(crate) const LEVELS: usize = 16;
 /// Radius of level zero, in metres.
@@ -250,11 +252,30 @@ pub(crate) struct VirtualShadowMap {
     queue: VecDeque<DirtyPage>,
     queued: BTreeSet<PageKey>,
     frame: u64,
+    /// The opt-in render-v3 sun page service (`sun`); `None` is today's map, the A/B
+    /// control.
+    pub(crate) service: Option<sun::Service>,
 }
 
 impl VirtualShadowMap {
-    pub(crate) fn new(gpu: &mut GpuDevice, settings: super::VirtualShadows) -> Result<Self> {
+    /// The map for `settings`; `service` (settings, the renderer's cooked artifacts and
+    /// their content key) selects the render-v3 sun page service instead of today's
+    /// pages, with draw, caster-row and request storage sized for uncapped demand.
+    pub(crate) fn new(
+        gpu: &mut GpuDevice,
+        settings: super::VirtualShadows,
+        service: Option<(sun::SunPages, &std::path::Path, &str)>,
+    ) -> Result<Self> {
         let rows = settings.pages.div_ceil(COLUMNS);
+        let (draws, row_capacity, request_words) = if service.is_some() {
+            (sun::MAX_DRAWS, sun::MAX_DRAWS * 256, sun::REQUEST_WORDS)
+        } else {
+            (
+                settings.budget as usize,
+                settings.budget as usize * ROWS_PER_PAGE,
+                REQUEST_WORDS,
+            )
+        };
         let mut owned: Vec<Resource> = Vec::new();
         let result = (|| {
             let atlas = gpu.create_image(
@@ -276,16 +297,27 @@ impl VirtualShadowMap {
             };
             let entries = LEVELS * (PAGE_SIDE * PAGE_SIDE) as usize;
             let (table, table_index) = buffer(gpu, entries * 8)?;
-            let (matrices, matrices_index) = buffer(gpu, settings.budget as usize * 64)?;
-            let capacity = settings.budget as usize * ROWS_PER_PAGE;
+            let (matrices, matrices_index) = buffer(gpu, draws * 64)?;
+            let capacity = row_capacity;
             let (page_rows, page_rows_index) = buffer(gpu, capacity * 8)?;
             let ring = [
-                buffer(gpu, REQUEST_WORDS * 4)?,
-                buffer(gpu, REQUEST_WORDS * 4)?,
-                buffer(gpu, REQUEST_WORDS * 4)?,
+                buffer(gpu, request_words * 4)?,
+                buffer(gpu, request_words * 4)?,
+                buffer(gpu, request_words * 4)?,
             ];
-            let (requests, request_indices) = (ring.map(|r| r.0), ring.map(|r| r.1));
             let atlas_sampled = gpu.sampled_image(atlas, true)?.index;
+            let cache = ara_vsm::Cache::new(settings.pages)?;
+            // Last: nothing fails after the service owns its buffer.
+            let service = match service {
+                Some((sun, artifacts, key)) => Some(sun::Service::new(
+                    gpu,
+                    sun,
+                    settings.pages,
+                    (artifacts, key),
+                )?),
+                None => None,
+            };
+            let (requests, request_indices) = (ring.map(|r| r.0), ring.map(|r| r.1));
             Ok::<_, anyhow::Error>(Self {
                 settings,
                 atlas,
@@ -306,13 +338,14 @@ impl VirtualShadowMap {
                 requests,
                 request_indices,
                 requested: [None; 3],
-                cache: ara_vsm::Cache::new(settings.pages)?,
+                cache,
                 slot_keys: vec![None; settings.pages as usize],
                 space: None,
                 revision: 0,
                 queue: VecDeque::new(),
                 queued: BTreeSet::new(),
                 frame: 0,
+                service,
             })
         })();
         if result.is_err() {
@@ -368,14 +401,24 @@ impl VirtualShadowMap {
     /// pages at a fixed latency), invalidates the resident pages moved casters touch
     /// (they redraw first), and returns up to the budget of dirty pages, coarser
     /// levels before finer. Cull them, then `drawn` those that fit.
+    ///
+    /// The sun page service (`sun`) plans instead from the instance rows' world boxes
+    /// `instances` and the completed static/dynamic page passes' GPU ms `pass_ms`
+    /// (today's map ignores both).
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn plan(
         &mut self,
         gpu: &mut GpuDevice,
         sun: Vec3,
         bounds: [Vec3; 2],
         (all, moved): (bool, &[[Vec3; 2]]),
+        instances: &[[Vec3; 2]],
+        pass_ms: [Option<f64>; 2],
         settle: bool,
     ) -> Result<Vec<PageDraw>> {
+        if self.service.is_some() {
+            return self.plan_sun(gpu, sun, bounds, (all, moved), instances, pass_ms, settle);
+        }
         self.frame += 1;
         let fresh = LightSpace::new(sun, bounds);
         if all || !self.space.is_some_and(|s| s.holds(&fresh)) {
@@ -491,6 +534,9 @@ impl VirtualShadowMap {
         draws: &[PageDraw],
         rest: &[PageDraw],
     ) -> Result<()> {
+        if self.service.is_some() {
+            return self.drawn_sun(gpu, draws, rest);
+        }
         for draw in rest.iter().rev() {
             self.queue.push_front(draw.page);
             self.queued.insert(draw.page.key);
@@ -537,6 +583,9 @@ impl VirtualShadowMap {
     /// cleared (GPU-ordered) and remembered; `None` while its last marks are unread
     /// (no marks this frame).
     pub(crate) fn arm(&mut self, gpu: &mut GpuDevice, camera: Vec3) -> Result<Option<usize>> {
+        if self.service.is_some() {
+            return self.arm_sun(gpu, camera);
+        }
         let i = (self.frame % self.requests.len() as u64) as usize;
         let Some(space) = self.space else {
             return Ok(None);
@@ -571,6 +620,9 @@ impl VirtualShadowMap {
     /// The look record's VSM rows for a frame that marks into request buffer
     /// `request` (`arm`).
     pub(crate) fn rows(&self, request: Option<usize>) -> Option<Rows> {
+        if self.service.is_some() {
+            return self.rows_sun(request);
+        }
         let space = self.space?;
         let [near, far] = space.depth;
         Some(Rows {
@@ -596,7 +648,27 @@ impl VirtualShadowMap {
         })
     }
 
+    /// The sun page service's mark and project pipelines (look/passes.rs dispatches them
+    /// for `VSM.Mark` and `VSM.Project`); `None` for today's map.
+    pub(crate) fn service_pipelines(&self) -> Option<sun::Pipelines> {
+        self.service.as_ref().map(|s| s.pipelines)
+    }
+
+    /// How this frame's page draws split into the static and dynamic layers (the
+    /// renderer records them as two passes); `None` for today's map.
+    pub(crate) fn service_layers(&self) -> Option<[usize; 2]> {
+        self.service.as_ref().map(|s| s.layers)
+    }
+
+    /// The sun page service's counters of the last planned frame.
+    pub(crate) fn sun_counters(&self) -> Option<&sun::SunPageCounters> {
+        self.service.as_ref().map(sun::Service::counters)
+    }
+
     pub(crate) fn destroy(self, gpu: &mut GpuDevice) -> Result<()> {
+        if let Some(service) = self.service {
+            service.destroy(gpu)?;
+        }
         gpu.retire(Resource::Image(self.atlas))?;
         for buffer in [self.table, self.matrices, self.page_rows]
             .into_iter()

@@ -161,6 +161,9 @@ pub struct Renderer {
     rays: rt::Rays,
     /// Explicit opt-in patch readout; absent on every default renderer.
     patch_transport: Option<crate::look::transport::solve::ReadoutGpu>,
+    /// Explicit opt-in render-v3 sun page service (`set_sun_pages`); absent on every
+    /// default renderer, where today's virtual shadow maps are the A/B control.
+    sun_pages: Option<crate::look::vsm::sun::SunPages>,
     views: views::Views,
     secondary_active: bool,
     live: Option<live::Live>,
@@ -203,6 +206,44 @@ impl Renderer {
             }
         }
         Ok(())
+    }
+
+    /// Select the render-v3 sun page service (`look::vsm::sun`, council-v3 3.1/3.5) for
+    /// the virtual shadow maps, or `None` for today's pages (the default and the A/B
+    /// control). It takes effect where `Quality::virtual_shadows` is set (High/Epic) and
+    /// re-keys the map. Call at a completed frame boundary.
+    pub fn set_sun_pages(&mut self, pages: Option<crate::SunPages>) -> Result<()> {
+        ensure!(
+            !self.gpu.deferring_completion(),
+            "select sun pages at a completed frame boundary"
+        );
+        if pages == self.sun_pages {
+            return Ok(());
+        }
+        self.sun_pages = pages;
+        if let Some(old) = self.look.vsm.take() {
+            let settings = old.settings;
+            old.destroy(&mut self.gpu)?;
+            self.look.vsm = Some(crate::look::vsm::VirtualShadowMap::new(
+                &mut self.gpu,
+                settings,
+                self.sun_pages.map(|s| {
+                    (
+                        s,
+                        self.artifacts.as_path(),
+                        self.shader_metadata.content_key.as_str(),
+                    )
+                }),
+            )?);
+        }
+        Ok(())
+    }
+
+    /// The sun page service's counters of the last planned frame (T1 lab `sun_pages` and
+    /// `dynamic_pages` rows; GPU ms come from `timings`: `VSM.Pages`,
+    /// `VSM.Pages.Dynamic`); `None` without the service.
+    pub fn sun_page_counters(&self) -> Option<&crate::SunPageCounters> {
+        self.look.vsm.as_ref()?.sun_counters()
     }
 
     /// GPU readout allocation, added to the host transport report for peak residency.
@@ -692,6 +733,13 @@ impl Renderer {
                 self.look.vsm = Some(crate::look::vsm::VirtualShadowMap::new(
                     &mut self.gpu,
                     settings,
+                    self.sun_pages.map(|s| {
+                        (
+                            s,
+                            self.artifacts.as_path(),
+                            self.shader_metadata.content_key.as_str(),
+                        )
+                    }),
                 )?);
             }
         }
