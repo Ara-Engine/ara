@@ -366,6 +366,8 @@ pub fn advance(f: &mut Fixture, case: &Case, frame: u64) -> instanced::Changes {
         changes.materials.push(1);
     }
     for (i, light) in f.scene.lights.iter_mut().enumerate() {
+        // F8 is the first changed sample, after the unchanged pre-event frames.
+        let light_time = t + 1. / 60.;
         if case.name == "switch-off" {
             light.color_lumens[3] = 0.;
         }
@@ -377,11 +379,11 @@ pub fn advance(f: &mut Fixture, case: &Case, frame: u64) -> instanced::Changes {
             };
         }
         if case.name == "200-light" {
-            light.position_range[0] =
-                (i % 20) as f32 * 0.6 - 5.7 + ((t * 1.7 + i as f32).sin() - (i as f32).sin()) * 1.6;
+            light.position_range[0] = (i % 20) as f32 * 0.6 - 5.7
+                + ((light_time * 1.7 + i as f32).sin() - (i as f32).sin()) * 1.6;
         }
         if case.name == "repeated-invalidation" {
-            light.position_range[0] = (t * 2.).sin();
+            light.position_range[0] = (light_time * 2.).sin();
             light.color_lumens[3] = if frame.is_multiple_of(2) { 11520. } else { 0. };
         }
     }
@@ -393,4 +395,39 @@ pub fn advance(f: &mut Fixture, case: &Case, frame: u64) -> instanced::Changes {
         };
     }
     changes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn continuous_lights_change_on_all_300_event_frames() -> Result<()> {
+        for case in cases()
+            .into_iter()
+            .filter(|case| matches!(case.name, "200-light" | "repeated-invalidation"))
+        {
+            let mut fixture = create(&case)?;
+            let mut changed = 0;
+            for frame in 0..case.frames {
+                let before: Vec<_> = fixture
+                    .scene
+                    .lights
+                    .iter()
+                    .map(|light| (light.position_range, light.color_lumens))
+                    .collect();
+                advance(&mut fixture, &case, frame);
+                let differs = fixture
+                    .scene
+                    .lights
+                    .iter()
+                    .zip(before)
+                    .any(|(light, old)| (light.position_range, light.color_lumens) != old);
+                assert_eq!(differs, frame >= case.event, "{} F{frame}", case.name);
+                changed += usize::from(differs);
+            }
+            assert_eq!(changed, 300, "{}", case.name);
+        }
+        Ok(())
+    }
 }
