@@ -6,6 +6,8 @@ use crate::look::transport::patches::{PatchBuffers, PatchId};
 use ara_patch_charts::Charts;
 use glam::{Vec2, Vec3};
 use std::collections::BTreeMap;
+mod coverage;
+use coverage::TriangleCoverage;
 
 #[derive(Clone, Copy)]
 struct Coverage {
@@ -16,7 +18,7 @@ struct Coverage {
 /// One mapping per resident chart instance; it is rebuilt on topology publication.
 #[derive(Default)]
 pub(crate) struct SurfaceMap {
-    triangles: BTreeMap<(u64, u32), Vec<Coverage>>,
+    triangles: BTreeMap<(u64, u32), TriangleCoverage>,
 }
 
 impl SurfaceMap {
@@ -39,38 +41,31 @@ impl SurfaceMap {
                 self.triangles
                     .entry((instance, fragment.triangle))
                     .or_default()
+                    .entries
                     .push(Coverage {
                         patch: dense,
                         bary: fragment.barycentric,
                     });
             }
         }
+        for (_, triangle) in self
+            .triangles
+            .range_mut((instance, 0)..=(instance, u32::MAX))
+        {
+            triangle.build();
+        }
     }
 
     pub fn patch(&self, instance: u64, primitive: u32, barycentric: [f32; 2]) -> Option<u32> {
-        let p = Vec2::from(barycentric);
         self.triangles
             .get(&(instance, primitive))?
-            .iter()
-            .find(|c| {
-                let [a, b, d] = c.bary.map(Vec2::from);
-                let cross = |u: Vec2, v: Vec2| u.x * v.y - u.y * v.x;
-                let area = cross(b - a, d - a);
-                if area == 0. {
-                    return false;
-                }
-                let u = cross(b - p, d - p) / area;
-                let v = cross(d - p, a - p) / area;
-                let w = 1. - u - v;
-                u >= -2e-5 && v >= -2e-5 && w >= -2e-5
-            })
-            .map(|c| c.patch)
+            .patch(Vec2::from(barycentric))
     }
 
     pub fn resident_bytes(&self) -> usize {
         self.triangles
             .values()
-            .map(|v| v.capacity() * size_of::<Coverage>() + 80)
+            .map(|v| v.resident_bytes() + 80)
             .sum()
     }
 }
