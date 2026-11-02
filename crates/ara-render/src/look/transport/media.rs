@@ -47,10 +47,6 @@ impl MediaGrid {
         Ok(())
     }
 
-    pub fn generation(&self) -> u64 {
-        self.generation
-    }
-
     pub fn cell(&self, index: IVec3) -> Cell {
         self.cells
             .get(&index.to_array())

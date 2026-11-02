@@ -19,7 +19,7 @@ impl PatchTransport {
             scene,
             textures,
             bodies: &self.bodies,
-            generation: self.frame + 1,
+            generations: &self.geometry_generations,
         };
         let count = self.graph.links.patches.len();
         for (id, light) in scene.lights.iter().enumerate() {

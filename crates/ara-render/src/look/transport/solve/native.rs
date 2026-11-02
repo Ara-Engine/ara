@@ -134,6 +134,8 @@ pub struct PatchTransport {
     pub(crate) trace: TraceScene,
     surfaces: SurfaceMap,
     charts: BTreeMap<u64, ChartInstance>,
+    /// Local cache revisions advanced only by A3 motion/appearance events.
+    geometry_generations: Vec<u64>,
     registry: PatchRegistry,
     media: MediaGrid,
     media_sources: Vec<TransportMedium>,
@@ -309,11 +311,12 @@ impl PatchTransport {
             }
         }
         let media = MediaGrid::default();
+        let geometry_generations = vec![1; scene.instances.len()];
         let materials = NativeMaterials {
             scene,
             textures,
             bodies: &bodies,
-            generation: 1,
+            generations: &geometry_generations,
         };
         let cpu = CpuTrace::new(&trace);
         let query = Query {
@@ -363,6 +366,7 @@ impl PatchTransport {
             trace,
             surfaces,
             charts,
+            geometry_generations,
             registry,
             media,
             media_sources: Vec::new(),
@@ -599,10 +603,15 @@ impl PatchTransport {
             return Ok(&self.report);
         }
         let mut affected = std::collections::BTreeSet::new();
+        let geometry_revision = events
+            .frame
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("transport geometry revision exhausted"))?;
         if channels_changed {
             affected.extend(0..self.graph.links.patches.len() as u32);
         }
         for event in &events.instances {
+            self.geometry_generations[event.change.id as usize] = geometry_revision;
             self.graph.changed(event.change.id);
             if let Some(current) = event.change.current {
                 let mask = if !current.body.owns_links() && !current.is_large() {
@@ -657,6 +666,7 @@ impl PatchTransport {
         }
         self.trace.commit();
         if !events.portals.is_empty() {
+            self.geometry_generations.fill(geometry_revision);
             self.graph.invalidate_all(events.frame);
         }
         for event in &events.materials {
@@ -681,6 +691,7 @@ impl PatchTransport {
                 .enumerate()
                 .filter(|(_, i)| i.material as u64 == event.id)
             {
+                self.geometry_generations[id] = geometry_revision;
                 self.graph.changed(id as u64);
                 let bounds = instance.bounds(&scene.geometry[instance.geometry]);
                 if let Some(region) = Region::new(bounds[0].to_array(), bounds[1].to_array()) {
@@ -705,7 +716,7 @@ impl PatchTransport {
             scene,
             textures,
             bodies: &self.bodies,
-            generation: events.frame + 1,
+            generations: &self.geometry_generations,
         };
         let query = Query {
             trace: &cpu,
@@ -818,11 +829,14 @@ impl PatchTransport {
         let memory = Memory::measure(&self.graph.links, &self.graph.reverse, &self.graph.index);
         self.report.link_bytes = memory.link_bytes()
             + self.graph.repaired_index_bytes()
-            + self.graph.repaired_reverse_bytes();
+            + self.graph.repaired_reverse_bytes()
+            + self.geometry_generations.capacity() * 8;
         self.report.index_bytes_per_link = if self.graph.links.len() == 0 {
             0.
         } else {
-            (memory.index + self.graph.repaired_index_bytes()) as f64
+            (memory.index
+                + self.graph.repaired_index_bytes()
+                + self.geometry_generations.capacity() * 8) as f64
                 / self.graph.links.len() as f64
         };
         self.report.channel_bytes = self.channels.resident_bytes();
@@ -831,6 +845,7 @@ impl PatchTransport {
             + self.solver.resident_bytes()
             + self.channels.resident_bytes()
             + self.external_irradiance.capacity() * size_of::<Vec3>()
+            + self.geometry_generations.capacity() * 8
             + self.surfaces.resident_bytes()
             + self.media.resident_bytes()
             + self.media_sources.capacity() * size_of::<TransportMedium>()
@@ -880,7 +895,7 @@ impl PatchTransport {
             scene,
             textures,
             bodies: &self.bodies,
-            generation: self.frame + 1,
+            generations: &self.geometry_generations,
         };
         let all: Vec<_>;
         let rows = if let Some(rows) = rows {

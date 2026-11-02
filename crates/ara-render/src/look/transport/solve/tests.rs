@@ -52,6 +52,7 @@ fn native_local_repair_matches_fresh_trace_through_move_sleep_and_wake() -> Resu
         None,
     )?;
     let awake_count = transport.graph.links.patches.len();
+    assert_eq!(transport.graph.repaired_index_bytes(), 0);
     assert!(
         transport
             .volume
@@ -102,6 +103,70 @@ fn native_local_repair_matches_fresh_trace_through_move_sleep_and_wake() -> Resu
             assert_eq!(transport.graph.links.patches.len(), awake_count);
         }
     }
+    Ok(())
+}
+
+#[test]
+fn media_motion_reuses_static_witnesses_but_material_edits_advance_them() -> Result<()> {
+    use crate::instanced::{
+        Changes,
+        transport::{BodyClass, NativeChangeFeed},
+    };
+    use glam::Mat4;
+    let case = fixtures::Case {
+        name: "sleep-wake",
+        frames: 90,
+        event: 8,
+        bodies: 1,
+        triangles: 108,
+        lights: 1,
+    };
+    let mut f = fixtures::create(&case)?;
+    f.scene
+        .instances
+        .retain(|i| matches!(i.entity, 1 | 2 | 100));
+    f.scene.instances[0].world =
+        Mat4::from_translation(Vec3::new(0., -0.1, 0.)) * Mat4::from_scale(Vec3::new(4., 0.2, 4.));
+    f.scene.instances[1].world =
+        Mat4::from_translation(Vec3::new(0., 1., -1.)) * Mat4::from_scale(Vec3::new(2., 2., 0.2));
+    f.scene.instances[2].world =
+        Mat4::from_translation(Vec3::new(-0.5, 0.4, 0.)) * Mat4::from_scale(Vec3::splat(0.25));
+    f.bodies.clear();
+    f.bodies.insert(2, BodyClass::PhysicsActive);
+    let mut transport = PatchTransport::new(
+        &f.scene,
+        &[],
+        f.bodies.clone(),
+        TransportOptions::default(),
+        None,
+    )?;
+    assert_eq!(transport.graph.repaired_index_bytes(), 0);
+    let mut feed = NativeChangeFeed::new(&f.scene, 0)?;
+    let mut changes = Changes::default();
+    changes.transport.bodies.push((2, BodyClass::PhysicsActive));
+    feed.update(&f.scene, Some(&changes))?;
+    feed.finish();
+    for frame in 1..=3 {
+        f.scene.instances[2].world.w_axis.x += 0.1;
+        changes.instances = vec![2];
+        feed.begin_frame(frame)?;
+        feed.update(&f.scene, Some(&changes))?;
+        transport.advance(&f.scene, &[], feed.finish(), true)?;
+        assert_eq!(
+            transport.graph.repaired_index_bytes(),
+            0,
+            "static visibility was duplicated at frame {frame}"
+        );
+    }
+    changes.instances.clear();
+    changes.transport.bodies.clear();
+    changes.materials = vec![2];
+    f.scene.materials[2].pbr.base_color = [0.2, 0.3, 0.4, 1.];
+    feed.begin_frame(4)?;
+    feed.update(&f.scene, Some(&changes))?;
+    transport.advance(&f.scene, &[], feed.finish(), true)?;
+    assert!(transport.graph.repaired_index_bytes() > 0);
+    assert!(transport.report().index_bytes_per_link < 8.);
     Ok(())
 }
 

@@ -14,7 +14,7 @@ impl PatchTransport {
             scene,
             textures,
             bodies: &self.bodies,
-            generation: self.frame + 1,
+            generations: &self.geometry_generations,
         };
         let query = Query {
             trace: &cpu,
@@ -70,7 +70,7 @@ impl PatchTransport {
             scene,
             textures,
             bodies: &self.bodies,
-            generation: self.media.generation(),
+            generations: &self.geometry_generations,
         };
         for (&id, body) in &self.bodies {
             if body.owns_links() {

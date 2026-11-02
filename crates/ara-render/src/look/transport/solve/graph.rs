@@ -21,6 +21,8 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
+mod witnesses;
+use witnesses::RepairedWitnesses;
 
 /// G3 compares the same ray count with two deterministic quadratures.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -62,7 +64,7 @@ pub(crate) struct TraceGraph {
     pub media: Vec<Vec3>,
     pub generations: Vec<u64>,
     /// Sparse updated witnesses; untouched links keep A2's interned sets.
-    witnesses: BTreeMap<u32, Vec<GeometryStamp>>,
+    witnesses: RepairedWitnesses,
     /// Repair debt survives events and is ordered by receiver error, then patch.
     pending: BTreeMap<u32, u64>,
     /// Reverse redirects supplement the immutable CSR without a global rebuild.
@@ -328,7 +330,7 @@ impl TraceGraph {
             index,
             media,
             generations,
-            witnesses: BTreeMap::new(),
+            witnesses: RepairedWitnesses::default(),
             pending: BTreeMap::new(),
             redirects: BTreeMap::new(),
             original_sources: BTreeMap::new(),
@@ -393,13 +395,13 @@ impl TraceGraph {
         }
         let mut rows = BTreeMap::<u32, u64>::new();
         for link in chosen {
-            let (first, multiple) = if let Some(w) = self.witnesses.get(&link) {
+            let (first, multiple) = if let Some(w) = self.witnesses.get(link) {
                 (w.first().copied(), w.len() > 1)
             } else {
                 let mut witnesses = self.links.witnesses.iter(self.links.witness[link as usize]);
                 (witnesses.next().copied(), witnesses.next().is_some())
             };
-            let sample = if multiple || self.full_repair {
+            let mut sample = if multiple || self.full_repair {
                 query.sample(self.links.segment(link))?
             } else {
                 query.local(
@@ -415,7 +417,20 @@ impl TraceGraph {
                 self.links.transmission[axis][i] = sample.transmission[axis];
             }
             self.media[i] = sample.media;
-            self.witnesses.insert(link, sample.geometry);
+            // Match A2's canonical witness-set order. Unchanged geometry reuses
+            // its interned set even when media/transmission on the ray changed.
+            sample.geometry.sort_unstable();
+            sample.geometry.dedup();
+            if sample
+                .geometry
+                .iter()
+                .eq(self.links.witnesses.iter(self.links.witness[i]))
+            {
+                self.witnesses.clear(link);
+            } else {
+                self.witnesses
+                    .set(link, sample.geometry, self.links.len())?;
+            }
             let receiver = self.links.receiver(link);
             let tile = self
                 .links
@@ -469,10 +484,7 @@ impl TraceGraph {
     /// Repaired visibility witnesses remain part of the G3 index charge, even
     /// though they supplement A2's immutable, interned original witnesses.
     pub fn repaired_index_bytes(&self) -> usize {
-        self.witnesses
-            .values()
-            .map(|w| w.capacity() * size_of::<GeometryStamp>() + 64)
-            .sum::<usize>()
+        self.witnesses.resident_bytes()
     }
 
     /// Sparse reverse redirects and original-source identities are link data.
@@ -568,7 +580,7 @@ mod tests {
             links,
             reverse,
             index,
-            witnesses: BTreeMap::new(),
+            witnesses: RepairedWitnesses::default(),
             pending: BTreeMap::new(),
             redirects: BTreeMap::new(),
             original_sources: BTreeMap::new(),

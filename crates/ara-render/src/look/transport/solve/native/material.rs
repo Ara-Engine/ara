@@ -4,7 +4,7 @@ pub(super) struct NativeMaterials<'a> {
     pub(super) scene: &'a Scene,
     pub(super) textures: &'a [crate::scene::Texture],
     pub(super) bodies: &'a BTreeMap<u64, BodyClass>,
-    pub(super) generation: u64,
+    pub(super) generations: &'a [u64],
 }
 
 impl NativeMaterials<'_> {
@@ -128,8 +128,8 @@ impl Materials for NativeMaterials<'_> {
         }
         Optical::Surface
     }
-    fn generation(&self, _: u64) -> u64 {
-        self.generation
+    fn generation(&self, instance: u64) -> u64 {
+        self.generations[instance as usize]
     }
 }
 
