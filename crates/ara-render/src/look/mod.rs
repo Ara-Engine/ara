@@ -22,6 +22,7 @@ pub(crate) mod moments;
 pub(crate) mod passes;
 pub mod placement;
 pub(crate) mod refract;
+pub(crate) mod reflect;
 pub(crate) mod screen_gi;
 pub(crate) mod trace;
 pub(crate) mod translucent;

@@ -15,6 +15,8 @@ pub mod post;
 mod readback;
 mod readiness;
 mod rt;
+#[path = "../look/reflect/renderer.rs"]
+mod software_reflect;
 mod submission;
 mod targets;
 mod transfer;
@@ -159,6 +161,8 @@ pub struct Renderer {
     native_pipelines: native::pipelines::Pipelines,
     /// Hybrid ray queries over the native content (High/Epic on RT devices; D29).
     rays: rt::Rays,
+    /// Explicit software secondary transport; absent in the default path.
+    software_reflections: Option<software_reflect::Reflections>,
     /// Explicit opt-in patch readout; absent on every default renderer.
     patch_transport: Option<crate::look::transport::solve::ReadoutGpu>,
     /// Explicit opt-in render-v3 sun page service (`set_sun_pages`); absent on every

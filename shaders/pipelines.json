@@ -1671,6 +1671,36 @@
       "vertex_stride": 0
     }
   },
+  "reflect_clear": {
+    "entries": { "reflectClearMain": "compute" },
+    "source": "reflect-main.slang",
+    "state": { "blend": false, "color_formats": [], "depth_format": null, "depth_test": false, "depth_write": false, "vertex_stride": 0 }
+  },
+  "reflect_mirror": {
+    "entries": { "reflectMirrorMain": "compute" },
+    "source": "reflect-main.slang",
+    "state": { "blend": false, "color_formats": [], "depth_format": null, "depth_test": false, "depth_write": false, "vertex_stride": 0 }
+  },
+  "reflect_rough": {
+    "entries": { "reflectRoughMain": "compute" },
+    "source": "reflect-main.slang",
+    "state": { "blend": false, "color_formats": [], "depth_format": null, "depth_test": false, "depth_write": false, "vertex_stride": 0 }
+  },
+  "reflect_lighting": {
+    "entries": { "fullscreenVertex": "vertex", "reflectLightingFragment": "fragment" },
+    "source": "reflect-lighting.slang",
+    "state": { "blend": false, "color_formats": [97], "depth_format": null, "depth_test": false, "depth_write": false, "vertex_stride": 0 }
+  },
+  "reflect_prefiltered": {
+    "entries": { "reflectPrefilteredMain": "compute" },
+    "source": "reflect-main.slang",
+    "state": { "blend": false, "color_formats": [], "depth_format": null, "depth_test": false, "depth_write": false, "vertex_stride": 0 }
+  },
+  "glass_ordered": {
+    "entries": { "glassOrderedFragment": "fragment", "glassOrderedVertex": "vertex" },
+    "source": "glass-ordered.slang",
+    "state": { "blend": true, "color_formats": [97,100,83], "depth_format": 126, "depth_test": true, "depth_write": false, "vertex_stride": 0 }
+  },
   "transport_diffuse": {
     "entries": {
       "fullscreenVertex": "vertex",

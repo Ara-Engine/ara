@@ -272,6 +272,7 @@ impl Renderer {
             old.destroy(&mut self.gpu)?;
         }
         transport_result?;
+        self.update_software_reflections(scene)?;
         Ok(())
     }
 
@@ -347,6 +348,7 @@ impl Renderer {
         {
             feed.update(scene, changes)?;
         }
+        self.update_software_reflections(scene)?;
         Ok(())
     }
 
