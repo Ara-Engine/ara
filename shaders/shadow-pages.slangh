@@ -67,23 +67,30 @@ SpPage spPage(Look l,uint level,float3 p){
     return s;
 }
 // Height of page-local texel `t` of `s` (texels past its edge from the neighbouring page,
-// clamped into this one where that is not resident).
-float spTexel(Look l,SpPage s,int2 t){
-    int2 over=t>>7;int slot=s.slot;
-    if(any(over!=0)){int n=spSlot(l,s.level,s.page+int2(over.x,-over.y));if(n>=0){slot=n;t-=over*int(SP_PAGE);}else t=clamp(t,0,int(SP_PAGE)-1);}
+// clamped into this one where that is not resident), and `dk`, the shear of the page it
+// came from less `s`'s: a texel of height y drawn under shear k_n lies (y - yref) dk
+// further along ground in `s`'s frame, which spRing adds, so cross-page reads are exact.
+float spTexel(Look l,SpPage s,int2 t,out float2 dk){
+    int2 over=t>>7;int slot=s.slot;dk=0;
+    if(any(over!=0)){int n=spSlot(l,s.level,s.page+int2(over.x,-over.y));if(n>=0){slot=n;t-=over*int(SP_PAGE);dk=spRecord(l,n).xy-s.k;}else t=clamp(t,0,int(SP_PAGE)-1);}
     uint u=uint(slot),cols=l.vsm.w;
     return spHeight(l,textures[NonUniformResourceIndex(l.vsm.y)].Load(int3(int2(u%cols,u/cols)*int(SP_PAGE)+t,0)).r);
 }
 // Heights of the 2x2 texels around page-local boundary `g` (texels g-1 and g), in the order
-// (g-1,g-1), (g,g-1), (g-1,g), (g,g): one gather inside the page, texel loads across it.
-float4 spHeights(Look l,SpPage s,int2 g){
+// (g-1,g-1), (g,g-1), (g-1,g), (g,g): one gather inside the page, texel loads across it
+// (with each texel's shear difference, `dkx`/`dky`, spTexel).
+float4 spHeights(Look l,SpPage s,int2 g,out float4 dkx,out float4 dky){
+    dkx=0;dky=0;
     if(all(g>=1)&&all(g<=int(SP_PAGE)-1)){
         uint u=uint(s.slot),cols=l.vsm.w;
         float2 origin=float2(u%cols,u/cols)*SP_PAGE,atlas=float2(cols,l.vsmRequest.z)*SP_PAGE;
         float4 d=textures[NonUniformResourceIndex(l.vsm.y)].GatherRed(samplers[2],(origin+float2(g))/atlas).wzxy;
         return (d-l.vsmDepth.y)/l.vsmDepth.x;
     }
-    return float4(spTexel(l,s,g-1),spTexel(l,s,g+int2(0,-1)),spTexel(l,s,g+int2(-1,0)),spTexel(l,s,g));
+    float2 a,b,c,d;
+    float4 h=float4(spTexel(l,s,g-1,a),spTexel(l,s,g+int2(0,-1),b),spTexel(l,s,g+int2(-1,0),c),spTexel(l,s,g,d));
+    dkx=float4(a.x,b.x,c.x,d.x);dky=float4(a.y,b.y,c.y,d.y);
+    return h;
 }
 
 // The sun disc's samples in shear space (the same for every pixel of the frame): the disc's
@@ -131,7 +138,7 @@ void spRing(Look l,SpPage s,SpDisc disc,float y,float2 g,float bias,float hole,i
     int2 r=int2(floor(s.c+0.5));float2 lo=disc.centre-disc.half;
     [loop]for(uint q=0;q<16;q++){
         int2 gq=r+int2(int(q&3)*2-3,int(q>>2)*2-3);
-        float4 h4=spHeights(l,s,gq);
+        float4 dkx,dky;float4 h4=spHeights(l,s,gq,dkx,dky);
         [unroll]for(uint k=0;k<4;k++){
             // Texel (gq.x-1+(k&1), gq.y-1+(k>>1)): its centre relative to the receiver, in
             // metres of ground (rows run towards -z).
@@ -139,6 +146,8 @@ void spRing(Look l,SpPage s,SpDisc disc,float y,float2 g,float bias,float hole,i
             float2 du=float2(t.x,-t.y)*s.texel;
             if(hole>0&&all(abs(du)<hole))continue;
             float height=k==0?h4.x:k==1?h4.y:k==2?h4.z:h4.w;
+            // A neighbouring page's texel, moved into this page's frame (spTexel).
+            du+=(height-spRef(l))*float2(k==0?dkx.x:k==1?dkx.y:k==2?dkx.z:dkx.w,k==0?dky.x:k==1?dky.y:k==2?dky.z:dky.w);
             float above=height-(y+dot(g,du))-bias;
             if(above<=0)continue;
             float hb=max(height-y,1e-4);

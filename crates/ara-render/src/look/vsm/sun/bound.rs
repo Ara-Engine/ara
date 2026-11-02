@@ -6,10 +6,10 @@
 //! coordinates (both rays pass through `c`; [`super::oblique`]), for any receiver
 //! orientation. A page whose casters reach at most `top` and whose receivers lie in
 //! `[lo, hi]` therefore lags by at most `(top - lo) |dk|`. Filter taps that cross into
-//! a neighbouring page read texels drawn under that page's shear: a blocker of height
-//! `y` then lands `(y - y_ref) |k_page - k_neighbour|` off, so each page also carries
-//! `max |y - y_ref|` of its contents (the seam term) and the scheduler triggers at half
-//! the line, keeping the sum of two neighbours within it.
+//! a neighbouring page read texels drawn under that page's shear; the shader moves each
+//! into the receiver page's frame by `(y - y_ref)(k_neighbour - k_page)`
+//! (shadow-pages.slangh `spTexel`), so they are exact up to the neighbour's own lag,
+//! which the neighbour's bound covers (receivers near an edge mark the neighbour too).
 //!
 //! [`Heights`] bounds `top` and `[lo, hi]` from instance world boxes (every surface
 //! lies inside its instance's box), so it is conservative without GPU feedback; GPU
@@ -34,19 +34,14 @@ pub(crate) struct PageHeights {
 
 impl PageHeights {
     /// Upper bound, in metres of ground coordinates, on any shadow edge's misplacement
-    /// in this page per unit of shear change, including the seam term.
-    pub(crate) fn reach(&self, y_ref: f32) -> f32 {
-        let cast = (self.top - self.receivers[0]).max(0.);
-        let seam = (self.top - y_ref)
-            .abs()
-            .max((self.receivers[0] - y_ref).abs())
-            .max((self.receivers[1] - y_ref).abs());
-        cast + seam
+    /// in this page per unit of shear change: the caster height above the lowest receiver.
+    pub(crate) fn reach(&self) -> f32 {
+        (self.top - self.receivers[0]).max(0.)
     }
 
     /// The bound in page texels (`texel` metres) after a shear change of `dk`.
-    pub(crate) fn lag_texels(&self, y_ref: f32, dk: f32, texel: f32) -> f32 {
-        self.reach(y_ref) * dk / texel
+    pub(crate) fn lag_texels(&self, dk: f32, texel: f32) -> f32 {
+        self.reach() * dk / texel
     }
 }
 
@@ -244,7 +239,7 @@ mod tests {
                 top: c.y,
                 receivers: [lo, e0p.y.max(e1p.y)],
             };
-            let bound = heights.reach(y_ref) * (k1 - k0).length();
+            let bound = heights.reach() * (k1 - k0).length();
             assert!(
                 moved <= bound * (1. + 1e-3) + 1e-6,
                 "moved {moved} > bound {bound}: d0 {d0} d1 {d1} c {c} n {normal}"
@@ -290,7 +285,7 @@ mod tests {
             )
             .expect("floor");
         assert_eq!(far.top, 0.);
-        assert!(far.reach(0.) <= 0.41, "{far:?}");
+        assert!(far.reach() <= 0.21, "{far:?}");
         // A moved pole follows.
         let moved = [Vec3::new(20., 0., 20.), Vec3::new(20.1, 3., 20.1)];
         heights.update(&[floor, moved]);

@@ -174,17 +174,14 @@ fn renderer(
     Ok(renderer)
 }
 
-/// Waits while another agent holds the overnight quiet-window lock (`ARA_QUIET_LOCK`),
-/// so functional runs never load the GPU inside someone's timing window. The timing
-/// mode runs inside B2's own window (`B2` in the lock) and does not wait for itself.
+/// Waits while anyone holds the overnight quiet-window lock (`ARA_QUIET_LOCK`, set only
+/// for functional runs), so they never load the GPU inside a timing window, B2's own
+/// included. Timing runs leave it unset: they run inside their window.
 fn yield_to_timing() {
     let Ok(lock) = std::env::var("ARA_QUIET_LOCK") else {
         return;
     };
     while let Ok(owner) = std::fs::read_to_string(&lock) {
-        if owner.starts_with("owner=B2 ") {
-            return;
-        }
         eprintln!("waiting for the quiet window: {}", owner.trim());
         std::thread::sleep(std::time::Duration::from_secs(20));
     }

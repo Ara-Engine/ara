@@ -8,10 +8,11 @@
 //!   of the sun at draw time and read with that page's own shear. A moving sun does not
 //!   re-key the cache (today's map re-keys every page on any sun change).
 //! - **Invalidation** ([`bound`]): a page's lag bound is
-//!   `(caster height above its receivers + seam term) x |k_now - k_drawn|` in its
-//!   texels, exact for the caster-receiver term at every elevation and azimuth
-//!   (`h delta-alpha / sin^2 alpha` plus azimuth). Caster tops come from instance boxes;
-//!   receiver heights from `VSM.Mark` (every lit pixel, every frame) where available.
+//!   `(caster height above its lowest receiver) x |k_now - k_drawn|` in its texels, exact
+//!   for a caster-receiver pair at every elevation and azimuth (`h delta-alpha / sin^2
+//!   alpha` plus azimuth); cross-page reads are moved into the reading page's frame, so
+//!   no seam term. Caster tops come from instance boxes; receiver heights from `VSM.Mark`
+//!   (every lit pixel within 16 frames) where available, else instance boxes.
 //! - **Demand** comes from the pixels that sample pages (`shadow-pages.slang`
 //!   `sunPagesMarkMain`); reflection hits, patches and froxels can mark the same
 //!   request buffer later.
@@ -61,8 +62,8 @@ pub struct SunPages {
     /// Pages (any level) whose ground square comes within this many metres of the
     /// camera's ground position form the near ring.
     pub near_radius: f32,
-    /// A page becomes demand at this fraction of its line (0.5), so that two
-    /// neighbouring pages at their trigger stay within the line together.
+    /// A page becomes demand at this fraction of its line (0.5) and is due at the line:
+    /// the slack between them is what deadline staggering spreads under the cap.
     pub trigger: f32,
     /// World height (m) of the sheared page grid's reference plane (the ground).
     pub reference_height: f32,
@@ -573,9 +574,8 @@ impl VirtualShadowMap {
                         ],
                         ..h
                     });
-                    let lag =
-                        heights.map_or(0., |h| h.lag_texels(y_ref, (k - drawn.k).length(), texel));
-                    let rate = heights.map_or(0., |h| h.reach(y_ref) * rate_dk / texel);
+                    let lag = heights.map_or(0., |h| h.lag_texels((k - drawn.k).length(), texel));
+                    let rate = heights.map_or(0., |h| h.reach() * rate_dk / texel);
                     let dynamic = r.moved / texel;
                     let layer = if dynamic > 0. && dynamic >= lag {
                         Layer::Dynamic
