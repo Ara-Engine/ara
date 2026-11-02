@@ -3,9 +3,10 @@
 // k = d.xz/d.y; texels hold the height (depth = vsmDepth.x*y + vsmDepth.y, reversed: the
 // GREATER test keeps the first surface along each sun ray) of the page's surfaces, drawn
 // under the shear of their draw time, which each slot's record keeps (vsmRequest.y:
-// float4 k.x, k.y, top height, 0). The page table and atlas are look-vsm.slangh's.
-// Look rows in service mode: vsmSpace column 0 = (k.x, k.y, yref, 0); vsmRequest.x the
-// request words (bits, then a receiver word per page-table entry), .w = 1 | tag << 16.
+// float4 k.x, k.y, window top, drift margin). The page table and atlas are
+// look-vsm.slangh's. Look rows in service mode: vsmSpace column 0 = (k.x, k.y, yref, content
+// top); vsmRequest.x the request words (bits, then a receiver word per page-table entry),
+// .w = 1 | tag << 16.
 // Include after look.slangh.
 static const uint SP_LEVELS=16,SP_SIDE=128,SP_PAGE=128;
 // Request words before the receiver words (one bit per level and toroidal page).
@@ -17,6 +18,8 @@ float4 spColumn0(Look l){return mul(l.vsmSpace,float4(1,0,0,0));}
 // The current shear and the grid's reference height.
 float2 spShear(Look l){return spColumn0(l).xy;}
 float spRef(Look l){return spColumn0(l).z;}
+// The highest point of any caster now (instance boxes; look/vsm/sun).
+float spContentTop(Look l){return spColumn0(l).w;}
 // Ground coordinates of `p` under shear `k`.
 float2 spGround(Look l,float3 p,float2 k){return p.xz-(p.y-spRef(l))*k;}
 // Page width (m) of `level`.
@@ -32,8 +35,16 @@ int spSlot(Look l,uint level,int2 page){
     uint high=(uint(page.x>>7)&0xffffu)|((uint(page.y>>7)&0xffffu)<<16);
     return e.x!=0&&e.y==high?int(e.x)-1:-1;
 }
-// A slot's record: the shear it was drawn under and its casters' top height.
+// A slot's record: the shear it was drawn under, the top of the casters whose sample
+// rays can reach its receivers, and the drift margin (m) that top was dilated by.
 float4 spRecord(Look l,int slot){return asfloat(buffers[NonUniformResourceIndex(l.vsmRequest.y)].Load4(uint(slot)*16));}
+// The window top of record `r` read under the current shear: content shears by
+// (y - y_ref) |k - k_drawn| as the sun moves, so past the record's drift margin casters
+// from outside it can reach its receivers and the content's top stands in.
+float spWindowTop(Look l,float4 r){
+    float drift=max(spContentTop(l)-spRef(l),0)*length(spShear(l)-r.xy);
+    return drift<=r.w?r.z:spContentTop(l);
+}
 // The level of `world` (ground `u` under the current shear): the finest whose texels cover
 // the pixel's footprint (shifted by the level bias), coarse enough that its 128-page window
 // around the camera's ground position holds it with pages to spare.
@@ -58,7 +69,7 @@ SpPage spPage(Look l,uint level,float3 p){
     s.page=int2(floor(spGround(l,p,spShear(l))/width));
     s.slot=spSlot(l,level,s.page);s.k=0;s.top=0;s.c=0;s.u=0;
     [loop]for(uint hop=0;hop<2&&s.slot>=0;hop++){
-        float4 r=spRecord(l,s.slot);s.k=r.xy;s.top=r.z;s.u=spGround(l,p,s.k);
+        float4 r=spRecord(l,s.slot);s.k=r.xy;s.top=spWindowTop(l,r);s.u=spGround(l,p,s.k);
         float2 local=s.u/width-float2(s.page);
         int2 off=int2(floor(local));
         if(all(off==0)||hop==1){s.c=float2(local.x,1-local.y)*SP_PAGE-0.5;break;}
