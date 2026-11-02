@@ -4,17 +4,17 @@
   "key": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1",
   "stages": [
     {
-      "dxil": "9be7711471087c3ece05b5dff76b0689d7da04ba59d3c843f9976862e003a14f/lights_build/lightsBuildMain.dxil",
+      "dxil": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1/lights_build/lightsBuildMain.dxil",
       "dxil_hash": "cd0d55b5d3a5cc37948319b90b2d635ed3aefeb96aebb9f81f8373ac293100e1",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "9be7711471087c3ece05b5dff76b0689d7da04ba59d3c843f9976862e003a14f/lights_build/lightsBuildMain.metallib",
+        "metallib": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1/lights_build/lightsBuildMain.metallib",
         "metallib_hash": "0531d06af9a801aa3b6097aafb0220e313d11ca664b1e3c1b11b9314ae315615",
-        "reflection": "9be7711471087c3ece05b5dff76b0689d7da04ba59d3c843f9976862e003a14f/lights_build/lightsBuildMain.metal.json",
+        "reflection": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1/lights_build/lightsBuildMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "lightsBuildMain",
-      "spirv": "9be7711471087c3ece05b5dff76b0689d7da04ba59d3c843f9976862e003a14f/lights_build/lightsBuildMain.spv",
+      "spirv": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1/lights_build/lightsBuildMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "e33f4b3a4b61308cd67cbbc20f9c4f8e43ae43a48fdad898ce17897aa706a220",
       "stage": "compute"

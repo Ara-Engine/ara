@@ -1,20 +1,20 @@
 {
   "binding_layout_hash": "4293970391ecf89956c8d6a8c74a378409eb500d89d41c54f215bb739f3d57b0",
   "compiler": "2026.17-25-gc7954ebd1",
-  "key": "4af659cbb74557e625c48d3e1f32c29822bcabed1bfd945700bea790394a92d2",
+  "key": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1",
   "stages": [
     {
-      "dxil": "4af659cbb74557e625c48d3e1f32c29822bcabed1bfd945700bea790394a92d2/look_multiscatter/multiScatterMain.dxil",
+      "dxil": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1/look_multiscatter/multiScatterMain.dxil",
       "dxil_hash": "11533570aa0e09a5615c0ed5b2dd114e0864ef5da8b058d4a228cdc0bc5a2682",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "4af659cbb74557e625c48d3e1f32c29822bcabed1bfd945700bea790394a92d2/look_multiscatter/multiScatterMain.metallib",
+        "metallib": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1/look_multiscatter/multiScatterMain.metallib",
         "metallib_hash": "90805b6b6f6d33b40afce41509320212e3ebb162ed10f836548be3c263dae12c",
-        "reflection": "4af659cbb74557e625c48d3e1f32c29822bcabed1bfd945700bea790394a92d2/look_multiscatter/multiScatterMain.metal.json",
+        "reflection": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1/look_multiscatter/multiScatterMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "multiScatterMain",
-      "spirv": "4af659cbb74557e625c48d3e1f32c29822bcabed1bfd945700bea790394a92d2/look_multiscatter/multiScatterMain.spv",
+      "spirv": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1/look_multiscatter/multiScatterMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "dddc0bb56297f7270c9ebe97df60759b487a761ee42c7674f4d0e8cf20fa8c27",
       "stage": "compute"

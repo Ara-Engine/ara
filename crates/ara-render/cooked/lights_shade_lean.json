@@ -4,17 +4,17 @@
   "key": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1",
   "stages": [
     {
-      "dxil": "9be7711471087c3ece05b5dff76b0689d7da04ba59d3c843f9976862e003a14f/lights_shade_lean/lightsShadeMain.dxil",
+      "dxil": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1/lights_shade_lean/lightsShadeMain.dxil",
       "dxil_hash": "2a0c521cdf9140e677feff7f11ed9ab88451042b900df65e5d86d911f41c8f5c",
       "metal": {
         "converter": "metal-irconverter version: 4.0.3\nDefault triple: air64-apple-macosx15.0.0",
-        "metallib": "9be7711471087c3ece05b5dff76b0689d7da04ba59d3c843f9976862e003a14f/lights_shade_lean/lightsShadeMain.metallib",
+        "metallib": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1/lights_shade_lean/lightsShadeMain.metallib",
         "metallib_hash": "d10e487d27b3b7e108a1884ba08636ffecd3f6bead22c667b461f0550abb1b1f",
-        "reflection": "9be7711471087c3ece05b5dff76b0689d7da04ba59d3c843f9976862e003a14f/lights_shade_lean/lightsShadeMain.metal.json",
+        "reflection": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1/lights_shade_lean/lightsShadeMain.metal.json",
         "root_signature_hash": "884f8e2f61e367a8cf26590f67e1736e17475ae23c0cc496a880ab9aa4ad0587"
       },
       "source_entry": "lightsShadeMain",
-      "spirv": "9be7711471087c3ece05b5dff76b0689d7da04ba59d3c843f9976862e003a14f/lights_shade_lean/lightsShadeMain.spv",
+      "spirv": "4014cfc4b8a2a5e3c945c924efe2e492d33fb600c859ce9379954ba4f8de85d1/lights_shade_lean/lightsShadeMain.spv",
       "spirv_entry": "main",
       "spirv_hash": "d32cbfbfa6e124fc298438a41ba8db02a9cf318e91be81d15544044db1029079",
       "stage": "compute"
