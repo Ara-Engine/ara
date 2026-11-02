@@ -257,10 +257,20 @@ pub fn create(case: &Case) -> Result<Fixture> {
         scene,
         textures: Vec::new(),
         bodies,
-        camera: CameraSpec::LookAt {
-            position: Vec3::new(8., 6., 10.),
-            target: Vec3::new(0., 0.7, 0.),
-            vertical_fov: 55f32.to_radians(),
+        camera: if matches!(case.name, "sealed-flicker" | "sealed-20") {
+            // Observe a lit receiver inside the first sealed room. An exterior
+            // camera would only see opaque ceilings and miss the channel test.
+            CameraSpec::LookAt {
+                position: Vec3::new(-5.7, 1.35, -5.75),
+                target: Vec3::new(-5.6, 1.1, -4.85),
+                vertical_fov: 55f32.to_radians(),
+            }
+        } else {
+            CameraSpec::LookAt {
+                position: Vec3::new(8., 6., 10.),
+                target: Vec3::new(0., 0.7, 0.),
+                vertical_fov: 55f32.to_radians(),
+            }
         },
         exposure: 1. / (1.2 * 32.),
     })
