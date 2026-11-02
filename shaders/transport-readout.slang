@@ -27,19 +27,22 @@ float3 transportIrradiance(Frame f,int2 pixelPosition,float3 world,float3 normal
     float3 axis=abs(geometric.y)<0.9?float3(0,1,0):float3(1,0,0);
     float3 tangent=normalize(cross(axis,geometric)),bitangent=cross(geometric,tangent);
     float3 value=0;float weight=0,nearest=1e30;float3 fallback=0;
-    for(int z=-1;z<=1;++z)for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x) {
-        uint2 span=transportCell(record,int4(cell+int3(x,y,z),int(entity)));
+    {
+        // This span contains the identical ordered 27-cell neighbourhood. Only
+        // its IDs are repeated in the atlas, never radiance or channel records.
+        uint2 span=transportCell(record,int4(cell,int(entity)));
         for(uint i=0;i<span.y;++i) {
-            uint offset=head.y+(span.x+i)*48;
+            uint patch=buffers[record].Load<uint>(head.z+(span.x+i)*4);
+            uint offset=head.y+patch*48;
             float4 p=buffers[record].Load<float4>(offset);
             float4 n=buffers[record].Load<float4>(offset+16);
+            float3 delta=world-p.xyz;
+            if(dot(n.xyz,geometric)<0.8||abs(dot(delta,n.xyz))>0.025)continue;
             float3 e=buffers[record].Load<float3>(offset+32);
             for(uint channel=0;channel<asuint(n.w);++channel) {
                 uint response=asuint(p.w)+channel*32;
                 e+=buffers[record].Load<float3>(response)*buffers[record].Load<float3>(response+16);
             }
-            float3 delta=world-p.xyz;
-            if(dot(n.xyz,geometric)<0.8||abs(dot(delta,n.xyz))>0.025)continue;
             float distance=dot(delta,delta);
             if(distance<nearest){nearest=distance;fallback=e;}
             float w=max(0,1-abs(dot(delta,tangent))/0.25)*max(0,1-abs(dot(delta,bitangent))/0.25);

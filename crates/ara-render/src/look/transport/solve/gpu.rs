@@ -179,10 +179,27 @@ fn readout_bytes(
             .floor()
             .as_ivec3()
             .to_array();
-        cells
-            .entry((stamp.id.instance as u32 + 1, cell))
-            .or_default()
-            .push(i as u32);
+        // Publish the same 27-cell neighbourhood once, rather than hashing 27
+        // independent cells per pixel. Radiance records remain shared FP32 rows.
+        for z in -1..=1 {
+            for y in -1..=1 {
+                for x in -1..=1 {
+                    cells
+                        .entry((
+                            stamp.id.instance as u32 + 1,
+                            [cell[0] - x, cell[1] - y, cell[2] - z],
+                        ))
+                        .or_default()
+                        .push(i as u32);
+                }
+            }
+        }
+    }
+    for rows in cells.values_mut() {
+        rows.sort_unstable_by_key(|&p| {
+            let cell = (Vec3::from(patches.position(p)) / 0.25).floor().as_ivec3();
+            (cell.z, cell.y, cell.x, p)
+        });
     }
     // Readout volume cells use entity zero and six 48-byte axis records. Surface
     // rows use the native instance ID and never interpolate with these cells.
@@ -190,12 +207,14 @@ fn readout_bytes(
     let table_size = ((cells.len() + volume_cells) * 2)
         .max(1)
         .next_power_of_two();
-    let records_offset = 16 + table_size * 32;
+    let indices_offset = 16 + table_size * 32;
+    let indices_count = cells.values().map(Vec::len).sum::<usize>();
+    let records_offset = (indices_offset + indices_count * 4).next_multiple_of(16);
     let mut bytes = Vec::with_capacity(records_offset + patches.len() * 48);
     bytes.extend_from_slice(bytemuck::cast_slice(&[
         (table_size - 1) as u32,
         records_offset as u32,
-        patches.len() as u32,
+        indices_offset as u32,
         0,
     ]));
     let mut table = vec![[0u32; 8]; table_size];
@@ -216,6 +235,7 @@ fn readout_bytes(
         );
         first += 6;
     }
+    first = 0;
     for (&(instance, cell), indices) in &cells {
         insert_cell(
             &mut table,
@@ -233,6 +253,12 @@ fn readout_bytes(
         first += indices.len() as u32;
     }
     bytes.extend_from_slice(bytemuck::cast_slice(&table));
+    for rows in cells.values() {
+        for &p in rows {
+            bytes.extend_from_slice(&(p + (volume_cells * 6) as u32).to_le_bytes());
+        }
+    }
+    bytes.resize(records_offset, 0);
     for (cell, lobes) in transport.volume.records() {
         for (axis, value) in lobes.iter().enumerate() {
             let pos = glam::IVec3::from_array(cell).as_vec3() * 0.25;
@@ -253,54 +279,52 @@ fn readout_bytes(
     }
     let channel_offset = records_offset + (patches.len() + volume_cells * 6) * 48;
     let mut channel_rows = Vec::<[f32; 8]>::new();
-    for indices in cells.values() {
-        for &p in indices {
-            let pos = patches.position(p);
-            let normal = patches.normal.each_ref().map(|c| c[p as usize]);
-            let e = reference
-                .map_or_else(
-                    || transport.irradiance(p, scene),
-                    |values| {
-                        let links = &transport.graph.links;
-                        let mut incoming = Vec3::ZERO;
-                        for link in links.receiver_links(p) {
-                            let i = link as usize;
-                            if let Some(value) = values.get(links.source[i] as usize) {
-                                incoming += Vec3::from(*value)
-                                    * Vec3::from_array(links.transmission.each_ref().map(|c| c[i]))
-                                    * links.weight[i];
-                            }
+    for p in 0..patches.len() as u32 {
+        let pos = patches.position(p);
+        let normal = patches.normal.each_ref().map(|c| c[p as usize]);
+        let e = reference
+            .map_or_else(
+                || transport.irradiance(p, scene),
+                |values| {
+                    let links = &transport.graph.links;
+                    let mut incoming = Vec3::ZERO;
+                    for link in links.receiver_links(p) {
+                        let i = link as usize;
+                        if let Some(value) = values.get(links.source[i] as usize) {
+                            incoming += Vec3::from(*value)
+                                * Vec3::from_array(links.transmission.each_ref().map(|c| c[i]))
+                                * links.weight[i];
                         }
-                        incoming * std::f32::consts::PI + transport.external_irradiance[p as usize]
-                    },
-                )
-                .to_array();
-            let channel_start = channel_rows.len();
-            if reference.is_none() {
-                channel_rows.extend(
-                    transport
-                        .channels
-                        .readout(p)
-                        .map(|(e, g)| [e.x, e.y, e.z, 0., g.x, g.y, g.z, 0.]),
-                );
-            }
-            let channel_count = channel_rows.len() - channel_start;
-            let row = [
-                pos[0],
-                pos[1],
-                pos[2],
-                f32::from_bits((channel_offset + channel_start * 32) as u32),
-                normal[0],
-                normal[1],
-                normal[2],
-                f32::from_bits(channel_count as u32),
-                e[0],
-                e[1],
-                e[2],
-                0.,
-            ];
-            bytes.extend_from_slice(bytemuck::cast_slice(&row));
+                    }
+                    incoming * std::f32::consts::PI + transport.external_irradiance[p as usize]
+                },
+            )
+            .to_array();
+        let channel_start = channel_rows.len();
+        if reference.is_none() {
+            channel_rows.extend(
+                transport
+                    .channels
+                    .readout(p)
+                    .map(|(e, g)| [e.x, e.y, e.z, 0., g.x, g.y, g.z, 0.]),
+            );
         }
+        let channel_count = channel_rows.len() - channel_start;
+        let row = [
+            pos[0],
+            pos[1],
+            pos[2],
+            f32::from_bits((channel_offset + channel_start * 32) as u32),
+            normal[0],
+            normal[1],
+            normal[2],
+            f32::from_bits(channel_count as u32),
+            e[0],
+            e[1],
+            e[2],
+            0.,
+        ];
+        bytes.extend_from_slice(bytemuck::cast_slice(&row));
     }
     bytes.extend_from_slice(bytemuck::cast_slice(&channel_rows));
     bytes

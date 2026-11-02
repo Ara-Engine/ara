@@ -26,12 +26,16 @@ fn request(f: &Fixture) -> CaptureRequest {
 pub struct ReplayImages {
     renderer: Renderer,
     out: PathBuf,
+    physical_samples: Option<u32>,
+    physical_gpu: Option<ara_gpu::GpuDevice>,
 }
 impl ReplayImages {
-    pub fn new(f: &Fixture, out: &Path) -> Result<Self> {
+    pub fn new(f: &Fixture, out: &Path, physical_samples: Option<u32>) -> Result<Self> {
         Ok(Self {
             renderer: Renderer::new_raster(gltf_scene::world(f), SIZE, &[], out.join("gpu"))?,
             out: out.to_owned(),
+            physical_samples,
+            physical_gpu: None,
         })
     }
     pub fn frame(
@@ -54,6 +58,51 @@ impl ReplayImages {
         self.renderer
             .set_patch_transport(Some(transport), &f.scene)?;
         let candidate = self.renderer.capture(&request(f))?;
+        if ((event..=event + 3).contains(&frame) || frame == 1)
+            && let Some(samples) = self.physical_samples
+        {
+            let (_, candidate_hdr) = self.renderer.lab_radiance()?;
+            if self.physical_gpu.is_none() {
+                self.physical_gpu =
+                    Some(ara_gpu::GpuDevice::new(&[], self.out.join("physical-gpu"))?);
+            }
+            let gpu = self
+                .physical_gpu
+                .as_mut()
+                .expect("physical device acquired");
+            let post = PostSettings {
+                bloom: 0.,
+                fog_density: 0.,
+                aperture: 0.,
+                shutter: 0.,
+                ..PostSettings::default()
+            };
+            let mut physical =
+                ara_pathtrace::Reference::new(gpu, &gltf_scene::world(f), SIZE, samples, 16, post)?;
+            while !physical.step(gpu, &f.camera, false)? {}
+            let hdr = physical.radiance(gpu)?;
+            let image = physical.capture(gpu)?;
+            physical.destroy(gpu)?;
+            let max_white = hdr
+                .iter()
+                .zip(&candidate_hdr)
+                .flat_map(|(a, b)| (0..3).map(move |i| (a[i] - b[i]).abs() * f.exposure))
+                .fold(0f32, f32::max);
+            let score = ara_pathtrace::flip::flip(
+                &image,
+                &candidate.image,
+                ara_pathtrace::flip::PIXELS_PER_DEGREE,
+            )?;
+            let region_flip = worst_region(&score.errors);
+            image.save(self.out.join(format!("F{frame:03}-pathtrace.png")))?;
+            write_json(
+                &self.out.join(format!("F{frame:03}-physical.json")),
+                &serde_json::json!({
+                "max_error_white":max_white,"worst_region_flip":region_flip,"samples":samples,"bounces":16,
+                "reference_converged":false,"note":"Current geometry physical check at F1 and F..F+3; other frames use the independently converged patch-system oracle"}),
+            )?;
+            println!("G3 physical F{frame} max_white={max_white:.6} region_flip={region_flip:.6}");
+        }
         self.renderer
             .set_patch_transport_reference(uncapped, &f.scene, exact)?;
         let reference = self.renderer.capture(&request(f))?;
@@ -63,20 +112,7 @@ impl ReplayImages {
             ara_pathtrace::flip::PIXELS_PER_DEGREE,
         )?;
         // Maximum 64x64 region mean, rather than a full-frame mean hiding local debt.
-        let mut worst = 0f64;
-        for y in (0..SIZE[1]).step_by(64) {
-            for x in (0..SIZE[0]).step_by(64) {
-                let mut sum = 0f64;
-                let mut count = 0;
-                for yy in y..(y + 64).min(SIZE[1]) {
-                    for xx in x..(x + 64).min(SIZE[0]) {
-                        sum += f64::from(score.errors[(yy * SIZE[0] + xx) as usize]);
-                        count += 1;
-                    }
-                }
-                worst = worst.max(sum / f64::from(count));
-            }
-        }
+        let worst = worst_region(&score.errors);
         if (event..=event + 3).contains(&frame) || frame == 1 {
             candidate
                 .image
@@ -91,6 +127,24 @@ impl ReplayImages {
         }
         Ok(worst)
     }
+}
+
+fn worst_region(errors: &[f32]) -> f64 {
+    let mut worst = 0f64;
+    for y in (0..SIZE[1]).step_by(64) {
+        for x in (0..SIZE[0]).step_by(64) {
+            let mut sum = 0f64;
+            let mut count = 0;
+            for yy in y..(y + 64).min(SIZE[1]) {
+                for xx in x..(x + 64).min(SIZE[0]) {
+                    sum += f64::from(errors[(yy * SIZE[0] + xx) as usize]);
+                    count += 1;
+                }
+            }
+            worst = worst.max(sum / f64::from(count));
+        }
+    }
+    worst
 }
 
 pub fn ab(f: &Fixture, out: &Path, samples: u32) -> Result<()> {
@@ -199,18 +253,18 @@ pub fn ab(f: &Fixture, out: &Path, samples: u32) -> Result<()> {
 }
 use std::collections::BTreeMap;
 fn steady(renderer: &mut Renderer, request: &CaptureRequest) -> Result<serde_json::Value> {
-    let mut request = request.clone();
-    request.settle_frames = 1;
+    renderer.set_jitter_override(Some([0., 0.]));
     let mut lighting = Vec::new();
     let mut frames = Vec::new();
     for frame in 0..180 {
-        let capture = renderer.capture(&request)?;
+        // Keep actual rendering continuous: PNG readbacks and capture resets
+        // introduce long idle gaps and do not describe steady live readout.
+        renderer.render(&request.camera, request.exposure)?;
         if frame < 30 {
             continue;
         }
-        let passes: Vec<_> = capture
-            .metadata
-            .timings
+        let passes: Vec<_> = renderer
+            .timings()
             .iter()
             .filter(|t| t.pass != "CaptureReadback")
             .collect();
@@ -224,6 +278,7 @@ fn steady(renderer: &mut Renderer, request: &CaptureRequest) -> Result<serde_jso
         let end = passes.iter().map(|t| t.end_ms).fold(0., f64::max);
         frames.push(end - start);
     }
+    renderer.set_jitter_override(None);
     let quantiles = |mut samples: Vec<f64>| {
         samples.sort_by(f64::total_cmp);
         serde_json::json!({"samples":samples.len(),"p50_ms":samples.get(samples.len()/2),

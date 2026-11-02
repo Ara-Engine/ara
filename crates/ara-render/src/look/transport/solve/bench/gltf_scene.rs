@@ -184,10 +184,19 @@ fn visit(
                     .read_tex_coords(1)
                     .map(|v| v.into_f32().collect())
                     .unwrap_or_else(|| vec![[0.; 2]; positions.len()]);
-                let tangents: Vec<_> = read
-                    .read_tangents()
-                    .map(Iterator::collect)
-                    .unwrap_or_else(|| vec![[1., 0., 0., 1.]; positions.len()]);
+                let tangents: Vec<_> =
+                    read.read_tangents()
+                        .map(Iterator::collect)
+                        .unwrap_or_else(|| {
+                            normals
+                                .iter()
+                                .map(|&normal| {
+                                    let tangent =
+                                        Vec3::from(normal).normalize().any_orthonormal_vector();
+                                    [tangent.x, tangent.y, tangent.z, 1.]
+                                })
+                                .collect()
+                        });
                 let bounds = positions.iter().fold(
                     [Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY)],
                     |b, &p| [b[0].min(Vec3::from(p)), b[1].max(Vec3::from(p))],
@@ -213,16 +222,23 @@ fn visit(
                 hash.update(bytemuck::cast_slice(&vertices));
                 hash.update(bytemuck::cast_slice(&indices));
                 let key = hash.finalize().into();
-                let slot = scene.geometry.len();
-                scene.geometry.push(n::Geometry {
-                    key,
-                    vertices,
-                    lods: vec![n::Lod { indices, error: 0. }],
-                    bounds,
-                    deforming: false,
-                    vertex_colors: false,
-                    revision: 0,
-                });
+                let slot = scene
+                    .geometry
+                    .iter()
+                    .position(|g| g.key == key)
+                    .unwrap_or_else(|| {
+                        let slot = scene.geometry.len();
+                        scene.geometry.push(n::Geometry {
+                            key,
+                            vertices,
+                            lods: vec![n::Lod { indices, error: 0. }],
+                            bounds,
+                            deforming: false,
+                            vertex_colors: false,
+                            revision: 0,
+                        });
+                        slot
+                    });
                 keys.insert((mesh.index(), primitive.index()), slot);
                 slot
             };
@@ -293,7 +309,9 @@ pub fn world(f: &Fixture) -> scene::Scene {
                 .map(|v| {
                     let n = normal.transform_vector3(Vec3::from(v.normal)).normalize();
                     let t = i.world.transform_vector3(Vec3::from_slice(&v.tangent[..3]));
-                    let t = (t - n * n.dot(t)).normalize_or_zero();
+                    let t = (t - n * n.dot(t))
+                        .try_normalize()
+                        .unwrap_or_else(|| n.any_orthonormal_vector());
                     scene::Vertex {
                         position: i.world.transform_point3(Vec3::from(v.position)).to_array(),
                         normal: n.to_array(),

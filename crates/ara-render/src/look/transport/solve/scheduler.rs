@@ -1,5 +1,5 @@
 //! Error-ordered, patch-stratified residual propagation. The priority is an
-//! algebraic residual and the real-arithmetic estimate is ||r||inf/(1-||T||inf).
+//! algebraic residual and the real-arithmetic estimate uses a weighted infinity norm.
 //! FP32 roundoff and geometric error are not covered by that estimate. Images and
 //! frame radiance are scored against an independent FP64 solve.
 
@@ -72,8 +72,10 @@ pub(crate) struct EventSolver {
     residual: Vec<Vec3>,
     blocks: Vec<Block>,
     queue: BTreeSet<(u32, std::cmp::Reverse<usize>)>,
-    contraction: f32,
-    row_norms: Vec<f32>,
+    contraction: f64,
+    row_norms: Vec<f64>,
+    norm_weights: Vec<glam::DVec3>,
+    norm_scale: f64,
     frame: u64,
     epoch: u64,
 }
@@ -104,6 +106,8 @@ impl EventSolver {
             queue: BTreeSet::new(),
             contraction: 0.,
             row_norms: vec![0.; n.max(1).next_power_of_two() * 2],
+            norm_weights: vec![glam::DVec3::ONE; n],
+            norm_scale: 1.,
             frame: 0,
             epoch: 1,
         };
@@ -130,19 +134,25 @@ impl EventSolver {
         for node in (1..leaves).rev() {
             self.row_norms[node] = self.row_norms[node * 2].max(self.row_norms[node * 2 + 1]);
         }
-        self.check_contraction()
+        self.check_contraction(links)
     }
 
-    fn row_norm(&self, links: &LinkStore, receiver: usize) -> f32 {
-        let mut row = Vec3::ZERO;
+    fn weighted_row(&self, links: &LinkStore, receiver: usize) -> glam::DVec3 {
+        let mut row = glam::DVec3::ZERO;
         for link in links.receiver_links(receiver as u32) {
             let i = link as usize;
             if (links.source[i] as usize) < self.radiance.len() {
                 row +=
-                    Vec3::from_array(links.transmission.each_ref().map(|c| c[i])) * links.weight[i];
+                    glam::DVec3::from_array(links.transmission.each_ref().map(|c| f64::from(c[i])))
+                        * f64::from(links.weight[i])
+                        * self.norm_weights[links.source[i] as usize];
             }
         }
-        (row * self.albedo[receiver]).max_element()
+        row * self.albedo[receiver].as_dvec3()
+    }
+
+    fn row_norm(&self, links: &LinkStore, receiver: usize) -> f64 {
+        (self.weighted_row(links, receiver) / self.norm_weights[receiver]).max_element()
     }
 
     /// Changed rows update a flat max tree. Visibility repair never needs a
@@ -157,14 +167,48 @@ impl EventSolver {
                 self.row_norms[node] = self.row_norms[node * 2].max(self.row_norms[node * 2 + 1]);
             }
         }
-        self.check_contraction()
+        self.check_contraction(links)
     }
 
-    fn check_contraction(&mut self) -> Result<()> {
+    fn check_contraction(&mut self, links: &LinkStore) -> Result<()> {
+        // A white row may transfer all its energy to absorbing rows. The ordinary
+        // row-sum norm rejects that valid system. Positive weights from sum T^k 1
+        // certify it without altering reflectance or dropping transport paths.
+        if self.row_norms[1] >= 1. {
+            let mut next = vec![glam::DVec3::ONE; self.radiance.len()];
+            for _ in 0..1024 {
+                for (receiver, value) in next.iter_mut().enumerate() {
+                    *value = glam::DVec3::ONE + self.weighted_row(links, receiver);
+                }
+                std::mem::swap(&mut next, &mut self.norm_weights);
+                let leaves = self.row_norms.len() / 2;
+                for receiver in 0..self.radiance.len() {
+                    self.row_norms[leaves + receiver] = self.row_norm(links, receiver);
+                }
+                for node in (1..leaves).rev() {
+                    self.row_norms[node] =
+                        self.row_norms[node * 2].max(self.row_norms[node * 2 + 1]);
+                }
+                if self.row_norms[1] < 1. {
+                    break;
+                }
+            }
+            let min = self
+                .norm_weights
+                .iter()
+                .map(|w| w.min_element())
+                .fold(1., f64::min);
+            let max = self
+                .norm_weights
+                .iter()
+                .map(|w| w.max_element())
+                .fold(1., f64::max);
+            self.norm_scale = max / min;
+        }
         let maximum = self.row_norms[1];
         ensure!(
             maximum.is_finite() && maximum < 1.,
-            "transport has no infinity-norm contraction certificate ({maximum})"
+            "transport has no weighted infinity-norm contraction certificate ({maximum})"
         );
         self.contraction = maximum;
         Ok(())
@@ -222,7 +266,7 @@ impl EventSolver {
 
     pub fn solution_bound(&self) -> f32 {
         let residual = self.queue.last().map_or(0., |key| f32::from_bits(key.0));
-        residual / (1. - self.contraction)
+        (f64::from(residual) * self.norm_scale / (1. - self.contraction)) as f32
     }
 
     pub fn oldest_dirty(&self) -> Option<u64> {
@@ -240,7 +284,7 @@ impl EventSolver {
     pub fn errors(&self) -> Vec<f32> {
         self.residual
             .iter()
-            .map(|v| magnitude(*v) / (1. - self.contraction))
+            .map(|v| (f64::from(magnitude(*v)) * self.norm_scale / (1. - self.contraction)) as f32)
             .collect()
     }
 
@@ -387,7 +431,7 @@ impl EventSolver {
                 difference = difference.max((*output - values[p]).abs().max_element());
             }
             std::mem::swap(&mut values, &mut next);
-            if difference / (1. - f64::from(self.contraction)) <= tolerance {
+            if difference * self.norm_scale / (1. - self.contraction) <= tolerance {
                 return Ok(values.into_iter().map(|v| v.as_vec3()).collect());
             }
         }
@@ -401,7 +445,8 @@ impl EventSolver {
             + self.residual.capacity())
             * size_of::<Vec3>()
             + self.blocks.capacity() * size_of::<Block>()
-            + self.row_norms.capacity() * size_of::<f32>()
+            + self.row_norms.capacity() * size_of::<f64>()
+            + self.norm_weights.capacity() * size_of::<glam::DVec3>()
             + self.queue.len() * 64
     }
 }

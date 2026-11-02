@@ -53,7 +53,32 @@ fn main() -> Result<()> {
         return register_pipelines();
     }
     if let Some(path) = option("--ab") {
-        let fixture = gltf_scene::load(Path::new(path))?;
+        let mut fixture = gltf_scene::load(Path::new(path))?;
+        if let Some(camera) = option("--camera") {
+            let value: serde_json::Value = serde_json::from_slice(&std::fs::read(camera)?)?;
+            fixture.camera = serde_json::from_value(
+                value
+                    .get("request")
+                    .and_then(|r| r.get("camera"))
+                    .unwrap_or(&value)
+                    .to_owned(),
+            )?;
+        }
+        if let Some(shots) = option("--shots") {
+            let value: serde_json::Value = serde_json::from_slice(&std::fs::read(shots)?)?;
+            let name = option("--shot").context("--shots needs --shot")?;
+            let shot = value["shots"]
+                .as_array()
+                .context("shots array")?
+                .iter()
+                .find(|s| s["name"].as_str() == Some(name))
+                .context("unknown shot")?;
+            fixture.camera = ara_render::scene::CameraSpec::LookAt {
+                position: serde_json::from_value(shot["position"].to_owned())?,
+                target: serde_json::from_value(shot["target"].to_owned())?,
+                vertical_fov: (shot["fov"].as_f64().context("shot fov")? as f32).to_radians(),
+            };
+        }
         return images::ab(
             &fixture,
             &out,
@@ -129,7 +154,11 @@ fn main() -> Result<()> {
         let mut replay = ReplayWriter::new(std::io::BufWriter::new(file))?;
         replay.write_frame(feed.finish())?;
         let mut capture = if images {
-            Some(images::ReplayImages::new(&fixture, &dir)?)
+            Some(images::ReplayImages::new(
+                &fixture,
+                &dir,
+                args.iter().any(|a| a == "--physical").then_some(1024),
+            )?)
         } else {
             None
         };

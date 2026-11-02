@@ -11,8 +11,10 @@ impl NativeMaterials<'_> {
     pub(super) fn patch(&self, id: u64, charts: &Charts, local: u32) -> (Vec3, Vec3) {
         let instance = &self.scene.instances[id as usize];
         let geometry = &self.scene.geometry[instance.geometry];
-        let mut albedo = Vec3::ZERO;
-        let mut emission = Vec3::ZERO;
+        // Accumulate the area average in FP64: white texture fragments must not
+        // become super-unit reflectors through FP32 summation roundoff.
+        let mut albedo = glam::DVec3::ZERO;
+        let mut emission = glam::DVec3::ZERO;
         let mut area = 0.;
         for fragment in charts.coverage(&charts.patches[local as usize]) {
             let triangle = &geometry.lods[0].indices
@@ -26,10 +28,12 @@ impl NativeMaterials<'_> {
             let points = fragment.barycentric.map(|uv| {
                 original[0] * (1. - uv[0] - uv[1]) + original[1] * uv[0] + original[2] * uv[1]
             });
-            let weight = (points[1] - points[0])
-                .cross(points[2] - points[0])
-                .length()
-                * 0.5;
+            let weight = f64::from(
+                (points[1] - points[0])
+                    .cross(points[2] - points[0])
+                    .length()
+                    * 0.5,
+            );
             let barycentric = std::array::from_fn(|axis| {
                 fragment.barycentric.iter().map(|v| v[axis]).sum::<f32>() / 3.
             });
@@ -46,12 +50,13 @@ impl NativeMaterials<'_> {
                 front: true,
             };
             let (base, emitted, transmission, metallic) = self.material(hit);
-            albedo += base.truncate() * (weight * (1. - metallic) * (1. - transmission));
-            emission += emitted * weight;
+            albedo += base.truncate().as_dvec3()
+                * (weight * (1. - f64::from(metallic)) * (1. - f64::from(transmission)));
+            emission += emitted.as_dvec3() * weight;
             area += weight;
         }
         if area > 0. {
-            (albedo / area, emission / area)
+            ((albedo / area).as_vec3(), (emission / area).as_vec3())
         } else {
             (Vec3::ZERO, Vec3::ZERO)
         }
@@ -130,7 +135,7 @@ fn sample_texture(textures: &[crate::scene::Texture], id: u32, uv: [f32; 2]) -> 
         - glam::Vec2::splat(0.5);
     let base = p.floor().as_ivec2();
     let f = p - p.floor();
-    let mut result = Vec4::ZERO;
+    let mut result = glam::DVec4::ZERO;
     for y in 0..=1 {
         for x in 0..=1 {
             let ix = (base.x + x).rem_euclid(width as i32) as usize;
@@ -151,12 +156,20 @@ fn sample_texture(textures: &[crate::scene::Texture], id: u32, uv: [f32; 2]) -> 
                     };
                 }
             }
-            result += value
-                * (if x == 0 { 1. - f.x } else { f.x })
-                * (if y == 0 { 1. - f.y } else { f.y });
+            result += value.as_dvec4()
+                * (if x == 0 {
+                    1. - f64::from(f.x)
+                } else {
+                    f64::from(f.x)
+                })
+                * (if y == 0 {
+                    1. - f64::from(f.y)
+                } else {
+                    f64::from(f.y)
+                });
         }
     }
-    result
+    result.as_vec4()
 }
 
 pub(super) fn environment(scene: &Scene, direction: Vec3) -> Vec3 {
@@ -213,4 +226,26 @@ pub(super) fn direct(
         incident += lamp(light, cpu, materials, position, normal);
     }
     incident
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn filtered_white_texture_does_not_create_superunit_reflectance() {
+        let textures = [crate::scene::Texture {
+            size: [2, 2],
+            rgba: vec![255; 16],
+            srgb: true,
+        }];
+        for i in -100..100 {
+            for j in 0..29 {
+                assert_eq!(
+                    sample_texture(&textures, 0, [i as f32 / 71., j as f32 / 31.]),
+                    Vec4::ONE
+                );
+            }
+        }
+    }
 }

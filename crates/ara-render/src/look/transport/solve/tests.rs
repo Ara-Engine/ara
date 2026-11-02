@@ -152,6 +152,19 @@ fn event_solver_high_albedo_switch_off_matches_independent_exact_solution() -> R
 }
 
 #[test]
+fn white_receiver_converges_through_absorbing_dependency_without_albedo_clamp() -> Result<()> {
+    let links = two_patches()?;
+    let reverse = ReverseLinks::build(&links)?;
+    let mut solver = EventSolver::new_albedo(&links, vec![Vec3::ONE, Vec3::splat(0.5)])?;
+    solver.set_forcing(0, Vec3::ONE)?;
+    solver.run(&links, &reverse, Budget::default())?;
+    assert!(magnitude(solver.radiance[0] - Vec3::splat(2.)) < 2e-5);
+    assert!(magnitude(solver.radiance[1] - Vec3::ONE) < 2e-5);
+    assert!(EventSolver::new_albedo(&links, vec![Vec3::ONE; 2]).is_err());
+    Ok(())
+}
+
+#[test]
 fn repeated_events_keep_old_debt_and_reverse_propagation_cannot_be_cut() -> Result<()> {
     let links = two_patches()?;
     let reverse = ReverseLinks::build(&links)?;
