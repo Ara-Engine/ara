@@ -182,9 +182,6 @@ impl IrradianceVolume {
     pub fn clear(&mut self) {
         self.samples.clear();
     }
-    pub fn contains(&self, cell: IVec3) -> bool {
-        self.samples.contains_key(&cell.to_array())
-    }
     pub fn records(&self) -> impl Iterator<Item = ([i32; 3], &[Vec3; 6])> {
         self.samples.iter().map(|(&cell, lobes)| (cell, lobes))
     }

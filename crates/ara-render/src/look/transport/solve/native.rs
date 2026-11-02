@@ -26,6 +26,7 @@ use ara_patch_charts::{Charts, Mesh, Settings, Triangle, cache};
 use glam::{Affine3A, IVec3, Vec3, Vec4};
 use std::{collections::BTreeMap, path::Path, sync::Arc, time::Instant};
 mod channel_bake;
+mod forcing;
 mod material;
 mod receivers;
 mod source;
@@ -882,74 +883,5 @@ impl PatchTransport {
     pub(crate) fn irradiance(&self, patch: u32, _scene: &Scene) -> Vec3 {
         self.solver.gathered(patch as usize) * std::f32::consts::PI
             + self.external_irradiance[patch as usize]
-    }
-
-    fn refresh_forcing(
-        &mut self,
-        scene: &Scene,
-        textures: &[crate::scene::Texture],
-        rows: Option<&[u32]>,
-    ) -> Result<()> {
-        let cpu = CpuTrace::new(&self.trace);
-        let materials = NativeMaterials {
-            scene,
-            textures,
-            bodies: &self.bodies,
-            generations: &self.geometry_generations,
-        };
-        let all: Vec<_>;
-        let rows = if let Some(rows) = rows {
-            rows
-        } else {
-            all = (0..self.graph.links.patches.len() as u32).collect();
-            &all
-        };
-        for &patch in rows {
-            let p = patch as usize;
-            let position = Vec3::from(self.graph.links.patches.position(patch));
-            let normal = Vec3::from_array(self.graph.links.patches.normal.each_ref().map(|v| v[p]));
-            let instance = self.graph.links.patches.stamps[p].id.instance as usize;
-            let stamp = self.graph.links.patches.stamps[p];
-            let (albedo, emission) = materials.patch(
-                instance as u64,
-                &self.charts[&(instance as u64)].charts,
-                stamp.id.local,
-            );
-            self.solver.albedo[p] = albedo;
-            let direct = direct(scene, &cpu, &materials, position, normal, self.distance);
-            let mut incident = Vec3::ZERO;
-            for link in self.graph.links.receiver_links(patch) {
-                let i = link as usize;
-                if self.graph.links.source[i] as usize == self.graph.links.patches.len() {
-                    let segment = self.graph.links.segment(link);
-                    incident +=
-                        environment(scene, (Vec3::from(segment.end) - position).normalize())
-                            * Vec3::from_array(
-                                self.graph.links.transmission.each_ref().map(|v| v[i]),
-                            )
-                            * (std::f32::consts::PI * self.graph.links.weight[i]);
-                } else if self.graph.links.source[i] as usize > self.graph.links.patches.len() {
-                    let source = &self.graph.links.external
-                        [self.graph.links.source[i] as usize - self.graph.links.patches.len()];
-                    incident += self
-                        .body_radiance
-                        .get(&source.id)
-                        .copied()
-                        .unwrap_or(Vec3::ZERO)
-                        * Vec3::from_array(self.graph.links.transmission.each_ref().map(|v| v[i]))
-                        * (std::f32::consts::PI * self.graph.links.weight[i]);
-                }
-                incident +=
-                    self.graph.media[i] * (std::f32::consts::PI * self.graph.links.weight[i]);
-            }
-            self.external_irradiance[p] = incident;
-            self.solver.set_forcing(
-                patch,
-                (emission + self.solver.albedo[p] * (incident + direct) / std::f32::consts::PI
-                    - self.channels.forcing(patch))
-                .max(Vec3::ZERO),
-            )?;
-        }
-        Ok(())
     }
 }

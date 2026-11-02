@@ -9,7 +9,7 @@ use anyhow::Result;
 use ara_patch_charts::{Mesh, Settings, Triangle, cache};
 use std::sync::Arc;
 #[path = "bench/fixtures.rs"]
-mod fixtures;
+pub(super) mod fixtures;
 
 #[test]
 fn native_local_repair_matches_fresh_trace_through_move_sleep_and_wake() -> Result<()> {
