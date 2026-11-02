@@ -94,7 +94,7 @@ pub(crate) fn reference(
         tier: Tier::Rt,
         mode: Mode::Reference {
             samples: spp,
-            bounces: 8,
+            bounces: if super::direct() { 1 } else { 8 },
         },
         upscaler: Upscaler::Taau,
         probe_ray_budget: 64,

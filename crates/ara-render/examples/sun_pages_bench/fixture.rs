@@ -59,6 +59,21 @@ pub(crate) fn cases() -> Vec<Case> {
             ));
         }
     }
+    // B2's own scale stress (not in T1's catalogue): 2,000 buildings over 400 m, the
+    // camera at street level, the sun at the worst band and one higher.
+    for (speed, el) in [(1_f32, 10_f32), (10., 10.), (1., 30.)] {
+        out.push(case(
+            format!("city-{speed}deg-{el}elev"),
+            vec![2],
+            "city",
+            308,
+            0,
+            108,
+            speed,
+            el,
+            0.3,
+        ));
+    }
     out.push(case(
         "foliage-wind".into(),
         vec![2],
@@ -116,6 +131,31 @@ pub(crate) fn cases() -> Vec<Case> {
         45.,
         0.3,
     ));
+    // R5-5's rect-light cases: local-light visibility (look::local today, look::lights V2
+    // per-sample trace() in render-v3), measured here for today's control only.
+    for recipe in [
+        "overlap",
+        "crate_gap",
+        "hand",
+        "stained_glass",
+        "rect_orientation",
+    ] {
+        let id = format!("shadow-{}", recipe.replace('_', "-"));
+        out.push(case(id, vec![4], recipe, 32, 0, 108, 0., 45., 0.3));
+    }
+    for h in [0.1_f32, 0.3, 1., 3., 10.] {
+        out.push(case(
+            format!("shadow-contact-rect-{h}"),
+            vec![4],
+            "contact_rect",
+            32,
+            0,
+            108,
+            0.,
+            45.,
+            h,
+        ));
+    }
     out
 }
 
@@ -538,4 +578,10 @@ pub(crate) fn legacy(f: &Fixture) -> ara_render::scene::Scene {
         environment: f.scene.environment.clone(),
         environment_size: f.scene.environment_size,
     }
+}
+
+/// Direct sun (or the rect light) only: a black environment, so images compare shadows
+/// rather than ambient models.
+pub(crate) fn direct_only(f: &mut Fixture) {
+    f.scene.environment = vec![[0., 0., 0., 1.]];
 }

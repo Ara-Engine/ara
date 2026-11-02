@@ -79,14 +79,16 @@ pub(crate) fn order<K: Ord + Copy>(demand: &mut [Demand<K>]) {
 }
 
 /// A layer's runtime protection: a per-frame cap in GPU milliseconds, converted to a
-/// page count through the measured cost of past draws.
+/// page count through the measured cost of past draws: the median milliseconds per page
+/// of the last 9 frames that drew pages (pass overhead included, so small packets are
+/// sized conservatively; the median ignores clock-ramp outliers that a maximum would
+/// keep for the whole window). At least one page draws each frame, so the queue drains.
 #[derive(Debug, Clone)]
 pub(crate) struct Budget {
     /// The cap; `None` draws every page of demand (the uncapped replay).
     pub cap_ms: Option<f32>,
-    /// Recent measured milliseconds per page (largest of a short window), seeded
-    /// before any measurement.
-    window: [f32; 8],
+    /// Recent (pages, ms) of frames that drew pages.
+    window: [(f32, f32); 9],
     next: usize,
     /// Measurements so far (the seed sizes packets until the first).
     measured: usize,
@@ -99,7 +101,7 @@ impl Budget {
     pub(crate) fn new(cap_ms: Option<f32>) -> Self {
         Self {
             cap_ms,
-            window: [SEED_MS_PER_PAGE; 8],
+            window: [(0., 0.); 9],
             next: 0,
             measured: 0,
         }
@@ -110,24 +112,23 @@ impl Budget {
         if pages == 0 || !ms.is_finite() || ms < 0. {
             return;
         }
-        if self.measured == 0 {
-            // The seed only stands in until a real cost exists.
-            self.window = [0.; 8];
-        }
-        self.window[self.next] = (ms / pages as f64) as f32;
+        self.window[self.next] = (pages as f32, ms as f32);
         self.next = (self.next + 1) % self.window.len();
         self.measured += 1;
     }
 
-    /// Pages this frame may draw (the largest recent per-page cost sizes the packet).
+    /// Pages this frame may draw.
     pub(crate) fn pages(&self) -> usize {
-        match self.cap_ms {
-            None => usize::MAX,
-            Some(cap) => {
-                let per = self.window.iter().copied().fold(1e-5, f32::max);
-                (cap / per).floor() as usize
-            }
-        }
+        let Some(cap) = self.cap_ms else {
+            return usize::MAX;
+        };
+        let mut per: Vec<f32> = self.window[..self.measured.min(self.window.len())]
+            .iter()
+            .map(|s| s.1 / s.0)
+            .collect();
+        per.sort_by(f32::total_cmp);
+        let per = per.get(per.len() / 2).copied().unwrap_or(SEED_MS_PER_PAGE);
+        ((cap / per.max(1e-6)).floor().max(1.)) as usize
     }
 }
 
@@ -266,10 +267,17 @@ mod tests {
     fn budgets_follow_the_largest_measured_page_cost() {
         let mut b = Budget::new(Some(0.15));
         assert_eq!(b.pages(), 15);
-        b.measured(100, 0.2);
-        assert_eq!(b.pages(), 75);
-        b.measured(10, 0.1);
-        assert_eq!(b.pages(), 15);
+        // A slow warm-up frame (idle clocks), then steady 0.001 ms per page plus 0.02.
+        b.measured(15, 0.5);
+        assert_eq!(b.pages(), 4);
+        for _ in 0..4 {
+            b.measured(100, 0.12);
+        }
+        let steady = b.pages();
+        assert!((124..=125).contains(&steady), "{steady}");
+        // One outlier among nine does not move the median.
+        b.measured(100, 0.9);
+        assert_eq!(b.pages(), steady);
         assert_eq!(Budget::new(None).pages(), usize::MAX);
     }
 }

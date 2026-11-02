@@ -68,9 +68,9 @@ void sunPagesMarkMain(uint3 tid:SV_DispatchThreadID){
             float shift=shadowOffset(nl)*sqrt(saturate(1-nl*nl));
             m.levels[0]=spLevelMarks(l,world,level,shift+SP_RING+1);
             m.levels[2]=spLevelMarks(l,world,level+2,SP_RING+1);
-            // The outer ring only where the level's page says its blockers reach past ring two.
-            int slot=spSlot(l,level,int2(floor(spGround(l,world,spShear(l))/spStep(l,level))));
-            float top=slot>=0?spRecord(l,slot).z:1e30;
+            // The outer ring only where the content's top (the height range less its 64 m pad,
+            // look/vsm/sun HEIGHT_PAD) can reach past ring two.
+            float top=spHeight(l,1)-64;
             float2 k=spShear(l);
             if((top-world.y)*tan(max(l.sunLux.w,1e-5))*(1+dot(k,k))>SP_RING*spStep(l,level+2)/SP_PAGE)
                 m.levels[3]=spLevelMarks(l,world,level+4,SP_RING+1);

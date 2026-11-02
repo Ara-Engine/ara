@@ -92,6 +92,9 @@ struct Frame {
     dynamic_ms: f64,
     mark_ms: f64,
     project_ms: f64,
+    /// Today's sun maps: cascades, far map and their moment pyramids (redrawn on any
+    /// sun change; the control's moving-sun cost).
+    maps_ms: f64,
     /// Sum of every pass this frame (not a complete-frame span).
     passes_ms: f64,
     counters: Option<SunPageCounters>,
@@ -151,15 +154,47 @@ fn renderer(
     if let Some(v) = &mut quality.virtual_shadows {
         v.pages = 4096;
     }
+    if direct() {
+        // Direct sun only, against the reference's single scattering event.
+        quality.ambient_occlusion = None;
+        quality.reflections = None;
+        quality.screen_gi = None;
+    }
     renderer.set_quality(quality)?;
     let mut look = *renderer.look();
     look.auto_exposure = None;
     look.bloom = 0.;
+    if direct() {
+        look.sky_light = 0.;
+    }
     renderer.set_look(look)?;
     renderer.set_jitter_override(Some([0.; 2]));
     renderer.set_tone_curve(ara_render::renderer::post::ToneCurve::Neutral);
     renderer.set_sun_pages(variant.pages())?;
     Ok(renderer)
+}
+
+/// Waits while another agent holds the overnight quiet-window lock (`ARA_QUIET_LOCK`),
+/// so functional runs never load the GPU inside someone's timing window. The timing
+/// mode runs inside B2's own window (`B2` in the lock) and does not wait for itself.
+fn yield_to_timing() {
+    let Ok(lock) = std::env::var("ARA_QUIET_LOCK") else {
+        return;
+    };
+    while let Ok(owner) = std::fs::read_to_string(&lock) {
+        if owner.starts_with("owner=B2 ") {
+            return;
+        }
+        eprintln!("waiting for the quiet window: {}", owner.trim());
+        std::thread::sleep(std::time::Duration::from_secs(20));
+    }
+}
+
+/// Whether runs isolate direct sun light (`ARA_SUN_BENCH_DIRECT=1`): a black
+/// environment, no AO, reflections or screen GI, and references of one scattering
+/// event, so image lines compare shadows rather than ambient models.
+fn direct() -> bool {
+    std::env::var("ARA_SUN_BENCH_DIRECT").is_ok_and(|v| v == "1")
 }
 
 /// Frames a run of `case` scores (`ARA_SUN_BENCH_FRAMES` caps the script).
@@ -182,7 +217,11 @@ fn run(
     size: [u32; 2],
     samples: &[u32],
 ) -> Result<(Run, Vec<(u32, image::RgbaImage)>)> {
+    yield_to_timing();
     let mut f = fixture::create(case);
+    if direct() {
+        fixture::direct_only(&mut f);
+    }
     let cache = out_dir().join("gpu-cache");
     let mut r = renderer(&f, size, variant, &cache)?;
     let exposure = exposure(&f);
@@ -215,6 +254,16 @@ fn run(
             dynamic_ms: ms("VSM.Pages.Dynamic"),
             mark_ms: ms("VSM.Mark"),
             project_ms: ms("VSM.Project"),
+            maps_ms: r
+                .timings()
+                .iter()
+                .filter(|t| {
+                    t.pass == "ShadowAtlas.Cascades"
+                        || t.pass == "ShadowAtlas.Far"
+                        || t.pass.starts_with("ShadowMoments")
+                })
+                .map(|t| t.milliseconds)
+                .sum(),
             passes_ms: r.timings().iter().map(|t| t.milliseconds).sum(),
             counters: r.sun_page_counters().cloned(),
         });
@@ -284,7 +333,7 @@ fn timing() -> Result<()> {
     let size = env_size();
     let out = out_dir().join("timing");
     let mut summary = String::from(
-        "| case | run | pages ms avg/p99/max | dynamic ms avg/p99/max | mark ms avg/max | project ms avg/max | static demand avg/max | debt max | lag max (near) texels | deadline misses |\n|---|---|---|---|---|---|---|---|---|---|\n",
+        "| case | run | pages ms avg/p99/max | dynamic ms avg/p99/max | mark ms avg/max | project ms avg/max | sun maps ms avg/max | static demand avg/max | debt max | lag max (near) texels | deadline misses |\n|---|---|---|---|---|---|---|---|---|---|---|\n",
     );
     for case in selected(2) {
         for variant in [Variant::Control, Variant::Uncapped, Variant::Capped] {
@@ -303,6 +352,7 @@ fn timing() -> Result<()> {
             let dynamic = spread(scored.iter().map(|f| f.dynamic_ms));
             let mark = spread(scored.iter().map(|f| f.mark_ms));
             let project = spread(scored.iter().map(|f| f.project_ms));
+            let maps = spread(scored.iter().map(|f| f.maps_ms));
             let counters: Vec<&SunPageCounters> =
                 scored.iter().filter_map(|f| f.counters.as_ref()).collect();
             let demand = spread(
@@ -341,7 +391,7 @@ fn timing() -> Result<()> {
                 })
                 .sum();
             let line = format!(
-                "| {} | {} | {:.3}/{:.3}/{:.3} | {:.3}/{:.3}/{:.3} | {:.3}/{:.3} | {:.3}/{:.3} | {:.0}/{:.0} | {} | {:.3} ({:.3}) | {} |\n",
+                "| {} | {} | {:.3}/{:.3}/{:.3} | {:.3}/{:.3}/{:.3} | {:.3}/{:.3} | {:.3}/{:.3} | {:.3}/{:.3} | {:.0}/{:.0} | {} | {:.3} ({:.3}) | {} |\n",
                 case.id,
                 variant.name(),
                 pages[0],
@@ -354,6 +404,8 @@ fn timing() -> Result<()> {
                 mark[2],
                 project[0],
                 project[2],
+                maps[0],
+                maps[2],
                 demand[0],
                 demand[2],
                 debt,
@@ -465,7 +517,11 @@ fn quality() -> Result<()> {
         let r = e + 60;
         if matches!(case.recipe, "sun" | "city") && samples.contains(&r) {
             let mut f = fixture::create(&case);
+            if direct() {
+                fixture::direct_only(&mut f);
+            }
             fixture::apply(&mut f, &case, r);
+            yield_to_timing();
             let mut gpu = GpuDevice::new(&[], out_dir().join("reference-cache"))?;
             let reference = score::reference(&mut gpu, &f, size, reference_spp())?;
             gpu.assert_clean()?;
@@ -534,7 +590,11 @@ fn g4(spp: u32) -> Result<()> {
     );
     for case in &cases {
         let mut f = fixture::create(case);
+        if direct() {
+            fixture::direct_only(&mut f);
+        }
         fixture::apply(&mut f, case, frames(case) - 1);
+        yield_to_timing();
         let reference = score::reference(&mut gpu, &f, size, spp)?;
         save_png(&reference, &out.join(&case.id).join("reference.png"))?;
         for (c, variant, image) in candidates.iter().filter(|(c, _, _)| c.id == case.id) {
