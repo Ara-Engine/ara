@@ -239,29 +239,24 @@ fn run(
         let reflection = renderer.software_reflection_counters()?;
         if let Some(c) = reflection {
             for (name, pass, demand) in [
-                ("reflection_mirror", "Reflect.Mirror", c.mirror_pixels),
-                ("reflection_rough", "Reflect.Rough", c.rough_pixels),
+                ("reflection_mirror", "Reflect.Mirror", Some(c.mirror_pixels)),
+                ("reflection_rough", "Reflect.Rough", Some(c.rough_pixels)),
                 (
                     "reflection_prefiltered",
                     "Reflect.Prefiltered",
-                    c.prefiltered_pixels,
+                    Some(c.prefiltered_pixels),
                 ),
-                ("ordered_glass", "ForwardTransparency", c.glass_interfaces),
+                // Interfaces also occur in reflection passes. The global count
+                // remains evidence below, not isolated transparency demand.
+                ("ordered_glass", "ForwardTransparency", None),
             ] {
                 let ms = stages.get(pass).and_then(|s| s.gpu_ms);
                 stages.insert(
                     name.into(),
                     StageCounters {
                         gpu_ms: ms,
-                        demand: Some(u64::from(demand)),
-                        work_unit: Some(
-                            if name == "ordered_glass" {
-                                "interfaces"
-                            } else {
-                                "native pixels"
-                            }
-                            .into(),
-                        ),
+                        demand: demand.map(u64::from),
+                        work_unit: demand.map(|_| "native pixels".into()),
                         ..Default::default()
                     },
                 );
