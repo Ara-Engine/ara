@@ -26,6 +26,8 @@ struct FrameScore {
     max_error_white: f32,
     mean_error_white: f32,
     region_flip_excess: Option<f64>,
+    exact_geometry_max_error_white: Option<f32>,
+    exact_geometry_region_flip: Option<f64>,
     measured_transport_heap_live: isize,
     measured_transport_heap_peak: usize,
 }
@@ -163,6 +165,7 @@ fn main() -> Result<()> {
                 &fixture,
                 &dir,
                 args.iter().any(|a| a == "--physical").then_some(1024),
+                global,
             )?)
         } else {
             None
@@ -224,7 +227,9 @@ fn main() -> Result<()> {
                 capped: protected,
                 max_error_white: peak,
                 mean_error_white: (mean / (values.len().max(1) * 3) as f64) as f32,
-                region_flip_excess: flip,
+                region_flip_excess: flip.as_ref().map(|s| s.patch_region_flip),
+                exact_geometry_max_error_white: flip.as_ref().map(|s| s.geometry_max_white),
+                exact_geometry_region_flip: flip.as_ref().map(|s| s.geometry_region_flip),
                 measured_transport_heap_live: measured_live,
                 measured_transport_heap_peak: frame_peak,
             });
@@ -265,7 +270,7 @@ fn main() -> Result<()> {
             .map(|s| s.max_error_white)
             .fold(0f32, f32::max);
         let value = serde_json::json!({"fixture":"B3 deterministic fallback; T1 catalogue read at f0e0e66fc70e287286fceed78dc76509b4de8821; T1 worker not merged",
-            "case":case.name,"declared_frames":case.frames,"completed_frames":scores.len()+1,"triangles_per_body":case.triangles,
+            "case":case.name,"declared_frames":case.frames,"completed_frames":scores.len()+1,"scored_frames":scores.len(),"initial_publication_frame":0,"first_scored_frame":1,"triangles_per_body":case.triangles,
             "bodies":case.bodies,"lights":case.lights,"cold":cold,"uncapped_cpu_average_ms":average,"uncapped_cpu_p99_ms":p99,
             "uncapped_cpu_max_ms":maximum,"capped_max_error_white":max_error,
             "peak_host_transport_bytes":scores.iter().map(|s|s.capped.resident_bytes).chain([cold.resident_bytes]).max(),
@@ -273,7 +278,9 @@ fn main() -> Result<()> {
             "measured_heap_cold_peak_bytes":cold_peak,
             "max_debt_age":scores.iter().map(|s|s.capped.oldest_debt).max(),
             "max_region_flip_excess":scores.iter().filter_map(|s|s.region_flip_excess).reduce(f64::max),
-            "reference":"Independent converged FP64 patch system; current-geometry pathtrace and mover/media quality require separate image evidence",
+            "max_exact_geometry_error_white":scores.iter().filter_map(|s|s.exact_geometry_max_error_white).reduce(f32::max),
+            "max_exact_geometry_region_flip":scores.iter().filter_map(|s|s.exact_geometry_region_flip).reduce(f64::max),
+            "reference":"Independent converged FP64 patch system. Every image frame additionally compares against current triangle geometry with all bodies represented as ordinary surface patches in the offline reference only. This isolates receiver/media approximation at the same 25 cm / 48 direction discretization, not continuous-integral convergence. Critical frames also have a 1024-spp pathtrace check.",
             "760m_event_gpu_ms":null,"promotion":"not promoted"});
         write_json(&dir.join("summary.json"), &value)?;
         results.insert(case.name, value);

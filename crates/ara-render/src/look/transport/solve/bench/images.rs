@@ -1,12 +1,13 @@
 //! Native-resolution deterministic readout captures and independent path tracing.
 use super::{fixtures::Fixture, gltf_scene, memory, write_json};
-use anyhow::Result;
+use anyhow::{Result, ensure};
 use ara_render::{
     PatchTransport, Renderer, TransportOptions,
     capture::{CaptureRequest, ViewMode},
 };
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use std::path::{Path, PathBuf};
+mod geometry;
 
 const SIZE: [u32; 2] = [1920, 1080];
 fn request(f: &Fixture) -> CaptureRequest {
@@ -30,14 +31,29 @@ pub struct ReplayImages {
     out: PathBuf,
     physical_samples: Option<u32>,
     physical_gpu: Option<ara_gpu::GpuDevice>,
+    geometry: Option<geometry::GeometryReference>,
+    global: bool,
+}
+
+pub struct ImageScore {
+    pub patch_region_flip: f64,
+    pub geometry_region_flip: f64,
+    pub geometry_max_white: f32,
 }
 impl ReplayImages {
-    pub fn new(f: &Fixture, out: &Path, physical_samples: Option<u32>) -> Result<Self> {
+    pub fn new(
+        f: &Fixture,
+        out: &Path,
+        physical_samples: Option<u32>,
+        global: bool,
+    ) -> Result<Self> {
         Ok(Self {
             renderer: Renderer::new_raster(gltf_scene::world(f), SIZE, &[], out.join("gpu"))?,
             out: out.to_owned(),
             physical_samples,
             physical_gpu: None,
+            geometry: None,
+            global,
         })
     }
     pub fn frame(
@@ -48,7 +64,7 @@ impl ReplayImages {
         uncapped: &PatchTransport,
         exact: &[[f32; 3]],
         (frame, event): (u64, u64),
-    ) -> Result<f64> {
+    ) -> Result<ImageScore> {
         if !changes.instances.is_empty()
             || !changes.materials.is_empty()
             || !changes.geometries.is_empty()
@@ -60,10 +76,10 @@ impl ReplayImages {
         self.renderer
             .set_patch_transport(Some(transport), &f.scene)?;
         let candidate = self.renderer.capture(&request(f))?;
+        let (_, candidate_hdr) = self.renderer.lab_radiance()?;
         if ((event..=event + 3).contains(&frame) || frame == 1)
             && let Some(samples) = self.physical_samples
         {
-            let (_, candidate_hdr) = self.renderer.lab_radiance()?;
             if self.physical_gpu.is_none() {
                 self.physical_gpu =
                     Some(ara_gpu::GpuDevice::new(&[], self.out.join("physical-gpu"))?);
@@ -85,11 +101,7 @@ impl ReplayImages {
             let hdr = physical.radiance(gpu)?;
             let image = physical.capture(gpu)?;
             physical.destroy(gpu)?;
-            let max_white = hdr
-                .iter()
-                .zip(&candidate_hdr)
-                .flat_map(|(a, b)| (0..3).map(move |i| (a[i] - b[i]).abs() * f.exposure))
-                .fold(0f32, f32::max);
+            let max_white = max_white(&hdr, &candidate_hdr, f.exposure)?;
             let score = ara_pathtrace::flip::flip(
                 &image,
                 &candidate.image,
@@ -108,6 +120,7 @@ impl ReplayImages {
         self.renderer
             .set_patch_transport_reference(uncapped, &f.scene, exact)?;
         let reference = self.renderer.capture(&request(f))?;
+        let (_, reference_hdr) = self.renderer.lab_radiance()?;
         let score = ara_pathtrace::flip::flip(
             &reference.image,
             &candidate.image,
@@ -115,6 +128,46 @@ impl ReplayImages {
         )?;
         // Maximum 64x64 region mean, rather than a full-frame mean hiding local debt.
         let worst = worst_region(&score.errors);
+        let mut geometry_region_flip = worst;
+        let mut geometry_max_white = max_white(&reference_hdr, &candidate_hdr, f.exposure)?;
+        if self.geometry.is_some()
+            || !changes.instances.is_empty()
+            || f.bodies.values().any(|class| !class.owns_links())
+        {
+            if let Some(geometry) = &mut self.geometry {
+                geometry.update(f, frame)?;
+            } else {
+                self.geometry = Some(geometry::GeometryReference::new(
+                    f,
+                    frame,
+                    self.global,
+                    &self.out,
+                )?);
+            }
+            let geometry = self
+                .geometry
+                .as_ref()
+                .expect("geometry reference initialized");
+            let solved = geometry.transport.exact_patch_solution()?;
+            self.renderer
+                .set_patch_transport_reference(&geometry.transport, &f.scene, &solved)?;
+            let reference_geometry = self.renderer.capture(&request(f))?;
+            let (_, hdr) = self.renderer.lab_radiance()?;
+            geometry_max_white = max_white(&hdr, &candidate_hdr, f.exposure)?;
+            geometry_region_flip = worst_region(
+                &ara_pathtrace::flip::flip(
+                    &reference_geometry.image,
+                    &candidate.image,
+                    ara_pathtrace::flip::PIXELS_PER_DEGREE,
+                )?
+                .errors,
+            );
+            if (event..=event + 3).contains(&frame) || frame == 1 {
+                reference_geometry
+                    .image
+                    .save(self.out.join(format!("F{frame:03}-exact-geometry.png")))?;
+            }
+        }
         if (event..=event + 3).contains(&frame) || frame == 1 {
             candidate
                 .image
@@ -127,8 +180,28 @@ impl ReplayImages {
                 &candidate.metadata,
             )?;
         }
-        Ok(worst)
+        Ok(ImageScore {
+            patch_region_flip: worst,
+            geometry_region_flip,
+            geometry_max_white,
+        })
     }
+}
+
+fn max_white(reference: &[[f32; 4]], candidate: &[[f32; 4]], exposure: f32) -> Result<f32> {
+    ensure!(
+        reference.len() == candidate.len(),
+        "HDR reference extent mismatch"
+    );
+    let mut maximum = 0f32;
+    for (a, b) in reference.iter().zip(candidate) {
+        for i in 0..3 {
+            let error = (a[i] - b[i]).abs() * exposure;
+            ensure!(error.is_finite(), "nonfinite HDR quality sample");
+            maximum = maximum.max(error);
+        }
+    }
+    Ok(maximum)
 }
 
 fn worst_region(errors: &[f32]) -> f64 {
