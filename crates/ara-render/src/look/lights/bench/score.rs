@@ -162,6 +162,11 @@ impl E3 {
         self.frames += 1;
     }
 
+    /// Forgets the previous frame (the next frame starts a new pop sequence).
+    pub(crate) fn reset_temporal(&mut self) {
+        self.previous = None;
+    }
+
     /// Whether every line is exact: no leak, no pop, full highlight and shadow energy
     /// (to 1e-4).
     pub(crate) fn exact(&self) -> bool {

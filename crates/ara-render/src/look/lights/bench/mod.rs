@@ -112,6 +112,12 @@ struct Quality {
     omission: Option<f32>,
     frames: u32,
     e3: score::E3,
+    /// E3 over the frames whose exact control reproduced on its first re-run.
+    e3_reproduced: score::E3,
+    e3_reproduced_exact: bool,
+    /// Frames whose exact control needed retries, and the extra exact runs in all.
+    irreproducible_frames: Vec<u32>,
+    control_retries: u32,
     e3_exact: bool,
     highlight_retention: f64,
     shadow_retention: f64,
@@ -153,6 +159,33 @@ fn row(t: &Timing) -> harness_stats::Row {
     }
 }
 
+/// The exact control's image of the posed frame, taken once two runs agree bit for bit
+/// (the first is already in `exact`; up to five runs). The exact pass is occasionally
+/// not reproducible on this device (about one run in ten differs everywhere; V2 never
+/// did): `retries` counts the extra runs this needed.
+fn agreed(
+    bench: &mut Bench,
+    blockers: Blockers,
+    settings: Settings,
+    retries: &mut u32,
+) -> Result<Vec<f32>> {
+    let mut previous = bench.read(Readback::Exact)?;
+    for _ in 0..4 {
+        bench.run_exact(false, blockers, settings)?;
+        let next = bench.read(Readback::Exact)?;
+        let same = previous
+            .iter()
+            .zip(&next)
+            .all(|(a, b)| a.to_bits() == b.to_bits());
+        if same {
+            return Ok(next);
+        }
+        *retries += 1;
+        previous = next;
+    }
+    anyhow::bail!("the exact control did not reproduce in five runs")
+}
+
 /// Scores `frames` frames of `case` (E3 dynamics where the case has them).
 pub(crate) fn quality(
     case: &Case,
@@ -166,15 +199,21 @@ pub(crate) fn quality(
     let mut bench = Bench::new(layout, size, entries(case, size))?;
     let (w, h) = (size[0] as usize, size[1] as usize);
     let mut e3 = score::E3::default();
+    // The same lines over the frames whose exact control reproduced at once.
+    let mut e3_reproduced = score::E3::default();
+    let mut irreproducible = Vec::new();
     let (mut lit, mut rays, mut covered_px, mut omitted) = (0f64, 0f64, 0f64, 0f64);
     let mut masked = 0f64;
     let mut max_omitted = 0f64;
     let mut stats = Vec::new();
     let dir = out_dir().join(&case.id);
     let shadows = true;
+    let mut retries = 0u32;
     for f in 0..frames {
         bench.pose(f)?;
-        let timing = bench.run_v2(true, Blockers::On, settings)?;
+        let before = retries;
+        // V2 and the exact control share one submission (identical inputs).
+        let timing = bench.run_pair(true, Blockers::On, settings)?;
         anyhow::ensure!(
             timing.stats.clean(),
             "{} frame {f}: tiles fell back: {:?}",
@@ -185,37 +224,41 @@ pub(crate) fn quality(
         let test = bench.read(Readback::V2)?;
         let counters = bench.read(Readback::Counters)?;
         let material = bench.read(Readback::Material)?;
-        bench.run_exact(false, Blockers::On, settings)?;
-        let control = bench.read(Readback::Exact)?;
+        let control = agreed(&mut bench, Blockers::On, settings, &mut retries)?;
         let (test_open, control_open) = if shadows {
-            bench.run_v2(false, Blockers::Off, settings)?;
+            bench.run_pair(false, Blockers::Off, settings)?;
             let t = bench.read(Readback::V2)?;
-            bench.run_exact(false, Blockers::Off, settings)?;
-            (Some(t), Some(bench.read(Readback::Exact)?))
+            (
+                Some(t),
+                Some(agreed(&mut bench, Blockers::Off, settings, &mut retries)?),
+            )
         } else {
             (None, None)
         };
         let covered: Vec<bool> = (0..w * h).map(|i| material[i * 4 + 2] > 0.5).collect();
-        let slot = |i: usize| material[i * 4 + 3].round() as u32;
+        let slot = |i: usize| (material[i * 4 + 3] * 255.).round() as u32;
         let metal: Vec<bool> = (0..w * h)
             .map(|i| covered[i] && slot(i) == scene::GLOSSY)
             .collect();
         let blocker: Vec<bool> = (0..w * h)
             .map(|i| covered[i] && slot(i) != scene::FLOOR)
             .collect();
-        e3.add(
-            w,
-            h,
-            &score::Images {
-                test: &test,
-                control: &control,
-                test_open: test_open.as_deref(),
-                control_open: control_open.as_deref(),
-                covered: &covered,
-                metal: &metal,
-                blocker: &blocker,
-            },
-        );
+        let scored = score::Images {
+            test: &test,
+            control: &control,
+            test_open: test_open.as_deref(),
+            control_open: control_open.as_deref(),
+            covered: &covered,
+            metal: &metal,
+            blocker: &blocker,
+        };
+        e3.add(w, h, &scored);
+        if retries == before {
+            e3_reproduced.add(w, h, &scored);
+        } else {
+            irreproducible.push(f);
+            e3_reproduced.reset_temporal();
+        }
         for i in (0..w * h).filter(|&i| covered[i]) {
             lit += f64::from(counters[i * 4]);
             // Rays plus 4096 per mask-resolved pair (lights-v2.slangh LIGHTS_MASKED).
@@ -290,6 +333,10 @@ pub(crate) fn quality(
         omission: settings.omission,
         frames,
         e3_exact: e3.exact(),
+        e3_reproduced_exact: e3_reproduced.exact(),
+        e3_reproduced,
+        irreproducible_frames: irreproducible,
+        control_retries: retries,
         highlight_retention: e3.highlight_retention(),
         shadow_retention: e3.shadow_retention(),
         e3,
@@ -315,7 +362,7 @@ pub(crate) fn timing(
 ) -> Result<serde_json::Value> {
     let layout = Layout::new(case);
     let mut bench = Bench::new(layout, size, entries(case, size))?;
-    let mut series: [Vec<f64>; 6] = Default::default();
+    let mut series: [Vec<f64>; 7] = Default::default();
     let mut first = None;
     for f in 0..warm + frames {
         let frame = if case.motion == Motion::Static {
@@ -340,7 +387,9 @@ pub(crate) fn timing(
         let build = t.ms(&["Lights.Build", "Lights.Bin"]);
         let prep = t.ms(&["Lights.Prep"]);
         let select = t.ms(&["Lights.Select"]);
-        let shade = t.ms(&["Lights.Shade"]);
+        // Shade is the combined pass, or the lean pass plus the visibility pass.
+        let shade = t.ms(&["Lights.Shade", "Lights.Visibility"]);
+        let visibility = t.ms(&["Lights.Visibility"]);
         for (s, v) in series.iter_mut().zip([
             build,
             prep,
@@ -348,17 +397,19 @@ pub(crate) fn timing(
             shade,
             build + prep + select + shade,
             t.ms(&["Bench.Primary"]),
+            visibility,
         ]) {
             s.push(v);
         }
     }
     bench.destroy()?;
-    let [build, prep, select, shade, total, primary] = series.map(|s| Spread::of(&s));
+    let [build, prep, select, shade, total, primary, visibility] = series.map(|s| Spread::of(&s));
     Ok(serde_json::json!({
         "case": case.id, "size": size, "samples": settings.samples, "omission": settings.omission,
         "shadowed": shadowed, "classify": settings.classify,
         "frames": frames, "warm": warm,
         "build_ms": build, "prep_ms": prep, "select_ms": select, "shade_ms": shade, "total_ms": total,
+        "visibility_part_ms": visibility,
         "bench_primary_ms": primary, "select_counters": first,
     }))
 }
@@ -529,4 +580,84 @@ fn g1_export() -> Result<()> {
         eprintln!("exported {}", case.id);
     }
     Ok(())
+}
+
+/// Fresh-device verification of dynamic cases: for each sampled frame f
+/// (`ARA_LIGHTS_BENCH_FRESH`, default 11,23,35,47), a new bench poses f - 1 then f,
+/// running V2 and the exact control in one submission each, and E3 scores that pair
+/// (pops between f - 1 and f). The exact control proved history dependent on this
+/// device in long runs; on a fresh device every spot check reproduced.
+#[test]
+#[ignore = "G1 bench: fresh-device E3 verification of the dynamic cases"]
+fn g1_fresh() -> Result<()> {
+    let size = size();
+    let frames: Vec<u32> = std::env::var("ARA_LIGHTS_BENCH_FRESH")
+        .unwrap_or_else(|_| "11,23,35,47".into())
+        .split(',')
+        .filter_map(|f| f.trim().parse().ok())
+        .collect();
+    let mut all = Vec::new();
+    for case in selected()
+        .into_iter()
+        .filter(|c| c.motion != Motion::Static)
+    {
+        let dense = case.target_lpp > 10.;
+        for omission in [None, Some(0.01)]
+            .into_iter()
+            .filter(|o| o.is_none() || dense)
+        {
+            let s = Settings {
+                omission,
+                ..settings()
+            };
+            let mut e3 = score::E3::default();
+            let (w, h) = (size[0] as usize, size[1] as usize);
+            for &f in &frames {
+                let mut bench = Bench::new(Layout::new(&case), size, entries(&case, size))?;
+                e3.reset_temporal();
+                for frame in [f.saturating_sub(1), f] {
+                    bench.pose(frame)?;
+                    let t = bench.run_pair(false, Blockers::On, s)?;
+                    anyhow::ensure!(t.stats.clean(), "{} frame {frame}: fallback", case.id);
+                    let test = bench.read(Readback::V2)?;
+                    let control = bench.read(Readback::Exact)?;
+                    let material = bench.read(Readback::Material)?;
+                    bench.run_pair(false, Blockers::Off, s)?;
+                    let test_open = bench.read(Readback::V2)?;
+                    let control_open = bench.read(Readback::Exact)?;
+                    let covered: Vec<bool> =
+                        (0..w * h).map(|i| material[i * 4 + 2] > 0.5).collect();
+                    let slot = |i: usize| (material[i * 4 + 3] * 255.).round() as u32;
+                    let metal: Vec<bool> = (0..w * h)
+                        .map(|i| covered[i] && slot(i) == scene::GLOSSY)
+                        .collect();
+                    let blocker: Vec<bool> = (0..w * h)
+                        .map(|i| covered[i] && slot(i) != scene::FLOOR)
+                        .collect();
+                    e3.add(
+                        w,
+                        h,
+                        &score::Images {
+                            test: &test,
+                            control: &control,
+                            test_open: Some(&test_open),
+                            control_open: Some(&control_open),
+                            covered: &covered,
+                            metal: &metal,
+                            blocker: &blocker,
+                        },
+                    );
+                }
+                bench.destroy()?;
+            }
+            let value = serde_json::json!({
+                "case": case.id, "omission": omission, "frames": frames,
+                "e3_exact": e3.exact(), "highlight_retention": e3.highlight_retention(),
+                "shadow_retention": e3.shadow_retention(), "e3": e3,
+            });
+            eprintln!("{value}");
+            all.push(value);
+        }
+    }
+    write("fresh.json", &serde_json::Value::Array(all))
 }

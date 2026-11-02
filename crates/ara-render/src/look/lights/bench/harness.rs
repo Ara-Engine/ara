@@ -154,6 +154,8 @@ pub(crate) struct Bench {
     pub half: Target,
     readback: Buffer,
     pub v2_gpu: LightsGpu,
+    /// The exact control's own record and storage, so it can run in V2's submission.
+    exact_gpu: LightsGpu,
     /// Frame-record camera position and view-projection.
     pub camera: Vec3,
     pub vp: Mat4,
@@ -235,9 +237,12 @@ impl Bench {
         let f16 = vk::Format::R16G16B16A16_SFLOAT;
         let gbuffer = GBuffer {
             depth: Target::new(&mut gpu, size, vk::Format::R32_SFLOAT)?,
-            normal: Target::new(&mut gpu, size, f16)?,
+            // The renderer's widths where storage allows: RG16 octahedral normals, RGBA8
+            // roughness/metal (w: the material slot / 255, for scoring). Albedo stays
+            // linear RGBA16F (the renderer's RGBA8 sRGB has no storage view).
+            normal: Target::new(&mut gpu, size, vk::Format::R16G16_UNORM)?,
             albedo: Target::new(&mut gpu, size, f16)?,
-            material: Target::new(&mut gpu, size, f16)?,
+            material: Target::new(&mut gpu, size, vk::Format::R8G8B8A8_UNORM)?,
         };
         let f32x4 = vk::Format::R32G32B32A32_SFLOAT;
         let v2 = Target::new(&mut gpu, size, f32x4)?;
@@ -252,6 +257,15 @@ impl Bench {
                 lights: light_capacity,
                 coarse_lights: 1024,
                 entries,
+            },
+        )?;
+        let exact_gpu = LightsGpu::new(
+            &mut gpu,
+            Capacity {
+                size,
+                lights: light_capacity,
+                coarse_lights: 16,
+                entries: 16,
             },
         )?;
         let camera = layout.camera.resolve(size)?;
@@ -280,6 +294,7 @@ impl Bench {
             half,
             readback,
             v2_gpu,
+            exact_gpu,
             camera: camera.position,
             vp,
             count: 0,
@@ -412,7 +427,8 @@ impl Bench {
             barriers.push(self.counters.to(Access::Storage));
         }
         c.barriers(barriers);
-        self.v2_gpu.record(&mut c, self.frame_index, self.count);
+        self.v2_gpu
+            .record(&mut c, self.frame_index, self.count, self.v2.image);
         self.v2_gpu.record_stats_copy(&mut c);
         let passes = self.submit(c)?;
         Ok(Timing {
@@ -432,7 +448,8 @@ impl Bench {
         let mut c = self.gpu.begin(Queue::Graphics);
         self.record_primary(&mut c);
         c.barriers([self.half.to(Access::Storage)]);
-        self.v2_gpu.record(&mut c, self.frame_index, self.count);
+        self.v2_gpu
+            .record(&mut c, self.frame_index, self.count, self.half.image);
         self.v2_gpu.record_stats_copy(&mut c);
         let passes = self.submit(c)?;
         Ok(Timing {
@@ -442,6 +459,45 @@ impl Bench {
     }
 
     /// Draws the posed frame's G-buffer and runs the exact control into `exact`.
+    /// V2 (into `v2`, with counters when `stats`) and the exact control (into `exact`) in
+    /// one submission over one G-buffer, each with its own record: both see exactly the
+    /// same frame inputs.
+    pub(crate) fn run_pair(
+        &mut self,
+        stats: bool,
+        blockers: Blockers,
+        settings: Settings,
+    ) -> Result<Timing> {
+        let inputs = self.inputs(self.v2.storage, stats, blockers, settings);
+        self.v2_gpu.prepare(&mut self.gpu, &inputs)?;
+        let control = self.inputs(
+            self.exact.storage,
+            false,
+            blockers,
+            Settings {
+                omission: None,
+                ..settings
+            },
+        );
+        self.exact_gpu.prepare(&mut self.gpu, &control)?;
+        let mut c = self.gpu.begin(Queue::Graphics);
+        self.record_primary(&mut c);
+        let mut barriers = vec![self.v2.to(Access::Storage), self.exact.to(Access::Storage)];
+        if stats {
+            barriers.push(self.counters.to(Access::Storage));
+        }
+        c.barriers(barriers);
+        self.v2_gpu
+            .record(&mut c, self.frame_index, self.count, self.v2.image);
+        self.v2_gpu.record_stats_copy(&mut c);
+        self.exact_gpu.record_exact(&mut c, self.frame_index);
+        let passes = self.submit(c)?;
+        Ok(Timing {
+            passes,
+            stats: self.v2_gpu.stats(&self.gpu)?,
+        })
+    }
+
     pub(crate) fn run_exact(
         &mut self,
         stats: bool,
@@ -506,10 +562,21 @@ impl Bench {
         if which == Readback::Depth {
             return Ok(bytemuck::cast_slice::<u8, f32>(&bytes[..pixels * 4]).to_vec());
         }
-        Ok(if matches!(which, Readback::Material | Readback::Normal) {
-            let pixels = self.size[0] as usize * self.size[1] as usize * 4;
-            let halves: &[u16] = bytemuck::cast_slice(&bytes[..pixels * 2]);
-            halves.iter().map(|&h| half_to_f32(h)).collect()
+        Ok(if which == Readback::Material {
+            // RGBA8 UNORM, widened to four floats per pixel.
+            bytes[..pixels * 4]
+                .iter()
+                .map(|&b| f32::from(b) / 255.)
+                .collect()
+        } else if which == Readback::Normal {
+            // RG16 UNORM octahedral, widened to four floats per pixel (zw zero).
+            let words: &[u16] = bytemuck::cast_slice(&bytes[..pixels * 4]);
+            words
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .flat_map(|w| [f32::from(w[0]) / 65535., f32::from(w[1]) / 65535., 0., 0.])
+                .collect()
         } else {
             bytemuck::cast_slice::<u8, f32>(&bytes[..image_bytes(self.size) as usize]).to_vec()
         })
@@ -521,6 +588,7 @@ impl Bench {
             mut gpu,
             trace_gpu,
             v2_gpu,
+            exact_gpu,
             lights,
             materials,
             frame,
@@ -534,6 +602,7 @@ impl Bench {
             ..
         } = self;
         v2_gpu.destroy(&mut gpu)?;
+        exact_gpu.destroy(&mut gpu)?;
         trace_gpu.destroy(&mut gpu)?;
         for b in [lights, materials, frame, look, readback] {
             gpu.retire(Resource::Buffer(b))?;

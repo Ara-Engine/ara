@@ -27,7 +27,8 @@ pub(crate) const HIGH_LOCAL_SHADOWS: LocalShadows = LocalShadows {
 /// light besides the local lights.
 pub(crate) fn quality(local_shadows: Option<LocalShadows>) -> Quality {
     Quality {
-        gi_budget: 0,
+        // Quality::validate needs a budget; no probe volume is set, so nothing relights.
+        gi_budget: 1,
         bloom: false,
         high_tier: true,
         local_shadows,

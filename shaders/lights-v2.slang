@@ -29,6 +29,14 @@
 // Sentinel in a tile head's count: the tile's lists overflowed; shade walks its
 // coarse list (or every light) with exact visibility instead.
 static const uint LIGHTS_FALLBACK=0x80000000u;
+// Tile head count bit: some entry is partial (lightsShadeMain's visibility part runs).
+static const uint LIGHTS_HAS_PARTIAL=0x40000000u,LIGHTS_COUNT=0x3fffffffu;
+// Which entries lightsShadeMain shades (a compile-time PSO variant, so the lean part
+// carries no trace() code): 0 every entry (omission and per-pixel counters use it),
+// 1 the clear ones, writing the output, 2 the partial ones, adding to it.
+#ifndef LIGHTS_PART
+#define LIGHTS_PART 0
+#endif
 // Staged entries per tile in groupshared memory (a power of two, for the sort).
 static const uint LIGHTS_STAGE=512;
 
@@ -57,7 +65,8 @@ void lightsPrepMain(uint3 g:SV_GroupID,uint3 t:SV_GroupThreadID,uint gi:SV_Group
     if(covered){
         n=gbufferNormal(f,p);float3 q=world+n*lightsBias(f,r,world);
         lo=min(world,q);hi=max(world,q);olo=q;ohi=q;
-        float2 m=gbufferMaterial(f,p);rough=m.x;albedo=max(max(gbufferAlbedo(f,p).r,gbufferAlbedo(f,p).g),gbufferAlbedo(f,p).b);
+        // The BRDF bound only serves omission: skip the material reads without it.
+        if((r.trace.w&LIGHTS_OMIT)!=0){float2 m=gbufferMaterial(f,p);rough=m.x;float3 a=gbufferAlbedo(f,p).rgb;albedo=max(max(a.r,a.g),a.b);}
     }
     // Wave reductions, then one lane per wave into groupshared memory (any wave size
     // of at least 16 lanes).
@@ -145,7 +154,7 @@ void lightsBinMain(uint3 g:SV_GroupID,uint gi:SV_GroupIndex){
 groupshared uint4 stageEntry[LIGHTS_STAGE];
 groupshared float stageBound[LIGHTS_STAGE];
 groupshared uint selBits[2];
-groupshared uint selCount,selFirst,selSpent;
+groupshared uint selCount,selFirst,selSpent,selPartial;
 groupshared uint selOverflow;
 [shader("compute")]
 [numthreads(64,1,1)]
@@ -162,7 +171,7 @@ void lightsSelectMain(uint3 g:SV_GroupID,uint gi:SV_GroupIndex){
     bool scanAll=listed==LIGHTS_FALLBACK;uint total=scanAll?r.counts.x:listed;
     bool shadowed=r.trace.x!=TRACE_NONE&&(r.trace.w&LIGHTS_UNSHADOWED)==0;
     TraceScene s=traceScene(shadowed?r.trace.x:0);
-    if(gi==0){selCount=0;selOverflow=0;selSpent=0;}
+    if(gi==0){selCount=0;selOverflow=0;selSpent=0;selPartial=0;}
     GroupMemoryBarrierWithGroupSync();
     for(uint chunk=0;chunk<total;chunk+=64){
         if(gi<2)selBits[gi]=0;
@@ -213,6 +222,7 @@ void lightsSelectMain(uint3 g:SV_GroupID,uint gi:SV_GroupIndex){
         uint added=countbits(selBits[0])+countbits(selBits[1]);
         uint at=selCount+before;
         if(keep&&at<LIGHTS_STAGE){stageEntry[at]=entry;stageBound[at]=bound;}
+        if(keep&&(entry.x&LIGHTS_PARTIAL)!=0)InterlockedOr(selPartial,1u);
         GroupMemoryBarrierWithGroupSync();
         if(gi==0){selCount+=added;if(selCount>LIGHTS_STAGE)selOverflow=1;}
         GroupMemoryBarrierWithGroupSync();
@@ -251,7 +261,7 @@ void lightsSelectMain(uint3 g:SV_GroupID,uint gi:SV_GroupIndex){
         else if(overflow)buffers[r.output.y].InterlockedAdd(LIGHTS_STAT_POOL*4,1);
         buffers[r.output.y].InterlockedAdd(LIGHTS_STAT_BUDGET*4,selSpent);
         selFirst=overflow?0xffffffffu:first;
-        buffers[r.buffers.w].Store2(tile*8,overflow?uint2(0,LIGHTS_FALLBACK):uint2(first,count));
+        buffers[r.buffers.w].Store2(tile*8,overflow?uint2(0,LIGHTS_FALLBACK):uint2(first,count|(selPartial!=0?LIGHTS_HAS_PARTIAL:0)));
     }
     GroupMemoryBarrierWithGroupSync();
     if(selFirst==0xffffffffu)return;
@@ -280,7 +290,9 @@ float3 lightsShadeOne(Frame f,Look l,LightsRecord r,TraceScene s,bool shadowed,S
     lit++;
     if(shadowed&&(entry.x&LIGHTS_PARTIAL)!=0){
         LightShape shape=lightShaped(light)?loadLightShape(f.lighting.w,index):(LightShape)0;
+#if LIGHTS_PART!=1
         c*=lightsVisibility(s,origin,light,shape,entry,r.trace.y,r.trace.z,(r.trace.w&LIGHTS_NOMASK)==0,rays);
+#endif
     }
     return c;
 }
@@ -292,16 +304,24 @@ void lightsShadeMain(uint3 g:SV_GroupID,uint3 t:SV_GroupThreadID){
     int2 p=int2(g.xy*LIGHTS_TILE+t.xy);if(any(p>=int2(f.extent.xy)))return;
     bool covered;float3 world=gbufferWorld(f,p,covered);
     bool stats=(r.trace.w&LIGHTS_STATS)!=0;
+    uint tile=g.x+g.y*r.counts.y;uint2 head=buffers[r.buffers.w].Load2(tile*8);
+    bool fallback=head.y==LIGHTS_FALLBACK;uint count=fallback?0:head.y&LIGHTS_COUNT;
+#if LIGHTS_PART==2
+    // Only tiles with partial pairs (or overflowed lists) have work here.
+    if(!covered||(!fallback&&(head.y&LIGHTS_HAS_PARTIAL)==0))return;
+#else
     if(!covered){images[NonUniformResourceIndex(r.output.x)][p]=0;if(stats)images[NonUniformResourceIndex(r.extra.y)][p]=0;return;}
-    Look l=look(f);uint tile=g.x+g.y*r.counts.y;uint2 head=buffers[r.buffers.w].Load2(tile*8);
+#endif
+    Look l=look(f);
     Surface surface=lightsSurface(f,p);float3 v=normalize(f.camera.xyz-world);Lobes o=specularLobes(surface,v);AreaPixel area=(AreaPixel)0;
     float3 origin=world+surface.normal*lightsBias(f,r,world);
     bool shadowed=r.trace.x!=TRACE_NONE&&(r.trace.w&LIGHTS_UNSHADOWED)==0;TraceScene s=traceScene(shadowed?r.trace.x:0);
     bool omit=(r.trace.w&LIGHTS_OMIT)!=0;float fraction=r.params.x;
     lightsDebugOn=(r.trace.w&LIGHTS_DEBUG)!=0;
     float3 sum=0;float accumulated=0;uint rays=0,lit=0,omitted=0,considered=0;
-    if(head.y==LIGHTS_FALLBACK){
-        // Overflowed lists: every light of the coarse list (or scene), exact visibility.
+    if(fallback&&LIGHTS_PART!=1){
+        // Overflowed lists: every light of the coarse list (or scene), exact visibility
+        // (the visibility part shades them whole; the lean part leaves them zero).
         uint cap=r.output.z,coarse=g.x/LIGHTS_COARSE+g.y/LIGHTS_COARSE*r.counts.w,base=coarse*(cap+1);
         uint listed=buffers[r.buffers.y].Load(base*4);bool scanAll=listed==LIGHTS_FALLBACK;uint total=scanAll?r.counts.x:listed;
         for(uint j=0;j<total;j++){
@@ -309,15 +329,23 @@ void lightsShadeMain(uint3 g:SV_GroupID,uint3 t:SV_GroupThreadID){
             sum+=lightsShadeOne(f,l,r,s,shadowed,surface,o,v,world,origin,uint4(i|LIGHTS_PARTIAL|LIGHTS_ALL,TRACE_NONE,TRACE_NONE,0),area,rays,lit);
         }
         considered=total;
-    }else{
-        considered=head.y;
-        for(uint j=0;j<head.y;j++){
+    }else if(!fallback){
+        considered=count;
+        for(uint j=0;j<count;j++){
             uint4 entry=buffers[r.extra.x].Load4((head.x+j)*16);
-            if(omit&&asfloat(entry.w)<=fraction*accumulated){omitted=head.y-j;break;}
+#if LIGHTS_PART==1
+            if((entry.x&LIGHTS_PARTIAL)!=0)continue;
+#elif LIGHTS_PART==2
+            if((entry.x&LIGHTS_PARTIAL)==0)continue;
+#endif
+            if(omit&&asfloat(entry.w)<=fraction*accumulated){omitted=count-j;break;}
             float3 c=lightsShadeOne(f,l,r,s,shadowed,surface,o,v,world,origin,entry,area,rays,lit);
             sum+=c;accumulated+=luminance(c);
         }
     }
+#if LIGHTS_PART==2
+    if(!fallback)sum+=images[NonUniformResourceIndex(r.output.x)][p].rgb;
+#endif
     images[NonUniformResourceIndex(r.output.x)][p]=float4(sum,1);
     if(stats)images[NonUniformResourceIndex(r.extra.y)][p]=lightsDebugOn?float4(lightsDebug):float4(lit,rays,considered,omitted);
 }
@@ -359,5 +387,5 @@ void lightsPrimaryMain(uint3 id:SV_DispatchThreadID){
     images[NonUniformResourceIndex(root.cascade)][p]=gbufferEncodeNormal(n,1);
     images[NonUniformResourceIndex(root.mode)][p]=float4(a.rgb,1);
     // w: the material slot (the bench reads it back to classify surfaces).
-    images[NonUniformResourceIndex(root.sample)][p]=float4(a.w,m.x,1,float(hit.user));
+    images[NonUniformResourceIndex(root.sample)][p]=float4(a.w,m.x,1,float(hit.user)/255.);
 }

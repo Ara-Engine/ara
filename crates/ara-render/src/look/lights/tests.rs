@@ -32,6 +32,16 @@ fn compare(bench: &mut Bench, settings: Settings) -> Result<(f64, usize, f64, u3
     assert!(timing.stats.clean(), "{:?}", timing.stats);
     let test = bench.read(Readback::V2)?;
     let counters = bench.read(Readback::Counters)?;
+    // Without counters the shade pass splits into its lean and visibility PSOs.
+    bench.run_v2(false, Blockers::On, settings)?;
+    let split = bench.read(Readback::V2)?;
+    let split_worst = (0..(SIZE[0] * SIZE[1]) as usize)
+        .map(|i| (lum(&split[i * 4..]) - lum(&test[i * 4..])).abs() / lum(&test[i * 4..]).max(1e-6))
+        .fold(0., f64::max);
+    assert!(
+        split_worst <= 1e-5,
+        "split shading differs from the combined pass by {split_worst}"
+    );
     bench.run_exact(false, Blockers::On, settings)?;
     let control = bench.read(Readback::Exact)?;
     let n = (SIZE[0] * SIZE[1]) as usize;
@@ -324,6 +334,202 @@ fn masks_against_f64_brute_force() -> Result<()> {
         shown += 1;
         if shown >= 6 {
             break;
+        }
+    }
+    bench.destroy()?;
+    Ok(())
+}
+
+/// Localizes V2-vs-control disagreements of one dynamic frame (`ARA_LIGHTS_PROBE`:
+/// case id, frame, pixel x, pixel y) across classification and mask switches.
+#[test]
+#[ignore = "diagnostic"]
+fn dynamic_mismatch_probe() -> Result<()> {
+    let spec = std::env::var("ARA_LIGHTS_PROBE")
+        .unwrap_or_else(|_| "moving-200-lights,23,1434,922".into());
+    let parts: Vec<&str> = spec.split(',').collect();
+    let case = scene::cases()
+        .into_iter()
+        .find(|c| c.id == parts[0])
+        .expect("case");
+    let (frame, px, py): (u32, usize, usize) =
+        (parts[1].parse()?, parts[2].parse()?, parts[3].parse()?);
+    let size = [2560u32, 1440];
+    let mut bench = Bench::new(Layout::new(&case), size, 1 << 22)?;
+    bench.pose(frame)?;
+    let n = (size[0] * size[1]) as usize;
+    bench.run_exact(false, Blockers::On, Settings::default())?;
+    let control = bench.read(Readback::Exact)?;
+    let at = (py * size[0] as usize + px) * 4;
+    eprintln!("control at pixel: {}", lum(&control[at..]));
+    for (name, s) in [
+        ("default", Settings::default()),
+        (
+            "noclassify",
+            Settings {
+                classify: false,
+                ..Settings::default()
+            },
+        ),
+        (
+            "rays",
+            Settings {
+                masks: false,
+                ..Settings::default()
+            },
+        ),
+    ] {
+        bench.run_v2(false, Blockers::On, s)?;
+        let test = bench.read(Readback::V2)?;
+        let differing = (0..n)
+            .filter(|&i| {
+                (lum(&test[i * 4..]) - lum(&control[i * 4..])).abs()
+                    > 1e-4 * lum(&control[i * 4..]).max(1e-3)
+            })
+            .count();
+        eprintln!("{name}: {differing} differing; pixel {}", lum(&test[at..]));
+    }
+    // The exact control with rays instead of masks.
+    bench.run_exact(
+        false,
+        Blockers::On,
+        Settings {
+            masks: false,
+            ..Settings::default()
+        },
+    )?;
+    let rays = bench.read(Readback::Exact)?;
+    let differing = (0..n)
+        .filter(|&i| {
+            (lum(&rays[i * 4..]) - lum(&control[i * 4..])).abs()
+                > 1e-4 * lum(&control[i * 4..]).max(1e-3)
+        })
+        .count();
+    eprintln!(
+        "ray control vs mask control: {differing} differing; pixel {}",
+        lum(&rays[at..])
+    );
+    bench.destroy()?;
+    Ok(())
+}
+
+/// Replays the quality loop's call sequence up to one frame and compares V2 with the
+/// exact control there (`ARA_LIGHTS_PROBE`: case, frame, x, y; `ARA_LIGHTS_PROBE_OPEN`
+/// 0 drops the no-blocker runs).
+#[test]
+#[ignore = "diagnostic"]
+fn sequence_mismatch_probe() -> Result<()> {
+    let spec = std::env::var("ARA_LIGHTS_PROBE")
+        .unwrap_or_else(|_| "moving-200-lights,23,1434,922".into());
+    let open = std::env::var("ARA_LIGHTS_PROBE_OPEN").map_or(true, |v| v != "0");
+    let parts: Vec<&str> = spec.split(',').collect();
+    let case = scene::cases()
+        .into_iter()
+        .find(|c| c.id == parts[0])
+        .expect("case");
+    let (last, px, py): (u32, usize, usize) =
+        (parts[1].parse()?, parts[2].parse()?, parts[3].parse()?);
+    let size = [2560u32, 1440];
+    let mut bench = Bench::new(Layout::new(&case), size, 1 << 22)?;
+    let s = Settings::default();
+    let at = (py * size[0] as usize + px) * 4;
+    for f in 0..=last {
+        bench.pose(f)?;
+        bench.run_v2(true, Blockers::On, s)?;
+        let test = bench.read(Readback::V2)?;
+        if std::env::var("ARA_LIGHTS_PROBE_READS").is_ok() {
+            bench.read(Readback::Counters)?;
+            bench.read(Readback::Material)?;
+        }
+        bench.run_exact(false, Blockers::On, s)?;
+        let control = bench.read(Readback::Exact)?;
+        if open {
+            bench.run_v2(false, Blockers::Off, s)?;
+            if std::env::var("ARA_LIGHTS_PROBE_READS").is_ok() {
+                bench.read(Readback::V2)?;
+            }
+            bench.run_exact(false, Blockers::Off, s)?;
+            if std::env::var("ARA_LIGHTS_PROBE_READS").is_ok() {
+                bench.read(Readback::Exact)?;
+            }
+        }
+        let n = (size[0] * size[1]) as usize;
+        let differing = (0..n)
+            .filter(|&i| {
+                (lum(&test[i * 4..]) - lum(&control[i * 4..])).abs()
+                    > 1e-4 * lum(&control[i * 4..]).max(1e-3)
+            })
+            .count();
+        if differing > 0 || f == last {
+            eprintln!(
+                "frame {f}: {differing} differing; pixel v2 {} control {}",
+                lum(&test[at..]),
+                lum(&control[at..])
+            );
+        }
+    }
+    bench.destroy()?;
+    Ok(())
+}
+
+/// Runs V2 and the exact control twice on every frame of a case and counts pixels where
+/// a pass disagrees with itself (`ARA_LIGHTS_PROBE`: case, last frame).
+#[test]
+#[ignore = "diagnostic"]
+fn determinism_probe() -> Result<()> {
+    let spec = std::env::var("ARA_LIGHTS_PROBE").unwrap_or_else(|_| "moving-200-lights,23".into());
+    let parts: Vec<&str> = spec.split(',').collect();
+    let case = scene::cases()
+        .into_iter()
+        .find(|c| c.id == parts[0])
+        .expect("case");
+    let last: u32 = parts[1].parse()?;
+    let size = [2560u32, 1440];
+    let entries = size[0].div_ceil(16) * size[1].div_ceil(16) * 96;
+    let mut bench = Bench::new(Layout::new(&case), size, entries)?;
+    let s = Settings {
+        masks: std::env::var("ARA_LIGHTS_PROBE_RAYS").is_err(),
+        ..Settings::default()
+    };
+    let n = (size[0] * size[1]) as usize;
+    let count = |a: &[f32], b: &[f32]| {
+        (0..n * 4)
+            .filter(|&i| a[i].to_bits() != b[i].to_bits())
+            .count()
+    };
+    let paired = std::env::var("ARA_LIGHTS_PROBE_PAIR").is_ok();
+    for f in 0..=last {
+        bench.pose(f)?;
+        let (a, b, c, again, d);
+        if paired {
+            bench.run_pair(true, Blockers::On, s)?;
+            a = bench.read(Readback::V2)?;
+            c = bench.read(Readback::Exact)?;
+            again = bench.read(Readback::Exact)?;
+            bench.run_pair(true, Blockers::On, s)?;
+            b = bench.read(Readback::V2)?;
+            d = bench.read(Readback::Exact)?;
+        } else {
+            bench.run_v2(true, Blockers::On, s)?;
+            a = bench.read(Readback::V2)?;
+            bench.run_v2(true, Blockers::On, s)?;
+            b = bench.read(Readback::V2)?;
+            bench.run_exact(false, Blockers::On, s)?;
+            c = bench.read(Readback::Exact)?;
+            again = bench.read(Readback::Exact)?;
+            bench.run_exact(false, Blockers::On, s)?;
+            d = bench.read(Readback::Exact)?;
+        }
+        let (v2, exact, cross, reread) = (
+            count(&a, &b),
+            count(&c, &d),
+            count(&a, &c),
+            count(&c, &again),
+        );
+        if v2 + exact + cross + reread > 0 {
+            eprintln!(
+                "frame {f}: v2 vs itself {v2}, exact vs itself {exact}, v2 vs exact {cross}, re-read {reread} words"
+            );
         }
     }
     bench.destroy()?;

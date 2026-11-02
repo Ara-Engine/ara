@@ -8,7 +8,9 @@
 //! radiance (linear, not pre-exposed) that a lighting pass adds.
 use anyhow::{Result, ensure};
 use ara_gpu::commands::{Command, Recorder};
-use ara_gpu::{Access, Barrier, Buffer, Device, GpuDevice, Pipeline, Resource, RootConstants, vk};
+use ara_gpu::{
+    Access, Barrier, Buffer, Device, GpuDevice, Image, Pipeline, Resource, RootConstants, vk,
+};
 use bytemuck::{Pod, Zeroable};
 use std::path::Path;
 
@@ -110,6 +112,9 @@ struct Pipelines {
     bin: Pipeline,
     select: Pipeline,
     shade: Pipeline,
+    /// The shade pass split by PSO: clear pairs without trace() code, then partial pairs.
+    shade_lean: Pipeline,
+    shade_vis: Pipeline,
     exact: Pipeline,
 }
 
@@ -136,6 +141,9 @@ pub(crate) struct LightsGpu {
     readback: Buffer,
     /// Whether the storage has been used (barrier sources).
     used: bool,
+    /// This frame shades in one combined pass (omission orders all entries together;
+    /// per-pixel counters cover all of them).
+    combined: bool,
 }
 
 /// Loads cooked pipeline `name` from `artifacts`.
@@ -167,6 +175,8 @@ impl LightsGpu {
             bin: load(gpu, &artifacts, "lights_bin")?,
             select: load(gpu, &artifacts, "lights_select")?,
             shade: load(gpu, &artifacts, "lights_shade")?,
+            shade_lean: load(gpu, &artifacts, "lights_shade_lean")?,
+            shade_vis: load(gpu, &artifacts, "lights_shade_vis")?,
             exact: load(gpu, &artifacts, "lights_exact")?,
         };
         let tiles = capacity.size.map(|s| s.div_ceil(TILE));
@@ -210,6 +220,7 @@ impl LightsGpu {
             stats,
             readback,
             used: false,
+            combined: true,
         })
     }
 
@@ -281,6 +292,7 @@ impl LightsGpu {
             ],
         };
         gpu.upload(self.record.buffer, bytemuck::bytes_of(&record))?;
+        self.combined = s.omission.is_some() || inputs.stats.is_some();
         Ok(())
     }
 
@@ -326,10 +338,12 @@ impl LightsGpu {
         c.push(Command::EndPass);
     }
 
-    /// Records the V2 passes (`Lights.Build`, `.Prep`, `.Bin`, `.Select`, `.Shade`)
-    /// with the frame record at heap index `frame`. The G-buffer must be readable
-    /// and the output image in `Storage`; [`Self::prepare`] wrote the record.
-    pub(crate) fn record(&mut self, c: &mut Recorder, frame: u32, lights: u32) {
+    /// Records the V2 passes (`Lights.Build`, `.Prep`, `.Bin`, `.Select`, then `.Shade`,
+    /// or `.Shade` (clear pairs) and `.Visibility` (partial pairs, adding to the output)
+    /// as two PSOs when [`Self::prepare`] needed no combined pass) with the frame record
+    /// at heap index `frame`. The G-buffer must be readable and `output` (the image the
+    /// inputs named) in `Storage`; [`Self::prepare`] wrote the record.
+    pub(crate) fn record(&mut self, c: &mut Recorder, frame: u32, lights: u32, output: Image) {
         self.barrier(c, !self.used);
         self.used = true;
         c.push(Command::UpdateBuffer {
@@ -358,7 +372,30 @@ impl LightsGpu {
             [tx, ty, 1],
         );
         self.barrier(c, false);
-        self.pass(c, "Lights.Shade", self.pipelines.shade, frame, [tx, ty, 1]);
+        if self.combined {
+            self.pass(c, "Lights.Shade", self.pipelines.shade, frame, [tx, ty, 1]);
+        } else {
+            self.pass(
+                c,
+                "Lights.Shade",
+                self.pipelines.shade_lean,
+                frame,
+                [tx, ty, 1],
+            );
+            c.barriers([Barrier {
+                resource: Resource::Image(output),
+                before: Access::Storage,
+                after: Access::Storage,
+                handoff: None,
+            }]);
+            self.pass(
+                c,
+                "Lights.Visibility",
+                self.pipelines.shade_vis,
+                frame,
+                [tx, ty, 1],
+            );
+        }
         self.barrier(c, false);
     }
 
