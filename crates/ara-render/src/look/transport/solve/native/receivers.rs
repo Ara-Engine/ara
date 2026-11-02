@@ -209,6 +209,7 @@ impl PatchTransport {
             bodies: &self.bodies,
             generations: &self.geometry_generations,
         };
+        let mut media_regions = Vec::new();
         for (&id, body) in &self.bodies {
             if body.owns_links() {
                 continue;
@@ -249,10 +250,11 @@ impl PatchTransport {
                 self.media
                     .splat(bounds[0], bounds[1], 1., 80., albedo, outgoing)?;
                 if let Some(region) = Region::new(bounds[0].to_array(), bounds[1].to_array()) {
-                    self.graph.discover(region, self.frame);
+                    media_regions.push(region);
                 }
             }
         }
+        self.graph.discover_regions(&mut media_regions, self.frame);
         Ok(())
     }
 }

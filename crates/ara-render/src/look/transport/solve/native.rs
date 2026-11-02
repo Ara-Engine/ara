@@ -604,6 +604,7 @@ impl PatchTransport {
             return Ok(&self.report);
         }
         let mut affected = std::collections::BTreeSet::new();
+        let mut changed_regions = Vec::new();
         let geometry_revision = events
             .frame
             .checked_add(1)
@@ -648,7 +649,7 @@ impl PatchTransport {
             if let Some(region) =
                 Region::new(event.swept.min.to_array(), event.swept.max.to_array())
             {
-                self.graph.discover(region, events.frame);
+                changed_regions.push(region);
                 // Sub-patch bodies use the media grid, not triangle visibility.
                 // Project only edits that can alter the direct triangle query.
                 if [event.change.previous, event.change.current]
@@ -696,11 +697,13 @@ impl PatchTransport {
                 self.graph.changed(id as u64);
                 let bounds = instance.bounds(&scene.geometry[instance.geometry]);
                 if let Some(region) = Region::new(bounds[0].to_array(), bounds[1].to_array()) {
-                    self.graph.discover(region, events.frame);
+                    changed_regions.push(region);
                     self.shadow_receivers(scene, region, &mut affected);
                 }
             }
         }
+        self.graph
+            .discover_regions(&mut changed_regions, events.frame);
         let receiver_started = Instant::now();
         self.update_receivers(scene, textures)?;
         let receiver_cpu_ms = receiver_started.elapsed().as_secs_f64() * 1000.;

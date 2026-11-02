@@ -21,6 +21,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
+mod discovery;
 mod witnesses;
 use witnesses::RepairedWitnesses;
 
