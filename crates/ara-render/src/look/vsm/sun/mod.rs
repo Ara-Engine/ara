@@ -11,8 +11,11 @@
 //!   `(caster height above its lowest receiver) x |k_now - k_drawn|` in its texels, exact
 //!   for a caster-receiver pair at every elevation and azimuth (`h delta-alpha / sin^2
 //!   alpha` plus azimuth); cross-page reads are moved into the reading page's frame, so
-//!   no seam term. Caster tops come from instance boxes; receiver heights from `VSM.Mark`
-//!   (every lit pixel within 16 frames) where available, else instance boxes.
+//!   no seam term. Caster tops come from instance boxes over the page dilated by a drift
+//!   margin of 16 texels (content shears by (y - y_ref) |dk| as the sun moves, so casters
+//!   outside a page can move in; past the margin the bound queries the full drift, and the
+//!   shader takes the content top); receiver heights from `VSM.Mark` (every lit pixel within
+//!   16 frames) where available, else instance boxes.
 //! - **Demand** comes from the pixels that sample pages (`shadow-pages.slang`
 //!   `sunPagesMarkMain`); reflection hits, patches and froxels can mark the same
 //!   request buffer later.
@@ -139,6 +142,8 @@ pub(crate) const REQUEST_WORDS: usize = super::REQUEST_WORDS + RECEIVER_WORDS;
 const DEMAND_FRAMES: u64 = 4;
 /// Frames of receiver feedback before it replaces the box bound (the marks' rotation).
 const FEEDBACK_FRAMES: u32 = 16;
+/// Drift margin (texels of the page) its stored heights and window top are dilated by.
+const DRIFT_TEXELS: f32 = 16.;
 /// Light id of the sheared sun in the page cache.
 const SUN_PAGES: u64 = 2;
 
@@ -153,7 +158,11 @@ pub(crate) struct Pipelines {
 #[derive(Debug, Clone, Copy)]
 struct Drawn {
     k: Vec2,
+    /// Heights over the page dilated by `margin` (ground metres): casters and receivers
+    /// that can shear into the page while `(content top - y_ref) |k - k_drawn|` stays
+    /// within it.
     heights: Option<PageHeights>,
+    margin: f32,
 }
 
 /// Per-page service state, beside the cache's slot assignment.
@@ -608,6 +617,7 @@ impl VirtualShadowMap {
             }
         }
         // This frame's demand.
+        let content_top = s.heights.span()[1];
         let mut demand: [Vec<Demand<PageKey>>; 2] = [Vec::new(), Vec::new()];
         for (&key, r) in &mut s.records {
             // Every page accumulates its casters' shifts, read this frame or not.
@@ -629,7 +639,17 @@ impl VirtualShadowMap {
             let resident = self.cache.resident(key).is_some();
             let (layer, cold, lag, rate) = match r.drawn {
                 Some(drawn) if resident => {
-                    let heights = drawn.heights.map(|h| PageHeights {
+                    // Past the drift margin, content from further away can have sheared in:
+                    // bound it from the instance boxes over the full drift.
+                    let drift = (content_top - y_ref).max(0.) * (k - drawn.k).length();
+                    let stored = if drift <= drawn.margin {
+                        drawn.heights
+                    } else {
+                        let (lo, hi) = page_rect(level, r.xy, 1.);
+                        s.heights
+                            .page((lo - drift, hi + drift), drawn.k, y_ref, &mut s.scratch)
+                    };
+                    let heights = stored.map(|h| PageHeights {
                         receivers: [
                             r.receivers
                                 .filter(|_| r.feedback >= FEEDBACK_FRAMES)
@@ -755,22 +775,36 @@ impl VirtualShadowMap {
                     }
                 }
                 self.set_entry(gpu, index, super::table_entry(draw.page.slot, draw.xy))?;
-                // The lag bound reads the page's own contents (one texel of slack); the
-                // shader's window top covers every blocker whose sample rays can reach a
-                // receiver in the page: the content's height span times the shear's
-                // spread across the sun disc (|dk/dtheta| <= 1 + |k|^2, the disc at most
-                // MAX_SUN_RADIUS).
-                let heights =
-                    s.heights
-                        .page(page_rect(draw.level, draw.xy, 1.), k, y_ref, &mut s.scratch);
+                // The lag bound reads the page's contents dilated by a drift margin: content
+                // shears by (y - y_ref) |dk| as the sun moves, so casters and receivers that
+                // start outside the page can move in; while the drift stays within the margin
+                // these heights bound them (past it, plan_service queries again). The
+                // shader's window top also covers every blocker whose sample rays can reach a
+                // receiver in the page: the content's height span times the shear's spread
+                // across the sun disc (|dk/dtheta| <= 1 + |k|^2, the disc at most
+                // MAX_SUN_RADIUS); the record's fourth word is the margin, past which the
+                // shader takes the content top instead.
+                let texel = page_step(draw.level) / PAGE_SIZE as f32;
+                let margin = DRIFT_TEXELS * texel;
+                let heights = s.heights.page(
+                    page_rect(draw.level, draw.xy, 1. + DRIFT_TEXELS),
+                    k,
+                    y_ref,
+                    &mut s.scratch,
+                );
                 let [lo, hi] = s.heights.span();
                 let spread = (hi - lo).max(0.) * MAX_SUN_RADIUS * (1. + k.length_squared());
                 let (a, b) = page_rect(draw.level, draw.xy, 1.);
                 let top = s
                     .heights
-                    .page((a - spread, b + spread), k, y_ref, &mut s.scratch)
+                    .page(
+                        (a - spread - margin, b + spread + margin),
+                        k,
+                        y_ref,
+                        &mut s.scratch,
+                    )
                     .map_or(f32::NEG_INFINITY, |h| h.top);
-                let record = [k.x, k.y, top, 0.];
+                let record = [k.x, k.y, top, margin];
                 let slot = draw.page.slot as usize;
                 if s.slots_mirror[slot] != record {
                     s.slots_mirror[slot] = record;
@@ -781,7 +815,7 @@ impl VirtualShadowMap {
                     )?;
                 }
                 if let Some(r) = s.records.get_mut(&draw.page.key) {
-                    r.drawn = Some(Drawn { k, heights });
+                    r.drawn = Some(Drawn { k, heights, margin });
                     r.moved = 0.;
                     r.since = None;
                 }
@@ -809,8 +843,9 @@ impl VirtualShadowMap {
     }
 
     /// The service's look-record rows (look/frame.rs `vsm*`): x/y/z/w as the control's,
-    /// request y the per-slot shear records and w 1 (service), the light space's
-    /// columns the shear and reference height, depth `[a, b]` with depth = a y + b.
+    /// request y the per-slot records and w 1 (service), the light space's
+    /// column 0 the shear, reference height and content top, depth `[a, b]` with
+    /// depth = a y + b.
     pub(super) fn rows_sun(&self, request: Option<usize>) -> Option<super::Rows> {
         let s = self.service.as_ref()?;
         let k = s.shear?;
@@ -830,7 +865,7 @@ impl VirtualShadowMap {
                 request.map_or(1, |i| 1 | s.tags[i] << 16),
             ],
             space: Mat4::from_cols(
-                Vec4::new(k.x, k.y, s.settings.reference_height, 0.),
+                Vec4::new(k.x, k.y, s.settings.reference_height, s.heights.span()[1]),
                 Vec4::ZERO,
                 Vec4::ZERO,
                 Vec4::ZERO,

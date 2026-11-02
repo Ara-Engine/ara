@@ -74,13 +74,13 @@ void sunPagesMarkMain(uint3 tid:SV_DispatchThreadID){
             uint level=spLevel(f,l,world,spGround(l,world,spShear(l)));
             float shift=shadowOffset(nl)*sqrt(saturate(1-nl*nl));
             m.levels[0]=spLevelMarks(l,world,level,shift+SP_RING+1);
-            // The blockers' spread: the pixel's page window top (look/vsm/sun; the content's
-            // top, its height range less the 64 m pad, before the page lands) times the sun
+            // The blockers' spread: the pixel's page window top (spWindowTop; the content's
+            // top before the page lands) times the sun
             // disc's extent in shear space, rho (1 + |k|^2), with a quarter of slack for the
             // shear's change since the page was drawn.
             float2 k=spShear(l);
             int slot=spSlot(l,level,int2(floor(spGround(l,world,k)/spStep(l,level))));
-            float top=slot>=0?spRecord(l,slot).z:spHeight(l,1)-64;
+            float top=slot>=0?spWindowTop(l,spRecord(l,slot)):spContentTop(l);
             float spread=max(top-world.y,0)*tan(max(l.sunLux.w,1e-5))*(1+dot(k,k))*1.25;
             // Ring two is also the fallback while the pixel's level renders.
             [unroll]for(uint i=1;i<SP_RINGS;i++)
