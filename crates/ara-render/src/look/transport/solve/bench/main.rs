@@ -28,6 +28,9 @@ struct FrameScore {
     region_flip_excess: Option<f64>,
     exact_geometry_max_error_white: Option<f32>,
     exact_geometry_region_flip: Option<f64>,
+    capture_repeat_valid: Option<bool>,
+    capture_repeat_max_white: Option<f32>,
+    capture_repeat_region_flip: Option<f64>,
     measured_transport_heap_live: isize,
     measured_transport_heap_peak: usize,
 }
@@ -54,6 +57,10 @@ fn main() -> Result<()> {
     std::fs::create_dir_all(&out)?;
     if args.iter().any(|a| a == "--register-pipelines") {
         return register_pipelines();
+    }
+    if args.iter().any(|a| a == "--audit-capture") {
+        quiet::wait(option("--quiet-lock").map(Path::new));
+        return images::audit::capture_order(&out);
     }
     if let Some(path) = option("--ab") {
         let mut fixture = gltf_scene::load(Path::new(path))?;
@@ -230,9 +237,18 @@ fn main() -> Result<()> {
                 region_flip_excess: flip.as_ref().map(|s| s.patch_region_flip),
                 exact_geometry_max_error_white: flip.as_ref().map(|s| s.geometry_max_white),
                 exact_geometry_region_flip: flip.as_ref().map(|s| s.geometry_region_flip),
+                capture_repeat_valid: flip.as_ref().map(|s| s.repeat_valid),
+                capture_repeat_max_white: flip.as_ref().map(|s| s.repeat_max_white),
+                capture_repeat_region_flip: flip.as_ref().map(|s| s.repeat_region_flip),
                 measured_transport_heap_live: measured_live,
                 measured_transport_heap_peak: frame_peak,
             });
+            if flip.as_ref().is_some_and(|s| !s.repeat_valid) {
+                println!(
+                    "G3 INVALID capture repeat {} F{frame}; image attribution unsigned",
+                    case.name
+                );
+            }
             if frame == 1
                 || frame % 10 == 0
                 || frame == case.event
@@ -280,6 +296,9 @@ fn main() -> Result<()> {
             "max_region_flip_excess":scores.iter().filter_map(|s|s.region_flip_excess).reduce(f64::max),
             "max_exact_geometry_error_white":scores.iter().filter_map(|s|s.exact_geometry_max_error_white).reduce(f32::max),
             "max_exact_geometry_region_flip":scores.iter().filter_map(|s|s.exact_geometry_region_flip).reduce(f64::max),
+            "capture_repeat_failures":scores.iter().filter(|s|s.capture_repeat_valid==Some(false)).count(),
+            "max_capture_repeat_white":scores.iter().filter_map(|s|s.capture_repeat_max_white).reduce(f32::max),
+            "max_capture_repeat_region_flip":scores.iter().filter_map(|s|s.capture_repeat_region_flip).reduce(f64::max),
             "reference":"Independent converged FP64 patch system. Every image frame additionally compares against current triangle geometry with all bodies represented as ordinary surface patches in the offline reference only. This isolates receiver/media approximation at the same 25 cm / 48 direction discretization, not continuous-integral convergence. Critical frames also have a 1024-spp pathtrace check.",
             "760m_event_gpu_ms":null,"promotion":"not promoted"});
         write_json(&dir.join("summary.json"), &value)?;

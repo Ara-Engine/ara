@@ -7,6 +7,7 @@ use ara_render::{
 };
 use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings, Tier, Upscaler};
 use std::path::{Path, PathBuf};
+pub mod audit;
 mod geometry;
 
 const SIZE: [u32; 2] = [1920, 1080];
@@ -17,9 +18,10 @@ fn request(f: &Fixture) -> CaptureRequest {
         mode: ViewMode::Lit,
         deterministic: true,
         exposure: f.exposure,
-        // Two identical deterministic draws initialize the post-exposure pair
-        // required by lab_radiance. Transport advances only once per scored frame.
-        settle_frames: 2,
+        // Four identical draws initialize exposure and the shared raster state
+        // after geometry publication. Transport advances once per scored frame.
+        // --audit-capture verifies that repeating this input changes no image.
+        settle_frames: 4,
         tick: 0,
         seed: 0,
         marks: None,
@@ -39,6 +41,9 @@ pub struct ImageScore {
     pub patch_region_flip: f64,
     pub geometry_region_flip: f64,
     pub geometry_max_white: f32,
+    pub repeat_valid: bool,
+    pub repeat_max_white: f32,
+    pub repeat_region_flip: f64,
 }
 impl ReplayImages {
     pub fn new(
@@ -75,8 +80,8 @@ impl ReplayImages {
         }
         self.renderer
             .set_patch_transport(Some(transport), &f.scene)?;
-        let candidate = self.renderer.capture(&request(f))?;
-        let (_, candidate_hdr) = self.renderer.lab_radiance()?;
+        let (candidate, candidate_hdr, mut repeat) =
+            audit::repeated_capture(&mut self.renderer, &request(f))?;
         if ((event..=event + 3).contains(&frame) || frame == 1)
             && let Some(samples) = self.physical_samples
         {
@@ -119,8 +124,9 @@ impl ReplayImages {
         }
         self.renderer
             .set_patch_transport_reference(uncapped, &f.scene, exact)?;
-        let reference = self.renderer.capture(&request(f))?;
-        let (_, reference_hdr) = self.renderer.lab_radiance()?;
+        let (reference, reference_hdr, reference_repeat) =
+            audit::repeated_capture(&mut self.renderer, &request(f))?;
+        repeat.include(reference_repeat);
         let score = ara_pathtrace::flip::flip(
             &reference.image,
             &candidate.image,
@@ -151,8 +157,9 @@ impl ReplayImages {
             let solved = geometry.transport.exact_patch_solution()?;
             self.renderer
                 .set_patch_transport_reference(&geometry.transport, &f.scene, &solved)?;
-            let reference_geometry = self.renderer.capture(&request(f))?;
-            let (_, hdr) = self.renderer.lab_radiance()?;
+            let (reference_geometry, hdr, geometry_repeat) =
+                audit::repeated_capture(&mut self.renderer, &request(f))?;
+            repeat.include(geometry_repeat);
             geometry_max_white = max_white(&hdr, &candidate_hdr, f.exposure)?;
             geometry_region_flip = worst_region(
                 &ara_pathtrace::flip::flip(
@@ -184,6 +191,9 @@ impl ReplayImages {
             patch_region_flip: worst,
             geometry_region_flip,
             geometry_max_white,
+            repeat_valid: repeat.valid,
+            repeat_max_white: repeat.max_white,
+            repeat_region_flip: repeat.region_flip,
         })
     }
 }
