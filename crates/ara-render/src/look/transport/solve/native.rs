@@ -105,6 +105,8 @@ pub struct TransportReport {
     pub missed_deadlines: usize,
     /// Residual/norm estimate for the published patch system; excludes FP32 roundoff
     /// and geometric quadrature error. G3 independently compares an FP64 solution.
+    /// An unbounded estimate is infinity, represented by null in JSON receipts.
+    #[serde(deserialize_with = "read_solution_bound")]
     pub solution_bound: f32,
     /// Accounted host transport residency, including private acceleration structures.
     /// Array capacities are exact; private map/node overhead is conservatively estimated.
@@ -117,6 +119,11 @@ pub struct TransportReport {
     pub index_bytes_per_link: f64,
     /// Whether this frame required a cold topology publication outside repair packets.
     pub topology_publication: bool,
+}
+
+/// Recover the unbounded estimate represented by JSON's nonfinite-number null.
+fn read_solution_bound<'de, D: serde::Deserializer<'de>>(reader: D) -> Result<f32, D::Error> {
+    Ok(<Option<f32> as serde::Deserialize>::deserialize(reader)?.unwrap_or(f32::INFINITY))
 }
 
 struct ChartInstance {

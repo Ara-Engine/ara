@@ -156,6 +156,22 @@ mod tests {
     }
 
     #[test]
+    fn recovery_reads_unbounded_solution_estimates_from_json_null() -> Result<()> {
+        let mut original = score(1);
+        original.capped.solution_bound = f32::INFINITY;
+        original.uncapped.solution_bound = 1e-5;
+        let encoded = serde_json::to_vec(&original)?;
+        let restored: FrameScore = serde_json::from_slice(&encoded)?;
+        ensure!(restored.capped.solution_bound == f32::INFINITY);
+        ensure!(restored.uncapped.solution_bound == 1e-5);
+        let prefix = Prefix {
+            source: "old".into(),
+            scores: vec![original],
+        };
+        prefix.verify(&restored, true)
+    }
+
+    #[test]
     fn recovery_requires_contiguous_valid_receipts_and_exact_overlap() -> Result<()> {
         ensure!(Prefix::validate(&[score(2)], 4).is_err());
         let mut invalid = score(1);
