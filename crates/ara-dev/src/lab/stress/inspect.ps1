@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory=$true)][string]$Root,
-    [Parameter(Mandatory=$true)][string]$Output
+    [Parameter(Mandatory=$true)][string]$Output,
+    [string[]]$Cases=@()
 )
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Drawing
@@ -10,6 +11,7 @@ $font=New-Object Drawing.Font('Segoe UI',10)
 $brush=[Drawing.Brushes]::White
 try {
     foreach($case in Get-ChildItem -LiteralPath (Join-Path $Root 'cases') -Directory) {
+        if($Cases.Count -gt 0 -and $case.Name -notin $Cases){continue}
         $runPath=Join-Path $case.FullName 'capped/run.json'
         if(-not(Test-Path -LiteralPath $runPath)){continue}
         $run=Get-Content -LiteralPath $runPath -Raw | ConvertFrom-Json

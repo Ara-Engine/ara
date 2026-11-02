@@ -135,6 +135,7 @@ stress trajectory rather than a physics simulation. The sealed flicker case has
 `inspect.ps1 -Root <campaign> -Output <directory>` creates labelled contact sheets
 from every raw capture/reference pair. It records no automatic visual approval;
 the operator must open and inspect the sheets and any suspicious native PNGs.
+Use `-Cases case-a,case-b` to generate only the next inspection batch.
 
 ## Focused verification
 
