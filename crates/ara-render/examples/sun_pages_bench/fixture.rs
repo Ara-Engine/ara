@@ -1,160 +1,99 @@
-//! The G2/G4 shadow fixtures, rebuilt from T1's lab recipes (`ara-dev` lab
-//! `stress/cases.v1.json` and `render-fidelity` example `render_v3/fixture.rs` at
-//! fb3f8ad77; T1's tooling is not merged into this branch): the same geometry, motion,
-//! sun script and camera for the recipes the sun page service serves. Rect-light R5-5
-//! recipes (overlap, crate gap, hand, stained glass, rect orientation, contact rect,
-//! eight lights) shade through local lights, not sun pages, and are not built here.
+//! The G2/G4 shadow fixtures: T1's lab catalogue (`ara-dev` `lab/stress/cases.v1.json`,
+//! read as-is) and its recipes (`render-fidelity` example `render_v3/fixture.rs`) for every
+//! G2 and G4 case, rebuilt here on the public renderer API with the same geometry, motion,
+//! lights, sun script and camera; plus B2's own city-scale stress (`city-*`, not in the
+//! catalogue). Rect-light and point-light recipes shade through local lights, not sun
+//! pages: they run today's control only.
+use super::contract;
 use ara_render::instanced::{Geometry, Instance, Lod, Material, Scene, Vertex};
 use ara_render::scene::{CameraSpec, Light};
 use glam::{Mat4, Quat, Vec3};
 
-/// One case of the catalogue (fields as `cases.v1.json`).
+/// One case: the catalogue's fields this bench reads, and the catalogue entry itself
+/// (`None` for B2's own cases), which lab receipts carry unchanged.
 #[derive(Debug, Clone, serde::Serialize)]
 pub(crate) struct Case {
     pub id: String,
     pub gates: Vec<u8>,
-    pub recipe: &'static str,
+    pub recipe: String,
     pub frames: u32,
     pub event_frame: u32,
     pub bodies: u32,
     pub triangles: u32,
+    pub lights: u32,
+    pub range_m: f32,
     pub sun_deg_s: f32,
     pub elevation_deg: f32,
     pub contact_m: f32,
+    #[serde(skip)]
+    pub catalogue: Option<contract::Case>,
 }
 
-/// The G2 and G4 cases of the sun page service, in catalogue order.
+/// Recipes this bench builds.
+const RECIPES: [&str; 16] = [
+    "sun",
+    "pole_sweep",
+    "wind",
+    "avalanche",
+    "collapse",
+    "wall",
+    "whip_pan",
+    "flythrough",
+    "contact_sun",
+    "contact_rect",
+    "overlap",
+    "crate_gap",
+    "hand",
+    "stained_glass",
+    "rect_orientation",
+    "eight_lights",
+];
+
+/// Every G2 and G4 case of T1's catalogue, in catalogue order, then B2's city stress.
 pub(crate) fn cases() -> Vec<Case> {
-    let case =
-        |id: String, gates: Vec<u8>, recipe, frames, bodies, triangles, sun, el, contact| Case {
-            id,
-            gates,
-            recipe,
-            frames,
-            event_frame: if frames > 32 { 8 } else { 0 },
-            bodies,
-            triangles,
-            sun_deg_s: sun,
-            elevation_deg: el,
-            contact_m: contact,
-        };
-    let mut out = Vec::new();
-    for speed in [0.25_f32, 1., 10.] {
-        for el in [60_f32, 30., 10., 5.] {
-            let name = if speed < 1. {
-                "0.25".to_string()
-            } else {
-                format!("{speed}")
-            };
-            out.push(case(
-                format!("sun-{name}deg-{el}elev"),
-                vec![2],
-                "sun",
-                308,
-                0,
-                108,
-                speed,
-                el,
-                0.3,
-            ));
-        }
-    }
-    // B2's own scale stress (not in T1's catalogue): 2,000 buildings over 400 m, the
-    // camera at street level, the sun at the worst band and one higher.
+    let suite: contract::Suite = serde_json::from_str(include_str!(
+        "../../../ara-dev/src/lab/stress/cases.v1.json"
+    ))
+    .expect("T1's catalogue parses");
+    let mut out: Vec<Case> = suite
+        .cases
+        .into_iter()
+        .filter(|c| c.gates.iter().any(|g| *g == 2 || *g == 4))
+        .filter(|c| RECIPES.contains(&c.recipe.as_str()))
+        .map(|c| Case {
+            id: c.id.clone(),
+            gates: c.gates.clone(),
+            recipe: c.recipe.clone(),
+            frames: c.frames,
+            event_frame: c.event_frame,
+            bodies: c.bodies,
+            triangles: c.triangles,
+            lights: c.lights,
+            range_m: c.range_m,
+            sun_deg_s: c.sun_deg_s,
+            elevation_deg: c.elevation_deg,
+            contact_m: c.contact_m,
+            catalogue: Some(c),
+        })
+        .collect();
+    // B2's scale stress: 2,000 buildings 4-30 m tall over 400 m, a street-level camera,
+    // the sun at the worst band and one higher.
     for (speed, el) in [(1_f32, 10_f32), (10., 10.), (1., 30.)] {
-        out.push(case(
-            format!("city-{speed}deg-{el}elev"),
-            vec![2],
-            "city",
-            308,
-            0,
-            108,
-            speed,
-            el,
-            0.3,
-        ));
-    }
-    out.push(case(
-        "foliage-wind".into(),
-        vec![2],
-        "wind",
-        308,
-        1200,
-        108,
-        0.,
-        45.,
-        0.3,
-    ));
-    out.push(case(
-        "avalanche-108".into(),
-        vec![2, 3],
-        "avalanche",
-        308,
-        4000,
-        108,
-        0.,
-        45.,
-        0.3,
-    ));
-    out.push(case(
-        "avalanche-1000".into(),
-        vec![2, 3],
-        "avalanche",
-        308,
-        4000,
-        1000,
-        0.,
-        45.,
-        0.3,
-    ));
-    for h in [0.1_f32, 0.3, 1., 3., 10.] {
-        out.push(case(
-            format!("shadow-contact-sun-{h}"),
-            vec![4],
-            "contact_sun",
-            32,
-            0,
-            108,
-            0.,
-            45.,
-            h,
-        ));
-    }
-    out.push(case(
-        "shadow-pole-sweep".into(),
-        vec![4],
-        "pole_sweep",
-        32,
-        0,
-        108,
-        10.,
-        45.,
-        0.3,
-    ));
-    // R5-5's rect-light cases: local-light visibility (look::local today, look::lights V2
-    // per-sample trace() in render-v3), measured here for today's control only.
-    for recipe in [
-        "overlap",
-        "crate_gap",
-        "hand",
-        "stained_glass",
-        "rect_orientation",
-    ] {
-        let id = format!("shadow-{}", recipe.replace('_', "-"));
-        out.push(case(id, vec![4], recipe, 32, 0, 108, 0., 45., 0.3));
-    }
-    for h in [0.1_f32, 0.3, 1., 3., 10.] {
-        out.push(case(
-            format!("shadow-contact-rect-{h}"),
-            vec![4],
-            "contact_rect",
-            32,
-            0,
-            108,
-            0.,
-            45.,
-            h,
-        ));
+        out.push(Case {
+            id: format!("city-{speed}deg-{el}elev"),
+            gates: vec![2],
+            recipe: "city".into(),
+            frames: 308,
+            event_frame: 8,
+            bodies: 0,
+            triangles: 108,
+            lights: 0,
+            range_m: 8.,
+            sun_deg_s: speed,
+            elevation_deg: el,
+            contact_m: 0.3,
+            catalogue: None,
+        });
     }
     out
 }
@@ -255,12 +194,33 @@ fn body_position(i: u32, t: f32) -> Vec3 {
     )
 }
 
+/// Collapse bodies' pose at event time `t` (T1's `body_position`, collapse branch).
+fn collapse_position(i: u32, t: f32) -> Vec3 {
+    let z = ((i / 40) % 25) as f32 * 0.35 - 4.;
+    let row = ((i / 10) % 30) as f32 * 0.32;
+    Vec3::new(
+        (i % 10) as f32 * 0.4 - 2. + t * 0.3,
+        row + 0.2 - (t * t * 2.).min(row),
+        z * 0.2,
+    )
+}
+
+/// T1's key-light power: scaled with the authored range.
+fn light_power(case: &Case) -> f32 {
+    180. * case.range_m * case.range_m
+}
+
 /// The case's scene at frame zero (T1's `fixture::create` for these recipes).
 pub(crate) fn create(case: &Case) -> Fixture {
+    let recipe = case.recipe.as_str();
     let mut scene = Scene {
         geometry: vec![cube(12), cube(case.triangles)],
         instances: Vec::new(),
-        materials: vec![material([0.7; 3], 0.7), material([0.7, 0.12, 0.05], 0.7)],
+        materials: vec![
+            material([0.7; 3], 0.7),
+            material([0.7, 0.12, 0.05], 0.7),
+            material([0.94; 3], 0.7),
+        ],
         textures: 0,
         decals: Vec::new(),
         lights: Vec::new(),
@@ -269,7 +229,11 @@ pub(crate) fn create(case: &Case) -> Fixture {
         environment: vec![[0.1, 0.12, 0.16, 1.]],
         environment_size: [1, 1],
     };
-    let floor = 12_f32.max(20. + case.contact_m * 4.);
+    let floor = if recipe == "flythrough" {
+        600.
+    } else {
+        12_f32.max(20. + case.contact_m * 4.)
+    };
     add(
         &mut scene,
         1,
@@ -282,7 +246,7 @@ pub(crate) fn create(case: &Case) -> Fixture {
         &mut scene,
         2,
         0,
-        0,
+        2,
         Vec3::new(0., 2., -5.),
         Vec3::new(12., 4., 0.2),
     );
@@ -294,8 +258,26 @@ pub(crate) fn create(case: &Case) -> Fixture {
         Vec3::new(-6., 2., 0.),
         Vec3::new(0.2, 4., 10.),
     );
-    match case.recipe {
-        "overlap" => {
+    if case.lights == 1 {
+        // T1's key light, outside the breach wall and the body field.
+        scene.lights.push(Light {
+            position_range: [0., 4., 5., case.range_m],
+            color_lumens: [1., 0.85, 0.65, light_power(case)],
+            direction_outer: [0., -1., 0., -1.],
+            parameters: [0., 1., 0.1, 1.],
+            ..Light::ZERO
+        });
+    }
+    match recipe {
+        "wall" => add(
+            &mut scene,
+            10,
+            0,
+            1,
+            Vec3::new(0., 1.5, 0.),
+            Vec3::new(2., 3., 0.15),
+        ),
+        "overlap" | "eight_lights" => {
             for (i, p) in [Vec3::new(-0.2, 0.6, 0.), Vec3::new(0.2, 1.4, -0.4)]
                 .into_iter()
                 .enumerate()
@@ -356,22 +338,17 @@ pub(crate) fn create(case: &Case) -> Fixture {
                 );
             }
         }
-        _ => {}
-    }
-    if matches!(
-        case.recipe,
-        "contact_sun" | "contact_rect" | "rect_orientation"
-    ) {
-        add(
+        "contact_sun" | "contact_rect" | "rect_orientation" => add(
             &mut scene,
             10,
             0,
             1,
             Vec3::new(0., case.contact_m + 0.025, 0.),
             Vec3::new(2., 0.05, 1.),
-        );
+        ),
+        _ => {}
     }
-    if matches!(case.recipe, "sun" | "pole_sweep") {
+    if matches!(recipe, "sun" | "pole_sweep") {
         for i in 0..25 {
             add(
                 &mut scene,
@@ -383,7 +360,40 @@ pub(crate) fn create(case: &Case) -> Fixture {
             );
         }
     }
-    if case.recipe == "city" {
+    if recipe == "flythrough" {
+        for i in 0..800 {
+            add(
+                &mut scene,
+                1000 + i,
+                1,
+                1,
+                Vec3::new(
+                    if i % 2 == 0 { -5. } else { 5. },
+                    2.,
+                    150. - (i / 2) as f32 * 1.5,
+                ),
+                Vec3::new(1., 4., 1.),
+            );
+        }
+    }
+    if recipe == "whip_pan" {
+        for i in 0..64 {
+            let height = 0.5 + (i % 3) as f32 * 0.5;
+            add(
+                &mut scene,
+                1000 + i,
+                1,
+                1,
+                Vec3::new(
+                    (i % 8) as f32 * 1.3 - 4.55,
+                    height * 0.5,
+                    (i / 8) as f32 - 3.5,
+                ),
+                Vec3::new(0.5, height, 0.5),
+            );
+        }
+    }
+    if recipe == "city" {
         // A deterministic block field: 40 x 50 lots of 10 m, buildings 6-9 m wide and 4-30 m
         // tall by a fixed hash, the street x in [0, 10) kept clear.
         add(
@@ -417,13 +427,18 @@ pub(crate) fn create(case: &Case) -> Fixture {
         }
     }
     for i in 0..case.bodies {
-        let wind = case.recipe == "wind";
+        let wind = recipe == "wind";
+        let position = if recipe == "collapse" {
+            collapse_position(i, 0.)
+        } else {
+            body_position(i, 0.)
+        };
         add(
             &mut scene,
             100 + u64::from(i),
             1,
             usize::from(wind),
-            body_position(i, 0.),
+            position,
             if wind {
                 Vec3::new(0.3, 1.5, 0.03)
             } else {
@@ -432,34 +447,47 @@ pub(crate) fn create(case: &Case) -> Fixture {
         );
     }
     if matches!(
-        case.recipe,
+        recipe,
         "overlap" | "crate_gap" | "hand" | "stained_glass" | "rect_orientation" | "contact_rect"
     ) {
         scene.sun_lux = Vec3::ZERO;
+        let rotated = recipe == "rect_orientation";
         scene.lights = vec![Light {
-            position_range: [-1., 4_f32.max(case.contact_m + 4.), 1., 8.],
+            position_range: [-1., 4_f32.max(case.contact_m + 4.), 1., case.range_m],
             color_lumens: [1., 1., 1., 10000.],
             direction_outer: [0., -1., 0., -1.],
             parameters: [2., 1., 0., 1.],
             tangent_length: [
-                if case.recipe == "rect_orientation" {
-                    0.
-                } else {
-                    1.
-                },
+                if rotated { 0. } else { 1. },
                 0.,
-                if case.recipe == "rect_orientation" {
-                    1.
-                } else {
-                    0.
-                },
+                if rotated { 1. } else { 0. },
                 0.,
             ],
             rect: [0.6, 0.2, 0., 0.],
             ..Light::ZERO
         }];
     }
-    let camera = if case.recipe == "city" {
+    if recipe == "contact_sun" {
+        scene.lights.clear();
+    }
+    if recipe == "eight_lights" {
+        scene.sun_lux = Vec3::ZERO;
+        scene.lights = (0..8)
+            .map(|i| Light {
+                position_range: [
+                    (i % 4) as f32 * 0.25 - 0.375,
+                    4.,
+                    (i / 4) as f32 * 0.3 - 0.15,
+                    case.range_m,
+                ],
+                color_lumens: [1., 1., 1., 1250.],
+                parameters: [0., 1., 0.03, 1.],
+                direction_outer: [0., -1., 0., -1.],
+                ..Light::ZERO
+            })
+            .collect();
+    }
+    let camera = if recipe == "city" {
         CameraSpec::LookAt {
             position: Vec3::new(5., 1.8, 2.),
             target: Vec3::new(5., 4., 60.),
@@ -487,29 +515,75 @@ pub(crate) fn create(case: &Case) -> Fixture {
     f
 }
 
-/// The absolute scripted pose of `frame` (60 Hz; T1's `fixture::apply`).
+/// The absolute scripted pose of `frame` (60 Hz; T1's `fixture::apply` and `camera`).
+/// The wall breach replaces the wall with 24 fragments at the event frame (a layout
+/// change: the caller republishes the scene).
 pub(crate) fn apply(f: &mut Fixture, case: &Case, frame: u32) {
+    let recipe = case.recipe.as_str();
     let seconds = frame as f32 / 60.;
-    let t = frame.saturating_sub(case.event_frame) as f32 / 60.;
-    let t = if frame >= case.event_frame { t } else { 0. };
+    let t = if frame >= case.event_frame {
+        (frame - case.event_frame) as f32 / 60.
+    } else {
+        0.
+    };
+    if frame == case.event_frame && recipe == "wall" {
+        f.scene.instances.retain(|i| i.entity != 10);
+        for i in 0..24 {
+            add(
+                &mut f.scene,
+                10_000 + i,
+                0,
+                1,
+                Vec3::new((i % 6) as f32 * 0.35 - 0.9, (i / 6) as f32 * 0.6 + 0.3, 0.),
+                Vec3::new(0.3, 0.5, 0.15),
+            );
+        }
+    }
     for instance in &mut f.scene.instances {
         instance.previous_world = instance.world;
         if (100..100 + u64::from(case.bodies)).contains(&instance.entity) {
             let i = (instance.entity - 100) as u32;
-            if case.recipe == "wind" {
+            if recipe == "wind" {
                 instance.world = Mat4::from_scale_rotation_translation(
                     Vec3::new(0.3, 1.5, 0.03),
                     Quat::from_rotation_z((t * 2. + i as f32).sin() * 0.15),
                     body_position(i, 0.),
                 );
+            } else if recipe == "collapse" {
+                instance.world.w_axis = collapse_position(i, t).extend(1.);
             } else {
                 instance.world.w_axis = body_position(i, t).extend(1.);
             }
+        }
+        if instance.entity >= 10_000 && instance.entity < 20_000 {
+            let i = instance.entity - 10_000;
+            instance.world.w_axis = Vec3::new(
+                (i % 6) as f32 * 0.35 - 0.9 + t * (i as f32 * 0.1 - 1.),
+                (0.3 + (i / 6) as f32 * 0.6 - 4.9 * t * t).max(0.15),
+                t * 0.4,
+            )
+            .extend(1.);
         }
     }
     let az = (seconds * case.sun_deg_s).to_radians();
     let el = case.elevation_deg.to_radians();
     f.scene.sun_direction = Vec3::new(el.cos() * az.cos(), el.sin(), el.cos() * az.sin());
+    if recipe == "whip_pan" {
+        let a = (t / 0.5).min(1.) * std::f32::consts::PI;
+        f.camera = CameraSpec::LookAt {
+            position: Vec3::new(0., 2., 3.),
+            target: Vec3::new(a.sin() * 5., 1., 3. - a.cos() * 5.),
+            vertical_fov: 55_f32.to_radians(),
+        };
+    }
+    if recipe == "flythrough" {
+        let z = 150. - t * (300. / 3.6);
+        f.camera = CameraSpec::LookAt {
+            position: Vec3::new(0., 3., z),
+            target: Vec3::new(0., 1., z - 10.),
+            vertical_fov: 55_f32.to_radians(),
+        };
+    }
 }
 
 /// The fixture as a world-space extraction for the path-traced reference

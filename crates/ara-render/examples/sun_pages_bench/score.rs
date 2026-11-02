@@ -225,7 +225,7 @@ pub(crate) fn penumbrae(
 ) -> Option<Penumbra> {
     let h = f64::from(case.contact_m);
     // The edge's floor z, two lines across it and the profile's half-length.
-    let (edge, lines, span) = match case.recipe {
+    let (edge, lines, span) = match case.recipe.as_str() {
         // The sun at azimuth 0 shifts the shadow along -x only.
         "contact_sun" => (0.5, [-h - 0.4, -h + 0.4], 0.02 + 0.03 * h),
         // The rect light at (-1, h + 4, 1) projects from its centre.

@@ -113,29 +113,42 @@ SpDisc spDiscFrame(Frame f,Look l){
     s.valid0=0;s.valid1=0;s.count=1;
     return s;
 }
-// ORs the cells of rows j0..j1 and columns i0..i1 into the 256-bit mask (m0, m1), with
-// constant word indices only (a runtime-indexed local array spills to memory).
-void spCover(inout uint4 m0,inout uint4 m1,int i0,int i1,int j0,int j1){
-    if(i0>i1||j0>j1)return;
-    uint cols=(i1>=15?0xffffu:((1u<<uint(i1+1))-1u))&~((1u<<uint(i0))-1u);
-    uint rows=(j1>=15?0xffffu:((1u<<uint(j1+1))-1u))&~((1u<<uint(j0))-1u);
-    uint4 a=uint4(((rows>>0)&1)!=0?cols:0,((rows>>2)&1)!=0?cols:0,((rows>>4)&1)!=0?cols:0,((rows>>6)&1)!=0?cols:0)
-           |uint4(((rows>>1)&1)!=0?cols<<16:0,((rows>>3)&1)!=0?cols<<16:0,((rows>>5)&1)!=0?cols<<16:0,((rows>>7)&1)!=0?cols<<16:0);
-    uint4 b=uint4(((rows>>8)&1)!=0?cols:0,((rows>>10)&1)!=0?cols:0,((rows>>12)&1)!=0?cols:0,((rows>>14)&1)!=0?cols:0)
-           |uint4(((rows>>9)&1)!=0?cols<<16:0,((rows>>11)&1)!=0?cols<<16:0,((rows>>13)&1)!=0?cols<<16:0,((rows>>15)&1)!=0?cols<<16:0);
-    m0|=a;m1|=b;
-}
 uint spCount(uint4 a,uint4 b){return countbits(a.x)+countbits(a.y)+countbits(a.z)+countbits(a.w)+countbits(b.x)+countbits(b.y)+countbits(b.z)+countbits(b.w);}
+
+// ORs into the mask the disc samples a solid texel column hides from the receiver: a ray
+// towards sample shear k' rises lambda over ground offset lambda (k' - apex) in the
+// page's frame (apex: the page's shear), so it passes under a texel whose ground box is
+// [b0, b1] (relative to the receiver) and whose surface stands `hb` above the receiver iff
+// lambda (k' - apex) lies in the box for some 0 < lambda <= hb. That set (a wedge from
+// the box outwards) is solved per disc row, testing sample centres. Adjacent columns'
+// wedges tile, so a steep surface (a pole's face at low sun, which steps up every texel)
+// hides every sample behind it; flat squares at each texel's height left gaps between.
+void spWedge(SpDisc d,float2 apex,float2 b0,float2 b1,float hb,inout uint4 m0,inout uint4 m1){
+    float2 lo=d.centre-d.half;
+    [unroll]for(uint j=0;j<16;j++){
+        float cy=lo.y+(float(j)+0.5)*d.cell.y-apex.y;
+        float la=1e-6,lb=hb;
+        if(abs(cy)<1e-12){if(b0.y>0||b1.y<0)continue;}
+        else{float t0=b0.y/cy,t1=b1.y/cy;la=max(la,min(t0,t1));lb=min(lb,max(t0,t1));}
+        if(la>lb)continue;
+        // The row's covered centres: x in the union of [b0.x, b1.x] / lambda over [la, lb].
+        float x0=b0.x>=0?b0.x/lb:b0.x/la,x1=b1.x<=0?b1.x/lb:b1.x/la;
+        float f0=clamp((x0+apex.x-lo.x)/d.cell.x-0.5,-1.,17.),f1=clamp((x1+apex.x-lo.x)/d.cell.x-0.5,-1.,17.);
+        int i0=max(int(ceil(f0)),0),i1=min(int(floor(f1)),15);
+        if(i0>i1)continue;
+        uint cols=(i1>=15?0xffffu:((1u<<uint(i1+1))-1u))&~((1u<<uint(i0))-1u);
+        uint bits=(j&1)!=0?cols<<16:cols;
+        if(j<8)m0[j/2]|=bits;else m1[(j-8)/2]|=bits;
+    }
+}
 
 // One ring of blocker texels: 8x8 texels of page `s` around the receiver (ground `s.u`,
 // height `y`, receiver plane height gradient `g` per metre of ground, `bias` metres), each
-// texel above the plane back-projected onto the disc samples it hides from the receiver:
-// a horizontal square of width `texel` at its height `h` above the receiver hides the
-// samples whose ray reaches it there, the shear-space square (texel - u)/h + k_page. With
-// `hole` > 0, texels whose centres lie within `hole` metres (each axis) of the receiver are
-// skipped (a finer ring covered them).
+// texel above the plane back-projected onto the disc samples it hides from the receiver as
+// a solid column (spWedge). With `hole` > 0, texels wholly within `hole` metres (each
+// axis) of the receiver are skipped (a finer ring covered them).
 void spRing(Look l,SpPage s,SpDisc disc,float y,float2 g,float bias,float hole,inout uint4 m0,inout uint4 m1){
-    int2 r=int2(floor(s.c+0.5));float2 lo=disc.centre-disc.half;
+    int2 r=int2(floor(s.c+0.5));
     [loop]for(uint q=0;q<16;q++){
         int2 gq=r+int2(int(q&3)*2-3,int(q>>2)*2-3);
         float4 dkx,dky;float4 h4=spHeights(l,s,gq,dkx,dky);
@@ -151,15 +164,7 @@ void spRing(Look l,SpPage s,SpDisc disc,float y,float2 g,float bias,float hole,i
             du+=(height-spRef(l))*float2(k==0?dkx.x:k==1?dkx.y:k==2?dkx.z:dkx.w,k==0?dky.x:k==1?dky.y:k==2?dky.z:dky.w);
             float above=height-(y+dot(g,du))-bias;
             if(above<=0)continue;
-            float hb=max(height-y,1e-4);
-            float2 a=s.k+(du-0.5*s.texel)/hb,b=s.k+(du+0.5*s.texel)/hb;
-            // Cells whose centres the square covers; a square narrower than a cell (a tall
-            // blocker's fine texel) covers every cell it overlaps instead, or neighbouring
-            // texels' squares would leave cell centres between them (light-leak stripes).
-            float2 fa=(a-lo)/disc.cell,fb=(b-lo)/disc.cell;
-            bool2 narrow=(fb-fa)<1;
-            int2 i0=int2(select(narrow,floor(fa),ceil(fa-0.5))),i1=int2(select(narrow,ceil(fb)-1,floor(fb-0.5)));
-            spCover(m0,m1,max(i0.x,0),min(i1.x,15),max(i0.y,0),min(i1.y,15));
+            spWedge(disc,s.k,du-0.5*s.texel,du+0.5*s.texel,max(height-y,1e-4),m0,m1);
         }
     }
 }

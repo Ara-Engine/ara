@@ -1,8 +1,8 @@
 // Sun page service passes (look/vsm/sun; opt-in, today's look-vsm.slang is the control).
 // sunPagesMarkMain: one thread per 4x4 pixel block. The block's rotating sample pixel (one
 // of 16 per frame, as look-vsm.slang) marks the pages its lookup reads: its level, and the
-// rings two and four levels coarser (two is also the fallback while its level's page
-// renders; four only where the page's blockers reach that far), each with the neighbours
+// ring levels two, four, ... coarser (two is also the fallback while its level's page
+// renders; the rest as far as its page's blockers spread), each with the neighbours
 // its window reaches near a page edge, and lowers its own level's lowest-receiver words
 // to its height (the invalidation bound's receiver term; look/vsm/sun propagates them to
 // the containing coarser pages and unions them since a page was first seen, so every
@@ -10,8 +10,8 @@
 // pages and write each once. sunPagesProjectMain: each lit-facing pixel's source-shaped
 // sun visibility from the
 // pages (shadow-pages.slangh spRing: per-texel back-projection onto 256 fixed disc
-// samples, rings at the pixel's level and two and four coarser as the blockers' height
-// needs), -1 where no page is resident, into the mask lighting reads (vsmMask).
+// samples, rings at the pixel's level and every second coarser level as far as the
+// blockers' spread needs), -1 where no page is resident, into the mask lighting reads (vsmMask).
 // Root word 0 is the frame record.
 #include "raster.slangh"
 #include "look.slangh"
@@ -20,8 +20,12 @@
 static const uint NO_MARK=0xffffffffu;
 // Texel radius of a ring's window (8x8 texels around the receiver).
 static const float SP_RING=3.5;
-// A pixel's marks: four levels, each its page and the neighbours across x, y and the diagonal.
-struct SpMarks {uint4 levels[4];};
+// Rings: the pixel's level and up to SP_RINGS-1 more, two levels apart, as far as the
+// blockers' sample rays spread (a 30 m caster at a 10 degree sun spreads ~4.6 m).
+static const uint SP_RINGS=8;
+// A pixel's marks: one per ring level, each its page and the neighbours across x, y and the
+// diagonal.
+struct SpMarks {uint4 levels[SP_RINGS];};
 
 // Level `k`'s page of world `p` (current shear) and the neighbours within `reach` texels
 // of its edges; NO_MARK past the clipmap.
@@ -38,7 +42,8 @@ uint4 spLevelMarks(Look l,float3 p,uint k,float reach){
 void spMarkAll(Look l,SpMarks m,uint word){
     uint base=l.vsmRequest.x;
     for(;;){
-        uint4 a=min(m.levels[0],m.levels[1]),b=min(m.levels[2],m.levels[3]),c=min(a,b);
+        uint4 c=m.levels[0];
+        [unroll]for(uint i=1;i<SP_RINGS;i++)c=min(c,m.levels[i]);
         uint index=WaveActiveMin(min(min(c.x,c.y),min(c.z,c.w)));
         if(index==NO_MARK)break;
         // Receiver words only for the pixels' own level (look/vsm/sun propagates them to
@@ -52,14 +57,14 @@ void spMarkAll(Look l,SpMarks m,uint word){
             if(best!=0&&buffers[NonUniformResourceIndex(base)].Load(r)<best)
                 buffers[NonUniformResourceIndex(base)].InterlockedMax(r,best);
         }
-        [unroll]for(uint i=0;i<4;i++)m.levels[i]=select(m.levels[i]==index,NO_MARK,m.levels[i]);
+        [unroll]for(uint i=0;i<SP_RINGS;i++)m.levels[i]=select(m.levels[i]==index,NO_MARK,m.levels[i]);
     }
 }
 [shader("compute")][numthreads(8,8,1)]
 void sunPagesMarkMain(uint3 tid:SV_DispatchThreadID){
     Frame f=frame();Look l=look(f);if(l.vsmRequest.x==0)return;
     uint n=l.flags.z;int2 p=int2(tid.xy)*4+int2((n&1)*2+((n>>2)&1),((n>>1)&1)*2+((n>>3)&1));
-    SpMarks m;[unroll]for(uint i=0;i<4;i++)m.levels[i]=NO_MARK;
+    SpMarks m;[unroll]for(uint i=0;i<SP_RINGS;i++)m.levels[i]=NO_MARK;
     uint word=0;
     if(all(p<int2(f.extent.xy))){
         float depth=gbufferDepth(f,p);
@@ -69,13 +74,18 @@ void sunPagesMarkMain(uint3 tid:SV_DispatchThreadID){
             uint level=spLevel(f,l,world,spGround(l,world,spShear(l)));
             float shift=shadowOffset(nl)*sqrt(saturate(1-nl*nl));
             m.levels[0]=spLevelMarks(l,world,level,shift+SP_RING+1);
-            m.levels[2]=spLevelMarks(l,world,level+2,SP_RING+1);
-            // The outer ring only where the content's top (the height range less its 64 m pad,
-            // look/vsm/sun HEIGHT_PAD) can reach past ring two.
-            float top=spHeight(l,1)-64;
+            // The blockers' spread: the pixel's page window top (look/vsm/sun; the content's
+            // top, its height range less the 64 m pad, before the page lands) times the sun
+            // disc's extent in shear space, rho (1 + |k|^2), with a quarter of slack for the
+            // shear's change since the page was drawn.
             float2 k=spShear(l);
-            if((top-world.y)*tan(max(l.sunLux.w,1e-5))*(1+dot(k,k))>SP_RING*spStep(l,level+2)/SP_PAGE)
-                m.levels[3]=spLevelMarks(l,world,level+4,SP_RING+1);
+            int slot=spSlot(l,level,int2(floor(spGround(l,world,k)/spStep(l,level))));
+            float top=slot>=0?spRecord(l,slot).z:spHeight(l,1)-64;
+            float spread=max(top-world.y,0)*tan(max(l.sunLux.w,1e-5))*(1+dot(k,k))*1.25;
+            // Ring two is also the fallback while the pixel's level renders.
+            [unroll]for(uint i=1;i<SP_RINGS;i++)
+                if(i==1||spread>SP_RING*spStep(l,level+2*(i-1))/SP_PAGE)
+                    m.levels[i]=spLevelMarks(l,world,level+2*i,SP_RING+1);
             // (tag << 16) | (65535 - floor(65535 depth)): the newest frame's lowest wins a max.
             uint q=uint(floor(saturate(spDepth(l,world.y))*65535));
             word=((l.vsmRequest.w>>16)<<16)|(65535-q);
@@ -89,8 +99,8 @@ void sunPagesMarkMain(uint3 tid:SV_DispatchThreadID){
 // texels, each back-projected onto the 256 fixed disc samples (spRing), so blockers at
 // different heights each hide their own samples and the per-sample results combine before
 // the samples average. Ring one is the pixel's level (screen-matched texels at contact);
-// rings two and four levels coarser add the blockers whose height reaches further, as far
-// as the page's top requires. -1 where the pixel's level and the next three hold no page.
+// rings two, four, ... levels coarser (up to SP_RINGS) add the blockers whose height
+// reaches further, as far as the page's top requires. -1 where the pixel's level and the next three hold no page.
 // `reach`: how far (texels of the level read) the tallest blocker's sample rays spread
 // (diagnostic, the mask's second channel).
 float spVisibility(Frame f,Look l,SpDisc disc,float3 world,float3 normal,out float reach){
@@ -112,10 +122,11 @@ float spVisibility(Frame f,Look l,SpDisc disc,float3 world,float3 normal,out flo
         spRing(l,s,disc,p.y,g,texel,0,m0,m1);
         float covered=SP_RING*texel;
         uint4 v0=disc.valid0,v1=disc.valid1;
-        // Umbra: every sample hidden already.
-        [loop]for(uint ring=1;ring<3&&spread>covered&&spCount(m0&v0,m1&v1)<uint(disc.count);ring++){
+        // Coarser rings until they cover the spread, or every sample is hidden (umbra). A ring
+        // whose page is not resident yet is skipped: the next coarser one covers its area.
+        [loop]for(uint ring=1;ring<SP_RINGS&&spread>covered&&spCount(m0&v0,m1&v1)<uint(disc.count);ring++){
             uint coarse=level+2*ring;if(coarse>=SP_LEVELS)break;
-            SpPage c=spPage(l,coarse,p);if(c.slot<0)break;
+            SpPage c=spPage(l,coarse,p);if(c.slot<0)continue;
             float2 cg=clamp(-normal.xz/max(dot(normal,float3(c.k.x,1,c.k.y)),0.05),-8,8);
             spRing(l,c,disc,p.y,cg,texel,covered,m0,m1);
             covered=SP_RING*c.texel;

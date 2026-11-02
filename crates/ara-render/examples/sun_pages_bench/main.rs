@@ -23,6 +23,11 @@
 //! Environment: `ARA_SUN_BENCH_SIZE` (`2560x1440`), `ARA_SUN_BENCH_CASES` (ids),
 //! `ARA_SUN_BENCH_FRAMES` (a frame cap), `ARA_SUN_BENCH_OUT` (`target/sun-pages-bench`).
 //! Outputs never go to tracked files.
+// T1's lab wire contract (read-only; `ara-dev` owns it): receipts this bench writes are
+// `RunResult` v1, so `ara-dev lab gate --report-only` scores them.
+#[allow(dead_code)]
+#[path = "../../../ara-dev/src/lab/stress/contract.rs"]
+mod contract;
 mod fixture;
 mod score;
 
@@ -107,6 +112,9 @@ struct Run {
     size: [u32; 2],
     device: String,
     frames: Vec<Frame>,
+    /// The same frames as T1 lab rows (`contract::FrameResult`).
+    #[serde(skip)]
+    lab: Vec<contract::FrameResult>,
 }
 
 fn env_size() -> [u32; 2] {
@@ -232,11 +240,20 @@ fn run(
         size,
         device: r.gpu().info().name.clone(),
         frames: Vec::new(),
+        lab: Vec::new(),
     };
     let mut captures = Vec::new();
     for frame in 0..frames {
+        r.gpu_mut().reset_timing_window();
+        let started = std::time::Instant::now();
+        let layout = f.scene.instances.len();
         fixture::apply(&mut f, case, frame);
-        r.update_native(&f.scene)?;
+        if f.scene.instances.len() == layout {
+            r.update_native(&f.scene)?;
+        } else {
+            // The wall breach: new instances publish the content again (as T1's worker).
+            r.replace_native_scene(&f.scene, Box::new(NoTextures))?;
+        }
         if samples.contains(&frame) {
             // Scored frames show the true-angle frame: the unjittered TAA would only blend
             // last frames' shadows in (equally for every variant), never anti-alias.
@@ -269,6 +286,8 @@ fn run(
             passes_ms: r.timings().iter().map(|t| t.milliseconds).sum(),
             counters: r.sun_page_counters().cloned(),
         });
+        run.lab
+            .push(lab_row(&r, frame, started.elapsed().as_secs_f64() * 1000.)?);
         if samples.contains(&frame) {
             let capture = r.capture_completed(&CaptureRequest {
                 camera: f.camera,
@@ -286,6 +305,123 @@ fn run(
     }
     r.gpu().assert_clean()?;
     Ok((run, captures))
+}
+
+/// This frame as a T1 lab row: every pass's GPU ms by label (as T1's worker records them),
+/// and the service's `sun_pages` and `dynamic_pages` StageCounters (`SunPageCounters`
+/// field for field), whose GPU ms are the complete stage paths: `sun_pages` the static
+/// page draws plus the marking that discovers demand for both layers (`VSM.Mark`),
+/// `dynamic_pages` the dynamic draws. The lookup (`VSM.Project`) is its own row (the
+/// "sun lookups + PCSS" allocation), not a page-stage cost.
+fn lab_row(r: &Renderer, frame: u32, host_ms: f64) -> Result<contract::FrameResult> {
+    let mut stages: std::collections::BTreeMap<String, contract::StageCounters> =
+        std::collections::BTreeMap::new();
+    for timing in r.timings() {
+        let stage = stages.entry(timing.pass.clone()).or_default();
+        *stage.gpu_ms.get_or_insert(0.) += timing.milliseconds;
+    }
+    let pass = |stages: &std::collections::BTreeMap<String, contract::StageCounters>,
+                label: &str| {
+        stages.get(label).and_then(|s| s.gpu_ms).unwrap_or(0.)
+    };
+    let (mark_ms, lookup_ms) = (pass(&stages, "VSM.Mark"), pass(&stages, "VSM.Project"));
+    let static_ms = pass(&stages, "VSM.Pages") + mark_ms;
+    let dynamic_ms = pass(&stages, "VSM.Pages.Dynamic");
+    let mut evidence = std::collections::BTreeMap::new();
+    if let Some(c) = r.sun_page_counters() {
+        let convert = |counters: &ara_render::SunPageStage, gpu_ms: f64| -> Result<_> {
+            let mut stage: contract::StageCounters =
+                serde_json::from_value(serde_json::to_value(counters)?)?;
+            stage.gpu_ms = Some(gpu_ms);
+            Ok(stage)
+        };
+        stages.insert("sun_pages".into(), convert(&c.sun_pages, static_ms)?);
+        stages.insert(
+            "dynamic_pages".into(),
+            convert(&c.dynamic_pages, dynamic_ms)?,
+        );
+        evidence.insert("sun_pages_drawn".into(), c.drawn[0] as f64);
+        evidence.insert("dynamic_pages_drawn".into(), c.drawn[1] as f64);
+        evidence.insert("sun_pages_cold".into(), c.cold as f64);
+        evidence.insert("sun_pages_resident".into(), c.resident as f64);
+        evidence.insert("sun_shear".into(), f64::from(c.shear));
+        evidence.insert("sun_shear_rate".into(), f64::from(c.shear_rate));
+        evidence.insert("vsm_mark_ms".into(), mark_ms);
+        evidence.insert("sun_lookup_ms".into(), lookup_ms);
+    }
+    Ok(contract::FrameResult {
+        frame,
+        stages,
+        gpu_frame_ms: r.gpu().timing_window().map(|s| s.milliseconds()),
+        cpu_critical_path_ms: None,
+        submission_stall_ms: None,
+        host_update_render_ms: Some(host_ms),
+        lpp: None,
+        receiver_coverage: None,
+        quality: contract::Quality::default(),
+        capture: None,
+        reference: None,
+        evidence,
+    })
+}
+
+/// SHA-256 of this bench executable (the receipts' `revision`, as T1's workers).
+fn revision() -> Result<String> {
+    use sha2::Digest;
+    let bytes = std::fs::read(std::env::current_exe()?)?;
+    Ok(format!("{:x}", sha2::Sha256::digest(bytes)))
+}
+
+/// Writes `run` as T1's `RunResult` v1 to `<out>/lab/cases/<id>/<uncapped|capped>/run.json`
+/// (catalogue cases only; T1's `lab gate --report-only --output <out>/lab` scores them).
+/// `timing_valid` comes from `ARA_SUN_BENCH_TIMING_VALID=1`, which only B2's guarded
+/// quiet-window script sets after its idle check.
+fn write_receipt(run: &Run, out: &Path) -> Result<()> {
+    let Some(case) = run.case.catalogue.clone() else {
+        return Ok(());
+    };
+    let (kind, dir) = match run.variant {
+        Variant::Uncapped => (contract::RunKind::Uncapped, "uncapped"),
+        Variant::Capped => (contract::RunKind::Capped, "capped"),
+        Variant::Control => return Ok(()),
+    };
+    // True uncapped demand: every frame drew all of it (no hidden draw or atlas limit).
+    let drained = run.frames.iter().all(|f| {
+        f.counters
+            .as_ref()
+            .is_some_and(|c| c.sun_pages.debt == Some(0) && c.dynamic_pages.debt == Some(0))
+    });
+    let receipt = contract::RunResult {
+        version: contract::VERSION,
+        case,
+        run: kind,
+        renderer: "b2-sun-page-service-native-raster-high".into(),
+        device: run.device.clone(),
+        revision: revision()?,
+        size: run.size,
+        fps: 60,
+        uncapped_supported: run.variant == Variant::Uncapped && drained,
+        caps_applied: run.variant == Variant::Capped,
+        timing_valid: std::env::var("ARA_SUN_BENCH_TIMING_VALID").is_ok_and(|v| v == "1"),
+        reference_samples: 0,
+        reference_bounces: 0,
+        reference_converged: false,
+        reference_white: 1.,
+        notes: vec![
+            "B2 sun page service (Renderer::set_sun_pages). Uncapped: every page of demand draws each frame; capped: 0.15 ms per layer on the RTX 4070 SUPER. sun_pages gpu_ms = VSM.Pages + VSM.Mark; dynamic_pages gpu_ms = VSM.Pages.Dynamic; the lookup (VSM.Project) is evidence sun_lookup_ms.".into(),
+            "Lags are the service's conservative bound per demanded resident page after the frame's draws (page texels), not image measurements. Image evidence (true-angle FLIP, D29, path-traced references) is in B2's quality bench, not in these timing receipts.".into(),
+            "timing_valid: B2's guarded quiet window (atomic overnight lock, six idle samples <= 5% GPU before, nvidia-smi pmon before/after), not T1's CPU/GPU load guard.".into(),
+            "Fixture rebuilt from T1's catalogue and recipes on the public renderer API (bench example sun_pages_bench); no startup probe GI, no textures.".into(),
+        ],
+        frames: run.lab.clone(),
+    };
+    write_json(
+        &out.join("lab/cases")
+            .join(&run.case.id)
+            .join(dir)
+            .join("run.json"),
+        &receipt,
+    )
 }
 
 fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
@@ -340,6 +476,7 @@ fn timing() -> Result<()> {
     for case in selected(2) {
         for variant in [Variant::Control, Variant::Uncapped, Variant::Capped] {
             let (run, _) = run(&case, variant, size, &[])?;
+            write_receipt(&run, &out_dir())?;
             write_json(
                 &out.join(format!("{}-{}.json", case.id, variant.name())),
                 &run,
@@ -517,7 +654,7 @@ fn quality() -> Result<()> {
         }
         // The true-angle image against the path tracer at F+60 (sun and city cases).
         let r = e + 60;
-        if matches!(case.recipe, "sun" | "city") && samples.contains(&r) {
+        if matches!(case.recipe.as_str(), "sun" | "city") && samples.contains(&r) {
             let mut f = fixture::create(&case);
             if direct() {
                 fixture::direct_only(&mut f);
@@ -567,7 +704,7 @@ fn g4(spp: u32) -> Result<()> {
     for case in &cases {
         let last = frames(case) - 1;
         // Rect-light cases do not use sun pages: today's control only.
-        let sun = matches!(case.recipe, "contact_sun" | "pole_sweep");
+        let sun = matches!(case.recipe.as_str(), "contact_sun" | "pole_sweep");
         let variants: &[Variant] = if sun {
             &[Variant::Uncapped, Variant::Control]
         } else {

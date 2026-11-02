@@ -26,8 +26,12 @@
 //!   back-projection onto a fixed 16x16 grid of sun-disc samples (a 256-bit mask per
 //!   pixel): every blocker texel at its own depth occludes its own samples, so multiple
 //!   blocker depths and static x mover occluders combine per source sample (one atlas
-//!   holds both). Rings at the pixel's level and two and four levels coarser keep
-//!   contact texels screen-matched while wide penumbrae stay bounded. No contact ray.
+//!   holds both). Rings of 8x8 texels at the pixel's level and every second coarser
+//!   level, as far as the page's blockers spread (up to eight rings), keep contact texels
+//!   screen-matched while reaching the full penumbra of tall casters at low sun. No
+//!   contact ray. Also: the dynamic layer's rigid movers carry their pre-move transform
+//!   (`rigid_displacement`), and receiver feedback from each pixel's own level propagates
+//!   to its ring pages.
 mod bound;
 mod oblique;
 mod schedule;
@@ -335,6 +339,9 @@ fn page_rect(level: usize, xy: IVec2, texels: f32) -> (Vec2, Vec2) {
 
 /// Texel radius of a ring's window (shadow-pages.slang `SP_RING`).
 const RING_TEXELS: f32 = 3.5;
+/// Ring levels a pixel reads: its own and every second coarser one (shadow-pages.slang
+/// `SP_RINGS`).
+const RINGS: usize = 8;
 
 /// Lowers `r`'s receiver height to `low`, counting at most one feedback frame per frame.
 fn feed(r: &mut Record, low: f32, frame: u64) {
@@ -524,12 +531,12 @@ impl VirtualShadowMap {
                     reported.push((level, xy, low));
                 }
             });
-            // Receiver words come from each pixel's own level; the ring pages two and four
-            // levels coarser read the same pixels (the ground grid nests 4x and 16x), so they
-            // take those heights over the dilated square their rings reach.
+            // Receiver words come from each pixel's own level; the ring pages two, four, ...
+            // levels coarser read the same pixels (the ground grid nests), so they take those
+            // heights over the dilated square their rings reach.
             for &(level, xy, low) in &reported {
                 let (lo, hi) = page_rect(level, xy, 0.);
-                for coarse in [level + 2, level + 4] {
+                for coarse in (1..RINGS).map(|i| level + 2 * i) {
                     if coarse >= super::LEVELS {
                         continue;
                     }
