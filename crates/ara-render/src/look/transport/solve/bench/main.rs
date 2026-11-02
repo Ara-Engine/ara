@@ -33,6 +33,7 @@ struct FrameScore {
     capture_repeat_region_flip: Option<f64>,
     measured_transport_heap_live: isize,
     measured_transport_heap_peak: usize,
+    frame_wall_ms: f64,
 }
 
 fn write_json(path: &Path, value: &impl serde::Serialize) -> Result<()> {
@@ -102,6 +103,11 @@ fn main() -> Result<()> {
     let quiet_lock = option("--quiet-lock").map(Path::new);
     let selected = option("--case").map(String::as_str);
     let images = args.iter().any(|a| a == "--images");
+    let native_images = args.iter().any(|a| a == "--native-images");
+    ensure!(
+        !native_images || images,
+        "--native-images requires --images"
+    );
     let global = args.iter().any(|a| a == "--global");
     let cases = fixtures::cases();
     let mut results = BTreeMap::new();
@@ -173,6 +179,7 @@ fn main() -> Result<()> {
                 &dir,
                 args.iter().any(|a| a == "--physical").then_some(1024),
                 global,
+                native_images,
             )?)
         } else {
             None
@@ -180,6 +187,7 @@ fn main() -> Result<()> {
         let mut scores = Vec::new();
         for frame in 1..frames.unwrap_or(case.frames) {
             quiet::wait(quiet_lock);
+            let frame_started = std::time::Instant::now();
             let layout = (fixture.scene.geometry.len(), fixture.scene.instances.len());
             let changes = fixtures::advance(&mut fixture, case, frame);
             feed.begin_frame(frame)?;
@@ -242,6 +250,7 @@ fn main() -> Result<()> {
                 capture_repeat_region_flip: flip.as_ref().map(|s| s.repeat_region_flip),
                 measured_transport_heap_live: measured_live,
                 measured_transport_heap_peak: frame_peak,
+                frame_wall_ms: frame_started.elapsed().as_secs_f64() * 1000.,
             });
             if flip.as_ref().is_some_and(|s| !s.repeat_valid) {
                 println!(
@@ -256,13 +265,14 @@ fn main() -> Result<()> {
             {
                 let last = scores.last().context("frame score")?;
                 println!(
-                    "G3 {} F{} uncapped_cpu_ms={:.4} capped_cpu_ms={:.4} max_white={:.6} debt_age={}",
+                    "G3 {} F{} uncapped_cpu_ms={:.4} capped_cpu_ms={:.4} max_white={:.6} debt_age={} frame_wall_ms={:.4}",
                     case.name,
                     frame,
                     last.uncapped.event_cpu_ms,
                     last.capped.event_cpu_ms,
                     peak,
-                    last.capped.oldest_debt
+                    last.capped.oldest_debt,
+                    last.frame_wall_ms
                 );
                 std::io::stdout().flush()?;
                 write_json(&dir.join("frames.json"), &scores)?;
@@ -287,6 +297,7 @@ fn main() -> Result<()> {
             .fold(0f32, f32::max);
         let value = serde_json::json!({"fixture":"B3 deterministic fallback; T1 catalogue read at f0e0e66fc70e287286fceed78dc76509b4de8821; T1 worker not merged",
             "case":case.name,"declared_frames":case.frames,"completed_frames":scores.len()+1,"scored_frames":scores.len(),"initial_publication_frame":0,"first_scored_frame":1,"triangles_per_body":case.triangles,
+            "capture_backend":if native_images {"native_instances"} else {"expanded_raster"},
             "bodies":case.bodies,"lights":case.lights,"cold":cold,"uncapped_cpu_average_ms":average,"uncapped_cpu_p99_ms":p99,
             "uncapped_cpu_max_ms":maximum,"capped_max_error_white":max_error,
             "peak_host_transport_bytes":scores.iter().map(|s|s.capped.resident_bytes).chain([cold.resident_bytes]).max(),

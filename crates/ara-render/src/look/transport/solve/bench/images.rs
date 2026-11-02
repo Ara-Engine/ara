@@ -9,6 +9,7 @@ use ara_render_fidelity::{FidelityView, FrameInput, Mode, PostSettings, Settings
 use std::path::{Path, PathBuf};
 pub mod audit;
 mod geometry;
+mod native;
 
 const SIZE: [u32; 2] = [1920, 1080];
 fn request(f: &Fixture) -> CaptureRequest {
@@ -35,6 +36,7 @@ pub struct ReplayImages {
     physical_gpu: Option<ara_gpu::GpuDevice>,
     geometry: Option<geometry::GeometryReference>,
     global: bool,
+    native: Option<native::CaptureScene>,
 }
 
 pub struct ImageScore {
@@ -51,14 +53,25 @@ impl ReplayImages {
         out: &Path,
         physical_samples: Option<u32>,
         global: bool,
+        native_instances: bool,
     ) -> Result<Self> {
+        let (renderer, native) = if native_instances {
+            let (renderer, scene) = native::CaptureScene::new(f, out, SIZE)?;
+            (renderer, Some(scene))
+        } else {
+            (
+                Renderer::new_raster(gltf_scene::world(f), SIZE, &[], out.join("gpu"))?,
+                None,
+            )
+        };
         Ok(Self {
-            renderer: Renderer::new_raster(gltf_scene::world(f), SIZE, &[], out.join("gpu"))?,
+            renderer,
             out: out.to_owned(),
             physical_samples,
             physical_gpu: None,
             geometry: None,
             global,
+            native,
         })
     }
     pub fn frame(
@@ -70,7 +83,9 @@ impl ReplayImages {
         exact: &[[f32; 3]],
         (frame, event): (u64, u64),
     ) -> Result<ImageScore> {
-        if !changes.instances.is_empty()
+        if let Some(native) = &mut self.native {
+            native.update(&mut self.renderer, f, changes)?;
+        } else if !changes.instances.is_empty()
             || !changes.materials.is_empty()
             || !changes.geometries.is_empty()
         {
