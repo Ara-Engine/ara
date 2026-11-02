@@ -22,6 +22,7 @@ pub(crate) struct SurfaceHit {
 pub(crate) struct CpuTrace<'a> {
     pub scene: &'a TraceScene,
     meshes: Vec<Option<&'a TraceMesh>>,
+    active_nodes: Vec<bool>,
 }
 
 impl<'a> CpuTrace<'a> {
@@ -30,7 +31,26 @@ impl<'a> CpuTrace<'a> {
         for (slot, mesh) in scene.blas_slots() {
             meshes[slot as usize] = Some(mesh);
         }
-        Self { scene, meshes }
+        // Small active bodies live in media, so entire TLAS subtrees can have
+        // zero visibility masks. Prune those without visiting every leaf per ray.
+        // A1's nodes are preorder; the left child's skip is the right child.
+        let nodes = &scene.tlas().nodes;
+        let mut active_nodes = vec![false; nodes.len()];
+        for i in (0..nodes.len()).rev() {
+            let first = nodes[i].first;
+            active_nodes[i] = if first & LEAF != 0 {
+                scene
+                    .slot(first & !LEAF)
+                    .is_some_and(|s| s.instance.mask != 0)
+            } else {
+                active_nodes[first as usize] || active_nodes[nodes[first as usize].skip as usize]
+            };
+        }
+        Self {
+            scene,
+            meshes,
+            active_nodes,
+        }
     }
 
     /// `accept` performs alpha/transmission/body-policy tests on actual source
@@ -56,14 +76,16 @@ impl<'a> CpuTrace<'a> {
         let mut maximum = ray.t_max;
         while node != END {
             let n = &self.scene.tlas().nodes[node as usize];
-            if !box_hit(
-                ray.origin,
-                ray.direction,
-                Vec3::from(n.min),
-                Vec3::from(n.max),
-                ray.t_min,
-                maximum,
-            ) {
+            if !self.active_nodes[node as usize]
+                || !box_hit(
+                    ray.origin,
+                    ray.direction,
+                    Vec3::from(n.min),
+                    Vec3::from(n.max),
+                    ray.t_min,
+                    maximum,
+                )
+            {
                 node = n.skip;
                 continue;
             }
@@ -130,4 +152,71 @@ fn box_hit(origin: Vec3, direction: Vec3, min: Vec3, max: Vec3, mut lo: f32, mut
         }
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::look::trace::{NO_MATERIAL, TraceInstance};
+    use glam::Affine3A;
+    use std::sync::Arc;
+
+    #[test]
+    fn masked_subtree_pruning_preserves_hits_across_mask_changes() -> anyhow::Result<()> {
+        let mesh = ara_bvh::Mesh {
+            positions: &[[-1., -1., 0.], [1., -1., 0.], [0., 1., 0.]],
+            indices: &[0, 1, 2],
+            submeshes: &[],
+        };
+        let blas = Arc::new(ara_bvh::Blas::build(&mesh)?);
+        let mut scene = TraceScene::default();
+        scene.add_mesh(TraceMesh {
+            blas: Arc::clone(&blas),
+            uvs: None,
+        });
+        let instance = |i: u64, mask| TraceInstance {
+            mesh: blas.hash,
+            world: Affine3A::from_translation(Vec3::new((i % 8) as f32 * 2., 0., (i / 8) as f32)),
+            mask,
+            materials: vec![NO_MATERIAL],
+            user: i as u32,
+        };
+        for i in 0..64 {
+            scene.set_instance(i, instance(i, if i >= 56 { 255 } else { 0 }))?;
+        }
+        for enabled in [false, true, false] {
+            scene.set_instance(0, instance(0, if enabled { 255 } else { 0 }))?;
+            scene.commit();
+            let pruned = CpuTrace::new(&scene);
+            let mut control = CpuTrace::new(&scene);
+            control.active_nodes.fill(true);
+            assert!(pruned.active_nodes.iter().any(|v| !*v));
+            for i in 0..128 {
+                let ray = Ray {
+                    origin: Vec3::new(i as f32 * 0.125 - 1., 0., -1.),
+                    direction: Vec3::Z,
+                    t_min: 0.,
+                    t_max: 20.,
+                };
+                let signature = |hit: Option<SurfaceHit>| {
+                    hit.map(|h| (h.id, h.primitive, h.distance, h.barycentric))
+                };
+                assert_eq!(
+                    signature(pruned.closest(ray, |_| true)),
+                    signature(control.closest(ray, |_| true))
+                );
+            }
+            let centre = Ray {
+                origin: Vec3::new(0., 0., -1.),
+                direction: Vec3::Z,
+                t_min: 0.,
+                t_max: 20.,
+            };
+            assert_eq!(
+                pruned.closest(centre, |_| true).unwrap().id,
+                if enabled { 0 } else { 56 }
+            );
+        }
+        Ok(())
+    }
 }

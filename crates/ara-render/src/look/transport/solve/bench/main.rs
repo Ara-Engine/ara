@@ -4,6 +4,7 @@ mod fixtures;
 mod gltf_scene;
 mod images;
 mod memory;
+mod quiet;
 use ara_render as fixture_api;
 
 use anyhow::{Context, Result, ensure};
@@ -89,6 +90,7 @@ fn main() -> Result<()> {
         );
     }
     let frames: Option<u64> = option("--frames").map(|s| s.parse()).transpose()?;
+    let quiet_lock = option("--quiet-lock").map(Path::new);
     let selected = option("--case").map(String::as_str);
     let images = args.iter().any(|a| a == "--images");
     let global = args.iter().any(|a| a == "--global");
@@ -98,6 +100,7 @@ fn main() -> Result<()> {
         .iter()
         .filter(|case| selected.is_none_or(|name| name == case.name))
     {
+        quiet::wait(quiet_lock);
         let dir = out.join(case.name);
         std::fs::create_dir_all(&dir)?;
         println!(
@@ -131,6 +134,7 @@ fn main() -> Result<()> {
         )?;
         let (mut measured_live, cold_peak) = memory::end(memory_before);
         let cold = uncapped.report().clone();
+        quiet::wait(quiet_lock);
         let mut capped = PatchTransport::new(
             &fixture.scene,
             &fixture.textures,
@@ -153,6 +157,7 @@ fn main() -> Result<()> {
         let file = std::fs::File::create(dir.join("events.arachg"))?;
         let mut replay = ReplayWriter::new(std::io::BufWriter::new(file))?;
         replay.write_frame(feed.finish())?;
+        quiet::wait(quiet_lock);
         let mut capture = if images {
             Some(images::ReplayImages::new(
                 &fixture,
@@ -164,6 +169,7 @@ fn main() -> Result<()> {
         };
         let mut scores = Vec::new();
         for frame in 1..frames.unwrap_or(case.frames) {
+            quiet::wait(quiet_lock);
             let layout = (fixture.scene.geometry.len(), fixture.scene.instances.len());
             let changes = fixtures::advance(&mut fixture, case, frame);
             feed.begin_frame(frame)?;
@@ -180,6 +186,7 @@ fn main() -> Result<()> {
             let (delta, extra_peak) = memory::end(memory_before);
             let frame_peak = measured_live.max(0) as usize + extra_peak;
             measured_live += delta;
+            quiet::wait(quiet_lock);
             let protected = capped
                 .advance(&fixture.scene, &fixture.textures, events, false)?
                 .clone();
@@ -199,6 +206,7 @@ fn main() -> Result<()> {
                 }
             }
             let flip = if let Some(capture) = &mut capture {
+                quiet::wait(quiet_lock);
                 Some(capture.frame(
                     &fixture,
                     &changes,
@@ -220,7 +228,10 @@ fn main() -> Result<()> {
                 measured_transport_heap_live: measured_live,
                 measured_transport_heap_peak: frame_peak,
             });
-            if frame % 10 == 0 || frame == case.event || frame + 1 == frames.unwrap_or(case.frames)
+            if frame == 1
+                || frame % 10 == 0
+                || frame == case.event
+                || frame + 1 == frames.unwrap_or(case.frames)
             {
                 let last = scores.last().context("frame score")?;
                 println!(

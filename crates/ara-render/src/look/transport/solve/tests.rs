@@ -34,7 +34,14 @@ fn native_local_repair_matches_fresh_trace_through_move_sleep_and_wake() -> Resu
         Mat4::from_translation(Vec3::new(0., -0.1, 0.)) * Mat4::from_scale(Vec3::new(4., 0.2, 4.));
     f.scene.instances[1].world =
         Mat4::from_translation(Vec3::new(-1., 0.6, 0.)) * Mat4::from_scale(Vec3::splat(0.8));
-    f.scene.lights[0].position_range = [0., 3., 0., 8.];
+    f.scene.lights[0].position_range = [-3., 1., 0., 8.];
+    f.scene.lights[0].parameters[2] = 0.;
+    f.scene.sun_lux = Vec3::ZERO;
+    f.scene.environment = vec![[0., 0., 0., 1.]];
+    // An absorbing mover isolates source-shadow support from the receiver
+    // volume approximation while testing the actual native event adapter.
+    f.scene.instances[1].material = 1;
+    f.scene.materials[1].pbr.base_color = [0., 0., 0., 1.];
     f.bodies.clear();
     f.bodies.insert(1, BodyClass::PhysicsActive);
     let mut transport = PatchTransport::new(
@@ -83,6 +90,12 @@ fn native_local_repair_matches_fresh_trace_through_move_sleep_and_wake() -> Resu
             transport.graph.links.transmission, fresh.graph.links.transmission,
             "frame {frame}"
         );
+        for (a, b) in transport.solver.forcing.iter().zip(&fresh.solver.forcing) {
+            assert!(
+                magnitude(*a - *b) < 1e-4,
+                "source shadow mismatch at frame {frame}: {a:?} != {b:?}"
+            );
+        }
         if class == BodyClass::Sleeping {
             assert!(transport.graph.links.patches.len() > awake_count);
         } else {

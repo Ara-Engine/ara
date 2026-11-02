@@ -29,6 +29,7 @@ mod channel_bake;
 mod material;
 mod receivers;
 mod source;
+mod source_support;
 use material::*;
 use source::{lamp, light_gain};
 
@@ -85,6 +86,14 @@ impl Default for TransportOptions {
 pub struct TransportReport {
     /// Complete host discovery/forcing/repair/solve wall time for this update.
     pub event_cpu_ms: f64,
+    /// Receiver volume acquisition and media splatting, inside the event total.
+    pub receiver_cpu_ms: f64,
+    /// Link repair wall time, inside the event total.
+    pub repair_cpu_ms: f64,
+    /// Source forcing and dependency marking, inside the event total.
+    pub source_cpu_ms: f64,
+    /// Capped or uncapped numerical solve, inside the event total.
+    pub solve_cpu_ms: f64,
     /// Actual completed patch updates.
     pub patch_passes: usize,
     /// Number of deferred cached-ray repairs.
@@ -479,6 +488,10 @@ impl PatchTransport {
             events.frame > self.frame,
             "transport replay frame must increase"
         );
+        ensure!(
+            scene.lights.iter().all(|l| l.tables[0] == 0),
+            "CPU transport forcing needs photometric table pixels before accepting profiled lights"
+        );
         let previous_bytes = self.report.resident_bytes;
         let row_light_ids = events.lights.iter().all(|event| {
             event.current.is_none_or(|state| {
@@ -626,6 +639,15 @@ impl PatchTransport {
                 Region::new(event.swept.min.to_array(), event.swept.max.to_array())
             {
                 self.graph.discover(region, events.frame);
+                // Sub-patch bodies use the media grid, not triangle visibility.
+                // Project only edits that can alter the direct triangle query.
+                if [event.change.previous, event.change.current]
+                    .into_iter()
+                    .flatten()
+                    .any(|state| state.body.owns_links() || state.is_large())
+                {
+                    self.shadow_receivers(scene, region, &mut affected);
+                }
             }
             for (i, stamp) in self.graph.links.patches.stamps.iter().enumerate() {
                 if stamp.id.instance == event.change.id {
@@ -663,10 +685,13 @@ impl PatchTransport {
                 let bounds = instance.bounds(&scene.geometry[instance.geometry]);
                 if let Some(region) = Region::new(bounds[0].to_array(), bounds[1].to_array()) {
                     self.graph.discover(region, events.frame);
+                    self.shadow_receivers(scene, region, &mut affected);
                 }
             }
         }
+        let receiver_started = Instant::now();
         self.update_receivers(scene, textures)?;
+        let receiver_cpu_ms = receiver_started.elapsed().as_secs_f64() * 1000.;
         // Large movers are external source rows. Their reflected radiance must
         // reach every receiver before a receiver can be skipped this frame.
         for &source in self.body_sources.values() {
@@ -690,6 +715,7 @@ impl PatchTransport {
             bodies: &self.body_sources,
             boundary: self.graph.links.patches.len() as u32,
         };
+        let repair_started = Instant::now();
         let repaired = self.graph.repair(
             &query,
             &errors,
@@ -700,6 +726,8 @@ impl PatchTransport {
             },
             events.frame + 1,
         )?;
+        let repair_cpu_ms = repair_started.elapsed().as_secs_f64() * 1000.;
+        let source_started = Instant::now();
         for &(patch, _) in &repaired {
             affected.insert(patch);
         }
@@ -743,6 +771,8 @@ impl PatchTransport {
             self.solver
                 .update_contraction_rows(&self.graph.links, &rows)?;
         }
+        let source_cpu_ms = source_started.elapsed().as_secs_f64() * 1000.;
+        let solve_started = Instant::now();
         let stats = self.solver.run(
             &self.graph.links,
             &self.graph,
@@ -765,6 +795,10 @@ impl PatchTransport {
         let (repair_debt, repair_age) = self.graph.debt(events.frame);
         self.report = TransportReport {
             event_cpu_ms: started.elapsed().as_secs_f64() * 1000.,
+            receiver_cpu_ms,
+            repair_cpu_ms,
+            source_cpu_ms,
+            solve_cpu_ms: solve_started.elapsed().as_secs_f64() * 1000.,
             patch_passes: stats.patch_passes,
             repair_debt,
             oldest_debt: stats.oldest_age.max(repair_age),

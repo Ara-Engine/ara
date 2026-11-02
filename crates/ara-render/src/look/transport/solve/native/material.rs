@@ -219,9 +219,12 @@ pub(super) fn direct(
     distance: f32,
 ) -> Vec3 {
     let sun = scene.sun_direction.normalize_or_zero();
-    let mut incident = scene.sun_lux
-        * normal.dot(sun).max(0.)
-        * visibility(cpu, materials, position, sun, distance);
+    let cosine = normal.dot(sun).max(0.);
+    let mut incident = if cosine > 0. && scene.sun_lux.max_element() > 0. {
+        scene.sun_lux * cosine * visibility(cpu, materials, position, sun, distance)
+    } else {
+        Vec3::ZERO
+    };
     for light in &scene.lights {
         incident += lamp(light, cpu, materials, position, normal);
     }

@@ -37,7 +37,7 @@ float3 transportIrradiance(Frame f,int2 pixelPosition,float3 world,float3 normal
             float4 p=buffers[record].Load<float4>(offset);
             float4 n=buffers[record].Load<float4>(offset+16);
             float3 delta=world-p.xyz;
-            if(dot(n.xyz,geometric)<0.8||abs(dot(delta,n.xyz))>0.025)continue;
+            if(dot(n.xyz,geometric)<0.8)continue;
             float3 e=buffers[record].Load<float3>(offset+32);
             for(uint channel=0;channel<asuint(n.w);++channel) {
                 uint response=asuint(p.w)+channel*32;
@@ -45,6 +45,10 @@ float3 transportIrradiance(Frame f,int2 pixelPosition,float3 world,float3 normal
             }
             float distance=dot(delta,delta);
             if(distance<nearest){nearest=distance;fallback=e;}
+            // A curved chart's centroid need not lie on a pixel's tangent plane.
+            // Keep its nearest compatible patch as coverage when no planar hat
+            // contributes; a static surface must not fall into the body volume.
+            if(abs(dot(delta,n.xyz))>0.025)continue;
             float w=max(0,1-abs(dot(delta,tangent))/0.25)*max(0,1-abs(dot(delta,bitangent))/0.25);
             value+=e*w;weight+=w;
         }
@@ -77,8 +81,19 @@ float4 transportLighting(FullscreenVarying input,bool diffuseOnly) {
     float3 v=normalize(f.camera.xyz-world);Lobes lobes=specularLobes(s,v);
     // Normal maps tilt the shading lobe, not the geometric surface used to find
     // a chart. A mapped normal must not disconnect a pixel from its own patch.
-    float3 geometric=cross(ddx(world),ddy(world));
-    geometric=dot(geometric,geometric)>1e-12?normalize(geometric):s.normal;
+    // Derivative quads straddle silhouettes and different objects. Select the
+    // nearest same-entity depth neighbour on each axis for the chart normal.
+    uint entity=uint(round(pixel(f.extra.y,p).r));
+    float3 dx=ddx(world),dy=ddy(world);float bx=1e30,by=1e30;
+    for(int side=-1;side<=1;side+=2) {
+        int2 px=p+int2(side,0),py=p+int2(0,side);
+        bool cx,cy;float3 wx=gbufferWorld(f,clamp(px,int2(0,0),int2(f.extent.xy)-1),cx),wy=gbufferWorld(f,clamp(py,int2(0,0),int2(f.extent.xy)-1),cy);
+        float3 x=(wx-world)*float(side),y=(wy-world)*float(side);
+        if(cx&&all(px>=0)&&all(px<int2(f.extent.xy))&&uint(round(pixel(f.extra.y,clamp(px,int2(0,0),int2(f.extent.xy)-1)).r))==entity&&dot(x,x)<bx){dx=x;bx=dot(x,x);}
+        if(cy&&all(py>=0)&&all(py<int2(f.extent.xy))&&uint(round(pixel(f.extra.y,clamp(py,int2(0,0),int2(f.extent.xy)-1)).r))==entity&&dot(y,y)<by){dy=y;by=dot(y,y);}
+    }
+    float3 geometric=cross(dx,dy);
+    geometric=bx<1e30&&by<1e30&&dot(geometric,geometric)>1e-12?normalize(geometric):s.normal;
     if(dot(geometric,s.normal)<0)geometric=-geometric;
     float3 bounce=transportIrradiance(f,p,world,s.normal,geometric)*lobes.diffuse;
     if(diffuseOnly)return float4(exposeHdr(f,l,bounce),1);
