@@ -230,11 +230,18 @@ fn field_row(s: &Studio, f: &Field) -> El<Studio> {
             *max,
         );
     }
-    row()
+    let (path, value) = (f.path.clone(), f.value.to_string());
+    let mut out = row()
         .gap(6.0)
         .align(Align::Center)
         .min_h(ROW)
-        .child(label)
+        .on_context_menu(move |s: &mut Studio, x, y| {
+            s.local.field_menu = Some((path.clone(), value.clone(), (x, y)))
+        });
+    if let Some((_, value, (x, y))) = s.local.field_menu.as_ref().filter(|(p, ..)| *p == f.path) {
+        out = out.overlay(field_menu(s, &f.path, value, f.provenance).at(*x, *y));
+    }
+    out.child(label)
         .child(editor(s, f).w(0.0).grow(1.0 - LABEL).min_w(0.0))
 }
 
@@ -577,6 +584,60 @@ fn number(
             move |e| e.border(1.0, ring)
         })
         .child(f)
+}
+
+/// A field's menu: Reset to Default (when it has its own value), Copy Value, Copy Path.
+fn field_menu(
+    s: &Studio,
+    path: &str,
+    value: &str,
+    provenance: Provenance,
+) -> stillkit::el::Overlay<Studio> {
+    let l = &s.look;
+    let (reset, copy_value, copy_path) = (path.to_owned(), value.to_owned(), path.to_owned());
+    let mut items = Vec::new();
+    if provenance != Provenance::Default {
+        items.push(menu_item(l, &format!("field/{path}/reset"), Some(icons::UNDO_2), "Reset to Default", None, false).on_press(move |s: &mut Studio| {
+            s.local.field_menu = None;
+            let commands = s.editor.state.selection.iter().map(|e| json!({"cmd": "editor.property.reset", "args": {"entity": e, "path": reset}})).collect();
+            s.apply(commands, "Reset value");
+        }));
+        items.push(menu_separator(l));
+    }
+    items.push(
+        menu_item(
+            l,
+            &format!("field/{path}/copy"),
+            Some(icons::COPY),
+            "Copy Value",
+            None,
+            false,
+        )
+        .on_press(move |s: &mut Studio| {
+            s.local.field_menu = None;
+            s.local.copy = Some(copy_value.clone());
+        }),
+    );
+    items.push(
+        menu_item(
+            l,
+            &format!("field/{path}/path"),
+            Some(icons::LINK),
+            "Copy Path",
+            None,
+            false,
+        )
+        .on_press(move |s: &mut Studio| {
+            s.local.field_menu = None;
+            if let Some(entity) = s.editor.state.selection.first().cloned() {
+                s.local.copy = Some(format!(
+                    "{}/{copy_path}",
+                    crate::shell::commands::table::reference(&s.editor, &entity)
+                ));
+            }
+        }),
+    );
+    menu(menu_panel(l, items)).on_dismiss(|s: &mut Studio| s.local.field_menu = None)
 }
 
 /// A component's ⋯ menu: remove it from the selection, fold the others.

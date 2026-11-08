@@ -228,6 +228,10 @@ pub struct Local {
     )>,
     /// An element to focus once the view shows it (a command that opened a field).
     pub focus: Option<&'static str>,
+    /// The open field menu: the field's path, its value as JSON, and where (window design px).
+    pub field_menu: Option<(String, String, (f32, f32))>,
+    /// Text for the host to put on the system clipboard.
+    pub copy: Option<String>,
     /// The open component overflow menu, by component.
     pub component_menu: Option<String>,
     /// Add Component's search and highlighted row, while open.

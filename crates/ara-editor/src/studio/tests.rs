@@ -346,3 +346,22 @@ fn dragging_a_row_onto_another_makes_it_a_child() {
         "the lamp moved inside the box"
     );
 }
+
+#[test]
+fn a_fields_menu_copies_its_path() {
+    let mut rt = open();
+    let label = rt.find("field/Transform.position/0").unwrap();
+    // The row's label column, left of the value cells.
+    rt.right_click(label.left - 120.0, label.center().y);
+    rt.frame(FRAME);
+    let item = rt
+        .find("field/Transform.position/path")
+        .expect("the field's menu opens");
+    rt.pointer_down(item.center().x, item.center().y);
+    rt.pointer_up(item.center().x, item.center().y);
+    rt.frame(FRAME);
+    assert_eq!(
+        rt.state().local.copy.as_deref(),
+        Some("@levels/main.scene#e_box/Transform.position")
+    );
+}

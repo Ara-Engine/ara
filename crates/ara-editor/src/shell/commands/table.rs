@@ -367,7 +367,8 @@ pub(crate) fn shape(e: &mut Editor, t: &Target, name: &str, shape: &str) -> R {
         matches!(t, Target::Entity(_)),
     )
 }
-fn reference(e: &Editor, entity: &str) -> String {
+/// `@scene#entity`: how documents and agents refer to an entity in the open scene.
+pub(crate) fn reference(e: &Editor, entity: &str) -> String {
     let path = e
         .host
         .store()

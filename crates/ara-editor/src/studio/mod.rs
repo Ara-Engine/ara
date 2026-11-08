@@ -546,6 +546,9 @@ fn pump(rt: &mut Runtime<Studio>, surface: &mut Surface, started: Instant) -> an
     if let Some(key) = rt.touch(|s| s.local.focus.take()) {
         rt.focus(key);
     }
+    if let Some(text) = rt.touch(|s| s.local.copy.take()) {
+        stillkit::el::Clipboard::set(&mut SystemClipboard, &text);
+    }
     if painted {
         rt.present(surface, (0, 0))?;
         chrome_parts(surface, rt);
