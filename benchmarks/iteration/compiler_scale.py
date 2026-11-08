@@ -76,7 +76,7 @@ def finish_server(process):
         time.sleep(0.01)
 
 
-def run_case(repo, server, modules, files, sample_count, dotnet_host, label):
+def run_case(repo, server, modules, files, sample_count, dotnet_host, label, edit_all):
     server_hash = hashlib.sha256(server.read_bytes()).hexdigest()
     project = repo / "target/iteration-perf" / f"compiler-scale-{os.getpid()}-{label}"
     for module in range(modules):
@@ -91,7 +91,8 @@ def run_case(repo, server, modules, files, sample_count, dotnet_host, label):
         try:
             for revision in range(sample_count + 3):
                 for module in range(modules):
-                    (project / "content" / f"module{module}" / "State0.cs").write_text(source(module, 0, revision), encoding="utf-8")
+                    for file in range(files if edit_all else 1):
+                        (project / "content" / f"module{module}" / f"State{file}.cs").write_text(source(module, file, revision), encoding="utf-8")
                 start = time.perf_counter()
                 process.stdin.write(json.dumps(dict(project=str(project), authoringRoot="content", domain="gameplay", operation="--compile-project")) + "\n")
                 process.stdin.flush()
@@ -112,6 +113,7 @@ def run_case(repo, server, modules, files, sample_count, dotnet_host, label):
             raise RuntimeError(process.stderr.read())
     warm = samples[3:]
     report = dict(modules=modules, files_per_module=files, generated_components=modules * files,
+                  edited_sources_per_request=modules * (files if edit_all else 1),
                   first_ms=samples[0], warm_ms=warm, p50_ms=statistics.median(warm),
                   p95_ms=sorted(warm)[math.ceil(0.95 * len(warm)) - 1],
                   server=str(server), server_sha256=server_hash, runtime=runtime,
@@ -132,6 +134,7 @@ def main():
     parser.add_argument("--modules", type=int, default=12)
     parser.add_argument("--files", type=int, default=12)
     parser.add_argument("--samples", type=int, default=8)
+    parser.add_argument("--edit-all", action="store_true", help="change every source before each request instead of one per module")
     args = parser.parse_args()
     if min(args.modules, args.files, args.samples) < 1:
         parser.error("modules, files and samples must be positive")
@@ -147,7 +150,7 @@ def main():
     dotnet_host = shutil.which("dotnet")
     if dotnet_host is None:
         parser.error("dotnet host is not on PATH")
-    results = {label: run_case(repo, path, args.modules, args.files, args.samples, dotnet_host, label)
+    results = {label: run_case(repo, path, args.modules, args.files, args.samples, dotnet_host, label, args.edit_all)
                for label, path in cases}
     report = results["optimized"] if args.reference_server is None else dict(run_order=[label for label, _ in cases], **results)
     args.output.parent.mkdir(parents=True, exist_ok=True)
