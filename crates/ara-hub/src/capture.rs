@@ -1,6 +1,6 @@
-//! `ara-hub --capture DIR`: every view, dark and light, rendered by the real GPU
-//! path (a headless device and the window's UI adapter; no window opens) and read
-//! back. The data is a fixed fixture fed through the model's own
+//! `ara-hub --capture DIR`: every view, dark and light, rendered headlessly through
+//! stillkit's software target (the same drawing a window shows; no window opens)
+//! and saved as PNG. The data is a fixed fixture fed through the model's own
 //! reply handling (no service), so captures are reproducible; the service path is
 //! covered by `ara/tests/hub_ui.rs`.
 mod engine_layout;
@@ -10,13 +10,14 @@ mod migration;
 use crate::{
     connection::Event,
     model::{AgentClient, Call, Hub, Intent, Layout, View},
-    native::Offscreen,
+    ui::{Doc, HubApp},
 };
 use serde_json::{Value, json};
 use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
+use stillkit::el::Runtime;
 
 /// Fixed clock for relative times in captures (2026-10-23 12:00 UTC).
 pub const NOW: u64 = 1_792_756_800_000;
@@ -283,18 +284,155 @@ const STEPS: &[Step] = &[
     ("learn", |hub| hub.view = View::Learn),
 ];
 
+/// A headless Hub window for captures and tests: the real view over a stillkit runtime.
+/// Fixture models are swapped in for each operation (`settle`, `save`, `click`), so a
+/// script keeps driving its own [`Hub`] through intents and replies.
+pub struct Capture {
+    rt: Runtime<HubApp>,
+    physical: [u32; 2],
+    dpi: f32,
+}
+
+impl Capture {
+    /// A `physical` px window at `dpi` device px per design px.
+    pub fn new(physical: [u32; 2], dpi: f32, docs: Vec<Doc>) -> anyhow::Result<Self> {
+        let width = physical[0] as f32 / dpi;
+        let hub = Hub::new(
+            crate::model::Prefs::default(),
+            PathBuf::from("target/hub-captures"),
+            None,
+        );
+        let mut app = HubApp::new(hub, docs, width);
+        app.now_ms = NOW;
+        app.frame.controls = (!cfg!(target_os = "macos")).then_some(false);
+        let theme = app.look.theme.clone();
+        let mut rt = Runtime::new(app, crate::ui::view, theme, (physical[0], physical[1]), dpi)?;
+        rt.set_reduced_motion(true);
+        Ok(Self { rt, physical, dpi })
+    }
+
+    /// The window's size in device px.
+    pub fn physical(&self) -> [u32; 2] {
+        self.physical
+    }
+
+    /// The window's size in design px.
+    pub fn logical(&self) -> [f32; 2] {
+        self.physical.map(|v| v as f32 / self.dpi)
+    }
+
+    /// The runtime, for tests that drive input directly.
+    pub fn runtime(&mut self) -> &mut Runtime<HubApp> {
+        &mut self.rt
+    }
+
+    /// Runs `body` with `hub` as the window's model, then hands it back.
+    fn with<T>(&mut self, hub: &mut Hub, body: impl FnOnce(&mut Runtime<HubApp>) -> T) -> T {
+        self.rt.update(|s| std::mem::swap(&mut s.hub, hub));
+        self.rt.update(|s| {
+            if s.sync_look() {
+                s.images.keep_scheme(s.look.dark);
+            }
+        });
+        let theme = self.rt.state().look.theme.clone();
+        self.rt.set_theme(theme);
+        let out = body(&mut self.rt);
+        self.rt.update(|s| std::mem::swap(&mut s.hub, hub));
+        out
+    }
+
+    /// Lays out `hub` and loads every picture it shows, until nothing more arrives.
+    pub fn settle(&mut self, hub: &mut Hub) {
+        self.with(hub, |rt| {
+            for _ in 0..6 {
+                rt.frame(Duration::from_millis(16));
+                let mut loaded = false;
+                rt.update(|s| {
+                    let look = s.look.clone();
+                    loaded = s.images.load_now(&look);
+                });
+                if !loaded {
+                    break;
+                }
+            }
+            for _ in 0..30 {
+                rt.frame(Duration::from_millis(16));
+            }
+        });
+    }
+
+    /// Settles `hub`, then writes the window as PNG to `path`.
+    pub fn save(&mut self, hub: &mut Hub, path: &Path) -> anyhow::Result<()> {
+        self.settle(hub);
+        let png = self.with(hub, |rt| {
+            rt.snap().and_then(|image| ara_kit::capture::png(&image))
+        })?;
+        std::fs::write(path, png)?;
+        println!("{}", path.display());
+        Ok(())
+    }
+
+    /// Clicks the element keyed `key` as a person would, with `hub` as the model.
+    pub fn click(&mut self, hub: &mut Hub, key: &str) -> anyhow::Result<()> {
+        let found = self.with(hub, |rt| {
+            rt.frame(Duration::from_millis(16));
+            let found = rt.find(key).is_some();
+            if found {
+                rt.click(key);
+                rt.frame(Duration::from_millis(16));
+            }
+            found
+        });
+        anyhow::ensure!(found, "no control keyed {key}");
+        Ok(())
+    }
+
+    /// Presses a key (a virtual-key code) with modifiers held, with `hub` as the model.
+    pub fn key(&mut self, hub: &mut Hub, vk: u16, mods: stillkit::el::Modifiers) {
+        self.with(hub, |rt| {
+            rt.frame(Duration::from_millis(16));
+            rt.key_with(vk, mods);
+            rt.frame(Duration::from_millis(16));
+        });
+    }
+
+    /// Types `text` into the focused field, with `hub` as the model.
+    pub fn typing(&mut self, hub: &mut Hub, text: &str) {
+        self.with(hub, |rt| {
+            rt.type_text(text);
+            rt.frame(Duration::from_millis(16));
+        });
+    }
+
+    /// Moves keyboard focus to the element keyed `key`.
+    pub fn focus(&mut self, hub: &mut Hub, key: &str) {
+        self.with(hub, |rt| {
+            rt.frame(Duration::from_millis(16));
+            rt.focus(key);
+            rt.frame(Duration::from_millis(16));
+        });
+    }
+
+    /// Whether an element keyed `key` shows for `hub`.
+    pub fn shows(&mut self, hub: &mut Hub, key: &str) -> bool {
+        self.with(hub, |rt| {
+            rt.frame(Duration::from_millis(16));
+            rt.find(key).is_some()
+        })
+    }
+
+    /// Runs `change` on the window's own state (the palette, a dropdown) with `hub` in it.
+    pub fn window(&mut self, hub: &mut Hub, change: impl FnOnce(&mut HubApp)) {
+        self.with(hub, |rt| rt.update(change));
+    }
+}
+
 /// Seed, then capture every step in both themes under `directory/<w>x<h>/`.
-pub fn run(
-    host: &mut Offscreen,
-    app: &mut crate::native::App,
-    hub: &mut Hub,
-    directory: &Path,
-) -> anyhow::Result<()> {
+pub fn run(cap: &mut Capture, hub: &mut Hub, directory: &Path) -> anyhow::Result<()> {
     seed(hub);
-    let physical = host.physical();
+    let physical = cap.physical();
     let folder = directory.join(format!("{}x{}", physical[0], physical[1]));
     std::fs::create_dir_all(&folder)?;
-    app.size = host.logical();
     for light in [false, true] {
         let theme = if light { "light" } else { "dark" };
         // What a tester sees right after installing: no projects yet.
@@ -305,41 +443,16 @@ pub fn run(
         );
         seed_first_run(&mut fresh);
         fresh.prefs.light = light;
-        settle(host, app, &mut fresh)?;
-        let path = folder.join(format!("{theme}-first-run.png"));
-        host.capture(app)?.save(&path)?;
-        println!("{}", path.display());
+        cap.save(&mut fresh, &folder.join(format!("{theme}-first-run.png")))?;
         hub.prefs.light = light;
         for (name, step) in STEPS {
             step(hub);
-            settle(host, app, hub)?;
-            let path = folder.join(format!("{theme}-{name}.png"));
-            host.capture(app)?.save(&path)?;
-            println!("{}", path.display());
+            cap.save(hub, &folder.join(format!("{theme}-{name}.png")))?;
         }
-        interactions::run(host, app, &folder, light)?;
-        flows::run(host, app, &folder, light)?;
-        migration::run(host, app, &folder, light)?;
-        engine_layout::run(host, app, &folder, light)?;
-    }
-    Ok(())
-}
-
-/// Rebuild until every requested preview has arrived (or two seconds pass).
-fn settle(host: &mut Offscreen, app: &mut crate::native::App, hub: &mut Hub) -> anyhow::Result<()> {
-    let until = Instant::now() + Duration::from_secs(2);
-    // Twice: the overflow menu anchors to the previous layout of its button.
-    for _ in 0..2 {
-        app.rebuild(hub, NOW).map_err(|e| anyhow::anyhow!("{e}"))?;
-    }
-    while app.thumbnails.pending() && Instant::now() < until {
-        std::thread::sleep(Duration::from_millis(10));
-        if host.upload(app) {
-            app.rebuild(hub, NOW).map_err(|e| anyhow::anyhow!("{e}"))?;
-        }
-    }
-    if host.upload(app) {
-        app.rebuild(hub, NOW).map_err(|e| anyhow::anyhow!("{e}"))?;
+        interactions::run(cap, &folder, light)?;
+        flows::run(cap, &folder, light)?;
+        migration::run(cap, &folder, light)?;
+        engine_layout::run(cap, &folder, light)?;
     }
     Ok(())
 }

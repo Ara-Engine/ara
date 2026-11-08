@@ -9,14 +9,30 @@ use crate::look::Look;
 /// A `w` x `h` cover for `seed` in `look`'s palette, as premultiplied BGRA.
 pub fn cover(look: &Look, seed: u64, w: u32, h: u32) -> Image {
     let c = &look.c;
-    let palette = [c.chart_1.0, c.chart_2.0, c.chart_3.0, c.chart_4.0, c.chart_5.0, c.chart_6.0];
+    let palette = [
+        c.chart_1.0,
+        c.chart_2.0,
+        c.chart_3.0,
+        c.chart_4.0,
+        c.chart_5.0,
+        c.chart_6.0,
+    ];
     let mut rng = Rng(seed ^ 0x9e37_79b9_7f4a_7c15);
     // Two or three tinted lights and a deep base from the scheme's background.
-    let base = if look.dark { mix(c.background.0, palette[(seed % 6) as usize], 0.18) } else { mix(c.card.0, palette[(seed % 6) as usize], 0.12) };
+    let base = if look.dark {
+        mix(c.background.0, palette[(seed % 6) as usize], 0.18)
+    } else {
+        mix(c.card.0, palette[(seed % 6) as usize], 0.12)
+    };
     let lights: Vec<(f32, f32, f32, Rgba)> = (0..3)
         .map(|i| {
             let colour = palette[((seed / 7 + i * 2) % 6) as usize];
-            (rng.f() * 1.3 - 0.15, rng.f() * 1.3 - 0.15, 0.6 + rng.f() * 0.5, colour)
+            (
+                rng.f() * 1.3 - 0.15,
+                rng.f() * 1.3 - 0.15,
+                0.6 + rng.f() * 0.5,
+                colour,
+            )
         })
         .collect();
     let (fw, fh) = (w.max(1) as f32, h.max(1) as f32);
@@ -43,20 +59,32 @@ pub fn cover(look: &Look, seed: u64, w: u32, h: u32) -> Image {
             pixels.extend_from_slice(&[px(col[2]), px(col[1]), px(col[0]), 255]);
         }
     }
-    Image { width: w, height: h, pixels }
+    Image {
+        width: w,
+        height: h,
+        pixels,
+    }
 }
 
 /// A stable 64-bit seed for an id string (FNV-1a).
 pub fn seed(id: &str) -> u64 {
-    id.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3))
+    id.bytes().fold(0xcbf2_9ce4_8422_2325, |h, b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
+    })
 }
 
 fn mix(a: Rgba, b: Rgba, t: f32) -> Rgba {
-    Rgba::new(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, 1.0)
+    Rgba::new(
+        a.r + (b.r - a.r) * t,
+        a.g + (b.g - a.g) * t,
+        a.b + (b.b - a.b) * t,
+        1.0,
+    )
 }
 
 fn hash(x: u32, y: u32, seed: u64) -> f32 {
-    let mut h = u64::from(x).wrapping_mul(0x9e37_79b9) ^ u64::from(y).wrapping_mul(0x85eb_ca6b) ^ seed;
+    let mut h =
+        u64::from(x).wrapping_mul(0x9e37_79b9) ^ u64::from(y).wrapping_mul(0x85eb_ca6b) ^ seed;
     h ^= h >> 33;
     h = h.wrapping_mul(0xff51_afd7_ed55_8ccd);
     h ^= h >> 33;
@@ -74,6 +102,35 @@ impl Rng {
         z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
         ((z ^ (z >> 31)) >> 40) as f32 / (1u64 << 24) as f32
     }
+}
+
+/// An SVG (a brand mark, an engine icon) rasterized to `w` x `h` device px, fitted and
+/// centred, as premultiplied BGRA. `None` when the source doesn't parse.
+pub fn svg(source: &str, w: u32, h: u32) -> Option<Image> {
+    use resvg::{tiny_skia, usvg};
+    let tree = usvg::Tree::from_str(source, &usvg::Options::default()).ok()?;
+    let mut pixmap = tiny_skia::Pixmap::new(w.max(1), h.max(1))?;
+    let size = tree.size();
+    let scale = (w as f32 / size.width()).min(h as f32 / size.height());
+    let (dx, dy) = (
+        (w as f32 - size.width() * scale) / 2.0,
+        (h as f32 - size.height() * scale) / 2.0,
+    );
+    resvg::render(
+        &tree,
+        tiny_skia::Transform::from_row(scale, 0.0, 0.0, scale, dx, dy),
+        &mut pixmap.as_mut(),
+    );
+    // tiny-skia is premultiplied RGBA; stillkit wants premultiplied BGRA.
+    let mut pixels = pixmap.take();
+    for px in pixels.as_chunks_mut::<4>().0 {
+        px.swap(0, 2);
+    }
+    Some(Image {
+        width: w,
+        height: h,
+        pixels,
+    })
 }
 
 #[cfg(test)]

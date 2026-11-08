@@ -1,6 +1,6 @@
 [package]
 name = "ara-hub"
-description = "Ara Hub: the native project launcher on the editor's UI stack (D25)."
+description = "Ara Hub: the native project launcher on stillkit (D25, D31)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -25,22 +25,13 @@ embed-resource.workspace = true
 ara-update = { path = "../ara-update" }
 ara-crash = { path = "../ara-crash" }
 ara-diag.workspace = true
-ara-editor-gpu = { path = "../ara-editor-gpu" }
-ara-gpu = { path = "../ara-gpu" }
 ara-hub-service = { path = "../ara-hub-service" }
 ara-json.workspace = true
-ara-platform = { path = "../ara-platform" }
+ara-kit = { path = "../ara-kit" }
+stillkit.workspace = true
 ara-proto.workspace = true
 ara-rpc.workspace = true
-ara-ui = { path = "../ara-ui" }
-ara-ui-render = { path = "../ara-ui-render" }
-ara-ui-text = { path = "../ara-ui-text" }
 anyhow.workspace = true
 image = { workspace = true, features = ["png", "jpeg"] }
-resvg.workspace = true
-sdl3-sys.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order", "float_roundtrip"] }
-
-[target.'cfg(windows)'.dependencies]
-windows = { workspace = true, features = ["Win32_Foundation", "Win32_Graphics_Dwm"] }

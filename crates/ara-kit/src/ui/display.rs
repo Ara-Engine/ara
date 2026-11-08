@@ -323,3 +323,24 @@ pub fn banner<S: 'static>(
 pub fn empty_action<S: 'static>(l: &Look, glyph: Icon, label: &str) -> El<S> {
     button(l, Tone::Primary, Size::Md, Some(glyph), label)
 }
+
+/// A chip that sits on a picture (a cover, a thumbnail): a dark translucent pill with white
+/// text and a coloured dot, legible over any image.
+pub fn photo_chip<S: 'static>(l: &Look, status: Status, label: &str) -> El<S> {
+    let solid = status_paints(l, status).2;
+    row()
+        .h(22.0)
+        .pad_x(8.0)
+        .gap(6.0)
+        .align(Align::Center)
+        .radius(11.0)
+        .fill(Rgba::new(0.0, 0.0, 0.0, 0.62))
+        .border(1.0, Rgba::new(1.0, 1.0, 1.0, 0.12))
+        .child(el().size(6.0).radius(3.0).fill(solid))
+        .child(
+            text(label)
+                .text_size(11.0)
+                .weight(560)
+                .color(Rgba::new(1.0, 1.0, 1.0, 0.95)),
+        )
+}

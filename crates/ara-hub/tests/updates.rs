@@ -2,7 +2,6 @@ use ara_hub::{
     capture,
     connection::Event,
     model::{Call, Dialog, DownloadPolicy, Effect, Hub, Intent, Prefs, View},
-    view::{self, Binding, Ctx},
 };
 use serde_json::json;
 
@@ -41,35 +40,36 @@ fn install_and_open_waits_for_success_and_restart_uses_authenticated_staging() {
 fn installs_settings_and_banner_bind_to_service_actions() {
     let mut hub = Hub::new(Prefs::default(), std::env::temp_dir(), None);
     capture::seed(&mut hub);
-    let ctx = Ctx {
-        now_ms: capture::NOW,
-        size: [1440., 900.],
-        thumbnail: &|_| None,
-        anchor: None,
-        docs: &[],
-        dialog_close_hint: false,
-    };
+    let mut cap = capture::Capture::new([1440, 900], 1.0, Vec::new()).expect("headless hub");
     hub.view = View::Installs;
-    let page = view::page(&hub, &ctx);
-    assert!(page.bindings.values().any(
-        |b| matches!(b,Binding::Intent(Intent::CancelDownload(id)) if id=="engine-0.0.3-alpha")
-    ));
+    hub.take_calls();
+    cap.click(&mut hub, "cancel-0.0.3-alpha")
+        .expect("the running install has Cancel");
     assert!(
-        page.bindings
-            .values()
-            .any(|b| matches!(b, Binding::Intent(Intent::Dialog(Dialog::Update))))
+        hub.take_calls()
+            .iter()
+            .any(|c| c.method() == "hub.download.cancel"
+                && c.params()["job"] == "engine-0.0.3-alpha")
     );
+    cap.click(&mut hub, "update-available")
+        .expect("the title bar offers the update");
+    assert_eq!(hub.dialog, Some(Dialog::Update));
+    hub.intent(Intent::DismissDialog);
     hub.view = View::Settings;
-    let page = view::page(&hub, &ctx);
+    cap.click(&mut hub, "release-channel")
+        .expect("the channel select");
     assert!(
-        page.bindings
-            .values()
-            .any(|b| matches!(b, Binding::Intent(Intent::CheckUpdates)))
+        cap.shows(&mut hub, "release-channel/Preview"),
+        "the select lists both channels"
     );
+    cap.key(&mut hub, 0x1B, stillkit::el::Modifiers::NONE);
     assert!(
-        page.markup.contains("label='Release channel'"),
-        "the shared select owns channel choice actions"
+        !cap.shows(&mut hub, "release-channel/Preview"),
+        "Escape closes it"
     );
+    cap.click(&mut hub, "check-updates")
+        .expect("Check for updates");
+    assert!(hub.releases.checking, "checking starts");
 }
 
 #[test]

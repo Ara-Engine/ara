@@ -135,7 +135,7 @@ dependencies = [
 [[package]]
 name = "accesskit_windows"
 version = "0.35.2"
-source = "git+https://github.com/Snowy7/stillkit?rev=f31b49e0bf5dadc1389090727483d37cb064fea6#f31b49e0bf5dadc1389090727483d37cb064fea6"
+source = "git+https://github.com/Snowy7/stillkit?rev=d078ef2d4e6a28208073a4187ede28b21c851f15#d078ef2d4e6a28208073a4187ede28b21c851f15"
 dependencies = [
  "accesskit 0.25.2",
  "accesskit_consumer 0.39.2",
@@ -1187,24 +1187,17 @@ dependencies = [
  "anyhow",
  "ara-crash",
  "ara-diag",
- "ara-editor-gpu",
- "ara-gpu",
  "ara-hub-service",
  "ara-json",
- "ara-platform",
+ "ara-kit",
  "ara-proto",
  "ara-rpc",
- "ara-ui",
- "ara-ui-render",
- "ara-ui-text",
  "ara-update",
  "embed-resource",
  "image",
- "resvg",
- "sdl3-sys",
  "serde",
  "serde_json",
- "windows",
+ "stillkit",
 ]
 
 [[package]]
@@ -1325,6 +1318,7 @@ version = "0.0.1-alpha"
 dependencies = [
  "anyhow",
  "image",
+ "resvg",
  "serde",
  "serde_json",
  "stillkit",
@@ -12146,7 +12140,7 @@ checksum = "ae139f051204a4af015d4f0ed3a1f7a51020d03a44c7cf249168c543d88131e9"
 [[package]]
 name = "stillkit"
 version = "0.0.1"
-source = "git+https://github.com/Snowy7/stillkit?rev=f31b49e0bf5dadc1389090727483d37cb064fea6#f31b49e0bf5dadc1389090727483d37cb064fea6"
+source = "git+https://github.com/Snowy7/stillkit?rev=d078ef2d4e6a28208073a4187ede28b21c851f15#d078ef2d4e6a28208073a4187ede28b21c851f15"
 dependencies = [
  "accesskit 0.25.2",
  "accesskit_macos 0.27.2",
