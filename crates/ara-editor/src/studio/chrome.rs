@@ -21,6 +21,15 @@ pub fn view(s: &Studio) -> El<Studio> {
         .fill(s.look.c.background.0)
         .on_key(keys)
         .child(title_bar(s))
+        .children(s.editor.state.playing.map(|playing| {
+            // A thin line under the title bar while Play runs (green) or pauses (amber).
+            let tint = if playing {
+                s.look.c.success.0
+            } else {
+                s.look.c.warning.0
+            };
+            el().h(2.0).w_full().fill(tint)
+        }))
         .child(dock::view(s).grow(1.0).min_h(0.0))
         .child(status_bar(s))
         .children(drag_chip(s))
@@ -406,14 +415,21 @@ fn status_bar(s: &Studio) -> El<Studio> {
         n => format!("{count} entities · {n} selected"),
     };
     let mut right = row().gap(14.0).align(Align::Center);
-    if let Some((fps, ms)) = s.local.scene.fps {
-        right = right.child(
-            text(format!("{fps:.0} fps · {ms:.2} ms"))
-                .text_size(11.0)
-                .family(mono())
-                .color(c.muted_foreground.0),
-        );
+    // Play is never only a colour (I40): the chip names the state.
+    if let Some(playing) = s.editor.state.playing {
+        let (status, label) = if playing {
+            (Status::Success, "Playing")
+        } else {
+            (Status::Warning, "Paused")
+        };
+        right = right.child(chip(l, status, label, true));
     }
+    let agents = s.editor.state.presence.len();
+    let authority = match agents {
+        0 => "Authority ready".to_owned(),
+        1 => "Authority ready · 1 agent connected".to_owned(),
+        n => format!("Authority ready · {n} agents connected"),
+    };
     let hint = text("W E R T tools · F frame · Alt+drag orbit · RMB+WASD fly · ⌘K commands")
         .text_size(11.0)
         .color(c.muted_foreground.0.with_alpha(0.8));
@@ -429,11 +445,7 @@ fn status_bar(s: &Studio) -> El<Studio> {
                 .gap(6.0)
                 .align(Align::Center)
                 .child(dot(l, Status::Success))
-                .child(
-                    text("Authority ready")
-                        .text_size(11.0)
-                        .color(c.muted_foreground.0),
-                ),
+                .child(text(authority).text_size(11.0).color(c.muted_foreground.0)),
         )
         .child(
             row()

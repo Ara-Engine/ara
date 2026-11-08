@@ -22,12 +22,17 @@ equivalent. `--legacy-ui` opens the old `shell` window.
 - `scene.rs`: the Scene element and toolbar. RMB look + WASD fly (key-ups from the host),
   MMB pan, Alt+LMB orbit, wheel dolly, click to pick, right-click menu, Shift+A at pointer.
 - `gizmo.rs`: handle hover/drag mapped to an editor gesture; release commits one step.
-- `hierarchy.rs`: virtual tree, rename, visibility/lock, WAI tree keyboard.
+- `hierarchy.rs`: scene root row, virtual tree, rename, visibility/lock, WAI tree keyboard,
+  drag to reparent (quarters: before / inside / after) through `shell::drag::content::hierarchy`.
 - `inspector.rs`: fields from `crate::inspector::fields`; label scrubs (8 px a step,
-  Shift ×0.1, Alt ×10), typed units, vectors, enums, colours; component ⋯; Add Component.
+  Shift ×0.1, Alt ×10), typed units, vectors, enums, colours; field menu (Reset, Copy
+  Value, Copy Path); component ⋯ (Fold Others, Remove); Add Component.
 - `create.rs`: the Create browser over `CATALOG` (registry `create.*` ids; an entry shows
   when the schema has its components). Recent, search, Enter, Shift+A placement.
-- `panels.rs`: Assets (folder tree + grid), Console, Problems; others say they are coming.
+- `panels.rs`: Assets (folder tree + grid, thumbnails from `asset_tools::thumbnails` via
+  `state::Previews`, models/prefabs drag into the Scene), Console, Problems (one-click
+  typed fixes via `shell::input::apply_fix`); other panels say they are coming.
+- `preferences.rs`: Preferences / Project Settings generated from `crate::settings::DEFS`.
 - `agents.rs`: Agents feed (presence, turns, Undo Turn) and History.
 - `commands.rs`: which registry commands the studio runs (`ported`), `run`, keymap,
   macOS shortcut glyphs. Menus hide (context) or disable (title) unported commands.
@@ -36,6 +41,7 @@ equivalent. `--legacy-ui` opens the old `shell` window.
 
 - Never write documents directly: `Studio::apply` (one undo step) or a registry command.
 - A command that opens a field sets `local.focus`; handlers with a `Tx` focus directly.
+  Copies set `local.copy`; the host writes it to the system clipboard.
 - Window-only state lives in `Local`; anything agents should see goes to `EditorState`.
 - Visual review: `cargo test -p ara-editor --lib studio::tests::captures -- --ignored`
   writes both themes (panels, context menu, Create) to `target/studio-captures/`.
