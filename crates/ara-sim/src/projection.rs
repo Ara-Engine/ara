@@ -237,12 +237,9 @@ impl EditWorld {
     }
 
     fn resolve(&self) -> Result<Resolved> {
-        let mut diags = self
+        let (rows, diags) = self
             .workspace
-            .check(&self.scene, None, &self.registry.schema);
-        let rows = self
-            .workspace
-            .resolve(&self.scene, &self.registry.schema, &mut diags);
+            .check_resolved(&self.scene, None, &self.registry.schema);
         if let Some(d) = diags.into_iter().find(|d| d.is_error()) {
             return Err(SimError(d.message));
         }

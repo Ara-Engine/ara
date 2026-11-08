@@ -379,12 +379,23 @@ impl Workspace {
         records: Option<&[RecordId]>,
         db: &SchemaDb,
     ) -> Vec<Diagnostic> {
+        self.check_resolved(id, records, db).1
+    }
+
+    /// Validates a document and returns its resolved entities from that same pass.
+    /// Consumers projecting a scene can reuse these rows instead of resolving twice.
+    pub fn check_resolved(
+        &self,
+        id: &AssetId,
+        records: Option<&[RecordId]>,
+        db: &SchemaDb,
+    ) -> (Resolved, Vec<Diagnostic>) {
         let mut out = Vec::new();
         let Some(doc) = self.doc(id.as_str()) else {
-            return out;
+            return (Resolved::new(), out);
         };
         let Some(kind) = db.kind(&doc.kind) else {
-            return out;
+            return (Resolved::new(), out);
         };
         let base = self.location(id);
         let all: Vec<RecordId>;
@@ -402,8 +413,8 @@ impl Workspace {
         }
         check_structure(doc, kind, &base, &mut out);
         check_entity_refs(db, doc, &base, &mut out);
-        resolve(doc, db, self, &base, &mut out);
-        out
+        let rows = resolve(doc, db, self, &base, &mut out);
+        (rows, out)
     }
 
     /// What `records` of a document report on their own, in document order: each
