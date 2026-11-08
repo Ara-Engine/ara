@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -7,7 +8,8 @@ namespace Ara.CompileServer;
 /// <summary>Roslyn state for the active project's modules, retained across sequential preparation requests.</summary>
 internal sealed class ProjectCompilations
 {
-    readonly Dictionary<string, Entry> _modules = new(StringComparer.Ordinal);
+    // Different modules may generate concurrently; one request owns each output.
+    readonly ConcurrentDictionary<string, Entry> _modules = new(StringComparer.Ordinal);
 
     sealed record Entry(string Configuration, CSharpCompilation User, GeneratorDriver Driver,
         Dictionary<string, (string Text, SyntaxTree Tree)> Sources);
@@ -16,7 +18,7 @@ internal sealed class ProjectCompilations
     internal void Retain(IEnumerable<string> outputs)
     {
         var active = new HashSet<string>(outputs, StringComparer.Ordinal);
-        foreach (var path in _modules.Keys.Where(path => !active.Contains(path)).ToArray()) _modules.Remove(path);
+        foreach (var path in _modules.Keys.Where(path => !active.Contains(path)).ToArray()) _modules.TryRemove(path, out _);
     }
 
     /// <summary>Reuses unchanged syntax and declarations; dependency/configuration changes start a new compilation.</summary>

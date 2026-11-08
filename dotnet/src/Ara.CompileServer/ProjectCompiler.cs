@@ -16,8 +16,19 @@ internal static class ProjectCompiler
 {
     static readonly CompileProducer ProjectDiagnostics = new("project");
     static readonly CompileProducer EditorDiagnostics = new("editor");
-    internal static ProjectInventoryResult Compile(ProjectBuildRequest request, bool writeOutputs = true, ProjectCompilations? compilations = null)
+    // A frontier shares only completed dependency images; each worker owns its
+    // Roslyn state and diagnostic rows. Requests on a session remain sequential.
+    sealed class BuildState(ProjectModule module, CompileAttempt attempt)
     {
+        internal ProjectModule Module = module;
+        internal MetadataReference? Reference;
+        internal readonly CompileAttempt Attempt = attempt;
+        internal readonly List<JsonObject> Diagnostics = [];
+    }
+
+    internal static ProjectInventoryResult Compile(ProjectBuildRequest request, bool writeOutputs = true, ProjectCompilations? compilations = null, int maxParallelism = 2)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxParallelism, 1);
         compilations ??= new ProjectCompilations();
         var inventory = ProjectInventory.Scan(new(request.Project, request.AuthoringRoot));
         if (inventory.Diagnostics.Any(d => (string?)d["severity"] == "error"))
@@ -37,40 +48,37 @@ internal static class ProjectCompiler
         }
         var root = ProjectInventory.ProjectPath(request.Project);
         compilations.Retain(inventory.Modules.Select(module => Path.Combine(root, module.AssemblyPath)));
-        var modules = inventory.Modules.ToDictionary(m => m.Name, StringComparer.OrdinalIgnoreCase);
-        var built = new Dictionary<string, (MetadataReference Reference, string Hash)>(StringComparer.OrdinalIgnoreCase);
-        var results = new Dictionary<string, ProjectModule>(StringComparer.OrdinalIgnoreCase);
-        var diagnostics = new List<JsonObject>();
-        var analysis = new AnalyzerSet();
+        var orderedBuilds = inventory.Modules.Where(m => request.Domain == "editor" || m.Profile == "gameplay")
+            .Select(m => new BuildState(m, Attempt(request, m))).ToArray();
+        var builds = orderedBuilds.ToDictionary(b => b.Module.Name, StringComparer.OrdinalIgnoreCase);
         var toolHash = Hash(File.ReadAllBytes(typeof(ProjectCompiler).Assembly.Location));
         var runtimeHash = Hash(File.ReadAllBytes(typeof(Behaviour).Assembly.Location));
         var generatorHash = Hash(File.ReadAllBytes(typeof(Ara.Generators.ModuleGenerator).Assembly.Location));
 
-        bool Build(string name)
+        void Build(BuildState build)
         {
-            if (built.ContainsKey(name)) return true;
-            if (results.ContainsKey(name)) return false;
-            var module = modules[name];
-            var attempt = Attempt(request, module);
+            var module = build.Module;
+            var name = module.Name;
+            var attempt = build.Attempt;
             var rows = new List<JsonObject>();
             var validated = false;
-            diagnostics.Add((attempt with { Request = attempt.Request with { Attempt = 0 } }).Marker("bound"));
-            diagnostics.Add(attempt.Marker("started"));
+            build.Diagnostics.Add((attempt with { Request = attempt.Request with { Attempt = 0 } }).Marker("bound"));
+            build.Diagnostics.Add(attempt.Marker("started"));
             try
             {
                 foreach (var dependency in module.References)
-                    if (!Build(dependency))
+                    if (builds[dependency].Reference is null)
                     {
                         rows.Add(Diagnostics.Row(AraCodes.DependencyFailed, "error", $"module `{name}` cannot compile because `{dependency}` failed", module.Directory));
-                        results[name] = module with { Result = "failed", Schema = null, Fingerprint = null };
-                        return false;
+                        build.Module = module with { Result = "failed", Schema = null, Fingerprint = null };
+                        return;
                     }
                 var sources = module.Sources.Select(s => (Source:s, Text:File.ReadAllText(Path.Combine(root, s.StoragePath)))).ToArray();
                 var configuration = Hash(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
                 {
                     module.Name, module.Hot, module.Profile, toolHash, runtimeHash, generatorHash,
                     editorHash = module.Profile == "editor" ? Hash(File.ReadAllBytes(typeof(Ara.Editor.EditorRegistry).Assembly.Location)) : "",
-                    references = module.References.Select(r => new { name = r, hash = built[r].Hash }),
+                    references = module.References.Select(r => new { name = r, hash = builds[r].Module.Fingerprint }),
                 })));
                 var fingerprint = Hash(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
                 {
@@ -89,10 +97,10 @@ internal static class ProjectCompiler
                     var schema = JsonNode.Parse(File.ReadAllText(schemaFile));
                     if (schema?["$schema"]?.GetValue<string>() == "ara://schema/types/1")
                     {
-                        built[name] = (MetadataReference.CreateFromImage(File.ReadAllBytes(assembly)), fingerprint);
-                        results[name] = module with { Schema = schema, Result = "cached", Fingerprint = fingerprint };
+                        build.Reference = MetadataReference.CreateFromImage(File.ReadAllBytes(assembly));
+                        build.Module = module with { Schema = schema, Result = "cached", Fingerprint = fingerprint };
                         validated = true;
-                        return true;
+                        return;
                     }
                 }
                 var extra = new List<string> { typeof(Behaviour).Assembly.Location };
@@ -103,20 +111,20 @@ internal static class ProjectCompiler
                 }
                 var compiler = new ModuleCompiler(name, extra);
                 var (driver, final, generatorDiagnostics, _) = compilations.Generate(assembly, configuration, compiler, module.Hot,
-                    sources.Select(s => (Path.Combine(root, s.Source.StoragePath), s.Text)).ToArray(), module.References.Select(r => built[r].Reference));
+                    sources.Select(s => (Path.Combine(root, s.Source.StoragePath), s.Text)).ToArray(), module.References.Select(r => builds[r].Reference!));
                 // Analysis and emission share immutable Roslyn state. Keep both off the
                 // game thread, and let emit supply compiler diagnostics in the same pass.
-                var analyzing = Task.Run(() => analysis.AnalyzeProject(final, module.Profile));
+                var analyzing = Task.Run(() => new AnalyzerSet().AnalyzeProject(final, module.Profile));
                 var (image, compilerDiagnostics) = ModuleCompiler.EmitWithDiagnostics(final);
                 var problems = generatorDiagnostics.Concat(compilerDiagnostics).Concat(analyzing.GetAwaiter().GetResult())
                     .Where(Diagnostics.Reportable).ToArray();
                 validated = true;
                 foreach (var diagnostic in problems) rows.Add(ToJson(diagnostic));
-                if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) { results[name] = module with { Result = "failed", Schema = null, Fingerprint = null }; return false; }
+                if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) { build.Module = module with { Result = "failed", Schema = null, Fingerprint = null }; return; }
                 if (image is null)
                 {
-                    results[name] = module with { Result = "failed", Schema = null, Fingerprint = null };
-                    return false;
+                    build.Module = module with { Result = "failed", Schema = null, Fingerprint = null };
+                    return;
                 }
                 var schemaTypes = new SortedDictionary<string, JsonNode?>(StringComparer.Ordinal);
                 foreach (var generated in driver.GetRunResult().Results.SelectMany(r => r.GeneratedSources).Where(s => s.HintName == "AraModule.g.cs"))
@@ -146,26 +154,50 @@ internal static class ProjectCompiler
                 }
                 // Rust publishes this JSON through the canonical writer. The compiler
                 // returns it explicitly; no consumer scans private output directories.
-                built[name] = (MetadataReference.CreateFromImage(image.Pe), fingerprint);
-                results[name] = module with { Schema = document, Result = "compiled", Fingerprint = fingerprint };
-                return true;
+                build.Reference = MetadataReference.CreateFromImage(image.Pe);
+                build.Module = module with { Schema = document, Result = "compiled", Fingerprint = fingerprint };
+                return;
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
             {
                 rows.Add(ProjectInventory.Error("ARA1003", error.Message, module.Directory));
                 validated = false;
-                results[name] = module with { Result = "failed", Schema = null, Fingerprint = null };
-                return false;
+                build.Module = module with { Result = "failed", Schema = null, Fingerprint = null };
+                return;
             }
             finally
             {
                 var result = rows.Any(d => (string?)d["severity"] == "error") ? "errors" : validated ? "success" : "cancelled";
-                diagnostics.AddRange(attempt.Complete(rows, result, validated));
+                build.Diagnostics.AddRange(attempt.Complete(rows, result, validated));
             }
         }
 
-        foreach (var module in inventory.Modules.Where(m => request.Domain == "editor" || m.Profile == "gameplay")) Build(module.Name);
-        return inventory with { Modules = inventory.Modules.Select(m => results.GetValueOrDefault(m.Name, m)).ToArray(), Diagnostics = [.. inventory.Diagnostics, .. diagnostics] };
+        var remaining = builds.ToDictionary(p => p.Key, p => p.Value.Module.References.Length, StringComparer.OrdinalIgnoreCase);
+        var dependents = builds.Keys.ToDictionary(name => name, _ => new List<BuildState>(), StringComparer.OrdinalIgnoreCase);
+        foreach (var build in orderedBuilds)
+            foreach (var dependency in build.Module.References) dependents[dependency].Add(build);
+        var ready = orderedBuilds.Where(b => remaining[b.Module.Name] == 0).ToArray();
+        var completed = 0;
+        while (ready.Length > 0)
+        {
+            if (maxParallelism == 1 || ready.Length == 1)
+                foreach (var build in ready) Build(build);
+            else
+                Parallel.ForEach(ready, new ParallelOptions { MaxDegreeOfParallelism = maxParallelism }, Build);
+            completed += ready.Length;
+            var next = new List<BuildState>();
+            foreach (var build in ready)
+                foreach (var dependent in dependents[build.Module.Name])
+                    if (--remaining[dependent.Module.Name] == 0) next.Add(dependent);
+            ready = next.OrderBy(b => b.Module.Name, StringComparer.Ordinal).ToArray();
+        }
+        if (completed != builds.Count) throw new InvalidOperationException("the validated module graph has no dependency frontier");
+        // Completion order is deliberately invisible to the protocol and consumers.
+        return inventory with
+        {
+            Modules = inventory.Modules.Select(m => builds.TryGetValue(m.Name, out var b) ? b.Module : m).ToArray(),
+            Diagnostics = [.. inventory.Diagnostics, .. orderedBuilds.SelectMany(b => b.Diagnostics)],
+        };
     }
 
     static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
