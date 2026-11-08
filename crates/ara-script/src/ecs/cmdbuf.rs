@@ -135,6 +135,24 @@ impl ScriptCatalog {
             ),
         }
     }
+
+    /// Writes an already-decoded engine value through the normal simulation codec.
+    /// The caller checks presence when this replaces an existing component.
+    pub fn write_json(
+        &self,
+        world: &mut World,
+        entity: Entity,
+        index: u32,
+        value: &serde_json::Value,
+    ) -> bool {
+        self.components
+            .get(index as usize)
+            .zip(self.names.get(index as usize).and_then(Option::as_deref))
+            .zip(self.json.as_ref())
+            .is_some_and(|((&(id, _), name), json)| {
+                json.write_component(world, entity, name, id, value).is_ok()
+            })
+    }
 }
 
 /// A cue emitted by C#, decoded to JSON when the host drains it.

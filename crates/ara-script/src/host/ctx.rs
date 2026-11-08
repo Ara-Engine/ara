@@ -426,6 +426,25 @@ unsafe extern "C" fn host_component_json(
                 .is_ok_and(|e| e.contains_id(comp.id)),
         );
     }
+    if op == COMPONENT_WRITE && comp.json && scope.journal.is_none() {
+        // Engine JSON codecs need no old bytes outside commands. Keep replacement
+        // semantics and write the parsed value through the same validated codec.
+        if !world
+            .get_entity(entity_id)
+            .is_ok_and(|e| e.contains_id(comp.id))
+        {
+            return 0;
+        }
+        // SAFETY: data/len is a readable UTF-8 JSON span for this call.
+        let Ok(value) = serde_json::from_slice(unsafe { bytes(data, len) }) else {
+            return 0;
+        };
+        return world.resource_scope(
+            |world, catalog: bevy_ecs::prelude::Mut<crate::ecs::cmdbuf::ScriptCatalog>| {
+                i32::from(catalog.write_json(world, entity_id, component, &value))
+            },
+        );
+    }
     let Some(before) = world
         .resource::<crate::ecs::cmdbuf::ScriptCatalog>()
         .read(world, entity_id, component)
@@ -636,3 +655,7 @@ mod diagnostics_tests {
         assert!(!context.diagnostics_pending.load(Ordering::Acquire));
     }
 }
+
+#[cfg(test)]
+#[path = "ctx_codec_tests.rs"]
+mod codec_tests;
