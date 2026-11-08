@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Text;
+using System.Text.Json;
 
 namespace Ara.Hosting;
 
@@ -89,14 +91,15 @@ public static unsafe class Host
         readonly HostContext? _previous;
         readonly bool _exclusive;
         readonly bool _changed;
-        readonly List<EngineAccess.IEntry>? _cache;
+        readonly EngineAccess.CachePool? _pool;
 
         internal Binding(HostContext context)
         {
             _previous = t_context;
             _exclusive = t_exclusive;
             _changed = !ReferenceEquals(context, _previous);
-            _cache = _changed ? EngineAccess.Swap(null) : null;
+            _pool = _changed ? context.AccessCaches.Value : null;
+            _pool?.Enter();
             t_context = context;
             if (_changed) t_exclusive = false;
         }
@@ -104,13 +107,16 @@ public static unsafe class Host
         /// <inheritdoc/>
         public void Dispose()
         {
-            if (_changed)
+            try
             {
-                EngineAccess.Discard();
-                EngineAccess.Swap(_cache);
+                if (_changed) EngineAccess.Discard();
             }
-            t_context = _previous;
-            t_exclusive = _exclusive;
+            finally
+            {
+                _pool?.Leave();
+                t_context = _previous;
+                t_exclusive = _exclusive;
+            }
         }
     }
 
@@ -152,6 +158,10 @@ public static unsafe class Host
                 "World access is only available in behaviours and commands; systems take components as parameters");
         return context;
     }
+
+    internal static EngineAccess.Cache AccessCache => RequireExclusive().AccessCaches.Value!.Current;
+    internal static EngineAccess.Cache? ExistingAccessCache => t_context is { } context && context.AccessCaches.IsValueCreated
+        ? context.AccessCaches.Value!.Existing : null;
 
     /// <summary>Logs a message. Level: 0 info, 1 warning, 2 error.</summary>
     public static void Log(uint level, string message)
@@ -202,22 +212,33 @@ public static unsafe class Host
     internal static byte* ComponentPtr(ulong entity, uint component, bool write)
     {
         var context = RequireExclusive();
-        return context.Init.Api.ComponentPtr(context.Init.Ctx, entity, component, write ? 1u : 0u);
+        return context.Init.Api.ComponentPtr == null ? null
+            : context.Init.Api.ComponentPtr(context.Init.Ctx, entity, component, write ? 1u : 0u);
     }
 
-    internal static byte[]? ComponentJson(ulong entity, uint component)
+    internal static T ReadComponent<T>(Entity entity, uint component, Func<JsonElement, T> read)
     {
         var context = RequireExclusive();
-        var buffer = new byte[1024];
-        while (true)
+        var buffer = ArrayPool<byte>.Shared.Rent(1024);
+        try
         {
-            int n;
-            fixed (byte* output = buffer)
-                n = context.Init.Api.ComponentJson(context.Init.Ctx, entity, component, AbiConst.ComponentRead, null, 0, output, (uint)buffer.Length);
-            if (n == 0) return null;
-            if (n > 0) return buffer.AsSpan(0, n).ToArray();
-            buffer = new byte[-n];
+            while (true)
+            {
+                int n;
+                fixed (byte* output = buffer)
+                    n = context.Init.Api.ComponentJson(context.Init.Ctx, entity.Bits, component, AbiConst.ComponentRead, null, 0, output, (uint)buffer.Length);
+                if (n == 0) throw new MissingComponentException(entity, typeof(T).Name);
+                if (n > 0)
+                {
+                    using var document = JsonDocument.Parse(buffer.AsMemory(0, n));
+                    return read(document.RootElement);
+                }
+                var next = ArrayPool<byte>.Shared.Rent(checked(-n));
+                ArrayPool<byte>.Shared.Return(buffer);
+                buffer = next;
+            }
         }
+        finally { ArrayPool<byte>.Shared.Return(buffer); }
     }
 
     internal static bool ComponentHas(ulong entity, uint component)
