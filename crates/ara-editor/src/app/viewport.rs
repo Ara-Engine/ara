@@ -19,7 +19,7 @@ mod scene_switch;
 pub(super) mod selection;
 mod startup;
 pub(super) use preview::{GamePreview, PreviewCamera};
-pub(super) use startup::prepare_renderer;
+pub(crate) use startup::prepare_renderer;
 
 #[derive(Clone, Copy)]
 enum RasterWork {
@@ -29,7 +29,7 @@ enum RasterWork {
     Prepare,
 }
 #[derive(Default)]
-pub(super) struct SceneView {
+pub(crate) struct SceneView {
     raster: Option<ara_runtime_render::RasterView>,
     raster_frame: Option<ara_runtime::extract::RenderFrame>,
     raster_snapshot_dirty: bool,

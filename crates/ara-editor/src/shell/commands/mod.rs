@@ -7,7 +7,7 @@
 mod extensions;
 pub(crate) mod keys;
 pub(crate) mod menus;
-mod table;
+pub(crate) mod table;
 use super::Shell;
 use crate::{Editor, state::EditorState};
 pub(crate) use extensions::{bar_titles, entries, lookup, registered_menu_path};

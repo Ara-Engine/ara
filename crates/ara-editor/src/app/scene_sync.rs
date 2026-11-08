@@ -47,7 +47,7 @@ const STALE_RETRY: Duration = Duration::from_secs(5);
 
 /// The renderer's state relative to the committed view: which previews it shows,
 /// and which model publication its geometry came from.
-pub(super) struct SceneSync {
+pub(crate) struct SceneSync {
     /// `ModelCache::revision` behind the last whole upload.
     models: u64,
     /// A newer publication, and since when it has held still.
@@ -71,7 +71,7 @@ pub(super) struct SceneSync {
 
 /// How long a Scene update took, by stage (the responsiveness probe reports them).
 #[derive(Default)]
-pub(super) struct Stages {
+pub(crate) struct Stages {
     /// Whole-scene extraction, in milliseconds.
     pub extract_ms: f64,
     /// The whole scene's upload, or a patch: extracting and uploading what moved.

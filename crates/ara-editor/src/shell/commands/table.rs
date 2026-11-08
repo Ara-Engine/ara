@@ -275,20 +275,20 @@ fn component_target(c: &Ctx) -> Avail {
     }
 }
 
-fn act(e: &mut Editor, method: &str, params: Value) -> R {
+pub(crate) fn act(e: &mut Editor, method: &str, params: Value) -> R {
     e.action(method, params)?;
     Ok(())
 }
-fn apply(e: &mut Editor, commands: Vec<Value>, why: &str) -> R {
+pub(crate) fn apply(e: &mut Editor, commands: Vec<Value>, why: &str) -> R {
     if !commands.is_empty() {
         e.apply(commands, why, None)?;
     }
     Ok(())
 }
-fn focus(e: &mut Editor, panel: &str) -> R {
+pub(crate) fn focus(e: &mut Editor, panel: &str) -> R {
     act(e, "editor.focus", json!({"panel": panel}))
 }
-fn set(e: &mut Editor, key: &str, value: Value) -> R {
+pub(crate) fn set(e: &mut Editor, key: &str, value: Value) -> R {
     act(
         e,
         "editor.settings.set",
@@ -304,7 +304,7 @@ fn toggle(e: &mut Editor, key: &str) -> R {
         .unwrap_or(false);
     set(e, key, json!(!current))
 }
-fn view(e: &mut Editor, params: Value) -> R {
+pub(crate) fn view(e: &mut Editor, params: Value) -> R {
     act(e, "editor.view", params)
 }
 fn camera(e: &mut Editor, yaw: f32, pitch: f32) -> R {
@@ -333,7 +333,7 @@ fn move_panel(s: &mut Shell, e: &mut Editor, t: &Target, slot: &str) -> R {
     )
 }
 /// Create an entity at the view centre (or as a child of the target) and select it.
-fn create(e: &mut Editor, t: &Target, name: &str, components: Value, child: bool) -> R {
+pub(crate) fn create(e: &mut Editor, t: &Target, name: &str, components: Value, child: bool) -> R {
     let mut args = json!({"name": name, "components": components});
     if args["components"].get("Transform").is_none() {
         let target = e.state.camera.target;
@@ -358,7 +358,7 @@ fn create(e: &mut Editor, t: &Target, name: &str, components: Value, child: bool
     }
     Ok(())
 }
-fn shape(e: &mut Editor, t: &Target, name: &str, shape: &str) -> R {
+pub(crate) fn shape(e: &mut Editor, t: &Target, name: &str, shape: &str) -> R {
     create(
         e,
         t,
@@ -381,10 +381,10 @@ fn reference(e: &Editor, entity: &str) -> String {
 fn resolved(e: &Editor) -> ara_ui::Result<ara_doc::prefab::Resolved> {
     crate::world::resolve(e.host.store(), &e.state.doc).map_err(|d| format!("{d:?}").into())
 }
-fn select(e: &mut Editor, entities: Vec<String>) -> R {
+pub(crate) fn select(e: &mut Editor, entities: Vec<String>) -> R {
     act(e, "editor.select", json!({"entities": entities}))
 }
-fn play(e: &mut Editor, method: &str, mut params: Value) -> R {
+pub(crate) fn play(e: &mut Editor, method: &str, mut params: Value) -> R {
     if method != "play.start"
         && let Some(world) = &e.play_world
     {
@@ -392,7 +392,7 @@ fn play(e: &mut Editor, method: &str, mut params: Value) -> R {
     }
     act(e, method, params)
 }
-fn play_params(e: &Editor) -> Value {
+pub(crate) fn play_params(e: &Editor) -> Value {
     let s = &e.state.settings;
     let text = |k: &str| s.get(k).and_then(Value::as_str).unwrap_or("").to_owned();
     let mode = text("play.mode");

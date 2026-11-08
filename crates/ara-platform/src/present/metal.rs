@@ -96,6 +96,35 @@ impl Present {
         present.presenter = Some(presenter);
         Ok(present)
     }
+    /// Present into a `CAMetalLayer` another toolkit owns (a native layer under a stillkit
+    /// window, D31), `size` device px, with SDR output. Nothing here owns the layer.
+    /// # Safety
+    /// `layer` is a live `CAMetalLayer` that outlives this presentation; `gpu` is live; call
+    /// from the main thread.
+    pub unsafe fn from_layer(
+        gpu: &GpuDevice,
+        layer: NonNull<std::ffi::c_void>,
+        size: [u32; 2],
+    ) -> Result<Self> {
+        // SAFETY: the caller keeps the layer alive past this presenter.
+        let presenter = unsafe { Presenter::from_layer(gpu, layer.cast(), size) }?;
+        Ok(Self {
+            format: presenter.surface_format(),
+            presenter: Some(presenter),
+            view: std::ptr::null_mut(),
+            output: OutputSettings::default(),
+        })
+    }
+
+    /// Follow a new drawable size in device px (the layer's rect changed).
+    pub fn resize(&mut self, size: [u32; 2]) -> Result<()> {
+        Ok(self
+            .presenter
+            .as_mut()
+            .context("presentation was retired")?
+            .resize(size)?)
+    }
+
     /// Present a completed engine image, scaled to the drawable. A stalled present path
     /// skips the frame after `PRESENT_WAIT` (100 ms), as Vulkan's acquire bound does.
     /// # Safety

@@ -1,0 +1,238 @@
+//! The registry commands the studio runs, by id. Titles, icons, shortcuts and menus come
+//! from the one registry (`shell::commands`), so the studio's menus, palette and keys match
+//! the classic editor's and MCP's `editor.commands`; each runs through the same helpers
+//! (`editor.*` actions, `cmd.apply`). Ids not ported yet show as unavailable with that
+//! reason instead of doing nothing.
+use serde_json::json;
+
+use super::Studio;
+use crate::shell::commands::Target;
+use crate::shell::commands::table::{
+    act, apply, create, play, play_params, select, set, shape, view,
+};
+
+/// Why a registry command can't run in the studio yet, or `None` when it can.
+pub(super) fn missing(id: &str) -> Option<&'static str> {
+    (!ported(id))
+        .then_some("Not in the studio yet: run the editor with --legacy-ui for this command")
+}
+
+/// Whether the studio runs `id`.
+pub(super) fn ported(id: &str) -> bool {
+    matches!(
+        id,
+        "file.save"
+            | "file.save_all"
+            | "edit.undo"
+            | "edit.redo"
+            | "edit.duplicate"
+            | "edit.delete"
+            | "edit.select_all"
+            | "edit.deselect"
+            | "edit.palette"
+            | "view.frame"
+            | "view.frame_all"
+            | "view.tool.move"
+            | "view.tool.rotate"
+            | "view.tool.scale"
+            | "view.tool.universal"
+            | "view.space"
+            | "view.pivot"
+            | "snap.toggle"
+            | "view.theme.dark"
+            | "view.theme.light"
+            | "view.reduce_motion"
+            | "create.empty"
+            | "create.cube"
+            | "create.sphere"
+            | "create.plane"
+            | "create.capsule"
+            | "create.camera"
+            | "create.light.sun"
+            | "create.light.point"
+            | "create.light.spot"
+            | "create.fog"
+            | "play.start"
+            | "play.pause"
+            | "play.step"
+            | "play.stop"
+            | "view.camera.perspective"
+            | "view.camera.default"
+    )
+}
+
+/// Runs registry command `id` on `target`; failures are reported like any editor failure.
+pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
+    let e = &mut s.editor;
+    let result = match id {
+        "file.save" | "file.save_all" => {
+            e.host.flush();
+            Ok(())
+        }
+        "edit.undo" => act(e, "history.undo", json!({})),
+        "edit.redo" => act(e, "history.redo", json!({})),
+        "edit.duplicate" => {
+            let entities = target.entities(&e.state);
+            e.apply(
+                vec![json!({"cmd":"editor.entities.duplicate","args":{"entities":entities}})],
+                "Duplicate selection",
+                None,
+            )
+            .map_err(Into::into)
+            .and_then(|result| match result["outputs"][0]["roots"].as_array() {
+                Some(roots) => act(e, "editor.select", json!({"entities": roots})),
+                None => Ok(()),
+            })
+        }
+        "edit.delete" => {
+            let entities = target.entities(&e.state);
+            apply(
+                e,
+                vec![json!({"cmd": "entity.delete", "args": {"entities": entities}})],
+                "Delete selection",
+            )
+        }
+        "edit.select_all" => {
+            let all: Vec<String> = s.resolved.keys().cloned().collect();
+            select(&mut s.editor, all)
+        }
+        "edit.deselect" => select(e, Vec::new()),
+        "edit.palette" => {
+            s.local.palette = Some((String::new(), 0));
+            Ok(())
+        }
+        "view.frame" => act(e, "editor.frame", json!({})),
+        "view.frame_all" => act(e, "editor.frame", json!({"all": true})),
+        "view.tool.move" | "view.tool.rotate" | "view.tool.scale" | "view.tool.universal" => {
+            let tool = match id {
+                "view.tool.move" => "translate",
+                "view.tool.rotate" => "rotate",
+                "view.tool.scale" => "scale",
+                _ => "universal",
+            };
+            view(e, json!({"gizmos": true}))
+                .and_then(|()| act(e, "editor.tool", json!({"tool": tool})))
+        }
+        "view.space" => {
+            let local = !e.state.local;
+            act(
+                e,
+                "editor.tool",
+                json!({"tool": e.state.tool, "local": local}),
+            )
+        }
+        "view.pivot" => {
+            let centre = !e.state.centre;
+            act(
+                e,
+                "editor.tool",
+                json!({"tool": e.state.tool, "centre": centre}),
+            )
+        }
+        "snap.toggle" => {
+            let on = !e.state.snapping;
+            act(
+                e,
+                "editor.tool",
+                json!({"tool": e.state.tool, "snapping": on}),
+            )
+        }
+        "view.theme.dark" => set(e, "appearance.theme", json!("dark")),
+        "view.theme.light" => set(e, "appearance.theme", json!("light")),
+        "view.reduce_motion" => {
+            let on = !e.state.reduce_motion;
+            act(e, "editor.preferences", json!({"reduceMotion": on}))
+        }
+        "create.empty" => create(e, &Target::None, "Entity", json!({}), false),
+        "create.cube" => shape(e, target, "Cube", "box"),
+        "create.sphere" => shape(e, target, "Sphere", "sphere"),
+        "create.plane" => shape(e, target, "Plane", "plane"),
+        "create.capsule" => shape(e, target, "Capsule", "capsule"),
+        "create.camera" => create(e, target, "Camera", json!({"Camera": {}}), false),
+        "create.light.sun" => create(
+            e,
+            target,
+            "Sun",
+            json!({"Light": {"kind": "directional", "intensity": 3}, "Transform": {"position": [0, 6, 0], "rotation": [-50, 30, 0]}}),
+            false,
+        ),
+        "create.light.point" => create(
+            e,
+            target,
+            "Point light",
+            json!({"Light": {"kind": "point"}}),
+            matches!(target, Target::Entity(_)),
+        ),
+        "create.light.spot" => create(
+            e,
+            target,
+            "Spot light",
+            json!({"Light": {"kind": "spot"}}),
+            false,
+        ),
+        "create.fog" => create(e, target, "Height fog", json!({"HeightFog": {}}), false),
+        "play.start" => {
+            if e.state.playing == Some(false) {
+                play(e, "play.resume", json!({}))
+            } else {
+                let mut params = play_params(e);
+                params["scene"] = json!(e.state.doc);
+                params["background"] = json!(true);
+                play(e, "play.start", params).and_then(|()| view(e, json!({"play": "playing"})))
+            }
+        }
+        "play.pause" => {
+            play(e, "play.pause", json!({})).and_then(|()| view(e, json!({"play": "paused"})))
+        }
+        "play.step" => play(e, "play.step", json!({"ticks": 1})),
+        "play.stop" => {
+            play(e, "play.stop", json!({})).and_then(|()| view(e, json!({"play": "stopped"})))
+        }
+        "view.camera.perspective" => act(
+            e,
+            "editor.camera",
+            json!({"projection": if e.state.camera.projection == crate::state::CameraProjection::Perspective { "orthographic" } else { "perspective" }}),
+        ),
+        "view.camera.default" => act(e, "editor.frame", json!({"all": true})),
+        _ => Err(format!("{id}: {}", missing(id).unwrap_or("unknown command")).into()),
+    };
+    if result.is_ok() && id.starts_with("create.") {
+        s.resolve();
+    }
+    if let Err(error) = result {
+        s.editor.report_failure(&*error);
+    }
+}
+
+/// The registry spec of `id`, for titles, icons and shortcuts.
+pub(super) fn spec(id: &str) -> Option<&'static crate::shell::commands::Spec> {
+    crate::shell::commands::get(id)
+}
+
+/// The studio's keyboard map: the registry's default chords for the commands it runs.
+pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'static str> {
+    let c = mods.ctrl;
+    let sh = mods.shift;
+    Some(match (c, sh, key) {
+        (true, false, 0x5A) => "edit.undo",
+        (true, true, 0x5A) | (true, false, 0x59) => "edit.redo",
+        (true, false, 0x53) => "file.save",
+        (true, false, 0x44) => "edit.duplicate",
+        (true, false, 0x41) => "edit.select_all",
+        (true, true, 0x41) => "edit.deselect",
+        (true, false, 0x4B) | (true, true, 0x50) => "edit.palette",
+        (true, true, 0x4E) => "create.empty",
+        (false, false, 0x2E) | (false, false, 0x08) => "edit.delete",
+        (false, false, 0x46) => "view.frame",
+        (false, false, 0x24) => "view.frame_all",
+        (false, false, 0x57) => "view.tool.move",
+        (false, false, 0x45) => "view.tool.rotate",
+        (false, false, 0x52) => "view.tool.scale",
+        (false, false, 0x54) => "view.tool.universal",
+        (false, false, 0x74) => "play.start",
+        (false, false, 0x75) => "play.pause",
+        (false, false, 0x76) => "play.step",
+        (false, true, 0x74) => "play.stop",
+        _ => return None,
+    })
+}

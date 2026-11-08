@@ -98,7 +98,7 @@ struct Snapshot {
 /// A scan already started when an authority save completed cannot acknowledge it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct ScanBarrier(u64);
-pub(super) struct Browser {
+pub(crate) struct Browser {
     pub items: Vec<Asset>,
     /// Last successful semantic index, also used to resolve OS-drop destinations.
     pub files: Vec<AuthoredFile>,

@@ -6,7 +6,7 @@
 //! know which OS window hosts them.
 pub(crate) mod asset_import;
 mod asset_ops;
-mod assets;
+pub(crate) mod assets;
 mod assets_favourites;
 mod axis;
 pub(crate) mod build;
