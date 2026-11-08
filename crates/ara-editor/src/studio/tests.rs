@@ -261,6 +261,20 @@ fn captures() {
         )
         .unwrap();
         rt.update(|s| s.local.settings = None);
+        rt.update(|s| {
+            super::commands::run(s, "edit.palette", &crate::shell::commands::Target::None)
+        });
+        settle(&mut rt);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{}-palette.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.palette = None);
     }
 }
 

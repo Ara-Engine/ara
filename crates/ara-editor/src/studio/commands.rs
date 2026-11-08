@@ -24,11 +24,13 @@ pub(super) fn shortcut(keys: &str) -> Option<String> {
     }
     let mut mods = String::new();
     let mut rest = first;
-    for (name, glyph) in [("Ctrl+", "⌘"), ("Shift+", "⇧"), ("Alt+", "⌥")] {
-        if let Some(r) = rest.strip_prefix(name) {
-            rest = r;
-            mods.push_str(glyph);
-        }
+    // Modifiers come in any order ("Alt+Shift+N").
+    while let Some((r, glyph)) = [("Ctrl+", "⌘"), ("Shift+", "⇧"), ("Alt+", "⌥")]
+        .into_iter()
+        .find_map(|(name, glyph)| rest.strip_prefix(name).map(|r| (r, glyph)))
+    {
+        rest = r;
+        mods.push_str(glyph);
     }
     // macOS orders modifiers ⌥⇧⌘.
     let order = |c: char| "⌃⌥⇧⌘".find(c).unwrap_or(0);
@@ -295,4 +297,16 @@ pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'stati
         (false, true, 0x74) => "play.stop",
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn shortcuts_read_as_macos_writes_them() {
+        assert_eq!(super::shortcut("Ctrl+Shift+Z").as_deref(), Some("⇧⌘Z"));
+        assert_eq!(super::shortcut("Alt+Shift+N").as_deref(), Some("⌥⇧N"));
+        assert_eq!(super::shortcut("F2 / Enter").as_deref(), Some("F2"));
+        assert_eq!(super::shortcut(""), None);
+    }
 }

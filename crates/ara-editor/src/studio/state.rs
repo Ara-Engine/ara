@@ -237,6 +237,8 @@ pub struct Local {
     pub copy: Option<String>,
     /// The open Settings window.
     pub settings: Option<super::preferences::View>,
+    /// Commands run from the palette lately, newest first (never destructive ones).
+    pub recent_commands: Vec<&'static str>,
     /// Scale fields keep their proportions (the Inspector's chain toggle).
     pub scale_linked: bool,
     /// The open component overflow menu, by component.

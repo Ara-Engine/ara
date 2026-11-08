@@ -493,14 +493,62 @@ pub(super) fn score(query: &str, title: &str) -> Option<i32> {
 
 /// Commands the studio runs and the scene's entities, best first, at most 14.
 fn results(s: &Studio, query: &str) -> Vec<Entry> {
+    let entry = |group: &'static str, id: &'static str| {
+        commands::spec(id)
+            .filter(|_| commands::ported(id))
+            .map(|spec| Entry {
+                group,
+                icon: icons::named(spec.icon),
+                title: spec.title.to_owned(),
+                detail: spec.summary.to_owned(),
+                keys: spec.keys,
+                run: Run::Command(spec.id),
+            })
+    };
+    // With no query: what was run lately, then what fits the moment (I23).
+    if query.is_empty() {
+        let suggested: &[&'static str] = if s.editor.state.selection.is_empty() {
+            &[
+                "create.at_cursor",
+                "view.frame_all",
+                "edit.preferences",
+                "layout.default",
+                "window.history",
+            ]
+        } else {
+            &[
+                "view.frame",
+                "edit.rename",
+                "edit.duplicate",
+                "create.empty_child",
+                "create.at_cursor",
+            ]
+        };
+        let recent = s
+            .local
+            .recent_commands
+            .iter()
+            .filter_map(|id| entry("Recent", id));
+        let rest = suggested
+            .iter()
+            .filter(|id| !s.local.recent_commands.contains(id))
+            .filter_map(|id| entry("Suggested", id));
+        return recent.chain(rest).take(14).collect();
+    }
     let mut all: Vec<(i32, Entry)> = Vec::new();
     for spec in crate::shell::commands::all()
         .iter()
         .filter(|spec| commands::ported(spec.id))
     {
         if let Some(sc) = score(query, spec.title) {
+            // Recency only breaks ties between similar matches.
+            let recent = if s.local.recent_commands.contains(&spec.id) {
+                4
+            } else {
+                0
+            };
             all.push((
-                sc + 2,
+                sc + 2 + recent,
                 Entry {
                     group: "Commands",
                     icon: icons::named(spec.icon),
@@ -512,31 +560,27 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
             ));
         }
     }
-    if !query.is_empty() {
-        for (id, entity) in s.resolved.iter() {
-            let name = entity
-                .record
-                .get("name")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or(id);
-            if let Some(sc) = score(query, name) {
-                all.push((
-                    sc,
-                    Entry {
-                        group: "Entities",
-                        icon: Some(icons::BOX),
-                        title: name.to_owned(),
-                        detail: id.clone(),
-                        keys: "",
-                        run: Run::Select(id.clone()),
-                    },
-                ));
-            }
+    for (id, entity) in s.resolved.iter() {
+        let name = entity
+            .record
+            .get("name")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(id);
+        if let Some(sc) = score(query, name) {
+            all.push((
+                sc,
+                Entry {
+                    group: "Entities",
+                    icon: Some(icons::BOX),
+                    title: name.to_owned(),
+                    detail: id.clone(),
+                    keys: "",
+                    run: Run::Select(id.clone()),
+                },
+            ));
         }
     }
-    if !query.is_empty() {
-        all.sort_by_key(|e| std::cmp::Reverse(e.0));
-    }
+    all.sort_by_key(|e| std::cmp::Reverse(e.0));
     all.into_iter().take(14).map(|(_, e)| e).collect()
 }
 
@@ -547,7 +591,14 @@ fn run(s: &mut Studio) {
     if let Some(entry) = results(s, &query).into_iter().nth(active) {
         s.local.palette = None;
         match entry.run {
-            Run::Command(id) => commands::run(s, id, &Target::None),
+            Run::Command(id) => {
+                if id != "edit.delete" && id != "edit.palette" {
+                    s.local.recent_commands.retain(|r| *r != id);
+                    s.local.recent_commands.insert(0, id);
+                    s.local.recent_commands.truncate(5);
+                }
+                commands::run(s, id, &Target::None)
+            }
             Run::Select(id) => {
                 s.select(vec![id], false);
                 s.act("editor.frame", serde_json::json!({}));
