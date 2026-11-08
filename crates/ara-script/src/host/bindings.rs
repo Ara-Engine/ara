@@ -3,7 +3,7 @@
 
 use ara_diag::Diagnostic;
 use ara_schema::{SchemaDb, StructLayout};
-use bevy_ecs::component::{Component, ComponentId, StorageType};
+use bevy_ecs::component::{Component, ComponentId};
 use bevy_ecs::world::World;
 
 use crate::codes;
@@ -122,16 +122,6 @@ impl EngineBindings {
                     }
                 }
                 let id = (b.register)(world);
-                let table = world
-                    .components()
-                    .get_info(id)
-                    .is_some_and(|i| i.storage_type() == StorageType::Table);
-                if !table {
-                    return Err(Diagnostic::error(
-                        codes::SPARSE_COMPONENT,
-                        format!("engine component `{}` must use table storage to be viewed by C#", b.name),
-                    ));
-                }
                 Ok((b.name.clone(), id, layout))
             })
             .collect()
@@ -212,5 +202,35 @@ mod tests {
             .resolve(&schema, &mut World::new())
             .expect_err("stale native layout");
         assert_eq!(error.code, codes::LAYOUT_MISMATCH);
+    }
+
+    #[test]
+    fn sparse_native_storage_keeps_the_same_checked_layout_and_abi_identity() {
+        #[derive(Component)]
+        #[component(storage = "SparseSet")]
+        #[repr(C)]
+        struct SparseTransform {
+            position: [f32; 3],
+            rotation: [f32; 3],
+            scale: [f32; 3],
+        }
+        let schema = ara_runtime::schema(&[]).expect("engine schema");
+        let bindings = crate::bind_component!(EngineBindings::new(), SparseTransform as "Transform" { position, rotation, scale });
+        let mut world = World::new();
+        let resolved = bindings
+            .resolve(&schema, &mut world)
+            .expect("checked sparse native view");
+        assert_eq!(bindings.names(), EngineBindings::builtin().names());
+        assert_eq!(
+            world
+                .components()
+                .get_info(resolved[0].1)
+                .expect("component")
+                .storage_type(),
+            bevy_ecs::component::StorageType::SparseSet
+        );
+        let layouts =
+            crate::csgen::engine_layouts(&schema, &bindings.names()).expect("canonical layouts");
+        assert_eq!(resolved[0].2, layouts[0]);
     }
 }

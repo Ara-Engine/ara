@@ -50,3 +50,10 @@ CPU/Cargo slot: unassigned initially. All children explicitly holding heavy work
 -100k workspace mean47.1–48.9ms→11.8–12.1ms; total p50 baseline1331.9/1412.6ms vsowned1321.2/1328.4ms. Projection remains~1.1–1.2s and dominates; do not promote workspace gain as whole-Play gain. Rust allocations39,828,431→37,703,392 perpreparation.
 - Actual player cargo check and all-target clippy passed (unchanged vendored C++ warnings only);109-package ara-dev formatting passed. Evidence scene_prepare_mac_2026-11-09.json.
 - Root rebuilt benchmark without first preserving legacya1f12binary. Historical R1 samples/source hashes remain intact, but original R2 cannot run that exact binary. Reconstructed20e8source baseline isa1892e… (different bytes), candidate7a42c8…; restored sources verified. Future comparative runs use a new profile and content-addressed executable snapshots, never call reconstruction the original binary.
+
+### Sparse native checkpoint
+- Actual nativeSparseSet binding no longer refused; checked-layout proof retained, exact membership/coalescing/row-balanced packets and serial command order verified.17lib tests+20kactualCLRfixture+all-targetclippy+independentunsafe review passed; formatted.
+- Two reversed AC rounds:50k selected aligned~0.449/0.454ms, interleaved100klive/50kselected~0.880/0.873ms. These are new capability numbers, not a before/after speedup.
+- Dense holdouts completed across guarded quiet windows using immutable binaries. All8valid state/tick results agree; interrupted reverse attempt retained/excluded. Coldp50+0.6–0.7%, hotp50-1.8–3.3%; reversecoldp95+22%(.320→.391ms) remains unresolved tail variability. Do not claim zero regression or universal superiority.
+- Follow-up justified by measured sparse setup: streaming per-packet gather proposal can remove O(selectedrows) pointer/call metadata and parallelize it; preserve callback boundaries/state/ticks/order. Not yet implemented.
+- Projection allocation follow-up source ready/reviewed: reusableValidator paths, owned-ID transfer, clone-once materialization. No compile or new timing yet.

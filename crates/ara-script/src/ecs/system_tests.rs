@@ -380,7 +380,7 @@ fn missing_resource_preserves_existing_row_stamp_side_effect_without_dispatch() 
 }
 
 #[test]
-fn later_sparse_column_keeps_preceding_table_stamp_side_effect_without_dispatch() {
+fn sparse_column_selects_only_matching_rows_and_reuses_one_small_run_buffer() {
     ComputeTaskPool::get_or_init(|| TaskPoolBuilder::new().num_threads(4).build());
     let mut world = World::new();
     for i in 0..5000 {
@@ -388,17 +388,161 @@ fn later_sparse_column_keeps_preceding_table_stamp_side_effect_without_dispatch(
     }
     let mut check = Box::<Check>::default();
     check.refresh(&world);
+    let before = check
+        .ticks
+        .keys()
+        .map(|&bits| {
+            let entity =
+                world.entity(bevy_ecs::entity::Entity::try_from_bits(bits).expect("entity"));
+            (
+                bits,
+                (
+                    entity
+                        .get_change_ticks::<Velocity>()
+                        .expect("velocity tick")
+                        .changed,
+                    entity
+                        .get_change_ticks::<PhysicsPose>()
+                        .expect("pose tick")
+                        .changed,
+                    entity
+                        .get_change_ticks::<Summary>()
+                        .expect("summary row tick")
+                        .changed,
+                ),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
     let mut plan = plan(&mut world, &check);
     plan.columns.push((
         world.register_component::<Sparse>(),
         true,
         size_of::<Sparse>(),
     ));
+    let sparse_id = world.component_id::<Sparse>().expect("sparse id");
+    let sparse_entity = world
+        .query::<(bevy_ecs::entity::Entity, &Sparse)>()
+        .iter(&world)
+        .next()
+        .expect("sparse row")
+        .0;
+    let (_, cells) = world
+        .storages()
+        .sparse_sets
+        .get(sparse_id)
+        .expect("sparse storage")
+        .get_with_ticks(sparse_entity)
+        .expect("sparse ticks");
+    assert!(
+        cells.summary_tick.is_none(),
+        "Bevy descriptors forbid summary ticks on sparse storage"
+    );
+    world.clear_trackers();
     let mut state: SystemState<(ScriptQuery<'static, 'static>,)> =
         (ScriptQueryBuilder(plan),).build_state(&mut world);
-    let tick = {
+    let (tick, buffers) = {
         let (mut query,) = state.get_mut(&mut world).expect("query");
         let tick = query.this_run;
+        check.expected.store(tick.get(), Ordering::Relaxed);
+        query.run(&Tick {
+            frame: 0,
+            seed: 1,
+            elapsed: 0.0,
+            dt: 1.0,
+            reserved: 0,
+        });
+        (tick, query.state.used)
+    };
+    assert_eq!(check.rows.load(Ordering::Relaxed), 1000);
+    assert!(check.calls.load(Ordering::Relaxed) > 0);
+    assert!(!check.wrong_tick.load(Ordering::Relaxed));
+    assert_eq!(
+        buffers, 1,
+        "small fragmented queries share one serial command buffer"
+    );
+    let changed = world
+        .query_filtered::<bevy_ecs::entity::Entity, bevy_ecs::query::Changed<Sparse>>()
+        .iter(&world)
+        .count();
+    assert_eq!(
+        changed, 1000,
+        "typed sparse Changed filters observe per-entity stamps"
+    );
+    for &bits in check.ticks.keys() {
+        let entity = bevy_ecs::entity::Entity::try_from_bits(bits).expect("entity");
+        let e = world.entity(entity);
+        let selected = world.get::<Sparse>(entity).is_some();
+        assert_eq!(
+            e.get_change_ticks::<Velocity>()
+                .expect("velocity tick")
+                .changed,
+            if selected { tick } else { before[&bits].0 }
+        );
+        assert_eq!(
+            e.get_change_ticks::<PhysicsPose>()
+                .expect("pose tick")
+                .changed,
+            if selected { tick } else { before[&bits].1 }
+        );
+        assert_eq!(
+            e.get_change_ticks::<Summary>()
+                .expect("summary row tick")
+                .changed,
+            if selected { tick } else { before[&bits].2 }
+        );
+        assert_eq!(
+            world
+                .get::<Velocity>(entity)
+                .expect("unchanged column")
+                .linear,
+            [if selected { 1.0 } else { 0.0 }, 0.0, 0.0]
+        );
+        if selected {
+            assert_eq!(
+                e.get_change_ticks::<Sparse>()
+                    .expect("sparse write tick")
+                    .changed,
+                tick
+            );
+        }
+    }
+}
+
+#[test]
+fn sparse_default_disabling_filters_use_archetypes_instead_of_shared_tables() {
+    ComputeTaskPool::get_or_init(|| TaskPoolBuilder::new().num_threads(4).build());
+    let mut world = World::new();
+    world.register_disabling_component::<Sparse>();
+    for i in 0..5000 {
+        spawn(&mut world, i);
+    }
+    let mut check = Box::<Check>::default();
+    check.refresh(&world);
+    let before = check
+        .ticks
+        .keys()
+        .map(|&bits| {
+            let entity =
+                world.entity(bevy_ecs::entity::Entity::try_from_bits(bits).expect("entity"));
+            (
+                bits,
+                entity
+                    .get_change_ticks::<Velocity>()
+                    .expect("original tick")
+                    .changed,
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut state: SystemState<(ScriptQuery<'static, 'static>,)> =
+        (ScriptQueryBuilder(plan(&mut world, &check)),).build_state(&mut world);
+    let tick = {
+        let (mut query,) = state.get_mut(&mut world).expect("query");
+        assert!(
+            !query.state.dense,
+            "default sparse filters participate in dense eligibility"
+        );
+        let tick = query.this_run;
+        check.expected.store(tick.get(), Ordering::Relaxed);
         query.run(&Tick {
             frame: 0,
             seed: 1,
@@ -408,38 +552,22 @@ fn later_sparse_column_keeps_preceding_table_stamp_side_effect_without_dispatch(
         });
         tick
     };
-    assert_eq!(
-        check.calls.load(Ordering::Relaxed),
-        0,
-        "sparse data columns remain unsupported"
-    );
+    assert_eq!(check.rows.load(Ordering::Relaxed), 4000);
+    assert!(!check.wrong_tick.load(Ordering::Relaxed));
     for &bits in check.ticks.keys() {
         let entity = bevy_ecs::entity::Entity::try_from_bits(bits).expect("entity");
-        let e = world.entity(entity);
+        let enabled = world.get::<Sparse>(entity).is_none();
         assert_eq!(
-            e.get_change_ticks::<Velocity>()
-                .expect("velocity tick")
-                .changed,
-            tick
-        );
-        assert_eq!(
-            e.get_change_ticks::<PhysicsPose>()
-                .expect("pose tick")
-                .changed,
-            tick
-        );
-        assert_eq!(
-            e.get_change_ticks::<Summary>()
-                .expect("summary row tick")
-                .changed,
-            tick
+            world.get::<Velocity>(entity).expect("velocity").linear[0],
+            if enabled { 1.0 } else { 0.0 }
         );
         assert_eq!(
             world
-                .get::<Velocity>(entity)
-                .expect("unchanged column")
-                .linear,
-            [0.0; 3]
+                .entity(entity)
+                .get_change_ticks::<Velocity>()
+                .expect("filtered tick")
+                .changed,
+            if enabled { tick } else { before[&bits] }
         );
     }
 }
