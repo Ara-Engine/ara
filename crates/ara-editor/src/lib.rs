@@ -5,7 +5,7 @@ mod actions;
 pub mod activity;
 pub(crate) mod app;
 mod asset_service;
-mod asset_tools;
+pub(crate) mod asset_tools;
 mod authoring;
 mod capture;
 pub mod codes;

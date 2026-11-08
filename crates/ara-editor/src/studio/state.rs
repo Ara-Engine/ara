@@ -106,6 +106,91 @@ pub struct ScenePointer {
     pub window: (f32, f32),
 }
 
+/// Asset tile pictures: the legacy pipeline's off-thread renders (cached by content under
+/// `.ara/cache/thumbnails`), turned into stillkit images as they land.
+#[derive(Default)]
+pub(crate) struct Previews {
+    /// The render queue, made on first use.
+    queue: Option<crate::asset_tools::thumbnails::Thumbnails>,
+    /// Paths already asked for.
+    asked: std::collections::HashSet<String>,
+    /// Finished pictures, by storage path.
+    pub images: std::collections::HashMap<String, std::sync::Arc<stillkit::Image>>,
+    /// Some sources had not finished importing; they are asked again each second.
+    waiting: bool,
+    /// When they were last asked again.
+    retried: Option<std::time::Instant>,
+}
+
+impl Previews {
+    /// Whether a file of `kind` has a picture worth rendering.
+    pub fn previewable(kind: &str) -> bool {
+        matches!(
+            kind,
+            "png" | "jpg" | "jpeg" | "hdr" | "exr" | "glb" | "gltf" | "fbx" | "material" | "graph"
+        )
+    }
+
+    /// Asks for `paths` not asked for yet.
+    pub fn want<'a>(&mut self, root: &std::path::Path, paths: impl IntoIterator<Item = &'a str>) {
+        for path in paths {
+            if self.asked.insert(path.to_owned()) {
+                self.queue
+                    .get_or_insert_with(|| crate::asset_tools::thumbnails::Thumbnails::new(root))
+                    .request(path);
+            }
+        }
+    }
+
+    /// Takes finished pictures; whether any landed.
+    pub fn poll(&mut self) -> bool {
+        let Some(queue) = self.queue.as_mut() else {
+            return false;
+        };
+        if self.waiting
+            && self
+                .retried
+                .is_none_or(|at| at.elapsed() >= std::time::Duration::from_secs(1))
+        {
+            self.retried = Some(std::time::Instant::now());
+            self.waiting = queue.retry_pending();
+        }
+        let mut landed = false;
+        for done in queue.poll() {
+            if let crate::asset_tools::thumbnails::Done::Pending(_) = &done {
+                self.waiting = true;
+            }
+            if let crate::asset_tools::thumbnails::Done::Image(thumb) = done {
+                let (width, height) = thumb.image.dimensions();
+                let mut pixels = Vec::with_capacity((width * height * 4) as usize);
+                for p in thumb.image.pixels() {
+                    let a = u16::from(p[3]);
+                    let pre = |c: u8| ((u16::from(c) * a + 127) / 255) as u8;
+                    pixels.extend_from_slice(&[pre(p[2]), pre(p[1]), pre(p[0]), p[3]]);
+                }
+                self.images.insert(
+                    thumb.key,
+                    std::sync::Arc::new(stillkit::Image {
+                        width,
+                        height,
+                        pixels,
+                    }),
+                );
+                landed = true;
+            }
+        }
+        landed
+    }
+}
+
+impl std::fmt::Debug for Previews {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Previews")
+            .field("images", &self.images.len())
+            .finish()
+    }
+}
+
 /// Window-only state.
 #[derive(Debug, Default)]
 pub struct Local {
@@ -186,6 +271,8 @@ pub struct Studio {
     pub size: (f32, f32),
     /// The project's files, scanned in the background (Assets).
     pub(crate) assets: Option<crate::shell::assets::Browser>,
+    /// Asset thumbnails rendered off-thread (models, materials, textures), by storage path.
+    pub(crate) previews: Previews,
     /// The diagnostics bus so far (Console, Problems), oldest first.
     pub logs: Vec<LogRow>,
 }
@@ -205,6 +292,7 @@ impl Studio {
             },
             size,
             assets: None,
+            previews: Previews::default(),
             logs: Vec::new(),
         };
         studio.resolve();

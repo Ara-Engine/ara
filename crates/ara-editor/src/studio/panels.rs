@@ -197,7 +197,10 @@ fn assets(s: &Studio) -> El<Studio> {
         let selected = s.editor.state.asset_path.clone();
         let tiles: Vec<El<Studio>> = items
             .into_iter()
-            .map(|a| tile(l, &a, selected.as_deref() == Some(a.path.as_str())))
+            .map(|a| {
+                let preview = s.previews.images.get(&a.path).cloned();
+                tile(l, &a, selected.as_deref() == Some(a.path.as_str()), preview)
+            })
             .collect();
         col()
             .grow(1.0)
@@ -387,7 +390,12 @@ fn crumb(l: &ara_kit::look::Look, label: &str, path: String, current: bool) -> E
 }
 
 /// One asset: its icon on a soft plate and the name under it, two lines at most.
-fn tile(l: &ara_kit::look::Look, a: &Asset, selected: bool) -> El<Studio> {
+fn tile(
+    l: &ara_kit::look::Look,
+    a: &Asset,
+    selected: bool,
+    preview: Option<std::sync::Arc<stillkit::Image>>,
+) -> El<Studio> {
     let c = &l.c;
     let name = a
         .path
@@ -474,15 +482,18 @@ fn tile(l: &ara_kit::look::Look, a: &Asset, selected: bool) -> El<Studio> {
                 true
             }
         })
-        .child(
-            el().size(52.0)
+        .child(match preview {
+            // The rendered picture, or the kind's icon until it lands.
+            Some(picture) => stillkit::el::image(picture).size(52.0),
+            None => el()
+                .size(52.0)
                 .radius(l.radius.sm)
                 .fill(c.raised.0)
                 .border(1.0, c.border.0)
                 .align(Align::Center)
                 .justify(Justify::Center)
                 .child(icon(kind_icon(a)).size(24.0).color(glyph_ink)),
-        )
+        })
         .child(
             text(stem.to_owned())
                 .text_size(11.5)

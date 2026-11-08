@@ -190,6 +190,26 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         }) {
             rt.update(|_| {});
         }
+        // Tile pictures for the open folder, rendered off-thread.
+        rt.touch(|s| {
+            let folder = s.editor.state.asset_folder.clone();
+            let root = s.editor.host.root().to_owned();
+            if let Some(browser) = &s.assets {
+                let wanted: Vec<String> = browser
+                    .items
+                    .iter()
+                    .filter(|a| {
+                        state::Previews::previewable(&a.kind)
+                            && a.path.rsplit_once('/').map_or("", |(p, _)| p) == folder
+                    })
+                    .map(|a| a.path.clone())
+                    .collect();
+                s.previews.want(&root, wanted.iter().map(String::as_str));
+            }
+        });
+        if rt.touch(|s| s.previews.poll()) {
+            rt.update(|_| {});
+        }
         if logs_at.elapsed() >= Duration::from_millis(400) {
             logs_at = Instant::now();
             if rt.touch(Studio::poll_logs) {
