@@ -794,7 +794,13 @@ impl PlayScene {
 
 /// Formats bytes as lowercase hex.
 pub fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    let mut text = String::with_capacity(bytes.len().saturating_mul(2));
+    for &byte in bytes {
+        text.push(char::from(DIGITS[usize::from(byte >> 4)]));
+        text.push(char::from(DIGITS[usize::from(byte & 15)]));
+    }
+    text
 }
 
 /// Parses hex text of any even length into bytes (portable snapshots).
