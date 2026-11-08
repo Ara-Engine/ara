@@ -1,11 +1,18 @@
-# Real query-filter fixture
+# Real ECS feature fixtures
 
 Status: `query_filter` passed real serial and parallel correctness smokes on
 2026-11-09 with Bevy 0.20.0, Unity 6000.4.5f1 and Burst 1.8.29. Both engines matched
 the independent 1,003-ID/five-step oracle across all 36,132 state bytes.
 [Versions, hashes and validation evidence](query_filter_smoke_mac_2026-11-09.json)
 retain `timings_accepted=false`; no feature performance result is claimed.
-The other five cases remain the [contract](CONTRACT.md).
+The other five cases passed all 50 planned serial/parallel correctness pairs on
+the same installed versions, with exact full-state/oracle agreement. Their
+[separate evidence](extended_smoke_mac_2026-11-09.json) preserves 22 earlier
+controllers and 28 resumed checkpointed controllers, with one unchanged runtime
+kernel source version and Bevy executable. These are correctness results;
+`timings_accepted=false`. The [extended notes](extended/README.md) describe real
+API coverage, storage checks, worker semantics and the recovery gate. They do not
+establish Ara public C# buffer/JobHandle availability or shipping performance.
 
 Both engines create the same 8/64 tag archetypes, group IDs by archetype, and retain
 their hot query. Unity uses `EntityQueryBuilder.WithAll/WithAllRW/WithNone`, a

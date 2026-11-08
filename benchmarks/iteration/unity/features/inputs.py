@@ -14,8 +14,11 @@ def manifest_digest(manifest):
 def templates(here, wrapper, helper):
     root = here.parents[3]
     files = [path for path in (here / "unity/Assets").rglob("*") if path.is_file()]
+    files += [path for path in (here / "extended/unity/Assets").rglob("*") if path.is_file()]
+    files += [path for path in (here / "editor").rglob("*") if path.is_file()]
     files += list(here.glob("*.py")) + list((here / "rust/src").rglob("*.rs"))
     files += [here / "rust/Cargo.toml", wrapper, helper]
+    if (here / "rust/Cargo.lock").is_file(): files.append(here / "rust/Cargo.lock")
     return {str(path.relative_to(root)): digest(path.read_bytes()) for path in sorted(files)}
 
 

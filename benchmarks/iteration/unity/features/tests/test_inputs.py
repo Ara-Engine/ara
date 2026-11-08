@@ -18,6 +18,8 @@ import project
 import run as launcher
 import verify as verification
 import reference
+import checkpoint_fixture
+import recovery
 
 
 class InputManifestTests(unittest.TestCase):
@@ -34,6 +36,38 @@ class InputManifestTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "result changed since"):
             verification.checked_result(result)
 
+    def extended(self):
+        self.args.case, self.args.percent, self.args.distribution = "dirty_epoch", 1, "clustered"
+        self.args.length, self.args.trim, self.args.topology = 4, False, "chain"
+        assets = self.here / "extended/unity/Assets"
+        assets.mkdir(parents=True)
+        (assets / "Extended.cs").write_text("class Extended {}\n")
+        self.prepare()
+
+    def test_extended_config_is_exactly_bound_and_cannot_change_mid_launch(self):
+        self.extended()
+        result, _, _ = project.paths(self.args, "unity")
+        with patch.object(project.BASE, "active_editors", return_value=[]), \
+             patch.object(project, "resources", return_value={"loadavg": [0, 0, 0], "power": "fixture power"}), \
+             patch.object(launcher.subprocess, "Popen", return_value=self.engine_child()), \
+             contextlib.redirect_stdout(io.StringIO()):
+            launcher.run(self.args, "unity")
+        launch = json.loads(result.with_suffix(".launch.json").read_text())
+        case_input = launch["case_input"]
+        self.assertEqual(hashlib.sha256(Path(case_input["path"]).read_bytes()).hexdigest(), case_input["sha256"])
+        self.assertEqual(case_input["config"]["percent"], 1)
+        verification.checked_case_input(launch, self.args)
+        Path(case_input["path"]).write_text("{}")
+        with self.assertRaisesRegex(ValueError, "case input changed since launch"):
+            verification.checked_case_input(launch, self.args)
+        self.args.run = "changed-input"
+        child = self.engine_child(lambda: project.config_path(self.args).write_text("{}"))
+        with patch.object(project.BASE, "active_editors", return_value=[]), \
+             patch.object(project, "resources", return_value={"loadavg": [0, 0, 0], "power": "fixture power"}), \
+             patch.object(launcher.subprocess, "Popen", return_value=child), \
+             self.assertRaisesRegex(RuntimeError, "case input changed during execution"):
+            launcher.run(self.args, "unity")
+
     def setUp(self):
         parent = project.ROOT / "target/feature-input-tests"
         parent.mkdir(parents=True, exist_ok=True)
@@ -43,19 +77,20 @@ class InputManifestTests(unittest.TestCase):
         self.here = root / "benchmarks/iteration/unity/features"
         files = {"unity/Assets/Query.cs": "class Query {}\n", "unity/Assets/Features.asmdef": "{}\n",
                  "rust/src/main.rs": "fn main() {}\n", "rust/Cargo.toml": "[package]\nname='fixture'\n",
-                 "generator.py": "value = 1\n"}
+                 "generator.py": "value = 1\n", "editor/PreferenceRecovery.cs": "class PreferenceRecovery {}\n"}
         for name, data in files.items():
             path = self.here / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(data)
-        (self.here.parent / "MacBatch.cs").write_text('S8Unity.Benchmark.Run(); // "-s8"\n')
+        (self.here.parent / "MacBatch.cs").write_text((Path(__file__).resolve().parents[2] / "MacBatch.cs").read_text())
         (self.here.parent / "bench.py").write_text("# fixture helper\n")
         editor = root / "editor/Unity.app/Contents/MacOS/Unity"
         editor.parent.mkdir(parents=True, exist_ok=True)
         editor.write_bytes(b"not an executable; never launched")
         with (editor.parents[1] / "Info.plist").open("wb") as stream:
             plistlib.dump({"CFBundleShortVersionString": "6000.4.5f1"}, stream)
-        for owner, name, value in [(project, "HERE", self.here), (project, "ROOT", root), (project.BASE, "EDITOR", editor)]:
+        for owner, name, value in [(project, "HERE", self.here), (project, "ROOT", root), (project.BASE, "EDITOR", editor),
+                (recovery, "ROOT", root), (recovery, "REGISTRY", root / "target/registry/projects.json")]:
             mocked = patch.object(owner, name, value)
             mocked.start()
             self.addCleanup(mocked.stop)
@@ -121,9 +156,13 @@ class InputManifestTests(unittest.TestCase):
             def wait(self, timeout):
                 result.write_text(json.dumps({"full_ids_tags_updates_checked": True,
                                               "max_kernel_runners": 1, "p50_ms": 0, "p95_ms": 0}))
-                Path(str(result) + ".environment.json").write_text(json.dumps({
+                environment = {
+                    **checkpoint_fixture.initial(),
                     "finally_restored": True, "measurement_completed": True, "burst_enabled": True,
-                    "burst_safety_checks": False, "burst_force_safety_checks": False, "burst_debug": False}))
+                    "burst_safety_checks": False, "burst_force_safety_checks": False, "burst_debug": False}
+                checkpoint = checkpoint_fixture.checkpoint(result.parents[2], result, environment)
+                checkpoint_fixture.receipt(result.parents[2], checkpoint)
+                Path(str(result) + ".environment.json").write_text(json.dumps(environment))
                 if after_write is not None:
                     after_write()
                 return 0

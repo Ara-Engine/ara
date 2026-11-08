@@ -10,10 +10,14 @@ import sys
 
 sys.dont_write_bytecode = True
 import inputs
+import cases
+import recovery
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[3]
 PROJECT = ROOT / "target/perf-scale/uf"
 RUST_TARGET = ROOT / "target/perf-scale/feature-rust"
+EXTENDED_PROJECT = ROOT / "target/perf-scale/ufx"
+EXTENDED_RUST_TARGET = ROOT / "target/perf-scale/extended-feature-rust"
 MARKER = ".ara-query-feature.json"
 spec = importlib.util.spec_from_file_location("ara_s8_helpers", HERE.parent / "bench.py")
 BASE = importlib.util.module_from_spec(spec)
@@ -26,13 +30,17 @@ def template_inputs():
 
 def prepared_manifest(args):
     root = BASE.scratch_path(args.project)
-    return inputs.check(root, MARKER, template_inputs(), str(BASE.EDITOR), BASE.PACKAGES)
+    manifest = inputs.check(root, MARKER, template_inputs(), str(BASE.EDITOR), BASE.PACKAGES)
+    expected = "extended-v1" if cases.extended(args) else "query_filter-v1"
+    if manifest["input_manifest"]["fixture"] != expected:
+        raise ValueError("prepared project belongs to another fixture family; choose its separate project or run prepare")
+    return manifest
 
 
 def paths(args, engine):
     lane = execution_lane(args)
     root = BASE.scratch_path(args.project)
-    stem = f"query_filter_{args.count}_a{args.archetypes}_r{args.runners}_{engine}"
+    stem = f"{cases.name(args)}_{args.count}_{cases.variant(args)}_r{args.runners}_{engine}"
     if lane == "correctness-smoke":
         stem += "_smoke"
     folder = root / "results" / args.run
@@ -63,14 +71,18 @@ def prepare(args):
     call = "S8Unity.Benchmark.Run();"
     if template.count(call) != 1 or template.count('"-s8"') != 1:
         raise ValueError("control wrapper changed; review the feature adapter before preparation")
-    derived = template.replace(call, "AraFeatures.QueryBenchmark.Run();").replace('"-s8"', '"-ara-feature"')
+    entry = "AraExtended.ExtendedBenchmark.Run();" if cases.extended(args) else "AraFeatures.QueryBenchmark.Run();"
+    derived = recovery.adapt_wrapper(template).replace(call, entry).replace('"-s8"', '"-ara-feature"')
     derived = derived.replace("missing S8 arguments", "missing feature arguments")
-    inputs.sync_assets(HERE / "unity/Assets", root / "Assets",
-                       ["Editor/MacBatch.cs", "Editor/Features.Editor.asmdef"])
+    source = HERE / ("extended/unity/Assets" if cases.extended(args) else "unity/Assets")
+    inputs.sync_assets(source, root / "Assets",
+                       ["Editor/MacBatch.cs", "Editor/Features.Editor.asmdef", "Editor/PreferenceRecovery.cs"])
     editor = root / "Assets/Editor"
     editor.mkdir(parents=True, exist_ok=True)
     inputs.write_if_changed(editor / "MacBatch.cs", derived.encode())
-    assembly = {"name": "AraFeatureFixture.Editor", "references": ["AraFeatureFixture", "Unity.Burst"], "includePlatforms": ["Editor"]}
+    inputs.write_if_changed(editor / "PreferenceRecovery.cs", (HERE / "editor/PreferenceRecovery.cs").read_bytes())
+    assembly_name = "AraExtendedFixture" if cases.extended(args) else "AraFeatureFixture"
+    assembly = {"name": assembly_name + ".Editor", "references": [assembly_name, "Unity.Burst"], "includePlatforms": ["Editor"]}
     inputs.write_if_changed(editor / "Features.Editor.asmdef", (json.dumps(assembly, indent=2) + "\n").encode())
     inputs.write_if_changed(root / "Packages/manifest.json", (json.dumps({"dependencies": BASE.PACKAGES}, indent=2) + "\n").encode())
     settings = root / "ProjectSettings"
@@ -78,11 +90,13 @@ def prepare(args):
     version_path = settings / "ProjectVersion.txt"
     if not version_path.exists() or "m_EditorVersion: 6000.4.5f1" not in version_path.read_text().splitlines():
         inputs.write_if_changed(version_path, b"m_EditorVersion: 6000.4.5f1\n")
-    BASE.write_json(marker, {"fixture": "query_filter-v1", "editor": str(BASE.EDITOR),
+    BASE.write_json(marker, {"fixture": "extended-v1" if cases.extended(args) else "query_filter-v1", "editor": str(BASE.EDITOR),
+                    "repository_root": str(ROOT),
                     "requested_packages": BASE.PACKAGES, "input_manifest_version": 1,
                     "template_inputs": template_inputs(), "prepared_inputs": inputs.prepared(root),
                     "wrapper_template_sha256": hashlib.sha256(template.encode()).hexdigest(),
                     "prepared_wrapper_sha256": hashlib.sha256(derived.encode()).hexdigest()})
+    recovery.register(root)
     print(json.dumps({"project": str(root), "marker": str(marker), "launched": False}))
 
 
@@ -92,24 +106,38 @@ def command(args, engine):
     environment = dict(os.environ)
     if engine == "bevy":
         binary = BASE.scratch_path(args.rust_binary)
-        workers = 0 if args.runners == 1 else args.runners - 1
-        argv = ["/usr/bin/nice", "-n", "10", str(binary), "query_filter", str(args.count), str(workers),
-                str(args.warmup), str(args.frames), str(result), str(dump), str(args.archetypes), str(args.batch)]
+        workers = cases.workers(args)
+        input_argument = str(config_path(args)) if cases.extended(args) else str(args.archetypes)
+        argv = ["/usr/bin/nice", "-n", "10", str(binary), cases.name(args), str(args.count), str(workers),
+                str(args.warmup), str(args.frames), str(result), str(dump), input_argument, str(args.batch)]
     else:
         root = BASE.scratch_path(args.project)
         environment.update(UPM_CACHE_ROOT=str(root / "upm-cache"),
                            UPM_GIT_LFS_CACHE_PATH=str(root / "upm-cache/git-lfs"),
-                           TMPDIR=str(ROOT / "target/perf-scale/uf-t"))
+                           TMPDIR=str(ROOT / ("target/perf-scale/ufx-t" if cases.extended(args) else "target/perf-scale/uf-t")))
         argv = ["/usr/bin/nice", "-n", "10", str(BASE.EDITOR), "-batchmode", "-nographics",
                 "-projectPath", str(root), "-job-worker-count", "14", "-executeMethod", "AraIteration.MacBatch.Run",
-                "-logFile", str(log), "-ara-feature", "query_filter", str(args.count), str(args.runners),
-                str(args.warmup), str(args.frames), str(result), str(dump), str(args.archetypes), str(args.batch)]
+                "-logFile", str(log), "-ara-feature", cases.name(args), str(args.count), str(args.runners),
+                str(args.warmup), str(args.frames), str(result), str(dump),
+                str(config_path(args)) if cases.extended(args) else str(args.archetypes), str(args.batch)]
     return argv, environment, result, dump, log
 
 
-def build_command():
-    return {"command": ["/usr/bin/nice", "-n", "10", "cargo", "build", "--release", "--manifest-path", str(HERE / "rust/Cargo.toml")],
-            "environment": {"CARGO_TARGET_DIR": str(RUST_TARGET), "CARGO_BUILD_JOBS": "2",
+def binary_name(args=None):
+    return "ara-ecs-extended-fixture" if args is not None and cases.extended(args) else "ara-ecs-feature-fixture"
+
+
+def rust_target(args=None):
+    return EXTENDED_RUST_TARGET if args is not None and cases.extended(args) else RUST_TARGET
+
+
+def config_path(args):
+    return BASE.scratch_path(args.project) / "inputs" / args.run / (cases.name(args) + "_" + cases.variant(args) + ".json")
+
+
+def build_command(args=None):
+    return {"command": ["/usr/bin/nice", "-n", "10", "cargo", "build", "--locked", "--release", "--bin", binary_name(args), "--manifest-path", str(HERE / "rust/Cargo.toml")],
+            "environment": {"CARGO_TARGET_DIR": str(rust_target(args)), "CARGO_BUILD_JOBS": "2",
                             "RUSTFLAGS": "-C target-cpu=native", "CARGO_PROFILE_RELEASE_LTO": "thin",
                             "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "1", "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",
                             "CARGO_PROFILE_RELEASE_DEBUG": "0", "CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS": "false"}}

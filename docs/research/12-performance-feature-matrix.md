@@ -5,7 +5,7 @@ the current follow-up work. Concurrent implementation changes must update their
 own evidence; an item below is not automatically a remaining defect in a later
 commit. This inventory adds feature and correctness coverage to
 [the scaling investigation](11-performance-scaling-comparison.md). It does not
-contain new timing runs.
+contain new timing runs; subsequent measurements are linked below.
 
 The present evidence does **not** establish that Ara beats Unity across ECS,
 Jobs, Burst, editor iteration or complete games. The controlled Mac comparison
@@ -59,6 +59,12 @@ changes have executable evidence:
   A later build replaced the original binary; reconstructed-source runs require a
   separate profile. The [new feature fixtures](../../benchmarks/iteration/unity/features/README.md)
   use full ID/tag/update exports and distinguish correctness smokes from timings.
+  The [extended suite](../../benchmarks/iteration/unity/features/extended_smoke_mac_2026-11-09.json)
+  passes 50 serial/parallel pairs for real changed filters, structural command
+  playback, dependency chains/forks and fixed/resizing buffers. Every full state
+  matches the independent integer oracle. Runtime kernels/executable stayed fixed;
+  controller phases and failed attempts are preserved. These are native API
+  correctness results, with no accepted timings or new Ara C# buffer/job API claim.
 
 These additions do not fill every API or comparison gap below. C# buffer,
 enable/shared/change-filter and explicit job-graph surfaces, subsystem comparisons
