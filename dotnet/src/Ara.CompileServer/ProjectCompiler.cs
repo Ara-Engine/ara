@@ -16,8 +16,9 @@ internal static class ProjectCompiler
 {
     static readonly CompileProducer ProjectDiagnostics = new("project");
     static readonly CompileProducer EditorDiagnostics = new("editor");
-    internal static ProjectInventoryResult Compile(ProjectBuildRequest request, bool writeOutputs = true)
+    internal static ProjectInventoryResult Compile(ProjectBuildRequest request, bool writeOutputs = true, ProjectCompilations? compilations = null)
     {
+        compilations ??= new ProjectCompilations();
         var inventory = ProjectInventory.Scan(new(request.Project, request.AuthoringRoot));
         if (inventory.Diagnostics.Any(d => (string?)d["severity"] == "error"))
         {
@@ -64,12 +65,16 @@ internal static class ProjectCompiler
                         return false;
                     }
                 var sources = module.Sources.Select(s => (Source:s, Text:File.ReadAllText(Path.Combine(root, s.StoragePath)))).ToArray();
-                var fingerprint = Hash(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+                var configuration = Hash(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
                 {
                     module.Name, module.Hot, module.Profile, toolHash, runtimeHash, generatorHash,
                     editorHash = module.Profile == "editor" ? Hash(File.ReadAllBytes(typeof(Ara.Editor.EditorRegistry).Assembly.Location)) : "",
-                    sources = sources.Select(s => new { s.Source.StoragePath, hash = Hash(Encoding.UTF8.GetBytes(s.Text)) }),
                     references = module.References.Select(r => new { name = r, hash = built[r].Hash }),
+                })));
+                var fingerprint = Hash(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+                {
+                    configuration,
+                    sources = sources.Select(s => new { s.Source.StoragePath, hash = Hash(Encoding.UTF8.GetBytes(s.Text)) }),
                 })));
                 var state = Path.Combine(root, module.StatePath);
                 var assembly = Path.Combine(root, module.AssemblyPath);
@@ -96,14 +101,11 @@ internal static class ProjectCompiler
                     if (File.Exists(editor)) extra.Add(editor);
                 }
                 var compiler = new ModuleCompiler(name, extra);
-                var trees = sources.Select(s => ModuleCompiler.Parse(Path.Combine(root, s.Source.StoragePath), s.Text)).ToArray();
-                var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(name,
-                    [.. trees, ModuleCompiler.Parse("<ara-global-usings>.cs", ModuleCompiler.GlobalUsings)],
-                    [.. compiler.References, .. module.References.Select(r => built[r].Reference)], ModuleCompiler.Options(module.Hot));
-                var driver = ModuleCompiler.Driver().RunGeneratorsAndUpdateCompilation(compilation, out var final, out var generatorDiagnostics);
+                var (driver, final, generatorDiagnostics, _) = compilations.Generate(assembly, configuration, compiler, module.Hot,
+                    sources.Select(s => (Path.Combine(root, s.Source.StoragePath), s.Text)).ToArray(), module.References.Select(r => built[r].Reference));
                 // Analysis and emission share immutable Roslyn state. Keep both off the
                 // game thread, and let emit supply compiler diagnostics in the same pass.
-                var analyzing = Task.Run(() => analysis.Analyze(final, trees, module.Profile));
+                var analyzing = Task.Run(() => analysis.AnalyzeProject(final, module.Profile));
                 var (image, compilerDiagnostics) = ModuleCompiler.EmitWithDiagnostics(final);
                 var problems = generatorDiagnostics.Concat(compilerDiagnostics).Concat(analyzing.GetAwaiter().GetResult())
                     .Where(Diagnostics.Reportable).ToArray();

@@ -23,13 +23,14 @@ if (args.Contains("--inventory", StringComparer.Ordinal))
 if (args.Contains("--project-session", StringComparer.Ordinal))
 {
     if (int.TryParse(Arg("--parent"), out var projectParent) && projectParent != 0) _ = Task.Run(() => WatchParent(projectParent));
+    var compilations = new ProjectCompilations();
     while (await Console.In.ReadLineAsync() is { } line)
     {
         using var input = System.Text.Json.JsonDocument.Parse(line);
         var operation = input.RootElement.GetProperty("operation").GetString();
         var result = operation switch {
             "--inventory" => ProjectInventory.Scan(input.RootElement.Deserialize<InventoryRequest>(CodeFixRunner.Json) ?? throw new ArgumentException("missing inventory request")),
-            "--compile-project" => ProjectCompiler.Compile(input.RootElement.Deserialize<ProjectBuildRequest>(CodeFixRunner.Json) ?? throw new ArgumentException("missing compilation request")),
+            "--compile-project" => ProjectCompiler.Compile(input.RootElement.Deserialize<ProjectBuildRequest>(CodeFixRunner.Json) ?? throw new ArgumentException("missing compilation request"), compilations: compilations),
             _ => throw new ArgumentException("unknown project operation"),
         };
         await Console.Out.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(result, CodeFixRunner.Json));

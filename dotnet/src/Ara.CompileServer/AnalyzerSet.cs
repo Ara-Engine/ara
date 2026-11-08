@@ -22,10 +22,7 @@ internal sealed class AnalyzerSet : IAnalysis
     /// <inheritdoc/>
     public ImmutableArray<Diagnostic> Analyze(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile)
     {
-        var analyzerOptions = _options.GetOrAdd(profile, p => new AnalyzerOptions([], new ProfileOptions(p)));
-        var options = new CompilationWithAnalyzersOptions(analyzerOptions, onAnalyzerException: null,
-            concurrentAnalysis: true, logAnalyzerExecutionTime: false);
-        var cwa = compilation.WithAnalyzers(_analyzers, options);
+        var cwa = WithAnalyzers(compilation, profile);
         var all = ImmutableArray.CreateBuilder<Diagnostic>();
         foreach (var tree in trees)
         {
@@ -34,6 +31,18 @@ internal sealed class AnalyzerSet : IAnalysis
             all.AddRange(cwa.GetAnalyzerSemanticDiagnosticsAsync(model, null, CancellationToken.None).GetAwaiter().GetResult());
         }
         return all.ToImmutable();
+    }
+
+    /// <summary>Analyzes a full project in one Roslyn request, allowing work across files to run concurrently.</summary>
+    internal ImmutableArray<Diagnostic> AnalyzeProject(Compilation compilation, string profile) =>
+        WithAnalyzers(compilation, profile).GetAnalyzerDiagnosticsAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+    CompilationWithAnalyzers WithAnalyzers(Compilation compilation, string profile)
+    {
+        var analyzerOptions = _options.GetOrAdd(profile, p => new AnalyzerOptions([], new ProfileOptions(p)));
+        var options = new CompilationWithAnalyzersOptions(analyzerOptions, onAnalyzerException: null,
+            concurrentAnalysis: true, logAnalyzerExecutionTime: false);
+        return compilation.WithAnalyzers(_analyzers, options);
     }
 
     /// <summary>The MSBuild property an IDE build would pass: <c>build_property.AraModuleProfile</c>.</summary>
