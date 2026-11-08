@@ -1,6 +1,6 @@
 {
   "date": "2026-11-08",
-  "status": "Partial: one completed forward round (6pairs/12engine processes). Second reversed round remains pending; do not treat this as the completed two-round matrix.",
+  "status": "Partial: one completed forward round (6pairs/12engine processes). The original executable was replaced by a later Cargo build before the reverse round; no completed two-round matrix is claimed.",
   "scope": "Unchanged S8 W2 boids (20k/50k) and W4 structural (100k), Rust-native optimized simd variant versus Unity Editor + Burst. This is a legacy fixture workflow comparison, not shipping, frame or production-engine performance.",
   "method": "Fresh process per case/engine, 120 warmup + 300 measured steps, niceness 10 for both. Before/after resource guards and per-process load/power captured. Compilation, setup, dumps, metadata and hash verification are outside kernel timings. Raw distributions remain under target/.",
   "verification_scope": "Exact 12-f32 little-endian numeric payload per logical slot plus exporter live-count assertions. StableId values are not exported/asserted by legacy dumps; ID epoch/slot uniqueness/component-presence/operation counts need a separate audit. No claim of complete four-component identity equivalence.",
@@ -979,5 +979,6 @@
     ]
   },
   "next": "Complete the reversed round in a clear CPU slot; audit exact W4 IDs/component presence/counts separately; implement new feature fixtures from features/CONTRACT.md.",
-  "reproduce": "README.md; raw provenance: target/perf-scale/unity-ara-broad-2026-11-08; raw Unity cases: target/perf-scale/unity-s8/results/broad-mac-2026-11-08-r1."
+  "reproduce": "README.md; raw provenance: target/perf-scale/unity-ara-broad-2026-11-08; raw Unity cases: target/perf-scale/unity-s8/results/broad-mac-2026-11-08-r1.",
+  "continuation": "Captured sources and original R1 evidence are preserved. Rebuilding the same frozen benchmark source produced executablea1892ee047fa753cca15b74046ddac33cb4cdbb12db8101c650c3a1531943c6b, differing from originala1f12\u2026 bytes. Any new AC runs use a separate reconstructed-baseline profile and immutable executable snapshots; they cannot silently complete or pool into this battery R1."
 }

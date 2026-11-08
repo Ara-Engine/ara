@@ -19,7 +19,9 @@ source/executable hashes, package versions, load and battery-power provenance
 define the scope of those measurements. The earlier
 [exploratory matrix](../unity_mac_2026-11-08_exploratory.json) is retained separately.
 The expanded [W2/W4 baseline](broad_mac_2026-11-08.json) is explicitly partial:
-one forward round is complete, while the reversed round awaits a clear CPU slot.
+one forward round is complete. A later Cargo build replaced the original binary
+before the reversed round; its captured sources rebuild to a different executable
+hash. Further runs need a separate profile and cannot be pooled into this round.
 It includes actual Rayon participation, frozen compiled-source hashes and the
 structural bookkeeping differences. Its legacy dump verifies numeric fields and
 live counts, and does not export/assert exact StableId values.
