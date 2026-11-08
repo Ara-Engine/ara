@@ -280,7 +280,10 @@ unsafe extern "C" fn host_component_ptr(
     let Ok(cell) = scope.world.get_entity(e) else {
         return std::ptr::null_mut();
     };
-    if comp.json {
+    // Command access keeps codec validation and read-your-writes semantics.
+    // Refuse the pointer before journaling: non-finite gameplay values cannot
+    // round-trip through JSON, and must remain untouched if decoding fails.
+    if !comp.native || (comp.json && scope.journal.is_some()) {
         return std::ptr::null_mut();
     }
     if comp.layout.size == 0 {
@@ -443,6 +446,16 @@ unsafe extern "C" fn host_component_json(
         return write_response(&value, out, cap);
     }
     if op != COMPONENT_WRITE {
+        return 0;
+    }
+    if comp.native
+        && comp.json
+        && scope.journal.is_some()
+        && world
+            .resource::<crate::ecs::cmdbuf::ScriptCatalog>()
+            .validate_json_preimage(component, &before)
+            .is_err()
+    {
         return 0;
     }
     // SAFETY: data/len is a readable UTF-8 JSON span for this call.

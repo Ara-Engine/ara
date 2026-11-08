@@ -2064,6 +2064,7 @@ dependencies = [
  "ara-diag",
  "ara-doc",
  "ara-json",
+ "ara-physics",
  "ara-profile",
  "ara-runtime",
  "ara-schema",

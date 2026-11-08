@@ -39,16 +39,16 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   `ara-play-host::open_project` publishes before validation; export uses this inventory.
 - `ModuleSpec { name, dir, assembly, watch, hot, references, profile }` from private inputs or legacy `ara.module.toml`
   (`references = ["Core"]`, `profile = "gameplay" | "editor"`: the API allowlist, ARA05xx).
-- Binding design: native `Transform` keeps its checked pointer view. Every other engine
-  component gets a generated typed struct and AOT-safe JSON codec. `World.Get/Read/Set`
-  dispatch through `IComponent<T>`; callback-local copies flush in first-access order
-  before returning to Rust. `HostApi.component_json` uses `SimRegistry`'s typed/dynamic
+- Binding design: `Transform` keeps the canonical native prefix; five checked physics
+  views use native pointers when available and fall back to AOT-safe JSON codecs.
+  `World.Get/Read/Set` dispatch through `IComponent<T>`; command access keeps validated
+  codec copies until returning to Rust. `HostApi.component_json` uses `SimRegistry`'s typed/dynamic
   ECS codecs, including default materialization and validation; no shadow gameplay store.
   Strings/assets/entity references use schema text, lists use arrays, maps use ordinal
   dictionaries, nested records/enums have generated codecs. `Commands.Add/Remove` share
   the normal deterministic command buffer, journaling, rejection rollback and undo.
-  Raw `[Query]` columns still require validated native views; accessor components use
-  World access in behaviours/commands. Schema blittability alone never proves Rust layout.
+  Raw `[Query]` columns require checked native layouts. Velocity, PhysicsId, PhysicsPose,
+  CharacterController and VehicleTelemetry qualify; schema blittability alone is not proof.
   `layout_hash` includes all engine fields and nested records/enums; project/module
   types do not change the engine ABI. L3 column migration keeps engine storage intact.
 - `EngineBindings` + `bind_component!`, `run` (`RunPool`/`RunWorker`), `value`, `codes`
@@ -131,7 +131,7 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   instead (same cost). Only smaller modules, L1/L2, or a Defender exclusion (the user's call) avoid it.
 - NativeAOT publish needs `vswhere.exe` on PATH (`tests/support::publish_aot` adds it).
 - `HostCtx` is leaked per host for late callback safety; CLR/images remain mapped.
-- Tags are 1 byte in C#. Native chunk loops stay allocation-free; variable-value access
+- Tags are 1 byte in C#. Native views retain codec wire/journal bytes; variable-value access
   allocates callback-local copies. Keep bulk hot loops in native views.
 ## Measurements (`reload_bench`, 7800X3D shared with other agents' builds)
 5.2k-line module, 20k entities, 60 Hz; edits rotate L1, L2 (a new method), L3 (a signature

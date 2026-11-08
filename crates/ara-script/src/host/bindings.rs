@@ -45,6 +45,19 @@ fn camel(snake: &str) -> String {
 }
 
 impl EngineBindings {
+    /// Additional checked views keep their existing codec indices and wire format.
+    /// The selected C layouts have no padding and contain no owned/drop fields.
+    pub(crate) fn accessor_views() -> Self {
+        let bindings =
+            crate::bind_component!(Self::new(), ara_physics::PhysicsId as "PhysicsId" { value });
+        let bindings = crate::bind_component!(bindings, ara_physics::PhysicsPose as "PhysicsPose" { position, rotation });
+        let bindings = crate::bind_component!(bindings, ara_physics::Velocity as "Velocity" { linear, angular });
+        let bindings = crate::bind_component!(bindings, ara_physics::CharacterController as "CharacterController" {
+            radius, height, crouch_height, max_slope_deg, step_height, stick_down, padding, max_strength, mass, layer
+        });
+        crate::bind_component!(bindings, ara_physics::VehicleTelemetry as "VehicleTelemetry" { wheels_in_contact, engine_rpm, gear })
+    }
+
     /// Built-in native views shared by host startup and checked-in C# generation.
     /// A blittable schema alone does not guarantee a Rust component's C layout.
     pub fn builtin() -> Self {
@@ -161,5 +174,43 @@ mod tests {
             crate::csgen::blittable_components(&schema).len() > bindings.names().len(),
             "schema-only render components must not become unbound native views"
         );
+    }
+
+    #[test]
+    fn accessor_views_are_checked_padding_free_and_leave_the_native_prefix_unchanged() {
+        let schema = ara_runtime::schema(&[]).expect("engine schema");
+        assert_eq!(EngineBindings::builtin().names(), ["Transform"]);
+        let views = EngineBindings::accessor_views()
+            .resolve(&schema, &mut World::new())
+            .expect("physics C layouts match canonical layouts");
+        assert_eq!(views.len(), 5);
+        for (_, _, layout) in views {
+            let mut end = 0;
+            for field in &layout.fields {
+                assert_eq!(
+                    field.offset, end,
+                    "{} has no uninitialized padding",
+                    layout.name
+                );
+                end += field.layout.size;
+            }
+            assert_eq!(end, layout.size, "{} has no trailing padding", layout.name);
+        }
+    }
+
+    #[test]
+    fn a_mismatched_accessor_layout_is_refused_before_a_pointer_is_exposed() {
+        #[derive(Component)]
+        #[repr(C)]
+        struct WrongVelocity {
+            linear: [f32; 3],
+            angular: [f32; 2],
+        }
+        let schema = ara_runtime::schema(&[]).expect("engine schema");
+        let bindings = crate::bind_component!(EngineBindings::new(), WrongVelocity as "Velocity" { linear, angular });
+        let error = bindings
+            .resolve(&schema, &mut World::new())
+            .expect_err("stale native layout");
+        assert_eq!(error.code, codes::LAYOUT_MISMATCH);
     }
 }

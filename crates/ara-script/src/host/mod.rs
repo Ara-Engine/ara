@@ -231,6 +231,7 @@ impl ScriptHost {
                 id,
                 layout,
                 owner: Owner::Engine,
+                native: true,
                 json: false,
             });
         }
@@ -238,6 +239,12 @@ impl ScriptHost {
             .map_err(|e| vec![Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string())])?;
         ara_runtime::register_components(&mut codecs)
             .map_err(|e| vec![Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string())])?;
+        let mut accessor_views: BTreeMap<_, _> = EngineBindings::accessor_views()
+            .resolve(&registry.schema, world)
+            .map_err(|d| vec![d])?
+            .into_iter()
+            .map(|(name, id, layout)| (name, (id, layout)))
+            .collect();
         let names: Vec<_> = ara_runtime::schema(&[])
             .map_err(|e| vec![Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string())])?
             .components()
@@ -253,15 +260,22 @@ impl ScriptHost {
                     format!("engine schema is missing `{name}`"),
                 )]);
             }
-            let id = codecs
-                .install_component(world, &name)
-                .map_err(|e| vec![Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string())])?;
-            let layout = crate::csgen::binding_layout(&registry.schema, &name);
+            let (id, layout, native) = match accessor_views.remove(&name) {
+                Some((id, layout)) => (id, layout, true),
+                None => (
+                    codecs.install_component(world, &name).map_err(|e| {
+                        vec![Diagnostic::error(codes::BAD_DESCRIPTOR, e.to_string())]
+                    })?,
+                    crate::csgen::binding_layout(&registry.schema, &name),
+                    false,
+                ),
+            };
             registry.components.push(ScriptComponent {
                 name,
                 id,
                 layout,
                 owner: Owner::Engine,
+                native,
                 json: true,
             });
         }
