@@ -229,12 +229,19 @@ and less repeated document work. The evidence has distinct scopes:
   [checked bindings](../../crates/ara-script/src/host/bindings.rs),
   [real-host semantics](../../crates/ara-script/tests/native_views.rs).
 - A real Rust-host/C# query over 1 million native rows now stamps change ticks
-  inside parallel chunks. Two paired orders showed **15–19% less cold-query
+  inside parallel chunks. Two paired orders showed **18–19.5% less cold-query
   tick time** and **7–8% less hot-query time** with 15 pool workers plus caller.
   Small/single-worker results varied around noise; existing pool allocations remain.
   Exact component bits and change-tick semantics were checked. Cold optimized IL
   and hot EnC Debug IL are separate lanes, with no Unity comparison for this probe.
-  [Real C# query evidence](../../benchmarks/iteration/query_tick_mac_2026-11-08.json).
+  [Counter-disabled latency holdouts](../../benchmarks/iteration/query_tick_uninstrumented_mac_2026-11-08.json),
+  [broader instrumented allocation matrix](../../benchmarks/iteration/query_tick_mac_2026-11-08.json).
+- Ordinary JSON-backed engine writes now avoid unused preimage serialization
+  and an incoming JSON roundtrip. Real Rust/C# updates over 2,048 audio components
+  measured roughly **14–17% less callback time**, with **14–20% fewer Rust
+  allocations** across the payload matrix. Latency excludes allocation counters;
+  command journals, validation and read bytes retain their existing path.
+  [Codec write evidence](../../benchmarks/iteration/codec_writes_mac_2026-11-08.json).
 - The editor's 5,001-entity hierarchy callback improved from **298 to 6.84 ms**
   including snapshot/IPC work. Document loading now has bounded preparation with
   sequential canonical insertion; separate probes retain exact workspace and
@@ -298,3 +305,9 @@ to dependency cooking and Play projection, not only JSON parsing. Match Unity's
 assembly graph and reload settings before comparing iteration latency. Unreal
 Mass, Windows/RTX, shipping AOT/IL2CPP, rendering and whole-editor/startup timings
 remain **unmeasured**; no engine installation or Windows work was performed.
+
+The current native query fast path uses dense table-backed columns. Custom
+SparseSet engine bindings need separate sparse-data/filter traversal support;
+sparse marker archetypes sharing dense columns are covered by the tick tests.
+This baseline limitation prevents treating the engine's entire query API as
+performance-complete. [Query implementation](../../crates/ara-script/src/ecs/system.rs).

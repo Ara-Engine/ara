@@ -1,6 +1,7 @@
 //! Real Rust-host/C# numeric query timing. Build the matching dotnet/ fixtures first;
 //! use ARA_DOTNET_PREBUILT=1, DOTNET_TieredCompilation=0 and an optimized Rust profile.
 //! --rows, --threads, --warmup and --samples configure one fresh-process measurement.
+//! Allocation counters run only in separate, untimed --allocation-samples ticks.
 #[path = "../tests/support/mod.rs"]
 mod support;
 
@@ -80,6 +81,7 @@ fn main() {
     let threads = arg("--threads", 15).max(1);
     let warmup = arg("--warmup", 24);
     let samples = arg("--samples", 80).max(1);
+    let allocation_samples = arg("--allocation-samples", 8).max(1);
     let fragmented = std::env::args().any(|a| a == "--fragmented");
     let hot = std::env::args().any(|a| a == "--hot");
     ComputeTaskPool::get_or_init(|| {
@@ -127,17 +129,22 @@ fn main() {
         live.run();
     }
     let mut timings = Vec::with_capacity(samples);
-    COUNT.store(0, Ordering::Relaxed);
-    BYTES.store(0, Ordering::Relaxed);
-    TRACK.store(true, Ordering::Relaxed);
+    // Latency samples exclude contended allocation-counter increments.
+    TRACK.store(false, Ordering::Relaxed);
     for _ in 0..samples {
         let start = Instant::now();
         live.run();
         timings.push(start.elapsed().as_secs_f64() * 1000.0);
     }
+    COUNT.store(0, Ordering::Relaxed);
+    BYTES.store(0, Ordering::Relaxed);
+    TRACK.store(true, Ordering::Relaxed);
+    for _ in 0..allocation_samples {
+        live.run();
+    }
     TRACK.store(false, Ordering::Relaxed);
     let (mut velocity, mut position) = ([2.0f32, 3.0, 4.0], [0.0f32; 3]);
-    for _ in 0..warmup + samples {
+    for _ in 0..warmup + samples + allocation_samples {
         velocity[0] += 1.0;
         for axis in 0..3 {
             position[axis] += velocity[axis] * (1.0f32 / 60.0);
@@ -196,9 +203,12 @@ fn main() {
         "rows":rows,"workers":ComputeTaskPool::get().thread_num(),"fragmented":fragmented,
         "rust_profile":"perf-opt3-lto-off-cgu256","csharp_hot":hot,"caller_participates":true,
         "warmup":warmup,"samples":samples,"p50_ms":sorted[samples/2],
+        "allocation_counters_enabled_during_timing":false,
+        "allocation_samples":allocation_samples,"allocation_probe":"separate-untimed-ticks-after-latency",
+        "total_ticks":warmup+samples+allocation_samples,
         "p95_ms":sorted[(samples*95/100).min(samples-1)],"samples_ms":timings,
-        "rust_allocations_per_tick":COUNT.load(Ordering::Relaxed) as f64/samples as f64,
-        "rust_allocated_bytes_per_tick":BYTES.load(Ordering::Relaxed) as f64/samples as f64,
+        "rust_allocations_per_tick":COUNT.load(Ordering::Relaxed) as f64/allocation_samples as f64,
+        "rust_allocated_bytes_per_tick":BYTES.load(Ordering::Relaxed) as f64/allocation_samples as f64,
         "velocity_bits":velocity.map(f32::to_bits),"position_bits":position.map(f32::to_bits),
         "checksum":checksum,"changed_tick":final_ticks.changed.get(),
     });
