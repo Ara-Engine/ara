@@ -16,6 +16,8 @@ pub(super) fn view(s: &Studio, panel: &str) -> El<Studio> {
         "assets" => assets(s),
         "console" => console(s),
         "problems" => problems(s),
+        "agents" => super::agents::agents(s),
+        "history" => super::agents::history(s),
         other => {
             let (title, glyph) = super::dock::panel_title(other);
             empty(

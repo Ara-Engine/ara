@@ -136,6 +136,8 @@ pub struct Local {
     pub component_menu: Option<String>,
     /// Add Component's search and highlighted row, while open.
     pub add_component: Option<(String, usize)>,
+    /// Agent turns shown open in Agents, by turn key.
+    pub expanded_turns: std::collections::BTreeSet<String>,
     /// The open Create browser.
     pub create: Option<super::create::Browser>,
     /// What was created lately, newest first (the browser's Recent).

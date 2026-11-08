@@ -8,6 +8,7 @@
 //! `editor.*` actions and content through `cmd.apply`, exactly what agents call over MCP, so
 //! every person's action has an agent equivalent. The host loop below owns the renderer and
 //! the transport; the runtime owns the [`Studio`] state and its view.
+mod agents;
 mod chrome;
 mod commands;
 mod compositor;

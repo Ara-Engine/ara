@@ -48,7 +48,7 @@ pub(crate) mod toolkit_verify;
 pub(crate) use drag::Drag;
 pub use testing::MenuRow;
 mod add_component;
-mod agents_panel;
+pub(crate) mod agents_panel;
 mod animation_panel;
 mod assets_panel;
 mod assets_tree;
