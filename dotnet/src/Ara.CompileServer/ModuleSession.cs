@@ -68,6 +68,7 @@ internal sealed class ModuleSession
     int _sizeLevel;
     readonly ModuleInputs? _project;
     readonly string? _graph;
+    readonly Dictionary<string, string> _sourceOwners = new(ModuleState.Paths);
     internal string WatchDirectory => _project is { } project ? Path.Combine(project.Project, project.AuthoringRoot) : Dir;
 
     // Latest text on disk; differs from the state's texts while the module has compile errors.
@@ -85,20 +86,27 @@ internal sealed class ModuleSession
         _analysis = analysis;
         _compiler = new ModuleCompiler(name, assemblies);
         _project = ModuleInputs.Read(Dir);
-        _graph = _project is { } project ? Graph(project.Scan()) : null;
+        if (_project is { } project)
+        {
+            var inventory = project.Scan();
+            _graph = Graph(inventory);
+            foreach (var source in inventory.Sources.Where(source => source.Editor))
+                _sourceOwners[ProjectInventory.ProjectPath(Path.Combine(project.Project, source.StoragePath))] = source.Module;
+        }
     }
 
     /// <summary>The committed state (null until the first successful build).</summary>
     internal ModuleState? State => _state;
     internal uint InitialGeneration;
     internal bool MatchesCurrent(Outcome outcome, ICompileContext context) =>
-        outcome.Next is { } next && MatchesInventory() && MatchesInputs(next, context);
+        outcome.Next is { } next && MatchesCurrentInputs(next, context);
 
-    bool MatchesInventory()
+    bool MatchesCurrentInputs(ModuleState state, ICompileContext context)
     {
-        if (_project is not { } project) return true;
-        var current = project.Scan();
-        return current.Diagnostics.Length == 0 && Graph(current) == _graph;
+        var current = _project?.Scan();
+        if (current is not null && (current.Diagnostics.Length != 0 || Graph(current) != _graph || OwnershipChanged(current, context))) return false;
+        if (current is not null) ObserveUnloadedDomains(current, context);
+        return MatchesInputs(state, context, SourceFiles(current));
     }
 
     /// <summary>Adopts an outcome's next state (a delta, image, relink or trivia-only change).</summary>
@@ -128,19 +136,54 @@ internal sealed class ModuleSession
         };
     }
 
-    internal IEnumerable<string> SourceFiles() => _project is { } project
-        ? project.Scan().Modules.Single(m => m.Name == Name).Sources.Select(s => ProjectInventory.ProjectPath(Path.Combine(project.Project, s.StoragePath)))
-        : Directory.EnumerateFiles(Dir, "*.cs", SearchOption.AllDirectories).Where(p => !IsIgnored(p));
+    internal IEnumerable<string> SourceFiles() => SourceFiles(_project?.Scan());
 
-    static string Graph(ProjectInventoryResult inventory) => System.Text.Json.JsonSerializer.Serialize(inventory.Modules.Select(m => new { m.Name, m.Directory, m.Hot, m.Profile, m.References, Sources = m.Sources.Select(s => s.StoragePath) }));
+    string[] SourceFiles(ProjectInventoryResult? inventory) => _project is { } project
+        ? [.. inventory!.Modules.Single(m => m.Name == Name).Sources.Select(s => ProjectInventory.ProjectPath(Path.Combine(project.Project, s.StoragePath)))]
+        : [.. Directory.EnumerateFiles(Dir, "*.cs", SearchOption.AllDirectories).Where(p => !IsIgnored(p)).Order(ModuleState.Paths)];
 
-    Outcome? CheckInventory(Phases timing)
+    // Source membership belongs to its existing module. Only module definitions,
+    // dependency edges or domains require rebuilding the player's module graph.
+    static string Graph(ProjectInventoryResult inventory) => System.Text.Json.JsonSerializer.Serialize(inventory.Modules.Select(m => new { m.Name, m.Directory, m.Hot, m.Profile, m.References }));
+
+    // A removal and an addition spanning owners can be a move even when both
+    // modules already exist. Preserve L4 conservatively for that ambiguous case;
+    // ordinary additions/removals in one module do not change the loaded graph.
+    bool OwnershipChanged(ProjectInventoryResult inventory, ICompileContext context)
     {
-        if (_project is not { } project) return null;
+        if (_project is not { } project) return false;
+        var states = inventory.Modules.Select(module => (module.Name, State: context.Dependency(module.Name)))
+            .Where(module => module.State is not null).ToArray();
+        var loaded = new HashSet<string>(states.Select(module => module.Name), StringComparer.Ordinal);
+        var previous = new Dictionary<string, string>(ModuleState.Paths);
+        // Editor-only domains may not be loaded by a player. Keep their discovered
+        // membership while replacing loaded modules with their last-good sources.
+        foreach (var (path, owner) in _sourceOwners)
+            if (!loaded.Contains(owner)) previous[path] = owner;
+        foreach (var module in states)
+            foreach (var path in module.State!.Texts.Keys) previous[path] = module.Name;
+        var current = inventory.Sources.ToDictionary(source => ProjectInventory.ProjectPath(Path.Combine(project.Project, source.StoragePath)), source => source.Module, ModuleState.Paths);
+        var removed = previous.Where(pair => !current.ContainsKey(pair.Key)).Select(pair => pair.Value).ToHashSet(StringComparer.Ordinal);
+        return current.Any(pair => !previous.ContainsKey(pair.Key) && removed.Any(owner => owner != pair.Value));
+    }
+
+    void ObserveUnloadedDomains(ProjectInventoryResult inventory, ICompileContext context)
+    {
+        if (_project is not { } project) return;
+        _sourceOwners.Clear();
+        foreach (var source in inventory.Sources)
+            if (source.Editor && context.Dependency(source.Module) is null)
+                _sourceOwners[ProjectInventory.ProjectPath(Path.Combine(project.Project, source.StoragePath))] = source.Module;
+    }
+
+    Outcome? CheckInventory(Phases timing, ICompileContext context, out string[] files)
+    {
+        files = [];
+        if (_project is not { } project) { files = SourceFiles(null); return null; }
         var inventory = project.Scan();
         if (inventory.Diagnostics.Length > 0)
             return new(this, OutcomeKind.Errors) { Timing = timing, Extra = [.. inventory.Diagnostics.Select(d => ((string)d["code"]!, (string)d["severity"]!, (string)d["message"]!))] };
-        if (Graph(inventory) != _graph)
+        if (Graph(inventory) != _graph || OwnershipChanged(inventory, context))
         {
             // Compile the entire candidate gameplay graph before asking the player
             // to restart. Broken moves retain the running last-good generation.
@@ -149,6 +192,11 @@ internal sealed class ModuleSession
                 return new(this, OutcomeKind.Errors) { Timing = timing, Extra = [.. candidate.Diagnostics.Select(d => ((string)d["code"]!, (string)d["severity"]!, (string)d["message"]!))] };
             return new(this, OutcomeKind.Restart) { ReloadKind = AbiConst.ReloadL4, Timing = timing, Escalation = Escalation.Requested };
         }
+        files = SourceFiles(inventory);
+        // Gameplay membership comes from committed states. Only retain observed
+        // unloaded editor sources here; refreshing them handles later editor-file
+        // additions without copying the entire project into every module session.
+        ObserveUnloadedDomains(inventory, context);
         return null;
     }
 
@@ -187,11 +235,11 @@ internal sealed class ModuleSession
     internal Outcome Initial(ICompileContext ctx, CancellationToken ct = default)
     {
         var p = new Phases(0, Stopwatch.GetTimestamp());
-        if (CheckInventory(p) is { } invalid) return invalid;
+        if (CheckInventory(p, ctx, out var files) is { } invalid) return invalid;
         var trees = ImmutableDictionary.CreateBuilder<string, SyntaxTree>(ModuleState.Paths);
         var texts = ImmutableDictionary.CreateBuilder<string, string>(ModuleState.Paths);
         _disk.Clear();
-        foreach (var path in SourceFiles())
+        foreach (var path in files)
         {
             var full = ProjectInventory.ProjectPath(path);
             var text = ReadWithRetry(full) ?? throw new FileNotFoundException("module source disappeared", full);
@@ -215,9 +263,10 @@ internal sealed class ModuleSession
         if (_state is not { } s) return Initial(ctx, ct);
         var h = (hot ?? s.Hot) && ctx.Enc;
         var user = h == s.Hot ? s.User : s.User.WithOptions(ModuleCompiler.Options(h));
-        var current = MatchesInputs(s, ctx);
+        var current = MatchesCurrentInputs(s, ctx);
         var outcome = Build(user, s with { Hot = h }, AbiConst.ReloadL3, escalation, new Phases(0, Stopwatch.GetTimestamp()), [], null, ctx, false, ct);
         outcome.ValidatedInputs = current;
+        outcome.Intent = CompileIntent.CommittedCode;
         return outcome;
     }
 
@@ -226,8 +275,13 @@ internal sealed class ModuleSession
     /// against it) when every dependency kept the surface this code was compiled against,
     /// otherwise rebuild against the new code (L3, <see cref="Escalation.Dependency"/>).
     /// </summary>
-    internal Outcome Cascade(ICompileContext ctx, CancellationToken ct = default)
+    internal Outcome Cascade(ICompileContext ctx, CancellationToken ct = default, CompileIntent intent = CompileIntent.CurrentSources)
     {
+        var timing = new Phases(0, Stopwatch.GetTimestamp());
+        string[] files = [];
+        // Current project candidates may require L4. Explicit committed-code work
+        // only validates that drift; it must not compile or request activation of it.
+        if (intent == CompileIntent.CurrentSources && CheckInventory(timing, ctx, out files) is { } invalid) return invalid;
         _diagnosticReferencesChanged = true;
         var s = _state ?? throw new InvalidOperationException($"module `{Name}` has not built");
         var (refs, surfaces) = Dependencies(ctx);
@@ -239,31 +293,45 @@ internal sealed class ModuleSession
             user = user.ReplaceReference(old, now);
             final = final.ReplaceReference(old, now);
         }
-        var same = References.All(n => s.DepSurfaces.TryGetValue(n, out var was) && was is not null && was == surfaces[n]);
+        var rebound = s with { User = user, Final = final, DepRefs = refs };
+        // Rebuild/heat work refers to committed code throughout the cascade. A
+        // dependent's unrelated disk edits must never hitchhike on that request.
+        var (current, changes) = intent == CompileIntent.CurrentSources
+            ? ReadSources(rebound, files) : (rebound, new List<FileChange>());
+        var validated = intent == CompileIntent.CurrentSources || MatchesCurrentInputs(rebound, ctx);
+        timing.Parse = timing.Mark();
+        var same = changes.Count == 0 && References.All(n => s.DepSurfaces.TryGetValue(n, out var was) && was is not null && was == surfaces[n]);
         if (same)
         {
             var problems = Problems(final, [], final.GetDiagnostics(ct), []);
-            if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(new Phases(0, Stopwatch.GetTimestamp()), problems);
+            if (problems.Any(d => d.Severity == DiagnosticSeverity.Error))
+            {
+                var failure = Errors(timing, problems);
+                failure.ValidatedInputs = validated;
+                failure.Intent = intent;
+                return failure;
+            }
             return new Outcome(this, OutcomeKind.Relink)
             {
                 ReloadKind = AbiConst.ReloadL3,
                 Escalation = Escalation.Relink,
-                ValidatedInputs = MatchesInputs(s, ctx, dependencies: false),
+                ValidatedInputs = validated,
+                Intent = intent,
                 Problems = problems,
                 Next = s with { User = user, Final = final, DepRefs = refs, Generation = s.Generation + 1 },
             };
         }
-        var outcome = Build(user, s with { DepRefs = refs }, AbiConst.ReloadL3, Escalation.Dependency,
-            new Phases(0, Stopwatch.GetTimestamp()), [], null, ctx, false, ct);
-        outcome.ValidatedInputs = MatchesInputs(s, ctx, dependencies: false);
+        var outcome = Build(current.User, current, AbiConst.ReloadL3, Escalation.Dependency,
+            timing, [.. changes.Where(c => c.New is not null).Select(c => c.New!)], null, ctx, false, ct);
+        outcome.ValidatedInputs = validated;
+        outcome.Intent = intent;
         return outcome;
     }
 
-    bool MatchesInputs(ModuleState state, ICompileContext ctx, bool dependencies = true)
+    static bool MatchesInputs(ModuleState state, ICompileContext ctx, string[] files)
     {
-        var files = SourceFiles().Select(ProjectInventory.ProjectPath).ToArray();
         return files.Length == state.Texts.Count && files.All(path => state.Texts.TryGetValue(path, out var text) && ReadWithRetry(path) == text)
-            && (!dependencies || References.All(name => state.DepRefs.TryGetValue(name, out var reference) && ReferenceEquals(reference, ctx.Dependency(name)?.Reference)));
+            && state.DepRefs.All(pair => ReferenceEquals(pair.Value, ctx.Dependency(pair.Key)?.Reference));
     }
 
     /// <summary>Reads source without denying edits or replacements by another world's editor.</summary>
@@ -283,6 +351,33 @@ internal sealed class ModuleSession
         }
     }
 
+    // One immutable membership snapshot per evaluation. Read every current source
+    // once: watcher overflow, missed notices and exact last-good restoration must
+    // still validate actual bytes rather than trusting timestamps or queued paths.
+    (ModuleState State, List<FileChange> Changes) ReadSources(ModuleState state, string[] files)
+    {
+        _disk.Clear();
+        foreach (var path in files)
+            _disk[path] = ReadWithRetry(path) ?? throw new FileNotFoundException("module source disappeared while capturing inputs", path);
+        var changes = new List<FileChange>();
+        var trees = state.Trees.ToBuilder();
+        var texts = state.Texts.ToBuilder();
+        foreach (var path in _disk.Keys.Union(state.Texts.Keys, ModuleState.Paths))
+        {
+            var had = state.Texts.TryGetValue(path, out var oldText);
+            var has = _disk.TryGetValue(path, out var newText);
+            if (had && has && oldText == newText) continue;
+            var oldTree = had ? state.Trees[path] : null;
+            var newTree = has ? ModuleCompiler.Parse(path, newText!) : null;
+            changes.Add(new FileChange(path, oldTree, newTree));
+            if (newTree is null) { trees.Remove(path); texts.Remove(path); }
+            else { trees[path] = newTree; texts[path] = newText!; }
+        }
+        var user = state.User;
+        foreach (var change in changes) user = Apply(user, change);
+        return (state with { User = user, Trees = trees.ToImmutable(), Texts = texts.ToImmutable() }, changes);
+    }
+
     /// <summary>
     /// Classifies and compiles one change set: an L1/L2 delta, an L3 image, nothing (a
     /// trivia-only change), or errors (the last good state stays committed).
@@ -290,47 +385,19 @@ internal sealed class ModuleSession
     internal Outcome Compile(IEnumerable<string> paths, long tEvent, ICompileContext ctx, CancellationToken ct = default)
     {
         var p = new Phases(tEvent, Stopwatch.GetTimestamp());
-        if (CheckInventory(p) is { } invalid) return invalid;
+        if (CheckInventory(p, ctx, out var files) is { } invalid) return invalid;
         if (_state is not { } s) return Initial(ctx, ct);
-        HashSet<string>? membership = _project is null ? null : new(SourceFiles().Select(ProjectInventory.ProjectPath), ModuleState.Paths);
-        if (membership is not null)
-        {
-            foreach (var removed in _disk.Keys.Where(path => !membership.Contains(path)).ToArray()) _disk.Remove(removed);
-            paths = paths.Concat(membership.Where(path => !_disk.ContainsKey(path)));
-        }
-        foreach (var path in paths.Concat(SourceFiles()).Concat(s.Texts.Keys).Distinct(ModuleState.Paths))
-        {
-            if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) || (membership is null ? IsIgnored(path) : !membership.Contains(ProjectInventory.ProjectPath(path)))) continue;
-            var full = ProjectInventory.ProjectPath(path);
-            if (ReadWithRetry(full) is { } text) _disk[full] = text;
-            else _disk.Remove(full);
-        }
-        var changes = new List<FileChange>();
-        var trees = s.Trees.ToBuilder();
-        var texts = s.Texts.ToBuilder();
-        foreach (var path in _disk.Keys.Union(s.Texts.Keys, ModuleState.Paths).ToList())
-        {
-            var had = s.Texts.TryGetValue(path, out var oldText);
-            var has = _disk.TryGetValue(path, out var newText);
-            if (had && has && oldText == newText) continue;
-            var oldTree = had ? s.Trees[path] : null;
-            var newTree = has ? ModuleCompiler.Parse(path, newText!) : null;
-            changes.Add(new FileChange(path, oldTree, newTree));
-            if (newTree is null) { trees.Remove(path); texts.Remove(path); }
-            else { trees[path] = newTree; texts[path] = newText!; }
-        }
+        var (nextState, changes) = ReadSources(s, files);
         if (changes.Count == 0)
         {
             var problems = Problems(s.Final, [], s.Final.GetDiagnostics(ct), []);
             if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
-            var validated = MatchesInputs(s, ctx);
+            var validated = References.All(name => s.DepRefs.TryGetValue(name, out var reference) && ReferenceEquals(reference, ctx.Dependency(name)?.Reference));
             if (validated) _diagnosticReferencesChanged = false;
             return new Outcome(this, OutcomeKind.None) { ValidatedInputs = validated, Problems = problems };
         }
-        var next = s.User;
-        foreach (var c in changes) next = Apply(next, c);
+        var next = nextState.User;
         var changed = changes.Where(c => c.New is not null).Select(c => c.New!).ToList();
-        var nextState = s with { User = next, Trees = trees.ToImmutable(), Texts = texts.ToImmutable() };
 
         var escalation = !ctx.Enc || !s.Hot ? Escalation.Cold : Escalation.None;
         var cls = escalation == Escalation.None ? EditClassifier.Classify(changes, ctx.Caps) : null;

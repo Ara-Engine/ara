@@ -12,11 +12,12 @@ public sealed class CompileLifecycleTests
     sealed class Gate : IAnalysis, IDisposable
     {
         internal int Armed;
+        internal string? Module;
         internal readonly ManualResetEventSlim Entered = new(false);
         internal readonly ManualResetEventSlim Release = new(false);
         public ImmutableArray<Diagnostic> Analyze(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile)
         {
-            if (Interlocked.Exchange(ref Armed, 0) == 1)
+            if ((Module is null || compilation.AssemblyName == Module) && Interlocked.Exchange(ref Armed, 0) == 1)
             {
                 Entered.Set();
                 Assert.True(Release.Wait(TimeSpan.FromSeconds(20)));
@@ -185,6 +186,147 @@ public sealed class CompileLifecycleTests
         var reader = new Protocol.Reader(finished.Payload);
         Assert.Equal(82ul, reader.U64());
         Assert.Equal("failed", reader.Str());
+    }
+
+    [Fact]
+    public void Cascades_revalidate_every_staged_module_before_committing_or_publishing_success()
+    {
+        using var gate = new Gate();
+        var sink = new Sink();
+        using var server = new Coordinator(sink, gate);
+        server.Hello(false, "");
+        var root = InstalledTools.Scratch("cascade-stale-input");
+        var combat = Watch(server, root, 0, "Combat");
+        const string dependent = "public class UsesCombat { public int Value(Count c) => c.Value; }";
+        var inventory = Watch(server, root, 1, "Inventory", dependent, ["Combat"]);
+        var before = sink.Messages.Count;
+        gate.Module = "Inventory";
+        gate.Armed = 1;
+        File.WriteAllText(combat, Source.Replace("public int Value;", "public long Value;", StringComparison.Ordinal));
+        File.WriteAllText(inventory, dependent.Replace("public int Value", "public long Value", StringComparison.Ordinal));
+        server.Change(0, [combat], AbiConst.OriginHuman, Stopwatch.GetTimestamp());
+        try
+        {
+            Assert.True(gate.Entered.Wait(TimeSpan.FromSeconds(20)));
+            // No watcher event: only final byte validation can detect that this
+            // successfully prepared dependent is already stale.
+            File.WriteAllText(inventory, "this is broken C#");
+        }
+        finally { gate.Release.Set(); }
+        Assert.True(server.WaitIdle(TimeSpan.FromSeconds(60)));
+        Assert.DoesNotContain(sink.Messages.Skip(before), message => message.Kind is MessageKind.Reload or MessageKind.Delta or MessageKind.Restart);
+        var completed = sink.Rows.Where(row => (string?)row["data"]?["compile"]?["phase"] == "completed").ToArray();
+        Assert.Contains(completed, row => (string?)row["data"]?["compile"]?["result"] == "cancelled");
+        Assert.NotEqual("success", (string?)sink.Last("Combat")["data"]?["compile"]?["result"]);
+    }
+
+    [Fact]
+    public void Stale_explicit_heat_changes_do_not_turn_into_current_source_compilation()
+    {
+        using var gate = new Gate();
+        var sink = new Sink();
+        using var server = new Coordinator(sink, gate);
+        server.Hello(true, "Baseline");
+        var root = InstalledTools.Scratch("stale-explicit-heat");
+        var combat = Watch(server, root, 0, "Combat");
+        Watch(server, root, 1, "Inventory", "public class UsesCombat { public int Value(Count c) => c.Value; }", ["Combat"]);
+        var before = sink.Messages.Count;
+        gate.Module = "Inventory";
+        gate.Armed = 1;
+        server.SetHeat(0, false);
+        try
+        {
+            Assert.True(gate.Entered.Wait(TimeSpan.FromSeconds(20)));
+            File.WriteAllText(combat, Source.Replace("+= 1", "+= Missing", StringComparison.Ordinal));
+        }
+        finally { gate.Release.Set(); }
+        Assert.True(server.WaitIdle(TimeSpan.FromSeconds(60)));
+        Assert.DoesNotContain(sink.Messages.Skip(before), message => message.Kind is MessageKind.Reload or MessageKind.Delta or MessageKind.Restart);
+        var compile = sink.Last("Combat")["data"]!["compile"]!;
+        Assert.Equal("cancelled", (string?)compile["result"]);
+        Assert.NotEqual("current-module-inputs", (string?)compile["validation"]);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Committed_rebuilds_do_not_consume_dirty_dependent_sources(bool rootBroken, bool dependentBroken)
+    {
+        var sink = new Sink();
+        using var server = new Coordinator(sink, new AnalyzerSet());
+        server.Hello(true, "Baseline");
+        var root = InstalledTools.Scratch("committed-cascade-intent");
+        var combat = Watch(server, root, 0, "Combat");
+        const string dependent = "public class UsesCombat { public int Value(Count c) => c.Value; }";
+        var inventory = Watch(server, root, 1, "Inventory", dependent, ["Combat"]);
+        var before = sink.Messages.Count;
+        if (rootBroken) File.WriteAllText(combat, Source.Replace("+= 1", "+= Missing", StringComparison.Ordinal));
+        // Neither save has a watcher notice. Rebuild requests the already committed
+        // graph, so even a valid dependent edit must not become executable here.
+        File.WriteAllText(inventory, dependentBroken ? "this is broken C#" : dependent.Replace("=> c.Value;", "=> c.Value + 7;", StringComparison.Ordinal));
+        server.Rebuild(0, Escalation.Requested);
+        Assert.True(server.WaitIdle(TimeSpan.FromSeconds(60)));
+        var messages = sink.Messages.Skip(before).ToArray();
+        Assert.DoesNotContain(messages, message => message.Kind is MessageKind.Reload or MessageKind.Delta or MessageKind.Restart);
+        Assert.DoesNotContain(messages.Where(message => message.Kind == MessageKind.Diagnostics), message => message.Diagnostics().Errors > 0);
+        foreach (var module in new[] { "Combat", "Inventory" })
+        {
+            var compile = sink.Last(module)["data"]!["compile"]!;
+            Assert.Equal("cancelled", (string?)compile["result"]);
+            Assert.NotEqual("current-module-inputs", (string?)compile["validation"]);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Committed_work_cancels_project_graph_or_ownership_drift_without_requesting_restart(bool heat, bool ownershipMove)
+    {
+        var root = InstalledTools.Scratch("committed-project-drift");
+        void Write(string relative, string text)
+        {
+            var path = Path.Combine(root, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, text);
+        }
+        Write("content/core/core.module.json", "{\"name\":\"core\"}");
+        Write("content/game.module.json", "{\"name\":\"game\",\"references\":[\"core\"]}");
+        Write("content/core/Core.cs", "public static class Core { public static int Value => 1; }");
+        Write("content/Game.cs", "public static class Game { public static int Value => Core.Value; }");
+        Write("content/editor/Tool.cs", "public class Tool { }");
+        var sink = new Sink();
+        using var server = new Coordinator(sink, new AnalyzerSet());
+        server.Hello(true, "Baseline");
+        foreach (var (slot, name, references) in new[] { (0u, "core", Array.Empty<string>()), (1u, "game", new[] { "core" }) })
+        {
+            var state = Path.Combine(root, ".ara", "scripts", name);
+            Write($".ara/scripts/{name}/module.inputs.json", System.Text.Json.JsonSerializer.Serialize(new { project = root, authoringRoot = "content", name }));
+            server.Watch(slot, name, state, true, [typeof(Behaviour).Assembly.Location], references, "gameplay", watch: false);
+            Assert.True(server.WaitIdle(TimeSpan.FromSeconds(60)));
+        }
+        var before = sink.Messages.Count;
+        if (ownershipMove) File.Move(Path.Combine(root, "content", "Game.cs"), Path.Combine(root, "content", "editor", "Game.cs"));
+        else
+        {
+            Write("content/other/other.module.json", "{\"name\":\"other\"}");
+            Write("content/other/Other.cs", "public class Other { }");
+        }
+        if (heat) server.SetHeat(0, false);
+        else server.Rebuild(0, Escalation.Requested);
+        Assert.True(server.WaitIdle(TimeSpan.FromSeconds(60)));
+        var messages = sink.Messages.Skip(before).ToArray();
+        Assert.DoesNotContain(messages, message => message.Kind is MessageKind.Reload or MessageKind.Delta or MessageKind.Restart);
+        Assert.DoesNotContain(messages.Where(message => message.Kind == MessageKind.Diagnostics), message => message.Diagnostics().Errors > 0);
+        foreach (var module in new[] { "core", "game" })
+        {
+            var compile = sink.Last(module)["data"]!["compile"]!;
+            Assert.Equal("cancelled", (string?)compile["result"]);
+            Assert.NotEqual("current-module-inputs", (string?)compile["validation"]);
+        }
     }
 
     [Fact]

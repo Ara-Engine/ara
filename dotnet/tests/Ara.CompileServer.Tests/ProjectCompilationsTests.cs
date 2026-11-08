@@ -67,13 +67,21 @@ public sealed class ProjectCompilationsTests
     }
 
     [Fact]
-    public void Module_cache_eviction_preserves_current_source_and_generator_output()
+    public void Active_projects_keep_more_than_eight_module_compilations_and_drop_inactive_outputs()
     {
         var cache = new ProjectCompilations();
         var compiler = new ModuleCompiler("game", [typeof(Behaviour).Assembly.Location]);
+        var outputs = Enumerable.Range(0, 12).Select(i => $"project/module-{i}.dll").ToArray();
+        cache.Retain(outputs);
+        var first = cache.Generate(outputs[0], "config", compiler, false, [("Code.cs", "class Code0 { }")], []);
         for (var i = 0; i < 12; i++)
-            cache.Generate($"project-{i}/game.dll", "config", compiler, false, [("Code.cs", $"class Code{i} {{ }}")], []);
-        var result = cache.Generate("project-0/game.dll", "config", compiler, false, [("Code.cs", "class Updated { }")], []);
+            cache.Generate(outputs[i], "config", compiler, false, [("Code.cs", $"class Code{i} {{ }}")], []);
+        var reused = cache.Generate(outputs[0], "config", compiler, false, [("Code.cs", "class Code0 { }")], []);
+        Assert.Same(first.Trees[0], reused.Trees[0]);
+        cache.Retain([outputs[1]]);
+        var evicted = cache.Generate(outputs[0], "config", compiler, false, [("Code.cs", "class Code0 { }")], []);
+        Assert.NotSame(reused.Trees[0], evicted.Trees[0]);
+        var result = cache.Generate(outputs[0], "config", compiler, false, [("Code.cs", "class Updated { }")], []);
         Assert.NotNull(result.Final.GetTypeByMetadataName("Updated"));
         Assert.Null(result.Final.GetTypeByMetadataName("Code0"));
         Assert.Single(result.Driver.GetRunResult().Results.SelectMany(r => r.GeneratedSources));

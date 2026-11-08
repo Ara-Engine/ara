@@ -36,6 +36,7 @@ internal static class ProjectCompiler
             return inventory with { Modules = inventory.Modules.Select(m => m with { Result = "failed", Schema = null, Fingerprint = null }).ToArray(), Diagnostics=[.. graphRows] };
         }
         var root = ProjectInventory.ProjectPath(request.Project);
+        compilations.Retain(inventory.Modules.Select(module => Path.Combine(root, module.AssemblyPath)));
         var modules = inventory.Modules.ToDictionary(m => m.Name, StringComparer.OrdinalIgnoreCase);
         var built = new Dictionary<string, (MetadataReference Reference, string Hash)>(StringComparer.OrdinalIgnoreCase);
         var results = new Dictionary<string, ProjectModule>(StringComparer.OrdinalIgnoreCase);

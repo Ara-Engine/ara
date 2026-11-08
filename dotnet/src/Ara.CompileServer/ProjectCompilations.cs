@@ -4,15 +4,20 @@ using Microsoft.CodeAnalysis.CSharp;
 
 namespace Ara.CompileServer;
 
-/// <summary>Bounded, process-local Roslyn state for sequential project-session requests.</summary>
+/// <summary>Roslyn state for the active project's modules, retained across sequential preparation requests.</summary>
 internal sealed class ProjectCompilations
 {
-    const int Capacity = 8;
     readonly Dictionary<string, Entry> _modules = new(StringComparer.Ordinal);
-    long _used;
 
     sealed record Entry(string Configuration, CSharpCompilation User, GeneratorDriver Driver,
-        Dictionary<string, (string Text, SyntaxTree Tree)> Sources, long Used);
+        Dictionary<string, (string Text, SyntaxTree Tree)> Sources);
+
+    /// <summary>Drop removed modules and other projects without evicting an active project's working set.</summary>
+    internal void Retain(IEnumerable<string> outputs)
+    {
+        var active = new HashSet<string>(outputs, StringComparer.Ordinal);
+        foreach (var path in _modules.Keys.Where(path => !active.Contains(path)).ToArray()) _modules.Remove(path);
+    }
 
     /// <summary>Reuses unchanged syntax and declarations; dependency/configuration changes start a new compilation.</summary>
     internal (GeneratorDriver Driver, Compilation Final, ImmutableArray<Diagnostic> Diagnostics, SyntaxTree[] Trees) Generate(
@@ -47,9 +52,7 @@ internal sealed class ProjectCompilations
         }
         var driver = (reusable ? previous!.Driver : ModuleCompiler.Driver())
             .RunGeneratorsAndUpdateCompilation(user, out var final, out var diagnostics);
-        if (!_modules.ContainsKey(output) && _modules.Count == Capacity)
-            _modules.Remove(_modules.MinBy(pair => pair.Value.Used).Key);
-        _modules[output] = new(configuration, user, driver, trees, ++_used);
+        _modules[output] = new(configuration, user, driver, trees);
         return (driver, final, diagnostics, [.. trees.Values.Select(s => s.Tree)]);
     }
 }

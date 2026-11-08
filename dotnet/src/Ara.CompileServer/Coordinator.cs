@@ -108,7 +108,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             {
                 var attempt = Begin(slot, name, profile, track: false);
                 SendDiagnostics(slot, dir, [], [(AraCodes.UnknownModule, "error",
-                    $"module `{name}` references {string.Join(", ", missing.Select(m => $"`{m}`"))}, which the compile server does not have; modules load after the modules they reference, and references cannot form a cycle")], 0, AbiConst.OriginHuman, supplied: attempt);
+                    $"module `{name}` references {string.Join(", ", missing.Select(m => $"`{m}`"))}, which the compile server does not have; modules load after the modules they reference, and references cannot form a cycle")], 0, AbiConst.OriginHuman, validated: false, supplied: attempt);
                 return;
             }
             var m = new ModuleSession(slot, name, dir, hot, assemblies, references, profile, _analysis) { InitialGeneration = generation };
@@ -340,7 +340,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 if (unbuilt.Count > 0)
                 {
                     SendDiagnostics(m.Slot, m.Dir, [], [(AraCodes.DependencyFailed, "error",
-                        $"module `{m.Name}` is not built because {string.Join(", ", unbuilt.Select(u => $"`{u}`"))} did not build")], 0, w.Origin);
+                        $"module `{m.Name}` is not built because {string.Join(", ", unbuilt.Select(u => $"`{u}`"))} did not build")], 0, w.Origin, validated: false);
                     return;
                 }
                 Handle(Evaluated(m.Initial(this, ct), ct), w.Origin, ct);
@@ -468,21 +468,40 @@ internal sealed class Coordinator : ICompileContext, IDisposable
             foreach (var d in order)
             {
                 Begin(d.Slot, d.Name, d.Profile);
-                var o = d.Cascade(this, cancellation);
+                var o = d.Cascade(this, cancellation, root.Intent);
+                if (o.Kind == OutcomeKind.Restart)
+                {
+                    Handle(o, origin, cancellation);
+                    return;
+                }
                 if (o.Kind == OutcomeKind.Errors)
                 {
                     o.Extra.Add((AraCodes.DependencyFailed, "error",
                         $"module `{d.Name}` does not compile against the change to `{root.Module.Name}`; both keep their last good version"));
-                    SendDiagnostics(d.Slot, d.Dir, o.Problems, o.Extra, 0, origin);
+                    SendDiagnostics(d.Slot, d.Dir, o.Problems, o.Extra, 0, origin, o.ValidatedInputs);
                     SendDiagnostics(root.Module.Slot, root.Module.Dir, root.Problems.Where(p => p.Severity != Microsoft.CodeAnalysis.DiagnosticSeverity.Error).ToList(),
                         [(AraCodes.DependencyFailed, "error", $"the change to `{root.Module.Name}` breaks module `{d.Name}` (see its diagnostics); nothing was applied")],
-                        root.Timing.ToTiming().ServerUs, origin);
+                        root.Timing.ToTiming().ServerUs, origin, root.ValidatedInputs);
                     return;
                 }
                 _cascade[d] = o;
                 outcomes.Add(o);
             }
             cancellation.ThrowIfCancellationRequested();
+            if (outcomes.Any(o => !o.Module.MatchesCurrent(o, this)))
+            {
+                // Compilers can finish after another save. Validate the entire
+                // staged graph before publishing any generation or success marker.
+                foreach (var pending in outcomes)
+                    SendDiagnostics(pending.Module.Slot, pending.Module.Dir, [], [], 0, origin, validated: false);
+                if (root.Intent == CompileIntent.CurrentSources)
+                {
+                    Log(0, "script inputs changed during the dependency cascade; nothing applied, recompiling current inputs");
+                    Enqueue(new Work(WorkKind.Change, root.Module.Slot, origin, Stopwatch.GetTimestamp()));
+                }
+                else Log(0, "script inputs changed during a committed-code rebuild; nothing applied and current source inputs remain unvalidated");
+                return;
+            }
             foreach (var o in outcomes) o.Module.Commit(o);
             foreach (var o in outcomes) SendDiagnostics(o.Module.Slot, o.Module.Dir, o.Problems, o.Extra, 0, origin, o.ValidatedInputs);
             SendReload(outcomes, origin);

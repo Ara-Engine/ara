@@ -55,6 +55,15 @@ internal enum OutcomeKind
     Restart,
 }
 
+/// <summary>Whether a reload consumes current saved sources or only the last committed code.</summary>
+internal enum CompileIntent
+{
+    /// <summary>A source change may read and activate the current module graph's saved inputs.</summary>
+    CurrentSources,
+    /// <summary>An explicit rebuild or heat change must not consume unrelated saved edits.</summary>
+    CommittedCode,
+}
+
 /// <summary>
 /// The result of one compile of one module. Holds the next <see cref="ModuleState"/>; nothing
 /// is applied until <see cref="ModuleSession.Commit"/>.
@@ -77,6 +86,8 @@ internal sealed class Outcome(ModuleSession module, OutcomeKind kind)
     internal Phases Timing = new(0, 0);
     /// <summary>True only when the evaluated snapshot represents current module inputs.</summary>
     internal bool ValidatedInputs;
+    /// <summary>Propagates source-vs-committed intent through every dependent in an atomic cascade.</summary>
+    internal CompileIntent Intent;
 
     internal int ErrorCount => Problems.Count(d => d.Severity == DiagnosticSeverity.Error) + Extra.Count(e => e.Severity == "error");
 }
