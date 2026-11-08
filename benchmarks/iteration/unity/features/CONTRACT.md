@@ -43,6 +43,9 @@ engine/case order; use niceness 10, the controlled Burst wrapper, load/power
 capture and the same preference-restoration proof as S8. Thread arguments are
 backend-specific: record configured workers, participating caller and observed
 runner ceiling, never assume every scheduler has Bevy query semantics.
+The implemented one-runner query fixture uses Unity `Schedule + Complete` and
+Bevy's direct contiguous loop. Both dispatch costs remain timed, so that row does
+not isolate equal scheduler overhead.
 
 ## Cases
 

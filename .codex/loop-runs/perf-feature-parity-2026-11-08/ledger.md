@@ -69,3 +69,11 @@ CPU/Cargo slot: unassigned initially. All children explicitly holding heavy work
 -24valid fresh-process cases now complete in2reversed AC rounds, plus1interruptedattempt retained/excluded. Samefrozenbinary, all1,000,003rows bitvalidated; privateCLR10.0.14 tieredcompilationoff.
 - Scalar spans alone give small/mixed changes; explicitVector<float>cold14workers+caller~.100ms vsrow.143/.151ms (~30–34%less); cold1worker+caller~.174/.179ms vsrow.545/.559ms (~68%less). Poolworker1 is not serial. HotDebug results separate. NotUnity/NativeAOT/framecomparison.
 -29generator/124compiler/2actualCLR integration+focusedclippy+independentAPIreview pass againstcommittedd05677f2c runtime. Code/bench/docsreadytocommit; streamingruntime remainsaseparateuncommittedpacket.
+
+### Real query-filter fixture checkpoint
+- Actual serial1/parallel15 correctness smokes: retainedUnityEntityQuery/Burstjobs versusnativeBevy0.20.0 retainedqueries, all36132oraclebytesagree (1003IDs,64archetypes,1255updates). Full ID/tag/value/update audits, inputmanifests andBurst/preferencesrestoration pass. Smokes neverpromotedtotimings, evenwhenquiet.
+- Newstandalonelock alignedall10Bevy0.20familyentries toroot0.20.0; setup-only0.20.1binaryretainedunused. Python10contracts, ownRustfmt/releaseClippyalltargets pass. Build/executable/source/lock/actualpackageproofsavedinquery_filter_smoke_mac_2026-11-09.json.
+- Bothprovenancefindingsfixed: completeprepared/templateinventories before/afterlaunch; exactresultbytesboundtolaunchhash. Firstimportmetadata/bootstraprunsunaccepteduntilreprepare. NativefixturecoverageisnotpublicAraC#buffer/jobgraphavailability.
+- Remaining5caseimplementationplanapprovednextafterthischeckpoint; source-onlywhileothergates/timingsactive.
+- Streamingfallback23tests/clippy pass;50kfragmentedretainedscratch8832B at4workers/16packets. Newoptimizedbinariesbuilt, before/afterlatencyqueued.
+- Local-scene-op source ready: cachedrecordcontributions withmembership/hierarchy/live-mappingguards, commonpreflight/publication andglobalmappingcleanup; fallbackfullforeveryuncertainty. Independentreview/tests/measurementpending.

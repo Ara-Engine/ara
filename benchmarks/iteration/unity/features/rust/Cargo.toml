@@ -1,0 +1,20 @@
+[package]
+name = "ara-ecs-feature-fixture"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+ara-json = { path = "../../../../../crates/ara-json" }
+bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }
+bevy_tasks = { version = "0.20", default-features = false, features = ["multi_threaded"] }
+blake3 = "1.8"
+serde_json = "1.0"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+debug = 0

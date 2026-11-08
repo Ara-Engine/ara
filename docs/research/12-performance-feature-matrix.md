@@ -21,6 +21,36 @@ demonstrated by a finite suite. The locked direction remains C# gameplay,
 explicit SIMD/native hot paths and the existing reload architecture: D11,
 A12/A13 and S8 in [the decisions](../decisions.md).
 
+## Follow-up evidence, November 9
+
+The baseline inventory below remains a snapshot of `20e8ccdbc`. These subsequent
+changes have executable evidence:
+
+- Native SparseSet views now pass actual CLR mixed-storage, filter, tick, churn,
+  command-order and undo tests. The [sparse results](../../benchmarks/iteration/sparse_native_mac_2026-11-09.json)
+  retain fragmented-query costs and a cold dense-tail increase; they do not establish
+  zero regression. Further streaming setup work is measured separately.
+- C# `[Query]` methods can receive component spans and readonly entity spans while
+  retaining the same access declarations and ABI. The [batch results](../../benchmarks/iteration/batch_queries_mac_2026-11-09.json)
+  cover 24 valid fresh-process cases, exact row bits, scalar and explicit SIMD
+  variants, Release and hot Debug. Scalar spans alone give small or mixed changes;
+  the explicit SIMD kernel benefits. NativeAOT entry generation compiles, while
+  NativeAOT execution remains unmeasured.
+- [Owned scene transfer](../../benchmarks/iteration/scene_prepare_mac_2026-11-09.json)
+  removes decoded JSON-tree copies. Subsequent [validation/materialization work](../../benchmarks/iteration/pipeline_allocations_mac_2026-11-09.json)
+  reduces complete CPU preparation by about 19% at 100k records and allocation
+  requests by 26%, with matching complete state and portable hashes. Asset, GPU
+  and first-correct-tick readiness are outside these timings.
+- The [expanded boids/structural baseline](../../benchmarks/iteration/unity/broad_mac_2026-11-08.json)
+  is one battery round, with its missing-ID and bookkeeping limits recorded.
+  A later build replaced the original binary; reconstructed-source runs require a
+  separate profile. The [new feature fixtures](../../benchmarks/iteration/unity/features/README.md)
+  use full ID/tag/update exports and distinguish correctness smokes from timings.
+
+These additions do not fill every API or comparison gap below. C# buffer,
+enable/shared/change-filter and explicit job-graph surfaces, subsystem comparisons
+and a measured Unreal lane still need their own evidence.
+
 ## Versions and evidence boundaries
 
 The installed fixture is Unity **6000.4.5f1**, Burst **1.8.29**, Mathematics
