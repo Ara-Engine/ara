@@ -5,6 +5,8 @@ mod baseline;
 mod kernels;
 #[path = "support/model.rs"]
 mod model;
+#[path = "support/queries.rs"]
+mod queries;
 #[path = "support/sorted.rs"]
 mod sorted;
 #[path = "support/tuned.rs"]
@@ -27,6 +29,7 @@ struct Row {
     p95_ms: f64,
     ms: Vec<f64>,
     state_hash: String,
+    stable_ids_asserted: bool,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -48,6 +51,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         || !["baseline", "tuned", "simd"].contains(&variant.as_str())
     {
         return Err("invalid benchmark parameters".into());
+    }
+    if workload == "w4" && n != 100_000 {
+        return Err("W4 replaces 10,000 of exactly 100,000 entities".into());
     }
     ComputeTaskPool::get_or_init(|| TaskPoolBuilder::new().num_threads(threads).build());
     rayon::ThreadPoolBuilder::new()
@@ -103,6 +109,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             let a = before.records();
             let b = after.records();
             let c = simd.records();
+            if w == "w4" {
+                before.check_churn_ids(warmup);
+                after.check_churn_ids(warmup);
+                simd.check_churn_ids(warmup);
+            }
             if !a
                 .iter()
                 .zip(&b)
@@ -141,6 +152,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             ms.push(elapsed);
         }
     }
+    if workload == "w4" {
+        world.check_churn_ids(warmup + frames);
+    }
     let mut hash = blake3::Hasher::new();
     for row in world.records() {
         for value in row {
@@ -161,6 +175,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         p95_ms: sorted[(frames as usize * 95).div_ceil(100) - 1],
         ms,
         state_hash: hash.finalize().to_hex().to_string(),
+        stable_ids_asserted: workload == "w4",
     };
     if args[8] != "-" {
         std::fs::write(

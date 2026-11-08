@@ -84,3 +84,9 @@ CPU/Cargo slot: unassigned initially. All children explicitly holding heavy work
 - Untimed50kfragmentedmetadata8832B (4workers,16packets,64pendingIDcapacity,zeroChunkCall retention). Excludesworld/schema/taskallocations andnotuniversalRSSgain; alignedvectorscanretainlargercapacity.
 - Densefollowup p50 largelyunchanged; allstatebits agree and73allocations/tick unchanged. Reversehotp95+.022ms/+3.2%, forwardimproves; retainvariability, noall-tailclaim. Evidence sparse_streaming_mac_2026-11-09.json.
 - Localprojectionreview identifieddoubleinstanceexpansion; fixingrecordvalidation+singlecontributionresolution and addinglargeinstance/broadwaveprobesbeforegates. No correctness/rollbackfinding.
+
+### Native fixture fairness/calibration checkpoint
+- OptimizedS8fixtures nowretainQueryStateplans outsideframes; productionAraalreadyretainedthem, so thisisbenchmarkmodelcorrection, notengineFPSgain. Independentbaseline mathkept.
+- Exact12-stepvalidation1003rowsinclSIMDtails and100kW4passes;20full freshprocessruns in2reversedACrounds have identicalnumericstatehashesperworkload. W4candidateassertsactualIDepochs/presence/uniqueslots.
+- Newreconstructedbaselinea1892e differsfromhistoricala1f12; newprofileonly. W3batch8192.315/.320ms vs4096.433/.428ms; configstudyonly. W2batch512.774/.775ms loses to128.712/.713ms, so noadoption/hiding. Othercachedplanresultsretainedmixed/noise; W4kernelunchanged.
+- Evidence ecs_fixture_cache_mac_2026-11-09.json; benchclippyandvalidationpassed. No newUnitytimingclaim.
