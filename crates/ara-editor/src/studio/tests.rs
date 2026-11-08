@@ -488,3 +488,24 @@ fn a_linked_scale_keeps_its_proportions() {
         json!([1.0, 2.0, 2.0])
     );
 }
+
+#[test]
+fn a_console_row_opens_its_details() {
+    let mut rt = open();
+    let diagnostic = ara_diag::Diagnostic::error(
+        ara_diag::codes::UNRESOLVED_REF,
+        "Missing @textures/rock.png",
+    );
+    let entry = json!({"seq": 7, "at": 0, "origin": "engine", "diagnostic": serde_json::to_value(&diagnostic).unwrap()});
+    let row = super::state::LogRow::from_entry(&entry).expect("a bus record reads");
+    rt.update(|s| {
+        s.logs = vec![row];
+        s.act("editor.layout.show", json!({"panel": "console"}));
+    });
+    settle(&mut rt);
+    let at = rt.find("console/row/7").expect("the row shows");
+    rt.pointer_down(at.center().x, at.center().y);
+    rt.pointer_up(at.center().x, at.center().y);
+    settle(&mut rt);
+    assert_eq!(rt.state().local.console_open, Some(7));
+}

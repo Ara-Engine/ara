@@ -620,20 +620,127 @@ fn console(s: &Studio) -> El<Studio> {
             std::sync::Arc::new(shown.into_iter().cloned().collect());
         let n = rows.len();
         let look = l.clone();
+        let open = s.local.console_open;
         virtual_list("console/rows", n, 34.0, move |range| {
             range
-                .map(|i| log_row(&look, &rows[i], i % 2 == 1))
+                .map(|i| log_row(&look, &rows[i], i % 2 == 1, open == Some(rows[i].seq)))
                 .collect()
         })
+        .h(0.0)
         .grow(1.0)
         .follow_end()
     };
+    let detail = s
+        .local
+        .console_open
+        .and_then(|seq| s.logs.iter().find(|r| r.seq == seq))
+        .map(|r| log_detail(s, r));
     col()
         .grow(1.0)
         .min_h(0.0)
         .child(toolbar)
         .child(divider(l))
         .child(body)
+        .children(detail.map(|d| col().child(divider(l)).child(d)))
+}
+
+/// The chosen record in full (Unity's console detail pane): the message, where it came
+/// from, what its code means and why it usually happens, and its typed fixes.
+fn log_detail(s: &Studio, r: &LogRow) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let doc = ara_diag::catalog::get(r.diagnostic.code);
+    let mut head = row()
+        .gap(8.0)
+        .align(Align::Center)
+        .child(severity_glyph(l, r.severity))
+        .child(
+            text(r.code.clone())
+                .text_size(11.0)
+                .family(mono())
+                .color(c.muted_foreground.0),
+        );
+    if let Some(doc) = doc {
+        head = head.child(
+            text(doc.title)
+                .text_size(12.0)
+                .weight(600)
+                .color(c.foreground.0),
+        );
+    }
+    head = head.child(el().grow(1.0)).child(
+        icon_button(l, Tone::Ghost, Size::Sm, icons::X, "Close details")
+            .on_press(|s: &mut Studio| s.local.console_open = None),
+    );
+    let mut out = col()
+        .max_h(180.0)
+        .pad_x(12.0)
+        .pad_y(8.0)
+        .gap(6.0)
+        .scroll(Axis::Vertical)
+        .child(head)
+        .child(
+            text(r.message.clone())
+                .text_size(12.0)
+                .wrap(4)
+                .color(c.foreground.0),
+        );
+    if let Some(source) = &r.source {
+        out = out.child(
+            row()
+                .gap(6.0)
+                .align(Align::Center)
+                .child(icon(icons::FILE).size(12.0).color(c.muted_foreground.0))
+                .child(
+                    text(source.clone())
+                        .text_size(11.0)
+                        .family(mono())
+                        .color(c.muted_foreground.0),
+                ),
+        );
+    }
+    if let Some(doc) = doc {
+        out = out.child(
+            text(doc.summary())
+                .text_size(11.5)
+                .wrap(3)
+                .color(c.muted_foreground.0),
+        );
+        if let Some(cause) = doc.causes.first() {
+            out = out.child(
+                text(format!("Usually: {cause}"))
+                    .text_size(11.5)
+                    .wrap(2)
+                    .color(c.muted_foreground.0),
+            );
+        }
+    }
+    if !r.diagnostic.fixes.is_empty() {
+        let mut fixes = row().gap(4.0);
+        for (i, fix) in r.diagnostic.fixes.iter().enumerate().take(3) {
+            let diagnostic = r.diagnostic.clone();
+            fixes = fixes.child(
+                button(
+                    l,
+                    Tone::Secondary,
+                    Size::Sm,
+                    Some(icons::WRENCH),
+                    &fix.title,
+                )
+                .on_press(move |s: &mut Studio| {
+                    if let Err(error) =
+                        crate::shell::input::apply_fix(&mut s.editor, &diagnostic, i)
+                    {
+                        s.editor
+                            .report_failure(&std::io::Error::other(error.to_string()));
+                    }
+                    s.resolve();
+                }),
+            );
+        }
+        out = out.child(fixes);
+    }
+    out
 }
 
 fn level(severity: ara_diag::Severity) -> usize {
@@ -645,7 +752,7 @@ fn level(severity: ara_diag::Severity) -> usize {
 }
 
 /// A console row: severity, the message, then its time, origin and source.
-fn log_row(l: &ara_kit::look::Look, r: &LogRow, odd: bool) -> El<Studio> {
+fn log_row(l: &ara_kit::look::Look, r: &LogRow, odd: bool, open: bool) -> El<Studio> {
     let c = &l.c;
     let secs = r.at / 1000;
     let meta = format!(
@@ -664,15 +771,29 @@ fn log_row(l: &ara_kit::look::Look, r: &LogRow, odd: bool) -> El<Studio> {
             String::new()
         }
     );
+    let seq = r.seq;
+    let hover = c.hover_surface.0;
     row()
+        .key(format!("console/row/{}", r.seq))
         .h(34.0)
         .pad_x(10.0)
         .gap(10.0)
         .align(Align::Center)
-        .fill(if odd {
+        .fill(if open {
+            c.selection_surface_inactive.0
+        } else if odd {
             c.muted.0.with_alpha(0.35)
         } else {
             stillkit::Rgba::TRANSPARENT
+        })
+        .selected(open)
+        .hovered(move |e| if open { e } else { e.fill(hover) })
+        .on_press(move |s: &mut Studio| {
+            s.local.console_open = if s.local.console_open == Some(seq) {
+                None
+            } else {
+                Some(seq)
+            }
         })
         .child(severity_glyph(l, r.severity))
         .child(
