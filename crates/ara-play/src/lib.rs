@@ -785,9 +785,9 @@ impl PlayScene {
         }
         let mut workspace = Workspace::new(index);
         for data in self.documents.drain(..) {
-            let mut doc = Document::new(data.kind, AssetId::parse(&data.id)?);
+            let mut doc = Document::new(data.kind, AssetId::try_from(data.id)?);
             for (id, record) in data.records {
-                doc.insert_unchecked(RecordId::parse(&id)?, record);
+                doc.insert_unchecked(RecordId::try_from(id)?, record);
             }
             workspace.insert(data.path, doc);
         }

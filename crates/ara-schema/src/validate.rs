@@ -1,6 +1,6 @@
 //! Value validation against the schema, producing structured diagnostics.
 
-use std::collections::BTreeSet;
+use std::{borrow::Cow, collections::BTreeSet, fmt::Write};
 
 use ara_diag::{Diagnostic, FixAction, Location, codes, did_you_mean};
 use serde_json::{Map, Value};
@@ -19,16 +19,25 @@ pub struct Validator<'a> {
     symbols: bool,
 }
 
-fn join(path: &str, name: &str) -> String {
-    if path.is_empty() {
-        name.to_owned()
-    } else {
-        format!("{path}.{name}")
+// A root can remain borrowed for scalar validation. Nested paths reuse one owned
+// buffer; diagnostics copy only the completed path they retain.
+fn append_field(path: &mut Cow<'_, str>, name: &str) -> usize {
+    let start = path.len();
+    let path = path.to_mut();
+    if !path.is_empty() {
+        path.push('.');
     }
+    path.push_str(name);
+    start
 }
 
-fn key_path(path: &str, key: &str) -> String {
-    format!("{path}[{key}]")
+fn append_key(path: &mut Cow<'_, str>, key: &str) -> usize {
+    let start = path.len();
+    let path = path.to_mut();
+    path.push('[');
+    path.push_str(key);
+    path.push(']');
+    start
 }
 
 impl<'a> Validator<'a> {
@@ -146,29 +155,36 @@ impl<'a> Validator<'a> {
     /// Validates the fields of a struct value: unknown keys, required fields and each
     /// field's value.
     pub fn fields(&mut self, ty: &TypeDesc, obj: &Map<String, Value>, path: &str) {
+        self.fields_at(ty, obj, &mut Cow::Borrowed(path));
+    }
+
+    fn fields_at(&mut self, ty: &TypeDesc, obj: &Map<String, Value>, path: &mut Cow<'_, str>) {
         for (key, v) in obj {
+            let start = append_field(path, key);
             match ty.field(key) {
-                Some(f) => self.value(&f.ty, Some(f), v, &join(path, key)),
-                None => self.unknown_field(ty, key, path),
+                Some(f) => self.value_at(&f.ty, Some(f), v, path),
+                None => self.unknown_field_at(ty, key, path),
             }
+            path.to_mut().truncate(start);
         }
         for f in ty
             .fields()
             .iter()
             .filter(|f| f.required && !obj.contains_key(&f.name))
         {
+            let start = append_field(path, &f.name);
             self.push(
                 Diagnostic::error(
                     codes::MISSING_REQUIRED,
                     format!("missing required field `{}` of `{}`", f.name, ty.name),
                 )
-                .path(join(path, &f.name)),
+                .path(path.as_ref()),
             );
+            path.to_mut().truncate(start);
         }
     }
 
-    fn unknown_field(&mut self, ty: &TypeDesc, key: &str, path: &str) {
-        let full = join(path, key);
+    fn unknown_field_at(&mut self, ty: &TypeDesc, key: &str, path: &str) {
         let renamed = ty
             .fields()
             .iter()
@@ -180,13 +196,13 @@ impl<'a> Validator<'a> {
         if renamed.is_some() {
             msg = format!("field `{key}` of `{}` was renamed", ty.name);
         }
-        let mut d = Diagnostic::error(codes::UNKNOWN_FIELD, msg).path(full.clone());
+        let mut d = Diagnostic::error(codes::UNKNOWN_FIELD, msg).path(path);
         if let Some(s) = suggestion {
             d = d.with_fix(
                 format!("Rename `{key}` to `{s}`"),
                 FixAction::Rename {
                     record: None,
-                    path: full,
+                    path: path.to_owned(),
                     to: s.to_owned(),
                 },
             );
@@ -196,6 +212,16 @@ impl<'a> Validator<'a> {
 
     /// Validates `v` against `ty`. `field` supplies range and deprecation metadata.
     pub fn value(&mut self, ty: &ValueType, field: Option<&FieldDesc>, v: &Value, path: &str) {
+        self.value_at(ty, field, v, &mut Cow::Borrowed(path));
+    }
+
+    fn value_at(
+        &mut self,
+        ty: &ValueType,
+        field: Option<&FieldDesc>,
+        v: &Value,
+        path: &mut Cow<'_, str>,
+    ) {
         if let Some(f) = field
             && let Some(msg) = &f.deprecated
         {
@@ -204,7 +230,7 @@ impl<'a> Validator<'a> {
                     codes::DEPRECATED,
                     format!("field `{}` is deprecated: {msg}", f.name),
                 )
-                .path(path),
+                .path(path.as_ref()),
             );
         }
         let range = field.and_then(|f| f.range);
@@ -223,34 +249,39 @@ impl<'a> Validator<'a> {
                 Value::Null => {}
                 Value::String(s) => {
                     if let Err(msg) = parse_ref(s) {
-                        self.push(Diagnostic::error(codes::INVALID_REF, msg).path(path));
+                        self.push(Diagnostic::error(codes::INVALID_REF, msg).path(path.as_ref()));
                     }
                 }
                 _ => self.mismatch(path, "an `@path#id` reference", v),
             },
             ValueType::Option(inner) => {
                 if !v.is_null() {
-                    self.value(inner, field, v, path);
+                    self.value_at(inner, field, v, path);
                 }
             }
             ValueType::List(item) => match v.as_array() {
                 Some(items) => {
                     for (i, it) in items.iter().enumerate() {
-                        self.value(item, None, it, &format!("{path}[#{i}]"));
+                        let start = path.len();
+                        write!(path.to_mut(), "[#{i}]").expect("writing to a String cannot fail");
+                        self.value_at(item, None, it, path);
+                        path.to_mut().truncate(start);
                     }
                 }
                 None => self.mismatch(path, "an array", v),
             },
-            ValueType::Keyed(item) => self.keyed(item, v, path),
+            ValueType::Keyed(item) => self.keyed_at(item, v, path),
             ValueType::Map(item) => match v.as_object() {
                 Some(o) => {
                     for (k, it) in o {
-                        self.value(item, None, it, &key_path(path, k));
+                        let start = append_key(path, k);
+                        self.value_at(item, None, it, path);
+                        path.to_mut().truncate(start);
                     }
                 }
                 None => self.mismatch(path, "an object", v),
             },
-            ValueType::Named(name) => self.named(name, v, path),
+            ValueType::Named(name) => self.named_at(name, v, path),
             _ => {}
         }
     }
@@ -318,7 +349,7 @@ impl<'a> Validator<'a> {
         }
     }
 
-    fn keyed(&mut self, item: &ValueType, v: &Value, path: &str) {
+    fn keyed_at(&mut self, item: &ValueType, v: &Value, path: &mut Cow<'_, str>) {
         let Some(items) = v.as_array() else {
             return self.mismatch(path, "an array of items with `id`", v);
         };
@@ -326,37 +357,42 @@ impl<'a> Validator<'a> {
         for it in items {
             match it.get("id").and_then(Value::as_str) {
                 Some(id) if split_id(id).is_some() && seen.insert(id) => {
-                    self.value(item, None, it, &key_path(path, id))
+                    let start = append_key(path, id);
+                    self.value_at(item, None, it, path);
+                    path.to_mut().truncate(start);
                 }
                 Some(id) if split_id(id).is_some() => {
+                    let start = append_key(path, id);
                     self.push(
                         Diagnostic::error(
                             codes::INVALID_KEYED_ITEM,
                             format!("item id `{id}` is used twice"),
                         )
-                        .path(key_path(path, id)),
+                        .path(path.as_ref()),
                     );
+                    path.to_mut().truncate(start);
                 }
                 _ => self.push(
                     Diagnostic::error(
                         codes::INVALID_KEYED_ITEM,
                         "keyed items need an `id` like `s_7c`",
                     )
-                    .path(path),
+                    .path(path.as_ref()),
                 ),
             }
         }
     }
 
-    fn named(&mut self, name: &str, v: &Value, path: &str) {
+    fn named_at(&mut self, name: &str, v: &Value, path: &mut Cow<'_, str>) {
         let Some(t) = self.db.get(name) else {
             return self.push(
-                Diagnostic::error(codes::UNKNOWN_TYPE, format!("unknown type `{name}`")).path(path),
+                Diagnostic::error(codes::UNKNOWN_TYPE, format!("unknown type `{name}`"))
+                    .path(path.as_ref()),
             );
         };
         match &t.shape {
             Shape::Struct { .. } => match v.as_object() {
-                Some(o) => self.fields(t, o, path),
+                Some(o) => self.fields_at(t, o, path),
                 None => self.mismatch(path, format!("a `{name}` object"), v),
             },
             Shape::Enum { variants } => {
@@ -371,7 +407,7 @@ impl<'a> Validator<'a> {
                                     codes::DEPRECATED,
                                     format!("`{name}.{s}` is deprecated: {msg}"),
                                 )
-                                .path(path),
+                                .path(path.as_ref()),
                             );
                         }
                     }
@@ -391,13 +427,13 @@ impl<'a> Validator<'a> {
                                 options.join(", ")
                             ),
                         )
-                        .path(path);
+                        .path(path.as_ref());
                         if let Some(sug) = suggestion {
                             d = d.with_fix(
                                 format!("Use `{sug}`"),
                                 FixAction::Set {
                                     record: None,
-                                    path: path.to_owned(),
+                                    path: path.to_string(),
                                     value: Value::from(sug),
                                 },
                             );
