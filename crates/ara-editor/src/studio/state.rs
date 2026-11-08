@@ -147,6 +147,9 @@ pub struct Local {
     pub component_menu: Option<String>,
     /// Add Component's search and highlighted row, while open.
     pub add_component: Option<(String, usize)>,
+    /// An asset being dragged toward the Scene: its storage path, name, and where the
+    /// pointer is (window design px).
+    pub asset_drag: Option<(String, String, (f32, f32))>,
     /// A Hierarchy row being dragged.
     pub row_drag: Option<RowDrag>,
     /// Agent turns shown open in Agents, by turn key.

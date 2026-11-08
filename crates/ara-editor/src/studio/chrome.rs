@@ -23,9 +23,31 @@ pub fn view(s: &Studio) -> El<Studio> {
         .child(title_bar(s))
         .child(dock::view(s).grow(1.0).min_h(0.0))
         .child(status_bar(s))
+        .children(drag_chip(s))
         .overlay(context_menu(s))
         .overlay(super::create::overlay(s));
     palette(s, root)
+}
+
+/// What an asset drag carries, beside the pointer.
+fn drag_chip(s: &Studio) -> Option<El<Studio>> {
+    let (_, name, (x, y)) = s.local.asset_drag.as_ref()?;
+    let l = &s.look;
+    let c = &l.c;
+    Some(
+        row()
+            .absolute(x + 14.0, y + 10.0)
+            .h(26.0)
+            .pad_x(10.0)
+            .gap(6.0)
+            .align(Align::Center)
+            .radius(l.radius.sm)
+            .fill(c.popover.0)
+            .border(1.0, c.border.0)
+            .shadow_level(stillkit::ShadowLevel::Menu)
+            .child(icon(icons::BOX).size(13.0).color(c.primary.0))
+            .child(text(name.clone()).text_size(12.0).color(c.foreground.0)),
+    )
 }
 
 /// The open context menu at the pointer: the registry's layout for what was clicked, its

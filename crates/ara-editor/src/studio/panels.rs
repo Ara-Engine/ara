@@ -403,6 +403,7 @@ fn tile(l: &ara_kit::look::Look, a: &Asset, selected: bool) -> El<Studio> {
     let folder = a.kind == "folder";
     let path = a.path.clone();
     let scene = a.document_kind.as_deref() == Some("scene");
+    let placeable = a.kind == "prefab" || matches!(a.kind.as_str(), "gltf" | "glb" | "fbx" | "obj");
     let reference = a.authored_path.clone();
     let glyph_ink = if folder {
         c.warning.0
@@ -438,21 +439,40 @@ fn tile(l: &ara_kit::look::Look, a: &Asset, selected: bool) -> El<Studio> {
                 });
             }
         })
-        .on_pointer(move |s: &mut Studio, e, _| {
-            if e.phase != stillkit::el::PointerPhase::Down || e.button != stillkit::Button::Left {
-                return false;
-            }
-            if e.clicks == 2 && folder {
-                s.act("editor.workspace", json!({"folder": path}));
-            } else if e.clicks == 2 && scene {
-                if let Some(doc) = &reference {
-                    s.act("editor.open", json!({"doc": doc}));
-                    s.resolve();
+        .on_pointer({
+            let name = stem.to_owned();
+            move |s: &mut Studio, e, _| {
+                use stillkit::el::PointerPhase;
+                if e.button != stillkit::Button::Left {
+                    return false;
                 }
-            } else {
-                s.act("editor.workspace", json!({"asset": path}));
+                match e.phase {
+                    PointerPhase::Down if e.clicks == 2 && folder => {
+                        s.act("editor.workspace", json!({"folder": path}))
+                    }
+                    PointerPhase::Down if e.clicks == 2 && scene => {
+                        if let Some(doc) = &reference {
+                            s.act("editor.scene.open", json!({"scene": doc}));
+                            s.resolve();
+                        }
+                    }
+                    PointerPhase::Down => s.act("editor.workspace", json!({"asset": path})),
+                    // Models and prefabs drag into the Scene.
+                    PointerPhase::Move
+                        if placeable && e.travel().x.abs() + e.travel().y.abs() >= 4.0 =>
+                    {
+                        s.local.asset_drag = Some((path.clone(), name.clone(), (e.at.x, e.at.y)));
+                    }
+                    PointerPhase::Up => {
+                        if let Some((path, _, at)) = s.local.asset_drag.take() {
+                            place(s, &path, at);
+                        }
+                    }
+                    PointerPhase::Cancel => s.local.asset_drag = None,
+                    _ => return false,
+                }
+                true
             }
-            true
         })
         .child(
             el().size(52.0)
@@ -726,4 +746,46 @@ fn problems(s: &Studio) -> El<Studio> {
         out = out.child(card);
     }
     col().grow(1.0).min_h(0.0).scroll(Axis::Vertical).child(out)
+}
+
+/// Places the model or prefab at storage `path` where the pointer let go: on the ground
+/// under it in the Scene view (nothing happens elsewhere).
+fn place(s: &mut Studio, path: &str, at: (f32, f32)) {
+    let Some(view) = s.local.rects.get("scene/view").copied() else {
+        return;
+    };
+    if !(at.0 >= view.left && at.0 <= view.right && at.1 >= view.top && at.1 <= view.bottom) {
+        return;
+    }
+    let Some(asset) = s
+        .assets
+        .as_ref()
+        .and_then(|b| b.items.iter().find(|a| a.path == path).cloned())
+    else {
+        return;
+    };
+    let Some(reference) = asset.current_reference(s.editor.host.store().workspace()) else {
+        s.editor
+            .report_failure(&std::io::Error::other("The asset is no longer available"));
+        return;
+    };
+    let rect = ara_ui::paint::Box2 {
+        x: 0.0,
+        y: 0.0,
+        w: view.width(),
+        h: view.height(),
+    };
+    let ground = crate::shell::overlay::ground_point(
+        &s.editor.state.camera,
+        rect,
+        [at.0 - view.left, at.1 - view.top],
+    )
+    .unwrap_or(s.editor.state.camera.target);
+    let position = json!([ground.x, ground.y, ground.z]);
+    let command = if asset.kind == "prefab" {
+        json!({"cmd": "prefab.instantiate", "args": {"prefab": reference, "position": position}})
+    } else {
+        json!({"cmd": "editor.mesh.instantiate", "args": {"mesh": reference, "position": position}})
+    };
+    s.apply(vec![command], "Place asset");
 }

@@ -530,7 +530,8 @@ fn pump(rt: &mut Runtime<Studio>, surface: &mut Surface, started: Instant) -> an
         rt.present(surface, (0, 0))?;
         chrome_parts(surface, rt);
         // Layout feedback the view reads next time: where splits and the Scene view are.
-        let keys = dock::rect_keys(&rt.state().editor.state.layout);
+        let mut keys = dock::rect_keys(&rt.state().editor.state.layout);
+        keys.push("scene/view".into());
         let s = rt.scale();
         let rects = keys
             .into_iter()

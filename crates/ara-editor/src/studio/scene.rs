@@ -82,6 +82,20 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         })
         .child(toolbar(s))
         .child(orientation(s));
+    // An asset over the view: it lands where the pointer lets go.
+    if let (Some((_, _, at)), Some(rect)) = (&s.local.asset_drag, s.local.rects.get("scene/view"))
+        && at.0 >= rect.left
+        && at.0 <= rect.right
+        && at.1 >= rect.top
+        && at.1 <= rect.bottom
+    {
+        view = view.child(
+            el().absolute(0.0, 0.0)
+                .w_full()
+                .h_full()
+                .border(2.0, l.c.primary.0),
+        );
+    }
     if !s.local.scene.ready {
         view = view.child(
             el().absolute(0.0, 0.0)
