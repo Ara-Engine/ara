@@ -328,11 +328,19 @@ pub fn plane_point(
 }
 /// Resolve the selected pivot and orientation into image-space transform handles.
 pub fn handles(view: &DocumentView, state: &EditorState, rect: Box2) -> Option<Handles> {
+    handles_in(view.entities(), state, rect)
+}
+/// [`handles`] over resolved scene entities (the studio keeps those, not a view).
+pub fn handles_in(
+    entities: &ara_doc::prefab::Resolved,
+    state: &EditorState,
+    rect: Box2,
+) -> Option<Handles> {
     if state.hide_gizmos || state.game_view {
         return None;
     }
     // Only the selection's transforms: composing the whole scene cost ~0.5 ms a frame.
-    let world = |id: &str| crate::world::world_transform(view.entities(), id);
+    let world = |id: &str| crate::world::world_transform(entities, id);
     let matrix = world(state.selection.first()?)?;
     let pivot = if state.centre {
         state

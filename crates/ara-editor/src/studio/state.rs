@@ -113,6 +113,10 @@ pub struct Local {
     pub scrub: Option<(String, Option<usize>, f64, f64)>,
     /// The open dropdown, by key.
     pub select: Option<String>,
+    /// The gizmo handle being dragged.
+    pub gizmo: Option<super::gizmo::Drag>,
+    /// The gizmo handle under the pointer.
+    pub gizmo_hover: Option<crate::shell::overlay::Handle>,
 }
 
 /// The studio's runtime state.

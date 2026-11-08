@@ -8,7 +8,7 @@ use ara_kit::ui::*;
 use stillkit::el::{Align, El, Handled, Justify, PointerPhase, el, icon, native, row, text};
 use stillkit::{Button, Cursor, Rgba};
 
-use super::{SCENE_LAYER, Studio, commands};
+use super::{SCENE_LAYER, Studio, commands, gizmo};
 use crate::shell::commands::Target;
 use crate::state::Tool;
 
@@ -38,15 +38,19 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
             s.editor.state.camera.zoom(w.delta);
             true
         })
-        .on_key(
-            |s: &mut Studio, key, tx| match commands::for_key(key.0, tx.modifiers()) {
+        .on_key(|s: &mut Studio, key, tx| {
+            if key == stillkit::el::KeyCode::ESCAPE && s.local.gizmo.is_some() {
+                gizmo::end(s, true);
+                return Handled::Yes;
+            }
+            match commands::for_key(key.0, tx.modifiers()) {
                 Some(id) => {
                     commands::run(s, id, &Target::None);
                     Handled::Yes
                 }
                 None => Handled::No,
-            },
-        )
+            }
+        })
         .child(toolbar(s))
         .child(orientation(s));
     if !s.local.scene.ready {
@@ -79,6 +83,27 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
 
 /// Camera navigation and picking from the pointer's story on the view.
 fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el::Tx) -> bool {
+    let at = [e.local.x, e.local.y];
+    // The gizmo takes the left button before picking and orbiting.
+    match (e.phase, e.button) {
+        (PointerPhase::Hover, _) => return gizmo::hover(s, at, e.size),
+        (PointerPhase::Down, Button::Left) if !e.mods.alt && gizmo::begin(s, at, e.size) => {
+            return true;
+        }
+        (PointerPhase::Move, Button::Left) if s.local.gizmo.is_some() => {
+            gizmo::drive(s, at);
+            return true;
+        }
+        (PointerPhase::Up, Button::Left) if s.local.gizmo.is_some() => {
+            gizmo::end(s, false);
+            return true;
+        }
+        (PointerPhase::Cancel, _) if s.local.gizmo.is_some() => {
+            gizmo::end(s, true);
+            return true;
+        }
+        _ => {}
+    }
     let camera = &mut s.editor.state.camera;
     match (e.phase, e.button) {
         (PointerPhase::Move, Button::Right) => camera.look([e.delta.x * 0.006, e.delta.y * 0.006]),

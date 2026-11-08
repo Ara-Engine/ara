@@ -12,11 +12,14 @@ mod chrome;
 mod commands;
 mod compositor;
 mod dock;
+mod gizmo;
 mod hierarchy;
 mod inspector;
 mod panels;
 mod scene;
 pub mod state;
+#[cfg(test)]
+mod tests;
 
 use std::time::{Duration, Instant};
 
@@ -223,7 +226,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             let camera_moved = now != camera;
             camera = now;
             // What the overlays draw besides the camera: the selection, tool and theme.
-            let key = rt.touch(|s| overlays_key(&s.editor.state));
+            let key = rt.touch(|s| overlays_key(s));
             let restyled = key != overlay_key;
             overlay_key = key;
             let render = camera_moved
@@ -253,7 +256,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                             &view,
                             &s.editor.state,
                             &changed,
-                            Default::default(),
+                            gizmo_state(s),
                             revision,
                             layer,
                             extent,
@@ -350,10 +353,20 @@ fn metal_layer(
     }
 }
 
+/// The gizmo handles to light: the one under the pointer and the one dragged.
+fn gizmo_state(s: &Studio) -> crate::shell::overlay::GizmoState {
+    crate::shell::overlay::GizmoState {
+        hover: s.local.gizmo_hover,
+        active: s.local.gizmo.as_ref().map(|d| d.handle),
+    }
+}
+
 /// A digest of the editor state the Scene overlays draw besides the camera.
-fn overlays_key(state: &crate::state::EditorState) -> u64 {
+fn overlays_key(s: &Studio) -> u64 {
     use std::hash::{Hash, Hasher};
+    let state = &s.editor.state;
     let mut h = std::collections::hash_map::DefaultHasher::new();
+    format!("{:?}", gizmo_state(s)).hash(&mut h);
     (
         &state.selection,
         state.tool as u8,
