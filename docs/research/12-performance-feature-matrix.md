@@ -43,6 +43,11 @@ changes have executable evidence:
   reduces complete CPU preparation by about 19% at 100k records and allocation
   requests by 26%, with matching complete state and portable hashes. Asset, GPU
   and first-correct-tick readiness are outside these timings.
+- A [10,240-script full-edit probe](../../benchmarks/iteration/compiler_10240_mac_2026-11-09.json)
+  completes full project requests at 13.9–14.5 seconds warm, with 1.93 GB peak
+  compile-server RSS. This is one process with generated independent modules and
+  three warm samples, on a newer CLR than the older 5,120-script fixture. It does
+  not measure a commercial project, live reload or a matched Unity graph.
 - [Local scene Set batches](../../benchmarks/iteration/projection_local_mac_2026-11-09.json)
   resolve touched source records with guarded full fallbacks. At 100k plain rows,
   one edit drops from 215–226 ms to 0.84–0.90 ms with matching source/state/snapshot
