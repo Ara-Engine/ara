@@ -115,6 +115,10 @@ pub struct Local {
     pub select: Option<String>,
     /// The gizmo handle being dragged.
     pub gizmo: Option<super::gizmo::Drag>,
+    /// The right button is held in the Scene view: WASD/QE fly the camera.
+    pub flying: bool,
+    /// Fly keys held down (W A S D Q E, as virtual keys).
+    pub held: std::collections::BTreeSet<u16>,
     /// The gizmo handle under the pointer.
     pub gizmo_hover: Option<crate::shell::overlay::Handle>,
 }

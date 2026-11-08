@@ -39,6 +39,10 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
             true
         })
         .on_key(|s: &mut Studio, key, tx| {
+            // While flying, the fly keys steer instead of switching tools.
+            if s.local.flying && super::FLY_KEYS.contains(&key.0) {
+                return Handled::Yes;
+            }
             if key == stillkit::el::KeyCode::ESCAPE && s.local.gizmo.is_some() {
                 gizmo::end(s, true);
                 return Handled::Yes;
@@ -106,6 +110,11 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
     }
     let camera = &mut s.editor.state.camera;
     match (e.phase, e.button) {
+        (PointerPhase::Down, Button::Right) => s.local.flying = true,
+        (PointerPhase::Up, Button::Right) | (PointerPhase::Cancel, Button::Right) => {
+            s.local.flying = false;
+            s.local.held.clear();
+        }
         (PointerPhase::Move, Button::Right) => camera.look([e.delta.x * 0.006, e.delta.y * 0.006]),
         (PointerPhase::Move, Button::Middle) => camera.pan([e.delta.x, e.delta.y]),
         (PointerPhase::Move, Button::Left) if e.mods.alt => {

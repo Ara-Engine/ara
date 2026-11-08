@@ -154,6 +154,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
     let mut fps = 0.0_f32;
     let mut camera = rt.state().editor.state.camera;
     let mut logs_at = Instant::now() - Duration::from_secs(1);
+    let mut last_fly = Instant::now();
     rt.update(|s| {
         let store = s.editor.host.store();
         s.assets = Some(crate::shell::assets::Browser::new(
@@ -301,7 +302,17 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 });
             }
         }
-        let busy = scene_view.needs_frame(rt.state().editor.state.quality)
+        // Fly: right button held, WASD (and Q/E down and up) move the camera at the view
+        // speed setting, three times as fast with Shift.
+        let flying = rt.state().local.flying && !rt.state().local.held.is_empty();
+        if flying {
+            let dt = last_fly.elapsed().as_secs_f32().min(0.1);
+            let shift = modifiers().shift;
+            rt.touch(|s| fly(s, dt, shift));
+        }
+        last_fly = Instant::now();
+        let busy = flying
+            || scene_view.needs_frame(rt.state().editor.state.quality)
             || rt.state().editor.state.quality && renderer.scene_frame_pending();
         // One wake for the runtime's timers or the next scene frame; none when idle.
         let next = [
@@ -351,6 +362,35 @@ fn metal_layer(
             "the studio's Scene view presents on macOS today; Windows and Linux use --legacy-ui until the Vulkan layer path lands"
         ),
     }
+}
+
+/// W, A, S, D, Q and E as virtual keys: the fly keys while the right button is held.
+pub(crate) const FLY_KEYS: [u16; 6] = [0x57, 0x41, 0x53, 0x44, 0x51, 0x45];
+
+/// One fly step of `dt` seconds from the held keys.
+fn fly(s: &mut Studio, dt: f32, fast: bool) {
+    let held = |vk: u16| f32::from(u8::from(s.local.held.contains(&vk)));
+    let direction = glam::Vec3::new(
+        held(0x44) - held(0x41),
+        held(0x45) - held(0x51),
+        held(0x53) - held(0x57),
+    );
+    if direction.length_squared() == 0.0 || dt.is_nan() || dt <= 0.0 {
+        return;
+    }
+    let speed = s
+        .editor
+        .state
+        .settings
+        .get("viewport.cameraSpeed")
+        .and_then(serde_json::Value::as_f64)
+        .filter(|v| v.is_finite())
+        .unwrap_or(4.0)
+        .clamp(0.5, 50.0) as f32;
+    s.editor.state.camera.fly(
+        direction.normalize(),
+        dt * speed * if fast { 3.0 } else { 1.0 },
+    );
 }
 
 /// The gizmo handles to light: the one under the pointer and the one dragged.
@@ -427,7 +467,15 @@ fn pump(rt: &mut Runtime<Studio>, surface: &mut Surface, started: Instant) -> an
                 });
             }
             Event::DpiChanged(dpi) => rt.set_scale(dpi as f32 / 96.0),
-            Event::Key(vk) => rt.key_with(vk, modifiers()),
+            Event::Key(vk) => {
+                if FLY_KEYS.contains(&vk) && rt.state().local.flying {
+                    rt.touch(|s| s.local.held.insert(vk));
+                }
+                rt.key_with(vk, modifiers());
+            }
+            Event::KeyUp(vk) => {
+                rt.touch(|s| s.local.held.remove(&vk));
+            }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Event::Char(c) => rt.type_text(c.encode_utf8(&mut [0; 4])),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
