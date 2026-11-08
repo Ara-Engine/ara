@@ -210,14 +210,15 @@ fn engine_chip(s: &HubApp, project: &Project) -> El<HubApp> {
     }
 }
 
-/// The one primary action for a project's state.
+/// The one action for a project's state. It is secondary: a page of projects has many,
+/// and New project stays the page's only primary button.
 fn primary_action(s: &HubApp, project: &Project, size: Size) -> El<HubApp> {
     let l = &s.look;
     let id = project.id.clone();
     let busy = s.hub.busy.contains_key(&id);
     let (tone, glyph, label, intent) = match s.hub.state(&id) {
         State::Closed if !installed(&s.hub, project) && !s.hub.engines.is_empty() => (
-            Tone::Primary,
+            Tone::Secondary,
             icons::DOWNLOAD,
             format!("Install {} and open", project.engine_version),
             Intent::InstallAndOpen {
@@ -226,19 +227,19 @@ fn primary_action(s: &HubApp, project: &Project, size: Size) -> El<HubApp> {
             },
         ),
         State::Closed => (
-            Tone::Primary,
+            Tone::Secondary,
             icons::PLAY,
             "Open".into(),
             Intent::Open(id.clone()),
         ),
         State::Headless => (
-            Tone::Primary,
+            Tone::Secondary,
             icons::MONITOR,
             "Open editor".into(),
             Intent::Open(id.clone()),
         ),
         State::Editor => (
-            Tone::Secondary,
+            Tone::Ghost,
             icons::SQUARE,
             "Close".into(),
             Intent::Close(id.clone()),
@@ -573,8 +574,7 @@ fn cards(s: &HubApp, visible: &[&Project]) -> El<HubApp> {
                     &fmt::path(&project.path),
                     ((card_w - 28.0) / 6.6) as usize,
                 ))
-                .text_size(11.0)
-                .family(mono())
+                .text_size(11.5)
                 .color(c.muted_foreground.0),
             )
             .child(
@@ -653,8 +653,7 @@ fn list(s: &HubApp, visible: &[&Project]) -> El<HubApp> {
                         .child(row().child(name(s, project, TextRole::Body)))
                         .child(
                             text(fmt::path(&project.path))
-                                .text_size(11.0)
-                                .family(mono())
+                                .text_size(11.5)
                                 .color(c.muted_foreground.0),
                         ),
                 )
