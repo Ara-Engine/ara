@@ -173,6 +173,18 @@ fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
 #[ignore = "writes review captures under target/"]
 fn captures() {
     let mut rt = open();
+    // The Project view over a real scan.
+    rt.update(|s| {
+        let store = s.editor.host.store();
+        s.assets = Some(crate::shell::assets::Browser::new(s.editor.host.root(), store.schema(), store.workspace().reference_root()));
+    });
+    for _ in 0..200 {
+        if rt.touch(|s| s.assets.as_mut().is_some_and(crate::shell::assets::Browser::poll)) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    rt.update(|s| s.act("editor.workspace", json!({"folder": ara_doc::AUTHORING_ROOT})));
     let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/studio-captures");
     std::fs::create_dir_all(&out).unwrap();
     for light in [false, true] {
