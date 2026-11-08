@@ -20,6 +20,61 @@ PACKAGES = {
     "com.unity.burst": "1.8.29",
     "com.unity.mathematics": "1.3.3",
 }
+DEFAULT_COUNTS = {"w1": 1_000_000, "w2": 20_000, "w3": 1_000_000, "w4": 100_000}
+
+
+def ara_runners(workload, workers):
+    """The S8 structural recorder uses Rayon; other parallel kernels use Bevy."""
+    if workers == 1:
+        return {"backend": "serial", "caller_participates": True, "max_kernel_runners": 1}
+    rayon = workload == "w4"
+    return {"backend": "rayon" if rayon else "bevy", "caller_participates": not rayon,
+            "max_kernel_runners": workers if rayon else workers + 1}
+
+
+def cached_tool(library_name, source_name, output):
+    """Link a diagnostic against existing Cargo artifacts without building Ara."""
+    libraries = [p for profile in ["perf", "release", "debug"]
+                 for p in (REPO / "target" / profile / "deps").glob(f"lib{library_name}-*.rlib")]
+    if not libraries:
+        raise ValueError(f"no existing {library_name} build artifact; compile the focused Ara ECS benchmark first")
+    library = max(libraries, key=lambda path: path.stat().st_mtime_ns)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    # Cached profiles differ: ordinary objects need no LTO, while thin-LTO
+    # bitcode must be consumed by Rust's LLVM before Apple's older linker.
+    errors = []
+    for link_flags in [[], ["-C", "lto=thin"]]:
+        compiled = subprocess.run(["/usr/bin/nice", "-n", "10", "rustc", "--edition=2024", *link_flags,
+                                   str(Path(__file__).with_name(source_name)), "--extern", f"{library_name}={library}",
+                                   "-L", "dependency=" + str(library.parent), "-o", str(output)],
+                                  capture_output=True, text=True)
+        if compiled.returncode == 0:
+            return library, link_flags
+        errors.append(compiled.stderr)
+    raise RuntimeError(f"cached {library_name} helper linking failed:\n" + "\n".join(errors))
+
+
+def probe_rayon(args):
+    if args.threads == 1:
+        raise ValueError("Rayon probe covers parallel recording; W4 argument 1 uses the caller directly")
+    root = scratch_path(args.project)
+    destination = root / "results" / args.run / f"rayon_t{args.threads}.json"
+    if destination.exists():
+        raise ValueError("Rayon probe output exists; choose a fresh --run")
+    if active_editors():
+        raise ValueError("a Unity Editor is already running; retry the diagnostic later")
+    output = root / "tools/rayon-probe"
+    library, link_flags = cached_tool("rayon", "rayon_probe.rs", output)
+    load_before = list(os.getloadavg())
+    measured = subprocess.run(["/usr/bin/nice", "-n", "10", str(output), str(args.threads)],
+                              check=True, capture_output=True, text=True)
+    report = json.loads(measured.stdout)
+    report.update(library=str(library), library_sha256=hashlib.sha256(library.read_bytes()).hexdigest(),
+                  link_flags=link_flags, source_sha256=hashlib.sha256(Path(__file__).with_name("rayon_probe.rs").read_bytes()).hexdigest(),
+                  loadavg_before=load_before, loadavg_after=list(os.getloadavg()), nice=10,
+                  power=subprocess.check_output(["pmset", "-g", "batt"], text=True).strip())
+    write_json(destination, report)
+    print(json.dumps(report))
 
 
 def write_json(path, value):
@@ -166,32 +221,17 @@ def verify(args):
     dump = result.with_suffix(".bin")
     if dump.stat().st_size != unity["count"] * 12 * 4:
         raise ValueError("state dump size differs from S8's 12-float entity layout")
-    libraries = [p for profile in ["perf", "release", "debug"]
-                 for p in (REPO / "target" / profile / "deps").glob("libblake3-*.rlib")]
-    if not libraries:
-        raise ValueError("no existing BLAKE3 build artifact; compile the focused Ara ECS benchmark first")
-    library = max(libraries, key=lambda path: path.stat().st_mtime_ns)
     output = root / "tools/dump-hash"
-    output.parent.mkdir(parents=True, exist_ok=True)
-    # Cached profiles differ: ordinary objects need no LTO, while thin-LTO
-    # bitcode must be consumed by Rust's LLVM before Apple's older linker.
-    errors = []
-    for link_flags in [[], ["-C", "lto=thin"]]:
-        compiled = subprocess.run(["/usr/bin/nice", "-n", "10", "rustc", "--edition=2024", *link_flags,
-                                   str(Path(__file__).with_name("dump_hash.rs")), "--extern", "blake3=" + str(library),
-                                   "-L", "dependency=" + str(library.parent), "-o", str(output)],
-                                  capture_output=True, text=True)
-        if compiled.returncode == 0:
-            break
-        errors.append(compiled.stderr)
-    else:
-        raise RuntimeError("cached BLAKE3 helper linking failed:\n" + "\n".join(errors))
+    library, link_flags = cached_tool("blake3", "dump_hash.rs", output)
     actual = subprocess.run([str(output), str(dump)], check=True, capture_output=True, text=True).stdout.strip()
+    concurrency = ara_runners(ara["workload"], ara["threads"])
     report = {"unity_result": str(result), "ara_result": str(reference), "algorithm": "BLAKE3",
               "hash_library": str(library), "hash_library_sha256": hashlib.sha256(library.read_bytes()).hexdigest(),
               "hash_helper_link_flags": link_flags,
               "ara_variant": ara["variant"], "ara_configured_pool_workers": ara["threads"],
-              "ara_max_kernel_runners": 1 if ara["threads"] == 1 else ara["threads"] + 1,
+              "ara_dispatch_backend": concurrency["backend"],
+              "ara_caller_participates_in_parallel_kernel": concurrency["caller_participates"],
+              "ara_max_kernel_runners": concurrency["max_kernel_runners"],
               "unity_actual_job_workers": unity["job_workers"],
               "unity_max_kernel_runners": unity["job_workers"] + 1,
               "unity_state_hash": actual, "ara_state_hash": ara["state_hash"],
@@ -204,11 +244,11 @@ def verify(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["prepare", "command", "run", "verify"])
+    parser.add_argument("action", choices=["prepare", "command", "run", "verify", "probe-rayon"])
     parser.add_argument("--project", type=Path, default=SCRATCH)
     parser.add_argument("--editor", type=Path, default=EDITOR)
-    parser.add_argument("--workload", choices=["w1", "w3"], default="w1")
-    parser.add_argument("--count", type=int, default=1_000_000)
+    parser.add_argument("--workload", choices=list(DEFAULT_COUNTS), default="w1")
+    parser.add_argument("--count", type=int)
     parser.add_argument("--threads", type=int, choices=[1, 15], default=1)
     parser.add_argument("--warmup", type=int)
     parser.add_argument("--frames", type=int, default=300)
@@ -217,8 +257,12 @@ def main():
     parser.add_argument("--result", type=Path)
     parser.add_argument("--reference", type=Path)
     args = parser.parse_args()
+    if args.count is None:
+        args.count = DEFAULT_COUNTS[args.workload]
     if args.count < 64 or args.frames < 1 or args.timeout < 1 or (args.warmup is not None and args.warmup < 0):
         parser.error("count >= 64, frames/timeout > 0, warmup >= 0 required")
+    if args.workload == "w4" and args.count != 100_000:
+        parser.error("S8 W4 replaces 10,000 of exactly 100,000 entities; --count must be 100000")
     if "/" in args.run or "\\" in args.run or args.run in {"", ".", ".."}:
         parser.error("--run must be one directory name")
     if args.action == "prepare":
@@ -228,6 +272,8 @@ def main():
         print(json.dumps({"command": argv, "environment": {key: environment[key] for key in ["UPM_CACHE_ROOT", "UPM_GIT_LFS_CACHE_PATH"]}}, indent=2))
     elif args.action == "run":
         run(args)
+    elif args.action == "probe-rayon":
+        probe_rayon(args)
     else:
         verify(args)
 

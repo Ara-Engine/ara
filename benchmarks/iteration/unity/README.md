@@ -18,6 +18,17 @@ effective-option/restoration checks passing. Its per-case statistics,
 source/executable hashes, package versions, load and battery-power provenance
 define the scope of those measurements. The earlier
 [exploratory matrix](../unity_mac_2026-11-08_exploratory.json) is retained separately.
+The expanded [W2/W4 baseline](broad_mac_2026-11-08.json) is explicitly partial:
+one forward round is complete, while the reversed round awaits a clear CPU slot.
+It includes actual Rayon participation, frozen compiled-source hashes and the
+structural bookkeeping differences. Its legacy dump verifies numeric fields and
+live counts, and does not export/assert exact StableId values.
+
+After the controlled W1/W3 measurements, `MacBatch.Run` gained an early non-batch
+guard so manual invocation cannot exit a user's Editor. The recorded executed
+wrapper hash remains `044c48250e0a2b7aa7b0d64cb310a0afc43384ea583867d3d1278c6109e41c30`.
+This later guard changes only the non-batch path; historical executed hashes are
+retained and were not replaced with the current source hash.
 
 Prepare without starting Unity, then inspect an exact launch command:
 
@@ -34,6 +45,21 @@ Run these only when compilation and other CPU measurements have stopped:
 /usr/bin/python3 benchmarks/iteration/unity/bench.py run --workload w3 --threads 1 --run mac-01
 /usr/bin/python3 benchmarks/iteration/unity/bench.py run --workload w3 --threads 15 --run mac-01
 ```
+
+The unchanged S8 boids and structural workloads are also supported:
+
+```sh
+/usr/bin/python3 benchmarks/iteration/unity/bench.py run --workload w2 --count 20000 --threads 1 --run broad-01
+/usr/bin/python3 benchmarks/iteration/unity/bench.py run --workload w2 --count 50000 --threads 15 --run broad-01
+/usr/bin/python3 benchmarks/iteration/unity/bench.py run --workload w4 --threads 15 --run broad-01
+```
+
+W2 defaults to **20,000** entities, W4 to exactly **100,000**. W1/W3 retain
+their 1-million defaults. W2/W4 use 120 warmup and 300 measured steps. W2 includes
+snapshot, stable grid build and neighbour processing; use Ara batch **128**.
+W4 replaces 10,000 entities per step and includes recording and deferred playback.
+Unity also rebuilds its slot handles after ECB playback; Ara updates those handles
+while recording its deferred spawn commands. Both bookkeeping paths remain timed.
 
 The launcher refuses an already-running Unity Editor, runs only its own process
 at niceness 10, and never changes licenses. A license error is a blocker to report.
@@ -98,6 +124,28 @@ Bevy 0.20 sources: `TaskPoolBuilder::num_threads`, `TaskPool::scope`, and
 [Unity worker-count semantics](https://docs.unity.com/en-us/engine/6000.5/script-reference/unity/jobs/lowlevel/unsafe/jobsutility/jobworkercount),
 [maximum worker count](https://docs.unity.com/en-us/engine/6000.5/script-reference/unity/jobs/lowlevel/unsafe/jobsutility/jobworkermaximumcount).
 
+W2 uses the same Bevy budget as W1/W3. W4 uses Rayon's `par_iter_mut` for recording;
+its external caller blocks in `registry::in_worker_cold`, then performs serial
+playback. Use Ara argument **15** versus Unity request **15** for that case, and
+verify this with the separate diagnostic before making an observed-concurrency
+claim:
+
+```sh
+/usr/bin/python3 benchmarks/iteration/unity/bench.py probe-rayon --threads 15 --run broad-01
+```
+
+The probe compiles only a tiny diagnostic against cached Rayon artifacts and
+reports observed worker IDs, peak concurrent recorders and whether the caller
+executed recording work. It runs outside all benchmark timings. Its entry path
+matches W4, but its extra arithmetic makes it a diagnostic, not a W4 speed result.
+The verification report distinguishes Rayon worker-only recording from Bevy's
+workers-plus-caller kernels. Both engines retain serial structural playback.
+
+New query/filter, dirty-fraction, archetype, dependency-job and buffer cases have
+a separate [implementation contract](features/CONTRACT.md) and independent
+[integer-state oracle](features/reference.py). They are not measured API fixtures
+yet; the real Unity/Bevy implementations and full-ID audits remain required.
+
 The math, timed loop, fixed seed, strict Burst FP mode and full state dump come
 unchanged from S8; source hashes are recorded by preparation. W1 uses 120 warmup
 steps, W3 uses 3000, and both measure 300 steps by default. Verify state against
@@ -115,7 +163,8 @@ warmup and measured-step counts, verify all state bytes:
 
 Verification compiles a tiny hash utility against an existing local BLAKE3
 artifact; it neither downloads a dependency nor rebuilds Ara. Unity's raw dump
-and Ara's hash both order 12 little-endian floats per stable entity ID. A mismatch
+and Ara's hash both order 12 little-endian floats per logical slot (the stable ID
+modulo count for W4). A mismatch
 fails verification and writes a result under scratch; never hide it by rounding.
 
 The Package Manager cache override is an environment setting documented by Unity;

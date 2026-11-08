@@ -33,3 +33,9 @@ CPU/Cargo slot: unassigned initially. All children explicitly holding heavy work
 - R2 paused twice by actual unrelated t3-4359603b Cargo/clippy/editor-test linking. No foreign job killed or paused. External PIDs exited; remaining R2 now granted exclusive CPU again.
 - User answered continue on battery; no more power requests/global changes. Record per-process conditions, continue while safely executable; no invented AC prerequisite. Latest battery14%.
 - All own source workers hold Cargo/.NET/format/metadata/timing during baseline. After release: private SDK batch generator/compiler tests first, then focused Rust correctness/player checks. Keep measurement slots exclusive.
+
+### Harness checkpoint
+- Feature inventory committed/pushed f08396d37. W2/W4 harness and R1 evidence independently reviewed: no must-fix findings; all12 retained raw hashes checked. Clarified clustered dirty selection, W4 logical-slot ordering, and parallel-only Rayon probe. Partial R1 remains battery-only; current machine reports AC charging, so future runs must identify the changed power profile.
+- Private SDK generator28 and full compiler124 tests pass, audit enabled; matching Host/CompileServer fixtures built. Independent batch API review found no must-fix, Rust execution still queued.
+- Cargo slot now sparse correctness, then batch integration, then scene/player gates. All Unity timing remains held. Sparse summary ticks are prohibited by Bevy descriptor invariants; table summary stamps retained and sparse per-entity Changed coverage added.
+- New query_filter real-engine fixtures are source-only work; contracts/oracle are not claimed as completed Unity/Bevy coverage.
