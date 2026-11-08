@@ -9,6 +9,9 @@ root `Cargo.toml`.
 
 - `icons`: one typed constant per Lucide SVG in `icons/` (`icons::FOLDER_PLUS`), plus `ALL`
   and `named(name)` for data-driven callers. Generated; never edit `src/icons.rs` by hand.
+- `look::Look::new(dark)`: the `assets/themes/` tokens (D18) as typed `Colors`, `Radius` and
+  `Metrics`, plus the stillkit `Theme` they map to (dense type ramp on the platform UI face).
+  Views read Ara tokens from `look.c`; stillkit components read the mapped theme.
 - `capture::png(&Image)`: a headless stillkit snapshot as PNG bytes (captures, tests).
 
 ## Icons

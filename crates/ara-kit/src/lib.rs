@@ -3,3 +3,4 @@
 //! ([`icons`]) and the components the editor and Hub share ([`ui`]).
 pub mod capture;
 pub mod icons;
+pub mod look;
