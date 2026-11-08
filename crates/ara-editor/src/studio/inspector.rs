@@ -296,7 +296,37 @@ fn scrubbable(
 }
 
 /// Commits a number (one channel of a vector when `axis` is set) to every selected entity.
-fn commit_number(s: &mut Studio, path: &str, axis: Option<usize>, value: f64) {
+pub(super) fn commit_number(s: &mut Studio, path: &str, axis: Option<usize>, value: f64) {
+    // A linked scale moves every axis by the same ratio (equal values from a zero axis).
+    if let Some(a) = axis
+        && s.local.scale_linked
+        && path.ends_with(".scale")
+        && let Some(id) = s.editor.state.selection.first()
+    {
+        // An unauthored scale is its default, one on every axis.
+        let current = s
+            .resolved
+            .get(id)
+            .and_then(|e| {
+                let (component, field) = path.split_once('.')?;
+                e.record.get(component)?.get(field)?.as_array().cloned()
+            })
+            .unwrap_or_else(|| vec![json!(1.0); 3]);
+        let old: Vec<f64> = current.iter().map(|v| v.as_f64().unwrap_or(1.0)).collect();
+        let base = old.get(a).copied().unwrap_or(1.0);
+        let scaled: Vec<Value> = old
+            .iter()
+            .map(|v| {
+                json!(round(if base.abs() < 1e-9 {
+                    value
+                } else {
+                    v * value / base
+                }))
+            })
+            .collect();
+        commit(s, path, Value::Array(scaled), "Scale uniformly");
+        return;
+    }
     let target = match axis {
         Some(a) => format!("{path}.{}", ["x", "y", "z", "w"][a.min(3)]),
         None => path.to_owned(),
@@ -414,6 +444,26 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                             .fill(stillkit::Rgba::TRANSPARENT)
                             .border(0.0, stillkit::Rgba::TRANSPARENT),
                         ),
+                );
+            }
+            // Scale: a chain keeps the proportions (I06), off by default as in Unity.
+            if f.path.ends_with(".scale") {
+                let linked = s.local.scale_linked;
+                out = out.child(
+                    toggle_button(
+                        l,
+                        Size::Sm,
+                        if linked { icons::LINK } else { icons::UNLINK },
+                        if linked {
+                            "Proportions kept: click to edit axes alone"
+                        } else {
+                            "Keep proportions"
+                        },
+                        linked,
+                    )
+                    .size(ROW)
+                    .key(format!("field/{}/link", f.path))
+                    .on_press(|s: &mut Studio| s.local.scale_linked = !s.local.scale_linked),
                 );
             }
             out

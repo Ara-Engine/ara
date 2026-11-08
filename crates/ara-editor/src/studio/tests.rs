@@ -457,3 +457,20 @@ fn window_menu_layouts_and_panels() {
     settle(&mut rt);
     assert!(rt.find("tab/history").is_some(), "History opens as a tab");
 }
+
+#[test]
+fn a_linked_scale_keeps_its_proportions() {
+    let mut rt = open();
+    rt.update(|s| s.local.scale_linked = true);
+    rt.update(|s| super::inspector::commit_number(s, "Transform.scale", Some(1), 2.0));
+    assert_eq!(
+        rt.state().resolved["e_box"].record["Transform"]["scale"],
+        json!([2.0, 2.0, 2.0])
+    );
+    rt.update(|s| s.local.scale_linked = false);
+    rt.update(|s| super::inspector::commit_number(s, "Transform.scale", Some(0), 1.0));
+    assert_eq!(
+        rt.state().resolved["e_box"].record["Transform"]["scale"],
+        json!([1.0, 2.0, 2.0])
+    );
+}

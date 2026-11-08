@@ -237,6 +237,8 @@ pub struct Local {
     pub copy: Option<String>,
     /// The open Settings window.
     pub settings: Option<super::preferences::View>,
+    /// Scale fields keep their proportions (the Inspector's chain toggle).
+    pub scale_linked: bool,
     /// The open component overflow menu, by component.
     pub component_menu: Option<String>,
     /// Add Component's search and highlighted row, while open.
