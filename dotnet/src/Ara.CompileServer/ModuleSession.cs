@@ -33,6 +33,8 @@ internal interface ICompileContext
     ModuleState? Dependency(string name);
     /// <summary>True if another module references <paramref name="module"/> (its surface hash is needed).</summary>
     bool HasDependents(ModuleSession module);
+    /// <summary>One immutable project inventory for a preparation wave; final publication validates a fresh scan.</summary>
+    ProjectInventoryResult Inventory(ModuleInputs project) => project.Scan();
 }
 
 /// <summary>
@@ -98,6 +100,15 @@ internal sealed class ModuleSession
     /// <summary>The committed state (null until the first successful build).</summary>
     internal ModuleState? State => _state;
     internal uint InitialGeneration;
+    /// <summary>Whether saved bytes differ from this module's last committed input snapshot.</summary>
+    internal bool SavedSourcesChanged(ICompileContext context)
+    {
+        if (_state is not { } state) return false;
+        var inventory = _project is { } project ? context.Inventory(project) : null;
+        if (inventory is not null && (inventory.Diagnostics.Length != 0 || Graph(inventory) != _graph)) return false;
+        return !SourcesMatch(state, SourceFiles(inventory));
+    }
+
     internal bool MatchesCurrent(Outcome outcome, ICompileContext context) =>
         outcome.Next is { } next && MatchesCurrentInputs(next, context);
 
@@ -180,7 +191,7 @@ internal sealed class ModuleSession
     {
         files = [];
         if (_project is not { } project) { files = SourceFiles(null); return null; }
-        var inventory = project.Scan();
+        var inventory = context.Inventory(project);
         if (inventory.Diagnostics.Length > 0)
             return new(this, OutcomeKind.Errors) { Timing = timing, Extra = [.. inventory.Diagnostics.Select(d => ((string)d["code"]!, (string)d["severity"]!, (string)d["message"]!))] };
         if (Graph(inventory) != _graph || OwnershipChanged(inventory, context))
@@ -298,6 +309,8 @@ internal sealed class ModuleSession
         // dependent's unrelated disk edits must never hitchhike on that request.
         var (current, changes) = intent == CompileIntent.CurrentSources
             ? ReadSources(rebound, files) : (rebound, new List<FileChange>());
+        if (intent == CompileIntent.CurrentSources && changes.Count > 0 && ctx.Enc && !current.Hot)
+            current = current with { User = current.User.WithOptions(ModuleCompiler.Options(true)), Hot = true };
         var validated = intent == CompileIntent.CurrentSources || MatchesCurrentInputs(rebound, ctx);
         timing.Parse = timing.Mark();
         var same = changes.Count == 0 && References.All(n => s.DepSurfaces.TryGetValue(n, out var was) && was is not null && was == surfaces[n]);
@@ -330,9 +343,12 @@ internal sealed class ModuleSession
 
     static bool MatchesInputs(ModuleState state, ICompileContext ctx, string[] files)
     {
-        return files.Length == state.Texts.Count && files.All(path => state.Texts.TryGetValue(path, out var text) && ReadWithRetry(path) == text)
+        return SourcesMatch(state, files)
             && state.DepRefs.All(pair => ReferenceEquals(pair.Value, ctx.Dependency(pair.Key)?.Reference));
     }
+
+    static bool SourcesMatch(ModuleState state, string[] files) =>
+        files.Length == state.Texts.Count && files.All(path => state.Texts.TryGetValue(path, out var text) && ReadWithRetry(path) == text);
 
     /// <summary>Reads source without denying edits or replacements by another world's editor.</summary>
     internal static string? ReadWithRetry(string path)
@@ -394,7 +410,7 @@ internal sealed class ModuleSession
             if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
             var validated = References.All(name => s.DepRefs.TryGetValue(name, out var reference) && ReferenceEquals(reference, ctx.Dependency(name)?.Reference));
             if (validated) _diagnosticReferencesChanged = false;
-            return new Outcome(this, OutcomeKind.None) { ValidatedInputs = validated, Problems = problems };
+            return new Outcome(this, OutcomeKind.None) { Next = s, ValidatedInputs = validated, Problems = problems };
         }
         var next = nextState.User;
         var changed = changes.Where(c => c.New is not null).Select(c => c.New!).ToList();

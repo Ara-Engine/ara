@@ -329,6 +329,106 @@ public sealed class CompileLifecycleTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Stale_standalone_deltas_are_discarded_before_publication(bool broken)
+    {
+        using var gate = new Gate();
+        var sink = new Sink();
+        using var server = new Coordinator(sink, gate);
+        server.Hello(true, "Baseline");
+        var path = Watch(server, InstalledTools.Scratch("stale-delta"), 0, "Combat");
+        var before = sink.Messages.Count;
+        gate.Module = "Combat";
+        gate.Armed = 1;
+        File.WriteAllText(path, Source.Replace("+= 1", "+= 2", StringComparison.Ordinal));
+        server.Change(0, [path], AbiConst.OriginHuman, Stopwatch.GetTimestamp());
+        var latest = Source.Replace("+= 1", broken ? "+= Missing" : "+= 3", StringComparison.Ordinal);
+        try
+        {
+            Assert.True(gate.Entered.Wait(TimeSpan.FromSeconds(20)));
+            File.WriteAllText(path, latest); // intentionally no second watcher notice
+        }
+        finally { gate.Release.Set(); }
+        Assert.True(server.WaitIdle(TimeSpan.FromSeconds(60)));
+        var messages = sink.Messages.Skip(before).ToArray();
+        Assert.Equal(broken ? 0 : 1, messages.Count(message => message.Kind == MessageKind.Delta));
+        Assert.DoesNotContain(messages, message => message.Kind is MessageKind.Reload or MessageKind.Restart);
+        Assert.Equal(broken ? Source : latest, server.Dependency("Combat")!.Texts[path]);
+        Assert.Contains(sink.Rows, row => (string?)row["data"]?["compile"]?["phase"] == "completed" && (string?)row["data"]?["compile"]?["result"] == "cancelled");
+        Assert.Equal(broken ? "errors" : "success", (string?)sink.Last("Combat")["data"]?["compile"]?["result"]);
+    }
+
+    [Fact]
+    public void Stale_diagnostic_only_restoration_cannot_retire_current_errors()
+    {
+        using var gate = new Gate();
+        var sink = new Sink();
+        using var server = new Coordinator(sink, gate);
+        server.Hello(true, "Baseline");
+        var root = InstalledTools.Scratch("stale-no-change");
+        var combat = Watch(server, root, 0, "Combat");
+        const string dependent = "public class UsesCombat { public int Value(Count c) => c.Value; }";
+        var inventory = Watch(server, root, 1, "Inventory", dependent, ["Combat"]);
+        Edit(server, 1, inventory, dependent.Replace("c.Value", "Missing", StringComparison.Ordinal));
+        Edit(server, 0, combat, Source.Replace("+= 1", "+= 2", StringComparison.Ordinal));
+        File.WriteAllText(inventory, dependent);
+        var before = sink.Messages.Count;
+        gate.Module = "Inventory";
+        gate.Armed = 1;
+        server.Change(1, [inventory], AbiConst.OriginHuman, Stopwatch.GetTimestamp());
+        try
+        {
+            Assert.True(gate.Entered.Wait(TimeSpan.FromSeconds(20)));
+            File.WriteAllText(inventory, "this is broken C#");
+        }
+        finally { gate.Release.Set(); }
+        Assert.True(server.WaitIdle(TimeSpan.FromSeconds(60)));
+        var messages = sink.Messages.Skip(before).ToArray();
+        Assert.DoesNotContain(messages, message => message.Kind is MessageKind.Reload or MessageKind.Delta or MessageKind.Restart);
+        var completed = messages.Where(message => message.Kind == MessageKind.Diagnostics)
+            .SelectMany(message => JsonNode.Parse(message.Diagnostics().Json)!.AsArray())
+            .Where(row => (string?)row?["data"]?["compile"]?["phase"] == "completed").ToArray();
+        Assert.Contains(completed, row => (string?)row?["data"]?["compile"]?["result"] == "cancelled");
+        Assert.DoesNotContain(completed, row => (string?)row?["data"]?["compile"]?["result"] == "success");
+        Assert.Equal("errors", (string?)sink.Last("Inventory")["data"]?["compile"]?["result"]);
+        Assert.Equal(dependent, server.Dependency("Inventory")!.Texts[inventory]);
+    }
+
+    [Fact]
+    public void Edit_waves_revalidate_all_prepared_roots_before_activation()
+    {
+        using var gate = new Gate();
+        var sink = new Sink();
+        using var server = new Coordinator(sink, gate);
+        server.Hello(true, "Baseline");
+        var root = InstalledTools.Scratch("stale-edit-wave");
+        const string alpha = "namespace Alpha; public static class Rules { public static int Old() => 1; }";
+        const string beta = "namespace Beta; public static class Rules { public static int Old() => 2; }";
+        const string combined = "public static class Combined { public static int Run() => Alpha.Rules.Old() + Beta.Rules.Old(); }";
+        var a = Watch(server, root, 0, "Alpha", alpha);
+        var b = Watch(server, root, 1, "Beta", beta);
+        var c = Watch(server, root, 2, "Combined", combined, ["Alpha", "Beta"]);
+        var before = sink.Messages.Count;
+        File.WriteAllText(a, alpha.Replace("Old", "New", StringComparison.Ordinal));
+        File.WriteAllText(b, beta.Replace("Old", "New", StringComparison.Ordinal));
+        File.WriteAllText(c, combined.Replace("Old", "New", StringComparison.Ordinal));
+        gate.Module = "Combined";
+        gate.Armed = 1;
+        server.Change(2, [c], AbiConst.OriginHuman, Stopwatch.GetTimestamp());
+        try
+        {
+            Assert.True(gate.Entered.Wait(TimeSpan.FromSeconds(20)));
+            File.WriteAllText(a, "this is broken C#");
+        }
+        finally { gate.Release.Set(); }
+        Assert.True(server.WaitIdle(TimeSpan.FromSeconds(60)));
+        Assert.DoesNotContain(sink.Messages.Skip(before), message => message.Kind is MessageKind.Reload or MessageKind.Delta or MessageKind.Restart);
+        foreach (var module in new[] { "Alpha", "Beta", "Combined" }) Assert.Equal(0u, server.Dependency(module)!.Generation);
+        Assert.Contains(sink.Rows, row => (string?)row["data"]?["compile"]?["phase"] == "completed" && (string?)row["data"]?["compile"]?["result"] == "cancelled");
+    }
+
     [Fact]
     public void Trivia_restoration_and_each_cascade_module_have_validated_independent_results()
     {

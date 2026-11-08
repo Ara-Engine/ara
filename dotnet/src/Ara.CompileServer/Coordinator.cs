@@ -64,6 +64,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
     readonly ModuleWatcher _watcher;
     CancellationTokenSource? _agentRun;
     Dictionary<ModuleSession, Outcome>? _cascade;
+    Dictionary<(string Project, string AuthoringRoot), ProjectInventoryResult>? _waveInventories;
     bool _busy;
     bool _compiling;
     bool _restartSent;
@@ -414,16 +415,19 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         switch (o.Kind)
         {
             case OutcomeKind.None:
+                if (!ValidateForPublication([o], o, origin, cancellation)) return;
                 if (o.Next is not null) { m.Commit(o); RebindDependents(m); }
                 SendDiagnostics(m.Slot, m.Dir, o.Problems, o.Extra, 0, origin, o.ValidatedInputs);
                 return;
             case OutcomeKind.Errors:
+                if (TryEditWave(o, origin, cancellation)) return;
                 SendDiagnostics(m.Slot, m.Dir, o.Problems, o.Extra, o.Timing.ToTiming().ServerUs, origin, o.ValidatedInputs);
                 return;
             case OutcomeKind.Restart:
                 _out.Send(MessageKind.Restart, new Protocol.Writer().U32(m.Slot).Str("module/source domain boundary changed; restart Play from the current snapshot to load the new inventory (L4)").ToArray());
                 return;
             case OutcomeKind.Delta:
+                if (!ValidateForPublication([o], o, origin, cancellation)) return;
                 m.Commit(o);
                 RebindDependents(m);
                 SendDiagnostics(m.Slot, m.Dir, o.Problems, o.Extra, 0, origin, o.ValidatedInputs);
@@ -476,6 +480,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 }
                 if (o.Kind == OutcomeKind.Errors)
                 {
+                    if (TryEditWave(root, origin, cancellation)) return;
                     o.Extra.Add((AraCodes.DependencyFailed, "error",
                         $"module `{d.Name}` does not compile against the change to `{root.Module.Name}`; both keep their last good version"));
                     SendDiagnostics(d.Slot, d.Dir, o.Problems, o.Extra, 0, origin, o.ValidatedInputs);
@@ -488,20 +493,7 @@ internal sealed class Coordinator : ICompileContext, IDisposable
                 outcomes.Add(o);
             }
             cancellation.ThrowIfCancellationRequested();
-            if (outcomes.Any(o => !o.Module.MatchesCurrent(o, this)))
-            {
-                // Compilers can finish after another save. Validate the entire
-                // staged graph before publishing any generation or success marker.
-                foreach (var pending in outcomes)
-                    SendDiagnostics(pending.Module.Slot, pending.Module.Dir, [], [], 0, origin, validated: false);
-                if (root.Intent == CompileIntent.CurrentSources)
-                {
-                    Log(0, "script inputs changed during the dependency cascade; nothing applied, recompiling current inputs");
-                    Enqueue(new Work(WorkKind.Change, root.Module.Slot, origin, Stopwatch.GetTimestamp()));
-                }
-                else Log(0, "script inputs changed during a committed-code rebuild; nothing applied and current source inputs remain unvalidated");
-                return;
-            }
+            if (!ValidateForPublication(outcomes, root, origin, cancellation)) return;
             foreach (var o in outcomes) o.Module.Commit(o);
             foreach (var o in outcomes) SendDiagnostics(o.Module.Slot, o.Module.Dir, o.Problems, o.Extra, 0, origin, o.ValidatedInputs);
             SendReload(outcomes, origin);
@@ -510,6 +502,121 @@ internal sealed class Coordinator : ICompileContext, IDisposable
         {
             _cascade = null;
         }
+    }
+
+    // A refactor can change independent roots before their shared dependent.
+    // Expand only a failed source attempt; successful L1/single-root work keeps
+    // its usual path and never inspects unrelated saved modules.
+    bool TryEditWave(Outcome trigger, uint origin, CancellationToken cancellation)
+    {
+        if (trigger.Intent != CompileIntent.CurrentSources || trigger.Module.State is null) return false;
+        var previousCascade = _cascade;
+        var previousInventories = _waveInventories;
+        _waveInventories = [];
+        try
+        {
+            var closures = new Dictionary<ModuleSession, HashSet<ModuleSession>>();
+            HashSet<ModuleSession> Closure(ModuleSession module)
+            {
+                if (!closures.TryGetValue(module, out var closure))
+                    closures[module] = closure = new HashSet<ModuleSession>(Dependents(module)) { module };
+                return closure;
+            }
+            var affected = new HashSet<ModuleSession>(Closure(trigger.Module));
+            var inspected = new HashSet<ModuleSession>();
+            var expanded = false;
+            while (true)
+            {
+                var grew = false;
+                foreach (var module in _modules)
+                {
+                    cancellation.ThrowIfCancellationRequested();
+                    if (module.State is null || affected.Contains(module)) continue;
+                    var closure = Closure(module);
+                    // Join through an affected dependent, never merely through
+                    // a shared unchanged ancestor or an unrelated saved edit.
+                    if (!closure.Overlaps(affected) || !inspected.Add(module)) continue;
+                    if (!module.SavedSourcesChanged(this)) continue;
+                    affected.UnionWith(closure);
+                    grew = expanded = true;
+                }
+                if (!grew) break;
+            }
+            if (!expanded) return false;
+            var order = _modules.Where(affected.Contains).ToArray();
+            foreach (var module in order)
+                if (!_attempts.ContainsKey(module.Slot)) Begin(module.Slot, module.Name, module.Profile);
+            _cascade = [];
+            var outcomes = new List<Outcome>();
+            foreach (var module in order)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                var outcome = module == trigger.Module && trigger.Kind == OutcomeKind.Image && module.MatchesCurrent(trigger, this)
+                    ? trigger : module.Cascade(this, cancellation);
+                if (outcome.Kind == OutcomeKind.Restart)
+                {
+                    Handle(outcome, origin, cancellation);
+                    return true;
+                }
+                if (outcome.Kind == OutcomeKind.Errors)
+                {
+                    foreach (var member in order)
+                    {
+                        if (member == module)
+                            SendDiagnostics(member.Slot, member.Dir, outcome.Problems, outcome.Extra, 0, origin, outcome.ValidatedInputs);
+                        else
+                        {
+                            _cascade.TryGetValue(member, out var staged);
+                            SendDiagnostics(member.Slot, member.Dir, [],
+                                [(AraCodes.DependencyFailed, "error", $"source edit wave failed in `{module.Name}`; every module keeps its last good code")],
+                                0, origin, staged?.ValidatedInputs ?? false);
+                        }
+                    }
+                    return true;
+                }
+                _cascade[module] = outcome;
+                outcomes.Add(outcome);
+            }
+            cancellation.ThrowIfCancellationRequested();
+            if (!ValidateForPublication(outcomes, trigger, origin, cancellation)) return true;
+            foreach (var outcome in outcomes) outcome.Module.Commit(outcome);
+            foreach (var outcome in outcomes)
+                SendDiagnostics(outcome.Module.Slot, outcome.Module.Dir, outcome.Problems, outcome.Extra, 0, origin, outcome.ValidatedInputs);
+            SendReload(outcomes, origin);
+            return true;
+        }
+        finally
+        {
+            _cascade = previousCascade;
+            _waveInventories = previousInventories;
+        }
+    }
+
+    bool ValidateForPublication(IReadOnlyList<Outcome> outcomes, Outcome trigger, uint origin, CancellationToken cancellation)
+    {
+        var current = outcomes.All(outcome => outcome.Module.MatchesCurrent(outcome, this));
+        cancellation.ThrowIfCancellationRequested();
+        if (current) return true;
+        // Includes deltas and diagnostic-only restoration. Stale candidates may
+        // neither publish executable bytes nor clear an older current error scope.
+        foreach (var outcome in outcomes)
+            SendDiagnostics(outcome.Module.Slot, outcome.Module.Dir, [], [], 0, origin, validated: false);
+        if (trigger.Intent == CompileIntent.CurrentSources)
+        {
+            Log(0, "script inputs changed during preparation; nothing applied, recompiling current inputs");
+            Enqueue(new Work(WorkKind.Change, trigger.Module.Slot, origin, Stopwatch.GetTimestamp()));
+        }
+        else Log(0, "script inputs changed during a committed-code rebuild; nothing applied and current source inputs remain unvalidated");
+        return false;
+    }
+
+    /// <inheritdoc/>
+    public ProjectInventoryResult Inventory(ModuleInputs project)
+    {
+        if (_waveInventories is null) return project.Scan();
+        var key = (project.Project, project.AuthoringRoot);
+        if (!_waveInventories.TryGetValue(key, out var inventory)) _waveInventories[key] = inventory = project.Scan();
+        return inventory;
     }
 
     /// <inheritdoc/>

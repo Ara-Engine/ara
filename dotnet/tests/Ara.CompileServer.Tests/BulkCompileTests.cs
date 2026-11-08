@@ -5,6 +5,112 @@ namespace Ara.CompileServer.Tests;
 
 public sealed class BulkCompileTests
 {
+    const string Alpha = "namespace Alpha; public static class Rules { public static int Old() => 1; }";
+    const string Beta = "namespace Beta; public static class Rules { public static int Old() => 2; }";
+    const string Combined = "namespace Combined; public static class Rules { public static int Run() => Alpha.Rules.Old() + Beta.Rules.Old(); }";
+
+    static void StartIndependentRoots(Modules modules, string[]? sharedReferences = null)
+    {
+        modules.Add(0, "Alpha", Alpha, references: sharedReferences);
+        modules.Idle();
+        modules.Sink.Next().Reload();
+        modules.Add(1, "Beta", Beta, references: sharedReferences);
+        modules.Idle();
+        modules.Sink.Next().Reload();
+        modules.Add(2, "Combined", Combined, references: ["Alpha", "Beta"]);
+        modules.Idle();
+        modules.Sink.Next().Reload();
+    }
+
+    static void SaveIndependentRefactor(Modules modules, bool broken = false)
+    {
+        File.WriteAllText(modules.File("Alpha", "Code.cs"), Alpha.Replace("Old", "New", StringComparison.Ordinal));
+        File.WriteAllText(modules.File("Beta", "Code.cs"), Beta.Replace("Old", "New", StringComparison.Ordinal));
+        File.WriteAllText(modules.File("Combined", "Code.cs"), broken ? "this is broken C#" : Combined.Replace("Old", "New", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(1u)]
+    [InlineData(2u)]
+    public void Independent_dirty_roots_and_their_shared_dependent_apply_as_one_edit_wave(uint first)
+    {
+        using var modules = new Modules();
+        StartIndependentRoots(modules);
+        SaveIndependentRefactor(modules);
+        var names = new[] { "Alpha", "Beta", "Combined" };
+        modules.Server.Change(first, [modules.File(names[first], "Code.cs")], AbiConst.OriginHuman, Stopwatch.GetTimestamp());
+        modules.Idle();
+        var batch = modules.Sink.Next().Reload();
+        Assert.Equal(new uint[] { 0, 1, 2 }, batch.Select(entry => entry.Slot));
+        Assert.All(batch, entry => { Assert.Equal(1u, entry.Generation); Assert.NotEmpty(entry.Pe); });
+        for (uint slot = 0; slot < names.Length; slot++)
+            modules.Server.Change(slot, [modules.File(names[slot], "Code.cs")], AbiConst.OriginHuman, Stopwatch.GetTimestamp());
+        modules.Idle();
+        Assert.True(modules.Sink.Empty, "late notifications for the same bytes must not activate another generation");
+    }
+
+    [Theory]
+    [InlineData(0u)]
+    [InlineData(2u)]
+    public void Invalid_edit_waves_preserve_all_last_good_generations_and_repair_atomically(uint first)
+    {
+        using var modules = new Modules();
+        StartIndependentRoots(modules);
+        SaveIndependentRefactor(modules, broken: true);
+        var names = new[] { "Alpha", "Beta", "Combined" };
+        modules.Server.Change(first, [modules.File(names[first], "Code.cs")], AbiConst.OriginHuman, Stopwatch.GetTimestamp());
+        modules.Idle();
+        foreach (var name in names)
+        {
+            Assert.True(modules.Sink.Next().Diagnostics().Errors > 0);
+            Assert.Equal(0u, modules.Server.Dependency(name)!.Generation);
+        }
+        Assert.True(modules.Sink.Empty);
+        File.WriteAllText(modules.File("Combined", "Code.cs"), Combined.Replace("Old", "New", StringComparison.Ordinal));
+        modules.Server.Change(2, [modules.File("Combined", "Code.cs")], AbiConst.OriginHuman, Stopwatch.GetTimestamp());
+        modules.Idle();
+        var batch = modules.Sink.Next().Reload();
+        Assert.Equal(new uint[] { 0, 1, 2 }, batch.Select(entry => entry.Slot));
+        Assert.All(batch, entry => Assert.Equal(1u, entry.Generation));
+        Assert.True(modules.Sink.Empty);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Edit_waves_do_not_activate_or_get_blocked_by_disconnected_agent_edits(bool broken, bool sharedAncestor)
+    {
+        using var modules = new Modules();
+        if (sharedAncestor)
+        {
+            modules.Add(4, "Shared", "namespace Shared; public static class Rules { public static int Value() => 1; }");
+            modules.Idle();
+            modules.Sink.Next().Reload();
+        }
+        StartIndependentRoots(modules, sharedAncestor ? ["Shared"] : null);
+        const string unrelated = "namespace Gamma; public static class Rules { public static int Value() => 4; }";
+        modules.Add(3, "Gamma", unrelated, references: sharedAncestor ? ["Shared"] : null);
+        modules.Idle();
+        modules.Sink.Next().Reload();
+        modules.Server.AgentQuiet = TimeSpan.FromDays(1);
+        File.WriteAllText(modules.File("Gamma", "Code.cs"), broken ? "this is broken C#" : unrelated.Replace("=> 4", "=> 9", StringComparison.Ordinal));
+        modules.Server.Change(3, [modules.File("Gamma", "Code.cs")], AbiConst.OriginAgent, Stopwatch.GetTimestamp());
+        SaveIndependentRefactor(modules);
+        modules.Server.Change(0, [modules.File("Alpha", "Code.cs")], AbiConst.OriginHuman, Stopwatch.GetTimestamp());
+        // Gamma intentionally stays queued: the related human refactor must finish
+        // without compiling or activating those quiet-period agent bytes.
+        var batch = modules.Sink.Next().Reload();
+        Assert.Equal(new uint[] { 0, 1, 2 }, batch.Select(entry => entry.Slot));
+        Assert.All(batch, entry => Assert.Equal(1u, entry.Generation));
+        var gamma = modules.Server.Dependency("Gamma")!;
+        Assert.Equal(0u, gamma.Generation);
+        Assert.Equal(unrelated, gamma.Texts[modules.File("Gamma", "Code.cs")]);
+        Assert.True(modules.Sink.Empty);
+    }
+
     [Fact]
     public void Same_module_source_additions_and_removals_reload_without_a_player_restart()
     {
