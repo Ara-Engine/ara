@@ -101,15 +101,17 @@ internal static class ProjectCompiler
                     [.. trees, ModuleCompiler.Parse("<ara-global-usings>.cs", ModuleCompiler.GlobalUsings)],
                     [.. compiler.References, .. module.References.Select(r => built[r].Reference)], ModuleCompiler.Options(module.Hot));
                 var driver = ModuleCompiler.Driver().RunGeneratorsAndUpdateCompilation(compilation, out var final, out var generatorDiagnostics);
-                var problems = generatorDiagnostics.Concat(final.GetDiagnostics()).Concat(analysis.Analyze(final, trees, module.Profile))
+                // Analysis and emission share immutable Roslyn state. Keep both off the
+                // game thread, and let emit supply compiler diagnostics in the same pass.
+                var analyzing = Task.Run(() => analysis.Analyze(final, trees, module.Profile));
+                var (image, compilerDiagnostics) = ModuleCompiler.EmitWithDiagnostics(final);
+                var problems = generatorDiagnostics.Concat(compilerDiagnostics).Concat(analyzing.GetAwaiter().GetResult())
                     .Where(Diagnostics.Reportable).ToArray();
                 validated = true;
                 foreach (var diagnostic in problems) rows.Add(ToJson(diagnostic));
                 if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) { results[name] = module with { Result = "failed", Schema = null, Fingerprint = null }; return false; }
-                var (image, errors) = ModuleCompiler.Emit(final);
                 if (image is null)
                 {
-                    rows.AddRange(errors.Select(ToJson));
                     results[name] = module with { Result = "failed", Schema = null, Fingerprint = null };
                     return false;
                 }
