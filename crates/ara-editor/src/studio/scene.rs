@@ -37,7 +37,24 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .cursor(Cursor::Crosshair)
         .on_pointer(navigate)
         .on_wheel(|s: &mut Studio, w, _| {
-            s.editor.state.camera.zoom(w.delta);
+            if s.local.flying {
+                // While flying the wheel sets the fly speed (Unity, Unreal), a step at a time.
+                let now = s
+                    .editor
+                    .state
+                    .settings
+                    .get("viewport.cameraSpeed")
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(4.0);
+                let next = (now * if w.delta > 0.0 { 1.25 } else { 0.8 }).clamp(0.5, 50.0);
+                let next = (next * 2.0).round() / 2.0;
+                s.act(
+                    "editor.settings.set",
+                    serde_json::json!({"key": "viewport.cameraSpeed", "value": next}),
+                );
+            } else {
+                s.editor.state.camera.zoom(w.delta);
+            }
             true
         })
         .on_key(|s: &mut Studio, key, tx| {
@@ -82,6 +99,40 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         })
         .child(toolbar(s))
         .child(orientation(s));
+    // Flying: the speed, which the wheel changes.
+    if s.local.flying {
+        let speed = s
+            .editor
+            .state
+            .settings
+            .get("viewport.cameraSpeed")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(4.0);
+        view = view.child(
+            stillkit::el::col()
+                .absolute(0.0, 0.0)
+                .w_full()
+                .h_full()
+                .justify(Justify::End)
+                .align(Align::Center)
+                .child(
+                    glass_group(l)
+                        .pad_x(10.0)
+                        .gap(6.0)
+                        .child(
+                            icon(icons::GAUGE)
+                                .size(13.0)
+                                .color(Rgba::new(1.0, 1.0, 1.0, 0.8)),
+                        )
+                        .child(
+                            text(format!("{speed:.1} m/s · wheel to change"))
+                                .text_size(11.5)
+                                .color(Rgba::new(1.0, 1.0, 1.0, 0.85)),
+                        ),
+                )
+                .child(el().h(12.0)),
+        );
+    }
     // An asset over the view: it lands where the pointer lets go.
     if let (Some((_, _, at)), Some(rect)) = (&s.local.asset_drag, s.local.rects.get("scene/view"))
         && at.0 >= rect.left
