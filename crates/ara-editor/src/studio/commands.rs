@@ -57,6 +57,20 @@ pub(super) fn ported(id: &str) -> bool {
                 | "edit.rename"
                 | "create.at_cursor"
                 | "edit.preferences"
+                | "layout.default"
+                | "layout.level_design"
+                | "layout.materials"
+                | "layout.animation"
+                | "layout.profiling"
+                | "layout.laptop"
+                | "layout.reset"
+                | "window.hierarchy"
+                | "window.inspector"
+                | "window.assets"
+                | "window.console"
+                | "window.problems"
+                | "window.agents"
+                | "window.history"
                 | "edit.project_settings"
                 | "edit.select_all"
                 | "edit.deselect"
@@ -119,6 +133,18 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 Ok(parent) => select(e, vec![parent]),
                 Err(error) => Err(error),
             }
+        }
+        "layout.default" => act(e, "editor.layout.apply", json!({"name": "default"})),
+        "layout.level_design" => act(e, "editor.layout.apply", json!({"name": "levelDesign"})),
+        "layout.materials" => act(e, "editor.layout.apply", json!({"name": "materials"})),
+        "layout.animation" => act(e, "editor.layout.apply", json!({"name": "animation"})),
+        "layout.profiling" => act(e, "editor.layout.apply", json!({"name": "profiling"})),
+        "layout.laptop" => act(e, "editor.layout.apply", json!({"name": "laptop"})),
+        "layout.reset" => act(e, "editor.layout.reset", json!({})),
+        id if id.starts_with("window.") => {
+            let panel = id.trim_start_matches("window.");
+            act(e, "editor.layout.show", json!({"panel": panel}))
+                .and_then(|_| act(e, "editor.focus", json!({"panel": panel})))
         }
         "edit.preferences" => {
             super::preferences::open(s, crate::settings::Scope::User);

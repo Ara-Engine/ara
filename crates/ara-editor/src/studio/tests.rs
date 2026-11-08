@@ -435,3 +435,25 @@ fn preferences_toggle_a_setting_and_reset_it() {
         def.default.value()
     );
 }
+
+#[test]
+fn window_menu_layouts_and_panels() {
+    let mut rt = open();
+    let before = format!("{:?}", rt.state().editor.state.layout);
+    rt.update(|s| {
+        super::commands::run(
+            s,
+            "layout.level_design",
+            &crate::shell::commands::Target::None,
+        )
+    });
+    settle(&mut rt);
+    assert_ne!(
+        format!("{:?}", rt.state().editor.state.layout),
+        before,
+        "the preset applies"
+    );
+    rt.update(|s| super::commands::run(s, "window.history", &crate::shell::commands::Target::None));
+    settle(&mut rt);
+    assert!(rt.find("tab/history").is_some(), "History opens as a tab");
+}
