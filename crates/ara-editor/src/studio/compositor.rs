@@ -135,6 +135,9 @@ impl Compositor {
             }],
             glyphs: Vec::new(),
         };
+        // Metal: the adapter has its own queue, ordered after the renderer's frame (Vulkan
+        // shares the renderer's queue).
+        #[cfg(target_os = "macos")]
         self.ui.order_after(renderer.gpu());
         let size = [
             logical[0].round().max(1.0) as u32,
@@ -146,15 +149,12 @@ impl Compositor {
         let present = match self.present.take() {
             Some((mut present, was)) => {
                 if was != extent {
-                    present.resize(extent)?;
+                    resize(&mut present, extent)?;
                 }
                 present
             }
             // SAFETY: forwarded caller contract.
-            None => unsafe {
-                self.ui
-                    .create_layer_present(ui_device(renderer.gpu()), layer, extent)?
-            },
+            None => unsafe { layer_present(&self.ui, renderer, layer, extent)? },
         };
         let (present, _) = self.present.insert((present, extent));
         // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
@@ -184,4 +184,46 @@ fn sheet(light: bool) -> Result<ara_ui::style::Sheet> {
     };
     let tokens = theme.tokens().map_err(|e| anyhow::anyhow!("{e}"))?;
     ara_ui::style::Sheet::with_tokens("", tokens).map_err(|e| anyhow::anyhow!("{e}"))
+}
+
+/// Presentation into the Scene's native layer.
+/// # Safety
+/// `layer` is the live `CAMetalLayer` of the Scene view.
+#[cfg(target_os = "macos")]
+unsafe fn layer_present(
+    ui: &NativeUi,
+    renderer: &ara_render::Renderer,
+    layer: NonNull<c_void>,
+    extent: [u32; 2],
+) -> Result<ara_platform::Present> {
+    // SAFETY: forwarded caller contract.
+    unsafe { ui.create_layer_present(ui_device(renderer.gpu()), layer, extent) }
+}
+
+/// The Scene layer's swapchain for a child HWND (Windows) is not built yet; the studio
+/// defaults to the legacy window there (`main.rs`).
+/// # Safety
+/// No requirement: it only reports that the path is missing.
+#[cfg(not(target_os = "macos"))]
+unsafe fn layer_present(
+    _: &NativeUi,
+    _: &ara_render::Renderer,
+    _: NonNull<c_void>,
+    _: [u32; 2],
+) -> Result<ara_platform::Present> {
+    anyhow::bail!(
+        "the studio's Scene view presents on macOS today; run with --legacy-ui on this platform"
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn resize(present: &mut ara_platform::Present, extent: [u32; 2]) -> Result<()> {
+    present.resize(extent)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn resize(_: &mut ara_platform::Present, _: [u32; 2]) -> Result<()> {
+    anyhow::bail!(
+        "the studio's Scene view presents on macOS today; run with --legacy-ui on this platform"
+    )
 }
