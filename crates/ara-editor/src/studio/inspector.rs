@@ -79,13 +79,21 @@ fn header(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let selection = &s.editor.state.selection;
+    // What it is, as the Hierarchy shows it (a light, a camera, a mesh…).
+    let glyph = match selection.as_slice() {
+        [id] => s
+            .resolved
+            .get(id)
+            .map_or(icons::BOX, |e| super::hierarchy::glyph(&e.record)),
+        _ => icons::BOXES,
+    };
     let mut head = row().h(28.0).gap(8.0).align(Align::Center).child(
         el().size(24.0)
             .radius(6.0)
             .fill(c.primary.0.with_alpha(0.14))
             .align(Align::Center)
             .justify(Justify::Center)
-            .child(icon(icons::BOX).size(14.0).color(c.primary.0)),
+            .child(icon(glyph).size(14.0).color(c.primary.0)),
     );
     if let [id] = selection.as_slice() {
         let entity = id.clone();

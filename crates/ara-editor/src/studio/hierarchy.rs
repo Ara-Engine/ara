@@ -29,7 +29,7 @@ struct Row {
 }
 
 /// The icon for what an entity is, by its components.
-fn glyph(record: &ara_doc::Record) -> stillkit::icons::Icon {
+pub(super) fn glyph(record: &ara_doc::Record) -> stillkit::icons::Icon {
     let has = |c: &str| record.get(c).is_some();
     if has("Camera") {
         icons::VIDEO
