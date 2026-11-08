@@ -1,8 +1,9 @@
 # ara-editor
 
-Native M2 editor shell, in-process project authority and Engine Protocol server.
-The UI is ara-ui; its display list goes to the Vulkan adapter in `ara-editor-gpu`.
-The viewport samples ara-render's image on that device; initial renderer construction runs on a worker while loading pumps the authority and events.
+Native editor, in-process project authority and Engine Protocol server. Two windows share
+`Editor`: the **studio** (`src/studio/`, stillkit, D31; default on macOS, read
+`src/studio/AGENTS.md`) and the legacy `shell` (ara-ui on `ara-editor-gpu`; `--legacy-ui`,
+verify routes, headless runs and other platforms until their Scene layer path lands).
 Public boundaries:
 - `Editor`: host, navigation commands, content batches, agent activity and per-turn undo.
 - `state`: navigation/layout op document; deliberately separate from content undo.

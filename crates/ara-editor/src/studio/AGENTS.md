@@ -1,0 +1,54 @@
+# studio: Ara's editor on stillkit (D31)
+
+The editor window: one stillkit `Runtime<Studio>` drawn on the CPU and redrawn only where
+something changed, with the Scene view as a native GPU layer under a hole. It is a client
+of `Editor` like any agent: navigation goes through `editor.*` actions and content through
+`cmd.apply` (`Studio::act`, `Studio::apply`), so every person's action has an agent
+equivalent. `--legacy-ui` opens the old `shell` window.
+
+## Files
+
+- `mod.rs`: the host loop. It pumps window events (`pump`), the protocol server and
+  `Editor::tick`, keeps the renderer in sync (`SceneSync`), renders and composites the
+  Scene when it is dirty, resolves picks, polls Assets and the diagnostics bus, applies
+  `Local::focus` requests, and sleeps until the next timer (idle costs nothing).
+- `state.rs`: `Studio` (editor, look, resolved scene, window-only `Local`, size).
+- `compositor.rs`: the renderer's image plus `shell::overlay` (grid, outlines by entity,
+  gizmo), drawn by `ara-editor-gpu`'s `NativeUi` and presented into the layer
+  (`create_layer_present`). Picking goes through the same channel map.
+- `chrome.rs`: root view, title bar (menus from `shell::commands::menus`, Play,
+  scene crumb, ⌘K launcher), status bar, palette, context menus.
+- `dock.rs`: `editor.state.layout` as rounded panels, tab strips and splitters.
+- `scene.rs`: the Scene element and toolbar. RMB look + WASD fly (key-ups from the host),
+  MMB pan, Alt+LMB orbit, wheel dolly, click to pick, right-click menu, Shift+A at pointer.
+- `gizmo.rs`: handle hover/drag mapped to an editor gesture; release commits one step.
+- `hierarchy.rs`: virtual tree, rename, visibility/lock, WAI tree keyboard.
+- `inspector.rs`: fields from `crate::inspector::fields`; label scrubs (8 px a step,
+  Shift ×0.1, Alt ×10), typed units, vectors, enums, colours; component ⋯; Add Component.
+- `create.rs`: the Create browser over `CATALOG` (registry `create.*` ids; an entry shows
+  when the schema has its components). Recent, search, Enter, Shift+A placement.
+- `panels.rs`: Assets (folder tree + grid), Console, Problems; others say they are coming.
+- `agents.rs`: Agents feed (presence, turns, Undo Turn) and History.
+- `commands.rs`: which registry commands the studio runs (`ported`), `run`, keymap,
+  macOS shortcut glyphs. Menus hide (context) or disable (title) unported commands.
+
+## Rules
+
+- Never write documents directly: `Studio::apply` (one undo step) or a registry command.
+- A command that opens a field sets `local.focus`; handlers with a `Tx` focus directly.
+- Window-only state lives in `Local`; anything agents should see goes to `EditorState`.
+- Visual review: `cargo test -p ara-editor --lib studio::tests::captures -- --ignored`
+  writes both themes (panels, context menu, Create) to `target/studio-captures/`.
+- Spacing: 4 px gutters, 30 px tab strips, 22 px tree and field rows, 24 px dense
+  controls. Fields set `focus_ring(false)` where their well shows focus.
+
+## Tests
+
+`studio/tests.rs` drives the runtime headless over a real `Editor` on a scratch project:
+gizmo drag (one transaction) and Escape, Hierarchy click and arrows, context menu, Create
+search + Enter. `cargo test -p ara-editor --lib studio::`.
+
+## Gaps
+
+The Scene layer presents on macOS only (Windows needs the Vulkan HWND path). Material,
+VFX, animation, profiler, lighting, import and settings pages are still legacy-only.
