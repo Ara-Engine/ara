@@ -59,6 +59,8 @@ pub struct LogRow {
     pub source: Option<String>,
     /// Repetitions merged into this record.
     pub count: u64,
+    /// The whole diagnostic: its location and typed fixes.
+    pub diagnostic: Arc<ara_diag::Diagnostic>,
 }
 
 impl LogRow {
@@ -75,11 +77,12 @@ impl LogRow {
             seq: e["seq"].as_u64()?,
             severity: d.severity,
             code: d.code.to_string(),
-            message: d.message,
+            message: d.message.clone(),
             origin: e["origin"].as_str().unwrap_or("engine").to_owned(),
             at: e["at"].as_u64().unwrap_or(0),
             source,
             count: e["count"].as_u64().unwrap_or(1),
+            diagnostic: Arc::new(d),
         })
     }
 }

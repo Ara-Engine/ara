@@ -27,7 +27,7 @@ pub(crate) mod feedback_geometry;
 mod feedback_quality;
 pub(crate) mod icons;
 mod imports;
-mod input;
+pub(crate) mod input;
 mod keyboard;
 mod menu;
 mod monkey_support;

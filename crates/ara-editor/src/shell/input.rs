@@ -1309,7 +1309,8 @@ impl DraftEdit<'_> {
         }
     }
 }
-fn apply_fix(
+/// Applies `diagnostic`'s fix `index` to its document as one undo step.
+pub(crate) fn apply_fix(
     editor: &mut Editor,
     diagnostic: &ara_diag::Diagnostic,
     index: usize,

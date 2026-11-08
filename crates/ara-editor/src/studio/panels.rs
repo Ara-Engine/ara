@@ -730,6 +730,38 @@ fn problems(s: &Studio) -> El<Studio> {
                 .child(count(l, rows.len(), false)),
         );
         for r in rows {
+            // Its typed fixes, one click each (the same ones agents apply).
+            let mut message = col().grow(1.0).min_w(0.0).gap(4.0).child(
+                text(r.message.clone())
+                    .text_size(12.0)
+                    .wrap(3)
+                    .color(c.foreground.0),
+            );
+            if !r.diagnostic.fixes.is_empty() {
+                let mut fixes = row().gap(4.0);
+                for (i, fix) in r.diagnostic.fixes.iter().enumerate().take(2) {
+                    let diagnostic = r.diagnostic.clone();
+                    fixes = fixes.child(
+                        button(
+                            l,
+                            Tone::Secondary,
+                            Size::Sm,
+                            Some(icons::WRENCH),
+                            &fix.title,
+                        )
+                        .on_press(move |s: &mut Studio| {
+                            if let Err(error) =
+                                crate::shell::input::apply_fix(&mut s.editor, &diagnostic, i)
+                            {
+                                s.editor
+                                    .report_failure(&std::io::Error::other(error.to_string()));
+                            }
+                            s.resolve();
+                        }),
+                    );
+                }
+                message = message.child(fixes);
+            }
             card = card.child(divider(l)).child(
                 row()
                     .min_h(32.0)
@@ -738,14 +770,7 @@ fn problems(s: &Studio) -> El<Studio> {
                     .gap(10.0)
                     .align(Align::Center)
                     .child(severity_glyph(l, r.severity))
-                    .child(
-                        text(r.message.clone())
-                            .text_size(12.0)
-                            .wrap(3)
-                            .color(c.foreground.0)
-                            .grow(1.0)
-                            .min_w(0.0),
-                    )
+                    .child(message)
                     .child(
                         text(r.code.clone())
                             .text_size(10.5)
