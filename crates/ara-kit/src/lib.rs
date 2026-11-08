@@ -4,3 +4,4 @@
 pub mod capture;
 pub mod icons;
 pub mod look;
+pub mod ui;

@@ -120,7 +120,9 @@ pub struct Hex(pub Rgba);
 impl<'de> Deserialize<'de> for Hex {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         let s = String::deserialize(d)?;
-        parse_hex(&s).map(Hex).ok_or_else(|| serde::de::Error::custom(format!("not a #rrggbb[aa] colour: {s}")))
+        parse_hex(&s)
+            .map(Hex)
+            .ok_or_else(|| serde::de::Error::custom(format!("not a #rrggbb[aa] colour: {s}")))
     }
 }
 
@@ -132,7 +134,10 @@ fn parse_hex(s: &str) -> Option<Rgba> {
         8 => byte(6)?,
         _ => return None,
     };
-    Some(Rgba::rgb8([byte(0)?, byte(2)?, byte(4)?], f32::from(alpha) / 255.0))
+    Some(Rgba::rgb8(
+        [byte(0)?, byte(2)?, byte(4)?],
+        f32::from(alpha) / 255.0,
+    ))
 }
 
 /// Corner radii, design px.
@@ -261,8 +266,14 @@ fn theme(c: &Colors, r: &Radius, m: &Metrics, dark: bool) -> Theme {
     p.warning = c.warning.0;
     p.surface = c.background.0;
     p.elevated = c.menu_surface.0;
-    p.hover = c.hover_surface.0.with_alpha(0.7);
-    p.pressed = c.hover_surface.0;
+    // Washes over any fill: white on dark, black on light, eased in by the runtime.
+    let wash = if dark {
+        Rgba::new(1.0, 1.0, 1.0, 1.0)
+    } else {
+        Rgba::new(0.0, 0.0, 0.0, 1.0)
+    };
+    p.hover = wash.with_alpha(if dark { 0.045 } else { 0.04 });
+    p.pressed = wash.with_alpha(if dark { 0.09 } else { 0.08 });
     p.knob = Rgba::new(1.0, 1.0, 1.0, 1.0);
     p.scrollbar = c.muted_foreground.0.with_alpha(0.45);
     // Shadows deepen on dark, where surfaces barely step.
@@ -294,22 +305,27 @@ fn theme(c: &Colors, r: &Radius, m: &Metrics, dark: bool) -> Theme {
 /// Dense type for a pro tool: 12 px body, 11 px small text, headings at Ara's sizes.
 fn type_ramp(m: &Metrics) -> stillkit::theme::TypeRamp {
     use stillkit::theme::Font;
-    let f = |size: f32, weight: u16, line: f32| Font { size, weight, tracking: 0.0, line };
+    let f = |size: f32, weight: u16, line: f32| Font {
+        size,
+        weight,
+        tracking: 0.0,
+        line,
+    };
     let body = m.font_size_body;
     let small = m.font_size_small;
     let heading = m.font_size_heading;
     stillkit::theme::TypeRamp {
         family: stillkit::VARIABLE.into(),
         roles: [
-            f(28.0, 650, 34.0),              // LargeTitle: page titles
-            f(22.0, 650, 28.0),              // Title1
-            f(18.0, 600, 24.0),              // Title2: dialog titles
-            f(heading, 600, heading + 6.0),  // Title3: section titles
-            f(body + 1.0, 560, body + 7.0),  // Headline: row and card titles
-            f(body, 400, body + 6.0),        // Body
-            f(body, 400, body + 6.0),        // Callout
-            f(small, 560, small + 5.0),      // Subheadline: section labels
-            f(small, 400, small + 5.0),      // Footnote
+            f(28.0, 650, 34.0),               // LargeTitle: page titles
+            f(22.0, 650, 28.0),               // Title1
+            f(18.0, 600, 24.0),               // Title2: dialog titles
+            f(heading, 600, heading + 6.0),   // Title3: section titles
+            f(body + 1.0, 560, body + 7.0),   // Headline: row and card titles
+            f(body, 400, body + 6.0),         // Body
+            f(body, 400, body + 6.0),         // Callout
+            f(small, 560, small + 5.0),       // Subheadline: section labels
+            f(small, 400, small + 5.0),       // Footnote
             f(small - 1.0, 500, small + 3.0), // Caption: badges, counts
         ],
     }
@@ -334,6 +350,10 @@ mod tests {
     fn colours_must_be_hex() {
         assert!(parse_hex("#0a0b0c").is_some());
         assert!(parse_hex("#0a0b0c80").is_some());
-        assert!(parse_hex("0a0b0c").is_none() && parse_hex("#0a0b").is_none() && parse_hex("#zz0000").is_none());
+        assert!(
+            parse_hex("0a0b0c").is_none()
+                && parse_hex("#0a0b").is_none()
+                && parse_hex("#zz0000").is_none()
+        );
     }
 }
