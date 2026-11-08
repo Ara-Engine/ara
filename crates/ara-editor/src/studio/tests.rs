@@ -187,3 +187,26 @@ fn captures() {
         }
     }
 }
+
+#[test]
+fn arrow_keys_walk_the_hierarchy() {
+    let mut rt = open();
+    let row = rt.find("row/e_box").unwrap();
+    rt.pointer_down(row.center().x, row.center().y);
+    rt.pointer_up(row.center().x, row.center().y);
+    rt.frame(FRAME);
+    rt.key(0x28);
+    rt.frame(FRAME);
+    assert_eq!(
+        rt.state().editor.state.selection,
+        vec!["e_lamp".to_owned()],
+        "Down moves to the next row"
+    );
+    rt.key(0x24);
+    rt.frame(FRAME);
+    assert_eq!(
+        rt.state().editor.state.selection,
+        vec!["e_box".to_owned()],
+        "Home goes to the first row"
+    );
+}

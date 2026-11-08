@@ -20,6 +20,7 @@ const INDENT: f32 = 14.0;
 /// One visible row.
 struct Row {
     id: String,
+    parent: Option<String>,
     name: String,
     depth: usize,
     children: bool,
@@ -105,6 +106,7 @@ fn rows(s: &Studio, query: &str) -> Vec<Row> {
             let record = &s.resolved[id].record;
             out.push(Row {
                 id: id.to_owned(),
+                parent: parent.map(str::to_owned),
                 name: name.to_owned(),
                 depth,
                 children: has_children,
@@ -162,7 +164,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                 .map(|i| {
                     row_el(
                         l,
-                        &built[i],
+                        (&built, i),
                         selection.contains(&built[i].id),
                         hidden.contains(&built[i].id),
                         locked.contains(&built[i].id),
@@ -204,12 +206,13 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
 
 fn row_el(
     l: &ara_kit::look::Look,
-    r: &Row,
+    (rows, at): (&std::sync::Arc<Vec<Row>>, usize),
     selected: bool,
     hidden: bool,
     locked: bool,
     rename: Option<&(String, String)>,
 ) -> El<Studio> {
+    let r = &rows[at];
     let c = &l.c;
     let (fill, ink, muted) = if selected {
         (
@@ -336,16 +339,8 @@ fn row_el(
         })
         .focusable()
         .on_key({
-            let id = r.id.clone();
-            let name = r.name.clone();
-            move |s: &mut Studio, key, tx| {
-                if key.0 == 0x71 {
-                    s.local.rename = Some((id.clone(), name.clone()));
-                    tx.focus("hierarchy/rename");
-                    return Handled::Yes;
-                }
-                Handled::No
-            }
+            let rows = rows.clone();
+            move |s: &mut Studio, key, tx| navigate(s, &rows, at, key.0, tx)
         })
         .child(el().w(4.0 + r.depth as f32 * INDENT))
         .child(disclosure)
@@ -374,4 +369,57 @@ fn row_el(
             format!("row/{}/lock", r.id),
         ))
         .child(el().w(2.0))
+}
+
+/// The tree's keyboard (WAI tree pattern): Up and Down move through visible rows, Right
+/// opens a branch or steps into it, Left closes it or steps to the parent, Home and End
+/// jump; Shift extends the selection. F2 or Return renames; other keys are the editor's.
+fn navigate(
+    s: &mut Studio,
+    rows: &[Row],
+    at: usize,
+    key: u16,
+    tx: &mut stillkit::el::Tx,
+) -> Handled {
+    let r = &rows[at];
+    let extend = tx.modifiers().shift;
+    let go = |s: &mut Studio, to: usize, tx: &mut stillkit::el::Tx| {
+        let id = rows[to].id.clone();
+        s.select(
+            vec![id.clone()],
+            extend && !s.editor.state.selection.contains(&id),
+        );
+        tx.focus(format!("row/{id}").as_str());
+    };
+    match key {
+        0x28 if at + 1 < rows.len() => go(s, at + 1, tx),
+        0x26 if at > 0 => go(s, at - 1, tx),
+        0x24 => go(s, 0, tx),
+        0x23 => go(s, rows.len() - 1, tx),
+        0x27 if r.children && !r.open => {
+            s.editor.state.collapsed.remove(&r.id);
+        }
+        0x27 if r.children => go(s, at + 1, tx),
+        0x25 if r.children && r.open => {
+            s.editor.state.collapsed.insert(r.id.clone());
+        }
+        0x25 => {
+            if let Some(parent) = r
+                .parent
+                .as_deref()
+                .and_then(|p| rows.iter().position(|x| x.id == p))
+            {
+                go(s, parent, tx);
+            }
+        }
+        0x71 | 0x0D => {
+            s.local.rename = Some((r.id.clone(), r.name.clone()));
+            tx.focus("hierarchy/rename");
+        }
+        _ => match super::commands::for_key(key, tx.modifiers()) {
+            Some(id) => super::commands::run(s, id, &crate::shell::commands::Target::None),
+            None => return Handled::No,
+        },
+    }
+    Handled::Yes
 }
