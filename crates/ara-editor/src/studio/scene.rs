@@ -22,6 +22,8 @@ pub struct Pick {
     pub v: f32,
     /// Shift held: toggle in the selection.
     pub additive: bool,
+    /// A right click: open the Entity (or Viewport) menu here, window design px.
+    pub context: Option<(f32, f32)>,
 }
 
 pub(super) fn view(s: &Studio) -> El<Studio> {
@@ -114,6 +116,15 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
         (PointerPhase::Up, Button::Right) | (PointerPhase::Cancel, Button::Right) => {
             s.local.flying = false;
             s.local.held.clear();
+            let still = e.travel().x.abs() + e.travel().y.abs() < 4.0;
+            if e.phase == PointerPhase::Up && still && e.size.0 > 0.0 {
+                s.local.pick = Some(Pick {
+                    u: e.local.x / e.size.0,
+                    v: e.local.y / e.size.1,
+                    additive: false,
+                    context: Some((e.at.x, e.at.y)),
+                });
+            }
         }
         (PointerPhase::Move, Button::Right) => camera.look([e.delta.x * 0.006, e.delta.y * 0.006]),
         (PointerPhase::Move, Button::Middle) => camera.pan([e.delta.x, e.delta.y]),
@@ -127,6 +138,7 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
                 u: e.local.x / e.size.0,
                 v: e.local.y / e.size.1,
                 additive: e.mods.shift,
+                context: None,
             });
             return false;
         }

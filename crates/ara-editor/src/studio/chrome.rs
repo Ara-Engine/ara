@@ -22,8 +22,24 @@ pub fn view(s: &Studio) -> El<Studio> {
         .on_key(keys)
         .child(title_bar(s))
         .child(dock::view(s).grow(1.0).min_h(0.0))
-        .child(status_bar(s));
+        .child(status_bar(s))
+        .overlay(context_menu(s));
     palette(s, root)
+}
+
+/// The open context menu at the pointer: the registry's layout for what was clicked, its
+/// commands run on that target.
+fn context_menu(s: &Studio) -> Option<stillkit::el::Overlay<Studio>> {
+    let (kind, target, (x, y)) = s.local.context.clone()?;
+    let items = crate::shell::commands::menus::context(kind);
+    let panel = menu_panel(&s.look, entries(s, items, true, &target))
+        .max_h(560.0)
+        .scroll(Axis::Vertical);
+    Some(
+        menu(panel)
+            .at(x, y)
+            .on_dismiss(|s: &mut Studio| s.local.context = None),
+    )
 }
 
 /// Window-wide shortcuts: the registry's chords for the commands the studio runs. Keys a
@@ -166,7 +182,7 @@ fn menu_button(s: &Studio, title: &'static str, items: &'static [Item]) -> El<St
         });
     if open {
         b = b.fill(l.c.raised.0).color(l.c.foreground.0);
-        let panel = menu_panel(l, entries(s, items, 0))
+        let panel = menu_panel(l, entries(s, items, false, &Target::None))
             .max_h(560.0)
             .scroll(Axis::Vertical);
         b = b.overlay(menu(panel).on_dismiss(|s: &mut Studio| s.local.menu = None));
@@ -174,48 +190,80 @@ fn menu_button(s: &Studio, title: &'static str, items: &'static [Item]) -> El<St
     b
 }
 
-/// Menu entries for registry items; a submenu shows as a heading over its own entries.
-fn entries(s: &Studio, items: &'static [Item], depth: usize) -> Vec<El<Studio>> {
-    let l = &s.look;
-    let mut out = Vec::new();
+/// One line of a flattened menu.
+#[derive(Clone, Copy)]
+enum Line {
+    Separator,
+    Heading(&'static str),
+    Command(&'static str),
+}
+
+/// Flattens registry items: a submenu becomes a separator and a heading over its entries.
+/// `hide` drops commands the studio doesn't run yet (context menus stay short).
+fn lines(items: &'static [Item], depth: usize, hide: bool, out: &mut Vec<Line>) {
     for item in items {
         match item {
-            Item::Separator => out.push(menu_separator(l)),
-            Item::Command(id) => {
-                if let Some(e) = command_item(s, id) {
-                    out.push(e);
-                }
+            Item::Separator => out.push(Line::Separator),
+            Item::Command(id) if !(hide && commands::missing(id).is_some()) => {
+                out.push(Line::Command(id))
             }
             Item::Sub(title, sub) if depth < 2 => {
-                out.push(menu_separator(l));
-                out.push(menu_heading(l, title));
-                out.extend(entries(s, sub, depth + 1));
+                out.push(Line::Separator);
+                out.push(Line::Heading(title));
+                lines(sub, depth + 1, hide, out);
             }
-            Item::Sub(..) | Item::Dynamic(_) => {}
+            Item::Command(_) | Item::Sub(..) | Item::Dynamic(_) => {}
         }
     }
-    // No leading, trailing or doubled separators.
-    out
+}
+
+/// Menu entries for registry items, with no empty headings and no leading, trailing or
+/// doubled separators; commands act on `target`.
+fn entries(s: &Studio, items: &'static [Item], hide: bool, target: &Target) -> Vec<El<Studio>> {
+    let l = &s.look;
+    let mut all = Vec::new();
+    lines(items, 0, hide, &mut all);
+    let mut clean: Vec<Line> = Vec::new();
+    for (i, line) in all.iter().enumerate() {
+        match line {
+            Line::Heading(_) if !matches!(all.get(i + 1), Some(Line::Command(_))) => {}
+            Line::Separator if !matches!(clean.last(), Some(Line::Command(_))) => {}
+            _ => clean.push(*line),
+        }
+    }
+    while matches!(clean.last(), Some(Line::Separator | Line::Heading(_))) {
+        clean.pop();
+    }
+    clean
+        .into_iter()
+        .filter_map(|line| match line {
+            Line::Separator => Some(menu_separator(l)),
+            Line::Heading(title) => Some(menu_heading(l, title)),
+            Line::Command(id) => command_item(s, id, target),
+        })
+        .collect()
 }
 
 /// One registry command as a menu item: its icon, title and shortcut; unavailable with
 /// its reason when the studio doesn't run it yet.
-fn command_item(s: &Studio, id: &'static str) -> Option<El<Studio>> {
+fn command_item(s: &Studio, id: &'static str, target: &Target) -> Option<El<Studio>> {
+    let target = target.clone();
     let l = &s.look;
     let spec = commands::spec(id)?;
     let glyph = icons::named(spec.icon);
-    let keys = spec.keys.split(" / ").next().filter(|k| !k.is_empty());
+    let keys = commands::shortcut(spec.keys);
     let item = menu_item(
         l,
         &format!("cmd/{id}"),
         glyph,
         spec.title,
-        keys,
+        keys.as_deref(),
         id == "edit.delete",
     )
     .on_press(move |s: &mut Studio| {
         s.local.menu = None;
-        commands::run(s, id, &Target::None);
+        s.local.context = None;
+        commands::run(s, id, &target);
     });
     Some(match commands::missing(id) {
         Some(reason) => enabled(item.description(reason), false),
@@ -540,8 +588,8 @@ fn palette(s: &Studio, root: El<Studio>) -> El<Studio> {
                     })
                     .grow(1.0),
             );
-        if let Some(k) = e.keys.split(" / ").next().filter(|k| !k.is_empty()) {
-            item = item.child(kbd(l, k));
+        if let Some(k) = commands::shortcut(e.keys) {
+            item = item.child(kbd(l, &k));
         }
         list = list.child(item);
     }

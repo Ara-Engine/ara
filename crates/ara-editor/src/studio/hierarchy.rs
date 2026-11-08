@@ -337,6 +337,19 @@ fn row_el(
             tx.focus(format!("row/{pid}").as_str());
             true
         })
+        .on_context_menu({
+            let id = r.id.clone();
+            move |s: &mut Studio, x, y| {
+                if !s.editor.state.selection.contains(&id) {
+                    s.select(vec![id.clone()], false);
+                }
+                s.local.context = Some((
+                    crate::shell::commands::menus::Context::Entity,
+                    crate::shell::commands::Target::Entity(id.clone()),
+                    (x, y),
+                ));
+            }
+        })
         .focusable()
         .on_key({
             let rows = rows.clone();

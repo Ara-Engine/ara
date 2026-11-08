@@ -17,6 +17,34 @@ pub(super) fn missing(id: &str) -> Option<&'static str> {
         .then_some("Not in the studio yet: run the editor with --legacy-ui for this command")
 }
 
+/// A registry shortcut as this platform writes it: the first chord, with ⌘ ⇧ ⌥ on macOS
+/// (`Ctrl+Shift+Z` reads `⇧⌘Z`); `None` when the command has none.
+pub(super) fn shortcut(keys: &str) -> Option<String> {
+    let first = keys.split(" / ").next().filter(|k| !k.is_empty())?;
+    if !cfg!(target_os = "macos") {
+        return Some(first.to_owned());
+    }
+    let mut mods = String::new();
+    let mut rest = first;
+    for (name, glyph) in [("Ctrl+", "⌘"), ("Shift+", "⇧"), ("Alt+", "⌥")] {
+        if let Some(r) = rest.strip_prefix(name) {
+            rest = r;
+            mods.push_str(glyph);
+        }
+    }
+    // macOS orders modifiers ⌥⇧⌘.
+    let order = |c: char| "⌃⌥⇧⌘".find(c).unwrap_or(0);
+    let mut glyphs: Vec<char> = mods.chars().collect();
+    glyphs.sort_by_key(|c| order(*c));
+    let key = match rest {
+        "Del" | "Delete" => "⌫",
+        "Enter" => "↩",
+        "Esc" => "⎋",
+        other => other,
+    };
+    Some(glyphs.into_iter().collect::<String>() + key)
+}
+
 /// Whether the studio runs `id`.
 pub(super) fn ported(id: &str) -> bool {
     matches!(
@@ -27,6 +55,7 @@ pub(super) fn ported(id: &str) -> bool {
             | "edit.redo"
             | "edit.duplicate"
             | "edit.delete"
+            | "edit.rename"
             | "edit.select_all"
             | "edit.deselect"
             | "edit.palette"
@@ -91,6 +120,18 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 vec![json!({"cmd": "entity.delete", "args": {"entities": entities}})],
                 "Delete selection",
             )
+        }
+        "edit.rename" => {
+            let id = match target {
+                Target::Entity(id) => Some(id.clone()),
+                _ => e.state.selection.first().cloned(),
+            };
+            if let Some(id) = id {
+                let name = s.name(&id);
+                s.local.rename = Some((id, name));
+                s.local.focus = Some("hierarchy/rename");
+            }
+            Ok(())
         }
         "edit.select_all" => {
             let all: Vec<String> = s.resolved.keys().cloned().collect();

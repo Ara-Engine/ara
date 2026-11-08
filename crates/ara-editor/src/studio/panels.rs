@@ -274,6 +274,18 @@ fn tile(l: &ara_kit::look::Look, a: &Asset, selected: bool) -> El<Studio> {
         .tooltip(a.path.clone())
         .selected(selected)
         .hovered(move |e| if selected { e } else { e.fill(hover) })
+        .on_context_menu({
+            let path = a.path.clone();
+            move |s: &mut Studio, x, y| {
+                use crate::shell::commands::{Target, menus::Context};
+                s.act("editor.workspace", json!({"asset": path}));
+                s.local.context = Some(if folder {
+                    (Context::Folder, Target::Folder(path.clone()), (x, y))
+                } else {
+                    (Context::Asset, Target::Asset(path.clone()), (x, y))
+                });
+            }
+        })
         .on_pointer(move |s: &mut Studio, e, _| {
             if e.phase != stillkit::el::PointerPhase::Down || e.button != stillkit::Button::Left {
                 return false;

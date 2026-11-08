@@ -185,6 +185,18 @@ fn captures() {
             )
             .unwrap();
         }
+        let row = rt.find("row/e_box").unwrap();
+        rt.right_click(row.center().x, row.center().y);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{}-context.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.key(stillkit::el::KeyCode::ESCAPE.0);
     }
 }
 
@@ -208,5 +220,22 @@ fn arrow_keys_walk_the_hierarchy() {
         rt.state().editor.state.selection,
         vec!["e_box".to_owned()],
         "Home goes to the first row"
+    );
+}
+
+#[test]
+fn right_clicking_a_row_opens_its_entity_menu() {
+    let mut rt = open();
+    let row = rt.find("row/e_lamp").unwrap();
+    rt.right_click(row.center().x, row.center().y);
+    rt.frame(FRAME);
+    assert_eq!(
+        rt.state().editor.state.selection,
+        vec!["e_lamp".to_owned()],
+        "the row becomes the selection"
+    );
+    assert!(
+        rt.find("cmd/edit.duplicate").is_some(),
+        "the Entity menu opens"
     );
 }

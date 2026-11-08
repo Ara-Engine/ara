@@ -113,6 +113,14 @@ pub struct Local {
     pub scrub: Option<(String, Option<usize>, f64, f64)>,
     /// The open dropdown, by key.
     pub select: Option<String>,
+    /// The open context menu: its layout, what it acts on, and where (window design px).
+    pub(crate) context: Option<(
+        crate::shell::commands::menus::Context,
+        crate::shell::commands::Target,
+        (f32, f32),
+    )>,
+    /// An element to focus once the view shows it (a command that opened a field).
+    pub focus: Option<&'static str>,
     /// The gizmo handle being dragged.
     pub gizmo: Option<super::gizmo::Drag>,
     /// The right button is held in the Scene view: WASD/QE fly the camera.

@@ -295,10 +295,21 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                         None
                     }
                 };
-                rt.update(|s| match entity {
-                    Some(e) => s.select(vec![e], pick.additive),
-                    None if !pick.additive => s.select(Vec::new(), false),
-                    None => {}
+                rt.update(|s| {
+                    use crate::shell::commands::{Target, menus::Context};
+                    match (&entity, pick.context) {
+                        // A right click keeps a selection it lands in.
+                        (Some(e), Some(_)) if s.editor.state.selection.contains(e) => {}
+                        (Some(e), _) => s.select(vec![e.clone()], pick.additive),
+                        (None, _) if !pick.additive => s.select(Vec::new(), false),
+                        (None, _) => {}
+                    }
+                    if let Some(at) = pick.context {
+                        s.local.context = Some(match entity {
+                            Some(e) => (Context::Entity, Target::Entity(e), at),
+                            None => (Context::Viewport, Target::None, at),
+                        });
+                    }
                 });
             }
         }
@@ -509,7 +520,11 @@ fn pump(rt: &mut Runtime<Studio>, surface: &mut Surface, started: Instant) -> an
         rt.update(|_| {});
     }
     rt.sync_text_input(surface);
-    if rt.frame(started.elapsed().saturating_sub(rt.now())) {
+    let painted = rt.frame(started.elapsed().saturating_sub(rt.now()));
+    if let Some(key) = rt.touch(|s| s.local.focus.take()) {
+        rt.focus(key);
+    }
+    if painted {
         rt.present(surface, (0, 0))?;
         chrome_parts(surface, rt);
         // Layout feedback the view reads next time: where splits and the Scene view are.
