@@ -18,6 +18,24 @@ pub(super) fn view(s: &Studio, panel: &str) -> El<Studio> {
         "problems" => problems(s),
         "agents" => super::agents::agents(s),
         "history" => super::agents::history(s),
+        "settings" => col().grow(1.0).justify(Justify::Center).child(empty(
+            &s.look,
+            icons::SETTINGS,
+            "Settings open in their own window",
+            "Edit › Preferences (⌘,) for yours, Project Settings for the project's.",
+            Some(
+                button(
+                    &s.look,
+                    Tone::Secondary,
+                    Size::Sm,
+                    Some(icons::SETTINGS),
+                    "Open Preferences",
+                )
+                .on_press(|s: &mut Studio| {
+                    super::preferences::open(s, crate::settings::Scope::User)
+                }),
+            ),
+        )),
         other => {
             let (title, glyph) = super::dock::panel_title(other);
             empty(

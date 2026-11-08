@@ -235,6 +235,8 @@ pub struct Local {
     pub field_menu: Option<(String, String, (f32, f32))>,
     /// Text for the host to put on the system clipboard.
     pub copy: Option<String>,
+    /// The open Settings window.
+    pub settings: Option<super::preferences::View>,
     /// The open component overflow menu, by component.
     pub component_menu: Option<String>,
     /// Add Component's search and highlighted row, while open.

@@ -18,6 +18,7 @@ mod gizmo;
 mod hierarchy;
 mod inspector;
 mod panels;
+mod preferences;
 mod scene;
 pub mod state;
 #[cfg(test)]

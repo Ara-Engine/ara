@@ -56,6 +56,8 @@ pub(super) fn ported(id: &str) -> bool {
                 | "edit.delete"
                 | "edit.rename"
                 | "create.at_cursor"
+                | "edit.preferences"
+                | "edit.project_settings"
                 | "edit.select_all"
                 | "edit.deselect"
                 | "edit.palette"
@@ -117,6 +119,14 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 Ok(parent) => select(e, vec![parent]),
                 Err(error) => Err(error),
             }
+        }
+        "edit.preferences" => {
+            super::preferences::open(s, crate::settings::Scope::User);
+            Ok(())
+        }
+        "edit.project_settings" => {
+            super::preferences::open(s, crate::settings::Scope::Project);
+            Ok(())
         }
         "create.at_cursor" => {
             super::create::toggle(s, super::create::Anchor::Key("scene/view"), None);
@@ -245,6 +255,7 @@ pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'stati
         (true, false, 0x4B) | (true, true, 0x50) => "edit.palette",
         (true, true, 0x4E) => "create.empty",
         (false, true, 0x41) => "create.at_cursor",
+        (true, false, 0xBC) => "edit.preferences",
         (false, false, 0x2E) | (false, false, 0x08) => "edit.delete",
         (false, false, 0x46) => "view.frame",
         (false, false, 0x24) => "view.frame_all",

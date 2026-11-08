@@ -25,7 +25,8 @@ pub fn view(s: &Studio) -> El<Studio> {
         .child(status_bar(s))
         .children(drag_chip(s))
         .overlay(context_menu(s))
-        .overlay(super::create::overlay(s));
+        .overlay(super::create::overlay(s))
+        .overlay(super::preferences::overlay(s));
     palette(s, root)
 }
 

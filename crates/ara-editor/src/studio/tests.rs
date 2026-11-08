@@ -247,6 +247,20 @@ fn captures() {
         )
         .unwrap();
         rt.update(|s| s.local.create = None);
+        rt.update(|s| {
+            super::commands::run(s, "edit.preferences", &crate::shell::commands::Target::None)
+        });
+        settle(&mut rt);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{}-settings.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.settings = None);
     }
 }
 
@@ -363,5 +377,61 @@ fn a_fields_menu_copies_its_path() {
     assert_eq!(
         rt.state().local.copy.as_deref(),
         Some("@levels/main.scene#e_box/Transform.position")
+    );
+}
+
+#[test]
+fn preferences_toggle_a_setting_and_reset_it() {
+    let mut rt = open();
+    rt.update(|s| {
+        super::commands::run(s, "edit.preferences", &crate::shell::commands::Target::None)
+    });
+    settle(&mut rt);
+    assert!(rt.find("settings").is_some(), "the window opens");
+    let def = crate::settings::DEFS
+        .iter()
+        .find(|d| {
+            d.scope == crate::settings::Scope::User
+                && matches!(d.kind, crate::settings::Kind::Toggle)
+        })
+        .expect("a user toggle");
+    rt.update(|s| s.local.settings.as_mut().unwrap().query = def.label.to_owned());
+    settle(&mut rt);
+    let before = rt
+        .state()
+        .editor
+        .state
+        .settings
+        .get(def.key)
+        .cloned()
+        .unwrap_or_else(|| def.default.value());
+    let switch = rt
+        .find(&format!("settings/{}/switch", def.key))
+        .expect("its switch shows");
+    rt.pointer_down(switch.center().x, switch.center().y);
+    rt.pointer_up(switch.center().x, switch.center().y);
+    settle(&mut rt);
+    let after = rt.state().editor.state.settings.get(def.key).cloned();
+    assert_eq!(
+        after,
+        Some(json!(!before.as_bool().unwrap())),
+        "{} flipped",
+        def.key
+    );
+    let reset = rt
+        .find(&format!("settings/{}/reset", def.key))
+        .expect("Reset shows once changed");
+    rt.pointer_down(reset.center().x, reset.center().y);
+    rt.pointer_up(reset.center().x, reset.center().y);
+    settle(&mut rt);
+    assert_eq!(
+        rt.state()
+            .editor
+            .state
+            .settings
+            .get(def.key)
+            .cloned()
+            .unwrap_or_else(|| def.default.value()),
+        def.default.value()
     );
 }
