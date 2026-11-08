@@ -21,7 +21,7 @@ mod confirm;
 mod cursors;
 mod dialog;
 mod dock_drag;
-mod drag;
+pub(crate) mod drag;
 #[path = "quality_tests/geometry.rs"]
 pub(crate) mod feedback_geometry;
 mod feedback_quality;

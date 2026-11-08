@@ -317,3 +317,32 @@ fn the_create_browser_searches_and_creates_with_enter() {
     assert_eq!(created["Light"]["kind"], "spot");
     assert_eq!(rt.state().local.recent, vec!["create.light.spot"]);
 }
+
+#[test]
+fn dragging_a_row_onto_another_makes_it_a_child() {
+    let mut rt = open();
+    let lamp = rt.find("row/e_lamp").unwrap();
+    let boxed = rt.find("row/e_box").unwrap();
+    rt.pointer_down(lamp.center().x, lamp.center().y);
+    for step in 1..=4 {
+        let y = lamp.center().y + (boxed.center().y - lamp.center().y) * step as f32 / 4.0;
+        rt.pointer_move(lamp.center().x, y);
+        rt.frame(FRAME);
+    }
+    assert!(
+        rt.state()
+            .local
+            .row_drag
+            .as_ref()
+            .and_then(|d| d.target.as_ref())
+            .is_some_and(|(t, _)| t == "e_box"),
+        "the box is the target"
+    );
+    rt.pointer_up(lamp.center().x, boxed.center().y);
+    rt.frame(FRAME);
+    assert_eq!(
+        rt.state().resolved["e_lamp"].parent.as_deref(),
+        Some("e_box"),
+        "the lamp moved inside the box"
+    );
+}

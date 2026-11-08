@@ -84,6 +84,17 @@ impl LogRow {
     }
 }
 
+/// A Hierarchy row drag: what moves, and where it would land.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RowDrag {
+    /// The pressed row's entity (the selection travels with it when it is selected).
+    pub source: String,
+    /// The pressed row's index among the shown rows.
+    pub at: usize,
+    /// The row under the pointer and where relative to it, once the drag has moved.
+    pub target: Option<(String, ara_ui::drag_drop::Placement)>,
+}
+
 /// Where the pointer rests over the Scene view (for Shift+A at the pointer).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScenePointer {
@@ -136,6 +147,8 @@ pub struct Local {
     pub component_menu: Option<String>,
     /// Add Component's search and highlighted row, while open.
     pub add_component: Option<(String, usize)>,
+    /// A Hierarchy row being dragged.
+    pub row_drag: Option<RowDrag>,
     /// Agent turns shown open in Agents, by turn key.
     pub expanded_turns: std::collections::BTreeSet<String>,
     /// The open Create browser.

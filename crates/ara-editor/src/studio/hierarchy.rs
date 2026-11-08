@@ -159,6 +159,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         let built = rows.clone();
         let (hidden, locked) = (s.editor.state.hidden.clone(), s.editor.state.locked.clone());
         let rename = s.local.rename.clone();
+        let drop = s.local.row_drag.as_ref().and_then(|d| d.target.clone());
         virtual_list("hierarchy/rows", rows.len(), ROW, move |range| {
             range
                 .map(|i| {
@@ -169,6 +170,9 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
                         hidden.contains(&built[i].id),
                         locked.contains(&built[i].id),
                         rename.as_ref(),
+                        drop.as_ref()
+                            .filter(|(t, _)| *t == built[i].id)
+                            .map(|(_, p)| *p),
                     )
                 })
                 .collect()
@@ -231,6 +235,7 @@ fn row_el(
     hidden: bool,
     locked: bool,
     rename: Option<&(String, String)>,
+    drop: Option<ara_ui::drag_drop::Placement>,
 ) -> El<Studio> {
     let r = &rows[at];
     let c = &l.c;
@@ -329,33 +334,111 @@ fn row_el(
             .child(icon(glyph).size(13.0))
     };
     let pid = r.id.clone();
+    // Where a drag would land: a line between rows, or this row as the new parent.
+    use ara_ui::drag_drop::Placement;
+    let indent = 10.0 + r.depth as f32 * INDENT;
+    let (fill, line) = match drop {
+        Some(Placement::Inside) => (c.primary.0.with_alpha(0.22), None),
+        Some(Placement::Before) => (fill, Some(0.0)),
+        Some(Placement::After) => (fill, Some(ROW - 2.0)),
+        None => (fill, None),
+    };
+    let marker = line.map(|y| {
+        el().absolute(indent, y)
+            .h(2.0)
+            .w(220.0)
+            .radius(1.0)
+            .fill(c.primary.0)
+    });
     row()
         .key(format!("row/{}", r.id))
         .h(ROW)
         .gap(4.0)
         .align(Align::Center)
         .radius(4.0)
+        .border(
+            1.0,
+            if drop == Some(Placement::Inside) {
+                c.primary.0
+            } else {
+                stillkit::Rgba::TRANSPARENT
+            },
+        )
         .fill(fill)
+        .children(marker)
         .color(ink)
         .cascade_ink()
         .role(stillkit::Role::TreeItem)
         .label(r.name.clone())
         .selected(selected)
         .expanded(r.open)
-        .on_pointer(move |s: &mut Studio, e, tx| {
-            if e.phase != PointerPhase::Down || e.button != stillkit::Button::Left {
-                return false;
+        .on_pointer({
+            let rows = rows.clone();
+            move |s: &mut Studio, e, tx| {
+                if e.button != stillkit::Button::Left {
+                    return false;
+                }
+                match e.phase {
+                    PointerPhase::Down => {
+                        if e.clicks == 2 {
+                            s.select(vec![pid.clone()], false);
+                            s.act("editor.frame", json!({}));
+                        } else if e.mods.shift || e.mods.ctrl {
+                            s.select(vec![pid.clone()], true);
+                        } else if !s.editor.state.selection.contains(&pid) {
+                            // A selected row keeps the selection, so it can drag them all.
+                            s.select(vec![pid.clone()], false);
+                        }
+                        s.local.row_drag = Some(super::state::RowDrag {
+                            source: pid.clone(),
+                            at,
+                            target: None,
+                        });
+                        tx.focus(format!("row/{pid}").as_str());
+                    }
+                    PointerPhase::Move => {
+                        if e.travel().x.abs() + e.travel().y.abs() < 4.0 {
+                            return true;
+                        }
+                        // Rows are uniform, so the pointer's offset from the pressed row
+                        // names the row under it; its top quarter is Before, its bottom
+                        // quarter After, the middle Inside.
+                        let k = (e.local.y / ROW).floor();
+                        let to = (at as f32 + k).clamp(0.0, rows.len().saturating_sub(1) as f32)
+                            as usize;
+                        let within = (e.local.y - k * ROW) / ROW;
+                        use ara_ui::drag_drop::Placement;
+                        let place = if within < 0.25 {
+                            Placement::Before
+                        } else if within > 0.75 {
+                            Placement::After
+                        } else {
+                            Placement::Inside
+                        };
+                        if let Some(drag) = s.local.row_drag.as_mut() {
+                            drag.target = Some((rows[to].id.clone(), place));
+                        }
+                    }
+                    PointerPhase::Up => {
+                        let drag = s.local.row_drag.take();
+                        match drag.and_then(|d| d.target.map(|t| (d.source, t))) {
+                            Some((source, (target, place))) => {
+                                drop_rows(s, &source, &target, place)
+                            }
+                            // A plain click on a row of a multi-selection selects just it.
+                            None if !(e.mods.shift || e.mods.ctrl)
+                                && s.editor.state.selection.len() > 1 =>
+                            {
+                                s.select(vec![pid.clone()], false)
+                            }
+                            None => {}
+                        }
+                    }
+                    PointerPhase::Cancel => s.local.row_drag = None,
+                    PointerPhase::Hover => return false,
+                }
+                true
             }
-            if e.clicks == 2 {
-                s.select(vec![pid.clone()], false);
-                s.act("editor.frame", json!({}));
-            } else if e.mods.shift || e.mods.ctrl {
-                s.select(vec![pid.clone()], true);
-            } else {
-                s.select(vec![pid.clone()], false);
-            }
-            tx.focus(format!("row/{pid}").as_str());
-            true
         })
         .on_context_menu({
             let id = r.id.clone();
@@ -455,4 +538,25 @@ fn navigate(
         },
     }
     Handled::Yes
+}
+
+/// Drops the dragged rows (the selection, when the pressed row is in it) relative to
+/// `target`: before or after it among its siblings, or inside it. World transforms are kept.
+fn drop_rows(s: &mut Studio, source: &str, target: &str, place: ara_ui::drag_drop::Placement) {
+    if source == target {
+        return;
+    }
+    let plan = crate::shell::drag::content::hierarchy::commands(
+        &s.resolved,
+        &s.editor.state.selection,
+        source,
+        Some(target),
+        place,
+        &s.editor.state.locked,
+    );
+    match plan {
+        Ok(commands) if !commands.is_empty() => s.apply(commands, "Move in hierarchy"),
+        Ok(_) => {}
+        Err(reason) => s.editor.report_failure(&std::io::Error::other(reason)),
+    }
 }

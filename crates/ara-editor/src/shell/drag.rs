@@ -2,7 +2,7 @@
 use super::*;
 use ara_ui::source::stable_id;
 #[path = "drag_drop.rs"]
-mod content;
+pub(crate) mod content;
 
 pub(crate) enum Drag {
     Content(Box<content::ContentDrag>),
