@@ -1,6 +1,7 @@
 //! The studio: Ara's editor on stillkit (D31). One app window, CPU-drawn and redrawn only
 //! where something changed, with the Scene view as a native GPU layer under a transparent
-//! hole: the renderer presents into it directly (no copy through the UI) and the UI's
+//! hole: the renderer's image and the scene overlays (grid, outlines, gizmo) are composited
+//! on the GPU and presented into it (no copy through the CPU UI), and the UI's
 //! toolbars, gizmo labels and menus composite over it.
 //!
 //! The studio is a client of the Editor's own surfaces: navigation and selection go through
@@ -9,6 +10,7 @@
 //! the transport; the runtime owns the [`Studio`] state and its view.
 mod chrome;
 mod commands;
+mod compositor;
 mod dock;
 mod hierarchy;
 mod inspector;
@@ -138,12 +140,16 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         rt.touch(|s| SceneSync::new(s.editor.models.revision(), s.editor.host.store().revision()));
     let mut revision = rt.state().editor.host.store().revision();
     let mut extraction = rt.state().editor.extraction_revision;
-    let mut present: Option<(ara_platform::Present, [u32; 2])> = None;
+    // SAFETY: the renderer outlives the compositor (retired and dropped below, before
+    // it); this thread submits for both.
+    let mut compositor =
+        unsafe { compositor::Compositor::new(&renderer, rt.state().editor.state.light)? };
+    let mut shown_extent = [0, 0];
+    let mut overlay_key = 0_u64;
     let mut scene_dirty = true;
     let mut last_frame = Instant::now();
     let mut fps = 0.0_f32;
     let mut camera = rt.state().editor.state.camera;
-    let mut channels = crate::world::channels::Channels::default();
     let mut logs_at = Instant::now() - Duration::from_secs(1);
     rt.update(|s| {
         let store = s.editor.host.store();
@@ -216,11 +222,15 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             let now = rt.state().editor.state.camera;
             let camera_moved = now != camera;
             camera = now;
-            if camera_moved
+            // What the overlays draw besides the camera: the selection, tool and theme.
+            let key = rt.touch(|s| overlays_key(&s.editor.state));
+            let restyled = key != overlay_key;
+            overlay_key = key;
+            let render = camera_moved
                 || scene_dirty
                 || scene_view.needs_frame(rt.state().editor.state.quality)
-                || present.as_ref().is_none_or(|(_, e)| *e != extent)
-            {
+                || shown_extent != extent;
+            if render {
                 renderer
                     .resize(extent)
                     .map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -229,13 +239,30 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 {
                     rt.touch(|s| s.editor.report_failure(&*error));
                 }
-                if renderer.presentation_ready() {
-                    let layer = surface.native_layer(SCENE_LAYER)?;
-                    present = Some(present_into(present.take(), &renderer, layer, extent)?);
-                    if let Some((p, _)) = present.as_mut() {
-                        // SAFETY: the renderer's completed output on its own live device.
-                        unsafe { p.present_image(renderer.gpu(), renderer.output(), extent)? };
+            }
+            if (render || restyled) && renderer.presentation_ready() {
+                let layer = metal_layer(surface.native_layer(SCENE_LAYER)?)?;
+                let scale = rt.scale();
+                rt.touch(|s| {
+                    let changed = s.editor.agent_tints();
+                    // SAFETY: the layer is the Scene view's own, alive while the window is;
+                    // the renderer's frame for this extent is complete.
+                    unsafe {
+                        compositor.frame(
+                            &renderer,
+                            &view,
+                            &s.editor.state,
+                            &changed,
+                            Default::default(),
+                            revision,
+                            layer,
+                            extent,
+                            scale,
+                        )
                     }
+                })?;
+                shown_extent = extent;
+                if render {
                     let dt = last_frame.elapsed().as_secs_f32().max(1e-4);
                     fps = if fps == 0.0 {
                         1.0 / dt
@@ -246,18 +273,19 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     let shown = (fps.min(999.0), 1000.0 / fps.max(1.0));
                     rt.touch(|s| s.local.scene.fps = Some(shown));
                 }
+            }
+            if render {
                 scene_dirty = false;
             }
             // A click in the view: the entity under it through the channel map.
             if let Some(pick) = rt.touch(|s| s.local.pick.take()) {
-                channels.update(view.entities(), revision, renderer.entities());
                 let size = renderer.size();
                 let at = [
                     ((pick.u * size[0] as f32) as u32).min(size[0].saturating_sub(1)),
                     ((pick.v * size[1] as f32) as u32).min(size[1].saturating_sub(1)),
                 ];
-                let entity = match renderer.entity_at(at) {
-                    Ok(id) => id.and_then(|id| channels.target_of(id)).map(str::to_owned),
+                let entity = match compositor.pick(&mut renderer, &view, revision, at) {
+                    Ok(entity) => entity,
                     Err(error) => {
                         rt.touch(|s| s.editor.report_failure(&*error));
                         None
@@ -268,7 +296,6 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                     None if !pick.additive => s.select(Vec::new(), false),
                     None => {}
                 });
-                scene_dirty = true;
             }
         }
         let busy = scene_view.needs_frame(rt.state().editor.state.quality)
@@ -285,10 +312,8 @@ pub fn run(options: Options) -> anyhow::Result<()> {
         wake_at(next);
     }
     renderer.wait_scene_frame().ok();
-    if let Some((mut p, _)) = present {
-        // SAFETY: the device is idle; the layer outlives this.
-        unsafe { p.retire(renderer.gpu()) };
-    }
+    compositor.retire(&renderer);
+    drop(compositor);
     scene_view
         .destroy(&mut renderer)
         .map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -310,37 +335,36 @@ fn present_extensions() -> Vec<std::ffi::CString> {
         .collect()
 }
 
-/// The Scene layer's presentation, made on first use and resized with the view.
-fn present_into(
-    current: Option<(ara_platform::Present, [u32; 2])>,
-    renderer: &ara_render::Renderer,
-    layer: stillkit::NativeHandle,
-    extent: [u32; 2],
-) -> anyhow::Result<(ara_platform::Present, [u32; 2])> {
-    #[cfg(target_os = "macos")]
-    {
-        if let Some((mut present, was)) = current {
-            if was != extent {
-                present.resize(extent)?;
-            }
-            return Ok((present, extent));
+/// The Scene view's `CAMetalLayer`.
+fn metal_layer(
+    handle: stillkit::NativeHandle,
+) -> anyhow::Result<std::ptr::NonNull<std::ffi::c_void>> {
+    match handle {
+        stillkit::NativeHandle::Metal(layer) => {
+            std::ptr::NonNull::new(layer).context("the Scene layer is null")
         }
-        let stillkit::NativeHandle::Metal(layer) = layer else {
-            anyhow::bail!("the Scene layer is not a Metal layer")
-        };
-        let layer = std::ptr::NonNull::new(layer).context("the Scene layer is null")?;
-        // SAFETY: the surface owns the layer until the window closes, after this present
-        // is retired; the renderer's device is live.
-        let present = unsafe { ara_platform::Present::from_layer(renderer.gpu(), layer, extent)? };
-        Ok((present, extent))
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = (current, renderer, layer, extent);
-        anyhow::bail!(
+        #[allow(unreachable_patterns)]
+        _ => anyhow::bail!(
             "the studio's Scene view presents on macOS today; Windows and Linux use --legacy-ui until the Vulkan layer path lands"
-        )
+        ),
     }
+}
+
+/// A digest of the editor state the Scene overlays draw besides the camera.
+fn overlays_key(state: &crate::state::EditorState) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (
+        &state.selection,
+        state.tool as u8,
+        state.local,
+        state.centre,
+        state.light,
+        state.hide_gizmos,
+        state.game_view,
+    )
+        .hash(&mut h);
+    h.finish()
 }
 
 /// The window's own controls: the system's on macOS, drawn ones elsewhere.

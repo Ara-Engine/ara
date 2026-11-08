@@ -59,13 +59,14 @@ fn title_bar(s: &Studio) -> El<Studio> {
     ];
     lead.extend(MENUS.iter().map(|m| menu_button(s, m.title, m.items)));
     let play = play_controls(s);
-    let scene = s
-        .editor
-        .state
-        .doc
+    let workspace = s.editor.host.store().workspace();
+    let scene = workspace
+        .path_of(&s.editor.state.doc)
+        .map(|path| workspace.reference_path(path))
+        .unwrap_or("Scene")
         .rsplit('/')
         .next()
-        .unwrap_or("")
+        .unwrap_or("Scene")
         .trim_end_matches(".scene")
         .to_owned();
     let project = s
@@ -423,7 +424,7 @@ fn results(s: &Studio, query: &str) -> Vec<Entry> {
         }
     }
     if !query.is_empty() {
-        all.sort_by(|a, b| b.0.cmp(&a.0));
+        all.sort_by_key(|e| std::cmp::Reverse(e.0));
     }
     all.into_iter().take(14).map(|(_, e)| e).collect()
 }

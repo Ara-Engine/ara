@@ -65,7 +65,7 @@ impl Asset {
             stamp: 0,
         }
     }
-    pub(super) fn folder(path: String, authored_path: Option<String>) -> Self {
+    pub(crate) fn folder(path: String, authored_path: Option<String>) -> Self {
         Self {
             authored_path,
             ..Self::unindexed(path, "folder".into())

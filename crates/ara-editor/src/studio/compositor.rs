@@ -1,0 +1,187 @@
+//! The Scene view's GPU compositor: the renderer's image with the editor's scene overlays
+//! (grid, selection and agent outlines by entity, the transform gizmo) drawn over it on the
+//! GPU UI adapter, then presented into the studio's native layer. The overlays are the same
+//! `shell::overlay` geometry and shaders the legacy window used; only the host changed.
+use std::ffi::c_void;
+use std::ptr::NonNull;
+
+use anyhow::Result;
+use ara_ui::paint::{Box2, DisplayList, Draw};
+use ara_ui::style::Color;
+use ara_ui_render::atlas::TextMode;
+use ara_ui_render::gpu::Renderer as UiRenderer;
+
+use crate::gpu::{NativeUi, ui_device};
+use crate::shell::overlay::{self, GizmoState, Outlines};
+use crate::state::EditorState;
+use crate::world::DocumentView;
+
+/// Composites and presents the Scene layer. Create it once the renderer is ready; drop it
+/// (after [`Self::retire`]) before the renderer.
+pub(super) struct Compositor {
+    ui: NativeUi,
+    paint: UiRenderer,
+    outlines: Outlines,
+    sheet: ara_ui::style::Sheet,
+    light: bool,
+    present: Option<(ara_platform::Present, [u32; 2])>,
+}
+
+impl Compositor {
+    /// An adapter on the renderer's GPU, themed for `light`.
+    /// # Safety
+    /// The renderer outlives the compositor; one thread submits for both.
+    pub unsafe fn new(renderer: &ara_render::Renderer, light: bool) -> Result<Self> {
+        // SAFETY: forwarded caller contract.
+        let ui = unsafe { NativeUi::new(ui_device(renderer.gpu()))? };
+        let mut paint = UiRenderer::default();
+        paint
+            .external_image(overlay::viewport_image())
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        Ok(Self {
+            ui,
+            paint,
+            outlines: Outlines::default(),
+            sheet: sheet(light)?,
+            light,
+            present: None,
+        })
+    }
+
+    /// The renderer entity the click at physical pixel `at` lands on, through the
+    /// channel map (a model's parts and a terrain's tiles pick their entity).
+    pub fn pick(
+        &mut self,
+        renderer: &mut ara_render::Renderer,
+        view: &DocumentView,
+        revision: u64,
+        at: [u32; 2],
+    ) -> Result<Option<String>> {
+        self.outlines.channels.update(
+            crate::world::EditWorldView::entities(view),
+            revision,
+            renderer.entities(),
+        );
+        let id = renderer.entity_at(at).map_err(|e| anyhow::anyhow!("{e}"))?;
+        Ok(id
+            .and_then(|id| self.outlines.channels.target_of(id))
+            .map(str::to_owned))
+    }
+
+    /// Draws the renderer's completed image and the overlays for `state` at `extent`
+    /// physical pixels (`scale` per logical px), and presents it into `layer`.
+    /// # Safety
+    /// `layer` is the live `CAMetalLayer` of the Scene view; the renderer's output is complete.
+    #[allow(clippy::too_many_arguments)]
+    pub unsafe fn frame(
+        &mut self,
+        renderer: &ara_render::Renderer,
+        view: &DocumentView,
+        state: &EditorState,
+        changed: &std::collections::BTreeMap<u64, &str>,
+        gizmo: GizmoState,
+        revision: u64,
+        layer: NonNull<c_void>,
+        extent: [u32; 2],
+        scale: f32,
+    ) -> Result<()> {
+        if self.light != state.light {
+            self.sheet = sheet(state.light)?;
+            self.light = state.light;
+        }
+        // SAFETY: both images belong to the live renderer and finish in CopySource.
+        unsafe {
+            self.ui.external_image(
+                overlay::viewport_image(),
+                renderer.gpu().native_image(renderer.output())?,
+                renderer.gpu().image_view(renderer.output())?,
+            )?;
+            self.ui.external_image(
+                overlay::ENTITY_IMAGE,
+                renderer.gpu().native_image(renderer.entity_channel())?,
+                renderer.gpu().image_view(renderer.entity_channel())?,
+            )?;
+        }
+        let logical = [extent[0] as f32 / scale, extent[1] as f32 / scale];
+        let rect = Box2 {
+            x: 0.0,
+            y: 0.0,
+            w: logical[0],
+            h: logical[1],
+        };
+        let overlays = overlay::build(
+            view,
+            state,
+            rect,
+            renderer,
+            changed,
+            gizmo,
+            &mut self.outlines,
+            revision,
+            &self.sheet,
+        )
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+        self.outlines
+            .upload(&mut self.paint, &mut self.ui)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        self.ui.set_dpi(scale)?;
+        self.ui.overlays(rect, overlay::ENTITY_IMAGE, overlays);
+        let list = DisplayList {
+            commands: vec![Draw::Image {
+                node: 1,
+                rect,
+                image: overlay::viewport_image(),
+                tint: Color(255, 255, 255, 255),
+            }],
+            glyphs: Vec::new(),
+        };
+        self.ui.order_after(renderer.gpu());
+        let size = [
+            logical[0].round().max(1.0) as u32,
+            logical[1].round().max(1.0) as u32,
+        ];
+        self.paint
+            .render(&mut self.ui, &list, &[], size, TextMode::Raster)
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let present = match self.present.take() {
+            Some((mut present, was)) => {
+                if was != extent {
+                    present.resize(extent)?;
+                }
+                present
+            }
+            // SAFETY: forwarded caller contract.
+            None => unsafe {
+                self.ui
+                    .create_layer_present(ui_device(renderer.gpu()), layer, extent)?
+            },
+        };
+        let (present, _) = self.present.insert((present, extent));
+        // SAFETY: the UI submission is ordered before the blit; the target is CopySource.
+        unsafe { self.ui.present(ui_device(renderer.gpu()), present)? };
+        Ok(())
+    }
+
+    /// Releases the layer presentation; call before the window closes.
+    pub fn retire(&mut self, renderer: &ara_render::Renderer) {
+        let _ = self.ui.wait_idle(ui_device(renderer.gpu()));
+        if let Some((mut present, _)) = self.present.take() {
+            // SAFETY: the adapter is idle and the presentation is not used again.
+            unsafe {
+                self.ui
+                    .retire_present(ui_device(renderer.gpu()), &mut present)
+            };
+        }
+    }
+}
+
+/// The overlay colours come from the editor theme's tokens.
+fn sheet(light: bool) -> Result<ara_ui::style::Sheet> {
+    let theme = if light {
+        ara_ui::theme::EditorTheme::Light
+    } else {
+        ara_ui::theme::EditorTheme::Dark
+    };
+    let tokens = theme.tokens().map_err(|e| anyhow::anyhow!("{e}"))?;
+    ara_ui::style::Sheet::with_tokens("", tokens).map_err(|e| anyhow::anyhow!("{e}"))
+}

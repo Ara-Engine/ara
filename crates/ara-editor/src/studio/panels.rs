@@ -31,7 +31,9 @@ pub(super) fn view(s: &Studio, panel: &str) -> El<Studio> {
 
 /// The folder that holds `path` ("" at the project root).
 fn parent(path: &str) -> &str {
-    path.rsplit_once('/').map_or("", |(p, _)| p)
+    path.trim_end_matches('/')
+        .rsplit_once('/')
+        .map_or("", |(p, _)| p)
 }
 
 /// The icon for an asset kind (its extension or document kind).
@@ -112,17 +114,51 @@ fn assets(s: &Studio) -> El<Studio> {
         );
     };
     let needle = query.trim().to_lowercase();
-    let mut items: Vec<&Asset> = browser
+    let mut items: Vec<Asset> = browser
         .items
         .iter()
         .filter(|a| {
-            if needle.is_empty() {
+            let hidden = a
+                .path
+                .trim_end_matches('/')
+                .rsplit('/')
+                .next()
+                .is_some_and(|n| n.starts_with('.'));
+            if hidden {
+                false
+            } else if needle.is_empty() {
                 parent(&a.path) == folder
             } else {
                 a.kind != "folder" && a.path.to_lowercase().contains(&needle)
             }
         })
+        .cloned()
         .collect();
+    // Folders the scan lists only through their files show too.
+    if needle.is_empty() {
+        let prefix = if folder.is_empty() {
+            String::new()
+        } else {
+            format!("{folder}/")
+        };
+        let mut dirs = std::collections::BTreeSet::new();
+        for a in &browser.items {
+            if let Some((dir, _)) = a
+                .path
+                .strip_prefix(&prefix)
+                .and_then(|rest| rest.split_once('/'))
+                && !dir.is_empty()
+                && !dir.starts_with('.')
+            {
+                dirs.insert(format!("{prefix}{dir}"));
+            }
+        }
+        for dir in dirs {
+            if !items.iter().any(|a| a.path.trim_end_matches('/') == dir) {
+                items.push(Asset::folder(dir, None));
+            }
+        }
+    }
     items.sort_by(|a, b| {
         (b.kind == "folder")
             .cmp(&(a.kind == "folder"))
@@ -158,7 +194,7 @@ fn assets(s: &Studio) -> El<Studio> {
         let selected = s.editor.state.asset_path.clone();
         let tiles: Vec<El<Studio>> = items
             .into_iter()
-            .map(|a| tile(l, a, selected.as_deref() == Some(a.path.as_str())))
+            .map(|a| tile(l, &a, selected.as_deref() == Some(a.path.as_str())))
             .collect();
         col()
             .grow(1.0)
@@ -201,7 +237,12 @@ fn crumb(l: &ara_kit::look::Look, label: &str, path: String, current: bool) -> E
 /// One asset: its icon on a soft plate and the name under it, two lines at most.
 fn tile(l: &ara_kit::look::Look, a: &Asset, selected: bool) -> El<Studio> {
     let c = &l.c;
-    let name = a.path.rsplit('/').next().unwrap_or(&a.path);
+    let name = a
+        .path
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or(&a.path);
     let stem = if a.kind == "folder" {
         name
     } else {

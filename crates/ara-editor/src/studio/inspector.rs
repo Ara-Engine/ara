@@ -1,6 +1,6 @@
 //! Inspector: the selection's components as folding sections, every field from the schema
 //! (`crate::inspector::fields`: widget kind, unit, provenance, mixed values across a
-//! multi-selection). Numbers scrub by dragging their label (Shift fine, ⌘ coarse) and
+//! multi-selection). Numbers scrub by dragging their label (8 px a step; Shift fine, Alt coarse) and
 //! commit one undo step on release; typing commits on Enter. Vectors label their axes in the
 //! gizmo's colours. Every edit is `property.set` through `cmd.apply`, as agents edit.
 use std::collections::BTreeMap;
@@ -57,6 +57,8 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         by_component.entry(component).or_default().push(f);
     }
     let mut page = col().pad(10.0).gap(8.0).child(header(s));
+    // Transform leads, as in every engine; the rest keep their record order.
+    order.sort_by_key(|c| c != "Transform");
     for component in order {
         page = page.child(section(s, &component, &by_component[&component]));
     }
@@ -206,7 +208,7 @@ fn field_row(s: &Studio, f: &Field) -> El<Studio> {
         .align(Align::Center)
         .child(el().w(2.0).h(14.0).radius(1.0).fill(mark))
         .child(
-            text(f.label.clone())
+            text(sentence(&f.label))
                 .text_size(12.0)
                 .color(c.muted_foreground.0),
         )
@@ -236,7 +238,7 @@ fn field_row(s: &Studio, f: &Field) -> El<Studio> {
         .child(editor(s, f).grow(1.0).min_w(0.0))
 }
 
-/// A label that scrubs a number: drag right to raise it, Shift for a tenth, ⌘ for ten.
+/// A label that scrubs a number: 8 px per step to the right, Shift for a tenth, Alt for ten.
 #[allow(clippy::too_many_arguments)]
 fn scrubbable(
     label: El<Studio>,
@@ -261,13 +263,14 @@ fn scrubbable(
                 PointerPhase::Move => {
                     let k = if e.mods.shift {
                         0.1
-                    } else if e.mods.ctrl {
+                    } else if e.mods.alt {
                         10.0
                     } else {
                         1.0
                     };
                     if let Some((_, _, _, now)) = s.local.scrub.as_mut() {
-                        *now = (*now + f64::from(e.delta.x) * step * k)
+                        // 8 logical px per schema step (I02).
+                        *now = (*now + f64::from(e.delta.x) / 8.0 * step * k)
                             .clamp(min.unwrap_or(f64::MIN), max.unwrap_or(f64::MAX));
                     }
                 }
@@ -553,7 +556,7 @@ fn number(
         .select_all_on_focus()
         .text_size(12.0)
         .family(mono())
-        .text_align(stillkit::el::TextAlign::End)
+        .text_align(stillkit::el::TextAlign::Start)
         .color(l.c.foreground.0)
         .on_submit(move |s: &mut Studio, t| {
             if let Ok(v) = crate::inspector::parse_number(t, unit.as_deref()) {
@@ -575,4 +578,22 @@ fn number(
             move |e| e.border(1.0, ring)
         })
         .child(f)
+}
+
+/// A schema name as a label: `emissiveStrength` reads "Emissive strength".
+fn sentence(name: &str) -> String {
+    let mut out = String::with_capacity(name.len() + 4);
+    for (i, c) in name.chars().enumerate() {
+        if i == 0 {
+            out.extend(c.to_uppercase());
+        } else if c.is_uppercase() {
+            out.push(' ');
+            out.extend(c.to_lowercase());
+        } else if c == '_' {
+            out.push(' ');
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
