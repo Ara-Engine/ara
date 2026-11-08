@@ -1,12 +1,15 @@
 use crate::{Result, SimError, SimRegistry};
 use ara_doc::{
-    AssetId, Document, Op, RecordId, Workspace,
+    AssetId, Document, Edit, Op, RecordId, Workspace,
     prefab::{Resolved, ResolvedEntity},
 };
 use bevy_ecs::{component::ComponentId, prelude::*};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet};
+
+mod local;
+mod sync;
 
 /// Stable document address or deterministic runtime identity. Never reused in a session.
 #[derive(Component, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -93,7 +96,7 @@ impl EditWorld {
             resolved: Resolved::new(),
         };
         let rows = this.resolve()?;
-        this.sync(rows)?;
+        this.sync_full(rows)?;
         Ok(this)
     }
 
@@ -151,17 +154,36 @@ impl EditWorld {
         self.apply_ops(&transaction.ops)
     }
 
-    /// Applies the committed op stream. This mirrors ops; it does not author new edits.
+    /// Applies committed ops without authoring new edits. Local scene data edits
+    /// resolve touched records; structural and dependency edits resolve the full scene.
     pub fn apply_ops(&mut self, ops: &[Op]) -> Result<()> {
         if ops.is_empty() {
             return Ok(());
         }
         let mut applied = Vec::new();
+        // An ordered wave covering every source record has no resolution locality.
+        // Recognize it before allocating a touched-record set. Unordered waves
+        // receive the same full fallback after deduplication in resolve_local.
+        let all_roots = self.workspace.doc(self.scene.as_str()).is_some_and(|doc| {
+            ops.len() == doc.records().len() && ops.iter().zip(doc.records().keys()).all(|(op, id)| {
+                matches!(op, Op::Set { doc, id: target, .. } if doc == &self.scene && target == id)
+            })
+        });
+        let mut local = (!all_roots).then(BTreeSet::new);
         for op in ops {
+            let edit = op.to_edit();
+            match (&mut local, &edit) {
+                (Some(records), Edit::Set { doc, id, .. })
+                    if doc == &self.scene && edit.is_local() =>
+                {
+                    records.insert(id.clone());
+                }
+                _ => local = None,
+            }
             let Some(doc) = self.workspace.doc_mut(op.doc().as_str()) else {
                 continue;
             };
-            match doc.apply(op.to_edit(), &self.registry.schema) {
+            match doc.apply(edit, &self.registry.schema) {
                 Ok(actual) => {
                     if actual != *op {
                         doc.revert(&actual, &self.registry.schema);
@@ -178,17 +200,13 @@ impl EditWorld {
                 }
             }
         }
-        let rows = match self.resolve() {
-            Ok(rows) => rows,
-            Err(e) => {
-                self.rollback(&applied);
-                return Err(e);
-            }
+        let result = match local.and_then(|records| self.resolve_local(&records)) {
+            Some(rows) => self.sync_local(rows),
+            None => self.resolve().and_then(|rows| self.sync_full(rows)),
         };
-        // Preflight Rust deserialization as well as schema validation before touching ECS.
-        if let Err(e) = self.sync(rows) {
+        if let Err(error) = result {
             self.rollback(&applied);
-            return Err(e);
+            return Err(error);
         }
         Ok(())
     }
@@ -245,106 +263,6 @@ impl EditWorld {
         }
         Ok(rows)
     }
-
-    fn sync(&mut self, rows: Resolved) -> Result<()> {
-        self.mapping
-            .retain(|_, entity| self.world.get_entity(*entity).is_ok());
-        let changed: BTreeSet<_> = rows
-            .keys()
-            .chain(self.resolved.keys())
-            .filter(|id| rows.get(*id) != self.resolved.get(*id))
-            .cloned()
-            .collect();
-        for id in &changed {
-            if let Some(row) = rows.get(id) {
-                for (name, value) in &row.record {
-                    if ara_doc::is_component_key(name) {
-                        self.registry.validate(name, value)?;
-                        let complete = crate::dynamic::materialize(
-                            &self.registry.schema,
-                            &ara_schema::ValueType::Named(name.clone()),
-                            value,
-                        );
-                        self.registry.validate(name, &complete)?;
-                        if let Some(codec) = self.registry.typed.get(name) {
-                            (codec.check)(complete)?;
-                        }
-                    }
-                }
-            }
-        }
-        for id in &changed {
-            if rows.contains_key(id) && !self.mapping.contains_key(id) {
-                let entity = self
-                    .world
-                    .spawn((Identity(id.clone()), SceneMetadata::default()))
-                    .id();
-                self.mapping.insert(id.clone(), entity);
-            }
-        }
-        // Detach before deletion: Bevy's Children relationship otherwise cascades.
-        for id in &changed {
-            if let Some(&entity) = self.mapping.get(id) {
-                self.world.entity_mut(entity).remove::<ChildOf>();
-            }
-        }
-        for id in &changed {
-            let Some(row) = rows.get(id) else { continue };
-            let entity = self.mapping[id];
-            let previous = self.resolved.get(id);
-            for (name, &component_id) in &self.ids {
-                let old = previous.and_then(|row| row.record.get(name));
-                let new = row.record.get(name);
-                if old == new {
-                    continue;
-                }
-                if let Some(value) = new {
-                    self.registry
-                        .write(&mut self.world, &self.ids, entity, name, value)?;
-                } else {
-                    self.world.entity_mut(entity).remove_by_id(component_id);
-                }
-            }
-            for name in &self.registry.external {
-                let old = previous.and_then(|row| row.record.get(name));
-                let new = row.record.get(name);
-                if old != new {
-                    let value = new.map(|v| {
-                        crate::dynamic::materialize(
-                            &self.registry.schema,
-                            &ara_schema::ValueType::Named(name.clone()),
-                            v,
-                        )
-                    });
-                    self.world
-                        .resource_mut::<ExternalWrites>()
-                        .0
-                        .push(ExternalWrite {
-                            entity,
-                            component: name.clone(),
-                            value,
-                        });
-                }
-            }
-            self.world.entity_mut(entity).insert(metadata(row));
-            if let Some(parent) = &row.parent {
-                let parent = *self
-                    .mapping
-                    .get(parent)
-                    .ok_or_else(|| SimError(format!("missing parent {parent}")))?;
-                self.world.entity_mut(entity).insert(ChildOf(parent));
-            }
-        }
-        for id in &changed {
-            if !rows.contains_key(id)
-                && let Some(entity) = self.mapping.remove(id)
-            {
-                self.world.despawn(entity);
-            }
-        }
-        self.resolved = rows;
-        Ok(())
-    }
 }
 
 fn metadata(row: &ResolvedEntity) -> SceneMetadata {
@@ -358,3 +276,6 @@ fn metadata(row: &ResolvedEntity) -> SceneMetadata {
         order: row.order.clone().unwrap_or_default(),
     }
 }
+
+#[cfg(test)]
+mod tests;

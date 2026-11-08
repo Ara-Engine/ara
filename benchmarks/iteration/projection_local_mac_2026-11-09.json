@@ -1,0 +1,2072 @@
+{
+  "status": "Verified local scene Set optimization; broad and large-instance work remain visible.",
+  "change": "Resolve and validate touched source records when address membership, hierarchy/source and live mappings are unchanged; otherwise use full resolution. Common typed preflight/publication, op rollback, authored baseline and external writes retained.",
+  "quality": "41 ara-sim/ara-play tests and all-target clippy pass; independent review including large prefab expansion fix has no must-fix findings. All 28 measured processes agree on complete canonical source, runtime state and portable snapshot hashes by case, and retain authored handles/preexisting runtime values. Runtime divergence, typed rejection, stale preimage rollback, external publication, references, lifetime generations, snapshot/replay and full fallbacks covered separately in tests.",
+  "baseline": "53dcadd57 projection.rs and identical new probe/other libraries versus candidate projection modules. Source restoration verified. Immutable executable hashes, source hashes and build commands retained below.",
+  "method": "100000 entities, one excluded warmup and three apply_ops samples per fresh process. Initial two reversed rounds, then two reversed all-record-only follow-ups prompted by the initial 21.5% full-wave increase. Setup, verification and snapshot export excluded. Follow-up is additional evidence, not a reason to discard the slower original sample. No allocation instrumentation. AC was observed; no power setting/action performed.",
+  "limits": "One plain edit p50 215/226ms -> .844/.900ms; 1% and 10% edits also benefit. A 100k-row prefab contribution is still resolved entirely: name/override ~146-148ms, only small gains. Original full-wave after 931ms vs before 766ms (+21.5%) is retained; reverse 747/774ms, fresh repeats after 774/776 vs before 769/766 (+0.7%/+1.4%). Full-wave overhead/variability is not established as zero. Public API CPU apply_ops only, not complete editor latency, Play startup, compile time or Unity superiority. Three samples do not establish tail latency.",
+  "p50_ms_by_case": {
+    "one": {
+      "before": [
+        214.959083,
+        225.59799999999998
+      ],
+      "after": [
+        0.843625,
+        0.900083
+      ]
+    },
+    "pct1": {
+      "before": [
+        223.18937499999998,
+        228.755291
+      ],
+      "after": [
+        7.647082999999999,
+        7.5975410000000005
+      ]
+    },
+    "pct10": {
+      "before": [
+        270.5495,
+        276.660458
+      ],
+      "after": [
+        75.004209,
+        76.68445799999999
+      ]
+    },
+    "all": {
+      "before": [
+        766.298417,
+        774.143709
+      ],
+      "after": [
+        930.987667,
+        747.103833
+      ]
+    },
+    "prefab-name": {
+      "before": [
+        157.039792,
+        152.031625
+      ],
+      "after": [
+        146.53329100000002,
+        147.552875
+      ]
+    },
+    "prefab-override": {
+      "before": [
+        155.829667,
+        152.211875
+      ],
+      "after": [
+        146.65775,
+        147.246042
+      ]
+    }
+  },
+  "build_provenance": {
+    "before_projection_revision": "53dcadd57",
+    "candidate_source_sha256": {
+      "crates/ara-sim/src/projection.rs": "4c77ffee3b5991c42f9150d990e5622298d250c9666d66665b610964df07a2da",
+      "crates/ara-sim/src/projection/local.rs": "6aa0282576b9fafd3b3a329e789adc388e0e25bf74a1ab96b04303a5266cc0d4",
+      "crates/ara-sim/src/projection/sync.rs": "97b7071b7c13c0988de6f4ccc0f168447e0daab88cec7e49ee83e3b3c8659996",
+      "crates/ara-sim/src/projection/tests.rs": "ee4394fd9ac987b7cf2288be352c36346d65cc4998e10d05caa20944826710f5",
+      "crates/ara-sim/src/projection/tests/fixture.rs": "587195dbf10e28ac661e22a210aa917bce92fde9b1b28152864c62d2b13ad93c",
+      "crates/ara-sim/examples/projection_edit_bench.rs": "a1158bfd2ceda650d4aa4f62fb07c091e5aa694e5ce17a9afb57d062572b77f9",
+      "crates/ara-sim/examples/projection_edit_bench/fixture.rs": "ac69e0eabac60051593446e911fde00edddb9b0c7bed7dfae38341f17faf8dd5"
+    },
+    "command": [
+      "/usr/bin/nice",
+      "-n",
+      "10",
+      "cargo",
+      "build",
+      "-p",
+      "ara-sim",
+      "--profile",
+      "perf",
+      "--example",
+      "projection_edit_bench"
+    ],
+    "variants": {
+      "before": {
+        "binary": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e"
+      },
+      "after": {
+        "binary": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a"
+      }
+    },
+    "utc": "2026-11-08T22:43:46.156183+00:00",
+    "before_projection_sha256": "614ce8e0e2872e4fd1ccb1500027e1842edd095af65da062484c4c4da36e496a",
+    "candidate_restored": true
+  },
+  "initial_rounds": {
+    "phase": "projection",
+    "scope": "Ara CPU preparation/host feature experiment; no Unity, shipping frame or universal superiority claim.",
+    "date_utc": "2026-11-08T22:46:05.356809+00:00",
+    "git_head": "53dcadd57bfca63281d876dac0c3603d63314bb3",
+    "dirty_sources": true,
+    "script_sha256": "391b19f6484a7c99ebbd37d4bb9246de24b376e10981d4478d1dc44a69a4bf56",
+    "source_sha256": {
+      "crates/ara-script/src/ecs/system.rs": "66a867c44f44d1423492cced0b76ca9509aa2ee281d4969f0779a2b3d76e072f",
+      "crates/ara-script/src/host/bindings.rs": "50ecaedfa87d094dd515c508de717406b6cc9c36ba90743ef9ccf4f2395a4165",
+      "crates/ara-script/src/host/ctx.rs": "43347ce85f871f1ad6c31126388210408bbcd04049e9ad9ef9bd5f65826aa81e",
+      "crates/ara-script/src/ecs/cmdbuf.rs": "a4748b7393b7e976d27eef2ad92beac1a42e65ed165ad4d168ec18c8745efdc9",
+      "crates/ara-play/src/lib.rs": "0e40e93a4c5bf1897e7ce59dcf98469807d1b11c5c58ffd07c804080f0e4026a",
+      "crates/ara-player/src/world.rs": "31e123ffe52759e812152604b3e1e9651baeb188f8a2a344228d4c46185b6ab3",
+      "dotnet/src/Ara.Generators/Docs.cs": "e22fd2cd4b3316d4f8c7453b6f6982228eb230615cffd8ab9021952b938e6d60",
+      "dotnet/src/Ara.Generators/ModuleGenerator.cs": "a541c8db5f7e892cff4e443f5eb4ac3e2aa35319b52cfbe13aa4c6a4972b691f",
+      "dotnet/src/Ara.Generators/Polyfills.cs": "46d1d486ed083c11e036591c4dfa0ba0d0d7a189b4a9b537d38633f41f5f4312",
+      "dotnet/src/Ara.Generators/Emit.Query.cs": "79af604889da4f65cb520be5bed0cc390658f2527a2ab3ed15d8c73848621b64",
+      "dotnet/src/Ara.Generators/Extract.Query.cs": "62d358f6ca2afcdd281511e19766aaddae8a2bc8cdf21936b172a15df095bc95",
+      "dotnet/src/Ara.Generators/Models.cs": "ad8bc6f162123d098a0b892cdc238d6a22bdf33b49a9990561939a1d5251d18b",
+      "dotnet/src/Ara.Generators/Emit.cs": "a4b4bbddd7b4a15405c6b4a7f0ac1bd7d9b3f8e9a7398905d48fdf246921c23e",
+      "dotnet/src/Ara.Generators/Json.cs": "f75826b6d7f12702450ce5b168b650fe2459c7beefd20f4f9af26aa0e0f75d68",
+      "dotnet/src/Ara.Generators/Extract.cs": "db87e252f2b146affddc9d176975fa7be179a8633af976990dc04433a80f0142",
+      "dotnet/src/Ara.Generators/Schema.cs": "ce181448d594714a7a39159b4495e009d019f37403d7d45bcc49161eb150e260",
+      "dotnet/src/Ara.Generators/Descriptors.cs": "8d58346e4a0bb02304a9e9e1c0f5c21374fd8acca4816b8759cf2205bd99fd2a",
+      "crates/ara-sim/src/projection/local.rs": "6aa0282576b9fafd3b3a329e789adc388e0e25bf74a1ab96b04303a5266cc0d4",
+      "crates/ara-sim/src/projection/sync.rs": "97b7071b7c13c0988de6f4ccc0f168447e0daab88cec7e49ee83e3b3c8659996",
+      "crates/ara-sim/src/projection/tests.rs": "ee4394fd9ac987b7cf2288be352c36346d65cc4998e10d05caa20944826710f5",
+      "crates/ara-sim/src/projection/tests/fixture.rs": "587195dbf10e28ac661e22a210aa917bce92fde9b1b28152864c62d2b13ad93c",
+      "crates/ara-sim/examples/projection_edit_bench.rs": "a1158bfd2ceda650d4aa4f62fb07c091e5aa694e5ce17a9afb57d062572b77f9",
+      "crates/ara-sim/examples/projection_edit_bench/fixture.rs": "ac69e0eabac60051593446e911fde00edddb9b0c7bed7dfae38341f17faf8dd5",
+      "crates/ara-schema/src/validate.rs": "fb36a40795f6141fa2d1a741b72490152d64b11086843b6677b611aaf637549f",
+      "crates/ara-doc/src/id.rs": "60897be3df44088b706afa8a98bf5941b7bcbbb7779fa813fa256afaf1fae196",
+      "crates/ara-sim/src/dynamic.rs": "01480421d258e4edd3ffb03687053dec8e4bb2f0673aa6a51aec5eb2efc74666",
+      "crates/ara-sim/src/registry.rs": "6e1d6c3850274ab45790a185e798ce040fe6a5bd80ec5c4183e6bf7b62701e57",
+      "crates/ara-sim/src/projection.rs": "4c77ffee3b5991c42f9150d990e5622298d250c9666d66665b610964df07a2da",
+      "crates/ara-script/examples/batch_query_bench.rs": "ca3f433deab8d5fd731d425f110d77b417e16cef8df438077aeec139132d78e1",
+      "crates/ara-script/examples/query_tick_bench.rs": "06173f79b247f94cd810d1f77db8d2c19624a26c4f57c03e234f485c43cdede0",
+      "crates/ara-script/examples/sparse_query_bench.rs": "7b8b7fb6a66f77be334a88ecc2362e0b3e70224998f69f676a68c2b4b44cce3b",
+      "crates/ara-play/examples/scene_prepare_bench.rs": "343666dd91a9d7077aa2bd15c347e9edb8739a56214ce78826f86f42af50a268"
+    },
+    "method": "Two fresh-process rounds with reversed order, nice10. Kernel samples exclude setup/verification; separate untimed Rust allocation counts. Resource guards before/after cannot prove continuous absence of interference. Worker arguments are pool workers plus a participating caller, not total hardware cores.",
+    "results": [
+      {
+        "name": "r0-one-before",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "one"
+        ],
+        "binary_sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:46:05.391010+00:00",
+          "load": [
+            1.3857421875,
+            2.36962890625,
+            2.39013671875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [
+            {
+              "pid": 16364,
+              "cpu_percent": 11.1,
+              "command": "/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/Resources/Python.app/Contents/MacOS/Python"
+            },
+            {
+              "pid": 35798,
+              "cpu_percent": 5.7,
+              "command": "/Applications/T3 Code (Nightly).app/Contents/MacOS/T3 Code (Nightly)"
+            },
+            {
+              "pid": 79230,
+              "cpu_percent": 6.2,
+              "command": "codex"
+            }
+          ],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:46:12.020873+00:00",
+          "load": [
+            1.412109375,
+            2.3408203125,
+            2.37939453125
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "one",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 1,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            227.138916,
+            213.62675000000002,
+            214.959083
+          ],
+          "p50_ms": 214.959083,
+          "p95_ms": 227.138916,
+          "canonical_document_hashes": {
+            "bench.scene": "f48a67540e2f52e2899accacc4a350ebe1a5b34351d1be451f17114bb590c3bb"
+          },
+          "runtime_state_hash": "6060fe81dff1925c1bc9fa4606427b09a47a57757c64e65b943b51d82d6338f3",
+          "portable_snapshot_hash": "6403b908411c2aeceb1ac9c9652dc3e1e7454dee1e1a64f917159eefe56d9eff",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "d6ba83989f4b80292784c2bbbef786f220df1e34dc47662e28b6ffc7459efd00",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r0-one-after",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "one"
+        ],
+        "binary_sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:46:12.045390+00:00",
+          "load": [
+            1.412109375,
+            2.3408203125,
+            2.37939453125
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:46:17.310012+00:00",
+          "load": [
+            1.37890625,
+            2.318359375,
+            2.37109375
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [
+            {
+              "pid": 1,
+              "cpu_percent": 6.7,
+              "command": "/sbin/launchd"
+            }
+          ],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "one",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 1,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            0.843625,
+            0.691333,
+            0.860375
+          ],
+          "p50_ms": 0.843625,
+          "p95_ms": 0.860375,
+          "canonical_document_hashes": {
+            "bench.scene": "f48a67540e2f52e2899accacc4a350ebe1a5b34351d1be451f17114bb590c3bb"
+          },
+          "runtime_state_hash": "6060fe81dff1925c1bc9fa4606427b09a47a57757c64e65b943b51d82d6338f3",
+          "portable_snapshot_hash": "6403b908411c2aeceb1ac9c9652dc3e1e7454dee1e1a64f917159eefe56d9eff",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "af8e6ee6588adc7a633662f8345c508ae42e3565aad29ea18c0a15362eabdd7e",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r0-pct1-before",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "pct1"
+        ],
+        "binary_sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:46:17.334913+00:00",
+          "load": [
+            1.37890625,
+            2.318359375,
+            2.37109375
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:46:23.255524+00:00",
+          "load": [
+            1.82861328125,
+            2.39599609375,
+            2.39794921875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [
+            {
+              "pid": 16635,
+              "cpu_percent": 8.5,
+              "command": "bash"
+            }
+          ],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "pct1",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 1000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            224.529708,
+            218.776167,
+            223.18937499999998
+          ],
+          "p50_ms": 223.18937499999998,
+          "p95_ms": 224.529708,
+          "canonical_document_hashes": {
+            "bench.scene": "3057f6c82b002c4a40907065b628f8277702fd770f02edae6a5ec2bf5340885c"
+          },
+          "runtime_state_hash": "320a9d1f24778709906ca02ee6fdc4a3278faf6e36fe1e01247c4b8b881765dc",
+          "portable_snapshot_hash": "fb90e104e5ff5233361c0cdde448b2a9fae64c10f65fce3af0f1ad5d14beee27",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "e9a561d44e6d4c355004ea7f9fff40f9ca0ed5d459797bdcffd8be8f0d043657",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r0-pct1-after",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "pct1"
+        ],
+        "binary_sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:46:23.282732+00:00",
+          "load": [
+            1.82861328125,
+            2.39599609375,
+            2.39794921875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [
+            {
+              "pid": 16635,
+              "cpu_percent": 8.5,
+              "command": "bash"
+            }
+          ],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:46:28.346543+00:00",
+          "load": [
+            1.76220703125,
+            2.37255859375,
+            2.3896484375
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "pct1",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 1000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            7.721042,
+            7.647082999999999,
+            7.55675
+          ],
+          "p50_ms": 7.647082999999999,
+          "p95_ms": 7.721042,
+          "canonical_document_hashes": {
+            "bench.scene": "3057f6c82b002c4a40907065b628f8277702fd770f02edae6a5ec2bf5340885c"
+          },
+          "runtime_state_hash": "320a9d1f24778709906ca02ee6fdc4a3278faf6e36fe1e01247c4b8b881765dc",
+          "portable_snapshot_hash": "fb90e104e5ff5233361c0cdde448b2a9fae64c10f65fce3af0f1ad5d14beee27",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "d754a09293161b3741ca958072753e364b20dde23b42142d02bbd867796d1023",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r0-pct10-before",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "pct10"
+        ],
+        "binary_sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:46:28.370298+00:00",
+          "load": [
+            1.76220703125,
+            2.37255859375,
+            2.3896484375
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:46:34.505829+00:00",
+          "load": [
+            1.70068359375,
+            2.349609375,
+            2.38134765625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "pct10",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 10000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            273.30199999999996,
+            269.509583,
+            270.5495
+          ],
+          "p50_ms": 270.5495,
+          "p95_ms": 273.30199999999996,
+          "canonical_document_hashes": {
+            "bench.scene": "27b50df4f2224db23306e4760343bb022a3118d7721b974f1f99c959d8913537"
+          },
+          "runtime_state_hash": "883723e9694e535b7b8909c03d765ea041f2fda1c0987ba2638acb1d440ccebc",
+          "portable_snapshot_hash": "c478c5763b77101f19971e5e878b125023ce10777fe15219869b53a7d74219c9",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "342bb6db72b6bfc5aa69db046766ae2f4f356c17d81ca5d60cfd038bc126628a",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r0-pct10-after",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "pct10"
+        ],
+        "binary_sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:46:34.529802+00:00",
+          "load": [
+            1.70068359375,
+            2.349609375,
+            2.38134765625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:46:39.892907+00:00",
+          "load": [
+            1.64453125,
+            2.3271484375,
+            2.373046875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "pct10",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 10000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            75.26712500000001,
+            75.004209,
+            74.556417
+          ],
+          "p50_ms": 75.004209,
+          "p95_ms": 75.26712500000001,
+          "canonical_document_hashes": {
+            "bench.scene": "27b50df4f2224db23306e4760343bb022a3118d7721b974f1f99c959d8913537"
+          },
+          "runtime_state_hash": "883723e9694e535b7b8909c03d765ea041f2fda1c0987ba2638acb1d440ccebc",
+          "portable_snapshot_hash": "c478c5763b77101f19971e5e878b125023ce10777fe15219869b53a7d74219c9",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "dc1c4444c97ff236670f7d3950fd31d39d8610919278f71bf0e5868df8b23971",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r0-all-before",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "all"
+        ],
+        "binary_sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:46:39.917356+00:00",
+          "load": [
+            1.64453125,
+            2.3271484375,
+            2.373046875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:46:48.185106+00:00",
+          "load": [
+            1.544921875,
+            2.28271484375,
+            2.3564453125
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "all",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 100000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            760.26775,
+            773.592083,
+            766.298417
+          ],
+          "p50_ms": 766.298417,
+          "p95_ms": 773.592083,
+          "canonical_document_hashes": {
+            "bench.scene": "90c2678bf65f7e24089d126937da0a3a18ac8fd4832db1b5cedb4762c03cf8dd"
+          },
+          "runtime_state_hash": "7478d34254b7e7a7ac89ffdc15ec378b95473770a21b95ffaad64417a2f0f9cb",
+          "portable_snapshot_hash": "a8ff9c23cb9f2b25d10b1b3b50b742fe0917db9a7ae4bb9eb4b608bc8c94e062",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "fd031e80f856f8f47e219653c986cfba3ca9e7e8fc671f421ee485f2c8bf9d8c",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r0-all-after",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "all"
+        ],
+        "binary_sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:46:48.209380+00:00",
+          "load": [
+            1.544921875,
+            2.28271484375,
+            2.3564453125
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:46:58.113618+00:00",
+          "load": [
+            1.5341796875,
+            2.25634765625,
+            2.345703125
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "all",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 100000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            953.8259999999999,
+            917.6345,
+            930.987667
+          ],
+          "p50_ms": 930.987667,
+          "p95_ms": 953.8259999999999,
+          "canonical_document_hashes": {
+            "bench.scene": "90c2678bf65f7e24089d126937da0a3a18ac8fd4832db1b5cedb4762c03cf8dd"
+          },
+          "runtime_state_hash": "7478d34254b7e7a7ac89ffdc15ec378b95473770a21b95ffaad64417a2f0f9cb",
+          "portable_snapshot_hash": "a8ff9c23cb9f2b25d10b1b3b50b742fe0917db9a7ae4bb9eb4b608bc8c94e062",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "adc9ccbef4de5383725f7061637cf60edfad63bede133bac46bd350aa0e439b2",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r0-prefab-name-before",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "prefab-name"
+        ],
+        "binary_sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:46:58.138834+00:00",
+          "load": [
+            1.5341796875,
+            2.25634765625,
+            2.345703125
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:47:03.665574+00:00",
+          "load": [
+            1.4912109375,
+            2.2353515625,
+            2.33740234375
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "prefab-name",
+          "rows": 100000,
+          "source_scene_roots": 2,
+          "ops": 1,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            158.605208,
+            157.039792,
+            150.160334
+          ],
+          "p50_ms": 157.039792,
+          "p95_ms": 158.605208,
+          "canonical_document_hashes": {
+            "actor.prefab": "6f94886319e6a2ac2d618b3f5f7ca950467fa204e20dea766739377b57edb7e3",
+            "bench.scene": "a2cdef6df0a92cbe66df65d55e3f2cececfc33f97e0af3e257f2a9a29f7cd049"
+          },
+          "runtime_state_hash": "b0f115cdb0db6f8e09fa4c6617e2db2fd9bed6641e43240fb6490959a8dc2f53",
+          "portable_snapshot_hash": "3b1cf5055479ccef8a6e264d6aa506a64617702f54dd692dce7716ef0e858342",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "0f714592ac9a436e29ebe6ab84a530d022f35353a17be7abfbb547ffa009951a",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r0-prefab-name-after",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "prefab-name"
+        ],
+        "binary_sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:47:03.689400+00:00",
+          "load": [
+            1.4912109375,
+            2.2353515625,
+            2.33740234375
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:47:09.229662+00:00",
+          "load": [
+            1.45166015625,
+            2.21435546875,
+            2.3291015625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "prefab-name",
+          "rows": 100000,
+          "source_scene_roots": 2,
+          "ops": 1,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            154.576916,
+            146.127417,
+            146.53329100000002
+          ],
+          "p50_ms": 146.53329100000002,
+          "p95_ms": 154.576916,
+          "canonical_document_hashes": {
+            "actor.prefab": "6f94886319e6a2ac2d618b3f5f7ca950467fa204e20dea766739377b57edb7e3",
+            "bench.scene": "a2cdef6df0a92cbe66df65d55e3f2cececfc33f97e0af3e257f2a9a29f7cd049"
+          },
+          "runtime_state_hash": "b0f115cdb0db6f8e09fa4c6617e2db2fd9bed6641e43240fb6490959a8dc2f53",
+          "portable_snapshot_hash": "3b1cf5055479ccef8a6e264d6aa506a64617702f54dd692dce7716ef0e858342",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "f0d473e24f190130f2ddcb2d9ac8328c75b32f0d0ccc171a94e6feed36ab5f48",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r0-prefab-override-before",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "prefab-override"
+        ],
+        "binary_sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:47:09.254473+00:00",
+          "load": [
+            1.45166015625,
+            2.21435546875,
+            2.3291015625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:47:14.877759+00:00",
+          "load": [
+            1.4150390625,
+            2.19384765625,
+            2.3212890625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "prefab-override",
+          "rows": 100000,
+          "source_scene_roots": 2,
+          "ops": 1,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            164.04316599999999,
+            155.829667,
+            153.684
+          ],
+          "p50_ms": 155.829667,
+          "p95_ms": 164.04316599999999,
+          "canonical_document_hashes": {
+            "actor.prefab": "6f94886319e6a2ac2d618b3f5f7ca950467fa204e20dea766739377b57edb7e3",
+            "bench.scene": "a7ef99ec8c5b513da624fdc792820333588fe0f040019b3201336c46c32efc38"
+          },
+          "runtime_state_hash": "53ea4b142c1a38a1363f7e48fe43a847a9628998cf97bfb3f5c927718593babf",
+          "portable_snapshot_hash": "20e44e9c4673898c18a139fc1ee2edfe424c9dfd8e3d839743eec66a41b7ba62",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "386bb655e5e0775e63192d1def320cb605908a703da8878ff2d4ac4b23d9cf3e",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r0-prefab-override-after",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "prefab-override"
+        ],
+        "binary_sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:47:14.901922+00:00",
+          "load": [
+            1.4150390625,
+            2.19384765625,
+            2.3212890625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:47:20.405925+00:00",
+          "load": [
+            1.38134765625,
+            2.173828125,
+            2.3134765625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "prefab-override",
+          "rows": 100000,
+          "source_scene_roots": 2,
+          "ops": 1,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            150.066458,
+            146.65775,
+            145.421458
+          ],
+          "p50_ms": 146.65775,
+          "p95_ms": 150.066458,
+          "canonical_document_hashes": {
+            "actor.prefab": "6f94886319e6a2ac2d618b3f5f7ca950467fa204e20dea766739377b57edb7e3",
+            "bench.scene": "a7ef99ec8c5b513da624fdc792820333588fe0f040019b3201336c46c32efc38"
+          },
+          "runtime_state_hash": "53ea4b142c1a38a1363f7e48fe43a847a9628998cf97bfb3f5c927718593babf",
+          "portable_snapshot_hash": "20e44e9c4673898c18a139fc1ee2edfe424c9dfd8e3d839743eec66a41b7ba62",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "db062d6556d06185221e80533e78b5117e2a1378e9ae16e66840b4f547002e28",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r1-prefab-override-after",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "prefab-override"
+        ],
+        "binary_sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:47:20.430733+00:00",
+          "load": [
+            1.38134765625,
+            2.173828125,
+            2.3134765625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:47:25.958353+00:00",
+          "load": [
+            1.3505859375,
+            2.154296875,
+            2.3056640625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "prefab-override",
+          "rows": 100000,
+          "source_scene_roots": 2,
+          "ops": 1,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            153.23025,
+            146.45133299999998,
+            147.246042
+          ],
+          "p50_ms": 147.246042,
+          "p95_ms": 153.23025,
+          "canonical_document_hashes": {
+            "actor.prefab": "6f94886319e6a2ac2d618b3f5f7ca950467fa204e20dea766739377b57edb7e3",
+            "bench.scene": "a7ef99ec8c5b513da624fdc792820333588fe0f040019b3201336c46c32efc38"
+          },
+          "runtime_state_hash": "53ea4b142c1a38a1363f7e48fe43a847a9628998cf97bfb3f5c927718593babf",
+          "portable_snapshot_hash": "20e44e9c4673898c18a139fc1ee2edfe424c9dfd8e3d839743eec66a41b7ba62",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "e2ed0c6fad88fdcb521666e895beaba1aa88d74484f13800cf3c16e1a22999c9",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r1-prefab-override-before",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "prefab-override"
+        ],
+        "binary_sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:47:25.982572+00:00",
+          "load": [
+            1.3505859375,
+            2.154296875,
+            2.3056640625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:47:31.571298+00:00",
+          "load": [
+            1.29638671875,
+            2.11572265625,
+            2.2900390625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "prefab-override",
+          "rows": 100000,
+          "source_scene_roots": 2,
+          "ops": 1,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            158.621333,
+            152.211875,
+            151.960542
+          ],
+          "p50_ms": 152.211875,
+          "p95_ms": 158.621333,
+          "canonical_document_hashes": {
+            "actor.prefab": "6f94886319e6a2ac2d618b3f5f7ca950467fa204e20dea766739377b57edb7e3",
+            "bench.scene": "a7ef99ec8c5b513da624fdc792820333588fe0f040019b3201336c46c32efc38"
+          },
+          "runtime_state_hash": "53ea4b142c1a38a1363f7e48fe43a847a9628998cf97bfb3f5c927718593babf",
+          "portable_snapshot_hash": "20e44e9c4673898c18a139fc1ee2edfe424c9dfd8e3d839743eec66a41b7ba62",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "ee44f61c95700fcfbdd6fbf33ecfc32ccb65e1b1cf62f1c925dd02849a0b94b5",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r1-prefab-name-after",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "prefab-name"
+        ],
+        "binary_sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:47:31.595557+00:00",
+          "load": [
+            1.29638671875,
+            2.11572265625,
+            2.2900390625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:47:37.151326+00:00",
+          "load": [
+            1.2724609375,
+            2.09716796875,
+            2.2822265625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "prefab-name",
+          "rows": 100000,
+          "source_scene_roots": 2,
+          "ops": 1,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            152.357667,
+            145.767208,
+            147.552875
+          ],
+          "p50_ms": 147.552875,
+          "p95_ms": 152.357667,
+          "canonical_document_hashes": {
+            "actor.prefab": "6f94886319e6a2ac2d618b3f5f7ca950467fa204e20dea766739377b57edb7e3",
+            "bench.scene": "a2cdef6df0a92cbe66df65d55e3f2cececfc33f97e0af3e257f2a9a29f7cd049"
+          },
+          "runtime_state_hash": "b0f115cdb0db6f8e09fa4c6617e2db2fd9bed6641e43240fb6490959a8dc2f53",
+          "portable_snapshot_hash": "3b1cf5055479ccef8a6e264d6aa506a64617702f54dd692dce7716ef0e858342",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "5f3c867151af9b2fc8b7c86c56b681185237be599a74a09d41c214c072abe89e",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r1-prefab-name-before",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "prefab-name"
+        ],
+        "binary_sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:47:37.175694+00:00",
+          "load": [
+            1.2724609375,
+            2.09716796875,
+            2.2822265625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:47:42.757555+00:00",
+          "load": [
+            1.25048828125,
+            2.07861328125,
+            2.2744140625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "prefab-name",
+          "rows": 100000,
+          "source_scene_roots": 2,
+          "ops": 1,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            160.39979200000002,
+            151.994042,
+            152.031625
+          ],
+          "p50_ms": 152.031625,
+          "p95_ms": 160.39979200000002,
+          "canonical_document_hashes": {
+            "actor.prefab": "6f94886319e6a2ac2d618b3f5f7ca950467fa204e20dea766739377b57edb7e3",
+            "bench.scene": "a2cdef6df0a92cbe66df65d55e3f2cececfc33f97e0af3e257f2a9a29f7cd049"
+          },
+          "runtime_state_hash": "b0f115cdb0db6f8e09fa4c6617e2db2fd9bed6641e43240fb6490959a8dc2f53",
+          "portable_snapshot_hash": "3b1cf5055479ccef8a6e264d6aa506a64617702f54dd692dce7716ef0e858342",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "648fc9ffef7829ffe3a14d19e00aed6a753a11e8c48ab1560f1a8c75833c2e5d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r1-all-after",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "all"
+        ],
+        "binary_sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:47:42.781973+00:00",
+          "load": [
+            1.25048828125,
+            2.07861328125,
+            2.2744140625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:47:50.945652+00:00",
+          "load": [
+            1.22998046875,
+            2.060546875,
+            2.2666015625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "all",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 100000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            755.114917,
+            747.103833,
+            745.029708
+          ],
+          "p50_ms": 747.103833,
+          "p95_ms": 755.114917,
+          "canonical_document_hashes": {
+            "bench.scene": "90c2678bf65f7e24089d126937da0a3a18ac8fd4832db1b5cedb4762c03cf8dd"
+          },
+          "runtime_state_hash": "7478d34254b7e7a7ac89ffdc15ec378b95473770a21b95ffaad64417a2f0f9cb",
+          "portable_snapshot_hash": "a8ff9c23cb9f2b25d10b1b3b50b742fe0917db9a7ae4bb9eb4b608bc8c94e062",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "dd0a8b153181a24155d7c71368f75b957f197dfb805bc7c7912c074d28c4eb22",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r1-all-before",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "all"
+        ],
+        "binary_sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:47:50.970243+00:00",
+          "load": [
+            1.22998046875,
+            2.060546875,
+            2.2666015625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:47:59.285234+00:00",
+          "load": [
+            1.2744140625,
+            2.04150390625,
+            2.2568359375
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "all",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 100000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            776.072167,
+            763.9439169999999,
+            774.143709
+          ],
+          "p50_ms": 774.143709,
+          "p95_ms": 776.072167,
+          "canonical_document_hashes": {
+            "bench.scene": "90c2678bf65f7e24089d126937da0a3a18ac8fd4832db1b5cedb4762c03cf8dd"
+          },
+          "runtime_state_hash": "7478d34254b7e7a7ac89ffdc15ec378b95473770a21b95ffaad64417a2f0f9cb",
+          "portable_snapshot_hash": "a8ff9c23cb9f2b25d10b1b3b50b742fe0917db9a7ae4bb9eb4b608bc8c94e062",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "b5c87b3cca2d1641aa311d5118d98a59f1472c9977c4e0df67a4b27930ac0ed1",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r1-pct10-after",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "pct10"
+        ],
+        "binary_sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:47:59.309455+00:00",
+          "load": [
+            1.2744140625,
+            2.04150390625,
+            2.2568359375
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:48:04.781118+00:00",
+          "load": [
+            1.412109375,
+            2.05712890625,
+            2.2607421875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "pct10",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 10000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            76.73325,
+            76.68445799999999,
+            75.30612500000001
+          ],
+          "p50_ms": 76.68445799999999,
+          "p95_ms": 76.73325,
+          "canonical_document_hashes": {
+            "bench.scene": "27b50df4f2224db23306e4760343bb022a3118d7721b974f1f99c959d8913537"
+          },
+          "runtime_state_hash": "883723e9694e535b7b8909c03d765ea041f2fda1c0987ba2638acb1d440ccebc",
+          "portable_snapshot_hash": "c478c5763b77101f19971e5e878b125023ce10777fe15219869b53a7d74219c9",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "8ed90887c14b5415711e17019e145a6e54c7027b4f9453b42689506123046047",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r1-pct10-before",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "pct10"
+        ],
+        "binary_sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:48:04.805793+00:00",
+          "load": [
+            1.412109375,
+            2.05712890625,
+            2.2607421875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:48:11.042912+00:00",
+          "load": [
+            1.37890625,
+            2.03955078125,
+            2.2529296875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "pct10",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 10000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            281.403375,
+            274.096916,
+            276.660458
+          ],
+          "p50_ms": 276.660458,
+          "p95_ms": 281.403375,
+          "canonical_document_hashes": {
+            "bench.scene": "27b50df4f2224db23306e4760343bb022a3118d7721b974f1f99c959d8913537"
+          },
+          "runtime_state_hash": "883723e9694e535b7b8909c03d765ea041f2fda1c0987ba2638acb1d440ccebc",
+          "portable_snapshot_hash": "c478c5763b77101f19971e5e878b125023ce10777fe15219869b53a7d74219c9",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "3a0d05257a076cccd1937a68bfec52abf7d2dcf85f144b227303866506700630",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r1-pct1-after",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "pct1"
+        ],
+        "binary_sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:48:11.067418+00:00",
+          "load": [
+            1.37890625,
+            2.03955078125,
+            2.2529296875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:48:16.199488+00:00",
+          "load": [
+            1.34814453125,
+            2.02197265625,
+            2.2451171875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "pct1",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 1000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            7.5975410000000005,
+            7.820041999999999,
+            7.485458
+          ],
+          "p50_ms": 7.5975410000000005,
+          "p95_ms": 7.820041999999999,
+          "canonical_document_hashes": {
+            "bench.scene": "3057f6c82b002c4a40907065b628f8277702fd770f02edae6a5ec2bf5340885c"
+          },
+          "runtime_state_hash": "320a9d1f24778709906ca02ee6fdc4a3278faf6e36fe1e01247c4b8b881765dc",
+          "portable_snapshot_hash": "fb90e104e5ff5233361c0cdde448b2a9fae64c10f65fce3af0f1ad5d14beee27",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "067042181dd4651449fc6387e92f98d9dbeed2f120347866c286ed106956095e",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r1-pct1-before",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "pct1"
+        ],
+        "binary_sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:48:16.226292+00:00",
+          "load": [
+            1.34814453125,
+            2.02197265625,
+            2.2451171875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:48:22.222618+00:00",
+          "load": [
+            1.2939453125,
+            1.98779296875,
+            2.23046875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "pct1",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 1000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            228.755291,
+            234.75199999999998,
+            224.066792
+          ],
+          "p50_ms": 228.755291,
+          "p95_ms": 234.75199999999998,
+          "canonical_document_hashes": {
+            "bench.scene": "3057f6c82b002c4a40907065b628f8277702fd770f02edae6a5ec2bf5340885c"
+          },
+          "runtime_state_hash": "320a9d1f24778709906ca02ee6fdc4a3278faf6e36fe1e01247c4b8b881765dc",
+          "portable_snapshot_hash": "fb90e104e5ff5233361c0cdde448b2a9fae64c10f65fce3af0f1ad5d14beee27",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "d4fd96d9eb5296cf52d1711245025c5d0a807a2fe1308f0b349e186ea41815a7",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r1-one-after",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "one"
+        ],
+        "binary_sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:48:22.246456+00:00",
+          "load": [
+            1.2939453125,
+            1.98779296875,
+            2.23046875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:48:27.354476+00:00",
+          "load": [
+            1.27001953125,
+            1.97119140625,
+            2.22314453125
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "one",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 1,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            0.900083,
+            0.903417,
+            0.8109999999999999
+          ],
+          "p50_ms": 0.900083,
+          "p95_ms": 0.903417,
+          "canonical_document_hashes": {
+            "bench.scene": "f48a67540e2f52e2899accacc4a350ebe1a5b34351d1be451f17114bb590c3bb"
+          },
+          "runtime_state_hash": "6060fe81dff1925c1bc9fa4606427b09a47a57757c64e65b943b51d82d6338f3",
+          "portable_snapshot_hash": "6403b908411c2aeceb1ac9c9652dc3e1e7454dee1e1a64f917159eefe56d9eff",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "de17f449482531dad3dd1339bcc51c17e31b7d4e40f94acd3d26dad17f5eb86d",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r1-one-before",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "one"
+        ],
+        "binary_sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:48:27.379012+00:00",
+          "load": [
+            1.27001953125,
+            1.97119140625,
+            2.22314453125
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:48:33.391918+00:00",
+          "load": [
+            1.248046875,
+            1.95458984375,
+            2.2158203125
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "one",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 1,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            226.757958,
+            225.59799999999998,
+            223.69312499999998
+          ],
+          "p50_ms": 225.59799999999998,
+          "p95_ms": 226.757958,
+          "canonical_document_hashes": {
+            "bench.scene": "f48a67540e2f52e2899accacc4a350ebe1a5b34351d1be451f17114bb590c3bb"
+          },
+          "runtime_state_hash": "6060fe81dff1925c1bc9fa4606427b09a47a57757c64e65b943b51d82d6338f3",
+          "portable_snapshot_hash": "6403b908411c2aeceb1ac9c9652dc3e1e7454dee1e1a64f917159eefe56d9eff",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "06f71c672d85bdc56929dff7a917734e5afdb7edfe60ab673d81ca51a235392a",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "executables": {
+      "target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e": {
+        "path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e"
+      },
+      "target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a": {
+        "path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a"
+      }
+    },
+    "complete": true
+  },
+  "full_wave_followup": {
+    "phase": "projection",
+    "scope": "Ara CPU preparation/host feature experiment; no Unity, shipping frame or universal superiority claim.",
+    "date_utc": "2026-11-08T22:48:46.220514+00:00",
+    "git_head": "53dcadd57bfca63281d876dac0c3603d63314bb3",
+    "dirty_sources": true,
+    "script_sha256": "126dacb3f0a330d3e764749d9eb30d1dd24099f0076dda88046d26197e644231",
+    "source_sha256": {
+      "crates/ara-script/src/ecs/system.rs": "66a867c44f44d1423492cced0b76ca9509aa2ee281d4969f0779a2b3d76e072f",
+      "crates/ara-script/src/host/bindings.rs": "50ecaedfa87d094dd515c508de717406b6cc9c36ba90743ef9ccf4f2395a4165",
+      "crates/ara-script/src/host/ctx.rs": "43347ce85f871f1ad6c31126388210408bbcd04049e9ad9ef9bd5f65826aa81e",
+      "crates/ara-script/src/ecs/cmdbuf.rs": "a4748b7393b7e976d27eef2ad92beac1a42e65ed165ad4d168ec18c8745efdc9",
+      "crates/ara-play/src/lib.rs": "0e40e93a4c5bf1897e7ce59dcf98469807d1b11c5c58ffd07c804080f0e4026a",
+      "crates/ara-player/src/world.rs": "31e123ffe52759e812152604b3e1e9651baeb188f8a2a344228d4c46185b6ab3",
+      "dotnet/src/Ara.Generators/Docs.cs": "e22fd2cd4b3316d4f8c7453b6f6982228eb230615cffd8ab9021952b938e6d60",
+      "dotnet/src/Ara.Generators/ModuleGenerator.cs": "a541c8db5f7e892cff4e443f5eb4ac3e2aa35319b52cfbe13aa4c6a4972b691f",
+      "dotnet/src/Ara.Generators/Polyfills.cs": "46d1d486ed083c11e036591c4dfa0ba0d0d7a189b4a9b537d38633f41f5f4312",
+      "dotnet/src/Ara.Generators/Emit.Query.cs": "79af604889da4f65cb520be5bed0cc390658f2527a2ab3ed15d8c73848621b64",
+      "dotnet/src/Ara.Generators/Extract.Query.cs": "62d358f6ca2afcdd281511e19766aaddae8a2bc8cdf21936b172a15df095bc95",
+      "dotnet/src/Ara.Generators/Models.cs": "ad8bc6f162123d098a0b892cdc238d6a22bdf33b49a9990561939a1d5251d18b",
+      "dotnet/src/Ara.Generators/Emit.cs": "a4b4bbddd7b4a15405c6b4a7f0ac1bd7d9b3f8e9a7398905d48fdf246921c23e",
+      "dotnet/src/Ara.Generators/Json.cs": "f75826b6d7f12702450ce5b168b650fe2459c7beefd20f4f9af26aa0e0f75d68",
+      "dotnet/src/Ara.Generators/Extract.cs": "db87e252f2b146affddc9d176975fa7be179a8633af976990dc04433a80f0142",
+      "dotnet/src/Ara.Generators/Schema.cs": "ce181448d594714a7a39159b4495e009d019f37403d7d45bcc49161eb150e260",
+      "dotnet/src/Ara.Generators/Descriptors.cs": "8d58346e4a0bb02304a9e9e1c0f5c21374fd8acca4816b8759cf2205bd99fd2a",
+      "crates/ara-sim/src/projection/local.rs": "6aa0282576b9fafd3b3a329e789adc388e0e25bf74a1ab96b04303a5266cc0d4",
+      "crates/ara-sim/src/projection/sync.rs": "97b7071b7c13c0988de6f4ccc0f168447e0daab88cec7e49ee83e3b3c8659996",
+      "crates/ara-sim/src/projection/tests.rs": "ee4394fd9ac987b7cf2288be352c36346d65cc4998e10d05caa20944826710f5",
+      "crates/ara-sim/src/projection/tests/fixture.rs": "587195dbf10e28ac661e22a210aa917bce92fde9b1b28152864c62d2b13ad93c",
+      "crates/ara-sim/examples/projection_edit_bench.rs": "a1158bfd2ceda650d4aa4f62fb07c091e5aa694e5ce17a9afb57d062572b77f9",
+      "crates/ara-sim/examples/projection_edit_bench/fixture.rs": "ac69e0eabac60051593446e911fde00edddb9b0c7bed7dfae38341f17faf8dd5",
+      "crates/ara-schema/src/validate.rs": "fb36a40795f6141fa2d1a741b72490152d64b11086843b6677b611aaf637549f",
+      "crates/ara-doc/src/id.rs": "60897be3df44088b706afa8a98bf5941b7bcbbb7779fa813fa256afaf1fae196",
+      "crates/ara-sim/src/dynamic.rs": "01480421d258e4edd3ffb03687053dec8e4bb2f0673aa6a51aec5eb2efc74666",
+      "crates/ara-sim/src/registry.rs": "6e1d6c3850274ab45790a185e798ce040fe6a5bd80ec5c4183e6bf7b62701e57",
+      "crates/ara-sim/src/projection.rs": "4c77ffee3b5991c42f9150d990e5622298d250c9666d66665b610964df07a2da",
+      "crates/ara-script/examples/batch_query_bench.rs": "ca3f433deab8d5fd731d425f110d77b417e16cef8df438077aeec139132d78e1",
+      "crates/ara-script/examples/query_tick_bench.rs": "06173f79b247f94cd810d1f77db8d2c19624a26c4f57c03e234f485c43cdede0",
+      "crates/ara-script/examples/sparse_query_bench.rs": "7b8b7fb6a66f77be334a88ecc2362e0b3e70224998f69f676a68c2b4b44cce3b",
+      "crates/ara-play/examples/scene_prepare_bench.rs": "343666dd91a9d7077aa2bd15c347e9edb8739a56214ce78826f86f42af50a268"
+    },
+    "method": "Two fresh-process rounds with reversed order, nice10. Kernel samples exclude setup/verification; separate untimed Rust allocation counts. Resource guards before/after cannot prove continuous absence of interference. Worker arguments are pool workers plus a participating caller, not total hardware cores.",
+    "results": [
+      {
+        "name": "r0-all-before",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "all"
+        ],
+        "binary_sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:48:46.249288+00:00",
+          "load": [
+            1.12939453125,
+            1.90625,
+            2.1953125
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:48:54.603397+00:00",
+          "load": [
+            1.10888671875,
+            1.8759765625,
+            2.1806640625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "all",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 100000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            768.978583,
+            779.6096660000001,
+            752.8277909999999
+          ],
+          "p50_ms": 768.978583,
+          "p95_ms": 779.6096660000001,
+          "canonical_document_hashes": {
+            "bench.scene": "90c2678bf65f7e24089d126937da0a3a18ac8fd4832db1b5cedb4762c03cf8dd"
+          },
+          "runtime_state_hash": "7478d34254b7e7a7ac89ffdc15ec378b95473770a21b95ffaad64417a2f0f9cb",
+          "portable_snapshot_hash": "a8ff9c23cb9f2b25d10b1b3b50b742fe0917db9a7ae4bb9eb4b608bc8c94e062",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "fdd390ccdee0a1ece31e05186353bd5149a0c5d721c1d8b3d01801ab42dac336",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r0-all-after",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "all"
+        ],
+        "binary_sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:48:54.627645+00:00",
+          "load": [
+            1.10888671875,
+            1.8759765625,
+            2.1806640625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:49:03.027785+00:00",
+          "load": [
+            1.171875,
+            1.86328125,
+            2.171875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [
+            {
+              "pid": 520,
+              "cpu_percent": 10.2,
+              "command": "/usr/libexec/mobileassetd"
+            }
+          ],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "all",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 100000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            774.173292,
+            769.5035829999999,
+            782.072625
+          ],
+          "p50_ms": 774.173292,
+          "p95_ms": 782.072625,
+          "canonical_document_hashes": {
+            "bench.scene": "90c2678bf65f7e24089d126937da0a3a18ac8fd4832db1b5cedb4762c03cf8dd"
+          },
+          "runtime_state_hash": "7478d34254b7e7a7ac89ffdc15ec378b95473770a21b95ffaad64417a2f0f9cb",
+          "portable_snapshot_hash": "a8ff9c23cb9f2b25d10b1b3b50b742fe0917db9a7ae4bb9eb4b608bc8c94e062",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "b63c9a445e5191a86cfa1432c4a7dd317d956e04029c421450822449e4825d01",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r1-all-after",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "all"
+        ],
+        "binary_sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:49:03.052697+00:00",
+          "load": [
+            1.171875,
+            1.86328125,
+            2.171875
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [
+            {
+              "pid": 520,
+              "cpu_percent": 6.3,
+              "command": "/usr/libexec/mobileassetd"
+            }
+          ],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:49:11.507517+00:00",
+          "load": [
+            1.15771484375,
+            1.8486328125,
+            2.16455078125
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "all",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 100000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            778.583875,
+            770.3240420000001,
+            776.3088339999999
+          ],
+          "p50_ms": 776.3088339999999,
+          "p95_ms": 778.583875,
+          "canonical_document_hashes": {
+            "bench.scene": "90c2678bf65f7e24089d126937da0a3a18ac8fd4832db1b5cedb4762c03cf8dd"
+          },
+          "runtime_state_hash": "7478d34254b7e7a7ac89ffdc15ec378b95473770a21b95ffaad64417a2f0f9cb",
+          "portable_snapshot_hash": "a8ff9c23cb9f2b25d10b1b3b50b742fe0917db9a7ae4bb9eb4b608bc8c94e062",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "a64cefd4d53e41af689247d206382dadce031498e75f4ad11cec686d73d9bd5e",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "r1-all-before",
+        "command": [
+          "/usr/bin/nice",
+          "-n",
+          "10",
+          "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+          "--rows",
+          "100000",
+          "--samples",
+          "3",
+          "--case",
+          "all"
+        ],
+        "binary_sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "returncode": 0,
+        "before": {
+          "utc": "2026-11-08T22:49:11.531867+00:00",
+          "load": [
+            1.15771484375,
+            1.8486328125,
+            2.16455078125
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [],
+          "active_compilers": []
+        },
+        "after": {
+          "utc": "2026-11-08T22:49:19.860449+00:00",
+          "load": [
+            1.13330078125,
+            1.8203125,
+            2.15087890625
+          ],
+          "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=23920739)\t100%; finishing charge; (no estimate) present: true",
+          "active_processes": [
+            {
+              "pid": 35798,
+              "cpu_percent": 6.3,
+              "command": "/Applications/T3 Code (Nightly).app/Contents/MacOS/T3 Code (Nightly)"
+            }
+          ],
+          "active_compilers": []
+        },
+        "resource_guard_passed": true,
+        "result": {
+          "case": "all",
+          "rows": 100000,
+          "source_scene_roots": 100000,
+          "ops": 100000,
+          "samples": 3,
+          "warmup": 1,
+          "apply_ops_ms": [
+            767.598292,
+            765.9108329999999,
+            759.021667
+          ],
+          "p50_ms": 765.9108329999999,
+          "p95_ms": 767.598292,
+          "canonical_document_hashes": {
+            "bench.scene": "90c2678bf65f7e24089d126937da0a3a18ac8fd4832db1b5cedb4762c03cf8dd"
+          },
+          "runtime_state_hash": "7478d34254b7e7a7ac89ffdc15ec378b95473770a21b95ffaad64417a2f0f9cb",
+          "portable_snapshot_hash": "a8ff9c23cb9f2b25d10b1b3b50b742fe0917db9a7ae4bb9eb4b608bc8c94e062",
+          "all_authored_handles_retained": true,
+          "preexisting_runtime_values_retained": true
+        },
+        "stdout_sha256": "fdc3da4f38cfa9eb5d0fe16a99c75292689480f2d01a34c96fb009bed8383bd8",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "executables": {
+      "target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e": {
+        "path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e-3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e",
+        "sha256": "3640808044465ffc0fd92c0cc98a0f29c65b8689c451cdcffc13747456b93d7e"
+      },
+      "target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a": {
+        "path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-feature-parity/bin/projection-edit-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a-a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a",
+        "sha256": "a2e77238106577d5460108f8447ed3d44a5c1dfdd4defe0b2e8f53f09fd18c0a"
+      }
+    },
+    "complete": true
+  }
+}

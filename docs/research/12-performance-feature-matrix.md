@@ -29,7 +29,9 @@ changes have executable evidence:
 - Native SparseSet views now pass actual CLR mixed-storage, filter, tick, churn,
   command-order and undo tests. The [sparse results](../../benchmarks/iteration/sparse_native_mac_2026-11-09.json)
   retain fragmented-query costs and a cold dense-tail increase; they do not establish
-  zero regression. Further streaming setup work is measured separately.
+  zero regression. The subsequent [streaming fallback](../../benchmarks/iteration/sparse_streaming_mac_2026-11-09.json)
+  reduces measured sparse p50 by 52–71%, retaining exact callbacks/ticks and the
+  dense holdout results, including tail variability.
 - C# `[Query]` methods can receive component spans and readonly entity spans while
   retaining the same access declarations and ABI. The [batch results](../../benchmarks/iteration/batch_queries_mac_2026-11-09.json)
   cover 24 valid fresh-process cases, exact row bits, scalar and explicit SIMD
@@ -41,6 +43,12 @@ changes have executable evidence:
   reduces complete CPU preparation by about 19% at 100k records and allocation
   requests by 26%, with matching complete state and portable hashes. Asset, GPU
   and first-correct-tick readiness are outside these timings.
+- [Local scene Set batches](../../benchmarks/iteration/projection_local_mac_2026-11-09.json)
+  resolve touched source records with guarded full fallbacks. At 100k plain rows,
+  one edit drops from 215–226 ms to 0.84–0.90 ms with matching source/state/snapshot
+  hashes. A large prefab instance still resolves in full; broad edits do not gain
+  the same benefit. The initial full-wave slowdown and follow-up overhead remain
+  visible in the evidence. This measures CPU op application, not editor latency.
 - The [expanded boids/structural baseline](../../benchmarks/iteration/unity/broad_mac_2026-11-08.json)
   is one battery round, with its missing-ID and bookkeeping limits recorded.
   A later build replaced the original binary; reconstructed-source runs require a
