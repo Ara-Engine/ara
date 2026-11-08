@@ -19,6 +19,9 @@ root `Cargo.toml`.
   `menu_panel`/`menu_item`, `dialog_panel`, `toast`, `title_bar` (window-control keys for
   native chrome), `nav_item`, `page_header`. Controls `cascade_ink`, so labels and icons follow
   their colour and hover look; feedback washes come from the theme (`look.rs`).
+- `art::cover(look, seed, w, h)`: generated mesh-gradient cover art (chart palette, grain,
+  vignette) for projects and templates without a picture; `art::seed(id)` is stable.
+  `--example covers` writes a sample sheet.
 - `capture::png(&Image)`: a headless stillkit snapshot as PNG bytes (captures, tests).
 
 ## Icons
