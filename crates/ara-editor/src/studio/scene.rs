@@ -5,7 +5,7 @@
 //! renderer's entity channel), Shift adds.
 use ara_kit::icons;
 use ara_kit::ui::*;
-use stillkit::el::{Align, El, Handled, Justify, PointerPhase, el, icon, native, row, text};
+use stillkit::el::{Align, El, Handled, Justify, PointerPhase, col, el, icon, native, row, text};
 use stillkit::{Button, Cursor, Rgba};
 
 use super::{SCENE_LAYER, Studio, commands, gizmo};
@@ -263,23 +263,166 @@ fn toolbar(s: &Studio) -> El<Studio> {
 }
 
 /// The frame rate, top right, while frames run.
+/// The top-right corner: the orientation gizmo, and the frame rate under it while frames run.
 fn orientation(s: &Studio) -> El<Studio> {
-    match s.local.scene.fps {
-        Some((fps, ms)) if s.local.scene.ready => row()
-            .absolute(0.0, 10.0)
-            .w_full()
-            .justify(Justify::End)
-            .child(
-                glass_group(&s.look).pad_x(8.0).child(
-                    text(format!("{fps:.0} fps  {ms:.1} ms"))
-                        .text_size(11.0)
-                        .family(mono())
-                        .color(Rgba::new(1.0, 1.0, 1.0, 0.8)),
-                ),
-            )
-            .child(el().w(10.0)),
-        _ => el(),
+    let mut corner = col().gap(6.0).align(Align::End).child(axes(s));
+    if let Some((fps, ms)) = s.local.scene.fps.filter(|_| s.local.scene.ready) {
+        corner = corner.child(
+            glass_group(&s.look).h(22.0).pad_x(8.0).child(
+                text(format!("{fps:.0} fps  {ms:.1} ms"))
+                    .text_size(10.5)
+                    .family(mono())
+                    .color(Rgba::new(1.0, 1.0, 1.0, 0.75)),
+            ),
+        );
     }
+    row()
+        .absolute(0.0, 8.0)
+        .w_full()
+        .justify(Justify::End)
+        .child(corner)
+        .child(el().w(8.0))
+}
+
+/// The axis gizmo's size and its arms' length, design px.
+const AXES: f32 = 76.0;
+const ARM: f32 = 26.0;
+
+/// The world axes as the camera sees them, from the gizmo's centre: screen offset, depth
+/// (toward the viewer is negative), and which axis and sign.
+fn axis_points(camera: &crate::state::Camera) -> Vec<([f32; 2], f32, usize, bool)> {
+    let Some((right, up, forward)) = camera.basis() else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for (axis, dir) in [glam::Vec3::X, glam::Vec3::Y, glam::Vec3::Z]
+        .into_iter()
+        .enumerate()
+    {
+        for positive in [true, false] {
+            let d = if positive { dir } else { -dir };
+            out.push((
+                [d.dot(right) * ARM, -d.dot(up) * ARM],
+                d.dot(forward),
+                axis,
+                positive,
+            ));
+        }
+    }
+    // Far first, so near ones draw on top.
+    out.sort_by(|a, b| b.1.total_cmp(&a.1));
+    out
+}
+
+/// Unity's scene gizmo: X, Y and Z turning with the camera, the positive ends labelled.
+/// Clicking an end looks at the scene from that side; the centre switches projection.
+fn axes(s: &Studio) -> El<Studio> {
+    let camera = s.editor.state.camera;
+    let points = axis_points(&camera);
+    let tints = [
+        Rgba::rgb8([240, 82, 82], 1.0),
+        Rgba::rgb8([110, 205, 110], 1.0),
+        Rgba::rgb8([80, 140, 255], 1.0),
+    ];
+    let drawn = points.clone();
+    let mut gizmo = el()
+        .key("scene/axes")
+        .size(AXES)
+        .radius(AXES / 2.0)
+        .fill(Rgba::new(0.06, 0.06, 0.07, 0.0))
+        .label("View orientation")
+        .tooltip("Click an axis to look from that side; the centre switches projection")
+        .hovered(|e| e.fill(Rgba::new(0.06, 0.06, 0.07, 0.45)))
+        .child(
+            stillkit::el::paint(move |f, rect, _| {
+                let c = stillkit::Point::new(
+                    rect.left + rect.width() / 2.0,
+                    rect.top + rect.height() / 2.0,
+                );
+                let k = f.px(1.0);
+                for (offset, depth, axis, positive) in &drawn {
+                    let end = stillkit::Point::new(c.x + offset[0] * k, c.y + offset[1] * k);
+                    let tint = tints[*axis];
+                    // Ends pointing away fade.
+                    let alpha = if *depth > 0.3 { 0.55 } else { 1.0 };
+                    if *positive {
+                        f.push(stillkit::Op::Line {
+                            from: c,
+                            to: end,
+                            width: 2.0 * k,
+                            color: tint.with_alpha(alpha),
+                        });
+                        let r = 7.0 * k;
+                        f.fill(
+                            stillkit::Rect::new(end.x - r, end.y - r, 2.0 * r, 2.0 * r),
+                            r,
+                            tint.with_alpha(alpha),
+                        );
+                    } else {
+                        let r = 4.5 * k;
+                        f.fill(
+                            stillkit::Rect::new(end.x - r, end.y - r, 2.0 * r, 2.0 * r),
+                            r,
+                            tint.with_alpha(0.35 * alpha + 0.15),
+                        );
+                    }
+                }
+                let r = 3.0 * k;
+                f.fill(
+                    stillkit::Rect::new(c.x - r, c.y - r, 2.0 * r, 2.0 * r),
+                    r,
+                    Rgba::new(1.0, 1.0, 1.0, 0.85),
+                );
+            })
+            .w_full()
+            .h_full(),
+        )
+        .on_pointer(move |s: &mut Studio, e, _| {
+            if e.phase != PointerPhase::Up || e.button != Button::Left {
+                return e.phase == PointerPhase::Down;
+            }
+            let at = [e.local.x - AXES / 2.0, e.local.y - AXES / 2.0];
+            let hit = axis_points(&s.editor.state.camera)
+                .into_iter()
+                .rev()
+                .find(|(o, ..)| (o[0] - at[0]).hypot(o[1] - at[1]) < 9.0);
+            match hit {
+                Some((_, _, axis, positive)) => look_from(s, axis, positive),
+                None if at[0].hypot(at[1]) < 8.0 => {
+                    commands::run(s, "view.camera.perspective", &Target::None)
+                }
+                None => {}
+            }
+            true
+        });
+    // The positive ends' letters, over their discs.
+    for (offset, depth, axis, positive) in points {
+        if positive && depth <= 0.3 {
+            gizmo = gizmo.child(
+                text(["X", "Y", "Z"][axis])
+                    .text_size(9.5)
+                    .weight(800)
+                    .color(Rgba::new(0.05, 0.05, 0.06, 0.95))
+                    .text_align(stillkit::el::TextAlign::Center)
+                    .w(14.0)
+                    .absolute(AXES / 2.0 + offset[0] - 7.0, AXES / 2.0 + offset[1] - 6.5),
+            );
+        }
+    }
+    gizmo
+}
+
+/// Points the Scene camera from the side `axis` (`positive` or not) toward its target.
+fn look_from(s: &mut Studio, axis: usize, positive: bool) {
+    let sign = if positive { 1.0 } else { -1.0 };
+    let (yaw, pitch) = match axis {
+        0 => (sign * std::f32::consts::FRAC_PI_2, 0.0),
+        1 => (s.editor.state.camera.yaw, sign * 1.54),
+        _ => (if positive { 0.0 } else { std::f32::consts::PI }, 0.0),
+    };
+    let camera = &mut s.editor.state.camera;
+    camera.yaw = yaw;
+    camera.pitch = pitch;
 }
 
 /// A translucent group over the viewport, legible over any picture.
