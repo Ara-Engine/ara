@@ -64,3 +64,8 @@ CPU/Cargo slot: unassigned initially. All children explicitly holding heavy work
 - All initial/changed/portable hashes match at10k/100k, livehandles/source mirrors/restore pass. Compiler-overlap attempt retained/excluded. Allocation-only separate run agrees; latency inthatprofile intentionallyunaccepted.
 - BatchC#9validforward cases show smallscalarspanchanges and useful explicitSIMD gains; reverseandremainingparallelhot pending, interruptedcase retained. Runtime/source generationverified; noNativeAOTexecutionclaim.
 - Real query_filter harness provenance reviews: fullinputmanifests fixed; root also binds resultJSONbytes tolaunchhash and6Pythoncontracts pass. Actualcompilation/oracle smoke pending; correctness lane will remain distinctfromacceptedtimings underload.
+
+### Batch query checkpoint
+-24valid fresh-process cases now complete in2reversed AC rounds, plus1interruptedattempt retained/excluded. Samefrozenbinary, all1,000,003rows bitvalidated; privateCLR10.0.14 tieredcompilationoff.
+- Scalar spans alone give small/mixed changes; explicitVector<float>cold14workers+caller~.100ms vsrow.143/.151ms (~30–34%less); cold1worker+caller~.174/.179ms vsrow.545/.559ms (~68%less). Poolworker1 is not serial. HotDebug results separate. NotUnity/NativeAOT/framecomparison.
+-29generator/124compiler/2actualCLR integration+focusedclippy+independentAPIreview pass againstcommittedd05677f2c runtime. Code/bench/docsreadytocommit; streamingruntime remainsaseparateuncommittedpacket.

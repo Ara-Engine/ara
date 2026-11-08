@@ -6,7 +6,7 @@ using System.Text;
 namespace Ara.Generators;
 
 /// <summary>Writes the generated C# for each model and the module's <c>Register</c> method.</summary>
-public static class Emit
+public static partial class Emit
 {
     const string Unsafe = "global::System.Runtime.CompilerServices.Unsafe";
     const string Hidden = "[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]";
@@ -87,7 +87,7 @@ public static class Emit
     }
 
     /// <summary>The chunk-batched entry point of a <c>[Query]</c> system.</summary>
-    public static string Query(SystemModel m) => InShell(m.Shell, null, c =>
+    public static string Query(SystemModel m) => m.IsBatch ? QueryBatch(m) : InShell(m.Shell, null, c =>
     {
         c.Line("/// <summary>Runs <c>" + m.Method + "</c> over one chunk (one call per contiguous run of ECS rows).</summary>");
         c.Line(Hidden);
@@ -243,7 +243,7 @@ public static class Emit
         }
         foreach (var s in systems.OrderBy(s => s.Order).ThenBy(s => s.Name, StringComparer.Ordinal))
         {
-            var cols = Access(s.Params.Where(p => p.Kind == "column"));
+            var cols = Access(s.Params.Where(p => p.IsColumn));
             var res = Access(s.Params.Where(p => p.Kind == "resource"));
             var structural = s.Params.Any(p => p.Kind == "commands") ? "true" : "false";
             c.Line($"b.System({Lit(s.Name)}, &{s.Shell.FullName}.__AraRun_{s.Method}, {s.Order}, {cols}, {res}, {Strings(s.With)}, {Strings(s.Without)}, {structural});");

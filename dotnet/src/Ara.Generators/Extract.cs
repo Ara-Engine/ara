@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Ara.Generators;
 
 /// <summary>Turns attributed declarations into equatable pipeline models (with diagnostics).</summary>
-public static class Extract
+public static partial class Extract
 {
     /// <summary>Where <paramref name="t"/> lives, or null (plus <c>ARA0701</c>) if it or an enclosing type is not partial.</summary>
     public static Shell? ShellOf(INamedTypeSymbol t, List<DiagInfo> diags)
@@ -55,60 +55,6 @@ public static class Extract
         defs.Add(new TypeDef(name, Schema.StructJson(t, kind, fields, defs, diags)));
         return new DataModel(shell ?? new Shell(null, default, "", ""), role, name,
             fields.Select(f => f.Name).ToEquatable(), defs.ToEquatable(), diags.ToEquatable());
-    }
-
-    /// <summary>A <c>[Query]</c> method.</summary>
-    public static SystemModel? Query(GeneratorAttributeSyntaxContext ctx)
-    {
-        if (ctx.TargetSymbol is not IMethodSymbol m) return null;
-        var diags = new List<DiagInfo>();
-        var shell = ShellOf(m.ContainingType, diags);
-        if (!m.IsStatic || !m.ReturnsVoid || m.IsGenericMethod)
-            diags.Add(DiagInfo.At(Descriptors.BadSystem, m, $"`{m.Name}` must be a non-generic `static void` method to be a [Query] system"));
-        var attr = ctx.Attributes[0];
-        var order = 0;
-        string? name = null;
-        foreach (var kv in attr.NamedArguments)
-        {
-            if (kv.Key == "Order" && kv.Value.Value is int o) order = o;
-            if (kv.Key == "Name" && kv.Value.Value is string n) name = n;
-        }
-        name ??= m.Name == "Run" ? m.ContainingType.Name : m.ContainingType.Name + "." + m.Name;
-        var ps = new List<SystemParam>();
-        foreach (var p in m.Parameters)
-        {
-            var refKind = p.RefKind switch { RefKind.Ref => "ref", RefKind.In or RefKind.RefReadOnlyParameter => "in", _ => "" };
-            var ty = p.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            if (Schema.IsAraType(p.Type, "Entity") && refKind != "ref") ps.Add(new("entity", ty, "", ""));
-            else if (Schema.IsAraType(p.Type, "Tick") && refKind != "ref") ps.Add(new("tick", ty, "in", ""));
-            else if (Schema.IsAraType(p.Type, "Rng") && refKind == "ref") ps.Add(new("rng", ty, "ref", ""));
-            else if (Schema.IsAraType(p.Type, "Commands")) ps.Add(new("commands", ty, refKind, ""));
-            else if (Schema.IsComponent(p.Type, out var c) && p.Type is INamedTypeSymbol tag && Schema.Fields(tag).Count == 0)
-                diags.Add(DiagInfo.At(Descriptors.BadSystemParam, p,
-                    $"`{p.Type.Name}` has no fields (a tag), so it has no column to read; filter on it with [With<{p.Type.Name}>] instead"));
-            else if (Schema.IsComponent(p.Type, out c)) ps.Add(new("column", ty, refKind, c));
-            else if (Schema.IsResource(p.Type, out var r)) ps.Add(new("resource", ty, refKind, r));
-            else
-                diags.Add(DiagInfo.At(Descriptors.BadSystemParam, p,
-                    $"parameter `{p.Name}` of system `{name}` has type `{p.Type.ToDisplayString()}`; systems take components (`ref`/`in`), resources, `Entity`, `in Tick`, `ref Rng` or `ref Commands`"));
-        }
-        if (!ps.Any(p => p.Kind == "column"))
-            diags.Add(DiagInfo.At(Descriptors.BadSystem, m, $"system `{name}` needs at least one component parameter"));
-        var with = Filters(m, "WithAttribute", diags);
-        var without = Filters(m, "WithoutAttribute", diags);
-        return new SystemModel(shell ?? new Shell(null, default, "", ""), m.Name, name, order, ps.ToEquatable(),
-            with.ToEquatable(), without.ToEquatable(), diags.ToEquatable());
-    }
-
-    static List<string> Filters(IMethodSymbol m, string attr, List<DiagInfo> diags)
-    {
-        var names = new List<string>();
-        foreach (var a in Schema.Attrs(m, attr))
-        {
-            if (a.AttributeClass?.TypeArguments.FirstOrDefault() is { } t && Schema.IsComponent(t, out var n)) names.Add(n);
-            else diags.Add(DiagInfo.At(Descriptors.BadSystemParam, m, $"[{attr.Replace("Attribute", "")}<T>] needs a component type"));
-        }
-        return names;
     }
 
     /// <summary>A class deriving from <c>Ara.Behaviour</c>, or null for other classes.</summary>
