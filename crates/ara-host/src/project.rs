@@ -326,13 +326,12 @@ impl Project {
             ws.set_reference_root(crate::project_layout::AUTHORING_ROOT);
         }
         let mut diags = BTreeMap::new();
-        let mut seen = Vec::new();
+        let mut seen = HashSet::new();
         for file in self.docs.iter().chain(extra) {
             let rel = self.rel(file);
-            if seen.contains(&rel) {
+            if !seen.insert(rel.clone()) {
                 continue;
             }
-            seen.push(rel.clone());
             match fs::read_to_string(file) {
                 Ok(text) => {
                     let result = read(&text, &rel, &self.db, Some(&self.index));
