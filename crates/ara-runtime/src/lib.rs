@@ -505,7 +505,7 @@ impl Runtime {
         for plugin in &mut plugins {
             plugin.install(Stage::Late, &mut session)?;
         }
-        session.add_system("poses.resolve", sync::resolve_poses)?;
+        session.add_system("poses.resolve", sync::resolve_poses_cached)?;
 
         let mut play = PlayControl::new(session, config.build);
         play.start();
@@ -789,7 +789,7 @@ impl Runtime {
                 (
                     animation::animate,
                     control::place_cameras,
-                    sync::resolve_poses,
+                    sync::resolve_poses_cached,
                 )
                     .chain(),
             );
