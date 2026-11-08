@@ -1575,6 +1575,7 @@ dependencies = [
  "ara-components",
  "ara-doc",
  "ara-schema",
+ "ara-sim",
  "ciborium",
  "serde",
  "serde_json",

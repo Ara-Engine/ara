@@ -15,7 +15,8 @@ The play-mode wire contract between the edit-world owner (`ara` daemon, editor) 
 - `PlayScene`: documents (`DocumentData`), project types, seed, tick rate, asset pins
   (`as_…` → 64-hex action digest), cache and nav-cache dirs, `imports` (imported
   asset ID → path, so cell cooking resolves references). `encode`/`decode` (CBOR),
-  `documents(&Workspace)`, `workspace()`. `hex`/`unhex` for digests.
+  `documents(&Workspace)`, borrowed `workspace()` and consuming `take_workspace()`.
+  `hex`/`unhex` for digests.
 - `PlayScene.ui` embeds native markup/styles, typed ECS bindings, fonts/images,
   feedback counters and music routes. It carries presentation data, never game state.
   Defaulted resource-path and nonfatal-diagnostic metadata identifies broken files
@@ -48,6 +49,11 @@ the standalone entry calls `resolve_shipping(export_root)` before building a wor
   progress revisions. Absent IDs are failed/unregistered; existing pins stay live.
 - Accepted sockets inherit the listener's non-blocking mode; `accept` resets it.
 - Bump `PROTOCOL` only for incompatible changes; new methods are additive.
+- One-shot player preparation owns the decoded `PlayScene` and calls
+  `take_workspace()`: records move into the runtime's source mirror, while other
+  snapshot fields remain available. Documents drain even on error. Retry by
+  decoding retained snapshot bytes again; use `workspace()` when the caller must
+  retain the decoded documents. Owner capture keeps its authoring workspace.
 - `Role` matches `ara-net` launch roles (Host/Dedicated/Client) plus `Local`.
 - Networked roles: `Start.net` (`NetStart`: players, per-client `LinkConditions`, and
   for clients the `Joined` from the authority's `play.join`). The join token is private

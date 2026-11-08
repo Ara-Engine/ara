@@ -775,6 +775,25 @@ impl PlayScene {
         Ok((workspace, AssetId::parse(&self.scene)?))
     }
 
+    /// Transfers decoded records into the runtime's authoring workspace without
+    /// copying their JSON trees. Documents are consumed even on error; other
+    /// snapshot fields remain available for this one-shot preparation.
+    pub fn take_workspace(&mut self) -> Result<(Workspace, AssetId), String> {
+        let mut index = ara_doc::refs::AssetIndex::new();
+        for (id, path) in &self.imports {
+            index.insert(id.clone(), path.clone(), None);
+        }
+        let mut workspace = Workspace::new(index);
+        for data in self.documents.drain(..) {
+            let mut doc = Document::new(data.kind, AssetId::parse(&data.id)?);
+            for (id, record) in data.records {
+                doc.insert_unchecked(RecordId::parse(&id)?, record);
+            }
+            workspace.insert(data.path, doc);
+        }
+        Ok((workspace, AssetId::parse(&self.scene)?))
+    }
+
     /// Binary (CBOR) encoding for the shared-memory section.
     pub fn encode(&self) -> Result<Vec<u8>, String> {
         let mut bytes = Vec::new();
