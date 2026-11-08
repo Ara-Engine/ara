@@ -325,7 +325,6 @@ fn severity_glyph(l: &ara_kit::look::Look, severity: ara_diag::Severity) -> El<S
 /// Console: the bus in order, newest last; toggles filter by severity.
 fn console(s: &Studio) -> El<Studio> {
     let l = &s.look;
-    let c = &l.c;
     let counts = [
         ara_diag::Severity::Error,
         ara_diag::Severity::Warning,
@@ -337,12 +336,49 @@ fn console(s: &Studio) -> El<Studio> {
         .iter()
         .filter(|r| s.local.console[level(r.severity)])
         .collect();
+    // Severity filters: the icon in its colour and the count, a soft fill while shown.
+    let c = &l.c;
     let toggle = |i: usize, glyph, label: &str| {
         let on = s.local.console[i];
-        toggle_button(l, Size::Sm, glyph, label, on)
+        let tint = [c.destructive.0, c.warning.0, c.info.0][i];
+        let hover = c.hover_surface.0;
+        row()
             .key(format!("console/level/{i}"))
+            .h(24.0)
+            .pad_x(8.0)
+            .gap(6.0)
+            .align(Align::Center)
+            .radius(l.radius.sm)
+            .fill(if on {
+                c.raised.0
+            } else {
+                stillkit::Rgba::TRANSPARENT
+            })
+            .border(
+                1.0,
+                if on {
+                    c.border.0
+                } else {
+                    stillkit::Rgba::TRANSPARENT
+                },
+            )
+            .color(if on {
+                c.foreground.0
+            } else {
+                c.muted_foreground.0
+            })
+            .cascade_ink()
+            .label(format!("{label}: {}", counts[i]))
+            .tooltip(format!("{} {label}", if on { "Hide" } else { "Show" }))
+            .checked(on)
+            .hovered(move |e| e.fill(hover))
             .on_press(move |s: &mut Studio| s.local.console[i] = !s.local.console[i])
-            .child(text(counts[i].to_string()).text_size(11.0).family(mono()))
+            .child(
+                icon(glyph)
+                    .size(13.0)
+                    .color(if on { tint } else { tint.with_alpha(0.45) }),
+            )
+            .child(text(counts[i].to_string()).text_size(12.0).weight(560))
     };
     let toolbar = row()
         .h(36.0)
@@ -379,7 +415,6 @@ fn console(s: &Studio) -> El<Studio> {
         .grow(1.0)
         .follow_end()
     };
-    let _ = c;
     col()
         .grow(1.0)
         .min_h(0.0)

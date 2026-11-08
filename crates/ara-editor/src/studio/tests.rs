@@ -155,3 +155,35 @@ fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
         "and not the box's renderer"
     );
 }
+
+/// Writes the studio's chrome (the Scene hole left empty) in both themes, with each bottom
+/// panel, to `target/studio-captures/` for design review: `cargo test -p ara-editor --lib
+/// studio::tests::captures -- --ignored`.
+#[test]
+#[ignore = "writes review captures under target/"]
+fn captures() {
+    let mut rt = open();
+    let out = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/studio-captures");
+    std::fs::create_dir_all(&out).unwrap();
+    for light in [false, true] {
+        rt.update(|s| s.editor.state.light = light);
+        if rt.touch(Studio::sync_look) {
+            let theme = rt.state().look.theme.clone();
+            let background = rt.state().look.c.background.0;
+            rt.set_theme(theme);
+            rt.set_background(Some(background));
+        }
+        for panel in ["assets", "console", "problems"] {
+            rt.update(|s| s.act("editor.layout.show", json!({"panel": panel})));
+            for _ in 0..30 {
+                rt.frame(FRAME);
+            }
+            let name = format!("{}-{panel}.png", if light { "light" } else { "dark" });
+            std::fs::write(
+                out.join(name),
+                ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+            )
+            .unwrap();
+        }
+    }
+}

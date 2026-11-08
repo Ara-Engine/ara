@@ -203,6 +203,7 @@ fn field_row(s: &Studio, f: &Field) -> El<Studio> {
     let width = (s.size.0 * 0.22).clamp(220.0, 420.0);
     let mut label = row()
         .w(width * LABEL)
+        .min_w(width * LABEL)
         .h(24.0)
         .gap(6.0)
         .align(Align::Center)
@@ -459,7 +460,6 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
             let open = s.local.select.as_deref() == Some(key.as_str());
             let k = key.clone();
             let mut trigger = select(l, Size::Sm, key.clone(), &current)
-                .w_full()
                 .expanded(open)
                 .on_press(move |s: &mut Studio| {
                     s.local.select = if s.local.select.as_deref() == Some(k.as_str()) {
@@ -554,8 +554,7 @@ fn number(
         .grow(1.0)
         .value(shown)
         .select_all_on_focus()
-        .text_size(12.0)
-        .family(mono())
+        .text_size(12.5)
         .text_align(stillkit::el::TextAlign::Start)
         .color(l.c.foreground.0)
         .on_submit(move |s: &mut Studio, t| {
