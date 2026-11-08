@@ -84,6 +84,17 @@ impl LogRow {
     }
 }
 
+/// Where the pointer rests over the Scene view (for Shift+A at the pointer).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ScenePointer {
+    /// From the view's top-left, view px.
+    pub at: [f32; 2],
+    /// The view's size, view px.
+    pub size: (f32, f32),
+    /// In the window, design px.
+    pub window: (f32, f32),
+}
+
 /// Window-only state.
 #[derive(Debug, Default)]
 pub struct Local {
@@ -121,6 +132,16 @@ pub struct Local {
     )>,
     /// An element to focus once the view shows it (a command that opened a field).
     pub focus: Option<&'static str>,
+    /// The open component overflow menu, by component.
+    pub component_menu: Option<String>,
+    /// Add Component's search and highlighted row, while open.
+    pub add_component: Option<(String, usize)>,
+    /// The open Create browser.
+    pub create: Option<super::create::Browser>,
+    /// What was created lately, newest first (the browser's Recent).
+    pub recent: Vec<&'static str>,
+    /// The pointer over the Scene view.
+    pub scene_pointer: Option<ScenePointer>,
     /// The gizmo handle being dragged.
     pub gizmo: Option<super::gizmo::Drag>,
     /// The right button is held in the Scene view: WASD/QE fly the camera.

@@ -23,7 +23,8 @@ pub fn view(s: &Studio) -> El<Studio> {
         .child(title_bar(s))
         .child(dock::view(s).grow(1.0).min_h(0.0))
         .child(status_bar(s))
-        .overlay(context_menu(s));
+        .overlay(context_menu(s))
+        .overlay(super::create::overlay(s));
     palette(s, root)
 }
 
@@ -73,7 +74,13 @@ fn title_bar(s: &Studio) -> El<Studio> {
                     .color(c.primary_foreground.0),
             ),
     ];
-    lead.extend(MENUS.iter().map(|m| menu_button(s, m.title, m.items)));
+    lead.extend(MENUS.iter().map(|m| {
+        if m.title == "Create" {
+            create_button(s)
+        } else {
+            menu_button(s, m.title, m.items)
+        }
+    }));
     let play = play_controls(s);
     let workspace = s.editor.host.store().workspace();
     let scene = workspace
@@ -164,6 +171,26 @@ fn title_bar(s: &Studio) -> El<Studio> {
         vec![crumb, vdivider(l, 16.0), launcher, theme],
         s.frame.controls,
     )
+}
+
+/// The title bar's Create: opens the Create browser under it.
+fn create_button(s: &Studio) -> El<Studio> {
+    let l = &s.look;
+    let open = s
+        .local
+        .create
+        .as_ref()
+        .is_some_and(|b| b.anchor == super::create::Anchor::Key("menu/Create"));
+    let mut b = button(l, Tone::Ghost, Size::Sm, None, "Create")
+        .key("menu/Create")
+        .expanded(open)
+        .on_press(|s: &mut Studio| {
+            super::create::toggle(s, super::create::Anchor::Key("menu/Create"), None)
+        });
+    if open {
+        b = b.fill(l.c.raised.0).color(l.c.foreground.0);
+    }
+    b
 }
 
 /// A title-bar menu: its name, and its registry items while open.
@@ -412,7 +439,8 @@ enum Run {
     Select(String),
 }
 
-fn score(query: &str, title: &str) -> Option<i32> {
+/// A fuzzy match of `query` in `title`: letters in order, rewarding runs and word starts.
+pub(super) fn score(query: &str, title: &str) -> Option<i32> {
     if query.is_empty() {
         return Some(0);
     }
@@ -509,6 +537,7 @@ fn palette(s: &Studio, root: El<Studio>) -> El<Studio> {
         .child(icon(icons::SEARCH).size(16.0).color(c.muted_foreground.0))
         .child(
             text_input("palette/query")
+                .focus_ring(false)
                 .grow(1.0)
                 .placeholder("Run a command or jump to an entity")
                 .value(query.as_str())

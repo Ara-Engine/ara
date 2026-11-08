@@ -11,6 +11,7 @@
 mod chrome;
 mod commands;
 mod compositor;
+mod create;
 mod dock;
 mod gizmo;
 mod hierarchy;

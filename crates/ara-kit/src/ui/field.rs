@@ -50,7 +50,9 @@ pub fn field<S: 'static>(
         .placeholder(placeholder)
         .value(value)
         .text_size(if size == Size::Lg { 13.0 } else { 12.0 })
-        .color(l.c.foreground.0);
+        .color(l.c.foreground.0)
+        // The well's border shows focus; the field inside draws no second ring.
+        .focus_ring(false);
     w.child(input(f))
 }
 

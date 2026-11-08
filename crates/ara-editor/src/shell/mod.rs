@@ -58,7 +58,7 @@ mod graph_annotations;
 mod graph_input;
 mod graph_panel;
 mod hierarchy;
-mod hierarchy_actions;
+pub(crate) mod hierarchy_actions;
 mod hierarchy_filters;
 mod history_panel;
 mod import_panel;

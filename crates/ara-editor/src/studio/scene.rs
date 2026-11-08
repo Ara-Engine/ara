@@ -41,6 +41,29 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
             true
         })
         .on_key(|s: &mut Studio, key, tx| {
+            // Shift+A adds at the pointer: the browser opens there and places on the ground
+            // under it.
+            if key.0 == 0x41 && tx.modifiers().shift && !tx.modifiers().ctrl {
+                let (anchor, place) = match s.local.scene_pointer {
+                    Some(super::state::ScenePointer { at, size, window }) => {
+                        let rect = ara_ui::paint::Box2 {
+                            x: 0.0,
+                            y: 0.0,
+                            w: size.0,
+                            h: size.1,
+                        };
+                        let ground =
+                            crate::shell::overlay::ground_point(&s.editor.state.camera, rect, at);
+                        (
+                            super::create::Anchor::Point(window.0, window.1),
+                            ground.map(|p| [p.x, p.y, p.z]),
+                        )
+                    }
+                    None => (super::create::Anchor::Key("scene/view"), None),
+                };
+                super::create::toggle(s, anchor, place);
+                return Handled::Yes;
+            }
             // While flying, the fly keys steer instead of switching tools.
             if s.local.flying && super::FLY_KEYS.contains(&key.0) {
                 return Handled::Yes;
@@ -92,7 +115,14 @@ fn navigate(s: &mut Studio, e: &stillkit::el::PointerEvent, _: &mut stillkit::el
     let at = [e.local.x, e.local.y];
     // The gizmo takes the left button before picking and orbiting.
     match (e.phase, e.button) {
-        (PointerPhase::Hover, _) => return gizmo::hover(s, at, e.size),
+        (PointerPhase::Hover, _) => {
+            s.local.scene_pointer = Some(super::state::ScenePointer {
+                at,
+                size: e.size,
+                window: (e.at.x, e.at.y),
+            });
+            return gizmo::hover(s, at, e.size);
+        }
         (PointerPhase::Down, Button::Left) if !e.mods.alt && gizmo::begin(s, at, e.size) => {
             return true;
         }
@@ -224,7 +254,7 @@ fn toolbar(s: &Studio) -> El<Studio> {
                 .on_press(|s: &mut Studio| commands::run(s, "view.frame", &Target::None)),
         );
     row()
-        .absolute(10.0, 10.0)
+        .absolute(8.0, 8.0)
         .gap(8.0)
         .child(tools)
         .child(space)
@@ -255,7 +285,7 @@ fn orientation(s: &Studio) -> El<Studio> {
 /// A translucent group over the viewport, legible over any picture.
 fn glass_group(l: &ara_kit::look::Look) -> El<Studio> {
     row()
-        .h(30.0)
+        .h(28.0)
         .pad_x(3.0)
         .gap(2.0)
         .align(Align::Center)

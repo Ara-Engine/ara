@@ -60,6 +60,16 @@ fn open() -> Runtime<Studio> {
     rt
 }
 
+/// A few frames, applying focus requests as the host does.
+fn settle(rt: &mut Runtime<Studio>) {
+    for _ in 0..3 {
+        rt.frame(FRAME);
+        if let Some(key) = rt.touch(|s| s.local.focus.take()) {
+            rt.focus(key);
+        }
+    }
+}
+
 fn position(rt: &Runtime<Studio>, id: &str) -> Value {
     rt.state().resolved[id].record["Transform"]["position"].clone()
 }
@@ -197,6 +207,21 @@ fn captures() {
         )
         .unwrap();
         rt.key(stillkit::el::KeyCode::ESCAPE.0);
+        rt.update(|s| {
+            super::create::toggle(s, super::create::Anchor::Key("hierarchy/create"), None)
+        });
+        settle(&mut rt);
+        rt.key(0x28);
+        for _ in 0..30 {
+            rt.frame(FRAME);
+        }
+        let name = format!("{}-create.png", if light { "light" } else { "dark" });
+        std::fs::write(
+            out.join(name),
+            ara_kit::capture::png(&rt.snap().unwrap()).unwrap(),
+        )
+        .unwrap();
+        rt.update(|s| s.local.create = None);
     }
 }
 
@@ -238,4 +263,32 @@ fn right_clicking_a_row_opens_its_entity_menu() {
         rt.find("cmd/edit.duplicate").is_some(),
         "the Entity menu opens"
     );
+}
+
+#[test]
+fn the_create_browser_searches_and_creates_with_enter() {
+    let mut rt = open();
+    let plus = rt.find("hierarchy/create").unwrap();
+    rt.pointer_down(plus.center().x, plus.center().y);
+    rt.pointer_up(plus.center().x, plus.center().y);
+    settle(&mut rt);
+    assert!(rt.find("create").is_some(), "the browser opens");
+    assert!(rt.find("create/cat/Lights").is_some(), "with categories");
+    rt.type_text("spot");
+    rt.frame(FRAME);
+    assert!(
+        rt.find("create/item/create.light.spot").is_some(),
+        "search finds the spot light"
+    );
+    rt.key(0x0D);
+    rt.frame(FRAME);
+    assert!(
+        rt.state().local.create.is_none(),
+        "Enter creates and closes"
+    );
+    let selected = rt.state().editor.state.selection.clone();
+    assert_eq!(selected.len(), 1);
+    let created = &rt.state().resolved[&selected[0]].record;
+    assert_eq!(created["Light"]["kind"], "spot");
+    assert_eq!(rt.state().local.recent, vec!["create.light.spot"]);
 }

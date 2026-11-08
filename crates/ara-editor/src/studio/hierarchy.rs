@@ -176,32 +176,52 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .grow(1.0)
         .pad_x(4.0)
     };
+    // The scene's root: its name and what it holds (Unity's scene header row).
+    let workspace = s.editor.host.store().workspace();
+    let scene = workspace
+        .path_of(&s.editor.state.doc)
+        .map(|p| workspace.reference_path(p))
+        .unwrap_or("Scene")
+        .rsplit('/')
+        .next()
+        .unwrap_or("Scene")
+        .trim_end_matches(".scene")
+        .to_owned();
+    let shown = if count != s.resolved.len() {
+        format!("{count} of {}", s.resolved.len())
+    } else {
+        s.resolved.len().to_string()
+    };
+    let root = row()
+        .key("hierarchy/scene")
+        .h(26.0)
+        .grow(1.0)
+        .pad_x(8.0)
+        .gap(6.0)
+        .align(Align::Center)
+        .radius(4.0)
+        .fill(c.muted.0)
+        .child(
+            icon(icons::CLAPPERBOARD)
+                .size(13.0)
+                .color(c.muted_foreground.0),
+        )
+        .child(
+            text(scene)
+                .text_size(12.0)
+                .weight(600)
+                .color(c.foreground.0)
+                .grow(1.0),
+        )
+        .child(text(shown).text_size(11.0).color(c.muted_foreground.0));
     col()
         .grow(1.0)
         .min_h(0.0)
-        .child(row().pad(6.0).child(search.grow(1.0)))
+        .pad_y(6.0)
+        .gap(4.0)
+        .child(row().pad_x(6.0).child(search.h(24.0).grow(1.0)))
+        .child(row().pad_x(4.0).child(root))
         .child(body)
-        .child(
-            row()
-                .h(24.0)
-                .pad_x(10.0)
-                .align(Align::Center)
-                .child(
-                    text(format!("{} entities", s.resolved.len()))
-                        .text_size(11.0)
-                        .color(c.muted_foreground.0),
-                )
-                .child(el().grow(1.0))
-                .child(
-                    text(if count != s.resolved.len() {
-                        format!("{count} shown")
-                    } else {
-                        String::new()
-                    })
-                    .text_size(11.0)
-                    .color(c.muted_foreground.0),
-                ),
-        )
 }
 
 fn row_el(
@@ -355,7 +375,7 @@ fn row_el(
             let rows = rows.clone();
             move |s: &mut Studio, key, tx| navigate(s, &rows, at, key.0, tx)
         })
-        .child(el().w(4.0 + r.depth as f32 * INDENT))
+        .child(el().w(10.0 + r.depth as f32 * INDENT))
         .child(disclosure)
         .child(
             icon(r.glyph)

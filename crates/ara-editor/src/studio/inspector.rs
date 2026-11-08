@@ -10,13 +10,17 @@ use ara_kit::ui::*;
 use serde_json::{Value, json};
 use stillkit::Cursor;
 use stillkit::el::{
-    Align, Axis, El, Justify, PointerPhase, col, el, icon, menu, row, text, text_input,
+    Align, Axis, El, Handled, Justify, PointerPhase, col, el, icon, menu, popover, row, text,
+    text_input,
 };
 
 use super::Studio;
 use crate::inspector::{Field, Provenance, Widget};
 
-const LABEL: f32 = 0.38;
+/// The label column's share of a row (Unity's 40/60 split).
+const LABEL: f32 = 0.4;
+/// A field row's height.
+const ROW: f32 = 22.0;
 
 pub(super) fn view(s: &Studio) -> El<Studio> {
     let l = &s.look;
@@ -56,12 +60,13 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         }
         by_component.entry(component).or_default().push(f);
     }
-    let mut page = col().pad(10.0).gap(8.0).child(header(s));
+    let mut page = col().pad(8.0).gap(6.0).child(header(s));
     // Transform leads, as in every engine; the rest keep their record order.
     order.sort_by_key(|c| c != "Transform");
     for component in order {
         page = page.child(section(s, &component, &by_component[&component]));
     }
+    page = page.child(add_component(s));
     col()
         .grow(1.0)
         .min_h(0.0)
@@ -69,58 +74,51 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
         .child(page.child(el().h(12.0)))
 }
 
-/// The selection's name (editable for one entity) and how many are selected.
+/// The selection in one row: what it is, its name (editable for one entity) and its id.
 fn header(s: &Studio) -> El<Studio> {
     let l = &s.look;
     let c = &l.c;
     let selection = &s.editor.state.selection;
-    let title = if selection.len() == 1 {
-        s.name(&selection[0])
-    } else {
-        format!("{} entities", selection.len())
-    };
-    let mut head = row().gap(8.0).align(Align::Center).pad_y(2.0).child(
-        el().size(28.0)
-            .radius(7.0)
-            .fill(c.raised.0)
-            .border(1.0, c.border.0)
+    let mut head = row().h(28.0).gap(8.0).align(Align::Center).child(
+        el().size(24.0)
+            .radius(6.0)
+            .fill(c.primary.0.with_alpha(0.14))
             .align(Align::Center)
             .justify(Justify::Center)
-            .child(icon(icons::BOX).size(15.0).color(c.muted_foreground.0)),
+            .child(icon(icons::BOX).size(14.0).color(c.primary.0)),
     );
-    if selection.len() == 1 {
-        let id = selection[0].clone();
-        head = head.child(
-            field(l, Size::Md, "inspector/name", None, "Name", &title, move |f| {
-                f.on_submit(move |s: &mut Studio, t| {
-                    let name = t.trim().to_owned();
-                    if !name.is_empty() {
-                        s.apply(vec![json!({"cmd":"property.set","args":{"entity":id,"path":"name","value":name}})], "Rename entity");
-                    }
+    if let [id] = selection.as_slice() {
+        let entity = id.clone();
+        head = head
+            .child(
+                field(l, Size::Sm, "inspector/name", None, "Name", &s.name(id), move |f| {
+                    f.text_size(13.0).on_submit(move |s: &mut Studio, t| {
+                        let name = t.trim().to_owned();
+                        if !name.is_empty() {
+                            s.apply(vec![json!({"cmd":"property.set","args":{"entity":entity,"path":"name","value":name}})], "Rename entity");
+                        }
+                    })
                 })
-            })
-            .grow(1.0),
-        );
-    } else {
-        head = head.child(
-            text(title)
-                .text_size(13.0)
-                .weight(600)
-                .color(c.foreground.0)
+                .w(0.0)
                 .grow(1.0),
-        );
-    }
-    let id = if selection.len() == 1 {
-        selection[0].clone()
+            )
+            .child(text(id.clone()).text_size(10.5).family(mono()).color(c.muted_foreground.0.with_alpha(0.75)).tooltip("Entity id: what agents and references use"));
     } else {
-        String::new()
-    };
-    col().gap(4.0).child(head).child(
-        text(id)
-            .text_size(10.5)
-            .family(mono())
-            .color(c.muted_foreground.0.with_alpha(0.75)),
-    )
+        head = head
+            .child(
+                text(format!("{} entities", selection.len()))
+                    .text_size(13.0)
+                    .weight(600)
+                    .color(c.foreground.0)
+                    .grow(1.0),
+            )
+            .child(
+                text("Differing values show —")
+                    .text_size(11.0)
+                    .color(c.muted_foreground.0),
+            );
+    }
+    head
 }
 
 /// A component's section: a header (fold, icon, name) over its fields.
@@ -131,8 +129,8 @@ fn section(s: &Studio, component: &str, fields: &[&Field]) -> El<Studio> {
     let name = component.to_owned();
     let head = row()
         .key(format!("component/{component}"))
-        .h(30.0)
-        .pad_x(8.0)
+        .h(26.0)
+        .pad_x(6.0)
         .gap(8.0)
         .align(Align::Center)
         .radius(l.radius.sm)
@@ -160,14 +158,15 @@ fn section(s: &Studio, component: &str, fields: &[&Field]) -> El<Studio> {
                 .color(c.info_foreground.0),
         )
         .child(
-            text(component.to_owned())
+            text(spaced(component))
                 .text_size(12.5)
                 .weight(600)
                 .grow(1.0),
-        );
+        )
+        .child(component_menu(s, component));
     let mut out = card(l).fill(c.muted.0).child(head);
     if !folded {
-        let mut body = col().pad_x(8.0).pad_y(6.0).gap(4.0);
+        let mut body = col().pad_x(8.0).pad_y(4.0).gap(2.0);
         for f in fields {
             body = body.child(field_row(s, f));
         }
@@ -200,11 +199,11 @@ fn field_row(s: &Studio, f: &Field) -> El<Studio> {
         Provenance::Override => c.info.0,
         _ => c.primary.0.with_alpha(0.7),
     };
-    let width = (s.size.0 * 0.22).clamp(220.0, 420.0);
     let mut label = row()
-        .w(width * LABEL)
-        .min_w(width * LABEL)
-        .h(24.0)
+        .w(0.0)
+        .grow(LABEL)
+        .min_w(84.0)
+        .h(ROW)
         .gap(6.0)
         .align(Align::Center)
         .child(el().w(2.0).h(14.0).radius(1.0).fill(mark))
@@ -234,9 +233,9 @@ fn field_row(s: &Studio, f: &Field) -> El<Studio> {
     row()
         .gap(6.0)
         .align(Align::Center)
-        .min_h(24.0)
+        .min_h(ROW)
         .child(label)
-        .child(editor(s, f).grow(1.0).min_w(0.0))
+        .child(editor(s, f).w(0.0).grow(1.0 - LABEL).min_w(0.0))
 }
 
 /// A label that scrubs a number: 8 px per step to the right, Shift for a tenth, Alt for ten.
@@ -388,7 +387,7 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                     row()
                         .grow(1.0)
                         .w(0.0)
-                        .h(24.0)
+                        .h(ROW)
                         .pad_x(2.0)
                         .align(Align::Center)
                         .radius(l.radius.xs)
@@ -515,7 +514,7 @@ fn editor(s: &Studio, f: &Field) -> El<Studio> {
                 other => other.to_string(),
             };
             row()
-                .h(24.0)
+                .h(ROW)
                 .pad_x(8.0)
                 .gap(6.0)
                 .align(Align::Center)
@@ -551,6 +550,7 @@ fn number(
     };
     let unit = unit.map(str::to_owned);
     let mut f = text_input(key.to_owned())
+        .focus_ring(false)
         .grow(1.0)
         .value(shown)
         .select_all_on_focus()
@@ -566,7 +566,7 @@ fn number(
         f = f.read_only();
     }
     row()
-        .h(24.0)
+        .h(ROW)
         .pad_x(6.0)
         .align(Align::Center)
         .radius(l.radius.xs)
@@ -577,6 +577,237 @@ fn number(
             move |e| e.border(1.0, ring)
         })
         .child(f)
+}
+
+/// A component's ⋯ menu: remove it from the selection, fold the others.
+fn component_menu(s: &Studio, component: &str) -> El<Studio> {
+    let l = &s.look;
+    let open = s.local.component_menu.as_deref() == Some(component);
+    let name = component.to_owned();
+    let mut b = icon_button(l, Tone::Ghost, Size::Sm, icons::ELLIPSIS, "More")
+        .size(22.0)
+        .key(format!("component/{component}/more"))
+        .expanded(open)
+        .on_press(move |s: &mut Studio| {
+            s.local.component_menu = if s.local.component_menu.as_deref() == Some(name.as_str()) {
+                None
+            } else {
+                Some(name.clone())
+            };
+        });
+    if open {
+        let (remove, others) = (component.to_owned(), component.to_owned());
+        let items = vec![
+            menu_item(l, &format!("component/{component}/fold"), Some(icons::CHEVRONS_UP_DOWN), "Fold Others", None, false).on_press(move |s: &mut Studio| {
+                s.local.component_menu = None;
+                let all: Vec<String> = s.resolved.get(&s.editor.state.selection[0]).map(|e| e.record.keys().filter(|k| ara_doc::is_component_key(k)).cloned().collect()).unwrap_or_default();
+                s.local.folded = all.into_iter().filter(|k| *k != others).collect();
+            }),
+            menu_separator(l),
+            menu_item(l, &format!("component/{component}/remove"), Some(icons::TRASH), "Remove Component", None, true).on_press(move |s: &mut Studio| {
+                s.local.component_menu = None;
+                let commands = s.editor.state.selection.iter().map(|e| json!({"cmd": "component.remove", "args": {"entity": e, "component": remove}})).collect();
+                s.apply(commands, &format!("Remove {remove}"));
+            }),
+        ];
+        b = b.overlay(
+            menu(menu_panel(l, items)).on_dismiss(|s: &mut Studio| s.local.component_menu = None),
+        );
+    }
+    b
+}
+
+/// Add Component: a full-width button that opens a search over the schema's components the
+/// selection doesn't all have; Enter or a click adds one to every selected entity.
+fn add_component(s: &Studio) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let open = s.local.add_component.is_some();
+    let mut b = button(
+        l,
+        Tone::Secondary,
+        Size::Sm,
+        Some(icons::PLUS),
+        "Add Component",
+    )
+    .key("inspector/add")
+    .w_full()
+    .expanded(open)
+    .on_press(|s: &mut Studio| {
+        s.local.add_component = if s.local.add_component.is_some() {
+            None
+        } else {
+            Some((String::new(), 0))
+        };
+        s.local.focus = Some("inspector/add/search");
+    });
+    let Some((query, active)) = s.local.add_component.clone() else {
+        return row().pad_y(4.0).child(b.grow(1.0));
+    };
+    let rows = addable(s, &query);
+    let active = active.min(rows.len().saturating_sub(1));
+    let mut list = col().max_h(300.0).pad(4.0).gap(1.0).scroll(Axis::Vertical);
+    if rows.is_empty() {
+        list = list.child(
+            text("No components match")
+                .text_size(12.0)
+                .color(c.muted_foreground.0)
+                .pad(8.0),
+        );
+    }
+    for (i, (name, doc)) in rows.iter().enumerate() {
+        let on = i == active;
+        let add = name.clone();
+        let hover = c.hover_surface.0;
+        list = list.child(
+            col()
+                .key(format!("inspector/add/{name}"))
+                .pad_x(8.0)
+                .pad_y(5.0)
+                .gap(1.0)
+                .radius(l.radius.sm)
+                .fill(if on {
+                    c.selection_surface_inactive.0
+                } else {
+                    stillkit::Rgba::TRANSPARENT
+                })
+                .label(name.clone())
+                .hovered(move |e| if on { e } else { e.fill(hover) })
+                .on_press(move |s: &mut Studio| add_to_selection(s, &add))
+                .child(
+                    row()
+                        .gap(8.0)
+                        .align(Align::Center)
+                        .child(
+                            icon(component_icon(name))
+                                .size(13.0)
+                                .color(c.info_foreground.0),
+                        )
+                        .child(
+                            text(spaced(name))
+                                .text_size(12.5)
+                                .weight(560)
+                                .color(c.foreground.0),
+                        ),
+                )
+                .child(
+                    text(doc.clone())
+                        .text_size(11.0)
+                        .color(c.muted_foreground.0)
+                        .wrap(1),
+                ),
+        );
+    }
+    let panel = col()
+        .key("inspector/add/panel")
+        .radius(l.radius.md)
+        .fill(c.popover.0)
+        .border(1.0, c.border.0)
+        .shadow_level(stillkit::ShadowLevel::Menu)
+        .on_key(move |s: &mut Studio, key, _| {
+            let Some((q, a)) = s.local.add_component.clone() else {
+                return Handled::No;
+            };
+            let n = addable(s, &q).len();
+            match key.0 {
+                0x28 if n > 0 => s.local.add_component = Some((q, (a + 1).min(n - 1))),
+                0x26 => s.local.add_component = Some((q, a.saturating_sub(1))),
+                0x1B => s.local.add_component = None,
+                _ => return Handled::No,
+            }
+            Handled::Yes
+        })
+        .child(
+            row().pad(6.0).child(
+                field(
+                    l,
+                    Size::Sm,
+                    "inspector/add/search",
+                    Some(icons::SEARCH),
+                    "Search components",
+                    &query,
+                    |f| {
+                        f.on_input(|s: &mut Studio, t| {
+                            s.local.add_component = Some((t.to_owned(), 0))
+                        })
+                        .on_submit(|s: &mut Studio, _| {
+                            if let Some((q, a)) = s.local.add_component.clone()
+                                && let Some((name, _)) = addable(s, &q).get(a)
+                            {
+                                let name = name.clone();
+                                add_to_selection(s, &name);
+                            }
+                        })
+                    },
+                )
+                .grow(1.0),
+            ),
+        )
+        .child(divider(l))
+        .child(list);
+    b = b.overlay(
+        popover(panel)
+            .match_width()
+            .on_dismiss(|s: &mut Studio| s.local.add_component = None),
+    );
+    row().pad_y(4.0).child(b.grow(1.0))
+}
+
+/// Components the selection doesn't all have, matching `query`, with their first doc line.
+fn addable(s: &Studio, query: &str) -> Vec<(String, String)> {
+    let selection = &s.editor.state.selection;
+    let on_all = |name: &str| {
+        selection.iter().all(|e| {
+            s.resolved
+                .get(e)
+                .is_some_and(|r| r.record.contains_key(name))
+        })
+    };
+    let mut out: Vec<(i32, String, String)> = s
+        .editor
+        .host
+        .store()
+        .schema()
+        .components()
+        .filter(|t| !on_all(&t.name))
+        .filter_map(|t| {
+            let score = super::chrome::score(query, &t.name)
+                .or_else(|| super::chrome::score(query, &spaced(&t.name)))?;
+            Some((
+                score,
+                t.name.clone(),
+                t.doc.lines().next().unwrap_or("").to_owned(),
+            ))
+        })
+        .collect();
+    out.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    out.into_iter().map(|(_, n, d)| (n, d)).collect()
+}
+
+fn add_to_selection(s: &mut Studio, name: &str) {
+    s.local.add_component = None;
+    let commands = s
+        .editor
+        .state
+        .selection
+        .iter()
+        .map(|e| json!({"cmd": "component.add", "args": {"entity": e, "component": name}}))
+        .collect();
+    s.apply(commands, &format!("Add {name}"));
+}
+
+/// A type name with spaces between its words: `MeshRenderer` reads "Mesh Renderer".
+fn spaced(name: &str) -> String {
+    let mut out = String::with_capacity(name.len() + 4);
+    let chars: Vec<char> = name.chars().collect();
+    for (i, &c) in chars.iter().enumerate() {
+        let next_lower = chars.get(i + 1).is_some_and(|n| n.is_lowercase());
+        if i > 0 && c.is_uppercase() && (chars[i - 1].is_lowercase() || next_lower) {
+            out.push(' ');
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// A schema name as a label: `emissiveStrength` reads "Emissive strength".

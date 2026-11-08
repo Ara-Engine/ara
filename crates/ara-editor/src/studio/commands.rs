@@ -7,9 +7,7 @@ use serde_json::json;
 
 use super::Studio;
 use crate::shell::commands::Target;
-use crate::shell::commands::table::{
-    act, apply, create, play, play_params, select, set, shape, view,
-};
+use crate::shell::commands::table::{act, apply, play, play_params, select, set, view};
 
 /// Why a registry command can't run in the studio yet, or `None` when it can.
 pub(super) fn missing(id: &str) -> Option<&'static str> {
@@ -47,47 +45,39 @@ pub(super) fn shortcut(keys: &str) -> Option<String> {
 
 /// Whether the studio runs `id`.
 pub(super) fn ported(id: &str) -> bool {
-    matches!(
-        id,
-        "file.save"
-            | "file.save_all"
-            | "edit.undo"
-            | "edit.redo"
-            | "edit.duplicate"
-            | "edit.delete"
-            | "edit.rename"
-            | "edit.select_all"
-            | "edit.deselect"
-            | "edit.palette"
-            | "view.frame"
-            | "view.frame_all"
-            | "view.tool.move"
-            | "view.tool.rotate"
-            | "view.tool.scale"
-            | "view.tool.universal"
-            | "view.space"
-            | "view.pivot"
-            | "snap.toggle"
-            | "view.theme.dark"
-            | "view.theme.light"
-            | "view.reduce_motion"
-            | "create.empty"
-            | "create.cube"
-            | "create.sphere"
-            | "create.plane"
-            | "create.capsule"
-            | "create.camera"
-            | "create.light.sun"
-            | "create.light.point"
-            | "create.light.spot"
-            | "create.fog"
-            | "play.start"
-            | "play.pause"
-            | "play.step"
-            | "play.stop"
-            | "view.camera.perspective"
-            | "view.camera.default"
-    )
+    super::create::item(id).is_some()
+        || matches!(
+            id,
+            "file.save"
+                | "file.save_all"
+                | "edit.undo"
+                | "edit.redo"
+                | "edit.duplicate"
+                | "edit.delete"
+                | "edit.rename"
+                | "create.at_cursor"
+                | "edit.select_all"
+                | "edit.deselect"
+                | "edit.palette"
+                | "view.frame"
+                | "view.frame_all"
+                | "view.tool.move"
+                | "view.tool.rotate"
+                | "view.tool.scale"
+                | "view.tool.universal"
+                | "view.space"
+                | "view.pivot"
+                | "snap.toggle"
+                | "view.theme.dark"
+                | "view.theme.light"
+                | "view.reduce_motion"
+                | "play.start"
+                | "play.pause"
+                | "play.step"
+                | "play.stop"
+                | "view.camera.perspective"
+                | "view.camera.default"
+        )
 }
 
 /// Runs registry command `id` on `target`; failures are reported like any editor failure.
@@ -120,6 +110,25 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
                 vec![json!({"cmd": "entity.delete", "args": {"entities": entities}})],
                 "Delete selection",
             )
+        }
+        "create.group" => {
+            let selected = target.entities(&e.state);
+            match crate::shell::hierarchy_actions::group(e, &s.resolved, &selected) {
+                Ok(parent) => select(e, vec![parent]),
+                Err(error) => Err(error),
+            }
+        }
+        "create.at_cursor" => {
+            super::create::toggle(s, super::create::Anchor::Key("scene/view"), None);
+            Ok(())
+        }
+        id if super::create::item(id).is_some() => {
+            if let Some(item) = super::create::item(id) {
+                // From an entity's menu (Create Child) it goes under that entity.
+                let child = matches!(target, Target::Entity(_));
+                super::create::create(s, item, target, None, child);
+            }
+            Ok(())
         }
         "edit.rename" => {
             let id = match target {
@@ -184,34 +193,6 @@ pub(super) fn run(s: &mut Studio, id: &str, target: &Target) {
             let on = !e.state.reduce_motion;
             act(e, "editor.preferences", json!({"reduceMotion": on}))
         }
-        "create.empty" => create(e, &Target::None, "Entity", json!({}), false),
-        "create.cube" => shape(e, target, "Cube", "box"),
-        "create.sphere" => shape(e, target, "Sphere", "sphere"),
-        "create.plane" => shape(e, target, "Plane", "plane"),
-        "create.capsule" => shape(e, target, "Capsule", "capsule"),
-        "create.camera" => create(e, target, "Camera", json!({"Camera": {}}), false),
-        "create.light.sun" => create(
-            e,
-            target,
-            "Sun",
-            json!({"Light": {"kind": "directional", "intensity": 3}, "Transform": {"position": [0, 6, 0], "rotation": [-50, 30, 0]}}),
-            false,
-        ),
-        "create.light.point" => create(
-            e,
-            target,
-            "Point light",
-            json!({"Light": {"kind": "point"}}),
-            matches!(target, Target::Entity(_)),
-        ),
-        "create.light.spot" => create(
-            e,
-            target,
-            "Spot light",
-            json!({"Light": {"kind": "spot"}}),
-            false,
-        ),
-        "create.fog" => create(e, target, "Height fog", json!({"HeightFog": {}}), false),
         "play.start" => {
             if e.state.playing == Some(false) {
                 play(e, "play.resume", json!({}))
@@ -263,6 +244,7 @@ pub(super) fn for_key(key: u16, mods: stillkit::el::Modifiers) -> Option<&'stati
         (true, true, 0x41) => "edit.deselect",
         (true, false, 0x4B) | (true, true, 0x50) => "edit.palette",
         (true, true, 0x4E) => "create.empty",
+        (false, true, 0x41) => "create.at_cursor",
         (false, false, 0x2E) | (false, false, 0x08) => "edit.delete",
         (false, false, 0x46) => "view.frame",
         (false, false, 0x24) => "view.frame_all",

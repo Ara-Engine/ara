@@ -96,10 +96,11 @@ fn assets(s: &Studio) -> El<Studio> {
         |f| f.on_input(|s: &mut Studio, t| s.act("editor.workspace", json!({"assetQuery": t}))),
         |s: &mut Studio| s.act("editor.workspace", json!({"assetQuery": ""})),
     )
-    .w(220.0);
+    .h(24.0)
+    .w(200.0);
     let toolbar = row()
-        .h(40.0)
-        .pad_x(8.0)
+        .h(32.0)
+        .pad_x(6.0)
         .gap(8.0)
         .align(Align::Center)
         .child(crumbs.grow(1.0))
@@ -200,14 +201,163 @@ fn assets(s: &Studio) -> El<Studio> {
             .grow(1.0)
             .min_h(0.0)
             .scroll(Axis::Vertical)
-            .child(row().flow_wrap().pad(10.0).gap(6.0).children(tiles))
+            .child(row().flow_wrap().pad(8.0).gap(4.0).children(tiles))
     };
-    col()
+    // Unity's Project window: the folder tree beside the folder's contents.
+    let right = col()
+        .w(0.0)
         .grow(1.0)
         .min_h(0.0)
         .child(toolbar)
         .child(divider(l))
-        .child(body)
+        .child(body);
+    row()
+        .grow(1.0)
+        .min_h(0.0)
+        .child(folder_tree(s, browser, &folder))
+        .child(el().w(1.0).h_full().fill(c.border.0))
+        .child(right)
+}
+
+/// Every folder in the project, as a tree: the open ones and the current one's ancestors
+/// show their children. A click opens the folder in the grid.
+fn folder_tree(s: &Studio, browser: &crate::shell::assets::Browser, current: &str) -> El<Studio> {
+    let l = &s.look;
+    let c = &l.c;
+    let mut dirs = std::collections::BTreeSet::new();
+    for a in &browser.items {
+        let path = a.path.trim_end_matches('/');
+        let mut at = if a.kind == "folder" {
+            path
+        } else {
+            parent(path)
+        };
+        while !at.is_empty() {
+            if !at.rsplit('/').next().is_some_and(|n| n.starts_with('.')) {
+                dirs.insert(at.to_owned());
+            }
+            at = parent(at);
+        }
+    }
+    let open = |d: &str| {
+        s.editor.state.asset_expanded_folders.contains(d)
+            || current == d
+            || current.starts_with(&format!("{d}/"))
+    };
+    let mut tree = col()
+        .w(200.0)
+        .min_w(160.0)
+        .pad(4.0)
+        .gap(0.0)
+        .scroll(Axis::Vertical);
+    tree = tree.child(folder_row(
+        l,
+        "Project",
+        String::new(),
+        0,
+        current.is_empty(),
+        None,
+        icons::BOX,
+    ));
+    for dir in &dirs {
+        // Shown when every ancestor is open.
+        let mut at = parent(dir);
+        let mut visible = true;
+        while !at.is_empty() {
+            visible &= open(at);
+            at = parent(at);
+        }
+        if !visible {
+            continue;
+        }
+        let depth = dir.matches('/').count() + 1;
+        let has_children = dirs.iter().any(|d| parent(d) == dir);
+        let expanded = has_children.then(|| open(dir));
+        let name = dir.rsplit('/').next().unwrap_or(dir);
+        let glyph = if current == dir {
+            icons::FOLDER_OPEN
+        } else {
+            icons::FOLDER
+        };
+        tree = tree.child(folder_row(
+            l,
+            name,
+            dir.clone(),
+            depth,
+            current == dir,
+            expanded,
+            glyph,
+        ));
+    }
+    tree.fill(c.muted.0.with_alpha(0.35))
+}
+
+/// A folder tree row: disclosure (when it has subfolders), icon and name.
+fn folder_row(
+    l: &ara_kit::look::Look,
+    name: &str,
+    path: String,
+    depth: usize,
+    current: bool,
+    expanded: Option<bool>,
+    glyph: stillkit::icons::Icon,
+) -> El<Studio> {
+    let c = &l.c;
+    let hover = c.hover_surface.0;
+    let (fill, ink) = if current {
+        (c.selection_surface.0, c.selection_foreground.0)
+    } else {
+        (stillkit::Rgba::TRANSPARENT, c.foreground.0)
+    };
+    let disclosure = match expanded {
+        Some(on) => {
+            let path = path.clone();
+            el().size(16.0)
+                .align(Align::Center)
+                .justify(Justify::Center)
+                .color(c.muted_foreground.0)
+                .cascade_ink()
+                .label(if on { "Collapse" } else { "Expand" })
+                .on_press(move |s: &mut Studio| {
+                    let set = &mut s.editor.state.asset_expanded_folders;
+                    if !set.remove(&path) {
+                        set.insert(path.clone());
+                    }
+                })
+                .child(
+                    icon(if on {
+                        icons::CHEVRON_DOWN
+                    } else {
+                        icons::CHEVRON_RIGHT
+                    })
+                    .size(11.0),
+                )
+        }
+        None => el().size(16.0),
+    };
+    let open = path.clone();
+    row()
+        .key(format!("assets/tree/{path}"))
+        .h(22.0)
+        .pad_x(4.0)
+        .gap(4.0)
+        .align(Align::Center)
+        .radius(4.0)
+        .fill(fill)
+        .color(ink)
+        .cascade_ink()
+        .label(name.to_owned())
+        .selected(current)
+        .hovered(move |e| if current { e } else { e.fill(hover) })
+        .on_press(move |s: &mut Studio| s.act("editor.workspace", json!({"folder": open})))
+        .child(el().w(depth as f32 * 12.0))
+        .child(disclosure)
+        .child(
+            icon(glyph)
+                .size(13.0)
+                .color(if current { ink } else { c.warning.0 }),
+        )
+        .child(text(name.to_owned()).text_size(12.0).grow(1.0))
 }
 
 fn crumb(l: &ara_kit::look::Look, label: &str, path: String, current: bool) -> El<Studio> {
@@ -260,9 +410,9 @@ fn tile(l: &ara_kit::look::Look, a: &Asset, selected: bool) -> El<Studio> {
     let hover = c.hover_surface.0;
     col()
         .key(format!("asset/{}", a.path))
-        .w(92.0)
+        .w(84.0)
         .pad(6.0)
-        .gap(6.0)
+        .gap(5.0)
         .align(Align::Center)
         .radius(l.radius.sm)
         .fill(if selected {
@@ -303,13 +453,13 @@ fn tile(l: &ara_kit::look::Look, a: &Asset, selected: bool) -> El<Studio> {
             true
         })
         .child(
-            el().size(64.0)
+            el().size(52.0)
                 .radius(l.radius.sm)
                 .fill(c.raised.0)
                 .border(1.0, c.border.0)
                 .align(Align::Center)
                 .justify(Justify::Center)
-                .child(icon(kind_icon(a)).size(28.0).color(glyph_ink)),
+                .child(icon(kind_icon(a)).size(24.0).color(glyph_ink)),
         )
         .child(
             text(stem.to_owned())
@@ -393,7 +543,7 @@ fn console(s: &Studio) -> El<Studio> {
             .child(text(counts[i].to_string()).text_size(12.0).weight(560))
     };
     let toolbar = row()
-        .h(36.0)
+        .h(30.0)
         .pad_x(8.0)
         .gap(4.0)
         .align(Align::Center)
@@ -419,7 +569,7 @@ fn console(s: &Studio) -> El<Studio> {
             std::sync::Arc::new(shown.into_iter().cloned().collect());
         let n = rows.len();
         let look = l.clone();
-        virtual_list("console/rows", n, 40.0, move |range| {
+        virtual_list("console/rows", n, 34.0, move |range| {
             range
                 .map(|i| log_row(&look, &rows[i], i % 2 == 1))
                 .collect()
@@ -464,7 +614,7 @@ fn log_row(l: &ara_kit::look::Look, r: &LogRow, odd: bool) -> El<Studio> {
         }
     );
     row()
-        .h(40.0)
+        .h(34.0)
         .pad_x(10.0)
         .gap(10.0)
         .align(Align::Center)

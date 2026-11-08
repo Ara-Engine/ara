@@ -194,6 +194,7 @@ pub(super) fn layer(s: &HubApp, root: El<HubApp>) -> El<HubApp> {
         .child(icon(icons::SEARCH).size(16.0).color(c.muted_foreground.0))
         .child(
             text_input("palette/query")
+                .focus_ring(false)
                 .grow(1.0)
                 .placeholder("Search projects, templates and actions")
                 .value(s.palette.query.as_str())

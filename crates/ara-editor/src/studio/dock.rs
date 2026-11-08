@@ -40,8 +40,9 @@ fn split_key(path: &[u8]) -> String {
 }
 
 pub(super) fn view(s: &Studio) -> El<Studio> {
+    // Panels sit 4 px apart: one rhythm for gutters and splitters.
     node(s, &s.editor.state.layout, &mut Vec::new())
-        .pad(6.0)
+        .pad(4.0)
         .gap(0.0)
 }
 
@@ -98,9 +99,9 @@ fn splitter(s: &Studio, path: Vec<u8>, horizontal: bool) -> El<Studio> {
         el().h(1.0).w_full()
     };
     let hit = if horizontal {
-        row().w(6.0).h_full().justify(Justify::Center)
+        row().w(4.0).h_full().justify(Justify::Center)
     } else {
-        col().h(6.0).w_full().justify(Justify::Center)
+        col().h(4.0).w_full().justify(Justify::Center)
     };
     hit.key(key)
         .align(Align::Center)
@@ -197,8 +198,8 @@ fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
         .unwrap_or_default();
     let focused = s.editor.state.focus == active_id;
     let strip = row()
-        .h(34.0)
-        .pad_x(6.0)
+        .h(30.0)
+        .pad_x(4.0)
         .gap(2.0)
         .align(Align::Center)
         .children(tabs.iter().enumerate().map(|(i, tab)| {
@@ -208,9 +209,9 @@ fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
             let panel = tab.clone();
             row()
                 .key(format!("tab/{tab}"))
-                .h(26.0)
-                .pad_x(9.0)
-                .gap(7.0)
+                .h(24.0)
+                .pad_x(8.0)
+                .gap(6.0)
                 .align(Align::Center)
                 .radius(l.radius.sm)
                 .role(stillkit::Role::Tab)
@@ -231,7 +232,7 @@ fn area(s: &Studio, id: &str, tabs: &[String], active: usize) -> El<Studio> {
                 .on_press(move |s: &mut Studio| {
                     s.act("editor.layout.show", json!({"panel": panel}))
                 })
-                .child(icon(glyph).size(14.0))
+                .child(icon(glyph).size(13.0))
                 .child(
                     text(title)
                         .text_size(12.0)
@@ -284,7 +285,7 @@ fn area_tools(s: &Studio, panel: &str) -> Vec<El<Studio>> {
             icon_button(l, Tone::Ghost, Size::Sm, icons::PLUS, "Create (Shift+A)")
                 .key("hierarchy/create")
                 .on_press(|s: &mut Studio| {
-                    super::commands::run(s, "create.empty", &crate::shell::commands::Target::None)
+                    super::create::toggle(s, super::create::Anchor::Key("hierarchy/create"), None)
                 }),
         ],
         _ => Vec::new(),
