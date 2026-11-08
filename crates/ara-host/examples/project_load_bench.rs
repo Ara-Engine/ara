@@ -54,7 +54,7 @@ fn write(path: PathBuf, text: String) {
     fs::write(path, text).expect("fixture file");
 }
 
-fn fixture(root: &Path, pairs: usize, rows: usize, menus: usize) {
+fn fixture(root: &Path, pairs: usize, rows: usize, menus: usize, pinned_ui: bool) {
     write(
         root.join("ara.project.json"),
         ara_json::to_canonical_string(&json!({"layoutVersion":4,"name":"Loading probe"})),
@@ -85,7 +85,14 @@ fn fixture(root: &Path, pairs: usize, rows: usize, menus: usize) {
         }
     }
     for menu in 0..menus {
-        let mut text = format!("<ui id='root'><text id='title' text='Menu {menu}'/>");
+        let mut text = if pinned_ui {
+            format!("<!-- ara:asset ui_{menu:08} -->\n")
+        } else {
+            String::new()
+        };
+        text.push_str(&format!(
+            "<ui id='root'><text id='title' text='Menu {menu}'/>"
+        ));
         for i in 0..32 {
             text.push_str(&format!(
                 "<panel id='row{i}'><text id='label{i}' text='Item {i}'/></panel>"
@@ -119,14 +126,17 @@ fn main() {
         .join("../../target/iteration-perf")
         .join(format!("project-load-{}", std::process::id()));
     let reverse = std::env::args().any(|arg| arg == "--reverse");
+    let open_only = std::env::args().any(|arg| arg == "--open-only");
     for (name, pairs, rows, menus) in [
         ("small", 2, 32, 1),
         ("many_tiny", 32, 1, 0),
+        ("ui_heavy", 2, 32, 256),
+        ("ui_pinned", 2, 32, 256),
         ("medium", 32, 128, 8),
         ("large", 128, 128, 16),
     ] {
         let case = root.join(name);
-        fixture(&case, pairs, rows, menus);
+        fixture(&case, pairs, rows, menus, name == "ui_pinned");
         let project = Project::open(&case).expect("project opens");
         let (workspace, diags) = project.load(&[]);
         let errors: Vec<_> = project
@@ -160,6 +170,9 @@ fn main() {
         measure(&format!("{name}_open"), || {
             Project::open(&case).expect("project opens")
         });
+        if open_only {
+            continue;
+        }
         for baseline in if reverse {
             [false, true]
         } else {

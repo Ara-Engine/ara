@@ -198,19 +198,21 @@ impl Project {
         for file in &sidecars {
             project.index_sidecar(file);
         }
-        for file in project.docs.clone() {
-            if project.project_files.contains(&file) {
+        for file in &project.docs {
+            if project.project_files.contains(file) {
                 continue;
             }
-            if let Ok(text) = fs::read_to_string(&file)
-                && let Some((kind, id)) = read_header(&text, &project.rel(&file), &project.db)
-                && kind != "project"
-            {
-                project.index.insert(
-                    id.to_string(),
-                    project.reference_path(&project.rel(&file)).to_owned(),
-                    Some(kind),
-                );
+            if let Ok(text) = fs::read_to_string(file) {
+                let relative = project.rel(file);
+                if let Some((kind, id)) = read_header(&text, &relative, &project.db)
+                    && kind != "project"
+                {
+                    project.index.insert(
+                        id.to_string(),
+                        project.reference_path(&relative).to_owned(),
+                        Some(kind),
+                    );
+                }
             }
         }
         Ok(project)
