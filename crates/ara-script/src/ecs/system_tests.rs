@@ -30,6 +30,7 @@ struct Check {
     calls: AtomicUsize,
     wrong_tick: AtomicBool,
     result: AtomicI32,
+    capture_trace: AtomicBool,
 }
 
 impl Check {
@@ -72,6 +73,19 @@ unsafe extern "C" fn run(host: *mut c_void, call: *const SystemCall) -> i32 {
     let (check, call) = unsafe { (&*host.cast::<Check>(), &*call) };
     check.calls.fetch_add(1, Ordering::Relaxed);
     check.rows.fetch_add(call.len as usize, Ordering::Relaxed);
+    if check.capture_trace.load(Ordering::Relaxed) {
+        // SAFETY: this callback owns the packet's buffer. The test records only
+        // metadata, with no world mutation; packet playback order is inspected later.
+        let buffer = unsafe { &mut *call.commands.cast::<CmdBuf>() };
+        // SAFETY: the ABI supplies call.len live entity IDs for this callback.
+        let ids = unsafe { std::slice::from_raw_parts(call.entities, call.len as usize) };
+        buffer.ops.push(cmdbuf::Op {
+            op: crate::abi::CMD_CUE,
+            type_index: 0,
+            entity: 0,
+            data: ids.iter().flat_map(|id| id.to_ne_bytes()).collect(),
+        });
+    }
     for row in 0..call.len as usize {
         // SAFETY: the callback's entity slice has call.len live entries.
         let entity = unsafe { *call.entities.add(row) };
@@ -571,3 +585,6 @@ fn sparse_default_disabling_filters_use_archetypes_instead_of_shared_tables() {
         );
     }
 }
+
+#[path = "system/streaming_tests.rs"]
+mod streaming;

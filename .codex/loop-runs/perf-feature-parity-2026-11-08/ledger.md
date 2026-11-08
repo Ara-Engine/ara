@@ -77,3 +77,10 @@ CPU/Cargo slot: unassigned initially. All children explicitly holding heavy work
 - Remaining5caseimplementationplanapprovednextafterthischeckpoint; source-onlywhileothergates/timingsactive.
 - Streamingfallback23tests/clippy pass;50kfragmentedretainedscratch8832B at4workers/16packets. Newoptimizedbinariesbuilt, before/afterlatencyqueued.
 - Local-scene-op source ready: cachedrecordcontributions withmembership/hierarchy/live-mappingguards, commonpreflight/publication andglobalmappingcleanup; fallbackfullforeveryuncertainty. Independentreview/tests/measurementpending.
+
+### Streaming sparse execution checkpoint
+-20lib+2batch+1realCLR sparse tests, alltargetclippy, formatting andindependentunsafe review pass. Separateprivate sparsemodule; densebody earlydispatch. CallbackID/len/packetorder/ticks/resource/fault/disabled/churn/undo semantics retained.
+-2fresh reversed ACrounds, all16sparse+denseprocessguards pass.50kselected alignedp50.444/.452→.125/.130ms (~71%less); interleaved100klive/50kselected.861/.859→.325/.413ms (~52–62%less). Allselectedpositions/unselectedpose/ticks checks pass; variednativeintegrationfixtures separate.
+- Untimed50kfragmentedmetadata8832B (4workers,16packets,64pendingIDcapacity,zeroChunkCall retention). Excludesworld/schema/taskallocations andnotuniversalRSSgain; alignedvectorscanretainlargercapacity.
+- Densefollowup p50 largelyunchanged; allstatebits agree and73allocations/tick unchanged. Reversehotp95+.022ms/+3.2%, forwardimproves; retainvariability, noall-tailclaim. Evidence sparse_streaming_mac_2026-11-09.json.
+- Localprojectionreview identifieddoubleinstanceexpansion; fixingrecordvalidation+singlecontributionresolution and addinglargeinstance/broadwaveprobesbeforegates. No correctness/rollbackfinding.

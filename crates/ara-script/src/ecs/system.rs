@@ -23,6 +23,9 @@ use nonmax::NonMaxU32;
 use crate::abi::{ScriptApi, SystemCall, Tick};
 use crate::ecs::cmdbuf::{self, CmdBuf, ScriptCatalog, ScriptEvents};
 
+mod sparse;
+use sparse::SparseScratch;
+
 /// Rows below this run on the calling thread (no task-pool dispatch).
 const PARALLEL_MIN_ROWS: usize = 4096;
 /// Smallest chunk handed to one task.
@@ -58,18 +61,14 @@ struct Scratch {
     cols: Vec<*mut u8>,
     /// Changed-tick bases parallel to `cols`; null for read-only columns.
     changed: Vec<*const UnsafeCell<BevyTick>>,
-    /// Selected entity IDs for non-dense archetype iteration, reused between runs.
-    entities: Vec<u64>,
     /// Resource pointers.
     res: Vec<*mut u8>,
     /// One call per chunk.
     calls: Vec<ChunkCall>,
-    /// `(entities, len, first base index in cols)` per table or contiguous sparse run.
+    /// `(entities, len, first base index in cols)` per dense table.
     tables: Vec<(*const u64, usize, usize)>,
     /// `calls` as task-pool handles.
     sends: Vec<SendPtr>,
-    /// Call index ranges for sparse worker packets, balanced by actual row counts.
-    packets: Vec<(usize, usize)>,
 }
 
 // SAFETY: the pointers in `Scratch` are written and read only inside one run of the
@@ -86,6 +85,7 @@ pub(crate) struct ScriptQueryState {
     /// Whole tables are valid only when every required/default filter is dense.
     dense: bool,
     scratch: Scratch,
+    sparse: SparseScratch,
     buffers: Vec<CmdBuf>,
     used: usize,
 }
@@ -134,6 +134,7 @@ unsafe impl<'w, 's> SystemParamBuilder<ScriptQuery<'w, 's>> for ScriptQueryBuild
             dense,
             plan: self.0,
             scratch: Scratch::default(),
+            sparse: SparseScratch::default(),
             buffers: Vec::new(),
             used: 0,
         }
@@ -221,20 +222,6 @@ impl SendPtr {
     }
 }
 
-/// A fallback packet owns its calls and their one shared structural buffer.
-#[derive(Clone, Copy)]
-struct SendCalls(*const [ChunkCall]);
-
-// SAFETY: packets are disjoint immutable call ranges; each owns disjoint ECS rows
-// and a separate buffer. A worker processes all calls within its packet serially.
-unsafe impl Send for SendCalls {}
-
-impl SendCalls {
-    fn get(self) -> *const [ChunkCall] {
-        self.0
-    }
-}
-
 /// Internal metadata leaves the C# ABI and the task's single-pointer capture unchanged.
 struct ChunkCall {
     call: SystemCall,
@@ -274,187 +261,68 @@ unsafe fn stamp_changed(changed: &[*const UnsafeCell<BevyTick>], len: usize, tic
     }
 }
 
-impl Scratch {
-    /// # Safety
-    /// The query has registered every column access and belongs to `world`. Storage
-    /// metadata stays fixed, and no conflicting component references exist this run.
-    unsafe fn gather_sparse(
-        &mut self,
-        world: UnsafeWorldCell<'_>,
-        query: &QueryState<FilteredEntityMut<'static, 'static>>,
-        columns: &[(ComponentId, bool, usize)],
-        tick: BevyTick,
-    ) -> usize {
-        let archetypes = world.archetypes();
-        // SAFETY: metadata is readable; the caller provides declared column access.
-        let storages = unsafe { world.storages() };
-        let total = query
-            .matched_archetypes()
-            .map(|id| archetypes[id].len() as usize)
-            .sum::<usize>();
-        // Entity pointers in run descriptors must remain stable while gathering.
-        self.entities.reserve(total);
-        for id in query.matched_archetypes() {
-            let archetype = &archetypes[id];
-            if archetype.is_empty() {
-                continue;
-            }
-            let table = &storages.tables[archetype.table_id()];
-            for &(id, write, _) in columns {
-                if write
-                    && let Some(column) = table.get_column(id)
-                    && let Some(summary) = column.get_summary_tick()
-                {
-                    summary.set(tick);
-                }
-            }
-            let first_run = self.tables.len();
-            // Bevy archetype IDs, then their entity order, define traversal. Sparse
-            // marker membership can split a table, so never walk all its rows here.
-            for entity in archetype.entities() {
-                let entity_at = self.entities.len();
-                self.entities.push(entity.id().to_bits());
-                let first = self.cols.len();
-                for &(id, write, _) in columns {
-                    let (data, changed) = if let Some(column) = table.get_column(id) {
-                        // SAFETY: this entity belongs to the archetype's table and
-                        // its table_row is live; access is declared by the query.
-                        let data = unsafe { column.get_data_unchecked(entity.table_row()) }
-                            .as_ptr()
-                            .cast_mut();
-                        let changed = if write {
-                            // SAFETY: same live row and declared write access.
-                            std::ptr::from_ref(unsafe {
-                                column.get_changed_tick_unchecked(entity.table_row())
-                            })
-                        } else {
-                            std::ptr::null()
-                        };
-                        (data, changed)
-                    } else {
-                        let set = storages
-                            .sparse_sets
-                            .get(id)
-                            .expect("matched archetype column has sparse storage");
-                        let (data, cells) = set
-                            .get_with_ticks(entity.id())
-                            .expect("matched archetype entity has its sparse component");
-                        (
-                            data.as_ptr().cast_mut(),
-                            if write {
-                                std::ptr::from_ref(cells.changed)
-                            } else {
-                                std::ptr::null()
-                            },
-                        )
-                    };
-                    self.cols.push(data);
-                    self.changed.push(changed);
-                }
-                let merge = if self.tables.len() > first_run {
-                    let &(_, len, base) = self.tables.last().expect("current archetype has a run");
-                    columns.iter().enumerate().all(|(column, &(_, _, size))| {
-                        // SAFETY: within one archetype every column uses one fixed
-                        // table/sparse allocation. The existing run is contiguous by
-                        // induction; computing its next (possibly one-past) slot is valid.
-                        let data = unsafe { self.cols[base + column].add(len * size) };
-                        let changed = self.changed[base + column];
-                        let next_tick = if changed.is_null() {
-                            changed
-                        } else {
-                            // SAFETY: the same allocation/range proof covers tick cells.
-                            unsafe { changed.add(len) }
-                        };
-                        data == self.cols[first + column]
-                            && next_tick == self.changed[first + column]
-                    })
-                } else {
-                    false
-                };
-                if merge {
-                    self.tables.last_mut().expect("merge has a current run").1 += 1;
-                    self.cols.truncate(first);
-                    self.changed.truncate(first);
-                } else {
-                    // SAFETY: reserve(total) prevents reallocation, and entity_at
-                    // addresses a selected ID just appended to the owned scratch.
-                    self.tables
-                        .push((unsafe { self.entities.as_ptr().add(entity_at) }, 1, first));
-                }
-            }
-        }
-        total
-    }
-}
-
 impl ScriptQuery<'_, '_> {
     /// Runs the C# system over matched contiguous row runs, one call per chunk.
     pub fn run(&mut self, tick: &Tick) {
+        if !self.state.dense {
+            self.run_sparse(tick);
+            return;
+        }
         let st = &mut *self.state;
         st.used = 0;
         let ncols = st.plan.columns.len();
         let scratch = &mut st.scratch;
         scratch.cols.clear();
         scratch.changed.clear();
-        scratch.entities.clear();
         scratch.res.clear();
         scratch.calls.clear();
         scratch.tables.clear();
         scratch.sends.clear();
-        scratch.packets.clear();
         // SAFETY: storage metadata is readable; columns are only touched within the declared access.
         let storages = unsafe { self.world.storages() };
         let mut total = 0usize;
-        if st.dense {
-            'tables: for table_id in st.query.matched_tables() {
-                let Some(table) = storages.tables.get(table_id) else {
-                    continue;
-                };
-                let len = table.entity_count() as usize;
-                if len == 0 {
-                    continue;
-                }
-                let first = scratch.cols.len();
-                for (id, write, _) in &st.plan.columns {
-                    let Some(col) = table.get_column(*id) else {
-                        // Dense eligibility requires every column to exist in its
-                        // matched table. Preserve partial stamps if that invariant fails.
-                        // SAFETY: workers have not started, and these are the preceding
-                        // writable columns' complete row ranges for this table.
-                        unsafe { stamp_changed(&scratch.changed[first..], len, self.this_run) };
-                        scratch.cols.truncate(first);
-                        scratch.changed.truncate(first);
-                        continue 'tables;
-                    };
-                    // SAFETY: `len > 0`, so row 0 exists. Column data lives in interior-mutable
-                    // storage, so writing through the pointer is fine under the declared access.
-                    let base = unsafe { col.get_data_unchecked(TableRow::new(NonMaxU32::ZERO)) }
-                        .as_ptr()
-                        .cast_mut();
-                    let changed = if *write {
-                        if let Some(summary) = col.get_summary_tick() {
-                            summary.set(self.this_run);
-                        }
-                        // SAFETY: `len` is this column's actual row count. Row stamping
-                        // is deferred to the worker that exclusively owns each chunk.
-                        unsafe { col.get_changed_ticks_slice(len) }.as_ptr()
-                    } else {
-                        std::ptr::null()
-                    };
-                    scratch.cols.push(base);
-                    scratch.changed.push(changed);
-                }
-                scratch
-                    .tables
-                    .push((table.entities().as_ptr().cast::<u64>(), len, first));
-                total += len;
-            }
-        } else {
-            // SAFETY: the system param registered the query's exact filtered
-            // access, and no C# workers or structural mutations have started.
-            total = unsafe {
-                scratch.gather_sparse(self.world, &st.query, &st.plan.columns, self.this_run)
+        'tables: for table_id in st.query.matched_tables() {
+            let Some(table) = storages.tables.get(table_id) else {
+                continue;
             };
+            let len = table.entity_count() as usize;
+            if len == 0 {
+                continue;
+            }
+            let first = scratch.cols.len();
+            for (id, write, _) in &st.plan.columns {
+                let Some(col) = table.get_column(*id) else {
+                    // Dense eligibility requires every column to exist in its
+                    // matched table. Preserve partial stamps if that invariant fails.
+                    // SAFETY: workers have not started, and these are the preceding
+                    // writable columns' complete row ranges for this table.
+                    unsafe { stamp_changed(&scratch.changed[first..], len, self.this_run) };
+                    scratch.cols.truncate(first);
+                    scratch.changed.truncate(first);
+                    continue 'tables;
+                };
+                // SAFETY: `len > 0`, so row 0 exists. Column data lives in interior-mutable
+                // storage, so writing through the pointer is fine under the declared access.
+                let base = unsafe { col.get_data_unchecked(TableRow::new(NonMaxU32::ZERO)) }
+                    .as_ptr()
+                    .cast_mut();
+                let changed = if *write {
+                    if let Some(summary) = col.get_summary_tick() {
+                        summary.set(self.this_run);
+                    }
+                    // SAFETY: `len` is this column's actual row count. Row stamping
+                    // is deferred to the worker that exclusively owns each chunk.
+                    unsafe { col.get_changed_ticks_slice(len) }.as_ptr()
+                } else {
+                    std::ptr::null()
+                };
+                scratch.cols.push(base);
+                scratch.changed.push(changed);
+            }
+            scratch
+                .tables
+                .push((table.entities().as_ptr().cast::<u64>(), len, first));
+            total += len;
         }
         for (id, write) in &st.plan.resources {
             // SAFETY: the resource access was declared in `init_access`.
@@ -504,25 +372,10 @@ impl ScriptQuery<'_, '_> {
             .iter()
             .map(|(_, len, _)| len.div_ceil(batch.min(*len)))
             .sum();
-        // Fragmented sparse filters may require len=1 calls. Packet them so each
-        // job owns many calls and one buffer rather than allocating a task per row.
-        let parallel_sparse = !st.dense && !st.plan.serial && total >= PARALLEL_MIN_ROWS;
-        let buffer_count = if st.dense {
-            chunk_count
-        } else if parallel_sparse {
-            total.div_ceil(batch)
-        } else {
-            1
-        };
-        // A sparse packet boundary can split one existing run into two calls.
-        // Reserve that upper bound before publishing any grid/call pointers.
-        let call_capacity = chunk_count + if parallel_sparse { buffer_count - 1 } else { 0 };
-        scratch.cols.reserve(call_capacity * ncols);
-        scratch.changed.reserve(call_capacity * ncols);
-        scratch.calls.reserve(call_capacity);
-        if parallel_sparse {
-            scratch.packets.reserve(buffer_count);
-        }
+        scratch.cols.reserve(chunk_count * ncols);
+        scratch.changed.reserve(chunk_count * ncols);
+        scratch.calls.reserve(chunk_count);
+        let buffer_count = chunk_count;
         if st.buffers.len() < buffer_count {
             st.buffers.resize_with(buffer_count, CmdBuf::default);
         }
@@ -531,17 +384,10 @@ impl ScriptQuery<'_, '_> {
             buf.reset(allocator);
         }
         let mut chunk = 0;
-        let mut packet = 0;
-        let mut packet_first = 0;
-        let mut packet_rows = 0;
         for &(entities, len, first) in &scratch.tables {
             let mut start = 0;
             while start < len {
-                let n = if parallel_sparse {
-                    (batch - packet_rows).min(len - start)
-                } else {
-                    batch.min(len - start)
-                };
+                let n = batch.min(len - start);
                 let col_at = scratch.cols.len();
                 for (c, (_, _, size)) in st.plan.columns.iter().enumerate() {
                     // SAFETY: `start < len`, so the offset stays inside the column.
@@ -566,10 +412,7 @@ impl ScriptQuery<'_, '_> {
                         columns: unsafe { scratch.cols.as_ptr().add(col_at) },
                         resources: scratch.res.as_ptr(),
                         tick,
-                        commands: std::ptr::from_mut(
-                            &mut st.buffers[if st.dense { chunk } else { packet }],
-                        )
-                        .cast::<c_void>(),
+                        commands: std::ptr::from_mut(&mut st.buffers[chunk]).cast::<c_void>(),
                     },
                     // SAFETY: the parallel grid has the same reserved length and
                     // column indices as `cols`; neither grid moves during dispatch.
@@ -581,46 +424,17 @@ impl ScriptQuery<'_, '_> {
                 });
                 chunk += 1;
                 start += n;
-                if parallel_sparse {
-                    packet_rows += n;
-                    if packet_rows == batch {
-                        scratch.packets.push((packet_first, chunk));
-                        packet_first = chunk;
-                        packet += 1;
-                        packet_rows = 0;
-                    }
-                }
             }
-        }
-        if parallel_sparse && packet_first < chunk {
-            scratch.packets.push((packet_first, chunk));
         }
         st.used = buffer_count;
         let run = st.plan.api.run_system;
         let host = st.plan.host;
-        if scratch.calls.len() == 1 || st.plan.serial || (!st.dense && total < PARALLEL_MIN_ROWS) {
+        if scratch.calls.len() == 1 || st.plan.serial {
             for call in &scratch.calls {
                 // SAFETY: the call describes live columns within this system's access;
                 // calls run one at a time, in chunk order.
                 unsafe { call.run(host, run) };
             }
-            return;
-        }
-        if !st.dense {
-            pool.scope(|scope| {
-                for &(first, end) in &scratch.packets {
-                    let calls = SendCalls(&scratch.calls[first..end]);
-                    scope.spawn(async move {
-                        // SAFETY: the call grid is frozen for the scope. Packets
-                        // have disjoint rows/buffers; calls in one packet are serial.
-                        for call in unsafe { &*calls.get() } {
-                            // SAFETY: each call owns its declared row ranges until
-                            // completion, with read-only shared resources here.
-                            unsafe { call.run(host, run) };
-                        }
-                    });
-                }
-            });
             return;
         }
         scratch
