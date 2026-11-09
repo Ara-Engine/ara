@@ -32,6 +32,7 @@ mod style;
 #[cfg(test)]
 mod tests;
 mod trace;
+mod vfx;
 
 use std::time::{Duration, Instant};
 
@@ -550,6 +551,11 @@ pub fn run(options: Options) -> anyhow::Result<()> {
                 }
             }
         }
+        // The VFX page's live preview: frames while it is on screen, paused otherwise.
+        let vfx_visible = rt.find("vfx/preview").is_some();
+        if rt.touch(|s| vfx::update(s, vfx_visible)) {
+            rt.update(|_| {});
+        }
         pass.mark("game");
         pass.phase("studio.fly");
         // Fly: right button held, WASD (and Q/E down and up) move the camera at the view
@@ -591,6 +597,7 @@ pub fn run(options: Options) -> anyhow::Result<()> {
             || scene_view.needs_frame(rt.state().editor.state.quality)
             || renderer.scene_frame_pending()
             || composite
+            || rt.touch(|s| vfx::running(s))
             || rt.touch(|s| game.wants_frame(&s.editor, &renderer, &scene_view));
         // One wake for the runtime's timers or the next scene frame; none when idle.
         let next = [

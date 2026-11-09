@@ -97,7 +97,7 @@ pub mod prefab_ops;
 mod profiler_panel;
 pub(crate) mod profiler_targets;
 pub(crate) mod reachability;
-mod vfx_panel;
+pub(crate) mod vfx_panel;
 use crate::{Editor, inspector::Field};
 use ara_ui::{
     Ui,
