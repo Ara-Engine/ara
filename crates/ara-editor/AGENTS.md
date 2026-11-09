@@ -3,8 +3,7 @@
 Native editor, in-process project authority and Engine Protocol server. Two windows share
 `Editor`: the **studio** (`src/studio/`, stillkit, D34; default on macOS, read
 `src/studio/AGENTS.md`) and the legacy `shell` (ara-ui on `ara-editor-gpu`; `--legacy-ui`,
-verify routes, headless runs and other platforms until their Scene layer path lands).
-Public boundaries:
+verify routes, headless runs and other platforms until their Scene layer path lands). API:
 - `Editor`: host, navigation commands, content batches, agent activity and per-turn undo.
 - `state`: navigation/layout op document; deliberately separate from content undo.
 - `world::EditWorldView`: replace the document extraction with ara-sim later.
