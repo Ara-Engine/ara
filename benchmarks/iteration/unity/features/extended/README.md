@@ -20,6 +20,23 @@ Its timings are excluded; exact known-checkpoint recovery succeeded and the
 global guard is clear. [Recovery evidence](../feature_timed_phase_b_recovery_mac_2026-11-09.json)
 preserves the crash/receipt/control proofs. No automatic benchmark retry ran;
 remaining24 pairs are still pending.
+
+The optional native buffer variants retain the original loop as the default.
+`--buffer-kernel contiguous` batches writable column access and change-tick stamping;
+`--buffer-kernel simd` additionally uses exact wrapping-u32 NEON arithmetic on
+supported targets, with scalar tails and fallback. Resize, initialization, trim,
+capacity and spill work stays in the timed loop. Targets/results are separate,
+and both launch and offline verification bind the requested variant to its Cargo
+flags, actual target capabilities and archived build bytes. A new result reports
+its actual `buffer_kernel`; a scalar fallback is never labeled NEON.
+
+[Prototype fixed4 measurements](../buffer_fixed4_internal_mac_2026-11-09.json)
+contain twelve accepted internal processes with complete 420-step output/storage
+agreement and reversed order. These precede the current-main integration; they
+are not measurements of the newly integrated build or fresh Unity comparisons.
+Timed exports omit change-tick cells; that packet checks them separately over
+six serial steps. The integrated quality test also covers parallel stamping.
+
 Cases 2–6 follow [CONTRACT.md](../CONTRACT.md) and the existing independent
 [integer oracle](../reference.py). These fixtures exercise native Bevy/Unity APIs;
 they do not establish Ara public C# buffer or JobHandle availability, shipping

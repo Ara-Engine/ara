@@ -157,6 +157,7 @@ fn main() -> Result<()> {
         "worker_semantics": if scheduled { "Send systems scope_with_executor(false); participation observed separately" } else { "scope/par_iter caller may join shared pool" },
         "worker_probe": worker_probe, "dirty_diagnostics": diagnostics,
         "batch": batch, "warmup": warmup, "frames": frames, "config": config,
+        "buffer_kernel": buffers::KERNEL,
         "logical_cpus": std::thread::available_parallelism()?.get(), "ms": samples,
         "p50_ms": ordered[(frames as usize * 50).div_ceil(100) - 1], "p95_ms": ordered[(frames as usize * 95).div_ceil(100) - 1],
         "full_ids_tags_updates_checked": true, "state_bytes": state_bytes, "state_blake3": state_hash,

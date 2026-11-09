@@ -65,6 +65,11 @@ def run(args, engine):
     data = json.loads(result.read_text())
     if not data["full_ids_tags_updates_checked"] or data["max_kernel_runners"] != args.runners:
         raise RuntimeError("unexpected runner budget or missing full identity checks")
+    kernel_metadata = {}
+    if cases.name(args) in ("buffer_fixed", "buffer_resize"):
+        reported = build.checked_result_kernel(data, executable, args) if engine == "bevy" else None
+        kernel_metadata = {"buffer_kernel_requested": project.buffer_kernel(args),
+                           "buffer_kernel_reported": reported}
     if engine == "unity":
         metadata = json.loads(Path(str(result) + ".environment.json").read_text())
         if (not metadata.get("finally_restored") or not metadata.get("measurement_completed")
@@ -94,6 +99,7 @@ def run(args, engine):
         "command": argv, "nice": 10, "before": before, "wall_seconds": time.monotonic() - started,
         "execution_lane": lane, "timings_accepted": accepted, "strict_timing_guard_enforced": timed,
         "executable": executable,
+        **kernel_metadata,
         "case_input": case_input,
         "initial_preference_checkpoint": checkpoint if engine == "unity" else None,
         "prepared_project": prepared, "prepared_inputs_unchanged_after_run": True,
@@ -116,6 +122,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=["prepare", "build-command", "build-bevy", "command", "run-bevy", "run-unity", "recover-unity", "verify"])
     parser.add_argument("--case", choices=cases.NAMES, default="query_filter")
+    parser.add_argument("--buffer-kernel", choices=project.BUFFER_KERNELS, default="baseline",
+                        help="opt-in native buffer implementation; Unity math stays unchanged")
     parser.add_argument("--project", type=Path)
     parser.add_argument("--rust-binary", type=Path)
     parser.add_argument("--engine", choices=["bevy", "unity"], default="unity")
@@ -136,6 +144,8 @@ def main():
     parser.add_argument("--checkpoint", type=Path, help="known durable checkpoint for explicit preference-only batch recovery")
     parser.add_argument("--smoke", action="store_true", help="correctness only, <=10k entities/10steps; never accept timings")
     args = parser.parse_args()
+    try: project.buffer_kernel(args)
+    except ValueError as error: parser.error(str(error))
     if args.project is None: args.project = project.EXTENDED_PROJECT if cases.extended(args) else project.PROJECT
     if args.rust_binary is None: args.rust_binary = project.rust_target(args) / "release" / project.binary_name(args)
     if args.count < 64 or args.count > 2**31 - 1 or args.warmup < 0 or args.frames < 1 or args.batch < 1 or args.timeout < 1:

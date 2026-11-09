@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -33,10 +34,56 @@ def source_hashes(args=None):
     return {str(path.relative_to(project.ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in files}
 
 
+def checked_build_settings(record, args=None):
+    """Bind the requested feature/profile to compiled provenance before execution."""
+    expected = project.build_command(args)
+    if record.get("command") != expected["command"] or record.get("environment") != expected["environment"]:
+        raise ValueError("Rust build command/environment/features differ from the requested buffer kernel")
+    kernel = project.buffer_kernel(args)
+    requested = record.get("buffer_kernel_requested")
+    if requested is not None and requested != kernel:
+        raise ValueError("Rust build records another requested buffer kernel")
+    contract = record.get("buffer_kernel_contract_version")
+    legacy = kernel == "baseline" and requested is None and contract is None
+    if not legacy and (requested != kernel or contract != 1):
+        raise ValueError("buffer kernel lacks matching versioned feature provenance")
+    label = {"baseline": "baseline-row-mut-scalar", "contiguous": "contiguous-scalar"}.get(kernel)
+    cfg = record.get("rustc_target_cfg")
+    if kernel == "simd":
+        command = record.get("rustc_target_cfg_command", [])
+        flags = ["--print", "cfg", *shlex.split(expected["environment"]["RUSTFLAGS"])]
+        if record.get("cargo_build_target"):
+            flags += ["--target", record["cargo_build_target"]]
+        if not isinstance(cfg, list) or not all(isinstance(row, str) for row in cfg) or len(command) < 2 or command[1:] != flags:
+            raise ValueError("SIMD buffer kernel lacks matching compiler target-feature proof")
+        architectures = [row for row in cfg if row.startswith('target_arch="')]
+        if len(architectures) != 1:
+            raise ValueError("SIMD compiler target architecture is ambiguous")
+        neon = 'target_arch="aarch64"' in cfg and 'target_feature="neon"' in cfg
+        label = "contiguous-neon4" if neon else "contiguous-scalar-fallback"
+    return {"requested": kernel, "expected_reported_label": label,
+            "legacy_metadata_allowed": legacy,
+            "rustc_target_cfg": cfg}
+
+
+def checked_result_kernel(data, executable, args):
+    """A SIMD feature may report scalar fallback; never relabel it as NEON."""
+    if project.cases.name(args) not in ("buffer_fixed", "buffer_resize"):
+        return None
+    proof = executable["buffer_kernel"]
+    reported = data.get("buffer_kernel")
+    if reported is None and proof["legacy_metadata_allowed"]:
+        return None
+    if reported != proof["expected_reported_label"]:
+        raise ValueError("Rust reported buffer kernel differs from compiled feature/architecture proof")
+    return reported
+
+
 def snapshot(binary, args=None):
     record_path = project.rust_target(args) / "build-provenance.json"
     provenance_raw = record_path.read_bytes()
     record = json.loads(provenance_raw)
+    kernel = checked_build_settings(record, args)
     if record["exit_code"] != 0 or record["source_sha256"] != source_hashes(args):
         raise ValueError("Rust fixture source differs from the successful build; rebuild in a CPU slot")
     binary = project.BASE.scratch_path(binary)
@@ -60,7 +107,7 @@ def snapshot(binary, args=None):
         raise ValueError("immutable build provenance snapshot is corrupt")
     return archive, {"executable_sha256": digest, "snapshot": str(archive),
                      "build_provenance": str(provenance), "original_build_provenance": str(record_path),
-                     "build_provenance_sha256": provenance_digest}
+                     "build_provenance_sha256": provenance_digest, "buffer_kernel": kernel}
 
 
 def build(args):
@@ -90,6 +137,15 @@ def build(args):
               "resource_context_before": resources_before, "timings_accepted": False,
               "rustc": subprocess.check_output([environment.get("RUSTC", "rustc"), "-Vv"], env=environment, text=True),
               "git_revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=project.ROOT, text=True).strip()}
+    if project.cases.extended(args):
+        record.update(buffer_kernel_requested=project.buffer_kernel(args), buffer_kernel_contract_version=1)
+    if project.buffer_kernel(args) == "simd":
+        cfg_command = [environment.get("RUSTC", "rustc"), "--print", "cfg", *shlex.split(settings["environment"]["RUSTFLAGS"])]
+        target = environment.get("CARGO_BUILD_TARGET")
+        if target:
+            cfg_command += ["--target", target]
+        record.update(cargo_build_target=target, rustc_target_cfg_command=cfg_command,
+                      rustc_target_cfg=subprocess.check_output(cfg_command, env=environment, text=True).splitlines())
     with (output / "build.log").open("w") as log:
         with subprocess.Popen(settings["command"], env=environment, cwd=project.ROOT,
                               stdout=log, stderr=subprocess.STDOUT, start_new_session=True) as child:
