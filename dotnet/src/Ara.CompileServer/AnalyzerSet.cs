@@ -3,13 +3,15 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Ara.Analyzers;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Ara.CompileServer;
 
 /// <summary>
-/// Runs the Ara analyzers (ARA0001-ARA0506) over touched method trees or the full module
-/// when declarations or references change. Analyzer errors retain the last good code.
+/// Runs the Ara analyzers (ARA0001-ARA0506) over eligible methods from a proven clean
+/// baseline, full touched trees otherwise, or the full module for declaration/reference
+/// changes. Analyzer errors retain the last good code.
 /// The module's profile (<c>gameplay</c> or <c>editor</c>) selects the API allowlist.
 /// </summary>
 internal sealed class AnalyzerSet : IAnalysis
@@ -33,6 +35,35 @@ internal sealed class AnalyzerSet : IAnalysis
         return all.ToImmutable();
     }
 
+    /// <inheritdoc/>
+    public ImmutableArray<Diagnostic> AnalyzeBodies(Compilation compilation, IReadOnlyCollection<MethodDeclarationSyntax> methods, string profile)
+    {
+        // Tree/span requests omit Roslyn's nonlocal failure diagnostics. Capture
+        // the callback too, so a failed analyzer cannot establish clean trust.
+        var failures = new ConcurrentQueue<Diagnostic>();
+        var cwa = CreateDriver(compilation, profile, (_, _, diagnostic) => failures.Enqueue(diagnostic));
+        var all = ImmutableArray.CreateBuilder<Diagnostic>();
+        foreach (var group in methods.GroupBy(method => method.SyntaxTree))
+        {
+            all.AddRange(cwa.GetAnalyzerSyntaxDiagnosticsAsync(group.Key, CancellationToken.None).GetAwaiter().GetResult());
+            var model = compilation.GetSemanticModel(group.Key);
+            foreach (var method in group)
+            {
+                var diagnostics = cwa.GetAnalyzerSemanticDiagnosticsAsync(model, method.Span, CancellationToken.None).GetAwaiter().GetResult();
+                // Successive Roslyn requests can include earlier cached diagnostics.
+                // Each disjoint ordinary method owns only its own source diagnostics.
+                all.AddRange(diagnostics.Where(diagnostic => Owns(method, diagnostic)));
+            }
+        }
+        all.AddRange(failures);
+        return all.ToImmutable();
+    }
+
+    /// <summary>Owns this method's source diagnostics; failures without source locations must never disappear.</summary>
+    internal static bool Owns(MethodDeclarationSyntax method, Diagnostic diagnostic) =>
+        !diagnostic.Location.IsInSource || (diagnostic.Location.SourceTree == method.SyntaxTree
+            && method.Span.Contains(diagnostic.Location.SourceSpan));
+
     /// <summary>Analyzes a full project in one Roslyn request, allowing work across files to run concurrently.</summary>
     internal ImmutableArray<Diagnostic> AnalyzeProject(Compilation compilation, string profile) =>
         WithAnalyzers(compilation, profile).GetAnalyzerDiagnosticsAsync(CancellationToken.None).GetAwaiter().GetResult();
@@ -41,10 +72,12 @@ internal sealed class AnalyzerSet : IAnalysis
     public ImmutableArray<Diagnostic> AnalyzeModule(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile) =>
         AnalyzeProject(compilation, profile);
 
-    CompilationWithAnalyzers WithAnalyzers(Compilation compilation, string profile)
+    CompilationWithAnalyzers WithAnalyzers(Compilation compilation, string profile) => CreateDriver(compilation, profile, null);
+
+    CompilationWithAnalyzers CreateDriver(Compilation compilation, string profile, Action<Exception, DiagnosticAnalyzer, Diagnostic>? onException)
     {
         var analyzerOptions = _options.GetOrAdd(profile, p => new AnalyzerOptions([], new ProfileOptions(p)));
-        var options = new CompilationWithAnalyzersOptions(analyzerOptions, onAnalyzerException: null,
+        var options = new CompilationWithAnalyzersOptions(analyzerOptions, onAnalyzerException: onException,
             concurrentAnalysis: true, logAnalyzerExecutionTime: false);
         return compilation.WithAnalyzers(_analyzers, options);
     }

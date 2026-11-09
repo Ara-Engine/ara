@@ -29,6 +29,9 @@ internal sealed record ModuleState(
     // The reference in use for each referenced module (its final compilation).
     ImmutableDictionary<string, MetadataReference> DepRefs)
 {
+    /// <summary>True only for a committed snapshot proven free of all built-in analyzer diagnostics.</summary>
+    internal bool AnalyzerClean { get; init; }
+
     /// <summary>Paths compare case-insensitively (Windows file system).</summary>
     internal static readonly StringComparer Paths = StringComparer.OrdinalIgnoreCase;
 

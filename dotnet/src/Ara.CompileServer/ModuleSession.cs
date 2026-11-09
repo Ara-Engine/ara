@@ -20,6 +20,9 @@ internal interface IAnalysis
 {
     /// <summary>Analyzer diagnostics for <paramref name="trees"/> of <paramref name="compilation"/> under an API profile.</summary>
     ImmutableArray<Diagnostic> Analyze(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile);
+    /// <summary>Validates eligible ordinary methods; custom providers retain their full-tree behavior.</summary>
+    ImmutableArray<Diagnostic> AnalyzeBodies(Compilation compilation, IReadOnlyCollection<MethodDeclarationSyntax> methods, string profile) =>
+        Analyze(compilation, methods.Select(method => method.SyntaxTree).Distinct().ToArray(), profile);
     /// <summary>Validates declarations and cross-file effects; custom providers retain their full-tree fallback.</summary>
     ImmutableArray<Diagnostic> AnalyzeModule(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile) => Analyze(compilation, trees, profile);
 }
@@ -144,7 +147,11 @@ internal sealed partial class ModuleSession
     /// <summary>Adopts an outcome's next state (a delta, image, relink or trivia-only change).</summary>
     internal void Commit(Outcome o)
     {
-        if (o.Next is { } next) { _state = next; _published = null; }
+        if (o.Next is { } next)
+        {
+            _state = next.AnalyzerClean && !o.ValidatedInputs ? next with { AnalyzerClean = false } : next;
+            _published = null;
+        }
         _diagnosticReferencesChanged = !o.ValidatedInputs;
     }
 
@@ -162,6 +169,7 @@ internal sealed partial class ModuleSession
         _diagnosticReferencesChanged = true;
         _state = s with
         {
+            AnalyzerClean = false,
             User = s.User.ReplaceReference(old, now),
             Final = s.Final.ReplaceReference(old, now),
             DepRefs = s.DepRefs.SetItem(name, now),
@@ -349,7 +357,7 @@ internal sealed partial class ModuleSession
             user = user.ReplaceReference(old, now);
             final = final.ReplaceReference(old, now);
         }
-        var rebound = s with { User = user, Final = final, DepRefs = refs };
+        var rebound = s with { User = user, Final = final, DepRefs = refs, AnalyzerClean = false };
         // Rebuild/heat work refers to committed code throughout the cascade. A
         // dependent's unrelated disk edits must never hitchhike on that request.
         var (current, changes) = intent == CompileIntent.CurrentSources
@@ -361,7 +369,7 @@ internal sealed partial class ModuleSession
         var same = changes.Count == 0 && References.All(n => s.DepSurfaces.TryGetValue(n, out var was) && was is not null && was == surfaces[n]);
         if (same)
         {
-            var problems = Problems(final, [], final.GetDiagnostics(ct), []);
+            var problems = Problems(final, [], final.GetDiagnostics(ct), [], out var clean);
             if (problems.Any(d => d.Severity == DiagnosticSeverity.Error))
             {
                 var failure = Errors(timing, problems);
@@ -376,7 +384,7 @@ internal sealed partial class ModuleSession
                 ValidatedInputs = validated,
                 Intent = intent,
                 Problems = problems,
-                Next = s with { User = user, Final = final, DepRefs = refs, Generation = s.Generation + 1 },
+                Next = s with { User = user, Final = final, DepRefs = refs, Generation = s.Generation + 1, AnalyzerClean = clean },
             };
         }
         var outcome = Build(current.User, current, AbiConst.ReloadL3, Escalation.Dependency,
@@ -458,11 +466,16 @@ internal sealed partial class ModuleSession
         var (nextState, changes) = ReadSources(s, files);
         if (changes.Count == 0)
         {
-            var problems = Problems(s.Final, [], s.Final.GetDiagnostics(ct), []);
+            var problems = Problems(s.Final, [], s.Final.GetDiagnostics(ct), [], out var clean);
             if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
             var validated = References.All(name => s.DepRefs.TryGetValue(name, out var reference) && ReferenceEquals(reference, ctx.Reference(name)));
+            var nextClean = _diagnosticReferencesChanged ? clean : s.AnalyzerClean;
             if (validated) _diagnosticReferencesChanged = false;
-            return new Outcome(this, OutcomeKind.None) { Next = s, ValidatedInputs = validated, Problems = problems };
+            return new Outcome(this, OutcomeKind.None)
+            {
+                Next = nextClean == s.AnalyzerClean ? s : s with { AnalyzerClean = nextClean },
+                ValidatedInputs = validated, Problems = problems,
+            };
         }
         var next = nextState.User;
         var changed = changes.Where(c => c.New is not null).Select(c => c.New!).ToList();
@@ -480,7 +493,7 @@ internal sealed partial class ModuleSession
             {
                 var g = Generate(next, ct);
                 p.Generate = p.Mark();
-                if (g.Diags.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, Problems(g.Final, g.Diags, [], changed));
+                if (g.Diags.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, Problems(g.Final, g.Diags, [], changed, out _));
                 if (!Same(g.Generated, s.Generated)) (escalation, reuse) = (Escalation.Generated, g);
             }
         }
@@ -498,9 +511,9 @@ internal sealed partial class ModuleSession
             IReadOnlyCollection<SyntaxTree> analyze = ordinaryBodies ? changed : [.. nextState.Trees.Values];
             if (cls.Bodies.Count == 0 && !cls.Additive)
             {
-                var checkedProblems = Problems(final, [], final.GetDiagnostics(ct), analyze, module: true);
+                var checkedProblems = Problems(final, [], final.GetDiagnostics(ct), analyze, out var triviaClean, module: true);
                 if (checkedProblems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, checkedProblems);
-                return new Outcome(this, OutcomeKind.None) { Next = nextState, Problems = checkedProblems, ValidatedInputs = true };
+                return new Outcome(this, OutcomeKind.None) { Next = nextState with { AnalyzerClean = triviaClean }, Problems = checkedProblems, ValidatedInputs = true };
             }
             ModuleDelta? delta = null;
             ImmutableArray<Diagnostic> errors = [];
@@ -514,7 +527,8 @@ internal sealed partial class ModuleSession
                 Trace.WriteLine($"module `{Name}`: EmitDifference threw, taking L3: {e.Message}");
             }
             p.Emit = p.Mark();
-            var problems = Problems(final, [], errors, analyze, module: !ordinaryBodies);
+            var bodies = ordinaryBodies && s.AnalyzerClean ? cls.Bodies.Select(body => (MethodDeclarationSyntax)body.New).ToArray() : null;
+            var problems = Problems(final, [], errors, analyze, out var clean, module: !ordinaryBodies, bodies: bodies);
             p.Analyze = p.Mark();
             if (problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
             if (delta is not null)
@@ -528,7 +542,8 @@ internal sealed partial class ModuleSession
                     Problems = problems,
                     ValidatedInputs = true,
                     Timing = p,
-                    Next = nextState with { Baseline = delta.Next, Surface = cls.Additive ? null : s.Surface, DepSurfaces = surfaces },
+                    Next = nextState with { Baseline = delta.Next, Surface = cls.Additive ? null : s.Surface, DepSurfaces = surfaces,
+                        AnalyzerClean = clean && (!ordinaryBodies || s.AnalyzerClean) },
                 };
             }
             escalation = Escalation.EmitFailed;
@@ -571,15 +586,25 @@ internal sealed partial class ModuleSession
 
     /// <summary>Errors and Ara diagnostics: generator, compiler (from emit) and analyzers (skipped when there are errors).</summary>
     List<Diagnostic> Problems(Compilation final, ImmutableArray<Diagnostic> generator, ImmutableArray<Diagnostic> emit,
-        IReadOnlyCollection<SyntaxTree> changed, Task<ImmutableArray<Diagnostic>>? analysis = null, bool module = false)
+        IReadOnlyCollection<SyntaxTree> changed, out bool analyzerClean, Task<ImmutableArray<Diagnostic>>? analysis = null, bool module = false,
+        IReadOnlyCollection<MethodDeclarationSyntax>? bodies = null)
     {
+        analyzerClean = false;
         var list = generator.Concat(emit).Where(Diagnostics.Reportable).ToList();
         if (list.All(d => d.Severity != DiagnosticSeverity.Error))
         {
-            if (analysis is not null) list.AddRange(analysis.GetAwaiter().GetResult().Where(Diagnostics.Reportable));
-            else if (_analysis is not null && AnalysisTrees(final, changed) is { Count: > 0 } trees)
-                list.AddRange((module || _diagnosticReferencesChanged ? _analysis.AnalyzeModule(final, trees, Profile)
-                    : _analysis.Analyze(final, trees, Profile)).Where(Diagnostics.Reportable));
+            ImmutableArray<Diagnostic>? raw = analysis?.GetAwaiter().GetResult();
+            if (raw is null && _analysis is not null && AnalysisTrees(final, changed) is { Count: > 0 } trees)
+                raw = module || _diagnosticReferencesChanged ? _analysis.AnalyzeModule(final, trees, Profile)
+                    : bodies is not null ? _analysis.AnalyzeBodies(final, bodies, Profile)
+                    : _analysis.Analyze(final, trees, Profile);
+            if (raw is { } diagnostics)
+            {
+                // Warnings, infos and hidden diagnostics also revoke the clean proof.
+                // Custom analysis providers keep their full-tree fallback and earn no proof.
+                analyzerClean = _analysis is AnalyzerSet && diagnostics.IsEmpty;
+                list.AddRange(diagnostics.Where(Diagnostics.Reportable));
+            }
         }
         return list;
     }
@@ -599,14 +624,14 @@ internal sealed partial class ModuleSession
     {
         var (final, genDiags, generated) = reuse ?? Generate(user, ct);
         p.Generate += p.Mark();
-        if (genDiags.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, Problems(final, genDiags, [], analyze));
+        if (genDiags.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, Problems(final, genDiags, [], analyze, out _));
         // A changed base, attribute or overload can affect unchanged companion files.
         // Validate the exact candidate snapshot, including committed-code rebuilds.
         var analysisTrees = start.Trees.Values.ToArray();
         var analysis = _analysis is not null && analysisTrees.Length > 0 ? Task.Run(() => _analysis.AnalyzeModule(final, analysisTrees, Profile), ct) : null;
         var (image, errors) = ModuleCompiler.Emit(final, ct);
         p.Emit = p.Mark();
-        var problems = Problems(final, genDiags, errors, analyze, analysis);
+        var problems = Problems(final, genDiags, errors, analyze, out var clean, analysis);
         p.Analyze = p.Mark();
         if (image is null || problems.Any(d => d.Severity == DiagnosticSeverity.Error)) return Errors(p, problems);
         var o = new Outcome(this, OutcomeKind.Image)
@@ -622,6 +647,7 @@ internal sealed partial class ModuleSession
                 User = user,
                 Final = final,
                 Generated = generated,
+                AnalyzerClean = clean,
                 Baseline = start.Hot ? ModuleCompiler.Baseline(final, image) : null,
                 Generation = kind == AbiConst.ReloadInitial ? InitialGeneration : (_state?.Generation ?? _published?.Generation ?? 0) + 1,
                 Surface = surface || ctx.HasDependents(this) ? ModuleCompiler.Surface(final) : null,

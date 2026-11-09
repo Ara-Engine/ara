@@ -391,3 +391,53 @@ Unity diagnostic are unfinished. Main integration is not a completion claim.
 - Bodyrequesttiming sources frozen thenRoot requested guardonlychanges before
   execution: minimal nonsensitiveenvironment snapshot, stablepower withbattery
   allowed, unchangedcumulativeidleVBCS exception,100mssampling. Unbuilt/unrun.
+
+### Continuing after 870d5b895
+
+- Fetched origin/main again: HEAD includes all current main commits (55 ahead,
+  zero behind). No integration changes required; origin unchanged.
+- Body request timing attempt timing-01 rejected before the first cell by an
+  unrelated active ara-editor PID 76926. Zero accepted timings. Subsequent CPU
+  snapshots show cumulative CPU advancing; no blind retry, process interference
+  or resource guard relaxation. Existing frozen prototype remains untouched.
+- Extended quality packet target/compiler-body-analysis-quality-extended-20261109
+  built cleanly and passed nine exact diagnostic differentials (including two
+  simultaneously edited partial files) plus property and existing-warning
+  counterexamples. Existing-warning case proves globally clean provenance must
+  include warnings: method narrowing otherwise drops an unedited-method warning.
+- Investigating precise process-managed analyzer request allocations in a separate
+  versioned target copy while editor remains active. Finite four process plan:
+  4096 methods, allowed edit, full/scoped then scoped/full, 3 warm +12 measured
+  calls each. All exact diagnostics required. Elapsed times explicitly unaccepted;
+  factory/model/preparation excluded from this allocation measurement.
+- Batch_queries owns NEW target/compiler-body-analysis-provenance-20261109 only,
+  source design of immutable baseline trust + conservative fallback, no CPU.
+  Ecs_research owns fixed4 target plan controller/three-arm validator source only,
+  no runs/builds/Unity grant. Root owns sole CPU slot.
+- Production body analysis implemented with immutable default-false AnalyzerClean on
+  ModuleState and exact built-in raw emptiness, adopted only at validated atomic
+  Commit. Unknown/custom providers stay full-tree; declarations/accessors/docs/
+  directives/generated/reference changes retain full-module validation. Warnings
+  revoke trust, changed-tree emptiness cannot create it, rebind clears it, published
+  images never import it. Exact no-op preserves state identity and existing trust.
+- Independent review caught a real Roslyn failure channel: tree/span APIs omit
+  nonlocal AD0001. AnalyzeBodies now captures onAnalyzerException into a per-request
+  queue and appends raw failures. Actual throwing-analyzer test passes. No analyzer
+  rule, math flag, EnC capability, ABI or persistent manifest relaxation.
+- Actual production entry-point allocation experiment completed four fresh processes
+  full/scoped then scoped/full,4096 querymethods over2partialfiles (2048 in the
+  changed file),one method edit,3warm+12measuredcalls each. Medians52.89/52.09MB full
+  versus9.13/9.13MB scoped; raw diagnostics match every call. No accepted timing,
+  peak/RSS/wholecompile/startplay/Unity claim. Measured SDK predates only final
+  ModuleSession identity fix; cached method audit confirms only Commit/Compile differ,
+  AnalyzerSet methods/signatures/locals/EH unchanged from checked final SDK.
+- Final gates pass: solution0warnings/errors,186compiler tests,15actualCLR tests
+  across7suites,all-target ara-scriptClippy -D warnings,fmt114packages. Retained
+  failed local builds, a stale no-build test attempt, real no-op identity failure
+  (fixed) and existing editor allocation0/656 failure (same binary isolated+full
+  repeat passed, no tolerance/editor changes). Independent re-review has no mustfix.
+- Fresh fixed4 controller/three-arm source review passes;22mocked mismatch contracts
+  nowpass. No engine/helper/timing execution grant yet; foreignUnity jobs active.
+- Allocation_pipeline_review nowowns NEW target/compiler-source-read-reuse-20261109
+  sourceonly prototype for exact streaming source comparison/reuse; NO product
+  changes/build/run/CPU grant. Source byte reads remain mandatory, no mtime trust.
