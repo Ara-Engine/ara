@@ -201,11 +201,11 @@ fn sheet(light: bool) -> Result<ara_ui::style::Sheet> {
     ara_ui::style::Sheet::with_tokens("", tokens).map_err(|e| anyhow::anyhow!("{e}"))
 }
 
-/// Presentation into the Scene's native layer.
+/// Presentation into one of the studio's native layers (the Scene's or the Game's).
 /// # Safety
 /// `layer` is the live `CAMetalLayer` of the Scene view.
 #[cfg(target_os = "macos")]
-unsafe fn layer_present(
+pub(super) unsafe fn layer_present(
     ui: &NativeUi,
     renderer: &ara_render::Renderer,
     layer: NonNull<c_void>,
@@ -224,7 +224,7 @@ unsafe fn layer_present(
 /// # Safety
 /// No requirement: it only reports that the path is missing.
 #[cfg(not(target_os = "macos"))]
-unsafe fn layer_present(
+pub(super) unsafe fn layer_present(
     _: &NativeUi,
     _: &ara_render::Renderer,
     _: NonNull<c_void>,
@@ -236,12 +236,12 @@ unsafe fn layer_present(
 }
 
 #[cfg(target_os = "macos")]
-fn resize(present: &mut ara_platform::Present, extent: [u32; 2]) -> Result<()> {
+pub(super) fn resize(present: &mut ara_platform::Present, extent: [u32; 2]) -> Result<()> {
     present.resize(extent)
 }
 
 #[cfg(not(target_os = "macos"))]
-fn resize(_: &mut ara_platform::Present, _: [u32; 2]) -> Result<()> {
+pub(super) fn resize(_: &mut ara_platform::Present, _: [u32; 2]) -> Result<()> {
     anyhow::bail!(
         "the studio's Scene view presents on macOS today; run with --legacy-ui on this platform"
     )

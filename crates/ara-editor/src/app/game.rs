@@ -6,7 +6,7 @@ use std::{
     collections::BTreeMap,
     time::{Duration, Instant},
 };
-mod player;
+pub(crate) mod player;
 use player::PlayerView;
 
 /// Legacy single Game image, retained for the preview/placeholder registration contract.

@@ -13,10 +13,10 @@ mod diagnostics_verify;
 mod drags;
 mod eyedropper;
 mod file_picker;
-mod game;
+pub(crate) mod game;
 #[cfg(test)]
 mod game_input_tests;
-mod game_preview;
+pub(crate) mod game_preview;
 mod game_view_verify;
 mod hierarchy_verify;
 mod history_verify;

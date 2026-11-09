@@ -227,6 +227,10 @@ pub struct Local {
     /// The open colour picker: its field path and the colour it holds (kept as HSV, so a
     /// grey keeps its hue while dragging).
     pub picker: Option<(String, stillkit_kit::Hsva)>,
+    /// What the Game view shows (the host loop reports it).
+    pub game: super::game::Status,
+    /// The keyboard and mouse go to the game (a click in the Game view while playing).
+    pub game_captured: bool,
     /// The open dropdown, by key.
     pub select: Option<String>,
     /// The open context menu: its layout, what it acts on, and where (window design px).

@@ -23,6 +23,35 @@ use ara_play_host::PublishedAssets;
 
 use super::viewport::{GamePreview, PreviewCamera, SceneView};
 use crate::{Editor, shell::Shell, state::Camera, world::DocumentView};
+
+/// What the window holding the Game view tells its preview. The legacy shell and the
+/// studio each answer for their own Game view.
+pub(crate) trait GameHost {
+    /// The Game view's frame in physical pixels, or None while it is not laid out (another
+    /// tab in front, or no Game view).
+    fn game_frame(&self) -> Option<[u32; 2]>;
+    /// Whether Play shows a live frame in the Game view.
+    fn game_live(&self) -> bool;
+    /// The camera Play starts with, if the scene has one.
+    fn gameplay_camera(&mut self, editor: &Editor) -> Option<Camera>;
+    /// Records the preview image's size (None once it goes); returns the previous one.
+    fn set_game_preview(&mut self, size: Option<[u32; 2]>) -> Option<[u32; 2]>;
+}
+
+impl GameHost for Shell {
+    fn game_frame(&self) -> Option<[u32; 2]> {
+        self.game_host().map(|_| self.game_target)
+    }
+    fn game_live(&self) -> bool {
+        self.game_live
+    }
+    fn gameplay_camera(&mut self, editor: &Editor) -> Option<Camera> {
+        Shell::gameplay_camera(self, editor)
+    }
+    fn set_game_preview(&mut self, size: Option<[u32; 2]>) -> Option<[u32; 2]> {
+        std::mem::replace(&mut self.game_preview, size)
+    }
+}
 use ara_render::Renderer;
 
 /// How long frames keep coming after a change: temporal history converges and
@@ -62,22 +91,21 @@ pub struct Preview {
 impl Preview {
     /// The camera and size a preview would render now, if the Game view (in the main
     /// window or a floating one) wants one.
-    fn want(editor: &Editor, shell: &mut Shell) -> Option<(Camera, [u32; 2])> {
-        let target = shell.game_target;
-        let visible = shell.game_host().is_some() && target.iter().all(|v| *v >= 64);
-        if !visible || editor.state.playing.is_some() || shell.game_live {
+    fn want(editor: &Editor, host: &mut dyn GameHost) -> Option<(Camera, [u32; 2])> {
+        let target = host.game_frame().filter(|t| t.iter().all(|v| *v >= 64))?;
+        if editor.state.playing.is_some() || host.game_live() {
             return None;
         }
-        Some((shell.gameplay_camera(editor)?, target))
+        Some((host.gameplay_camera(editor)?, target))
     }
 
     /// Whether a preview that is not wanted keeps its image: its Game view is only
     /// hidden (another tab, or not laid out) and nothing else needs the view, or Play
     /// is starting in the Game view and has not shown a frame yet.
-    fn keeps(editor: &Editor, shell: &Shell) -> bool {
-        !shell.game_live
+    fn keeps(editor: &Editor, host: &dyn GameHost) -> bool {
+        !host.game_live()
             && match editor.state.playing {
-                None => shell.game_host().is_none(),
+                None => host.game_frame().is_none(),
                 Some(_) => editor.plays_in_game_view(),
             }
     }
@@ -88,12 +116,12 @@ impl Preview {
     pub fn wants_frame(
         &mut self,
         editor: &Editor,
-        shell: &mut Shell,
+        host: &mut dyn GameHost,
         renderer: &Renderer,
         scene: &SceneView,
     ) -> bool {
-        match Self::want(editor, shell) {
-            None => self.attached.is_some() && !Self::keeps(editor, shell),
+        match Self::want(editor, host) {
+            None => self.attached.is_some() && !Self::keeps(editor, host),
             Some((camera, size)) => {
                 let key = self.key(editor, camera, size);
                 self.shown.as_ref() != Some(&key)
@@ -127,20 +155,20 @@ impl Preview {
         scene: &mut SceneView,
         editor: &mut Editor,
         view: &DocumentView,
-        shell: &mut Shell,
+        host: &mut dyn GameHost,
         gpu: &mut NativeUi,
     ) -> ara_ui::Result<bool> {
-        let Some((camera, size)) = Self::want(editor, shell) else {
-            if Self::keeps(editor, shell) {
+        let Some((camera, size)) = Self::want(editor, host) else {
+            if Self::keeps(editor, host) {
                 return Ok(false);
             }
-            return self.release(renderer, shell, gpu);
+            return self.release(renderer, host, gpu);
         };
         let mut changed = false;
         if self.scene.as_deref() != Some(editor.state.doc.as_str()) {
             // Detach before retiring the secondary targets; a different scene
             // must meter from fresh exposure rather than the previous interior/sky.
-            changed = self.release(renderer, shell, gpu)?;
+            changed = self.release(renderer, host, gpu)?;
             self.camera.release(renderer)?;
             self.scene = Some(editor.state.doc.clone());
         }
@@ -200,8 +228,7 @@ impl Preview {
             )?;
         }
         self.attached = Some(output.image);
-        let appeared = shell.game_preview.is_none();
-        shell.game_preview = Some(output.size);
+        let appeared = host.set_game_preview(Some(output.size)).is_none();
         Ok(appeared || changed)
     }
 
@@ -219,7 +246,7 @@ impl Preview {
     fn release(
         &mut self,
         _renderer: &mut Renderer,
-        shell: &mut Shell,
+        host: &mut dyn GameHost,
         gpu: &mut NativeUi,
     ) -> ara_ui::Result<bool> {
         if self.attached.take().is_some() {
@@ -227,6 +254,6 @@ impl Preview {
         }
         self.shown = None;
         self.settle_until = None;
-        Ok(shell.game_preview.take().is_some())
+        Ok(host.set_game_preview(None).is_some())
     }
 }
