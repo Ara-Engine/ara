@@ -358,13 +358,14 @@ fn round(v: f64) -> f64 {
     (v * 1e6).round() / 1e6
 }
 
-/// A number shown compactly.
+/// A number shown compactly: at most three decimals, as Unreal's transform fields, so it
+/// fits a vector field. Typing a value keeps its full precision.
 fn show(v: f64) -> String {
-    let r = round(v);
+    let r = (v * 1e3).round() / 1e3;
     if r.fract() == 0.0 && r.abs() < 1e9 {
-        format!("{r:.0}")
+        format!("{:.0}", r + 0.0)
     } else {
-        format!("{r}").trim_end_matches('0').to_owned()
+        format!("{r:.3}").trim_end_matches('0').to_owned()
     }
 }
 
@@ -620,12 +621,16 @@ fn number(
     let mut f = text_input(key.to_owned())
         .focus_ring(false)
         .grow(1.0)
-        .value(shown)
+        .value(shown.clone())
         .select_all_on_focus()
         .text_size(12.5)
         .text_align(stillkit::el::TextAlign::Start)
         .color(l.c.foreground.0)
         .on_submit(move |s: &mut Studio, t| {
+            // The box shows a rounded value: Enter on it untouched keeps the exact one.
+            if t == shown {
+                return;
+            }
             if let Ok(v) = crate::inspector::parse_number(t, unit.as_deref()) {
                 commit(s, v);
             }
