@@ -106,3 +106,12 @@ reuse at Play start. Merge this history; do not cherry-pick or discard it.
 The performance objective remains active: remaining feature losses, actual fresh
 boids and editable-wrapper Unity comparisons, AOT span validation and the fresh-cache
 Unity diagnostic are unfinished. Main integration is not a completion claim.
+
+- Main integration committed and pushed as `673c82153`; ancestry includes the fetched
+  main history. Restored the preserved buffer/AOT work; backup stash remains retained.
+- AOT sample Movement now uses borrowed component spans with identical scalar math.
+  Both actual NativeAOT tests pass, including 1,003 partial-batch rows with per-row
+  movement assertions, separate-world shutdown/isolation and commands/undo. Fresh
+  solution build and all 8 JIT host tests pass with the same sample; focused Clippy
+  and 114-package formatter pass. This validates shipping API support, not an AOT
+  speedup measurement. Raw logs: `target/perf-main-integration-20261109/`.
