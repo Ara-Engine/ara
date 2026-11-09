@@ -24,9 +24,10 @@ pub(super) fn title_bar(s: &HubApp) -> El<HubApp> {
                 .weight(600)
                 .color(c.foreground.0),
         );
-    // The launcher: a quiet field-shaped button that opens the palette.
-    let ring = c.ring.0;
-    let launcher = row()
+    // The launcher: a quiet Well-shaped button that opens the palette.
+    let hover = l.well_hover();
+    let launcher = Material::Well
+        .paint(l, row())
         .key("launcher")
         .w(340.0)
         .h(26.0)
@@ -34,12 +35,10 @@ pub(super) fn title_bar(s: &HubApp) -> El<HubApp> {
         .gap(8.0)
         .align(Align::Center)
         .radius(l.radius.sm)
-        .fill(c.muted.0)
-        .border(1.0, c.border.0)
         .color(c.muted_foreground.0)
         .cascade_ink()
         .label("Search or jump to")
-        .hovered(move |e| e.border(1.0, ring.with_alpha(0.35)))
+        .hovered(move |e| e.fill(hover))
         .on_press_with(|s: &mut HubApp, tx| {
             s.palette.open();
             tx.focus("palette/query");

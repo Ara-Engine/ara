@@ -110,11 +110,7 @@ pub(super) fn tile(s: &HubApp, template: &Template, on: bool) -> El<HubApp> {
             .grow(1.0),
     );
     if on {
-        title = title.child(
-            icon(icons::CIRCLE_CHECK)
-                .size(16.0)
-                .color(c.info_foreground.0),
-        );
+        title = title.child(icon(icons::CIRCLE_CHECK).size(16.0).color(c.foreground.0));
     }
     let id = template.id.clone();
     let mut t = hover_card(l)
@@ -139,8 +135,9 @@ pub(super) fn tile(s: &HubApp, template: &Template, on: bool) -> El<HubApp> {
                 )
                 .child(el().h(6.0)),
         );
+    // The chosen template lifts out (D31: selection is depth, not an outline).
     if on {
-        t = t.border(1.5, c.ring.0);
+        t = Material::Raised.paint(l, t);
     }
     t
 }
