@@ -9,16 +9,11 @@ use super::{Size, Status, Tone, button, icon_button, status_paints};
 use crate::icons;
 use crate::look::Look;
 
-/// A menu's panel: the menu surface, a hairline and the menu shadow, holding `items`.
+/// A menu's panel, the Float material, holding `items`.
 pub fn menu_panel<S: 'static>(l: &Look, items: Vec<El<S>>) -> El<S> {
-    col()
-        .min_w(200.0)
-        .pad(4.0)
-        .gap(1.0)
-        .radius(l.radius.md)
-        .fill(l.c.menu_surface.0)
-        .border(1.0, l.c.separator_strong.0)
-        .shadow_level(ShadowLevel::Menu)
+    let panel = col().min_w(200.0).pad(4.0).gap(1.0).radius(l.radius.md);
+    super::Material::Float
+        .paint(l, panel)
         .role(Role::Menu)
         .children(items)
 }

@@ -9,16 +9,17 @@ use stillkit::{Rgba, TextRole};
 use super::{Size, Tone, button, mono};
 use crate::look::Look;
 
-/// A keyboard key or chord as a small keycap: `kbd(l, "⌘K")`.
+/// A keyboard key or chord as a small Raised keycap: `kbd(l, "⌘K")`.
 pub fn kbd<S: 'static>(l: &Look, keys: &str) -> El<S> {
     let c = &l.c;
-    row()
+    let cap = row()
         .h(18.0)
         .pad_x(5.0)
         .align(Align::Center)
-        .radius(l.radius.xs)
+        .radius(l.radius.xs);
+    super::Material::Raised
+        .paint(l, cap)
         .fill(c.keycap.0)
-        .border(1.0, c.border.0)
         .child(
             text(keys)
                 .text_size(10.5)
@@ -111,22 +112,18 @@ pub fn dot<S: 'static>(l: &Look, status: Status) -> El<S> {
     el().size(8.0).radius(4.0).fill(status_paints(l, status).2)
 }
 
-/// A card: the panel fill, a hairline, Ara's base radius.
+/// A card: the Dock material at Ara's base radius.
 pub fn card<S: 'static>(l: &Look) -> El<S> {
-    col()
-        .fill(l.c.card.0)
-        .border(1.0, l.c.border.0)
-        .radius(l.radius.base)
+    super::Material::Dock.paint(l, col().radius(l.radius.base))
 }
 
-/// A card that lifts while hovered (project tiles, templates): its border brightens and it
-/// casts the card shadow. Make it interactive (`on_press`) for the hover to apply.
+/// A card that lifts while hovered (project tiles, templates): it steps up to the raised
+/// fill and casts the raised shadow. Make it interactive (`on_press`) for the hover to apply.
 pub fn hover_card<S: 'static>(l: &Look) -> El<S> {
-    let lift = l.c.separator_strong.0;
-    card(l).motion(token::MOTION_INTERACTIVE).hovered(move |e| {
-        e.border(1.0, lift)
-            .shadow_level(stillkit::ShadowLevel::Raised)
-    })
+    let lift = l.c.raised_hover.0;
+    card(l)
+        .motion(token::MOTION_INTERACTIVE)
+        .hovered(move |e| e.fill(lift).shadow_level(stillkit::ShadowLevel::Raised))
 }
 
 /// A horizontal hairline.

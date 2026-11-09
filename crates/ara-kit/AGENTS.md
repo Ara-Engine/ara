@@ -19,6 +19,9 @@ root `Cargo.toml`.
   `menu_panel`/`menu_item`, `dialog_panel`, `toast`, `title_bar` (window-control keys for
   native chrome), `nav_item`, `page_header`. Controls `cascade_ink`, so labels and icons follow
   their colour and hover look; feedback washes come from the theme (`look.rs`).
+- `ui::Material`: D31's six satin materials (Well, Raised, Pressed, Primary, Float, Dock) from
+  `docs/design/theme.md`; `Material::Raised.paint(l, row())` gives fill, inner light and shade
+  (stillkit `El::edges`) and the outer edge. Components are built from them.
 - `art::cover(look, seed, w, h)`: generated mesh-gradient cover art (chart palette, grain,
   vignette) for projects and templates without a picture; `art::seed(id)` is stable.
   `--example covers` writes a sample sheet.

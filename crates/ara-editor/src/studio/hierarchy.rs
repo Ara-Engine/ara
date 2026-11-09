@@ -350,7 +350,7 @@ fn row_el(
             .radius(1.0)
             .fill(c.primary.0)
     });
-    row()
+    super::style::chosen(l, row(), selected)
         .key(format!("row/{}", r.id))
         .h(ROW)
         .gap(4.0)

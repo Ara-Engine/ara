@@ -6,24 +6,25 @@ use stillkit::el::{Align, El, Justify, Key, col, el, icon, row, text, text_input
 use stillkit::icons::Icon;
 use stillkit::{Cursor, Role};
 
-use super::{Size, kbd};
+use super::{Material, Size, kbd};
 use crate::icons;
 use crate::look::Look;
 
-/// The well every input shares: an inset fill with no outline; a step lighter under the
-/// pointer, and the focus colour's border only while focus is inside it.
+/// The well every input shares: the Well material, a step lighter under the pointer, and
+/// the focus halo only while focus is inside it.
 fn well<S: 'static>(l: &Look, size: Size) -> El<S> {
     let c = &l.c;
-    let ring = c.ring.0;
+    let ring = c.focus_halo.0;
     let hover = l.well_hover();
-    row()
+    let row = row()
         .h(size.height())
         .pad_x(8.0)
         .gap(6.0)
         .align(Align::Center)
         .radius(l.radius.sm)
-        .fill(l.well())
-        .border(1.0, stillkit::Rgba::TRANSPARENT)
+        .border(1.0, stillkit::Rgba::TRANSPARENT);
+    Material::Well
+        .paint(l, row)
         .color(c.muted_foreground.0)
         .cascade_ink()
         .motion(token::MOTION_INTERACTIVE)
@@ -100,25 +101,24 @@ pub fn search<S: 'static>(
     w
 }
 
-/// The trigger of a dropdown: the chosen value and a chevron, opening `open` on press (pair
-/// it with an overlay menu anchored to `key`).
+/// The trigger of a dropdown, a Raised pop-up button: the chosen value and a chevron,
+/// opening `open` on press (pair it with an overlay menu anchored to `key`).
 pub fn select<S: 'static>(l: &Look, size: Size, key: impl Into<Key>, value: &str) -> El<S> {
     let c = &l.c;
-    let hover = l.well_hover();
-    row()
+    let row = row()
         .key(key)
         .h(size.height())
         .pad_x(8.0)
         .gap(6.0)
         .align(Align::Center)
-        .radius(l.radius.sm)
-        .fill(l.well())
+        .radius(l.radius.sm);
+    Material::Raised
+        .paint(l, row)
         .color(c.foreground.0)
         .role(Role::ComboBox)
         .cascade_ink()
         .label(value)
         .motion(token::MOTION_INTERACTIVE)
-        .hovered(move |e| e.fill(hover))
         .child(text(value).grow(1.0).text_size(12.0))
         .child(
             icon(icons::CHEVRONS_UP_DOWN)
@@ -127,44 +127,42 @@ pub fn select<S: 'static>(l: &Look, size: Size, key: impl Into<Key>, value: &str
         )
 }
 
-/// A switch: a 28x16 track whose knob springs across; `on` is the model's value.
+/// A switch: a 28x16 track (a Well, Primary while on) whose Raised knob springs across;
+/// `on` is the model's value.
 pub fn switch<S: 'static>(l: &Look, key: impl Into<Key>, label: &str, on: bool) -> El<S> {
     let c = &l.c;
-    el().key(key)
+    let track = el()
+        .key(key)
         .w(28.0)
         .h(16.0)
         .radius(8.0)
         .role(Role::Switch)
         .label(label)
-        .checked(on)
-        .fill(if on { c.primary.0 } else { c.raised.0 })
-        .border(
-            1.0,
-            if on {
-                c.primary.0
-            } else {
-                c.separator_strong.0
-            },
-        )
-        .motion(token::MOTION_INTERACTIVE)
-        .cursor(Cursor::Hand)
-        .child(
-            el().size(12.0)
-                .radius(6.0)
-                .fill(if on {
-                    c.primary_foreground.0
-                } else {
-                    c.muted_foreground.0
-                })
-                .absolute(if on { 14.0 } else { 2.0 }, 2.0)
-                .animate(),
-        )
+        .checked(on);
+    let knob = el()
+        .size(12.0)
+        .radius(6.0)
+        .absolute(if on { 14.0 } else { 2.0 }, 2.0);
+    let knob = if on {
+        knob.fill(c.primary_foreground.0)
+    } else {
+        Material::Raised.paint(l, knob).fill(c.muted_foreground.0)
+    };
+    (if on {
+        Material::Primary
+    } else {
+        Material::Well
+    })
+    .paint(l, track)
+    .motion(token::MOTION_INTERACTIVE)
+    .cursor(Cursor::Hand)
+    .child(knob.animate())
 }
 
-/// A checkbox: a 14 px box with a check while `on`.
+/// A checkbox: a 14 px Well, Primary with a check while `on`.
 pub fn checkbox<S: 'static>(l: &Look, key: impl Into<Key>, label: &str, on: bool) -> El<S> {
     let c = &l.c;
-    let mut b = el()
+    let b = el()
         .key(key)
         .size(14.0)
         .radius(l.radius.xs)
@@ -173,24 +171,17 @@ pub fn checkbox<S: 'static>(l: &Look, key: impl Into<Key>, label: &str, on: bool
         .checked(on)
         .align(Align::Center)
         .justify(Justify::Center)
-        .fill(if on { c.primary.0 } else { c.muted.0 })
-        .border(
-            1.0,
-            if on {
-                c.primary.0
-            } else {
-                c.separator_strong.0
-            },
-        )
-        .color(c.primary_foreground.0)
         .motion(token::MOTION_INTERACTIVE);
     if on {
-        b = b.child(icon(icons::CHECK).size(11.0));
+        Material::Primary
+            .paint(l, b)
+            .child(icon(icons::CHECK).size(11.0).color(c.primary_foreground.0))
+    } else {
+        Material::Well.paint(l, b)
     }
-    b
 }
 
-/// A segmented control: options side by side in a well; the chosen one raised. Each option
+/// A segmented control: options side by side in a Well; the chosen one Raised. Each option
 /// is `(key, icon, label)`; `on_pick(i)` makes the handler for option `i`.
 pub fn segmented<S: 'static, F: Fn(&mut S) + 'static>(
     l: &Look,
@@ -200,18 +191,15 @@ pub fn segmented<S: 'static, F: Fn(&mut S) + 'static>(
 ) -> El<S> {
     let c = &l.c;
     let hover = c.foreground.0;
-    row()
-        .h(28.0)
-        .pad(2.0)
-        .gap(2.0)
-        .radius(l.radius.sm)
-        .fill(l.well())
+    let track = row().h(28.0).pad(2.0).gap(2.0).radius(l.radius.sm);
+    Material::Well
+        .paint(l, track)
         .role(Role::RadioGroup)
         .focus_group(stillkit::el::Orientation::Horizontal)
         .select_follows_focus()
         .children(options.iter().enumerate().map(|(i, (key, lead, label))| {
             let on = i == chosen;
-            let mut o = row()
+            let mut o: El<S> = row()
                 .key(*key)
                 .h_full()
                 .pad_x(10.0)
@@ -222,20 +210,11 @@ pub fn segmented<S: 'static, F: Fn(&mut S) + 'static>(
                 .role(Role::RadioButton)
                 .label(*label)
                 .selected(on)
-                .checked(on)
-                .fill(if on {
-                    c.hover_surface.0
-                } else {
-                    stillkit::Rgba::TRANSPARENT
-                })
-                .border(
-                    1.0,
-                    if on {
-                        c.separator_strong.0
-                    } else {
-                        stillkit::Rgba::TRANSPARENT
-                    },
-                )
+                .checked(on);
+            if on {
+                o = Material::Raised.paint(l, o);
+            }
+            o = o
                 .color(if on {
                     c.foreground.0
                 } else {
@@ -245,9 +224,6 @@ pub fn segmented<S: 'static, F: Fn(&mut S) + 'static>(
                 .motion(token::MOTION_INTERACTIVE)
                 .hovered(move |e| e.color(hover))
                 .on_press(on_pick(i));
-            if on {
-                o = o.shadow_level(stillkit::ShadowLevel::Card);
-            }
             if let Some(i) = lead {
                 o = o.child(icon(*i).size(14.0));
             }

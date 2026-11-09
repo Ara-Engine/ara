@@ -9,12 +9,14 @@ mod button;
 mod chrome;
 mod display;
 mod field;
+mod material;
 mod overlay;
 
 pub use button::*;
 pub use chrome::*;
 pub use display::*;
 pub use field::*;
+pub use material::*;
 pub use overlay::*;
 
 use stillkit::Rgba;
