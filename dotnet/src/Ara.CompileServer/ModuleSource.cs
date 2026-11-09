@@ -18,8 +18,10 @@ internal static class ModuleSource
             try
             {
                 if (!File.Exists(path)) return null;
-                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-                using var reader = new StreamReader(stream);
+                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete, bufferSize: 1);
+                using var buffered = new PooledReadAheadStream(stream, ArrayPool<byte>.Shared);
+                using var reader = new StreamReader(buffered);
                 return ReadDecoded(reader, previous, ArrayPool<char>.Shared);
             }
             catch (IOException) when (sw.ElapsedMilliseconds < 200) { Thread.Yield(); }
