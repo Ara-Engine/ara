@@ -250,7 +250,7 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
             Some(
                 button(l, Tone::Primary, Size::Sm, Some(icons::PLUS), new)
                     .key(format!("{domain}/new"))
-                    .on_press(move |s: &mut Studio| create(s, domain)),
+                    .on_press(move |s: &mut Studio| super::asset_create::create(s, domain)),
             ),
         ));
     };
@@ -508,39 +508,6 @@ fn frame(s: &mut Studio) {
     if let Some(shown) = s.graph.shown.as_mut() {
         shown.canvas.camera = shown.canvas.framed_readable(rect);
         s.graph.dirty = true;
-    }
-}
-
-/// Starts a new `domain` document in the open Assets folder and opens it.
-fn create(s: &mut Studio, domain: &str) {
-    let folder = s.editor.state.asset_folder.clone();
-    let first = s.editor.host.store().revision();
-    let workspace = s.editor.host.store().workspace();
-    let extension = if domain == "animation" {
-        "animation"
-    } else {
-        "graph"
-    };
-    let path = (first..first.saturating_add(10_000))
-        .map(|n| {
-            let leaf = format!("{domain}-{n}.{extension}");
-            if folder.is_empty() {
-                leaf
-            } else {
-                format!("{folder}/{leaf}")
-            }
-        })
-        .find(|path| workspace.find(path).is_none());
-    let Some(path) = path else { return };
-    match s.editor.action(
-        "editor.resource.create",
-        json!({"path": path, "domain": domain}),
-    ) {
-        Ok(result) => s.act(
-            "editor.workspace",
-            json!({"resource": result["doc"], "asset": ""}),
-        ),
-        Err(error) => s.editor.report_failure(&error),
     }
 }
 

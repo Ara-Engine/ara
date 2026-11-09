@@ -35,6 +35,10 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   `shell::animation_panel::{connect, edit}`); Add Node lists `ara_material`'s library.
 - `vfx.rs`: the VFX page: emitter stacks (module rows, inline settings, `shell::vfx_panel::
   module_edit`), the live preview from `asset_tools::vfx_stream` (paused while hidden).
+- `asset_create.rs`: Add / `assets.create.*`: folder, scene, material, effect, controller,
+  script, at the open folder's authored path (never its storage path), opened where edited.
+- Assets (`panels.rs`): back/forward, Add, type filters across the project (Unreal's
+  filter bar), list or three tile sizes, a type strip under tiles.
 - `compositor.rs`: the renderer's image plus `shell::overlay` (grid, outlines by entity,
   gizmo), drawn by `ara-editor-gpu`'s `NativeUi` and presented into the layer
   (`create_layer_present`). Picking goes through the same channel map.

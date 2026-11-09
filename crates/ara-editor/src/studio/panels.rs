@@ -65,6 +65,110 @@ pub(super) fn view(s: &Studio, panel: &str) -> El<Studio> {
     }
 }
 
+/// How Assets lays out its items: a list, or tiles of three sizes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TileSize {
+    List,
+    Small,
+    #[default]
+    Medium,
+    Large,
+}
+
+impl TileSize {
+    /// A tile's width and its picture's size, design px.
+    fn tile(self) -> (f32, f32) {
+        match self {
+            TileSize::List | TileSize::Small => (68.0, 40.0),
+            TileSize::Medium => (84.0, 52.0),
+            TileSize::Large => (120.0, 84.0),
+        }
+    }
+}
+
+/// Assets' window-only view state: layout, type filter, folder history, the Add menu.
+#[derive(Clone, Debug, Default)]
+pub struct AssetsView {
+    pub size: TileSize,
+    /// A type filter (`FILTERS`), showing that type across the whole project.
+    pub filter: Option<&'static str>,
+    pub back: Vec<String>,
+    pub forward: Vec<String>,
+    /// The Add menu is open.
+    pub add: bool,
+}
+
+/// The type filters: id, label, icon.
+const FILTERS: [(&str, &str, stillkit::icons::Icon); 9] = [
+    ("model", "Models", icons::BOX),
+    ("material", "Materials", icons::PALETTE),
+    ("texture", "Textures", icons::IMAGE),
+    ("audio", "Audio", icons::VOLUME_2),
+    ("scene", "Scenes", icons::CLAPPERBOARD),
+    ("prefab", "Prefabs", icons::PACKAGE),
+    ("script", "Scripts", icons::FILE_CODE),
+    ("vfx", "Effects", icons::SPARKLES),
+    ("animation", "Animation", icons::PERSON_STANDING),
+];
+
+/// The type an asset files under (`FILTERS`), if any.
+fn category(a: &Asset) -> Option<&'static str> {
+    if a.document_kind.as_deref() == Some("scene") {
+        return Some("scene");
+    }
+    match (a.domain.as_deref(), a.kind.as_str()) {
+        (Some("material"), _) => Some("material"),
+        (Some("vfx"), _) => Some("vfx"),
+        (Some("animation"), _) | (_, "animation") => Some("animation"),
+        (_, "gltf" | "glb" | "fbx" | "obj") => Some("model"),
+        (_, "png" | "jpg" | "jpeg" | "tga" | "exr" | "hdr" | "ktx2" | "webp") => Some("texture"),
+        (_, "wav" | "ogg" | "mp3" | "flac") => Some("audio"),
+        (_, "prefab") => Some("prefab"),
+        (_, "cs") => Some("script"),
+        _ => None,
+    }
+}
+
+/// A type's colour (the strip under its tiles, as Unreal's content browser has).
+fn category_tint(l: &ara_kit::look::Look, category: &str) -> stillkit::Rgba {
+    let c = &l.c;
+    match category {
+        "model" => c.chart_1.0,
+        "material" => c.chart_2.0,
+        "texture" => c.chart_3.0,
+        "audio" => c.chart_4.0,
+        "scene" => c.chart_5.0,
+        "prefab" => c.chart_6.0,
+        "script" => c.info.0,
+        "vfx" => c.warning.0,
+        _ => c.success.0,
+    }
+}
+
+/// Opens `path` in Assets, remembering where it was for Back.
+fn open_folder(s: &mut Studio, path: &str) {
+    let now = s.editor.state.asset_folder.clone();
+    if now != path {
+        s.local.assets_view.back.push(now);
+        s.local.assets_view.forward.clear();
+    }
+    s.act("editor.workspace", json!({"folder": path}));
+}
+
+/// Back (or forward, `ahead`) through the folders Assets showed.
+fn step_folder(s: &mut Studio, ahead: bool) {
+    let view = &mut s.local.assets_view;
+    let (from, to) = if ahead {
+        (&mut view.forward, &mut view.back)
+    } else {
+        (&mut view.back, &mut view.forward)
+    };
+    if let Some(path) = from.pop() {
+        to.push(s.editor.state.asset_folder.clone());
+        s.act("editor.workspace", json!({"folder": path}));
+    }
+}
+
 /// The folder that holds `path` ("" at the project root).
 fn parent(path: &str) -> &str {
     path.trim_end_matches('/')
@@ -134,13 +238,125 @@ fn assets(s: &Studio) -> El<Studio> {
     )
     .h(22.0)
     .w(200.0);
+    let view = &s.local.assets_view;
+    let nav = |glyph, label: &str, key: &str, on: bool, ahead: bool| {
+        enabled(
+            icon_button(l, Tone::Ghost, Size::Sm, glyph, label)
+                .size(22.0)
+                .key(key.to_owned())
+                .on_press(move |s: &mut Studio| step_folder(s, ahead)),
+            on,
+        )
+    };
+    let mut add = button(l, Tone::Ghost, Size::Sm, Some(icons::PLUS), "Add")
+        .key("assets/add")
+        .h(22.0)
+        .on_press(|s: &mut Studio| s.local.assets_view.add = !s.local.assets_view.add);
+    if view.add {
+        let items = super::asset_create::KINDS
+            .iter()
+            .map(|(kind, title, glyph)| {
+                let kind = *kind;
+                menu_item(
+                    l,
+                    &format!("assets/add/{kind}"),
+                    Some(*glyph),
+                    title,
+                    None,
+                    false,
+                )
+                .on_press(move |s: &mut Studio| {
+                    s.local.assets_view.add = false;
+                    super::asset_create::create(s, kind);
+                })
+            })
+            .collect();
+        add = add.overlay(
+            stillkit::el::menu(menu_panel(l, items))
+                .side(stillkit::el::Side::Bottom)
+                .align(Align::Start)
+                .on_dismiss(|s: &mut Studio| s.local.assets_view.add = false),
+        );
+    }
+    // List, then three tile sizes (Unity's slider, as steps).
+    let mut sizes = row().gap(1.0);
+    for (size, glyph, label) in [
+        (TileSize::List, icons::LIST, "List"),
+        (TileSize::Small, icons::GRID_3X3, "Small tiles"),
+        (TileSize::Medium, icons::GRID_2X2, "Tiles"),
+        (TileSize::Large, icons::LAYOUT_GRID, "Large tiles"),
+    ] {
+        sizes = sizes.child(
+            toggle_button(l, Size::Sm, glyph, label, view.size == size)
+                .size(22.0)
+                .key(format!("assets/size/{label}"))
+                .on_press(move |s: &mut Studio| s.local.assets_view.size = size),
+        );
+    }
     let toolbar = row()
         .h(super::style::TOOLBAR)
         .pad_x(4.0)
-        .gap(8.0)
+        .gap(4.0)
         .align(Align::Center)
-        .child(crumbs.grow(1.0))
-        .child(search);
+        .child(nav(
+            icons::ARROW_LEFT,
+            "Back",
+            "assets/back",
+            !view.back.is_empty(),
+            false,
+        ))
+        .child(nav(
+            icons::ARROW_RIGHT,
+            "Forward",
+            "assets/forward",
+            !view.forward.is_empty(),
+            true,
+        ))
+        .child(add)
+        .child(crumbs.grow(1.0).pad_x(4.0))
+        .child(search)
+        .child(sizes);
+    // Type filters (Unreal's filter bar): one type across the whole project.
+    let mut chips = row()
+        .h(24.0)
+        .min_w(0.0)
+        .pad_x(6.0)
+        .gap(3.0)
+        .align(Align::Center)
+        .scroll(Axis::Horizontal);
+    for (id, label, glyph) in FILTERS {
+        let on = view.filter == Some(id);
+        let tint = category_tint(l, id);
+        let hover = c.hover_surface.0;
+        chips = chips.child(
+            super::style::chosen(l, row(), on)
+                .key(format!("assets/filter/{id}"))
+                .h(20.0)
+                .pad_x(7.0)
+                .gap(5.0)
+                .align(Align::Center)
+                .radius(10.0)
+                .label(label)
+                .selected(on)
+                .hovered(move |e| if on { e } else { e.fill(hover) })
+                .on_press(move |s: &mut Studio| {
+                    let f = &mut s.local.assets_view.filter;
+                    *f = if *f == Some(id) { None } else { Some(id) };
+                })
+                .child(el().size(6.0).radius(3.0).fill(tint))
+                .child(icon(glyph).size(12.0).color(if on {
+                    c.foreground.0
+                } else {
+                    c.muted_foreground.0
+                }))
+                .child(text(label).text_size(11.0).color(if on {
+                    c.foreground.0
+                } else {
+                    c.muted_foreground.0
+                })),
+        );
+    }
+    let toolbar = col().child(toolbar).child(chips);
     let Some(browser) = s.assets.as_ref() else {
         return col().grow(1.0).child(toolbar).child(
             row()
@@ -163,6 +379,9 @@ fn assets(s: &Studio) -> El<Studio> {
                 .is_some_and(|n| n.starts_with('.'));
             if hidden {
                 false
+            } else if let Some(only) = s.local.assets_view.filter {
+                category(a) == Some(only)
+                    && (needle.is_empty() || a.path.to_lowercase().contains(&needle))
             } else if needle.is_empty() {
                 parent(&a.path) == folder
             } else {
@@ -172,7 +391,7 @@ fn assets(s: &Studio) -> El<Studio> {
         .cloned()
         .collect();
     // Folders the scan lists only through their files show too.
-    if needle.is_empty() {
+    if needle.is_empty() && s.local.assets_view.filter.is_none() {
         let prefix = if folder.is_empty() {
             String::new()
         } else {
@@ -230,6 +449,7 @@ fn assets(s: &Studio) -> El<Studio> {
     } else {
         let selected = s.editor.state.asset_path.clone();
         let counts = contents(browser);
+        let size = s.local.assets_view.size;
         let tiles: Vec<El<Studio>> = items
             .into_iter()
             .map(|a| {
@@ -246,6 +466,7 @@ fn assets(s: &Studio) -> El<Studio> {
                     selected.as_deref() == Some(a.path.as_str()),
                     preview,
                     held,
+                    size,
                 )
             })
             .collect();
@@ -253,7 +474,11 @@ fn assets(s: &Studio) -> El<Studio> {
             .grow(1.0)
             .min_h(0.0)
             .scroll(Axis::Vertical)
-            .child(row().flow_wrap().pad(6.0).gap(2.0).children(tiles))
+            .child(if size == TileSize::List {
+                col().pad(4.0).gap(1.0).children(tiles)
+            } else {
+                row().flow_wrap().pad(6.0).gap(2.0).children(tiles)
+            })
     };
     // Unity's Project window: the folder tree beside the folder's contents.
     let right = col().w(0.0).grow(1.0).min_h(0.0).child(toolbar).child(body);
@@ -432,7 +657,7 @@ fn folder_row(
         .label(name.to_owned())
         .selected(current)
         .hovered(move |e| if current { e } else { e.fill(hover) })
-        .on_press(move |s: &mut Studio| s.act("editor.workspace", json!({"folder": open})))
+        .on_press(move |s: &mut Studio| open_folder(s, &open))
         .child(el().w(depth as f32 * 12.0))
         .child(disclosure)
         .child(icon(glyph).size(13.0).color(folder_ink))
@@ -455,7 +680,7 @@ fn crumb(l: &ara_kit::look::Look, label: &str, path: String, current: bool) -> E
         .cascade_ink()
         .label(label)
         .hovered(move |e| e.color(hover))
-        .on_press(move |s: &mut Studio| s.act("editor.workspace", json!({"folder": path})))
+        .on_press(move |s: &mut Studio| open_folder(s, &path))
         .child(
             text(label)
                 .text_size(12.0)
@@ -472,8 +697,12 @@ fn tile(
     selected: bool,
     preview: Option<std::sync::Arc<stillkit::Image>>,
     held: Option<usize>,
+    size: TileSize,
 ) -> El<Studio> {
     let c = &l.c;
+    let (width, picture) = size.tile();
+    let list = size == TileSize::List;
+    let kind = category(a);
     let name = a
         .path
         .trim_end_matches('/')
@@ -496,12 +725,47 @@ fn tile(
         None => (kind_icon(a), c.muted_foreground.0),
     };
     let hover = c.hover_surface.0.with_alpha(0.7);
-    super::style::chosen(l, col(), selected)
+    let shell = if list {
+        super::style::chosen(l, row(), selected)
+            .h(22.0)
+            .pad_x(6.0)
+            .gap(8.0)
+    } else {
+        super::style::chosen(l, col(), selected)
+            .w(width)
+            .pad_x(4.0)
+            .pad_y(6.0)
+            .gap(3.0)
+    };
+    let strip = kind.filter(|_| !folder && !list).map(|k| {
+        el().w(picture * 0.8)
+            .h(2.0)
+            .radius(1.0)
+            .fill(category_tint(l, k))
+    });
+    let picture_el = match preview {
+        // The rendered picture, or the kind's bare icon until it lands.
+        Some(picture_image) if !list => stillkit::el::image(picture_image).size(picture),
+        _ => {
+            let side = if list { 16.0 } else { picture };
+            el().size(side)
+                .align(Align::Center)
+                .justify(Justify::Center)
+                .child(
+                    icon(glyph)
+                        .size(if list {
+                            14.0
+                        } else if folder {
+                            picture * 0.85
+                        } else {
+                            picture * 0.7
+                        })
+                        .color(glyph_ink),
+                )
+        }
+    };
+    shell
         .key(format!("asset/{}", a.path))
-        .w(84.0)
-        .pad_x(4.0)
-        .pad_y(6.0)
-        .gap(3.0)
         .align(Align::Center)
         .radius(super::style::RADIUS)
         .fill(if selected {
@@ -533,9 +797,7 @@ fn tile(
                     return false;
                 }
                 match e.phase {
-                    PointerPhase::Down if e.clicks == 2 && folder => {
-                        s.act("editor.workspace", json!({"folder": path}))
-                    }
+                    PointerPhase::Down if e.clicks == 2 && folder => open_folder(s, &path),
                     PointerPhase::Down if e.clicks == 2 && scene => {
                         if let Some(doc) = &reference {
                             s.act("editor.scene.open", json!({"scene": doc}));
@@ -563,26 +825,30 @@ fn tile(
                 true
             }
         })
-        .child(match preview {
-            // The rendered picture, or the kind's bare icon until it lands.
-            Some(picture) => stillkit::el::image(picture).size(52.0),
-            None => el()
-                .size(52.0)
-                .align(Align::Center)
-                .justify(Justify::Center)
-                .child(
-                    icon(glyph)
-                        .size(if folder { 44.0 } else { 36.0 })
-                        .color(glyph_ink),
-                ),
-        })
-        .child(
+        .child(picture_el)
+        .children(strip)
+        .child(if list {
+            text(stem.to_owned())
+                .text_size(12.0)
+                .color(c.foreground.0)
+                .grow(1.0)
+        } else {
             text(stem.to_owned())
                 .text_size(11.5)
                 .wrap(2)
                 .text_align(stillkit::el::TextAlign::Center)
-                .color(c.foreground.0),
-        )
+                .color(c.foreground.0)
+        })
+        .children(list.then(|| {
+            let label = kind
+                .and_then(|k| FILTERS.iter().find(|(id, _, _)| *id == k))
+                .map_or(if folder { "Folder" } else { "File" }, |(_, label, _)| {
+                    label
+                });
+            text(label.to_owned())
+                .text_size(11.0)
+                .color(c.muted_foreground.0)
+        }))
 }
 
 fn severity_glyph(l: &ara_kit::look::Look, severity: ara_diag::Severity) -> El<Studio> {

@@ -177,7 +177,7 @@ pub(super) fn view(s: &Studio) -> El<Studio> {
             Some(
                 button(l, Tone::Primary, Size::Sm, Some(icons::PLUS), "New effect")
                     .key("vfx/new")
-                    .on_press(|s: &mut Studio| create(s)),
+                    .on_press(|s: &mut Studio| super::asset_create::create(s, "vfx")),
             ),
         ));
     };
@@ -707,32 +707,4 @@ fn timeline(s: &Studio) -> El<Studio> {
             .family(mono())
             .color(c.muted_foreground.0),
         )
-}
-
-/// Starts a new effect in the open Assets folder and opens it.
-fn create(s: &mut Studio) {
-    let folder = s.editor.state.asset_folder.clone();
-    let first = s.editor.host.store().revision();
-    let workspace = s.editor.host.store().workspace();
-    let path = (first..first.saturating_add(10_000))
-        .map(|n| {
-            let leaf = format!("vfx-{n}.graph");
-            if folder.is_empty() {
-                leaf
-            } else {
-                format!("{folder}/{leaf}")
-            }
-        })
-        .find(|path| workspace.find(path).is_none());
-    let Some(path) = path else { return };
-    match s.editor.action(
-        "editor.resource.create",
-        json!({"path": path, "domain": "vfx"}),
-    ) {
-        Ok(result) => s.act(
-            "editor.workspace",
-            json!({"resource": result["doc"], "asset": ""}),
-        ),
-        Err(error) => s.editor.report_failure(&error),
-    }
 }

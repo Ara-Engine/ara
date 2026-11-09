@@ -9,6 +9,7 @@
 //! every person's action has an agent equivalent. The host loop below owns the renderer and
 //! the transport; the runtime owns the [`Studio`] state and its view.
 mod agents;
+mod asset_create;
 mod asset_inspector;
 mod chrome;
 mod commands;
