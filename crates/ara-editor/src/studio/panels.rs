@@ -18,6 +18,7 @@ pub(super) fn view(s: &Studio, panel: &str) -> El<Studio> {
         "problems" => problems(s),
         "agents" => super::agents::agents(s),
         "history" => super::agents::history(s),
+        "lighting" => super::lighting::view(s),
         "settings" => col().grow(1.0).justify(Justify::Center).child(empty(
             &s.look,
             icons::SETTINGS,

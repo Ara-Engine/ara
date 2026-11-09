@@ -70,7 +70,7 @@ mod inspector_capture;
 mod inspector_fields;
 mod inspector_panel;
 mod inspector_sections;
-mod lighting;
+pub(crate) mod lighting;
 mod live_styles;
 mod log_panels;
 mod material_panel;

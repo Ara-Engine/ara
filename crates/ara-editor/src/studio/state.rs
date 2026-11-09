@@ -259,6 +259,10 @@ pub struct Local {
     pub add_component: Option<super::components::Picker>,
     /// Components added most recently (newest first): the picker lists them first.
     pub recent_components: Vec<String>,
+    /// The Lighting panel's filter.
+    pub lighting_query: String,
+    /// The Lighting panel's open menu ("add" or "presets").
+    pub lighting_menu: Option<&'static str>,
     /// An asset being dragged toward the Scene: its storage path, name, and where the
     /// pointer is (window design px).
     pub asset_drag: Option<(String, String, (f32, f32))>,

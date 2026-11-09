@@ -19,6 +19,7 @@ mod game;
 mod gizmo;
 mod hierarchy;
 mod inspector;
+mod lighting;
 mod panels;
 mod preferences;
 mod scene;
