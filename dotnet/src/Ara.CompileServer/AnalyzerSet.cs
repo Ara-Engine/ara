@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Ara.Analyzers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -24,7 +25,8 @@ internal sealed class AnalyzerSet : IAnalysis
     /// <inheritdoc/>
     public ImmutableArray<Diagnostic> Analyze(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile)
     {
-        var cwa = WithAnalyzers(compilation, profile);
+        var failures = new ConcurrentQueue<Diagnostic>();
+        var cwa = CreateDriver(compilation, profile, (_, _, diagnostic) => failures.Enqueue(Failure(diagnostic)));
         var all = ImmutableArray.CreateBuilder<Diagnostic>();
         foreach (var tree in trees)
         {
@@ -32,6 +34,7 @@ internal sealed class AnalyzerSet : IAnalysis
             var model = compilation.GetSemanticModel(tree);
             all.AddRange(cwa.GetAnalyzerSemanticDiagnosticsAsync(model, null, CancellationToken.None).GetAwaiter().GetResult());
         }
+        all.AddRange(failures);
         return all.ToImmutable();
     }
 
@@ -41,7 +44,7 @@ internal sealed class AnalyzerSet : IAnalysis
         // Tree/span requests omit Roslyn's nonlocal failure diagnostics. Capture
         // the callback too, so a failed analyzer cannot establish clean trust.
         var failures = new ConcurrentQueue<Diagnostic>();
-        var cwa = CreateDriver(compilation, profile, (_, _, diagnostic) => failures.Enqueue(diagnostic));
+        var cwa = CreateDriver(compilation, profile, (_, _, diagnostic) => failures.Enqueue(Failure(diagnostic)));
         var all = ImmutableArray.CreateBuilder<Diagnostic>();
         foreach (var group in methods.GroupBy(method => method.SyntaxTree))
         {
@@ -65,14 +68,24 @@ internal sealed class AnalyzerSet : IAnalysis
             && method.Span.Contains(diagnostic.Location.SourceSpan));
 
     /// <summary>Analyzes a full project in one Roslyn request, allowing work across files to run concurrently.</summary>
-    internal ImmutableArray<Diagnostic> AnalyzeProject(Compilation compilation, string profile) =>
-        WithAnalyzers(compilation, profile).GetAnalyzerDiagnosticsAsync(CancellationToken.None).GetAwaiter().GetResult();
+    internal ImmutableArray<Diagnostic> AnalyzeProject(Compilation compilation, string profile)
+    {
+        var failures = new ConcurrentQueue<Diagnostic>();
+        var cwa = CreateDriver(compilation, profile, (_, _, diagnostic) => failures.Enqueue(Failure(diagnostic)));
+        return [.. cwa.GetAnalyzerDiagnosticsAsync(CancellationToken.None).GetAwaiter().GetResult(), .. failures];
+    }
 
     /// <inheritdoc/>
     public ImmutableArray<Diagnostic> AnalyzeModule(Compilation compilation, IReadOnlyCollection<SyntaxTree> trees, string profile) =>
         AnalyzeProject(compilation, profile);
 
-    CompilationWithAnalyzers WithAnalyzers(Compilation compilation, string profile) => CreateDriver(compilation, profile, null);
+    // Roslyn reports analyzer exceptions as warnings. An unchecked candidate must
+    // retain the running code; its external AD diagnostic maps to existing ARA0900.
+    static Diagnostic Failure(Diagnostic diagnostic) => Diagnostic.Create(
+        new DiagnosticDescriptor(diagnostic.Id, diagnostic.Descriptor.Title, "{0}", diagnostic.Descriptor.Category,
+            DiagnosticSeverity.Error, isEnabledByDefault: true), diagnostic.Location,
+        additionalLocations: diagnostic.AdditionalLocations, properties: diagnostic.Properties,
+        messageArgs: [diagnostic.GetMessage(CultureInfo.InvariantCulture)]);
 
     CompilationWithAnalyzers CreateDriver(Compilation compilation, string profile, Action<Exception, DiagnosticAnalyzer, Diagnostic>? onException)
     {

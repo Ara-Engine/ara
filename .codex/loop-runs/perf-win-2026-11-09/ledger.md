@@ -441,3 +441,32 @@ Unity diagnostic are unfinished. Main integration is not a completion claim.
 - Allocation_pipeline_review nowowns NEW target/compiler-source-read-reuse-20261109
   sourceonly prototype for exact streaming source comparison/reuse; NO product
   changes/build/run/CPU grant. Source byte reads remain mandatory, no mtime trust.
+
+### Analyzer failure follow-up after edf98bae5
+
+- edf98bae5 committed and pushed immediately after verified analyzer allocation/
+  provenance slice. Further review found an existing safety gap: Roslyn AD0001 is
+  a warning, so Diagnostics.Reportable could omit it and an incompletely analyzed
+  candidate could still apply. The tree-only baseline path also omitted nonlocal
+  failures before our new body path existed.
+- All three AnalyzerSet entry points now capture the actual request exception
+  callback and promote its original external diagnostic ID/message/location/
+  additional locations/properties to Error. Existing ARA0900 mapping rejects the
+  candidate and preserves last-good code. Normal diagnostics/cancellation behavior
+  unchanged; no new code ID, rules disabled or EnC flag changes. Removed the now
+  unused private WithAnalyzers wrapper; older frozen SDK/prototype untouched.
+- Actual throwing analyzer regression now covers full initial images, ordinary L1
+  candidates, full-tree fallback and repair; full189 compiler tests pass. Fresh
+  solution0warnings/errors, three real CLR level/module tests, ara-diag coverage
+  and ara-script/ara-diag all-targetClippy pass. Independent source review no mustfix.
+- Fixed4 source guard review found an additional measurement gap: previous classifier
+  missed busy arbitrary apps and Java tools. No engine timing was launched. Owner
+  archived exact prior source/freeze/manifest plus22passing mocks and prepared v2
+  strict arbitraryCPU>=20% / Java-family guards with exact frontend/native/Unity
+  ownership. Revised30contracts written/unrun; source review/test before any grant.
+- Batch_queries owns NEW target/compiler-analysis-cancellation-20261109 source-only
+  design. Verified that AnalyzerSet currently passes CancellationToken.None and L3
+  compiler errors/cancellation can leave parallel analysis unjoined. No product
+  cancellation changes yet; plan must preserve custom-provider fallback, drain work
+  and atomically retain last-good state. AllocationPipeline source-read prototype
+  remains separate target-only; no CPU grant yet.
