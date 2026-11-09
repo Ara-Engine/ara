@@ -19,7 +19,8 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
   per request. Fingerprints and `ProjectSnapshot` manifests share that captured hash;
   no extra source capture survives the request, including publication-cache hits.
 - `ProjectCompilations`: retains unchanged source trees across dependency/heat/profile
-  changes. Those changes still rebuild semantic compilations and generator drivers.
+  changes, sharing their existing source strings instead of retaining equal rereads.
+  Configuration changes still rebuild semantic compilations and generator drivers.
   `compiler_scale.py --dependency-fanout` measures a shared edit with unchanged consumers.
 - `CodeFixRunner`: `--fix` applies the shipped code-fix providers to immutable input texts,
   returning replacements only. The host commits those through `source.replace` ops.
