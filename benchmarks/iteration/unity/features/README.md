@@ -4,7 +4,7 @@ Status: `query_filter` passed real serial and parallel correctness smokes on
 2026-11-09 with Bevy 0.20.0, Unity 6000.4.5f1 and Burst 1.8.29. Both engines matched
 the independent 1,003-ID/five-step oracle across all 36,132 state bytes.
 [Versions, hashes and validation evidence](query_filter_smoke_mac_2026-11-09.json)
-retain `timings_accepted=false`; no feature performance result is claimed.
+retain `timings_accepted=false`; those smokes establish correctness only.
 The other five cases passed all 50 planned serial/parallel correctness pairs on
 the same installed versions, with exact full-state/oracle agreement. Their
 [separate evidence](extended_smoke_mac_2026-11-09.json) preserves 22 earlier
@@ -13,6 +13,42 @@ kernel source version and Bevy executable. These are correctness results;
 `timings_accepted=false`. The [extended notes](extended/README.md) describe real
 API coverage, storage checks, worker semantics and the recovery gate. They do not
 establish Ara public C# buffer/JobHandle availability or shipping performance.
+
+Separate [phase A timing evidence](feature_timed_phase_a_mac_2026-11-09.json)
+now covers the first 12 of the planned 36 representative pairs: 100,000 entities,
+120 warmups and 300 samples, with complete independent 420-step scalar references.
+All state/control gates pass; six pairs meet the target of at least20% lower p50
+and at most5% p95 regression. This is the first engine order only; remaining24
+pairs include resize, 64-word buffers and reversed-order confirmation. The
+initial query helper `.meta` import attempt is retained and excluded; both
+families then passed fresh actual preflight smokes before all12 fresh pairs.
+
+Phase B stopped at its first64-word-buffer Unity invocation after a native Burst
+compiler crash. No Phase B pair was accepted. The durable checkpoint was saved
+before mutation; explicit recovery restored the exact captured five options and
+five preference keys, then cleared the matching guard after Editor exit.
+[Failure/recovery evidence](feature_timed_phase_b_recovery_mac_2026-11-09.json)
+preserves the failed attempt, source-bound control stages, full29.2MB independent
+oracle, recovery receipt and completed small serial/partitioned oracle checks.
+The first12 timings remain valid; the remaining24 await a separately authorized
+fresh attempt. No benchmark was retried automatically and no quality flags,
+licenses or caches were changed to bypass the crash.
+
+| Case | Serial Bevy / Unity p50 (ms) | Parallel Bevy / Unity p50 (ms) | Target met, serial / parallel |
+|---|---|---|---|
+| Query,8 archetypes | 0.00625 / 0.0087 | 0.01133 / 0.0180 | Yes / Yes |
+| Query,64 archetypes | 0.006625 / 0.0082 | 0.01133 / 0.0201 | No / Yes |
+| Dirty,1% spread | 0.03621 / 0.1165 | 0.06808 / 0.0540 | Yes / No |
+| Churn,10% | 0.2724 / 5.1572 | 0.2838 / 5.8661 | Yes / Yes |
+| DAG,fork/join | 0.09004 / 0.0927 | 0.11121 / 0.0918 | No / No |
+| Fixed buffer,4 words | 0.5146 / 0.4598 | 0.1223 / 0.0896 | No / No |
+
+The failing rows remain open. Parallel dirty/DAG/buffers are26.1%/21.1%/36.5%
+slower at p50, with9.5%/23.1%/14.2% p95 regressions. Serial buffers are11.9%
+slower with14.0% worse p95; serial64-archetype query is19.2% lower at p50 and
+serial DAG only2.9% lower. No fixture kernel or scheduling policy was changed to
+hide these results. Native fixture coverage does not establish the same public
+Ara C# API or performance.
 
 Both engines create the same 8/64 tag archetypes, group IDs by archetype, and retain
 their hot query. Unity uses `EntityQueryBuilder.WithAll/WithAllRW/WithNone`, a

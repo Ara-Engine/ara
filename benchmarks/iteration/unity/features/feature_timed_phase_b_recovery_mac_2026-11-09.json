@@ -1,0 +1,264 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-09",
+  "exported_utc": "2026-11-09T09:40:43.170412+00:00",
+  "scope": "PhaseBremaining24featurepairs stopped atfirstUnitynativeBurstcompilercrash; exactknowncheckpoint recovery succeeded. NoPhaseBtimingcomparison accepted; no automaticbenchmarkretry.",
+  "phase_b_planned_pairs": 24,
+  "phase_b_accepted_pairs": 0,
+  "prior_phase_a_valid_pairs": 12,
+  "remaining_pairs": 24,
+  "timings_accepted": false,
+  "failure": {
+    "signal_exit_code": -10,
+    "reported_signal": "SIGBUS onmacOS; log reports native segv",
+    "stage": "after_checkpoint_mutation_possible",
+    "restoration_proven_at_crash": false,
+    "result_written": false,
+    "durable_checkpoint": "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.json.environment.json.initial.json",
+    "checkpoint_sha256": "2ad1d58edd209b6edb196af7a6d7c18aed7caa1ebc0b6f45eb763de0d86a4553",
+    "failure_metadata": "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.failure.json",
+    "marker_log_lines": {
+      "checkpoint_saved": 360,
+      "mutation_started": 372,
+      "entering_benchmark": 384
+    },
+    "focused_stack": "Native mono crashhandler/signaltrampoline/unknown frames; managedBurst.Compiler.IL.Server.LibraryCompiler.CompileMethodGroupImpl/CompileMethodGroup +CacheManager. Do not infer a more precise LLVMcause.",
+    "effective_flag_evidence": "No finallyenvironment file survived. Preparedwrapper source assertsenabled=true,safety=false,force=false,debug=false beforeEnteringBenchmark marker; this is source/controlflow proof, not a serializedeffectiveflag snapshot."
+  },
+  "known_recovery": {
+    "checkpoint": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.json.environment.json.initial.json",
+    "checkpoint_sha256": "2ad1d58edd209b6edb196af7a6d7c18aed7caa1ebc0b6f45eb763de0d86a4553",
+    "recovery_attempt_id": "03adab7343184a15b51073c44cbb3af5",
+    "receipt": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.json.environment.json.initial.json.recovery-03adab7343184a15b51073c44cbb3af5.json",
+    "receipt_sha256": "03ecf1006b8f9300ade93bb56d4faf975ac66e16ab495468b34b89fc7dced2c2",
+    "restored": true,
+    "initial_options_restored": true,
+    "known_preferences_restored": true,
+    "matching_attempt_pending_cleared": true,
+    "shared_registry_clear": true,
+    "active_editors": [],
+    "benchmark_invoked": false,
+    "timings_accepted": false,
+    "phaseB_accepted_pairs": 0
+  },
+  "original_initial_state": {
+    "version": 1,
+    "invocation_id": "13cbcbef407d492890f3c5f7dbc697d0",
+    "project": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufx",
+    "result_path": "/Users/islam/.t3/worktrees/ara/t3-6f34c966/target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.json",
+    "initial_json": "{\"lane\":\"unity-editor-burst\",\"unity_version\":\"6000.4.5f1\",\"editor_contents\":\"/Applications/Unity/Hub/Editor/6000.4.5f1/Unity.app/Contents\",\"processor\":\"Apple M5 Pro\",\"logical_processors\":15,\"requested_threads\":1,\"job_workers\":0,\"job_worker_maximum\":14,\"burst_enabled\":false,\"burst_safety_checks\":false,\"caller_joins_jobs\":true,\"initial_burst_compilation\":true,\"initial_burst_safety_checks\":true,\"initial_burst_force_safety_checks\":false,\"initial_burst_debug\":false,\"initial_burst_compile_synchronously\":false,\"burst_force_safety_checks\":false,\"burst_debug\":false,\"measurement_completed\":false,\"option_values_restored\":false,\"editor_preferences_restored\":false,\"finally_restored\":false,\"initial_editor_preferences\":[{\"key\":\"BurstCompilation\",\"existed\":true,\"value\":true},{\"key\":\"BurstCompileSynchronously\",\"existed\":true,\"value\":false},{\"key\":\"BurstShowTimings\",\"existed\":true,\"value\":false},{\"key\":\"BurstDebug\",\"existed\":true,\"value\":false},{\"key\":\"BurstForceSafetyChecks\",\"existed\":true,\"value\":false}],\"packages\":[{\"name\":\"com.unity.burst\",\"version\":\"1.8.29\",\"source\":\"Registry\"},{\"name\":\"com.unity.collections\",\"version\":\"6.4.0\",\"source\":\"BuiltIn\"},{\"name\":\"com.unity.entities\",\"version\":\"6.4.0\",\"source\":\"BuiltIn\"},{\"name\":\"com.unity.ext.nunit\",\"version\":\"2.0.5\",\"source\":\"BuiltIn\"},{\"name\":\"com.unity.mathematics\",\"version\":\"1.3.3\",\"source\":\"Registry\"},{\"name\":\"com.unity.modules.assetbundle\",\"version\":\"1.0.0\",\"source\":\"BuiltIn\"},{\"name\":\"com.unity.modules.audio\",\"version\":\"1.0.0\",\"source\":\"BuiltIn\"},{\"name\":\"com.unity.modules.hierarchycore\",\"version\":\"1.0.0\",\"source\":\"BuiltIn\"},{\"name\":\"com.unity.modules.imgui\",\"version\":\"1.0.0\",\"source\":\"BuiltIn\"},{\"name\":\"com.unity.modules.jsonserialize\",\"version\":\"1.0.0\",\"source\":\"BuiltIn\"},{\"name\":\"com.unity.modules.physics\",\"version\":\"1.0.0\",\"source\":\"BuiltIn\"},{\"name\":\"com.unity.modules.ui\",\"version\":\"1.0.0\",\"source\":\"BuiltIn\"},{\"name\":\"com.unity.modules.uielements\",\"version\":\"1.0.0\",\"source\":\"BuiltIn\"},{\"name\":\"com.unity.modules.unityanalytics\",\"version\":\"1.0.0\",\"source\":\"BuiltIn\"},{\"name\":\"com.unity.modules.unitywebrequest\",\"version\":\"1.0.0\",\"source\":\"BuiltIn\"},{\"name\":\"com.unity.nuget.mono-cecil\",\"version\":\"1.11.6\",\"source\":\"Registry\"},{\"name\":\"com.unity.profiling.core\",\"version\":\"1.0.3\",\"source\":\"Registry\"},{\"name\":\"com.unity.scriptablebuildpipeline\",\"version\":\"2.6.1\",\"source\":\"Registry\"},{\"name\":\"com.unity.serialization\",\"version\":\"3.1.5\",\"source\":\"Registry\"},{\"name\":\"com.unity.test-framework\",\"version\":\"1.6.0\",\"source\":\"BuiltIn\"},{\"name\":\"com.unity.test-framework.performance\",\"version\":\"3.4.0\",\"source\":\"Registry\"}]}",
+    "initial_state_sha256": "1fc2634e46e10470b5146f2fc1b6a3c3ec97360efcbdce9d27f1d135452867c0"
+  },
+  "initial_state_not_guessed": true,
+  "recovery_benchmark_invoked": false,
+  "automatic_benchmark_retry": false,
+  "options_or_quality_flags_weakened": false,
+  "license_or_global_cache_changes": false,
+  "failed_case_files": [
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_bevy.bin",
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_bevy.json",
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_bevy.launch.json",
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_bevy.launcher.log",
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.failure.json",
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.json.environment.json.initial.json",
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.json.environment.json.initial.json.recovery-03adab7343184a15b51073c44cbb3af5.json",
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.json.environment.json.initial.json.recovery-03adab7343184a15b51073c44cbb3af5.launch.json",
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.json.environment.json.initial.json.recovery-03adab7343184a15b51073c44cbb3af5.launcher.log",
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.json.environment.json.initial.json.recovery-03adab7343184a15b51073c44cbb3af5.log",
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.launcher.log",
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.log"
+  ],
+  "control_files": [
+    "target/perf-scale/feature-timed-current/phase-b-plan.json",
+    "target/perf-scale/feature-timed-current/phase-b-driver.py",
+    "target/perf-scale/feature-timed-current/phase-b-driver.log",
+    "target/perf-scale/feature-timed-current/phase-b-recovery.log",
+    "target/perf-scale/feature-timed-current/phase-b-recovery-proof.json",
+    "target/perf-scale/feature-timed-current/parallel_buffer_oracle.py",
+    "target/perf-scale/feature-timed-current/oracle-preflight-proof.json"
+  ],
+  "oracle": {
+    "file": "target/perf-scale/feature-timed-current/oracles/aa3b0191624792a431d8dd1207e4de8ec852cb3cdf5fd66aa7a89df260091d48.bin",
+    "metadata_file": "target/perf-scale/feature-timed-current/oracles/aa3b0191624792a431d8dd1207e4de8ec852cb3cdf5fd66aa7a89df260091d48.oracle.json",
+    "proof": {
+      "reference_source_sha256": "dd9fee9034aabedb0ee93348c0d92bea4d8d5989a6978865c0a6dbb6e7f1031c",
+      "control_helper_sha256": "bad8d72487cf260348f62e7b48ce339d1434d563ae97f0dcf1d843792e1c7383",
+      "case": "buffer_fixed",
+      "entities": 100000,
+      "steps": 420,
+      "length": 64,
+      "percent": 10,
+      "workers": 8,
+      "start_method": "fork",
+      "partition_contract": "Original reference.initial/step/encode; disjoint IDs preserve order; buffer step does not depend on len(rows)",
+      "state_bytes": 29200024,
+      "state_sha256": "2c7b2124f5ae385746763e9c081bfe62e0b72041da80a02393d2dbbaedc3793f",
+      "wall_seconds": 123.574248334,
+      "timings_accepted": false
+    },
+    "state_math_source_unchanged": true,
+    "control_partition_helper_source": "\"\"\"Control-only row partitioning of the unchanged independent Python buffer oracle.\"\"\"\nimport argparse,hashlib,json,multiprocessing,struct,sys,time\nfrom pathlib import Path\nsys.dont_write_bytecode=True\nROOT=Path(__file__).resolve().parents[3]\nSOURCE=ROOT/'benchmarks/iteration/unity/features/reference.py'\nsys.path.insert(0,str(SOURCE.parent))\nimport reference\nROWS=None\nSETTINGS=None\n\ndef chunk(bounds):\n    start,stop=bounds\n    rows=ROWS[start:stop]\n    for tick in range(SETTINGS.steps):\n        reference.step(rows,SETTINGS.case,tick,SETTINGS.percent,'spread')\n    # Original encoder supplies all row fields/words; replace only local-count header.\n    return reference.encode(rows,SETTINGS.case,SETTINGS.steps)[24:]\n\ndef produce(args):\n    global ROWS,SETTINGS\n    if args.case not in ('buffer_fixed','buffer_resize'):raise ValueError('partitioning only applies to row-independent buffer cases')\n    if args.entities<1 or args.steps<0 or not 1<=args.workers<=15 or not 0<=args.percent<=100:raise ValueError('invalid oracle parameters')\n    destination=args.output.resolve()\n    if not destination.is_relative_to(ROOT/'target')or destination.exists():raise ValueError('fresh ownedtarget oracle output required')\n    before=hashlib.sha256(SOURCE.read_bytes()).hexdigest();start=time.monotonic();SETTINGS=args\n    ROWS=reference.initial(args.case,args.entities,8,args.length)\n    bounds=[(args.entities*i//args.workers,args.entities*(i+1)//args.workers)for i in range(args.workers)]\n    # Fresh CLI parent imports no GUI or threaded native libraries; fork shares only\n    # immutable initial rows. Each child mutates disjoint logical IDs privately.\n    with multiprocessing.get_context('fork').Pool(args.workers)as pool:\n        parts=pool.map(chunk,bounds)\n    data=struct.pack('<8sIIII',b'ARAECSF1',1,reference.CASES.index(args.case)+1,args.entities,args.steps)+b''.join(parts)\n    if hashlib.sha256(SOURCE.read_bytes()).hexdigest()!=before:raise ValueError('reference source changed during computation')\n    destination.parent.mkdir(parents=True,exist_ok=True)\n    with destination.open('xb')as output:output.write(data)\n    proof={'reference_source_sha256':before,'control_helper_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),'case':args.case,'entities':args.entities,'steps':args.steps,'length':args.length,'percent':args.percent,'workers':args.workers,'start_method':'fork','partition_contract':'Original reference.initial/step/encode; disjoint IDs preserve order; buffer step does not depend on len(rows)','state_bytes':len(data),'state_sha256':hashlib.sha256(data).hexdigest(),'wall_seconds':time.monotonic()-start,'timings_accepted':False}\n    destination.with_suffix('.oracle.json').write_text(json.dumps(proof,indent=2)+'\\n');print(json.dumps(proof),flush=True)\n\nif __name__=='__main__':\n    parser=argparse.ArgumentParser(description=__doc__)\n    parser.add_argument('--case',required=True,choices=['buffer_fixed','buffer_resize']);parser.add_argument('--entities',type=int,required=True);parser.add_argument('--steps',type=int,required=True);parser.add_argument('--length',type=int,default=64);parser.add_argument('--percent',type=int,default=100);parser.add_argument('--workers',type=int,default=8);parser.add_argument('--output',type=Path,required=True)\n    produce(parser.parse_args())\n",
+    "preflight": {
+      "records": [
+        {
+          "case": "buffer_fixed",
+          "steps": 5,
+          "byte_identical_to_original_serial_reference": true,
+          "state_sha256": "d8a9d06046736e34bdc17da2853e895edc1f91a281e7d7cb812b8301c3f72e53",
+          "bytes": 292900
+        },
+        {
+          "case": "buffer_fixed",
+          "steps": 6,
+          "byte_identical_to_original_serial_reference": true,
+          "state_sha256": "58111ced9496e60bdb5618223d4cb07dbb9908f8f475c028291620caa6505d0c",
+          "bytes": 292900
+        },
+        {
+          "case": "buffer_resize",
+          "steps": 5,
+          "byte_identical_to_original_serial_reference": true,
+          "state_sha256": "aac959a51135bb8a542dd40b348edf1bebe77448da8c3f6308695e9dd5d26edb",
+          "bytes": 292900
+        },
+        {
+          "case": "buffer_resize",
+          "steps": 6,
+          "byte_identical_to_original_serial_reference": true,
+          "state_sha256": "d31909539b162b7ab97965b6cc17b4cb7f30feaba1f66b3ab5187e30052967bc",
+          "bytes": 52180
+        }
+      ],
+      "quality_passed": true,
+      "timings_accepted": false,
+      "helper_sha256": "bad8d72487cf260348f62e7b48ce339d1434d563ae97f0dcf1d843792e1c7383"
+    },
+    "scope": "Originalreference.initial/step/encode overdisjointbufferIDpartitions only;full100k420state29.2MB. Generatedoutsideenginewindows; no kernelrewrite.",
+    "not_a_timing_sample": true
+  },
+  "phase_b_plan_sha256": "e152599bac1bebbcdc1c30c2ad90122a739c361420bb522f6cb944b147203e01",
+  "phase_a_artifact": "benchmarks/iteration/unity/features/feature_timed_phase_a_mac_2026-11-09.json",
+  "file_proofs": {
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_bevy.bin": {
+      "sha256": "2c7b2124f5ae385746763e9c081bfe62e0b72041da80a02393d2dbbaedc3793f",
+      "bytes": 29200024
+    },
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_bevy.json": {
+      "sha256": "95c2d4c287a32b8b19735ca0d362a13e105a8ed58f6ea4b09ed6aaa1a1cd6404",
+      "bytes": 5722
+    },
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_bevy.launch.json": {
+      "sha256": "42365be2c7386addc96e63f321a69af0f3b089b81ccb399047504f07e614b44f",
+      "bytes": 15059
+    },
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_bevy.launcher.log": {
+      "sha256": "4fcd935725b5f243bce544b86e8cc9bc1eafaea1633f277760be6e7292d723f4",
+      "bytes": 5723
+    },
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.failure.json": {
+      "sha256": "8aa2a2d06193dc41fad1769b7c8342e5519a00424cce6c04e800dd5266b20407",
+      "bytes": 633
+    },
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.json.environment.json.initial.json": {
+      "sha256": "2ad1d58edd209b6edb196af7a6d7c18aed7caa1ebc0b6f45eb763de0d86a4553",
+      "bytes": 3423
+    },
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.json.environment.json.initial.json.recovery-03adab7343184a15b51073c44cbb3af5.json": {
+      "sha256": "03ecf1006b8f9300ade93bb56d4faf975ac66e16ab495468b34b89fc7dced2c2",
+      "bytes": 750
+    },
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.json.environment.json.initial.json.recovery-03adab7343184a15b51073c44cbb3af5.launch.json": {
+      "sha256": "7035224b597d58b1c89fcd1add8bbc1eb3596217d94323249ea288a2e00229d4",
+      "bytes": 3322
+    },
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.json.environment.json.initial.json.recovery-03adab7343184a15b51073c44cbb3af5.launcher.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.json.environment.json.initial.json.recovery-03adab7343184a15b51073c44cbb3af5.log": {
+      "sha256": "666173150a8bd073a5bbc5dd77e096582126fa042b58bbf9b59cc49110ed1ce8",
+      "bytes": 28969
+    },
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.launcher.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "target/perf-scale/ufx/results/feature-current-timed-01_r1_buffer_fixed_length64_runners1_phaseb1/buffer_fixed_100000_length64_r1_unity.log": {
+      "sha256": "e2e850b0c675bc10b2b0cc4f0b949f023b7f60eb101f08b6f03a7f8f961207a3",
+      "bytes": 41883
+    },
+    "target/perf-scale/feature-timed-current/phase-b-plan.json": {
+      "sha256": "e152599bac1bebbcdc1c30c2ad90122a739c361420bb522f6cb944b147203e01",
+      "bytes": 95026
+    },
+    "target/perf-scale/feature-timed-current/phase-b-driver.py": {
+      "sha256": "343fa20b2964c3019885ce586f9c00452453b9ede68adbdecba5f8fd3a5f9c44",
+      "bytes": 2130
+    },
+    "target/perf-scale/feature-timed-current/phase-b-driver.log": {
+      "sha256": "77c4b0a5d0ca6848afd009707f3b582539ee82c1ea5d1da1f595164ced97017b",
+      "bytes": 3248
+    },
+    "target/perf-scale/feature-timed-current/phase-b-recovery.log": {
+      "sha256": "66e36733734fc0f5eccbd52c7728e33a9d735009e3ac0441971c129fee8bdcbd",
+      "bytes": 898
+    },
+    "target/perf-scale/feature-timed-current/phase-b-recovery-proof.json": {
+      "sha256": "b3c8ec79a6eb186867fa772d17a574a73b865c579801d1012243b7352f079379",
+      "bytes": 1035
+    },
+    "target/perf-scale/feature-timed-current/parallel_buffer_oracle.py": {
+      "sha256": "bad8d72487cf260348f62e7b48ce339d1434d563ae97f0dcf1d843792e1c7383",
+      "bytes": 3322
+    },
+    "target/perf-scale/feature-timed-current/oracle-preflight-proof.json": {
+      "sha256": "a65dd282ec0d8321a4f1a3a12935caf37d3315f8a0274a45d94e3b636d118742",
+      "bytes": 1093
+    },
+    "target/perf-scale/feature-timed-current/oracle-preflight/buffer_fixed5.bin": {
+      "sha256": "d8a9d06046736e34bdc17da2853e895edc1f91a281e7d7cb812b8301c3f72e53",
+      "bytes": 292900
+    },
+    "target/perf-scale/feature-timed-current/oracle-preflight/buffer_fixed5.oracle.json": {
+      "sha256": "94345ec503a22e7421acf286594b3b3a04b2253b8572f23692e922144a9a2e8a",
+      "bytes": 636
+    },
+    "target/perf-scale/feature-timed-current/oracle-preflight/buffer_fixed6.bin": {
+      "sha256": "58111ced9496e60bdb5618223d4cb07dbb9908f8f475c028291620caa6505d0c",
+      "bytes": 292900
+    },
+    "target/perf-scale/feature-timed-current/oracle-preflight/buffer_fixed6.oracle.json": {
+      "sha256": "c6ca3eb422ba0178a0303353c42bd0cde129656ca059abe8ab7b45dd0c4d992f",
+      "bytes": 639
+    },
+    "target/perf-scale/feature-timed-current/oracle-preflight/buffer_resize5.bin": {
+      "sha256": "aac959a51135bb8a542dd40b348edf1bebe77448da8c3f6308695e9dd5d26edb",
+      "bytes": 292900
+    },
+    "target/perf-scale/feature-timed-current/oracle-preflight/buffer_resize5.oracle.json": {
+      "sha256": "071dc4cd87dfe5e42672ae84e83812468360187eb5d161905cc6835fbc50d823",
+      "bytes": 640
+    },
+    "target/perf-scale/feature-timed-current/oracle-preflight/buffer_resize6.bin": {
+      "sha256": "d31909539b162b7ab97965b6cc17b4cb7f30feaba1f66b3ab5187e30052967bc",
+      "bytes": 52180
+    },
+    "target/perf-scale/feature-timed-current/oracle-preflight/buffer_resize6.oracle.json": {
+      "sha256": "39aeb825c15415d4eaa666daa67a9375de3a63c29586e49389d9fbe1ba5c901d",
+      "bytes": 639
+    },
+    "target/perf-scale/feature-timed-current/oracles/aa3b0191624792a431d8dd1207e4de8ec852cb3cdf5fd66aa7a89df260091d48.bin": {
+      "sha256": "2c7b2124f5ae385746763e9c081bfe62e0b72041da80a02393d2dbbaedc3793f",
+      "bytes": 29200024
+    },
+    "target/perf-scale/feature-timed-current/oracles/aa3b0191624792a431d8dd1207e4de8ec852cb3cdf5fd66aa7a89df260091d48.oracle.json": {
+      "sha256": "50bd613e2476b8f8d5a11ec6fa9eab336cb5dd6f6e25905b8d3756045b2e3f88",
+      "bytes": 646
+    },
+    "benchmarks/iteration/unity/features/feature_timed_phase_a_mac_2026-11-09.json": {
+      "sha256": "c7f83e2d9292d9c7af6a8475ef40043e141a57b1d69b5f9af0dfec4b4b1b1d2f",
+      "bytes": 471121
+    }
+  },
+  "raw_log_policy": "Rawlogsremain target; onlyfocusedstacksummary/markerlinepositions+hashes published, no incidental host/network text."
+}

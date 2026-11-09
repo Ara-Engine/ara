@@ -6,8 +6,20 @@ passed. Actual C# compilation, normal checkpoint/finally and explicit known-stat
 recovery gates passed too. [Durable evidence](../extended_smoke_mac_2026-11-09.json)
 labels 22 pre-checkpoint records and 28 checkpointed records separately; older
 records retain their original controllers and proofs. Runtime kernels and the
-Bevy executable are identical across accepted pairs. No performance timings are
-accepted. Query case 1 and its old quality artifact remain unchanged.
+Bevy executable are identical across those accepted smoke pairs. Their performance
+timings remain unaccepted. Query case 1 and its old quality artifact remain unchanged.
+New [phase A timing evidence](../feature_timed_phase_a_mac_2026-11-09.json)
+separately covers12 first-order pairs at100k entities/420steps with full independent
+reference agreement and strict resource/Burst/restoration controls. Six meet the
+target; parallel dirty/DAG/four-word buffers and serial buffers lose to Unity,
+while serial DAG and64-archetype query miss the20% threshold. Remaining24 pairs,
+including resize/64-word buffers/reversed confirmation, are pending; see the
+[current timing table](../README.md). The original50-smoke evidence is preserved.
+The first Phase B Unity invocation subsequently crashed in native Burst compilation.
+Its timings are excluded; exact known-checkpoint recovery succeeded and the
+global guard is clear. [Recovery evidence](../feature_timed_phase_b_recovery_mac_2026-11-09.json)
+preserves the crash/receipt/control proofs. No automatic benchmark retry ran;
+remaining24 pairs are still pending.
 Cases 2–6 follow [CONTRACT.md](../CONTRACT.md) and the existing independent
 [integer oracle](../reference.py). These fixtures exercise native Bevy/Unity APIs;
 they do not establish Ara public C# buffer or JobHandle availability, shipping
