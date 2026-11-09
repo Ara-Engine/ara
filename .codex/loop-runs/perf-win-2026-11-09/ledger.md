@@ -252,3 +252,58 @@ Unity diagnostic are unfinished. Main integration is not a completion claim.
 - Three-way DAG timing attempt stopped before its first process for an unrelated
   active ara-editor compiler; zeroaccepted. Native quality and prior limited internal
   gains remain retained, not promoted to a fresh Unity or combined-engine claim.
+
+
+### Incremental changed-file parsing (candidate; checkpoint gates in progress)
+
+- CurrentSDK kernel quality refreshed under
+  target/ecs-kernel-module-current-20261109-20261109T130705Z:32actualsmall cases,
+  realL1/coldKernelL3 atomic cascade and2disassemblies pass. Rust577f99 unchanged;
+  SDKactualDLL hashes/new fixture source captured independently ofembeddeddb76
+  version. No throughput/Unity run or freshly rebuilt SDK claim from this packet.
+- Native three-way DAG isolation now completes18accepted processes with exact420step
+  originaloracles/IDs/updates and source/exe/power/CPU guards. Contiguous-only helps;
+  combination meets20%/+5% internalparallel target vsbaseline, but some incremental
+  batching tails lose vscontiguous-only. Serialoneorder limited; older tail loss
+  retained. No Unity/production claim. Packet dag-isolation-timing-02/summary.json.
+- ModuleSession and ProjectCompilations fully parsed changed files even for a local
+  body edit. Prototyped precise common UTF16prefix/suffix plusRoslyn incremental API.
+  Primary sources: Microsoft Learn SyntaxTree.WithChangedText and dotnet/roslyn
+  SourceText.cs/ChangedText.cs. No classifier/EnC safety flags changed.
+- Ordinary SourceText.WithChanges prototype passed14freshtext/checksum/diagnostic/
+  PE/PDB cases, guarded parser comparisons. Smallfilesregress; largefilesimprove.
+  Repeatededit source history/backing storage needs care; oldmemoryincremental run
+  rejected forunrelatedcargo, no throughput claim fromit. Rawtargetpacket retained.
+- Flat change provider owns complete new text, weak immediate predecessor and exact
+  range; ancestors/unrelated texts conservatively get full replacement. No strong
+  source-history chain. Flatprototype parserguard passed; memoryfull process rejected
+  forunrelatedcargo andflat1000edit trace captured asqualityonly, neverquietthroughput
+  or boundedtotalcompiler memory. Roslyn/global compiler caches remainoutsideclaim.
+- Production candidate uses flat provider at>=2048characters; tinyfiles/pathchanges
+  parse fresh. Matchingbefore/tree invariant atbothcallsites reviewed independently.
+  Above-thresholdUnicode/directive/error/recovery/PE/PDB tests,2047/48/49crossings,
+  self/immediate/ancestor/unrelated ranges andgenerator+image equivalence allpass.
+  Initial8test failures were ImmutableArray identity assertion; bytearrays corrected,
+  exactchecksum equality remains enforced. Full168compiler tests and0warning/error
+  buildpass. Actuallargefile levelsL1/L2/L3 andbothkernel/directreload testsallpass.
+- Rustlevelsfixture paddedabove cutoff. Batch_queries owns only reload_bench.rs
+  optional single-file/SDKpath/rawJSON sourceextension; Root waitingfreeze forfocused
+  fmt/Clippy andactual full save-visible comparison. Do not commit/claimfinalspeed
+  before remaining checkpoint/measurement decisions; user goal remainsactive.
+
+- Incremental candidate checkpoint now verified: full168 compiler tests, reallarge
+  levelsL1/L2/L3, direct+kernel reloads,114packagefmt andalltargetClippy pass.
+  Benchmarkstylecollapsible-if fixedwithoutbehaviorchange;perfexamplebuild passes.
+- reload_bench optional--single-file retainsallfillersacrosssaves, explicitprivate
+  SDKpaths andrawJSON output; actual3edit smoke passesalllevels+unload. Private
+  archivedbaselineapphost lackedexecutablemode; firstlaunchfailedbeforeedits. Fresh
+  runnablecopyrestoresmodeonly,all46filecontentsbyteequal,oldarchiveuntouched.
+- Guarded5000line/20kentity comparison acceptsR1baseline+candidate andR2candidate;
+  finalR2baseline rejectedforunrelatedcargo. All4processescorrect,failedtimingnot
+  accepted. R1actualsave-visiblemedians L1 127.56->115.34ms,L2 141.31->123.56ms,
+  L3 222.68->204.10ms; allp95lowerinthislimitedpair. Parse/classify~9-10ms->~1ms.
+  Eighteditsperlevel,p95=max8,onecompleteorderonly,notastabletail/Unityclaim.
+  Publicpacket compiler_incremental_parse_mac_2026-11-09.json;rawcapturessaved.
+- Remainingbottleneck: analyzer/compiler validation dominates measuredL1serverwork.
+  Inspect precisebody-scopedanalysisanddiagnosticcoverage beforechanginganything;
+  do not weakenallowlist/state/determinism/AOT rules orclearunchangederrors.

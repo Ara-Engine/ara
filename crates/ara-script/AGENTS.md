@@ -128,6 +128,8 @@ Depends on ara-schema, ara-diag, ara-components, ara-runtime, ara-sim, bevy_ecs,
   share it through `support::clr_lock()`. `support::Live` writes inline modules and ticks.
 - Latency: `cargo run -p ara-script --release --example reload_bench [-- --edits 60 --verbose]`
   prints a p50/p95 phase table per level and the system CPU load during the run.
+  `--single-file` edits the large combined script; `--dotnet-bin <absolute projects-bin>`
+  selects a private SDK, and `--output <target/file.json>` retains raw edits/reports.
 ## Gotchas
 - One .NET runtime per process. `DOTNET_MODIFIABLE_ASSEMBLIES=debug` (EnC) is set before
   it starts; on non-Windows, start the host before other threads read the environment.

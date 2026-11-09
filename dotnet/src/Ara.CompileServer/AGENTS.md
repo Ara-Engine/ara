@@ -52,6 +52,9 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
   (`Escalation.Capability`). Everything else is L3.
 - `ModuleCompiler`: shared framework references, options, emit, EnC deltas (`isAddedSymbol`
   for inserts), baselines from the PDB, `Surface` (hash of public/protected declarations).
+- `ModuleText`: exact replacement ranges for incremental parsing above 2048 UTF-16
+  units; flat owned new text and a weak immediate predecessor, without a strong edit
+  history. Tiny files and path changes parse afresh. EnC classification stays unchanged.
 - `ModuleWatcher`: one pump thread for every module folder (1 ms spin settle).
 - `AnalyzerSet`: the Ara analyzers over changed trees, with the module's API profile
   (`build_property.AraModuleProfile`). `Diagnostics`: Roslyn → ara-diag JSON.
