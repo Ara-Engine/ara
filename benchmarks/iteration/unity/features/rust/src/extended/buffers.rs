@@ -1,46 +1,120 @@
-//! Component-owned SmallVec payloads, including real spill/resize/trim work.
-use super::model::{Case, Frame, Id, Value, Words, initial_word, update};
-use bevy_ecs::prelude::*;
+//! Explicit buffer kernels; the default preserves the original per-row baseline.
+use super::model;
 
-pub struct Buffers {
-    query: QueryState<(&'static Id, &'static mut Value, &'static mut Words)>,
-}
+#[cfg(not(feature = "buffer_contiguous"))]
+#[path = "buffers_baseline.rs"]
+mod implementation;
 
-impl Buffers {
-    pub fn new(world: &mut World) -> Self {
-        Self {
-            query: world.query(),
-        }
+#[cfg(feature = "buffer_contiguous")]
+#[path = "buffers_contiguous.rs"]
+mod implementation;
+
+pub use implementation::Buffers;
+
+#[cfg(not(feature = "buffer_contiguous"))]
+pub const KERNEL: &str = "baseline-row-mut-scalar";
+#[cfg(all(feature = "buffer_contiguous", not(feature = "buffer_simd")))]
+pub const KERNEL: &str = "contiguous-scalar";
+#[cfg(all(
+    feature = "buffer_simd",
+    target_arch = "aarch64",
+    target_feature = "neon"
+))]
+pub const KERNEL: &str = "contiguous-neon4";
+#[cfg(all(
+    feature = "buffer_simd",
+    not(all(target_arch = "aarch64", target_feature = "neon"))
+))]
+pub const KERNEL: &str = "contiguous-scalar-fallback";
+
+#[cfg(all(test, feature = "buffer_contiguous"))]
+#[path = "buffers_baseline.rs"]
+mod baseline_test;
+
+#[cfg(all(test, feature = "buffer_contiguous"))]
+mod tests {
+    use super::{
+        Buffers, baseline_test,
+        model::{self, Case, Frame, Id, Value, Words},
+    };
+    use bevy_ecs::prelude::*;
+
+    #[derive(Debug, PartialEq, Eq)]
+    struct State {
+        id: u32,
+        value: u32,
+        updates: u32,
+        words: Vec<u32>,
+        capacity: usize,
+        spilled: bool,
+        value_ticks: (u32, u32),
+        words_ticks: (u32, u32),
     }
-    pub fn step(&mut self, world: &mut World, case: Case, frame: Frame) {
-        let run = |(id, mut value, mut words): (&Id, Mut<Value>, Mut<Words>)| {
-            if case == Case::Resize && id.0 % 100 < frame.percent {
-                let length = if frame.tick.is_multiple_of(2) { 64 } else { 4 };
-                let previous = words.0.len();
-                words.0.resize(length, 0);
-                for index in previous..length {
-                    words.0[index] = initial_word(id.0, index);
+
+    fn snapshot(world: &mut World) -> Vec<State> {
+        let mut query = world.query::<(Entity, &Id, &Value, &Words)>();
+        let mut rows = query
+            .iter(world)
+            .map(|(entity, id, value, words)| {
+                let row = world.entity(entity);
+                let value_ticks = row.get_change_ticks::<Value>().expect("Value ticks");
+                let words_ticks = row.get_change_ticks::<Words>().expect("Words ticks");
+                State {
+                    id: id.0,
+                    value: value.value,
+                    updates: value.updates,
+                    words: words.0.to_vec(),
+                    capacity: words.0.capacity(),
+                    spilled: words.0.spilled(),
+                    value_ticks: (value_ticks.added.get(), value_ticks.changed.get()),
+                    words_ticks: (words_ticks.added.get(), words_ticks.changed.get()),
                 }
-                if frame.trim {
-                    words.0.shrink_to_fit();
+            })
+            .collect::<Vec<_>>();
+        rows.sort_by_key(|row| row.id);
+        rows
+    }
+
+    #[test]
+    fn contiguous_buffer_steps_keep_every_value_tick_and_storage_transition() {
+        let mut cases = vec![];
+        for length in [0, 4, 16, 64] {
+            cases.push((Case::Fixed, length, 10, false));
+        }
+        for percent in [0, 10, 100] {
+            for trim in [false, true] {
+                cases.push((Case::Resize, 4, percent, trim));
+            }
+        }
+        bevy_tasks::ComputeTaskPool::get_or_init(|| {
+            bevy_tasks::TaskPoolBuilder::new().num_threads(2).build()
+        });
+        for parallel in [false, true] {
+            for &(case, length, percent, trim) in &cases {
+                let frame = Frame {
+                    tick: 0,
+                    count: 1003,
+                    percent,
+                    clustered: false,
+                    length,
+                    trim,
+                    fork_join: false,
+                    parallel,
+                };
+                let (mut reference, _) = model::setup(case, frame);
+                let (mut candidate, _) = model::setup(case, frame);
+                let mut before = baseline_test::Buffers::new(&mut reference);
+                let mut after = Buffers::new(&mut candidate);
+                assert_eq!(snapshot(&mut reference), snapshot(&mut candidate));
+                for tick in 0..6 {
+                    reference.increment_change_tick();
+                    candidate.increment_change_tick();
+                    let current = Frame { tick, ..frame };
+                    before.step(&mut reference, case, current);
+                    after.step(&mut candidate, case, current);
+                    assert_eq!(snapshot(&mut reference), snapshot(&mut candidate));
                 }
             }
-            let mut sum = 0_u32;
-            for (index, word) in words.0.iter_mut().enumerate() {
-                *word = update(
-                    *word,
-                    id.0.wrapping_mul(64).wrapping_add(index as u32),
-                    frame.tick,
-                );
-                sum = sum.wrapping_add(*word);
-            }
-            value.value = value.value.wrapping_add(sum);
-            value.updates += 1;
-        };
-        if frame.parallel {
-            self.query.par_iter_mut(world).for_each(run);
-        } else {
-            self.query.iter_mut(world).for_each(run);
         }
     }
 }

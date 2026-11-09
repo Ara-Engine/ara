@@ -19,6 +19,7 @@ RUST_TARGET = ROOT / "target/perf-scale/feature-rust"
 EXTENDED_PROJECT = ROOT / "target/perf-scale/ufx"
 EXTENDED_RUST_TARGET = ROOT / "target/perf-scale/extended-feature-rust"
 MARKER = ".ara-query-feature.json"
+BUFFER_KERNELS = ("baseline", "contiguous", "simd")
 spec = importlib.util.spec_from_file_location("ara_s8_helpers", HERE.parent / "bench.py")
 BASE = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(BASE)
@@ -40,7 +41,11 @@ def prepared_manifest(args):
 def paths(args, engine):
     lane = execution_lane(args)
     root = BASE.scratch_path(args.project)
-    stem = f"{cases.name(args)}_{args.count}_{cases.variant(args)}_r{args.runners}_{engine}"
+    stem = f"{cases.name(args)}_{args.count}_{cases.variant(args)}_r{args.runners}"
+    kernel = buffer_kernel(args)
+    if kernel != "baseline":
+        stem += "_kernel_" + kernel
+    stem += "_" + engine
     if lane == "correctness-smoke":
         stem += "_smoke"
     folder = root / "results" / args.run
@@ -101,6 +106,7 @@ def prepare(args):
 
 
 def command(args, engine):
+    buffer_kernel(args)
     prepared_manifest(args)
     result, dump, log = paths(args, engine)
     environment = dict(os.environ)
@@ -128,7 +134,19 @@ def binary_name(args=None):
 
 
 def rust_target(args=None):
-    return EXTENDED_RUST_TARGET if args is not None and cases.extended(args) else RUST_TARGET
+    kernel = buffer_kernel(args)
+    root = EXTENDED_RUST_TARGET if args is not None and cases.extended(args) else RUST_TARGET
+    return root if kernel == "baseline" else root.with_name(root.name + "-" + kernel)
+
+
+def buffer_kernel(args=None):
+    """Only buffer fixtures may select an opt-in native implementation."""
+    kernel = getattr(args, "buffer_kernel", "baseline")
+    if kernel not in BUFFER_KERNELS:
+        raise ValueError("unknown buffer kernel")
+    if kernel != "baseline" and cases.name(args) not in ("buffer_fixed", "buffer_resize"):
+        raise ValueError("nonbaseline buffer kernels require buffer_fixed or buffer_resize")
+    return kernel
 
 
 def config_path(args):
@@ -145,7 +163,11 @@ def recovery_temp(args):
 
 
 def build_command(args=None):
-    return {"command": ["/usr/bin/nice", "-n", "10", "cargo", "build", "--locked", "--release", "--bin", binary_name(args), "--manifest-path", str(HERE / "rust/Cargo.toml")],
+    kernel = buffer_kernel(args)
+    command = ["/usr/bin/nice", "-n", "10", "cargo", "build", "--locked", "--release", "--bin", binary_name(args), "--manifest-path", str(HERE / "rust/Cargo.toml")]
+    if kernel != "baseline":
+        command.extend(["--features", "buffer_" + kernel])
+    return {"command": command,
             "environment": {"CARGO_TARGET_DIR": str(rust_target(args)), "CARGO_BUILD_JOBS": "2",
                             "RUSTFLAGS": "-C target-cpu=native", "CARGO_PROFILE_RELEASE_LTO": "thin",
                             "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "1", "CARGO_PROFILE_RELEASE_OPT_LEVEL": "3",

@@ -10,6 +10,7 @@ import inputs
 import cases
 import reference as scalar
 import recovery
+import build
 
 
 def checked_result(path):
@@ -41,11 +42,42 @@ def checked_case_input(launch, args):
         raise ValueError("case input changed since launch")
 
 
+def checked_buffer_kernel(results, launches, args):
+    """Verify variant identity from archived build bytes, not just a result label."""
+    if cases.name(args) not in ("buffer_fixed", "buffer_resize"):
+        return None
+    requested = project.buffer_kernel(args)
+    executable = launches["bevy"]["executable"]
+    path = project.BASE.scratch_path(Path(executable["build_provenance"]))
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != executable["build_provenance_sha256"]:
+        raise ValueError("buffer build provenance changed since launch")
+    record = json.loads(raw)
+    proof = build.checked_build_settings(record, args)
+    if record.get("exit_code") != 0 or record.get("executable_sha256") != executable["executable_sha256"]:
+        raise ValueError("buffer executable is not bound to its successful build")
+    legacy = proof["legacy_metadata_allowed"]
+    if not legacy or "buffer_kernel" in executable:
+        if executable.get("buffer_kernel") != proof:
+            raise ValueError("launch buffer feature proof differs from the archived build")
+    reported = build.checked_result_kernel(results["bevy"], {"buffer_kernel": proof}, args)
+    for engine, launch in launches.items():
+        if legacy and "buffer_kernel_requested" not in launch:
+            continue
+        if launch.get("buffer_kernel_requested") != requested:
+            raise ValueError("launch requested another buffer kernel")
+        if launch.get("buffer_kernel_reported") != (reported if engine == "bevy" else None):
+            raise ValueError("launch buffer label differs from the verified result")
+    return {"requested": requested, "reported": reported,
+            "build_provenance_sha256": executable["build_provenance_sha256"],
+            "legacy_metadata_allowed": legacy}
+
+
 def verification_sources():
     """Hash the executing verifier modules separately from prepared engine inputs."""
     here = Path(__file__).resolve().parent
     root = here.parents[3]
-    paths = [here / name for name in ["verify.py", "reference.py", "cases.py", "inputs.py", "project.py"]]
+    paths = [here / name for name in ["verify.py", "reference.py", "cases.py", "inputs.py", "project.py", "build.py"]]
     paths.append(here.parent / "bench.py")
     return {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
 
@@ -107,6 +139,7 @@ def verify(args):
     results = {engine: result for engine, (result, _) in checked.items()}
     launches = {engine: launch for engine, (_, launch) in checked.items()}
     lane = checked_lane(launches, args)
+    buffer_kernel = checked_buffer_kernel(results, launches, args)
     if lane == "correctness-smoke" and args.reference is None:
         raise ValueError("correctness smoke requires an independent scalar reference")
     states = {engine: path[1].read_bytes() for engine, path in paths.items()}
@@ -166,6 +199,8 @@ def verify(args):
         report["config"] = cases.config(args)
         report["worker_observations"] = {engine: result["worker_probe"] for engine, result in results.items()}
         report["storage_observations"] = {engine: result["layout"] for engine, result in results.items()}
+        if buffer_kernel is not None:
+            report["buffer_kernel"] = buffer_kernel
         if cases.name(args) == "dirty_epoch":
             report["separate_dirty_replay"] = {"bevy_tick_candidate_logical": bevy_visits,
                 "unity_candidates": unity_candidates, "unity_logical": unity_logical}

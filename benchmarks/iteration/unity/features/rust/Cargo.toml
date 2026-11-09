@@ -6,6 +6,10 @@ publish = false
 
 [workspace]
 
+[features]
+buffer_contiguous = []
+buffer_simd = ["buffer_contiguous"]
+
 [dependencies]
 ara-json = { path = "../../../../../crates/ara-json" }
 bevy_ecs = { version = "0.20", default-features = false, features = ["std", "multi_threaded"] }

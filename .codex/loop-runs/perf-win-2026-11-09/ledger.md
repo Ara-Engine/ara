@@ -130,3 +130,18 @@ Unity diagnostic are unfinished. Main integration is not a completion claim.
   both launch and offline verifier bind command, flags, architecture and archived build
   bytes. All 49 focused Python contracts pass. Integrated Rust variant builds/tick gates
   remain pending; prototype timings are not relabeled as combined-main measurements.
+
+- Integrated native buffer variants now pass all three actual harness builds, release
+  tests and Clippy. Both candidate variants verify serial and parallel Added/Changed
+  cells, values and SmallVec storage transitions. All 42 actual native cases agree
+  with fresh original scalar oracle bytes and old immutable baseline/storage; one
+  harness smoke is reused, not rerun. Actual snapshot/label and offline build binding
+  pass. Independent review recomputed small dump bytes/receipts with no must-fix.
+  Public integrated quality summary and pre-integration internal fixed4 timings are
+  separate artifacts; no fresh Unity or combined-main timing claim.
+- ABI5 internal r01 rejected for unrelated compilation; r02 accepted its first eight
+  cases/four pairs, then cooperatively stopped for a newly found startup issue. All
+  raw proofs/source guards retained. Reversed round unfinished; no market claim.
+- Startup audit found prebuilt watched modules lack compiler dependency state on first
+  edits. Prioritize actual Core->Game leaf/root edit repro and correctness fix before
+  extending the new-main performance captures. Nothing is silently called complete.
