@@ -601,8 +601,8 @@ fn cards(s: &HubApp, visible: &[&Project]) -> El<HubApp> {
             .child(body)
             .child(footer);
         if hot {
-            card = card
-                .border(1.0, c.ring.0)
+            card = Material::Raised
+                .paint(l, card)
                 .shadow_level(stillkit::ShadowLevel::Raised);
         }
         with_menu(s, project, interactive(card, project))
