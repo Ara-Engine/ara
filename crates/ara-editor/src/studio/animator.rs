@@ -193,34 +193,43 @@ pub(super) fn details(s: &Studio, doc: &str) -> El<Studio> {
 fn parameters(s: &Studio, doc: &str, controller: &ControllerData) -> Vec<El<Studio>> {
     let l = &s.look;
     let c = &l.c;
-    let add_doc = doc.to_owned();
-    let add = dropdown(
-        s,
-        "animation/param/add".into(),
-        "Add",
-        KINDS.iter().map(|(name, _)| (*name).to_owned()).collect(),
-        move |s: &mut Studio, kind: &str| {
-            let kind = KINDS
-                .iter()
-                .find(|(name, _)| *name == kind)
-                .map_or(ParameterKind::Float, |(_, k)| *k);
-            save(s, &add_doc, "Add animation parameter", |controller| {
-                let name = (1..)
-                    .map(|n| format!("{}{n}", kind_name(kind)))
-                    .find(|n| !controller.parameters.contains_key(n))
-                    .ok_or("no free parameter name")?;
-                controller.parameters.insert(
+    // + Add opens a menu of the four types.
+    let open = s.local.select.as_deref() == Some("animation/param/add");
+    let mut add = button(l, Tone::Ghost, Size::Sm, Some(icons::PLUS), "Add")
+        .key("animation/param/add")
+        .expanded(open)
+        .on_press(|s: &mut Studio| {
+            s.local.select = match s.local.select.as_deref() == Some("animation/param/add") {
+                true => None,
+                false => Some("animation/param/add".into()),
+            }
+        });
+    if open {
+        let items = KINDS
+            .iter()
+            .map(|(name, kind)| {
+                let (doc, kind) = (doc.to_owned(), *kind);
+                menu_item(
+                    l,
+                    &format!("animation/param/add/{name}"),
+                    None,
                     name,
-                    ara_anim::graph::Parameter {
-                        kind,
-                        ..Default::default()
-                    },
-                );
-                Ok(())
-            });
-        },
-    )
-    .w(90.0);
+                    None,
+                    false,
+                )
+                .on_press(move |s: &mut Studio| {
+                    s.local.select = None;
+                    add_parameter(s, &doc, kind);
+                })
+            })
+            .collect();
+        add = add.overlay(
+            menu(menu_panel(l, items))
+                .side(stillkit::el::Side::Bottom)
+                .align(Align::End)
+                .on_dismiss(|s: &mut Studio| s.local.select = None),
+        );
+    }
     let mut out = vec![
         row()
             .h(32.0)
@@ -343,6 +352,24 @@ fn parameters(s: &Studio, doc: &str, controller: &ControllerData) -> Vec<El<Stud
         );
     }
     out
+}
+
+/// Adds a parameter of `kind` under the first free `Kind<n>` name.
+fn add_parameter(s: &mut Studio, doc: &str, kind: ParameterKind) {
+    save(s, doc, "Add animation parameter", |controller| {
+        let name = (1..)
+            .map(|n| format!("{}{n}", kind_name(kind)))
+            .find(|n| !controller.parameters.contains_key(n))
+            .ok_or("no free parameter name")?;
+        controller.parameters.insert(
+            name,
+            ara_anim::graph::Parameter {
+                kind,
+                ..Default::default()
+            },
+        );
+        Ok(())
+    });
 }
 
 /// A float as typed: "0.2", "1", never "0.200000".

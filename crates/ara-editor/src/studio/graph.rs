@@ -16,7 +16,7 @@ use ara_ui::paint::{Box2, DisplayList};
 use ara_ui::style::Color;
 use serde_json::{Value, json};
 use stillkit::el::{
-    Align, Axis, El, Handled, Justify, PointerPhase, Side, col, el, native, row, text,
+    Align, Axis, El, Handled, Justify, PointerPhase, Side, col, el, icon, native, row, text,
 };
 
 use super::Studio;
@@ -464,7 +464,8 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
             .min_w(0.0)
             .child(canvas)
             .child(at_point)
-            .child(at_value),
+            .child(at_value)
+            .children(empty_hint(s, animation)),
     );
     let body = if animation {
         body.child(super::animator::details(s, &doc))
@@ -472,6 +473,30 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
         body.child(details(s, &doc))
     };
     col().grow(1.0).child(toolbar).child(body)
+}
+
+/// Over an empty state machine, how to start one (Unity's Animator opens on Entry).
+fn empty_hint(s: &Studio, animation: bool) -> Option<El<Studio>> {
+    let empty = s.graph.shown_graph().is_none_or(|g| g.nodes.is_empty());
+    (animation && empty).then(|| {
+        let c = &s.look.c;
+        row()
+            .absolute(20.0, 16.0)
+            .pad_x(12.0)
+            .pad_y(8.0)
+            .gap(8.0)
+            .align(Align::Center)
+            .radius(super::style::RADIUS)
+            .fill(super::style::tones(&s.look).band)
+            .child(icon(icons::INFO).size(13.0).color(c.muted_foreground.0))
+            .child(
+                text(
+                    "No states yet. Add State plays a clip; Add Blend mixes clips by a parameter.",
+                )
+                .text_size(12.0)
+                .color(c.muted_foreground.0),
+            )
+    })
 }
 
 /// The material's Details (Unreal) / Graph Inspector (Shader Graph): with nothing selected,

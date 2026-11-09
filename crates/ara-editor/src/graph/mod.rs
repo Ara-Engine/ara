@@ -833,14 +833,14 @@ impl Canvas {
             r.y + (node.pins_top() + (index as f32 + 0.5) * ROW) * self.camera.zoom,
         ])
     }
-    /// The minimap's screen rectangle, when the graph does not fit the view.
+    /// The minimap's screen rectangle, when a graph with nodes does not fit the view.
     fn minimap(&self, rect: Box2) -> Option<Box2> {
         let bounds = self.bounds();
         let a = self.screen([bounds.x, bounds.y], rect);
         let b = self.screen([bounds.x + bounds.w, bounds.y + bounds.h], rect);
         let fits =
             a[0] >= rect.x && a[1] >= rect.y && b[0] <= rect.x + rect.w && b[1] <= rect.y + rect.h;
-        (!fits && rect.w > 360. && rect.h > 240.).then_some(Box2 {
+        (!fits && !self.nodes.is_empty() && rect.w > 360. && rect.h > 240.).then_some(Box2 {
             x: rect.x + rect.w - 156.,
             y: rect.y + rect.h - 108.,
             w: 144.,
