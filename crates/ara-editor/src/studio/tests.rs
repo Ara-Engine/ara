@@ -829,6 +829,71 @@ fn material_inputs_show_their_defaults_inline_and_edit_in_place() {
     assert_eq!(graph.nodes[&constant].params["value"], json!([0.25]));
 }
 
+#[test]
+fn c_wraps_the_selection_in_a_comment_that_is_titled_and_removed_alone() {
+    let mut rt = open();
+    rt.touch(|s| {
+        let doc = s
+            .editor
+            .action(
+                "editor.resource.create",
+                json!({"path": "samples/notes.graph", "domain": "material"}),
+            )
+            .unwrap()["doc"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        s.act("editor.workspace", json!({"resource": doc}));
+    });
+    rt.update(|s| {
+        super::commands::run(s, "window.material", &crate::shell::commands::Target::None)
+    });
+    rt.touch(|s| super::graph::sync(s, "material"));
+    settle(&mut rt);
+    let nodes = super::graph::node_ids(rt.state());
+    let layout = |rt: &Runtime<Studio>| {
+        let workspace = rt.state().editor.host.store().workspace();
+        let doc = workspace.find("samples/notes.graph").expect("material");
+        ara_graph::Graph::from_document(workspace.doc(doc.as_str()).expect("doc"))
+            .expect("graph")
+            .editor
+    };
+    rt.update(|s| super::graph::select(s, &nodes[..2]));
+    rt.focus("graph/view");
+    rt.frame(FRAME);
+    rt.key(0x43);
+    settle(&mut rt);
+    rt.update(|s| super::graph::sync(s, "material"));
+    settle(&mut rt);
+    let groups = layout(&rt).groups;
+    assert_eq!(groups.len(), 1, "C made a comment");
+    let group = groups.values().next().expect("comment");
+    assert_eq!(group.nodes, nodes[..2].to_vec());
+    assert!(
+        rt.find("material/comment/title").is_some(),
+        "its title is typed in Details"
+    );
+    rt.type_text("Lighting");
+    rt.key(0x0D);
+    settle(&mut rt);
+    rt.touch(|s| super::graph::sync(s, "material"));
+    assert_eq!(
+        layout(&rt).groups.values().next().expect("comment").label,
+        "Lighting"
+    );
+    rt.focus("graph/view");
+    rt.frame(FRAME);
+    rt.key(0x2E);
+    settle(&mut rt);
+    rt.touch(|s| super::graph::sync(s, "material"));
+    assert!(layout(&rt).groups.is_empty(), "Delete removed the comment");
+    assert_eq!(
+        super::graph::node_ids(rt.state()),
+        nodes,
+        "and only the comment"
+    );
+}
+
 /// The open effect at `path`, compiled.
 fn effect_at(rt: &Runtime<Studio>, path: &str) -> ara_vfx::Effect {
     let workspace = rt.state().editor.host.store().workspace();

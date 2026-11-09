@@ -2,8 +2,11 @@
 //! machine, on the shared node canvas (`crate::graph::Canvas`, the legacy window's), drawn
 //! into the page's own native layer ([`PAGES`]) like the Scene. Drag nodes, drag from a port
 //! to connect, drag empty space to box-select, middle or right drag to pan, the wheel to
-//! zoom; F frames the graph; Space or Add Node searches the material library. Every edit is
-//! a command on the document (one undo step per gesture), the same ones agents send.
+//! zoom; F frames the graph; Space, Add Node, a right-click or a wire dropped on nothing
+//! searches the material library (only what fits the wire). Inputs show their defaults
+//! inline, typed where they show; C wraps the selection in a comment box; Delete removes the
+//! selection. Every edit is a command on the document (one undo step per gesture), the same
+//! ones agents send.
 use std::ffi::c_void;
 use std::ptr::NonNull;
 
@@ -422,6 +425,11 @@ pub(super) fn view(s: &Studio, domain: &'static str) -> El<Studio> {
                 delete_selection(s);
                 Handled::Yes
             }
+            // C wraps the selection in a comment box, as Unreal does.
+            0x43 if !animation => {
+                comment_selection(s);
+                Handled::Yes
+            }
             _ => Handled::No,
         });
     let body = row().grow(1.0).min_h(0.0).child(
@@ -496,6 +504,59 @@ fn details(s: &Studio, doc: &str) -> El<Studio> {
             .child(value.w(0.0).grow(0.6))
     };
     let selection = &shown.canvas.selection;
+    // A picked comment box: its title, typed here, and its removal (its nodes stay).
+    if let Some((key, group)) = graph
+        .editor
+        .groups
+        .iter()
+        .find(|(key, _)| selection.contains(*key))
+    {
+        let (doc_label, doc_remove) = (doc.to_owned(), doc.to_owned());
+        let (key_label, key_remove) = (key.clone(), key.clone());
+        return out
+            .child(band(
+                "Comment".into(),
+                format!("{} nodes", group.nodes.len()),
+                icons::SQUARE_DASHED,
+            ))
+            .child(prop(
+                "Title".into(),
+                field(
+                    l,
+                    Size::Sm,
+                    "material/comment/title",
+                    None,
+                    "",
+                    &group.label,
+                    move |x| {
+                        x.select_all_on_focus().on_submit(move |s: &mut Studio, t| {
+                            edit_layout(s, &doc_label, |layout| {
+                                if let Some(group) = layout.groups.get_mut(&key_label) {
+                                    group.label = t.trim().to_owned();
+                                }
+                            });
+                        })
+                    },
+                ),
+            ))
+            .child(
+                row().pad(10.0).child(
+                    button(
+                        l,
+                        Tone::Ghost,
+                        Size::Sm,
+                        Some(icons::TRASH),
+                        "Remove comment",
+                    )
+                    .key("material/comment/remove")
+                    .on_press(move |s: &mut Studio| {
+                        edit_layout(s, &doc_remove, |layout| {
+                            layout.groups.remove(&key_remove);
+                        });
+                    }),
+                ),
+            );
+    }
     if selection.is_empty() {
         out = out.child(band(
             "Parameters".into(),
@@ -1144,12 +1205,84 @@ fn set_value(s: &mut Studio, doc: &str, node: &str, typed: &str) {
     }
 }
 
-/// Removes the selected nodes and their inline defaults (one undo step).
+/// Changes the graph's layout (comments, groups, reroutes) as one undo step.
+fn edit_layout(s: &mut Studio, doc: &str, change: impl FnOnce(&mut ara_graph::Editor)) {
+    let Some(shown) = s.graph.shown.as_ref() else {
+        return;
+    };
+    let mut layout = shown.canvas.graph().editor.clone();
+    change(&mut layout);
+    let command = json!({"cmd": "graph.editor.set", "args": {"editor": layout}});
+    if let Err(error) = s.editor.apply_to(doc, vec![command], "Edit graph comments") {
+        s.editor.report_failure(&error);
+    }
+}
+
+/// Wraps the selected nodes in a comment box and picks it, its title ready to type.
+fn comment_selection(s: &mut Studio) {
+    let Some(shown) = s.graph.shown.as_ref() else {
+        return;
+    };
+    let graph = shown.canvas.graph();
+    let nodes: Vec<String> = shown
+        .canvas
+        .selection
+        .iter()
+        .filter(|id| graph.nodes.contains_key(*id))
+        .cloned()
+        .collect();
+    if nodes.is_empty() {
+        return;
+    }
+    let doc = shown.doc.clone();
+    let key = (1..)
+        .map(|n| format!("comment{n}"))
+        .find(|k| !graph.editor.groups.contains_key(k))
+        .unwrap_or_default();
+    let picked = key.clone();
+    edit_layout(s, &doc, |layout| {
+        layout.groups.insert(
+            key,
+            ara_graph::Group {
+                label: "Comment".into(),
+                nodes,
+            },
+        );
+    });
+    // Loaded now, so its title field is there when focus lands on it.
+    sync(s, "material");
+    if let Some(shown) = s.graph.shown.as_mut() {
+        shown.canvas.selection.insert(picked);
+        s.graph.dirty = true;
+    }
+    s.local.focus = Some("material/comment/title");
+}
+
+/// Removes the selected nodes and their inline defaults (one undo step); with a comment box
+/// picked, only the box.
 fn delete_selection(s: &mut Studio) {
     let Some(shown) = s.graph.shown.as_ref() else {
         return;
     };
     let doc = shown.doc.clone();
+    let groups: Vec<String> = shown
+        .canvas
+        .graph()
+        .editor
+        .groups
+        .keys()
+        .filter(|k| shown.canvas.selection.contains(*k))
+        .cloned()
+        .collect();
+    if !groups.is_empty() {
+        edit_layout(s, &doc, |layout| {
+            layout.groups.retain(|k, _| !groups.contains(k))
+        });
+        if let Some(shown) = s.graph.shown.as_mut() {
+            shown.canvas.selection.clear();
+        }
+        return;
+    }
     let graph = shown.canvas.graph();
     let selected = &shown.canvas.selection;
     // A node's inline input defaults go with it.
@@ -1188,6 +1321,14 @@ pub(super) fn inline_values(s: &Studio) -> Vec<(String, (f32, f32))> {
             .map(|(node, _, b)| (node.to_owned(), (b.x + b.w * 0.5, b.y + b.h * 0.5)))
             .collect()
     })
+}
+
+/// Picks `ids` on the open canvas (tests select without a window).
+#[cfg(test)]
+pub(super) fn select(s: &mut Studio, ids: &[String]) {
+    if let Some(shown) = s.graph.shown.as_mut() {
+        shown.canvas.selection = ids.iter().cloned().collect();
+    }
 }
 
 /// The nodes on the open canvas (tests read the page without a window).
