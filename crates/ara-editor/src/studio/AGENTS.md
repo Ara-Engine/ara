@@ -47,8 +47,9 @@ equivalent. `--legacy-ui` opens the old `shell` window.
   writes both themes (panels, context menu, Create) to `target/studio-captures/`.
 - Spacing: 3 px gutters, 26 px tab strips, 20 px tree and field rows, 24 px dense
   controls. Fields set `focus_ring(false)` where their well shows focus.
-- Depth, never lines (D31): `style::chosen` lifts the chosen row, folder, tile or item as
-  Raised; `style::float` makes popups the Float material; fields are Wells.
+- One flat look (D34): no lines and no elevation. `style::chosen` marks the chosen row,
+  folder, tile, item or tool in the Raised tone; `style::float` makes popups the Float
+  material; fields are Wells. Scene controls use the panels' strip tone, not glass.
 
 ## Tests
 
