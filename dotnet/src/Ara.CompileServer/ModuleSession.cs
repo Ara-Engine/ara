@@ -430,7 +430,8 @@ internal sealed partial class ModuleSession
             var has = _disk.TryGetValue(path, out var newText);
             if (had && has && oldText == newText) continue;
             var oldTree = had ? state.Trees[path] : null;
-            var newTree = has ? ModuleCompiler.Parse(path, newText!) : null;
+            var newTree = !has ? null : oldTree is null ? ModuleCompiler.Parse(path, newText!)
+                : ModuleText.Update(path, oldTree, oldText!, newText!);
             changes.Add(new FileChange(path, oldTree, newTree));
             if (newTree is null) { trees.Remove(path); texts.Remove(path); }
             else { trees[path] = newTree; texts[path] = newText!; }

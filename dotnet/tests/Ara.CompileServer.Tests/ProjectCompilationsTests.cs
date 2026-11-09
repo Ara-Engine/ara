@@ -144,4 +144,37 @@ public sealed class ProjectCompilationsTests
         Assert.Equal(expected.Pe, actual.Pe);
         Assert.Equal(expected.Pdb, actual.Pdb);
     }
+
+    [Fact]
+    public void Incremental_large_file_body_and_schema_edits_match_fresh_generator_and_image_outputs()
+    {
+        var cache = new ProjectCompilations();
+        var compiler = new ModuleCompiler("game", [typeof(Behaviour).Assembly.Location]);
+        var source = "//" + new string('x', 2500) + "\n" + """
+            /// <summary>State used by the generated query.</summary>
+            [Component] public partial struct Counter {
+                /// <summary>Latest result.</summary>
+                public int Value;
+            }
+            public static partial class UpdateCounter {
+                [Query] static void Run(ref Counter counter) { counter.Value = 1; }
+            }
+            """;
+        foreach (var text in new[] { source, source.Replace("= 1;", "= 2;", StringComparison.Ordinal),
+            source.Replace("public int Value;", "public int Value;\n/// <summary>Added state.</summary>\npublic int Extra;", StringComparison.Ordinal) })
+        {
+            var actual = cache.Generate("game.dll", "config", compiler, true, [("Code.cs", text)], []);
+            var fresh = new ProjectCompilations().Generate("game.dll", "config", compiler, true, [("Code.cs", text)], []);
+            Assert.Equal(fresh.Driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Select(result => result.SourceText.ToString()),
+                actual.Driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Select(result => result.SourceText.ToString()));
+            var image = ModuleCompiler.Emit(actual.Final);
+            var expected = ModuleCompiler.Emit(fresh.Final);
+            Assert.Empty(image.Errors);
+            Assert.Empty(expected.Errors);
+            Assert.NotNull(image.Image);
+            Assert.NotNull(expected.Image);
+            Assert.Equal(expected.Image.Pe, image.Image.Pe);
+            Assert.Equal(expected.Image.Pdb, image.Image.Pdb);
+        }
+    }
 }
