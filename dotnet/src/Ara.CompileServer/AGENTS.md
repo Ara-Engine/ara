@@ -8,6 +8,8 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
 
 - `ProjectInventory`: the one D30 folder/source inventory, shared with warm sessions;
   `--inventory` returns reference/storage paths and explicit derived schema results.
+  `ModuleInputs.Scan` skips publication hydration for ownership checks; public/default
+  scans and project builds still validate and hydrate schema/assembly publications.
 - `ProjectCompiler`: `--compile-project` builds deterministically before scene validation,
   returning generated schemas for Rust's canonical publication under `.ara/scripts`.
   Publication markers verify input, schema and assembly hashes; editor code stays separate.
