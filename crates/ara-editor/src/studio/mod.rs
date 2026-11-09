@@ -29,6 +29,7 @@ mod lighting;
 mod panels;
 mod preferences;
 mod profiler;
+mod references;
 mod scene;
 pub mod state;
 mod style;

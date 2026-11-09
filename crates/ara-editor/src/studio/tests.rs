@@ -151,6 +151,42 @@ fn escape_cancels_a_gizmo_drag() {
 }
 
 #[test]
+fn a_reference_field_searches_and_picks_an_entity() {
+    let mut rt = open();
+    rt.update(|s| {
+        s.apply(
+            vec![json!({"cmd":"entity.create","args":{"id":"e_rig","name":"Rig","components":{"Transform":{},"FollowCamera":{}}}})],
+            "Create rig",
+        );
+        s.act("editor.select", json!({"entities": ["e_rig"]}));
+    });
+    settle(&mut rt);
+    let field = rt
+        .find("field/FollowCamera.target")
+        .expect("the target is an object field");
+    rt.pointer_move(field.center().x, field.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(field.center().x, field.center().y);
+    rt.pointer_up(field.center().x, field.center().y);
+    settle(&mut rt);
+    assert!(rt.find("reference/panel").is_some(), "the picker opens");
+    rt.type_text("lam");
+    settle(&mut rt);
+    let item = rt.find("reference/item/1").expect("Lamp is found");
+    assert!(rt.find("reference/item/2").is_none(), "and only Lamp");
+    rt.pointer_move(item.center().x, item.center().y);
+    rt.frame(FRAME);
+    rt.pointer_down(item.center().x, item.center().y);
+    rt.pointer_up(item.center().x, item.center().y);
+    settle(&mut rt);
+    assert!(rt.state().local.reference.is_none(), "picking closes it");
+    assert_eq!(
+        rt.state().resolved["e_rig"].record["FollowCamera"]["target"],
+        json!("e_lamp")
+    );
+}
+
+#[test]
 fn a_hierarchy_row_click_selects_and_the_inspector_follows() {
     let mut rt = open();
     let row = rt.find("row/e_lamp").unwrap();
