@@ -91,6 +91,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
     if workload == "validate" || workload.starts_with("validate-") {
+        sorted::validate_pruning();
         for w in ["w1", "w2", "w3", "w4"] {
             if let Some(selected) = workload.strip_prefix("validate-")
                 && selected != w
