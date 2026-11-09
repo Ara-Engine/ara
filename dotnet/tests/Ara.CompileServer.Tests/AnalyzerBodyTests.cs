@@ -17,12 +17,37 @@ public sealed class AnalyzerBodyTests
         var compiler = new ModuleCompiler("Failure", [typeof(Behaviour).Assembly.Location]);
         var compilation = compiler.Create([tree], true, []);
         var method = Assert.Single(tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>());
-        var set = new AnalyzerSet();
-        // Inject a failure without exposing custom analyzer configuration in the product API.
-        typeof(AnalyzerSet).GetField("_analyzers", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .SetValue(set, ImmutableArray.Create<DiagnosticAnalyzer>(new FailingAnalyzer()));
+        var set = Throwing();
         var diagnostics = set.AnalyzeBodies(compilation, [method], "gameplay");
-        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "AD0001");
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "AD0001" && diagnostic.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void An_analyzer_failure_blocks_images_and_body_deltas_without_replacing_running_code(bool liveEdit)
+    {
+        using var fixture = new AnalysisModule(Throwing());
+        if (liveEdit) fixture.Start();
+        var good = fixture.Module.State;
+        fixture.Write(0, AnalysisModule.First.Replace("p.Value += 1;", "p.Value += Math.Abs(-2);", StringComparison.Ordinal));
+        var failed = liveEdit ? fixture.Compile(0) : fixture.Module.Initial(fixture);
+        Assert.Equal(OutcomeKind.Errors, failed.Kind);
+        Assert.Contains(failed.Problems, diagnostic => diagnostic.Id == "AD0001" && diagnostic.Severity == DiagnosticSeverity.Error);
+        Assert.Same(good, fixture.Module.State);
+        fixture.Write(0, AnalysisModule.First);
+        var repair = liveEdit ? fixture.Compile(0) : fixture.Module.Initial(fixture);
+        Assert.Equal(liveEdit ? OutcomeKind.None : OutcomeKind.Image, repair.Kind);
+    }
+
+    [Fact]
+    public void A_tree_fallback_also_retains_analyzer_failures_as_errors()
+    {
+        var tree = ModuleCompiler.Parse("Failure.cs", "static class C { static int M() => System.Math.Abs(-2); }");
+        var compiler = new ModuleCompiler("Failure", [typeof(Behaviour).Assembly.Location]);
+        var compilation = compiler.Create([tree], true, []);
+        Assert.Contains(Throwing().Analyze(compilation, [tree], "gameplay"),
+            diagnostic => diagnostic.Id == "AD0001" && diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
     [Theory]
@@ -79,6 +104,15 @@ public sealed class AnalyzerBodyTests
     internal static string[] Exact(IEnumerable<Diagnostic> diagnostics) => diagnostics.Select(diagnostic =>
         $"{diagnostic.Id}|{diagnostic.Severity}|{diagnostic.Location.SourceTree?.FilePath}|{diagnostic.Location.SourceSpan}|{diagnostic.GetMessage()}")
         .Order(StringComparer.Ordinal).ToArray();
+
+    static AnalyzerSet Throwing()
+    {
+        var set = new AnalyzerSet();
+        // Inject a failure without exposing custom analyzer configuration in the product API.
+        typeof(AnalyzerSet).GetField("_analyzers", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(set, ImmutableArray.Create<DiagnosticAnalyzer>(new FailingAnalyzer()));
+        return set;
+    }
 
     // Instantiated directly by the test; never discovered or shipped as a compiler extension.
 #pragma warning disable RS1001

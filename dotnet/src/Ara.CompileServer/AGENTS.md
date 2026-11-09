@@ -66,6 +66,8 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
   atomic commit, revoked by warnings/reference changes and never imported from PE
   publications. Unknown/custom providers keep full-tree analysis. Request-level
   exception callbacks retain failures Roslyn omits from tree/span results.
+  All analysis entry points promote analyzer exceptions to errors (`AD0001` maps
+  through existing `ARA0900`); incomplete checks never publish a candidate.
 
 ## Runtime config
 

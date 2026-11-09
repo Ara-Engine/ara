@@ -273,15 +273,17 @@ Fixes:
 ## ARA0900 script::COMPILE_ERROR: C# compilation failed
 owner: ara-script, Ara.CompileServer
 
-A C# compiler error prevented producing the replacement module. The message retains the Roslyn `CS` identifier and source location. The last good code keeps running; a module without a successful prior compilation is unavailable.
+A C# compiler error or failed analyzer check prevented producing the replacement module. The message retains the Roslyn `CS` or `AD` identifier and source location when available. The last good code keeps running; a module without a successful prior compilation is unavailable.
 
 Causes:
 - Syntax, type or name-resolution errors in edited C# source.
 - Missing or incompatible referenced types after a dependency change.
+- An analyzer threw an exception (`AD0001`), leaving the candidate incompletely checked.
 
 Fixes:
 - Fix the `CS` error at the reported file, line and column, then compile or reload again.
 - Correct module references and update callers to match changed dependency APIs.
+- For `AD0001`, retain the diagnostic and offending source when reporting the analyzer failure. Retry after the analyzer is repaired or the triggering edit is corrected.
 
 ## ARA0901 script::COMPILE_WARNING: C# compiler warning
 owner: ara-script, Ara.CompileServer
