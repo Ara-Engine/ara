@@ -55,6 +55,10 @@ its CPU and GC pauses never stall ticks. One process serves a host over a named 
 - `ModuleText`: exact replacement ranges for incremental parsing above 2048 UTF-16
   units; flat owned new text and a weak immediate predecessor, without a strong edit
   history. Tiny files and path changes parse afresh. EnC classification stays unchanged.
+- `ModuleSource`: reads every decoded source unit, reusing the committed string only
+  after exact EOF equality. A pooled buffer avoids allocating new unchanged strings;
+  changed/new files retain normal text ownership, BOM decoding and editor sharing.
+  Both capture and final source validation read contents; timestamps never grant trust.
 - `ModuleWatcher`: one pump thread for every module folder (1 ms spin settle).
 - `AnalyzerSet`: the Ara analyzers over changed trees, with the module's API profile
   (`build_property.AraModuleProfile`). `Diagnostics`: Roslyn → ara-diag JSON.

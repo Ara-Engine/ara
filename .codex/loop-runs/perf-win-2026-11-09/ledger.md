@@ -470,3 +470,35 @@ Unity diagnostic are unfinished. Main integration is not a completion claim.
   cancellation changes yet; plan must preserve custom-provider fallback, drain work
   and atomically retain last-good state. AllocationPipeline source-read prototype
   remains separate target-only; no CPU grant yet.
+
+### Exact source-read reuse after 992107d88
+
+- 992107d88 fail-closed analyzer fix committed+pushed. SourceRead prototype quality
+  passes87text differentials, decoder/BOM/UTF16 boundaries/sharing/replacement/retry,
+  pool failure2/2returns andthree successful valid-source exactPE/PDB comparisons.
+  Initial target-only NETSDK1199 packaging failure retained; matching rebuild passed.
+- Exact18 allocation cells complete: three source sizes x0/1/100%filesedited x2arms,
+  onefreshprocessperarm/config,2warm+5measuredpasses. Allfulltext/ref/checksums match;
+  app/runtime/sources unchanged. Unchanged256B×1000:8.865→7.673MB;4KiB×1000:
+  24.369→7.673MB;256KiB×100:106.306→.768MB. Every selected file changes one literal
+  nearitsbeginning;100%doesNOTmeanfull-contentreplacement. ALL elapsedtimes unaccepted
+  underforeignUnity; no compile/startplay/peakRSS/frame/Unity claim. Nine rows retained.
+- Promoted exact reader algorithm (namespace/doc-only normalization verified) into
+  ModuleSource. Every source stillreads throughdecodedEOF; committedpriorstring reused
+  onlyonexactequality. Initial/newfiles useoriginalReadToEnd, changedstringsflatowned,
+  poolreturn finally andsameeditor-sharing/200msIOretry. Capture AND finalvalidation
+  use actualcontents, no mtime skip. Added12focusedproductioncases. All201compiler
+  tests pass, solution0warnings/errors,nineactualCLR tests across5suites,all-target
+  ara-scriptClippy andfmt114passed. Independent review no mustfix. Commit+push next.
+- Roslyn provenance correction: central4.14 belongs compatibility analyzers/generators;
+  CompileServer/Tests override5.3. ActualcopiedDLL/loadedemit proof confirms5.3.0.0.
+  Earlier4.14private-driver research retained but explicitlymisbound; fresh5.3repo
+  commit16f9bd... independentlysupports sameinternalcancellation caveat, no actual
+  private-worker escape reproduced. Ara-owned cancellation/drain defects stillopen.
+- Source-only Mac scheduling audit found .NET Unix BelowNormal writesnice10 andNormal
+  writes0; unprivileged restoration mayfail permanently andskipthreadreset. Reversible
+  Darwinself-processbackgroundpolicy candidate+isolatedown-childproofplan ready;
+  NO priorityAPI/probe/productchange yet. Preserveinheritedpriority andD20.
+- Fixed4 helper-v3 transparentfrontend/source-onlyregistry prepared, oldplan/v2/archive
+  unchanged. Independentreviewfound null/NaN lifetime receipt gap; ownerSOURCEfixing.
+  No test/probe/helper/engine grant yet, no accepted performance result.
