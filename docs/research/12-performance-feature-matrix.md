@@ -26,6 +26,14 @@ A12/A13 and S8 in [the decisions](../decisions.md).
 The baseline inventory below remains a snapshot of `20e8ccdbc`. These subsequent
 changes have executable evidence:
 
+- [Hot C# intrinsics](../../benchmarks/iteration/csharp_hot_intrinsics_mac_2026-11-09.json)
+  retain Debug/EnC and improve the original Hot SIMD example by about 1.80–1.97×
+  across 16 fresh processes, with full state and identities matching. This remains
+  well above the optimized execution lane. It is an internal Mac comparison with
+  8 warmup and 24 samples, not a matched Unity result; the performance goal remains
+  open. Actual L1 edits and hardware-disabled correctness pass. Indirect calls
+  remain in the Hot loops. A hot wrapper over an optimized C# module is the next
+  separate experiment.
 - [C# schedule construction](../../benchmarks/iteration/script_dependency_graph_mac_2026-11-09.json)
   now tracks last writers and active readers instead of comparing every system
   pair. Mixed-graph reachability, real CLR deferred writes and chain/fork reload

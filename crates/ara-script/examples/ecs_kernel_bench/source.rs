@@ -1,5 +1,5 @@
 //! Real gameplay module declarations and scalar kernels, compiled by the public host.
-use super::simd;
+use super::{direct, simd};
 
 const TYPES: &str = r#"
 using System.Runtime.Intrinsics;
@@ -77,6 +77,10 @@ const W3: &str = r#"
 
 /// Selects one query, keeping all alternate kernels out of the scheduled workload.
 pub fn module(workload: &str, mode: &str) -> String {
+    if mode == "direct" {
+        let query = direct::query(workload);
+        return format!("{TYPES}\n{SCALAR}\n\n{query}\n}}");
+    }
     let query = match (workload, mode) {
         ("w1", "span") => W1,
         ("w3", "span") => W3,

@@ -2,6 +2,9 @@
 //! --threads is the total runner ceiling: pool workers plus the calling thread.
 //! Compile/spawn, every-row scalar validation, hashes and optional --dump are untimed.
 //! Use matching prebuilt .NET fixtures and DOTNET_TieredCompilation=0 for comparisons.
+//! `direct` emits native ISA math for this Rust target, with a scalar capability fallback.
+#[path = "ecs_kernel_bench/direct.rs"]
+mod direct;
 #[path = "ecs_kernel_bench/reference.rs"]
 mod reference;
 #[path = "ecs_kernel_bench/simd.rs"]
@@ -181,13 +184,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let samples = number("--samples", 80)?;
     let hot = std::env::args().any(|arg| arg == "--hot");
     if !["w1", "w3"].contains(&workload.as_str())
-        || !["span", "simd"].contains(&mode.as_str())
+        || !["span", "simd", "direct"].contains(&mode.as_str())
         || rows == 0
         || rows > u32::MAX as usize
         || threads == 0
         || samples == 0
     {
-        return Err("--workload w1|w3 --mode span|simd --rows 1..u32::MAX --threads TOTAL>=1 --warmup N --samples N>=1 [--hot] [--dump PATH]".into());
+        return Err("--workload w1|w3 --mode span|simd|direct --rows 1..u32::MAX --threads TOTAL>=1 --warmup N --samples N>=1 [--hot] [--dump PATH]".into());
     }
     let steps = warmup.checked_add(samples).ok_or("tick count overflow")?;
     // Bevy's native executor supports zero pool workers; the caller drains its scope.
@@ -253,6 +256,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         "{}",
         json!({"backend": "Ara ScriptHost/CoreCLR", "workload": workload, "mode": mode, "hot": hot,
         "rows": rows, "threads": threads, "worker_threads": workers, "runner_ceiling": workers + 1,
+        "direct_compiled_backend": (mode == "direct").then(direct::backend),
         "warmup": warmup, "samples": samples, "steps": steps,
         "p50_ms": sorted[(samples * 50).div_ceil(100) - 1], "p95_ms": sorted[(samples * 95).div_ceil(100) - 1],
         "ms": timings, "sorted_ms": sorted, "validation": validation})
